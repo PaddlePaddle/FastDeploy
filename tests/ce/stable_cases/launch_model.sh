@@ -38,7 +38,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --gpu-memory-utilization 0.9 \
        --model "$MODEL_PATH" \
        --no-shutdown-comm-group-if-worker-idle \
-       --swap-space 10 \
        --load-strategy ipc_snapshot \
        --dynamic-load-weight &
 

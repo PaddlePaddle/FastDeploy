@@ -272,12 +272,20 @@ class InputBatch:
                 fill_value=max_draft_token_num,
                 dtype="int32",
             )
-            self.output_cum_offsets = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            self.output_padding_offset = paddle.full(
-                shape=[max_num_seqs * (max_draft_token_num + 1)],
-                fill_value=0,
-                dtype="int32",
-            )
+            if current_platform.is_cuda():
+                self.cu_seqlens_q_output = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
+                self.batch_id_per_token_output = paddle.full(
+                    shape=[max_num_seqs * (max_draft_token_num + 1)],
+                    fill_value=0,
+                    dtype="int32",
+                )
+            else:
+                self.output_cum_offsets = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+                self.output_padding_offset = paddle.full(
+                    shape=[max_num_seqs * (max_draft_token_num + 1)],
+                    fill_value=0,
+                    dtype="int32",
+                )
             # For V1_KVCACHE_SCHEDULER
             self.step_draft_tokens = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
@@ -404,7 +412,10 @@ class InputBatch:
             swap_data(self.accept_num, i1, i2)
             swap_data(self.draft_tokens, i1, i2)
             swap_data(self.actual_draft_token_num, i1, i2)
-            swap_data(self.output_cum_offsets, i1, i2)
+            if current_platform.is_cuda():
+                swap_data(self.cu_seqlens_q_output, i1, i2)
+            else:
+                swap_data(self.output_cum_offsets, i1, i2)
             swap_data(self.step_draft_tokens, i1, i2)
             swap_data(self.step_seq_lens_this_time, i1, i2)
             swap_data(self.draft_logits, i1, i2)
@@ -478,6 +489,168 @@ class InputBatch:
             self.index_to_batch_id[batch_id] = batch_id
         return batch_id
 
+    def reset_share_inputs(self):
+        """
+        Reset all paddle tensors to their initial state.
+        This method clears the content of the shared input buffers while preserving
+        their shapes and data types.
+        """
+        try:
+            logger.info("Resetting share_inputs to initial state...")
+            from fastdeploy.utils import fill_paddle_tensor
+
+            # Reset all paddle tensors to their initial fill values
+            max_num_seqs = self.scheduler_config.max_num_seqs
+
+            # Reset basic tensors to their default values
+            fill_paddle_tensor(self, "pre_ids", -1)
+            fill_paddle_tensor(self, "input_ids", self.model_config.pad_token_id)
+            fill_paddle_tensor(self, "prompt_ids", self.model_config.pad_token_id)
+            fill_paddle_tensor(self, "eos_token_id", 0)
+            fill_paddle_tensor(self, "top_p", self.model_config.top_p)
+            fill_paddle_tensor(self, "top_k", 0)
+            fill_paddle_tensor(self, "min_p", 0.0)
+            fill_paddle_tensor(self, "temperature", self.model_config.temperature)
+            fill_paddle_tensor(self, "penalty_score", self.model_config.penalty_score)
+            fill_paddle_tensor(self, "frequency_score", self.model_config.frequency_score)
+            fill_paddle_tensor(self, "presence_score", self.model_config.presence_score)
+            fill_paddle_tensor(self, "temp_scaled_logprobs", False)
+            fill_paddle_tensor(self, "top_p_normalized_logprobs", False)
+
+            # Reset list variables (not paddle tensors)
+            self.top_k_list = [0] * max_num_seqs
+            self.min_p_list = [0.0] * max_num_seqs
+
+            fill_paddle_tensor(self, "min_dec_len", self.model_config.min_length)
+            fill_paddle_tensor(self, "max_dec_len", self.model_config.max_model_len)
+
+            # Reset sequence length related buffers
+            fill_paddle_tensor(self, "seq_lens_this_time_buffer", 0)
+            if self.enable_expert_parallel:
+                fill_paddle_tensor(self, "seq_lens_this_time", 0)
+            fill_paddle_tensor(self, "seq_lens_encoder", 0)
+            fill_paddle_tensor(self, "seq_lens_decoder", 0)
+            fill_paddle_tensor(self, "step_seq_lens_encoder", 0)
+            fill_paddle_tensor(self, "step_seq_lens_decoder", 0)
+            fill_paddle_tensor(self, "prompt_lens", 0)
+            fill_paddle_tensor(self, "step_idx", 0)
+            # fill_paddle_tensor(self, "not_need_stop", False)
+            fill_paddle_tensor(self, "not_need_stop_device", False)
+            fill_paddle_tensor(self, "sampled_token_ids", -1)
+            fill_paddle_tensor(self, "stop_flags", True)
+
+            fill_paddle_tensor(self, "bad_tokens", -1)
+            fill_paddle_tensor(self, "bad_tokens_len", 1)
+            fill_paddle_tensor(self, "next_tokens", -1)
+            fill_paddle_tensor(self, "is_block_step", False)
+            fill_paddle_tensor(self, "is_chunk_step", False)
+            fill_paddle_tensor(self, "encoder_block_lens", 0)
+            fill_paddle_tensor(self, "step_block_list", -1)
+            fill_paddle_tensor(self, "step_lens", 0)
+            fill_paddle_tensor(self, "recover_block_list", -1)
+            fill_paddle_tensor(self, "recover_lens", 0)
+            fill_paddle_tensor(self, "need_block_list", -1)
+            fill_paddle_tensor(self, "need_block_len", 0)
+            fill_paddle_tensor(self, "used_list_len", 0)
+            fill_paddle_tensor(self, "infer_seed", 0)
+            fill_paddle_tensor(self, "first_token_ids", -1)
+            fill_paddle_tensor(self, "ori_seq_lens_encoder", 0)
+            fill_paddle_tensor(self, "system_lens", 0)
+            fill_paddle_tensor(self, "system_ids", -1)
+
+            fill_paddle_tensor(self, "ids_remove_padding", 0)
+            fill_paddle_tensor(self, "batch_id_per_token", 0)
+            fill_paddle_tensor(self, "cu_seqlens_q", 0)
+            fill_paddle_tensor(self, "cu_seqlens_k", 0)
+
+            # Reset thinking related buffers
+            fill_paddle_tensor(self, "enable_thinking", True)
+            fill_paddle_tensor(self, "max_think_lens", -1)
+            fill_paddle_tensor(self, "limit_think_status", 0)
+
+            # Reset reasoning buffers
+            fill_paddle_tensor(self, "reasoning_status", 0)
+            # Reset reasoning allowed tokens (not using fill_paddle_tensor since it's a fixed tensor)
+            self.reasoning_allowed_tokens = paddle.to_tensor([100973, 100975], dtype="int64")
+
+            # Reset block tables
+            fill_paddle_tensor(self, "block_tables", -1)
+
+            # Reset free list (requires special handling)
+            free_list = list(
+                range(
+                    self.cache_config.total_block_num - 1,
+                    int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
+                    -1,
+                )
+            )
+            self.free_list = paddle.to_tensor(free_list, dtype="int32")
+            self.free_list_len = paddle.full([1], len(free_list), dtype="int32")
+
+            # Reset stop sequences
+            fill_paddle_tensor(self, "stop_seqs_len", 0)
+            fill_paddle_tensor(self, "stop_seqs", -1)
+
+            # Reset other list variables
+            self.req_ids = [""] * max_num_seqs
+            self.entropy_list = [[] for _ in range(max_num_seqs)]
+            self.logits_processors_args = [{} for _ in range(max_num_seqs)]
+
+            # Reset speculative decoding tensors if enabled
+            if self.speculative_decoding:
+                max_draft_token_num = self.speculative_config.num_speculative_tokens
+                fill_paddle_tensor(self, "input_ids_cpu", -1)
+                fill_paddle_tensor(self, "accept_tokens", 0)
+                fill_paddle_tensor(self, "accept_num", 0)
+                fill_paddle_tensor(self, "draft_tokens", -1)
+                fill_paddle_tensor(self, "actual_draft_token_num", max_draft_token_num)
+                fill_paddle_tensor(self, "output_cum_offsets", 0)
+                fill_paddle_tensor(self, "output_padding_offset", 0)
+                fill_paddle_tensor(self, "step_draft_tokens", 0)
+                fill_paddle_tensor(self, "step_seq_lens_this_time", 0)
+                fill_paddle_tensor(self, "draft_logits", -1)
+                fill_paddle_tensor(self, "cu_batch_token_offset", 0)
+
+            # Reset multimodal related tensors
+            if self.enable_mm:
+                head_dim = self.model_config.head_dim
+                if "qwen" in self.model_config.model_type or "paddleocr" in self.model_config.model_type:
+                    rope_head_dim = head_dim
+                else:
+                    rope_head_dim = head_dim // 2
+
+                self.rope_emb = paddle.full(
+                    shape=[
+                        max_num_seqs,
+                        2,
+                        1,
+                        self.model_config.max_model_len,
+                        1,
+                        rope_head_dim,
+                    ],
+                    fill_value=0,
+                    dtype="float32",
+                )
+                self.image_features = None
+                self.image_features_list = None
+            else:
+                # Reset non-multimodal rope_emb
+                self.rope_emb = get_rope(
+                    rotary_dim=self.model_config.head_dim,
+                    position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
+                    base=self.model_config.rope_theta,
+                    model_config=self.model_config,
+                    partial_rotary_factor=self.model_config.partial_rotary_factor,
+                )
+
+            # Reset other miscellaneous tensors
+            fill_paddle_tensor(self, "mask_rollback", 0)
+            fill_paddle_tensor(self, "preempted_idx", 0)
+
+            logger.info("share_inputs reset completed")
+        except Exception as e:
+            logger.error(f"Resetting share inputs failed, skipping reset, error message is {e}")
+
 
 class ProposerInputBatch(InputBatch):
     def __init__(self, fd_config: FDConfig, target_model_input_batch: InputBatch) -> None:
@@ -512,8 +685,12 @@ class ProposerInputBatch(InputBatch):
         self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
-        self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
-        self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
+        if current_platform.is_cuda():
+            self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
+            self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
+        else:
+            self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
+            self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
         self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
         self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
         self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
@@ -659,8 +836,12 @@ class ProposerInputBatch(InputBatch):
         swap_data(self.stop_flags, i1, i2)
         swap_data(self.not_need_stop, i1, i2)
         swap_data(self.pre_ids, i1, i2)
-        swap_data(self.output_cum_offsets, i1, i2)
-        swap_data(self.output_padding_offset, i1, i2)
+        if current_platform.is_cuda():
+            swap_data(self.cu_seqlens_q_output, i1, i2)
+            swap_data(self.batch_id_per_token_output, i1, i2)
+        else:
+            swap_data(self.output_cum_offsets, i1, i2)
+            swap_data(self.output_padding_offset, i1, i2)
         swap_data(self.ids_remove_padding, i1, i2)
         swap_data(self.batch_id_per_token, i1, i2)
         swap_data(self.cu_seqlens_q, i1, i2)
@@ -693,6 +874,125 @@ class ProposerInputBatch(InputBatch):
             swap_data(self.attn_mask_offsets_full, i1, i2)
             swap_data(self.attn_mask_offsets_decoder, i1, i2)
             swap_data(self.decode_states, i1, i2)
+
+    def reset_model_inputs(self) -> None:
+        """
+        Reset all paddle tensors in self to their initial state.
+        This method clears the content of the model input buffers while preserving
+        their shapes and data types.
+        """
+        try:
+            logger.info("Resetting model_inputs to initial state...")
+            from fastdeploy.utils import fill_paddle_tensor
+
+            # Reset all paddle tensors to their default values
+            # Clone the target model inputs to restore initial values
+            self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
+            self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
+            fill_paddle_tensor(self, "input_ids_cpu", -1)
+            # acceptance rate decline when reset seq_lens_this_time
+            # self.seq_lens_this_time_buffer = paddle.clone(self.target_model_input_batch["seq_lens_this_time"])
+
+            self.seq_lens_encoder = paddle.clone(self.target_model_input_batch["seq_lens_encoder"])
+            self.seq_lens_decoder = paddle.clone(self.target_model_input_batch["seq_lens_decoder"])
+            self.prompt_lens = self.target_model_input_batch["prompt_lens"]
+            self.step_idx = paddle.clone(self.target_model_input_batch["step_idx"])
+            self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
+            self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
+            self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+            self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
+            self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
+            self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
+            self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
+            self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
+            self.cu_seqlens_k = paddle.clone(self.target_model_input_batch["cu_seqlens_k"])
+
+            # Reset target hidden states
+            fill_paddle_tensor(self, "target_hidden_states", 0)
+
+            # Reset rope embedding by recreating with default position_ids
+            tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
+            self.rope_emb = get_rope(
+                rotary_dim=self.model_config.head_dim,
+                position_ids=tmp_position_ids,
+                base=self.model_config.rope_theta,
+                model_config=self.model_config,
+                partial_rotary_factor=self.model_config.partial_rotary_factor,
+            )
+
+            # Reset generation hyperparameters from the main model
+            self.top_p = self.target_model_input_batch["top_p"]
+            self.top_k = self.target_model_input_batch["top_k"]
+            self.temperature = self.target_model_input_batch["temperature"]
+            self.eos_token_id = self.target_model_input_batch["eos_token_id"]
+            self.penalty_score = self.target_model_input_batch["penalty_score"]
+            self.frequency_score = self.target_model_input_batch["frequency_score"]
+            self.presence_score = self.target_model_input_batch["presence_score"]
+            self.infer_seed = self.target_model_input_batch["infer_seed"]
+
+            self.max_dec_len = self.target_model_input_batch["max_dec_len"]
+            self.min_dec_len = self.target_model_input_batch["min_dec_len"]
+
+            self.bad_tokens = self.target_model_input_batch["bad_tokens"]
+            self.bad_tokens_len = self.target_model_input_batch["bad_tokens_len"]
+
+            # Reset speculative decoding specific tensors
+            self.base_model_draft_tokens = self.target_model_input_batch["draft_tokens"]
+            self.substep = 0
+
+            # Reset draft tokens
+            fill_paddle_tensor(self, "draft_tokens", -1)
+
+            # Reset encoder block lens
+            self.encoder_block_lens = paddle.clone(self.target_model_input_batch["encoder_block_lens"])
+
+            # Reset free list (recreate with current cache config)
+            free_list = list(
+                range(
+                    self.cache_config.total_block_num - 1,
+                    int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
+                    -1,
+                )
+            )
+            self.free_list = paddle.to_tensor(free_list, dtype="int32")
+            self.free_list_len = paddle.full(shape=[1], fill_value=len(free_list), dtype="int32")
+
+            # Reset step and drop flags
+            fill_paddle_tensor(self, "is_block_step", False)
+            fill_paddle_tensor(self, "batch_drop", False)
+            fill_paddle_tensor(self, "used_list_len", 0)
+
+            # Reset last sequence lengths if applicable
+            if self.num_model_steps > 1:
+                fill_paddle_tensor(self, "last_seq_lens_this_time", -1)
+
+            # Reset input IDs length
+            fill_paddle_tensor(self, "input_ids_len", 0)
+
+            # Reset various scores and flags
+            self.temp_scaled_logprobs = self.target_model_input_batch["temp_scaled_logprobs"]
+            self.top_p_normalized_logprobs = self.target_model_input_batch["top_p_normalized_logprobs"]
+            self.accept_num = self.target_model_input_batch["accept_num"]
+            self.accept_tokens = self.target_model_input_batch["accept_tokens"]
+            self.draft_logits = self.target_model_input_batch["draft_logits"]
+            fill_paddle_tensor(self, "first_token_hidden_states", -1)
+            fill_paddle_tensor(self, "batch_token_num", 0)
+            fill_paddle_tensor(self, "next_token_num", 0)
+            fill_paddle_tensor(self, "cu_batch_token_offset", 0)
+            fill_paddle_tensor(self, "cu_next_token_offset", 0)
+            fill_paddle_tensor(self, "mask_rollback", 0)
+            fill_paddle_tensor(self, "recompute_token_num", self.num_model_steps - 1)
+
+            # Reset multimodal tensors if enabled
+            if self.enable_mm:
+                fill_paddle_tensor(self, "attn_mask_offsets", -1)
+                fill_paddle_tensor(self, "attn_mask_offsets_full", -1)
+                fill_paddle_tensor(self, "attn_mask_offsets_decoder", -1)
+                fill_paddle_tensor(self, "decode_states", -1)
+
+            logger.info("model_inputs reset completed")
+        except Exception as e:
+            logger.error(f"Resetting model inputs failed, skipping reset, error message is {e}")
 
 
 def reorder_split_prefill_and_decode_form_index_to_batch_id(input_batch: InputBatch):
@@ -736,6 +1036,28 @@ def reorder_split_prefill_and_decode(input_batch: InputBatch):
             right -= 1
 
 
+def _recover_tensor(recover_tensor, index_to_batch_id_list):
+    """
+    Reorder recover_tensor according to index_to_batch_id_list mapping.
+
+    Args:
+        recover_tensor: paddle.Tensor to be reordered.
+        index_to_batch_id_list: List mapping current indices to original batch IDs.
+
+    Returns:
+        A paddle.Tensor with elements restored to the original batch order.
+    """
+    sort_len = len(index_to_batch_id_list)
+    if isinstance(recover_tensor.place, paddle.CUDAPinnedPlace):
+        recover_res_tensor = paddle.empty_like(recover_tensor, device="cpu")
+    else:
+        recover_res_tensor = paddle.empty_like(recover_tensor)
+    recover_res_tensor[:sort_len] = recover_tensor[:sort_len][index_to_batch_id_list]
+    if sort_len < recover_res_tensor.shape[0]:
+        recover_res_tensor[sort_len:] = recover_tensor[sort_len:]
+    return recover_res_tensor
+
+
 def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reorder, recover_list):
     """
     Reorder model_output according to index_to_batch_id mapping.
@@ -750,10 +1072,8 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reor
     res_map = {}
     is_not_swapped = all(i == v for i, v in index_to_batch_id.items()) or not enable_pd_reorder
     # Create a new tensor to store the reordered results
-    sorted_keys = sorted(index_to_batch_id.keys())
     if not is_not_swapped:
-        index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
-        index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
+        src_order = [k for k, v in sorted(index_to_batch_id.items(), key=lambda x: x[1])]
     for recover_name in recover_list:
         if isinstance(output_cls, dict):
             recover_tensor = output_cls[recover_name]
@@ -765,9 +1085,7 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reor
 
         if isinstance(recover_tensor, paddle.Tensor):
             # Create a new tensor to store the reordered results
-            res_map[recover_name] = paddle.scatter_nd(
-                paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), recover_tensor, recover_tensor.shape
-            )
+            res_map[recover_name] = _recover_tensor(recover_tensor, src_order)
         elif isinstance(recover_tensor, list):
             real_recover_tensor = recover_tensor.copy()
             for i1, i2 in enumerate(index_to_batch_id):
@@ -795,48 +1113,31 @@ def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id, en
 
     sampled_token_ids = sampler_output.sampled_token_ids
     # Create a new tensor to store the reordered results
-    sorted_keys = sorted(index_to_batch_id.keys())
-    index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
-    index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
-
-    real_token_ids = paddle.scatter_nd(
-        paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), sampled_token_ids, sampled_token_ids.shape
-    )
+    src_order = [k for k, v in sorted(index_to_batch_id.items(), key=lambda x: x[1])]
+    real_token_ids = _recover_tensor(sampled_token_ids, src_order)
     sampler_output.sampled_token_ids = real_token_ids
-
     if sampler_output.logprobs_tensors is not None:
         logprob_token_ids = sampler_output.logprobs_tensors.logprob_token_ids
         logprobs = sampler_output.logprobs_tensors.logprobs
         selected_token_ranks = sampler_output.logprobs_tensors.selected_token_ranks
-        real_logprob_token_ids = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), logprob_token_ids, sampled_token_ids.shape
-        )
-
-        real_logprobs = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), logprobs, sampled_token_ids.shape
-        )
-        real_selected_token_ranks = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), selected_token_ranks, sampled_token_ids.shape
-        )
+        real_logprob_token_ids = _recover_tensor(logprob_token_ids, src_order)
+        real_logprobs = _recover_tensor(logprobs, src_order)
+        real_selected_token_ranks = _recover_tensor(selected_token_ranks, src_order)
         sampler_output.logprobs_tensors.logprob_token_ids = real_logprob_token_ids
         sampler_output.logprobs_tensors.logprobs = real_logprobs
         sampler_output.logprobs_tensors.sampled_token_ranks = real_selected_token_ranks
 
     if sampler_output.token_num_per_batch is not None:
         token_num_per_batch = sampler_output.token_num_per_batch
-        real_token_num_per_batch = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), token_num_per_batch, sampled_token_ids.shape
-        )
+        real_token_num_per_batch = _recover_tensor(token_num_per_batch, src_order)
         sampler_output.token_num_per_batch = real_token_num_per_batch
 
     if sampler_output.cu_batch_token_offset is not None:
         cu_batch_token_offset = sampler_output.cu_batch_token_offset
-        real_cu_batch_token_offset = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), cu_batch_token_offset, sampled_token_ids.shape
-        )
+        real_cu_batch_token_offset = _recover_tensor(cu_batch_token_offset, src_order)
         sampler_output.cu_batch_token_offset = real_cu_batch_token_offset
 
     if sampler_output.logits is not None:
         logits = sampler_output.logits
-        real_logits = paddle.gather(logits, index_to_batch_id_tensor, axis=0)
+        real_logits = _recover_tensor(logits, src_order)
         sampler_output.logits = real_logits
