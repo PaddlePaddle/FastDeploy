@@ -99,32 +99,39 @@ elif current_platform.is_maca():
 elif current_platform.is_intel_hpu():
     pass
 else:
-    from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu as _rebuild_padding_cpu_impl
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,
-        rebuild_padding as _rebuild_padding_impl,
+        limit_thinking_content_length_v1,
+        limit_thinking_content_length_v2,
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
         speculate_get_seq_lens_output,
-        speculate_save_output,
-        speculate_save_output_topk,
-        speculate_set_value_by_flags_and_idx,
-        speculate_step_paddle,
-        speculate_step_system_cache,
-        speculate_update,
-        speculate_set_stop_value_multi_seqs,
-        step_paddle,
-        step_system_cache,
-        update_inputs,
-        step_reschedule,
-        update_inputs_v1,
-        speculate_step_reschedule,
-        limit_thinking_content_length_v1,
-        limit_thinking_content_length_v2,
         speculate_limit_thinking_content_length_v1,
         speculate_limit_thinking_content_length_v2,
+        speculate_save_output,
+        speculate_save_output_topk,
+        speculate_set_stop_value_multi_seqs,
+        speculate_set_value_by_flags_and_idx,
+        speculate_step_paddle,
+        speculate_step_reschedule,
+        speculate_step_system_cache,
+        speculate_update,
+        step_paddle,
+        step_reschedule,
+        step_system_cache,
+        update_inputs,
+        update_inputs_v1,
     )
+
+    if current_platform.is_cuda():
+        from fastdeploy.model_executor.ops.gpu import (
+            rebuild_padding as _rebuild_padding_impl,
+        )
+    elif current_platform.is_cpu():
+        from fastdeploy.model_executor.ops.cpu import (
+            rebuild_padding_cpu as _rebuild_padding_cpu_impl,
+        )
 
 from fastdeploy.model_executor.entropy_utils import (
     calculate_logits_entropy,
