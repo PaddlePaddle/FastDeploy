@@ -1,17 +1,3 @@
-# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import asyncio
 import os
 import shutil
@@ -30,6 +16,7 @@ sys.path.insert(0, tests_dir)
 from e2e.utils.serving_utils import (
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,
+    FD_CONTROLLER_PORT,
     FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
     clean_ports,
@@ -47,11 +34,10 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    FD_CONTROLLER_PORT = int(os.getenv("FD_CONTROLLER_PORT", 8333))
     clean_ports([FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT, FD_CONTROLLER_PORT])
 
     env = os.environ.copy()
-    env["CUDA_VISIBLE_DEVICES"] = "0,1"
+    env["CUDA_VISIBLE_DEVICES"] = "6,7"
     env["ENABLE_V1_KVCACHE_SCHEDULER"] = "1"
 
     base_path = os.getenv("MODEL_PATH")
@@ -200,43 +186,113 @@ def get_metrics_dict(metrics_url):
 
     # Parse Prometheus metrics data
     metrics_data = resp.text
-    print(metrics_data)
     metrics_dict = parse_prometheus_to_dict(metrics_data)
-    # print("\nParsed dict:")
-    # print(metrics_dict)
-    print("num_requests_running:", metrics_dict["fastdeploy:num_requests_running"])
-    print("num_requests_waiting", metrics_dict["fastdeploy:num_requests_waiting"])
 
     return metrics_dict
 
 
-def test_metrics_with_clear_and_reset():
+def poll_metrics_until(metrics_url, predicate=None, timeout=10, interval=0.3):
     """
-    Test the metrics monitoring endpoint.
+    轮询 metrics 直到 predicate(metrics_dict) 返回 True 或超时。
+    返回最后一次拉取到的 metrics_dict。
+    """
+    deadline = time.time() + timeout
+    while True:
+        metrics = get_metrics_dict(metrics_url)
+        if predicate is None or predicate(metrics):
+            return metrics
+        if time.time() >= deadline:
+            return metrics
+        time.sleep(interval)
+
+
+def test_metrics_during_inference():
+    """
+    正常推理场景：并发 10 个请求，max_num_seqs=1。
+    验证 enqueued -> waiting -> running 各状态计数的正确性，以及无 preemption。
+
+    请求在系统中的流转路径：
+      1. 请求进入 _recv_request_loop -> enqueued.inc(1)
+      2. 调度器取走请求 -> enqueued.dec(N)，进入 resource_manager.waiting
+      3. schedule() 将 waiting 中的请求分配资源 -> running
+      4. update_metrics() 刷新 num_requests_running / num_requests_waiting / num_requests_preempted
     """
     metrics_url = f"http://0.0.0.0:{FD_METRICS_PORT}/metrics"
-
+    base_metrics = get_metrics_dict(metrics_url)
     async_concurrency(n=10)
 
-    time.sleep(0.3)
+    # 等待所有 10 个请求到达服务端
+    def all_requests_arrived(m):
+        total = m.get("fastdeploy:requests_number_total", 0) - base_metrics.get("fastdeploy:requests_number_total", 0)
+        return total >= 10
 
-    # ===== clear_load_weight =====
+    metrics = poll_metrics_until(metrics_url, all_requests_arrived, timeout=10)
+
+    running = metrics["fastdeploy:num_requests_running"]
+    waiting = metrics["fastdeploy:num_requests_waiting"]
+    preempted = metrics["fastdeploy:num_requests_preempted"]
+    enqueued = metrics["fastdeploy:num_requests_enqueued"]
+    total = metrics["fastdeploy:requests_number_total"] - base_metrics["fastdeploy:requests_number_total"]
+
+    assert total == 10, f"server should have received all 10 requests, got {total}"
+
+    # max_num_seqs=1，最多只有 1 个请求处于 running
+    assert running <= 1, f"at most 1 request should be running (max_num_seqs=1), got {running}"
+
+    # enqueued(已入队未调度) + waiting(已调度等资源) 覆盖剩余非 running 请求
+    # 由于异步时序，部分请求可能还在 enqueued，部分已到 waiting
+    non_running = enqueued + waiting
+    assert non_running >= 0, f"enqueued({enqueued}) + waiting({waiting}) should be non-negative"
+    assert (
+        running + non_running <= total
+    ), f"running({running}) + enqueued({enqueued}) + waiting({waiting}) should not exceed total({total})"
+
+    # max_num_seqs=1 不会触发抢占
+    assert preempted == 0, f"no preemption should be triggered, got {preempted}"
+
+
+def test_metrics_with_clear_and_reset():
+    """
+    权重清除场景：验证 reset_scheduler 接口调用后，metrics 指标是否被正确重置。
+    """
+    metrics_url = f"http://0.0.0.0:{FD_METRICS_PORT}/metrics"
+    base_metrics = get_metrics_dict(metrics_url)
+
+    # 1. 发送请求并等待所有请求到达
+    async_concurrency(n=10)
+
+    def all_requests_arrived(m):
+        total = m.get("fastdeploy:requests_number_total", 0) - base_metrics.get("fastdeploy:requests_number_total", 0)
+        return total >= 10
+
+    poll_metrics_until(metrics_url, all_requests_arrived, timeout=10)
+
+    # 2. 调用 clear_load_weight — 清除模型权重（RL 动态加载场景）
     clear_url = f"http://0.0.0.0:{FD_API_PORT}/clear_load_weight"
     print("Calling clear_load_weight...")
     r = requests.get(clear_url, timeout=30)
     assert r.status_code == 200, f"clear_load_weight failed: {r.status_code}"
 
-    metrics = get_metrics_dict(metrics_url)
+    # 3. 调用 reset_scheduler — 清空调度队列并重置资源管理器指标
+    reset_url = f"http://0.0.0.0:{FD_CONTROLLER_PORT}/controller/reset_scheduler"
+    print("Calling reset_scheduler...")
+    r = requests.post(reset_url, json={"reset": True}, timeout=30)
+    assert r.status_code == 200, f"reset_scheduler failed: {r.status_code}"
+
+    # 4. 检查 enqueued/running/waiting/preempted 指标应被 reset_metrics() 清零
+    metrics = poll_metrics_until(metrics_url, predicate=None, timeout=10)
+
+    enqueued = metrics["fastdeploy:num_requests_enqueued"]
     running = metrics["fastdeploy:num_requests_running"]
     waiting = metrics["fastdeploy:num_requests_waiting"]
+    preempted = metrics["fastdeploy:num_requests_preempted"]
+    total = metrics["fastdeploy:requests_number_total"] - base_metrics["fastdeploy:requests_number_total"]
 
-    print(
-        "ASSERT after the clear_load_weight operation, the value is 0 (Request interruption stopped inference, and related requests were cleared):",
-        running,
-        "waiting:",
-        waiting,
-    )
-    # assert running == 0 and waiting == 0, "Expected both running and waiting to be 0 after clear_load_weight"
+    assert total == 10, f"server should have received all 10 requests, got {total}"
+    assert enqueued == 0, f"after reset_scheduler, num_requests_running should be 0, got {running}"
+    assert running == 0, f"after reset_scheduler, num_requests_running should be 0, got {running}"
+    assert waiting == 0, f"after reset_scheduler, num_requests_waiting should be 0, got {waiting}"
+    assert preempted == 0, f"after reset_scheduler, num_requests_preempted should be 0, got {preempted}"
 
 
 if __name__ == "__main__":

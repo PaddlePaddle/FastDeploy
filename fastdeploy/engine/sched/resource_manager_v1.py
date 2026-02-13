@@ -1399,6 +1399,7 @@ class ResourceManagerV1(ResourceManager):
         main_process_metrics.available_gpu_block_num.set(self.total_block_number())
         main_process_metrics.batch_size.set(0)
         main_process_metrics.gpu_cache_usage_perc.set(0)
+        main_process_metrics.num_requests_enqueued.set(0)
         main_process_metrics.num_requests_running.set(0)
         main_process_metrics.num_requests_waiting.set(0)
         main_process_metrics.num_requests_preempted.set(0)
