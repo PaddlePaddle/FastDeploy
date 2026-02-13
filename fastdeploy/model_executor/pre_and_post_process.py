@@ -124,14 +124,22 @@ else:
         update_inputs_v1,
     )
 
+    _rebuild_padding_impl = None
+    _rebuild_padding_cpu_impl = None
     if current_platform.is_cuda():
-        from fastdeploy.model_executor.ops.gpu import (
-            rebuild_padding as _rebuild_padding_impl,
-        )
+        try:
+            from fastdeploy.model_executor.ops.gpu import (
+                rebuild_padding as _rebuild_padding_impl,
+            )
+        except ImportError:
+            pass
     elif current_platform.is_cpu():
-        from fastdeploy.model_executor.ops.cpu import (
-            rebuild_padding_cpu as _rebuild_padding_cpu_impl,  # pragma: no cover
-        )
+        try:
+            from fastdeploy.model_executor.ops.cpu import (
+                rebuild_padding_cpu as _rebuild_padding_cpu_impl,  # pragma: no cover
+            )
+        except ImportError:
+            pass
 
 from fastdeploy.model_executor.entropy_utils import (
     calculate_logits_entropy,
@@ -873,17 +881,34 @@ def rebuild_padding(
     Returns:
     """
     if current_platform.is_cuda():
-        hidden_states = _rebuild_padding_impl(
-            tmp_out,
-            cu_seqlens_q,
-            seq_len_this_time,
-            seq_lens_decoder,
-            seq_lens_encoder,
-            batch_id_per_token_output,
-            cu_seqlens_q_output,
-            first_token_out,
-            enable_logprob,
-        )
+        if _rebuild_padding_impl is None:
+            from fastdeploy.model_executor.ops.gpu import (
+                rebuild_padding as _rebuild_padding_impl_local,
+            )
+
+            hidden_states = _rebuild_padding_impl_local(
+                tmp_out,
+                cu_seqlens_q,
+                seq_len_this_time,
+                seq_lens_decoder,
+                seq_lens_encoder,
+                batch_id_per_token_output,
+                cu_seqlens_q_output,
+                first_token_out,
+                enable_logprob,
+            )
+        else:
+            hidden_states = _rebuild_padding_impl(
+                tmp_out,
+                cu_seqlens_q,
+                seq_len_this_time,
+                seq_lens_decoder,
+                seq_lens_encoder,
+                batch_id_per_token_output,
+                cu_seqlens_q_output,
+                first_token_out,
+                enable_logprob,
+            )
     elif current_platform.is_dcu():
         hidden_states = _rebuild_padding_impl(
             tmp_out,
@@ -915,14 +940,28 @@ def rebuild_padding(
             batch_id_per_token_output,
         )
     elif current_platform.is_cpu():
-        hidden_states = _rebuild_padding_cpu_impl(
-            tmp_out,
-            cu_seqlens_q,
-            seq_len_this_time,
-            seq_lens_decoder,
-            seq_lens_encoder,
-            batch_id_per_token_output,
-        )
+        if _rebuild_padding_cpu_impl is None:
+            from fastdeploy.model_executor.ops.cpu import (
+                rebuild_padding_cpu as _rebuild_padding_cpu_impl_local,
+            )
+
+            hidden_states = _rebuild_padding_cpu_impl_local(
+                tmp_out,
+                cu_seqlens_q,
+                seq_len_this_time,
+                seq_lens_decoder,
+                seq_lens_encoder,
+                batch_id_per_token_output,
+            )
+        else:
+            hidden_states = _rebuild_padding_cpu_impl(
+                tmp_out,
+                cu_seqlens_q,
+                seq_len_this_time,
+                seq_lens_decoder,
+                seq_lens_encoder,
+                batch_id_per_token_output,
+            )
     elif current_platform.is_maca():
         hidden_states = _rebuild_padding_impl(
             tmp_out,
