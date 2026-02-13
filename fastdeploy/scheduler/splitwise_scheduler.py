@@ -33,6 +33,7 @@ from fastdeploy.engine.request import (
     RequestMetrics,
     RequestOutput,
 )
+from fastdeploy.utils import envs
 from fastdeploy.utils import scheduler_logger as logger
 
 
@@ -610,7 +611,17 @@ class APIScheduler:
                 if node.load >= blur_max:
                     break
                 blur_idx = idx
-            node = random.choice(nodes[: blur_idx + 1])
+            # 确定性模式下使用确定性选择，否则保持原有随机行为
+            if envs.FD_DETERMINISTIC_MODE:
+                # 使用确定性选择策略：基于 request_id hash 选择
+                node_index = hash(str(req.request_id)) % (blur_idx + 1)
+                node = nodes[node_index]
+                print(
+                    f"[DETERMINISM-SCHEDULER] time={time.time():.6f} | req_id={req.request_id} | role={role} | node_index={node_index}/{blur_idx} | min_load={min_load}"
+                )
+            else:
+                # 保持原有随机选择行为
+                node = random.choice(nodes[: blur_idx + 1])
             logger.info(f"Schedule Req {req.request_id}(len:{req.prompt_token_ids_len}) to {node}")
             return node
 

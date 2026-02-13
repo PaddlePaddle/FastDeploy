@@ -91,10 +91,51 @@ class Qwen2MLP(nn.Layer):
 
     def forward(self, x, forward_meta):
         """ """
+        # PERF: Disabled for performance
+        # if FD_DETERMINISTIC_MODE and not forward_meta.step_use_cudagraph:
+        #     self._log_mlp_input(x, forward_meta)
+
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
+
+        # PERF: Disabled for performance
+        # if FD_DETERMINISTIC_MODE and not forward_meta.step_use_cudagraph:
+        #     self._log_mlp_intermediate(gate_up_out, "gate_up")
+
         down_out = self.down_proj(act_out)
+
+        # PERF: Disabled for performance
+        # if FD_DETERMINISTIC_MODE and not forward_meta.step_use_cudagraph:
+        #     self._log_mlp_output(down_out)
+
         return down_out
+
+    def _log_mlp_input(self, x, forward_meta):
+        """打印 MLP 输入"""
+        import time
+
+        layer_id = getattr(forward_meta, "current_layer_id", -1)
+        sample = x.flatten()[: min(5, x.numel())].cpu().numpy().tolist()
+        mean = float(x.cast("float32").mean())
+        print(
+            f"[DETERMINISM-MLP] time={time.time():.6f} | layer={layer_id} | "
+            f"input_shape={tuple(x.shape)} | samples={sample} | mean={mean:.4f}"
+        )
+
+    def _log_mlp_intermediate(self, tensor, name):
+        """打印 MLP 中间输出"""
+        sample = tensor.flatten()[: min(5, tensor.numel())].cpu().numpy().tolist()
+        mean = float(tensor.cast("float32").mean())
+        print(f"[DETERMINISM-MLP] {name}_shape={tuple(tensor.shape)} | samples={sample} | mean={mean:.4f}")
+
+    def _log_mlp_output(self, output):
+        """打印 MLP 输出"""
+        sample = output.flatten()[: min(5, output.numel())].cpu().numpy().tolist()
+        mean = float(output.cast("float32").mean())
+        std = float(output.cast("float32").std())
+        print(
+            f"[DETERMINISM-MLP] output_shape={tuple(output.shape)} | samples={sample} | mean={mean:.4f} | std={std:.4f}"
+        )
 
 
 class Qwen2Attention(nn.Layer):
@@ -150,7 +191,12 @@ class Qwen2DecoderLayer(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        layer_id = int(prefix.split(sep=".")[-1])
+        # Extract layer_id from prefix, use -1 if prefix is empty or invalid
+        try:
+            layer_id = int(prefix.split(sep=".")[-1]) if prefix else -1
+        except (ValueError, IndexError):
+            layer_id = -1
+        self.layer_id = layer_id
 
         self.self_attn = Qwen2Attention(
             fd_config=fd_config,
@@ -192,6 +238,12 @@ class Qwen2DecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
+        # if FD_DETERMINISTIC_MODE and not forward_meta.step_use_cudagraph:
+        #     # layer_id = getattr(self, 'layer_id', -1)
+        #     # print(f"[DETERMINISM-LAYER] Enter layer {layer_id} | "
+        #     #       f"hidden_states_shape={tuple(hidden_states.shape)} | "
+        #     #       f"residual_shape={tuple(residual.shape) if residual is not None else 'None'}")
+
         # Self Attention
         hidden_states, residual = self.input_layernorm(
             hidden_states, residual_input=residual, forward_meta=forward_meta
@@ -202,10 +254,21 @@ class Qwen2DecoderLayer(nn.Layer):
             forward_meta=forward_meta,
         )
 
+        # if FD_DETERMINISTIC_MODE and not forward_meta.step_use_cudagraph:
+        #     layer_id = getattr(self, 'layer_id', -1)
+        #     print(f"[DETERMINISM-LAYER] layer={layer_id} | after_attention | "
+        #           f"hidden_states_mean={float(hidden_states.cast('float32').mean()):.4f}")
+
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
         hidden_states = self.mlp(hidden_states, forward_meta)
+
+        # if FD_DETERMINISTIC_MODE and not forward_meta.step_use_cudagraph:
+        #     layer_id = getattr(self, 'layer_id', -1)
+        #     print(f"[DETERMINISM-LAYER] layer={layer_id} | after_mlp | "
+        #           f"hidden_states_mean={float(hidden_states.cast('float32').mean()):.4f} | "
+        #           f"residual_mean={float(residual.cast('float32').mean()):.4f}")
 
         return hidden_states, residual
 

@@ -452,6 +452,44 @@ class ResourceManagerV1(ResourceManager):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
         num_new_tokens = min(num_new_tokens, token_budget)
+
+        # Deterministic mode: align chunk boundaries to split_kv_size
+        # This ensures batch-invariant attention by making each chunk
+        # a multiple of the split-KV block size (default 16)
+        if envs.FD_DETERMINISTIC_MODE:
+            split_kv_size = envs.FD_DETERMINISTIC_SPLIT_KV_SIZE
+            # Calculate the current position relative to alignment
+            current_pos = request.num_computed_tokens
+            remaining_tokens = request.need_prefill_tokens - current_pos
+
+            # If remaining tokens are less than split_kv_size, process them all (final chunk)
+            if remaining_tokens < split_kv_size:
+                # Final chunk: no alignment needed since we're at sequence end
+                aligned_end = current_pos + remaining_tokens
+            else:
+                # Need to align to next split_kv_size boundary
+                # Calculate distance to next boundary
+                tokens_to_boundary = split_kv_size - (current_pos % split_kv_size)
+                # Check if we have enough budget to reach the boundary
+                if token_budget < tokens_to_boundary:
+                    # Not enough budget to reach next boundary: return 0
+                    # We'll wait for the next iteration with more budget
+                    num_new_tokens = 0
+                    request.with_image = False
+                    return num_new_tokens
+                # Align to next boundary
+                aligned_end = ((current_pos + token_budget) // split_kv_size) * split_kv_size
+                if aligned_end == current_pos:
+                    # Can't reach any boundary with this budget
+                    num_new_tokens = 0
+                    request.with_image = False
+                    return num_new_tokens
+            num_new_tokens = aligned_end - current_pos
+            # Don't exceed the original budget or remaining tokens
+            num_new_tokens = min(
+                num_new_tokens, token_budget, request.need_prefill_tokens - request.num_computed_tokens
+            )
+
         if (
             current_platform.is_intel_hpu()
             and request.need_prefill_tokens - request.num_computed_tokens > token_budget
@@ -1104,7 +1142,7 @@ class ResourceManagerV1(ResourceManager):
         Match and fetch cache for a task.
         """
         try:
-            (common_block_ids, matched_token_num, metrics) = self.cache_manager.request_match_blocks(
+            common_block_ids, matched_token_num, metrics = self.cache_manager.request_match_blocks(
                 request, self.config.cache_config.block_size
             )
 

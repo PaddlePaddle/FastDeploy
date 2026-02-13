@@ -33,6 +33,7 @@ try:
 except:
     flashmask_attention = None
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
@@ -244,6 +245,15 @@ class FlashAttentionBackend(AttentionBackend):
         self.encoder_block_shape_q: int = encoder_block_shape_q
         self.decoder_block_shape_q: int = decoder_block_shape_q
 
+        # Deterministic mode support for chunked prefill alignment
+        self.enable_deterministic_mode = envs.FD_DETERMINISTIC_MODE
+        self.deterministic_split_kv_size = envs.FD_DETERMINISTIC_SPLIT_KV_SIZE
+
+        # Deterministic mode: override decoder_block_shape_q to ensure batch-invariant attention
+        # When enabled, this aligns the split-KV block size with the chunked prefill alignment
+        if self.enable_deterministic_mode:
+            self.decoder_block_shape_q = self.deterministic_split_kv_size
+
         self.speculative_method = fd_config.speculative_config.method
         self.use_speculate = self.speculative_method is not None
         self.speculate_max_draft_token_num = fd_config.speculative_config.num_speculative_tokens
@@ -418,6 +428,10 @@ class FlashAttentionBackend(AttentionBackend):
                 self.rope_3d,
             )
 
+            # PERF: Disabled for performance
+            # if self.enable_deterministic_mode and not forward_meta.step_use_cudagraph:
+            #     self._log_attention_input_prefill(q, k, v, layer.layer_id, "prefill")
+
             res_encoder = flash_attn_func(
                 q,
                 k,
@@ -432,6 +446,10 @@ class FlashAttentionBackend(AttentionBackend):
                 kv_num_heads=self.kv_num_heads,
                 head_dim=self.head_dim,
             )[0].reshape([-1, self.attn_outputsize_tp])
+
+            # PERF: Disabled for performance
+            # if self.enable_deterministic_mode and not forward_meta.step_use_cudagraph:
+            #     self._log_attention_output(res_encoder, layer.layer_id, "prefill")
 
         res_decoder = append_attention(
             qkv,
@@ -502,4 +520,47 @@ class FlashAttentionBackend(AttentionBackend):
             )
             return res_encoder
         else:
+            # PERF: Disabled for performance
+            # if self.enable_deterministic_mode and not forward_meta.step_use_cudagraph:
+            #     self._log_attention_output(res_decoder, layer.layer_id, "decode")
             return res_decoder
+
+    def _log_attention_input_prefill(self, q, k, v, layer_id, stage):
+        """Log attention prefill input"""
+        import time
+
+        def _tensor_summary(name, tensor):
+            if tensor is None:
+                return f"{name}=None"
+            sample = tensor.flatten()[: min(5, tensor.numel())].cpu().numpy().tolist()
+            mean = float(tensor.cast("float32").mean())
+            return f"{name}=shape={tuple(tensor.shape)} samples={sample} mean={mean:.4f}"
+
+        print(
+            f"[DETERMINISM-ATTN] time={time.time():.6f} | "
+            f"layer={layer_id} | stage={stage} | "
+            f"{_tensor_summary('q', q)} | "
+            f"{_tensor_summary('k', k)} | "
+            f"{_tensor_summary('v', v)}"
+        )
+
+    def _log_attention_output(self, output, layer_id, stage):
+        """打印 Attention 输出"""
+        import time
+
+        if output is None:
+            return
+
+        sample = output.flatten()[: min(5, output.numel())].cpu().numpy().tolist()
+        mean = float(output.cast("float32").mean())
+        std = float(output.cast("float32").std())
+        max_val = float(output.max().item())
+        min_val = float(output.min().item())
+
+        print(
+            f"[DETERMINISM-ATTN] time={time.time():.6f} | "
+            f"layer={layer_id} | stage={stage} | "
+            f"output_shape={tuple(output.shape)} | "
+            f"samples={sample} | "
+            f"mean={mean:.4f} | std={std:.4f} | min={min_val:.4f} | max={max_val:.4f}"
+        )

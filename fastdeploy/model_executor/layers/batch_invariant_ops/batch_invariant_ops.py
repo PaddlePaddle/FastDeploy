@@ -210,9 +210,11 @@ def matmul_persistent(a: paddle.Tensor, b: paddle.Tensor, bias: paddle.Tensor | 
         c.stride(0),
         c.stride(1),  #
         NUM_SMS=NUM_SMS,  #
-        A_LARGE=int(a.numel() > 2**31),
-        B_LARGE=int(b.numel() > 2**31),
-        C_LARGE=int(c.numel() > 2**31),
+        # Use M*K, K*N, M*N instead of numel() to avoid cudaErrorStreamCaptureImplicit
+        # during CUDA Graph capture
+        A_LARGE=int(M * K > 2**31),
+        B_LARGE=int(K * N > 2**31),
+        C_LARGE=int(M * N > 2**31),
         HAS_BIAS=int(bias is not None),
         # The Triton compiler (when used with Paddle) cannot handle these variables as booleans. Explicitly cast to int so the compiler can process them.
         **configs[dtype],
@@ -490,7 +492,10 @@ def mean_batch_invariant(
     x: paddle.Tensor, axis: list[int] = [], keepdim: bool = False, dtype: paddle.dtype | None = None, out=None
 ) -> paddle.Tensor:
     assert dtype is None or dtype == paddle.float32, f"unsupported dtype: {dtype}"
-    if type(axis) is int:
+    if axis is None:  # Global mean (no axis specified)
+        n_elems = x.numel()
+        result = paddle.sum(x, keepdim=keepdim, dtype=paddle.float32) / n_elems
+    elif type(axis) is int:
         result = mean_dim(x, axis, keepdim=keepdim)
     elif len(axis) == 1:  # axis: int | Sequence[int]
         result = mean_dim(x, axis[0], keepdim=keepdim)
@@ -518,7 +523,7 @@ def is_batch_invariant_mode_enabled():
 
 
 def enable_batch_invariant_mode():
-    global _batch_invariant_MODE, _original_ops
+    global _batch_invariant_MODE
     if _batch_invariant_MODE:
         return
 
@@ -548,7 +553,7 @@ def enable_batch_invariant_mode():
 
 
 def disable_batch_invariant_mode():
-    global _batch_invariant_MODE, _original_ops
+    global _batch_invariant_MODE
     if not _batch_invariant_MODE:
         return
 
@@ -566,7 +571,6 @@ def disable_batch_invariant_mode():
 
 @contextlib.contextmanager
 def set_batch_invariant_mode(enabled: bool = True):
-    global _batch_invariant_MODE, _original_ops
     old_mode = _batch_invariant_MODE
     if enabled:
         enable_batch_invariant_mode()

@@ -200,6 +200,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
     # File path for file storage backend
     "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
+    # Enable deterministic inference mode for chunked prefill alignment
+    "FD_DETERMINISTIC_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_MODE", "0"))),
+    # Split KV block size for deterministic alignment (must be power of 2, default 16)
+    "FD_DETERMINISTIC_SPLIT_KV_SIZE": lambda: int(os.getenv("FD_DETERMINISTIC_SPLIT_KV_SIZE", "16")),
 }
 
 
