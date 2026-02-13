@@ -443,10 +443,6 @@ class FlashAttentionBackend(AttentionBackend):
                 head_dim=self.head_dim,
             )[0].reshape([-1, self.attn_outputsize_tp])
 
-            # PERF: Disabled for performance
-            # if self.enable_deterministic_mode and not forward_meta.step_use_cudagraph:
-            #     self._log_attention_output(res_encoder, layer.layer_id, "prefill")
-
         res_decoder = append_attention(
             qkv,
             forward_meta.caches[2 * layer.layer_id],
@@ -517,43 +513,3 @@ class FlashAttentionBackend(AttentionBackend):
             return res_encoder
         else:
             return res_decoder
-
-    def _log_attention_input_prefill(self, q, k, v, layer_id, stage):
-        """Log attention prefill input"""
-        import time
-
-        def _tensor_summary(name, tensor):
-            if tensor is None:
-                return f"{name}=None"
-            sample = tensor.flatten()[: min(5, tensor.numel())].cpu().numpy().tolist()
-            mean = float(tensor.cast("float32").mean())
-            return f"{name}=shape={tuple(tensor.shape)} samples={sample} mean={mean:.4f}"
-
-        print(
-            f"[DETERMINISM-ATTN] time={time.time():.6f} | "
-            f"layer={layer_id} | stage={stage} | "
-            f"{_tensor_summary('q', q)} | "
-            f"{_tensor_summary('k', k)} | "
-            f"{_tensor_summary('v', v)}"
-        )
-
-    def _log_attention_output(self, output, layer_id, stage):
-        """Log attention output"""
-        import time
-
-        if output is None:
-            return
-
-        sample = output.flatten()[: min(5, output.numel())].cpu().numpy().tolist()
-        mean = float(output.cast("float32").mean())
-        std = float(output.cast("float32").std())
-        max_val = float(output.max().item())
-        min_val = float(output.min().item())
-
-        print(
-            f"[DETERMINISM-ATTN] time={time.time():.6f} | "
-            f"layer={layer_id} | stage={stage} | "
-            f"output_shape={tuple(output.shape)} | "
-            f"samples={sample} | "
-            f"mean={mean:.4f} | std={std:.4f} | min={min_val:.4f} | max={max_val:.4f}"
-        )
