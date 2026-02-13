@@ -23,7 +23,7 @@ try:
     from paddle.nn.functional import swiglu
 except ImportError:
 
-    def swiglu(x, axis=-1):
+    def swiglu(x, axis=-1):  # pragma: no cover
         x0, x1 = paddle.chunk(x, chunks=2, axis=axis)
         return silu(x0) * x1
 

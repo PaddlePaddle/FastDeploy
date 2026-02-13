@@ -33,8 +33,8 @@ def load_deep_gemm():
     if current_platform.is_cuda():
         if get_sm_version() == 100:
             # SM100 should use PFCC DeepGemm
-            if hasattr(paddle, "compat") and hasattr(paddle.compat, "enable_torch_proxy"):
-                paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
+            if hasattr(paddle, "compat") and hasattr(paddle.compat, "enable_torch_proxy"):  # pragma: no cover
+                paddle.compat.enable_torch_proxy(scope={"deep_gemm"})  # pragma: no cover
             try:
                 import paddlefleet.ops.deep_gemm as deep_gemm
 
