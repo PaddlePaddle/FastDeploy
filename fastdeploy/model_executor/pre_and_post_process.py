@@ -46,9 +46,7 @@ if current_platform.is_iluvatar():
         update_inputs_v1,
     )
 elif current_platform.is_gcu():
-    from fastdeploy.model_executor.ops.gcu import (
-        get_padding_offset,
-    )
+    from fastdeploy.model_executor.ops.gcu import get_padding_offset
     from fastdeploy.model_executor.ops.gcu import (
         rebuild_padding as _rebuild_padding_impl,
     )
@@ -58,9 +56,7 @@ elif current_platform.is_gcu():
         update_inputs,
     )
 elif current_platform.is_dcu():
-    from fastdeploy.model_executor.ops.gpu import (
-        get_padding_offset,
-    )
+    from fastdeploy.model_executor.ops.gpu import get_padding_offset
     from fastdeploy.model_executor.ops.gpu import (
         rebuild_padding as _rebuild_padding_impl,
     )
