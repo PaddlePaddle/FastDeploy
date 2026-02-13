@@ -48,7 +48,8 @@ class ErnieRotaryEmbedding:
 
     def __call__(self, position_ids):
         bsz, max_seq_len = position_ids.shape[:2]
-        inv_freq = get_inv_freq(self.rotary_dim, self.base, position_ids.place)
+        inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+        inv_freq = inv_freq.to(position_ids.place)
         partial_rotary_position_ids = position_ids / self.partial_rotary_factor
         freqs = paddle.einsum("ij,k->ijk", partial_rotary_position_ids.cast("float32"), inv_freq)
         if paddle.is_compiled_with_xpu() or paddle.is_compiled_with_custom_device("iluvatar_gpu"):
