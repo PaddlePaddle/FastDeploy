@@ -2335,11 +2335,6 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
-        # PERF: Disabled for performance
-        # if envs.FD_DETERMINISTIC_MODE:
-        # print(f"[DETERMINISM-DEBUG] FD_DETERMINISTIC_MODE={envs.FD_DETERMINISTIC_MODE}, step_use_cudagraph={self.forward_meta.step_use_cudagraph}")
-        # self._log_deterministic_input()  # Temporarily disabled, complete input_ids logged in insert_tasks_v1 prefill stage
-
         if self.enable_mm:
             model_output = self.model(
                 self.forward_meta.ids_remove_padding,
@@ -2675,92 +2670,100 @@ class GPUModelRunner(ModelRunnerBase):
             forward_batch_reqs_list: forward_batch_reqs_list list (may contain None)
             stage: Stage identifier (e.g., "prefill", "decode", "forward")
         """
-        batch_size = None
-        for name, tensor in tensor_dict.items():
-            if tensor is not None and hasattr(tensor, "shape"):
-                batch_size = tensor.shape[0]
-                break
-
-        if batch_size is None:
-            return
-
-        # Check if it contains prefill/decode information
-        prefill_count = 0
-        decode_count = 0
-        if hasattr(self, "share_inputs"):
-            if "seq_lens_encoder" in self.share_inputs:
-                seq_lens_encoder = self.share_inputs["seq_lens_encoder"].cpu().numpy()
-                prefill_count = int((seq_lens_encoder > 0).sum())
-                decode_count = int(batch_size - prefill_count)
-
-        # Build stage information
-        stage_info = f"{stage}"
-        if prefill_count > 0 or decode_count > 0:
-            stage_info += f" (prefill={prefill_count}, decode={decode_count})"
-
-        # Compute overall batch MD5
-        batch_md5_info = []
-        for name, tensor in tensor_dict.items():
-            if tensor is not None:
-                batch_md5_info.append(self._compute_tensor_md5(tensor, name, prefix="batch_"))
-
-        # Log overall batch MD5
         if not envs.FD_DETERMINISTIC_LOG_MODE:
             return
 
-        req_id_str = ""
-        if forward_batch_reqs_list is not None:
-            req_info = []
-            for i, req in enumerate(forward_batch_reqs_list):
-                if req is not None:
-                    req_info.append(f"[{i}]{req.request_id}")
-            req_id_str = ", ".join(req_info)
+        # Get batch size from first valid tensor
+        batch_size = self._get_batch_size(tensor_dict)
+        if batch_size is None:
+            return
 
+        # Get prefill/decode counts
+        prefill_count, decode_count, seq_lens_encoder = self._get_stage_counts(batch_size)
+
+        # Build stage information
+        stage_info = stage
+        if prefill_count > 0 or decode_count > 0:
+            stage_info += f" (prefill={prefill_count}, decode={decode_count})"
+
+        # Compute and log batch MD5
+        batch_md5_info = [
+            self._compute_tensor_md5(tensor, name, prefix="batch_")
+            for name, tensor in tensor_dict.items()
+            if tensor is not None
+        ]
+
+        # Log overall batch MD5
+        req_id_str = self._build_req_id_str(forward_batch_reqs_list)
         print(
             f"[DETERMINISM-MD5] stage={stage_info} | batch_size={batch_size} | "
             + (f"requests: {req_id_str} | " if req_id_str else "")
             + " | ".join(batch_md5_info)
         )
 
-        # Only compute per-request MD5 in decode phase (each request has only 1 token in decode)
-        # In decode phase, tensor shape is [batch_size, hidden_dim] or [batch_size, vocab_size]
-        # Can split by batch dimension directly
-        # Note: Even in mixed batch (both prefill and decode), output MD5 for decode requests
-        if decode_count > 0 and forward_batch_reqs_list is not None:
+        # Log per-request MD5 for decode requests
+        self._log_per_request_md5s(
+            tensor_dict, forward_batch_reqs_list, batch_size, prefill_count, decode_count, seq_lens_encoder
+        )
+
+    def _get_batch_size(self, tensor_dict):
+        """Get batch size from first tensor with a shape."""
+        for name, tensor in tensor_dict.items():
+            if tensor is not None and hasattr(tensor, "shape"):
+                return tensor.shape[0]
+        return None
+
+    def _get_stage_counts(self, batch_size):
+        """Get prefill/decode counts and seq_lens_encoder."""
+        prefill_count = 0
+        decode_count = 0
+        seq_lens_encoder = None
+
+        if hasattr(self, "share_inputs") and "seq_lens_encoder" in self.share_inputs:
+            seq_lens_encoder = self.share_inputs["seq_lens_encoder"].cpu().numpy()
+            prefill_count = int((seq_lens_encoder > 0).sum())
+            decode_count = int(batch_size - prefill_count)
+
+        return prefill_count, decode_count, seq_lens_encoder
+
+    def _build_req_id_str(self, forward_batch_reqs_list):
+        """Build request ID string from forward_batch_reqs_list."""
+        if forward_batch_reqs_list is None:
+            return ""
+        req_info = [f"[{i}]{req.request_id}" for i, req in enumerate(forward_batch_reqs_list) if req is not None]
+        return ", ".join(req_info)
+
+    def _log_per_request_md5s(
+        self, tensor_dict, forward_batch_reqs_list, batch_size, prefill_count, decode_count, seq_lens_encoder
+    ):
+        """Log per-request MD5 for decode requests.
+
+        In decode phase, tensor shape is [batch_size, hidden_dim] or [batch_size, vocab_size].
+        Can split by batch dimension directly.
+        """
+        if decode_count == 0 or forward_batch_reqs_list is None:
+            return
+
+        for i, req in enumerate(forward_batch_reqs_list):
+            if req is None or i >= batch_size:
+                continue
+
+            # Check if this is a decode request
             if seq_lens_encoder is not None:
-                # Use seq_lens_encoder to distinguish prefill and decode requests
-                # seq_lens_encoder[i] == 0 indicates decode request
-                for i, req in enumerate(forward_batch_reqs_list):
-                    if req is not None and i < batch_size and i < len(seq_lens_encoder):
-                        # Only compute MD5 for decode requests (seq_lens_encoder[i] == 0)
-                        if int(seq_lens_encoder[i]) == 0:
-                            req_id = req.request_id
-                            req_md5_info = []
-                            for name, tensor in tensor_dict.items():
-                                if tensor is not None and hasattr(tensor, "shape"):
-                                    # In decode phase, each request has only 1 token, can index directly
-                                    if len(tensor.shape) >= 2:
-                                        req_tensor = tensor[i : i + 1]  # Extract single request data, keep dimensions
-                                        req_md5_info.append(self._compute_tensor_md5(req_tensor, name))
+                if i >= len(seq_lens_encoder) or int(seq_lens_encoder[i]) != 0:
+                    continue  # Skip prefill requests
+            elif prefill_count > 0:
+                continue  # Mixed batch without seq_lens_encoder, skip all
 
-                            if req_md5_info:
-                                print(f"[DETERMINISM-MD5-REQ] {req_id} | decode | " + " | ".join(req_md5_info))
-            else:
-                # Fallback: If cannot get seq_lens_encoder, only handle pure decode batches
-                if prefill_count == 0:
-                    for i, req in enumerate(forward_batch_reqs_list):
-                        if req is not None and i < batch_size:
-                            req_id = req.request_id
-                            req_md5_info = []
-                            for name, tensor in tensor_dict.items():
-                                if tensor is not None and hasattr(tensor, "shape"):
-                                    # In decode phase, each request has only 1 token, can index directly
-                                    if len(tensor.shape) >= 2:
-                                        req_tensor = tensor[i : i + 1]  # Extract single request data, keep dimensions
-                                        req_md5_info.append(self._compute_tensor_md5(req_tensor, name))
+            req_id = req.request_id
+            req_md5_info = [
+                self._compute_tensor_md5(tensor[i : i + 1], name)
+                for name, tensor in tensor_dict.items()
+                if tensor is not None and hasattr(tensor, "shape") and len(tensor.shape) >= 2
+            ]
 
-                            if req_md5_info:
-                                print(f"[DETERMINISM-MD5-REQ] {req_id} | decode | " + " | ".join(req_md5_info))
+            if req_md5_info:
+                print(f"[DETERMINISM-MD5-REQ] {req_id} | decode | " + " | ".join(req_md5_info))
 
     def _log_deterministic_input(self):
         """Log determinism inference input information, supports multiple batch requests"""

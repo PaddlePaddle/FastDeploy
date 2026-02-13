@@ -428,10 +428,6 @@ class FlashAttentionBackend(AttentionBackend):
                 self.rope_3d,
             )
 
-            # PERF: Disabled for performance
-            # if self.enable_deterministic_mode and not forward_meta.step_use_cudagraph:
-            #     self._log_attention_input_prefill(q, k, v, layer.layer_id, "prefill")
-
             res_encoder = flash_attn_func(
                 q,
                 k,
@@ -520,9 +516,6 @@ class FlashAttentionBackend(AttentionBackend):
             )
             return res_encoder
         else:
-            # PERF: Disabled for performance
-            # if self.enable_deterministic_mode and not forward_meta.step_use_cudagraph:
-            #     self._log_attention_output(res_decoder, layer.layer_id, "decode")
             return res_decoder
 
     def _log_attention_input_prefill(self, q, k, v, layer_id, stage):

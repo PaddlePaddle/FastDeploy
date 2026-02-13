@@ -91,27 +91,16 @@ class Qwen2MLP(nn.Layer):
 
     def forward(self, x, forward_meta):
         """ """
-        # PERF: Disabled for performance
-        # if FD_DETERMINISTIC_MODE and not forward_meta.step_use_cudagraph:
-        #     self._log_mlp_input(x, forward_meta)
 
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
 
-        # PERF: Disabled for performance
-        # if FD_DETERMINISTIC_MODE and not forward_meta.step_use_cudagraph:
-        #     self._log_mlp_intermediate(gate_up_out, "gate_up")
-
         down_out = self.down_proj(act_out)
-
-        # PERF: Disabled for performance
-        # if FD_DETERMINISTIC_MODE and not forward_meta.step_use_cudagraph:
-        #     self._log_mlp_output(down_out)
 
         return down_out
 
     def _log_mlp_input(self, x, forward_meta):
-        """打印 MLP 输入"""
+        """Log MLP input"""
         import time
 
         layer_id = getattr(forward_meta, "current_layer_id", -1)
@@ -123,13 +112,13 @@ class Qwen2MLP(nn.Layer):
         )
 
     def _log_mlp_intermediate(self, tensor, name):
-        """打印 MLP 中间输出"""
+        """Log MLP intermediate output"""
         sample = tensor.flatten()[: min(5, tensor.numel())].cpu().numpy().tolist()
         mean = float(tensor.cast("float32").mean())
         print(f"[DETERMINISM-MLP] {name}_shape={tuple(tensor.shape)} | samples={sample} | mean={mean:.4f}")
 
     def _log_mlp_output(self, output):
-        """打印 MLP 输出"""
+        """Log MLP output"""
         sample = output.flatten()[: min(5, output.numel())].cpu().numpy().tolist()
         mean = float(output.cast("float32").mean())
         std = float(output.cast("float32").std())
