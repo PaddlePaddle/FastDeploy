@@ -47,8 +47,8 @@ if current_platform.is_iluvatar():
     )
 elif current_platform.is_gcu():
     from fastdeploy.model_executor.ops.gcu import get_padding_offset  # pragma: no cover
-    from fastdeploy.model_executor.ops.gcu import (  # pragma: no cover
-        rebuild_padding as _rebuild_padding_impl,
+    from fastdeploy.model_executor.ops.gcu import (
+        rebuild_padding as _rebuild_padding_impl,  # pragma: no cover
     )
     from fastdeploy.model_executor.ops.gcu import (  # pragma: no cover
         save_output,
@@ -57,8 +57,8 @@ elif current_platform.is_gcu():
     )
 elif current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import get_padding_offset  # pragma: no cover
-    from fastdeploy.model_executor.ops.gpu import (  # pragma: no cover
-        rebuild_padding as _rebuild_padding_impl,
+    from fastdeploy.model_executor.ops.gpu import (
+        rebuild_padding as _rebuild_padding_impl,  # pragma: no cover
     )
     from fastdeploy.model_executor.ops.gpu import (  # pragma: no cover
         save_output,
@@ -129,8 +129,8 @@ else:
             rebuild_padding as _rebuild_padding_impl,
         )
     elif current_platform.is_cpu():
-        from fastdeploy.model_executor.ops.cpu import (  # pragma: no cover
-            rebuild_padding_cpu as _rebuild_padding_cpu_impl,
+        from fastdeploy.model_executor.ops.cpu import (
+            rebuild_padding_cpu as _rebuild_padding_cpu_impl,  # pragma: no cover
         )
 
 from fastdeploy.model_executor.entropy_utils import (
