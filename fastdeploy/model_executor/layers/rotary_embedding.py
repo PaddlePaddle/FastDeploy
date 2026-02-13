@@ -449,7 +449,8 @@ class ErnieVlRotaryEmbedding3D:
 
         position_ids = position_ids / self.paritial_rotary_factor
 
-        indices = get_inv_freq(self.rotary_dim, self.base, position_ids.place)
+        indices = paddle.arange(0, self.rotary_dim, 2, dtype="float32")
+        indices = 1 / self.base ** (indices / self.rotary_dim)
         # sinusoid_inp: [bsz(1), seq_len, 1, head_dim // 2]
         sinusoid_inp = position_ids.unsqueeze(-1) * indices.unsqueeze(0)
         # pos_emb: [bsz(1), seq_len, 1, head_dim]
@@ -555,7 +556,8 @@ class QwenVlRotaryEmbedding3D:
 
         position_ids = position_ids / self.paritial_rotary_factor
 
-        indices = get_inv_freq(self.rotary_dim, self.base, position_ids.place)
+        indices = paddle.arange(0, self.rotary_dim, 2, dtype="float32")
+        indices = 1 / self.base ** (indices / self.rotary_dim)
         # sinusoid_inp: [bsz(1), seq_len, 1, head_dim // 2]
         sinusoid_inp = position_ids.unsqueeze(-1) * indices.unsqueeze(0)
         # pos_emb: [bsz(1), seq_len, 1, head_dim]
