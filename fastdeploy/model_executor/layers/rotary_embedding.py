@@ -31,12 +31,10 @@ from .utils import CpuGuard
 
 
 @functools.lru_cache(maxsize=128)
-def get_inv_freq(rotary_dim, base, device_str):
+def get_inv_freq(rotary_dim, base, device):
     # Calculate inverse frequency for rotary embedding
     inv_freq = base ** (-paddle.arange(0, rotary_dim, 2, dtype="float32") / rotary_dim)
-    if str(inv_freq.place) != device_str:
-        return inv_freq.to(device_str)
-    return inv_freq
+    return inv_freq.to(device)
 
 
 class ErnieRotaryEmbedding:
@@ -50,7 +48,7 @@ class ErnieRotaryEmbedding:
 
     def __call__(self, position_ids):
         bsz, max_seq_len = position_ids.shape[:2]
-        inv_freq = get_inv_freq(self.rotary_dim, self.base, str(paddle.get_device()))
+        inv_freq = get_inv_freq(self.rotary_dim, self.base, position_ids.place)
         partial_rotary_position_ids = position_ids / self.partial_rotary_factor
         freqs = paddle.einsum("ij,k->ijk", partial_rotary_position_ids.cast("float32"), inv_freq)
         if paddle.is_compiled_with_xpu() or paddle.is_compiled_with_custom_device("iluvatar_gpu"):
@@ -97,7 +95,7 @@ class GlmRotaryEmbedding:
 
     def __call__(self, position_ids):
         bsz, max_seq_len = position_ids.shape[:2]
-        inv_freq = get_inv_freq(self.rotary_dim, self.base, str(paddle.get_device()))
+        inv_freq = get_inv_freq(self.rotary_dim, self.base, position_ids.place)
         freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
         # shape: [B, S, D/2]
         rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim // 2), dtype="float32")
@@ -121,7 +119,7 @@ class QwenRotaryEmbedding:
     def __call__(self, position_ids):
         bsz, max_seq_len = position_ids.shape[:2]
         rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
-        inv_freq = get_inv_freq(self.rotary_dim, self.base, str(paddle.get_device()))
+        inv_freq = get_inv_freq(self.rotary_dim, self.base, position_ids.place)
 
         # shape: [B, S, D/2]
         freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
@@ -451,7 +449,7 @@ class ErnieVlRotaryEmbedding3D:
 
         position_ids = position_ids / self.paritial_rotary_factor
 
-        indices = get_inv_freq(self.rotary_dim, self.base, str(paddle.get_device()))
+        indices = get_inv_freq(self.rotary_dim, self.base, position_ids.place)
         # sinusoid_inp: [bsz(1), seq_len, 1, head_dim // 2]
         sinusoid_inp = position_ids.unsqueeze(-1) * indices.unsqueeze(0)
         # pos_emb: [bsz(1), seq_len, 1, head_dim]
@@ -557,8 +555,7 @@ class QwenVlRotaryEmbedding3D:
 
         position_ids = position_ids / self.paritial_rotary_factor
 
-        indices = paddle.arange(0, self.rotary_dim, 2, dtype="float32")
-        indices = 1 / self.base ** (indices / self.rotary_dim)
+        indices = get_inv_freq(self.rotary_dim, self.base, position_ids.place)
         # sinusoid_inp: [bsz(1), seq_len, 1, head_dim // 2]
         sinusoid_inp = position_ids.unsqueeze(-1) * indices.unsqueeze(0)
         # pos_emb: [bsz(1), seq_len, 1, head_dim]
