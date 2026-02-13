@@ -30,7 +30,8 @@ from fastdeploy.model_executor.utils import (
 
 from .quant_base import QuantConfigBase, QuantMethodBase
 
-paddle.compat.enable_torch_proxy(scope={"flashinfer"})
+if hasattr(paddle, "compat") and hasattr(paddle.compat, "enable_torch_proxy"):
+    paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
 
 def next_power_of_2(n: int):
