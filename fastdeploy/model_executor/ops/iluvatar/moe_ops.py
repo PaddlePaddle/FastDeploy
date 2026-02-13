@@ -1,3 +1,4 @@
+"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,116 +12,100 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
 
-from __future__ import annotations
+from typing import Optional
 
 import paddle
-
 try:
     from paddle.nn.functional import swiglu
 except ImportError:
-
     def swiglu(x):
         x, y = paddle.chunk(x, chunks=2, axis=-1)
         return paddle.nn.functional.silu(x) * y
 
+from paddle.nn.quant import weight_only_linear
+
+try:
+    from fastdeploy.model_executor.ops.iluvatar import w8a16_group_gemm
+except ImportError:
+    w8a16_group_gemm = None
+
+
+def group_gemm(
+    input: paddle.Tensor,
+    tokens_expert_prefix_sum: paddle.Tensor,
+    weight: paddle.Tensor,
+    scale: paddle.Tensor,
+    output: paddle.Tensor,
+):
+    assert (
+        input.dim() == 2
+        and tokens_expert_prefix_sum.dim() == 1
+        and weight.dim() == 3
+        and scale.dim() == 2
+        and output.dim() == 2
+    )
+    num_tokens = input.shape[0]
+    dim_in = input.shape[1]
+    dim_out = weight.shape[1]
+    num_experts = weight.shape[0]
+
+    # check shape
+    assert tokens_expert_prefix_sum.shape == [
+        num_experts,
+    ]
+    assert weight.shape == [num_experts, dim_out, dim_in]
+    assert scale.shape == [num_experts, dim_out]
+    assert output.shape == [num_tokens, dim_out]
+
+    # check dtype
+    assert input.dtype in (paddle.float16, paddle.bfloat16)
+    assert scale.dtype == input.dtype and output.dtype == input.dtype
+    assert tokens_expert_prefix_sum.dtype == paddle.int64
+    assert weight.dtype == paddle.int8
+
+    # check others
+    assert tokens_expert_prefix_sum.place.is_cpu_place()
+    assert tokens_expert_prefix_sum[-1] == num_tokens
+    for i in range(num_experts):
+        expert_start = 0 if i == 0 else tokens_expert_prefix_sum[i - 1]
+        expert_end = tokens_expert_prefix_sum[i]
+        if expert_start == expert_end:
+            continue
+        input_i = input[expert_start:expert_end]
+        weight_i = weight[i]
+        scale_i = scale[i]
+        # avoid d2d?
+        output[expert_start:expert_end] = weight_only_linear(
+            input_i, weight_i, weight_scale=scale_i, weight_dtype="int8", group_size=-1
+        )
+
 
 def iluvatar_moe_expert_ffn(
-    x,
-    w1,
-    w2,
-    topk_idx,
-    topk_weights,
-    ep_size,
-    ep_rank,
-    tp_size,
-    tp_rank,
-    group,
-    expert_num,
-    hidden_size,
-    inter_size,
-    act_type="swiglu",
-    weight_dtype="float16",
+    permute_input: paddle.Tensor,
+    tokens_expert_prefix_sum: paddle.Tensor,
+    up_gate_proj_weight: paddle.Tensor,
+    down_proj_weight: paddle.Tensor,
+    up_gate_proj_bias: Optional[paddle.Tensor],
+    up_gate_proj_scale: Optional[paddle.Tensor],
+    down_proj_scale: Optional[paddle.Tensor],
+    down_proj_in_scale: Optional[paddle.Tensor],
+    expert_idx_per_token: Optional[paddle.Tensor],
+    quant_method: str,
+    used_in_ep_low_latency: bool,
 ):
-    """
-    iluvatar moe expert ffn
-    """
-    # 1. 路由输入数据
-    # 计算每个rank处理的experts数量
-    num_local_experts = expert_num // ep_size
-    # 计算当前rank处理的experts范围
-    expert_start_idx = ep_rank * num_local_experts
-    expert_end_idx = expert_start_idx + num_local_experts
-
-    # 找出当前rank需要处理的token
-    # mask [batch_size, top_k]
-    mask = (topk_idx >= expert_start_idx) & (topk_idx < expert_end_idx)
-    # [num_tokens] 哪些token被选中
-    token_indices = paddle.nonzero(mask)
-    if token_indices.shape[0] == 0:
-        return paddle.zeros_like(x)
-
-    # 获取选中token的原始索引和对应的expert索引
-    batch_indices = token_indices[:, 0]
-    k_indices = token_indices[:, 1]
-
-    # 获取选中的experts id，并转为本地索引
-    selected_experts = topk_idx[batch_indices, k_indices] - expert_start_idx
-    # 获取对应的权重
-    selected_weights = topk_weights[batch_indices, k_indices]
-
-    # [num_tokens, hidden_size]
-    selected_x = x.index_select(batch_indices, axis=0)
-
-    # 2. 计算FFN
-    # 准备输出tensor
-    final_output = paddle.zeros_like(x)
-
-    # 遍历本地每个expert进行计算
-    for i in range(num_local_experts):
-        # 找出当前expert负责的token
-        expert_mask = selected_experts == i
-        if not expert_mask.any():
-            continue
-
-        # [num_expert_tokens]
-        expert_indices = paddle.nonzero(expert_mask).flatten()
-        # [num_expert_tokens, hidden_size]
-        expert_input = selected_x.index_select(expert_indices, axis=0)
-
-        # 获取当前expert的权重
-        # w1: [expert_num, inter_size * 2, hidden_size]
-        # w2: [expert_num, hidden_size, inter_size]
-        curr_w1 = w1[i].t()  # [hidden_size, inter_size * 2]
-        curr_w2 = w2[i].t()  # [inter_size, hidden_size]
-
-        # FFN计算
-        # [num_expert_tokens, inter_size * 2]
-        ffn1_output = paddle.matmul(expert_input, curr_w1)
-
-        # 激活函数
-        if act_type == "swiglu":
-            act_out = swiglu(ffn1_output)
-        else:
-            # 默认gelu
-            act_out = paddle.nn.functional.gelu(ffn1_output)
-
-        # [num_expert_tokens, hidden_size]
-        ffn2_output = paddle.matmul(act_out, curr_w2)
-
-        # 加权
-        # [num_expert_tokens, 1]
-        expert_weights = selected_weights.index_select(expert_indices, axis=0).unsqueeze(-1)
-        weighted_output = ffn2_output * expert_weights
-
-        # 累加到最终结果
-        # 注意：这里需要将结果scatter回原来的位置
-        # 获取在原始batch中的索引
-        original_indices = batch_indices.index_select(expert_indices, axis=0)
-        final_output.index_add_(original_indices, weighted_output, axis=0)
-
-    # 3. AllReduce聚合结果 (如果使用了EP)
-    if ep_size > 1:
-        paddle.distributed.all_reduce(final_output, group=group)
-
-    return final_output
+    assert up_gate_proj_bias is None
+    assert up_gate_proj_scale is not None
+    assert down_proj_scale is not None
+    assert down_proj_in_scale is None
+    assert expert_idx_per_token is None
+    assert quant_method in ("weight_only_int8")
+    assert not used_in_ep_low_latency
+    tokens_expert_prefix_sum_cpu = tokens_expert_prefix_sum.to("cpu")
+    ffn1_output = w8a16_group_gemm(
+        permute_input, up_gate_proj_weight, up_gate_proj_scale, tokens_expert_prefix_sum_cpu, -1
+    )
+    act_out = swiglu(ffn1_output)
+    output = w8a16_group_gemm(act_out, down_proj_weight, down_proj_scale, tokens_expert_prefix_sum_cpu, -1)
+    return output
