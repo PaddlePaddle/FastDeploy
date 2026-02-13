@@ -13,8 +13,8 @@ Usage:
     # Step 3: Stop server
     bash fastdeploy/stop.sh
 
-    # Step 4: Start server with determinism enabled
-    bash ./tests/determinitic/start_fd.sh 1
+    # Step 4: Start server with determinism enabled and logging ON
+    bash ./tests/determinitic/start_fd.sh 1 1
 
     # Step 5: Run deterministic test (expected: results consistent)
     python ./tests/determinitic/test_determinism_verification.py --phase deterministic
@@ -22,8 +22,11 @@ Usage:
 Arguments:
     --phase {deterministic,non-deterministic}
         Test mode
-        - deterministic: determinism enabled, expected MD5 consistency
+        - deterministic: determinism enabled with logging, expected MD5 consistency
         - non-deterministic: determinism disabled, expected different outputs
+
+Note: The deterministic test requires FD_DETERMINISTIC_LOG_MODE=1 to extract MD5 values
+      from logs for verification.
 """
 
 import argparse

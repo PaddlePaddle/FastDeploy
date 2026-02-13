@@ -204,6 +204,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DETERMINISTIC_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_MODE", "0"))),
     # Split KV block size for deterministic alignment (must be power of 2, default 16)
     "FD_DETERMINISTIC_SPLIT_KV_SIZE": lambda: int(os.getenv("FD_DETERMINISTIC_SPLIT_KV_SIZE", "16")),
+    # Enable determinism logging (print MD5 hashes and debug info)
+    "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
 }
 
 

@@ -13,13 +13,13 @@
 # limitations under the License.
 
 """
-测试 Paddle Attention 的确定性
+Tests for Paddle Attention Determinism
 
-测试场景：
-1. 同一批大小多次运行，检查结果是否一致
-2. 不同批大小运行，检查结果是否一致（测试批量不变性）
-3. 测试 prefill 和 decode 两种模式的确定性
-4. 测试不同 sequence length 下的确定性
+Test scenarios:
+1. Multiple runs with same batch size, check if results are consistent
+2. Different batch sizes, check if results are consistent (test batch invariance)
+3. Test determinism in both prefill and decode modes
+4. Test determinism under different sequence lengths
 """
 
 import unittest
@@ -39,13 +39,13 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         """Set up testing environment"""
         self.device = "gpu" if paddle.is_compiled_with_cuda() else "cpu"
         paddle.set_device(self.device)
-        self.dtype = "float32"  # 使用 float32 提高精度比较
+        self.dtype = "float32"  # Use float32 for higher precision comparison
 
-        # 初始化 attention backend
+        # Initialize attention backend
         self.attn_backend = PaddleNativeAttnBackend()
 
     def test_sdpa_multiple_runs_same_batch(self):
-        """测试相同输入多次运行 scaled_dot_product_attention 是否产生相同结果"""
+        """Test if scaled_dot_product_attention produces identical results for same input across multiple runs"""
         print("\n=== Testing SDPA Multiple Runs (Same Batch) ===")
 
         num_heads = 8
@@ -53,18 +53,18 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         batch_size = 2
         seq_len = 32
 
-        # 固定种子确保可重复性
+        # Fixed seed for reproducibility
         paddle.seed(42)
 
-        # 创建输入张量
+        # Create input tensors
         query = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype=self.dtype)
         key = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype=self.dtype)
         value = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype=self.dtype)
 
-        # 存储多次运行的结果
+        # Store results from multiple runs
         results = []
 
-        # 运行多次
+        # Run multiple times
         num_runs = 5
         for i in range(num_runs):
             paddle.device.cuda.synchronize() if self.device == "gpu" else None
@@ -74,9 +74,9 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             results.append(result.clone())
             print(f"  Run {i+1}: mean={result.mean().item():.6f}, std={result.std().item():.6f}")
 
-        # 验证所有运行结果是否完全相同（使用 equal 而不是 allclose）
+        # Verify all runs produce identical results (use equal instead of allclose)
         for i in range(1, num_runs):
-            # 使用 paddle.equal 检查完全相等
+            # Use paddle.equal to check exact equality
             is_equal = paddle.equal(results[0], results[i]).all().item()
 
             print(f"  Run 1 vs Run {i+1}: equal={is_equal}")
@@ -86,21 +86,21 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             else:
                 print(f"  ✗ Run 1 and Run {i+1} differ!")
 
-            # 在测试环境中检查
+            # Check in test environment
             self.assertTrue(is_equal, f"SDPA results differ between run 1 and run {i+1}")
 
     def test_sdpa_different_batch_sizes(self):
-        """测试不同批大小下 scaled_dot_product_attention 的确定性"""
+        """Test scaled_dot_product_attention determinism with different batch sizes"""
         print("\n=== Testing SDPA Different Batch Sizes ===")
 
         num_heads = 8
         head_dim = 64
         seq_len = 32
 
-        # 固定种子
+        # Fixed seed
         paddle.seed(42)
 
-        # 测试单个序列
+        # Test single sequence
         single_batch_size = 1
         query_single = paddle.randn([single_batch_size, num_heads, seq_len, head_dim], dtype=self.dtype)
         key_single = paddle.randn([single_batch_size, num_heads, seq_len, head_dim], dtype=self.dtype)
@@ -111,9 +111,9 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         )
         print(f"  Single batch (bs={single_batch_size}): mean={result_single.mean().item():.6f}")
 
-        # 测试不同批大小
+        # Test different batch sizes
         for batch_size in [2, 4, 8, 16]:
-            # 使用相同的种子确保输入一致
+            # Use same seed for consistent input
             paddle.seed(42)
 
             query = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype=self.dtype)
@@ -124,7 +124,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
                 query, key, value, is_causal=False, enable_gqa=False
             )
 
-            # 只比较第一个序列，使用 equal 检查完全相等
+            # Only compare first sequence, use equal to check exact equality
             is_equal = paddle.equal(result_single, result[0:1]).all().item()
 
             print(f"  Batch size {batch_size}: mean={result[0:1].mean().item():.6f}, equal={is_equal}")
@@ -134,7 +134,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
                 print("    This is expected - standard attention is not batch-invariant")
 
     def test_sdpa_causal_mask_determinism(self):
-        """测试带因果掩码的 SDPA 确定性"""
+        """Test SDPA determinism with causal mask"""
         print("\n=== Testing SDPA with Causal Mask ===")
 
         num_heads = 8
@@ -158,14 +158,14 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             )
             results.append(result.clone())
 
-        # 验证结果一致性
+        # Verify result consistency
         for i in range(1, num_runs):
             is_equal = paddle.equal(results[0], results[i]).all().item()
             print(f"  Run 1 vs Run {i+1}: equal={is_equal}")
             self.assertTrue(is_equal, f"Causal SDPA results differ between run 1 and run {i+1}")
 
     def test_sdpa_different_sequence_lengths(self):
-        """测试不同序列长度下的确定性"""
+        """Test determinism with different sequence lengths"""
         print("\n=== Testing SDPA Different Sequence Lengths ===")
 
         num_heads = 8
@@ -174,7 +174,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
         paddle.seed(42)
 
-        # 测试不同序列长度
+        # Test different sequence lengths
         seq_lengths = [16, 32, 64, 128, 256]
         results = {}
 
@@ -191,7 +191,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             results[seq_len] = result.clone()
             print(f"  Seq length {seq_len}: mean={result.mean().item():.6f}, std={result.std().item():.6f}")
 
-        # 每个序列长度运行多次验证确定性
+        # Run multiple times for each sequence length to verify determinism
         for seq_len in seq_lengths:
             paddle.seed(42)
 
@@ -208,7 +208,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             self.assertTrue(is_equal, f"SDPA results differ for seq_len={seq_len}")
 
     def test_manual_scaled_dot_product_attention_determinism(self):
-        """测试手动实现的 scaled_dot_product_attention 确定性"""
+        """Test manually implemented scaled_dot_product_attention determinism"""
         print("\n=== Testing Manual SDPA Implementation ===")
 
         num_heads = 8
@@ -228,7 +228,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         for i in range(num_runs):
             paddle.device.cuda.synchronize() if self.device == "gpu" else None
 
-            # 手动实现 attention
+            # Manual attention implementation
             d_k = query.shape[-1]
             scores = paddle.matmul(query, key.transpose([0, 1, 3, 2]))  # QK^T
             scores = scores / paddle.sqrt(paddle.to_tensor(d_k, dtype=scores.dtype))
@@ -237,28 +237,29 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
             results.append(output.clone())
 
-        # 验证结果一致性
+        # Verify result consistency
         for i in range(1, num_runs):
             is_equal = paddle.equal(results[0], results[i]).all().item()
             print(f"  Manual SDPA Run 1 vs Run {i+1}: equal={is_equal}")
             self.assertTrue(is_equal, f"Manual SDPA results differ between run 1 and run {i+1}")
 
     def test_attention_backend_prefill_determinism(self):
-        """测试 Attention Backend Prefill 模式的确定性"""
+        """Test Attention Backend Prefill mode determinism"""
         print("\n=== Testing Attention Backend Prefill Determinism ===")
 
-        # 这个测试需要更完整的 setup，先跳过
+        # This test requires more complete setup, skip for now
         self.skipTest("Full backend setup required for prefill test")
 
     def test_attention_backend_decode_determinism(self):
-        """测试 Attention Backend Decode 模式的确定性"""
+        """Test Attention Backend Decode mode determinism"""
+
         print("\n=== Testing Attention Backend Decode Determinism ===")
 
-        # 这个测试需要更完整的 setup，先跳过
+        # This test requires more complete setup, skip for now
         self.skipTest("Full backend setup required for decode test")
 
     def test_batch_invariant_mode_compatibility(self):
-        """测试批量不变模式与 attention 的兼容性"""
+        """Test compatibility of batch invariant mode with attention"""
         print("\n=== Testing Batch Invariant Mode Compatibility ===")
 
         num_heads = 8
@@ -272,16 +273,16 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         key = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype=self.dtype)
         value = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype=self.dtype)
 
-        # 在批量不变模式下运行
+        # Run in batch invariant mode
         with set_batch_invariant_mode(True):
             result_bi = paddle.nn.functional.scaled_dot_product_attention(query, key, value, is_causal=False)
             print(f"  With batch invariant mode: mean={result_bi.mean().item():.6f}")
 
-        # 在普通模式下运行
+        # Run in normal mode
         result_normal = paddle.nn.functional.scaled_dot_product_attention(query, key, value, is_causal=False)
         print(f"  Without batch invariant mode: mean={result_normal.mean().item():.6f}")
 
-        # 结果应该相同（因为 SDPA 本身是确定性的）
+        # Results should be same (since SDPA itself is deterministic)
         is_equal = paddle.equal(result_bi, result_normal).all().item()
         print(f"  Batch invariant vs Normal: equal={is_equal}")
 
@@ -289,7 +290,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             print("  Note: Batch invariant mode may not affect Paddle's native SDPA")
 
     def test_attention_with_different_head_configs(self):
-        """测试不同 head 配置下的确定性"""
+        """Test determinism with different head configurations"""
         print("\n=== Testing Different Head Configurations ===")
 
         configs = [
@@ -312,7 +313,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             key = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype=self.dtype)
             value = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype=self.dtype)
 
-            # 运行两次
+            # Run twice
             result1 = paddle.nn.functional.scaled_dot_product_attention(query, key, value, is_causal=False)
             result2 = paddle.nn.functional.scaled_dot_product_attention(query, key, value, is_causal=False)
 
@@ -323,7 +324,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             self.assertTrue(is_equal, f"Attention results differ for heads={num_heads}, head_dim={head_dim}")
 
     def test_half_precision_determinism(self):
-        """测试半精度下的确定性（使用完全相等检查）"""
+        """Test determinism at half precision (using exact equality check)"""
         print("\n=== Testing Half Precision Determinism ===")
 
         if not paddle.is_compiled_with_cuda():
@@ -336,7 +337,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
         paddle.seed(42)
 
-        # 使用 float16
+        # Use float16
         query = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype="float16")
         key = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype="float16")
         value = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype="float16")
@@ -351,7 +352,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             )
             results.append(result.clone())
 
-        # 验证结果一致性，使用完全相等检查
+        # Verify result consistency, using exact equality check
         is_deterministic = True
         for i in range(1, num_runs):
             is_equal = paddle.equal(results[0], results[i]).all().item()
@@ -359,14 +360,14 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             if not is_equal:
                 is_deterministic = False
 
-        # 根据实际测试结果报告
+        # Report based on actual test results
         if is_deterministic:
-            print("  结果: FP16 是确定性的（完全相等）")
+            print("  Result: FP16 is deterministic (exactly equal)")
         else:
-            print("  结果: FP16 不是完全确定性的（结果不完全相等）")
+            print("  Result: FP16 is not fully deterministic (results not exactly equal)")
 
     def test_different_backends_determinism(self):
-        """测试不同 backend 下的确定性"""
+        """Test determinism with different backends"""
         print("\n=== Testing Different Backends Determinism ===")
 
         if not paddle.is_compiled_with_cuda():
@@ -377,7 +378,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         batch_size = 2
         seq_len = 32
 
-        # 测试不同的 backend
+        # Test different backends
         backends = [None, "math", "flash"]  # None = auto
 
         for backend in backends:
@@ -413,18 +414,18 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             except Exception as e:
                 backend_name = backend if backend else "auto"
                 print(f"  Backend={backend_name:6s}: ✗ ERROR - {str(e)[:50]}")
-                # 跳过不支持的 backend
+                # Skip unsupported backend
                 continue
 
     def test_different_kv_lengths_determinism(self):
-        """测试不同 KV 长度下的确定性（模拟解码步骤）"""
+        """Test determinism with different KV lengths (simulating decode steps)"""
         print("\n=== Testing Different KV Lengths Determinism ===")
 
         num_heads = 8
         head_dim = 64
         batch_size = 2
 
-        # 测试不同的序列长度（模拟不同阶段）
+        # Test different sequence lengths (simulating different stages)
         sequence_lengths = [16, 32, 64]
 
         for seq_len in sequence_lengths:
@@ -433,17 +434,17 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             key = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype=self.dtype)
             value = paddle.randn([batch_size, num_heads, seq_len, head_dim], dtype=self.dtype)
 
-            # 第一次运行
+            # First run
             result1 = paddle.nn.functional.scaled_dot_product_attention(
                 query, key, value, is_causal=False, enable_gqa=False
             )
 
-            # 第二次运行（完全相同的输入）
+            # Second run (completely same input)
             result2 = paddle.nn.functional.scaled_dot_product_attention(
                 query, key, value, is_causal=False, enable_gqa=False
             )
 
-            # 第三次运行（再次验证）
+            # Third run (verify again)
             result3 = paddle.nn.functional.scaled_dot_product_attention(
                 query, key, value, is_causal=False, enable_gqa=False
             )
@@ -458,25 +459,25 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
 
 class TestAttentionDeterminismReport(unittest.TestCase):
-    """生成确定性测试报告"""
+    """Generate determinism test report"""
 
     def setUp(self):
         self.device = "gpu" if paddle.is_compiled_with_cuda() else "cpu"
         paddle.set_device(self.device)
 
     def test_generate_determinism_report(self):
-        """生成完整的确定性测试报告"""
+        """Generate complete determinism test report"""
         print("\n" + "=" * 70)
         print(" PADDLE ATTENTION DETERMINISM TEST REPORT")
         print("=" * 70)
 
-        # 基本测试
+        # Basic tests
         self._test_basic_determinism()
-        # 批大小测试
+        # Batch size tests
         self._test_batch_size_determinism()
-        # 序列长度测试
+        # Sequence length tests
         self._test_seq_length_determinism()
-        # 头配置测试
+        # Head config tests
         self._test_head_config_determinism()
 
         print("\n" + "=" * 70)
@@ -484,7 +485,7 @@ class TestAttentionDeterminismReport(unittest.TestCase):
         print("=" * 70)
 
     def _test_basic_determinism(self):
-        """基本确定性测试"""
+        """Basic determinism test"""
         print("\n[BASIC DETERMINISM] Testing basic SDPA determinism...")
 
         num_heads = 8
@@ -505,7 +506,7 @@ class TestAttentionDeterminismReport(unittest.TestCase):
             )
             results.append(result.clone())
 
-        # 使用完全相等检查
+        # Use exact equality check
         all_equal = True
         for i in range(1, len(results)):
             is_equal = paddle.equal(results[0], results[i]).all().item()
@@ -519,7 +520,7 @@ class TestAttentionDeterminismReport(unittest.TestCase):
         return all_equal
 
     def _test_batch_size_determinism(self):
-        """批大小确定性测试"""
+        """Batch size determinism test"""
         print("\n[BATCH SIZE DETERMINISM] Testing batch invariance...")
 
         num_heads = 8
@@ -540,7 +541,7 @@ class TestAttentionDeterminismReport(unittest.TestCase):
             )
             results.append((bs, result[0:1].clone()))
 
-        # 比较不同批大小的第一个序列，使用完全相等检查
+        # Compare first sequence across different batch sizes, use exact equality check
         all_equal = True
         for i in range(1, len(results)):
             is_equal = paddle.equal(results[0][1], results[i][1]).all().item()
@@ -550,12 +551,12 @@ class TestAttentionDeterminismReport(unittest.TestCase):
 
         status = "✓ PASS" if all_equal else "✗ FAIL"
         print(f"  Status: {status}")
-        print(f"  Batch invariant (完全相等): {all_equal}")
+        print(f"  Batch invariant (exactly equal): {all_equal}")
 
         return all_equal
 
     def _test_seq_length_determinism(self):
-        """序列长度确定性测试"""
+        """Sequence length determinism test"""
         print("\n[SEQUENCE LENGTH DETERMINISM] Testing different seq lengths...")
 
         num_heads = 8
@@ -587,7 +588,7 @@ class TestAttentionDeterminismReport(unittest.TestCase):
         return all_equal
 
     def _test_head_config_determinism(self):
-        """头配置确定性测试"""
+        """Head config determinism test"""
         print("\n[HEAD CONFIG DETERMINISM] Testing different head configs...")
 
         batch_size = 2
@@ -623,5 +624,5 @@ class TestAttentionDeterminismReport(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    # 运行测试
+    # Run tests
     unittest.main(verbosity=2)

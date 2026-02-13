@@ -13,20 +13,20 @@
 # limitations under the License.
 
 """
-Paddle Attention 确定性测试脚本（独立版）
+Paddle Attention Determinism Test Script (Standalone Version)
 
-此脚本可以直接运行，不依赖 fastdeploy 模块，用于验证 Paddle 的
-scaled_dot_product_attention 的确定性。
+This script can be run directly without fastdeploy dependencies,
+for verifying Paddle's scaled_dot_product_attention determinism.
 
-测试场景：
-1. 同一批大小多次运行，检查结果是否一致
-2. 不同批大小运行，检查结果是否一致
-3. 因果掩码模式下的确定性
-4. 不同序列长度下的确定性
-5. 不同 Head 配置下的确定性
-6. FP16 半精度下的确定性
-7. 不同 Backend 下的确定性
-8. 手动 Attention 实现的确定性
+Test scenarios:
+1. Multiple runs with same batch size, check if results are consistent
+2. Different batch sizes, check if results are consistent
+3. Determinism with causal mask
+4. Determinism with different sequence lengths
+5. Determinism with different head configurations
+6. FP16 half precision determinism
+7. Determinism with different backends
+8. Manual attention implementation determinism
 """
 
 import sys
@@ -40,7 +40,7 @@ print(" PADDLE ATTENTION DETERMINISM TEST")
 print("=" * 70)
 print()
 
-# 基础配置
+# Basic configuration
 BATCH_SIZE = 2
 NUM_HEADS = 8
 HEAD_DIM = 64
@@ -50,10 +50,10 @@ RTOL = 1e-5
 
 
 class TestPaddleAttentionDeterminism(unittest.TestCase):
-    """测试 Paddle Attention 的确定性"""
+    """Test Paddle Attention determinism"""
 
     def setUp(self):
-        """设置测试环境"""
+        """Set up test environment"""
         self.device = "gpu" if paddle.is_compiled_with_cuda() else "cpu"
         paddle.set_device(self.device)
         self.dtype = "float32"
@@ -61,7 +61,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         self.rtol = RTOL
 
     def test_sdpa_multiple_runs_same_batch(self):
-        """测试相同输入多次运行 scaled_dot_product_attention 是否产生相同结果"""
+        """Test if scaled_dot_product_attention produces identical results for same input across multiple runs"""
         print("\n[1] 多次运行一致性测试")
         print("-" * 70)
 
@@ -77,7 +77,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             result = F.scaled_dot_product_attention(query, key, value, is_causal=False, enable_gqa=False)
             results.append(result.clone())
 
-        # 使用完全相等检查
+        # Use exact equality check
         all_equal = True
         for i in range(1, 10):
             is_equal = paddle.equal(results[0], results[i]).all().item()
@@ -88,7 +88,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         self.assertTrue(all_equal, "Not all runs are equal")
 
     def test_sdpa_causal_mask_determinism(self):
-        """测试带因果掩码的 SDPA 确定性"""
+        """Test SDPA determinism with causal mask"""
         print("\n[2] 因果掩码测试")
         print("-" * 70)
 
@@ -105,7 +105,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         self.assertTrue(is_equal, "Results are not equal")
 
     def test_sdpa_different_batch_sizes(self):
-        """测试不同批大小下 scaled_dot_product_attention 的确定性"""
+        """Test scaled_dot_product_attention determinism with different batch sizes"""
         print("\n[3] 不同批大小测试")
         print("-" * 70)
 
@@ -133,7 +133,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         print("  ✓ PASS - All batch sizes match (1, 2, 4, 8)")
 
     def test_sdpa_different_sequence_lengths(self):
-        """测试不同序列长度下的确定性"""
+        """Test determinism with different sequence lengths"""
         print("\n[4] 不同序列长度测试")
         print("-" * 70)
 
@@ -153,7 +153,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         print("  ✓ PASS - All sequence lengths (16, 32, 64, 128) deterministic")
 
     def test_different_head_configs(self):
-        """测试不同 head 配置下的确定性"""
+        """Test determinism with different head configurations"""
         print("\n[5] 不同Head配置测试")
         print("-" * 70)
 
@@ -173,7 +173,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         print("  ✓ PASS - All head configs deterministic")
 
     def test_half_precision_determinism(self):
-        """测试半精度下的确定性（使用完全相等检查）"""
+        """Test determinism at half precision (using exact equality check)"""
         print("\n[6] FP16精度测试")
         print("-" * 70)
 
@@ -191,7 +191,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             result = F.scaled_dot_product_attention(query, key, value, is_causal=False, enable_gqa=False)
             results.append(result.clone())
 
-        # 验证结果一致性，使用完全相等检查
+        # Verify result consistency, using exact equality check
         is_deterministic = True
         for i in range(1, 5):
             is_equal = paddle.equal(results[0], results[i]).all().item()
@@ -199,14 +199,14 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             if not is_equal:
                 is_deterministic = False
 
-        # 根据实际测试结果报告
+        # Report based on actual test results
         if is_deterministic:
-            print("  结果: FP16 是确定性的（完全相等）")
+            print("  Result: FP16 is deterministic (exactly equal)")
         else:
-            print("  结果: FP16 不是完全确定性的")
+            print("  Result: FP16 is not fully deterministic")
 
     def test_different_backends_determinism(self):
-        """测试不同 backend 下的确定性"""
+        """Test determinism with different backends"""
         print("\n[7] 不同Backend测试")
         print("-" * 70)
 
@@ -248,7 +248,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         print("  ✓ PASS - All available backends deterministic")
 
     def test_fixed_sequence_lengths_multiple_runs(self):
-        """测试固定序列长度的多次运行（简化版解码测试）"""
+        """Test multiple runs with fixed sequence length (simplified decode test)"""
         print("\n[8] 固定序列长度的多次运行测试")
         print("-" * 70)
 
@@ -272,7 +272,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         print("  ✓ PASS - Multiple runs deterministic for all sequence lengths")
 
     def test_manual_attention_determinism(self):
-        """测试手动实现的 attention 确定性"""
+        """Test manually implemented attention determinism"""
         print("\n[9] 手动Attention实现测试")
         print("-" * 70)
 
@@ -298,36 +298,36 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    # 运行测试
+    # Run tests
     suite = unittest.TestLoader().loadTestsFromTestCase(TestPaddleAttentionDeterminism)
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
 
     print()
     print("=" * 70)
-    print(" 测试结果总结")
+    print(" Test Result Summary")
     print("=" * 70)
-    print(f"  通过: {result.testsRun - len(result.failures) - len(result.errors)}")
-    print(f"  失败: {len(result.failures)}")
-    print(f"  错误: {len(result.errors)}")
-    print(f"  总计: {result.testsRun}")
+    print(f"  Passed: {result.testsRun - len(result.failures) - len(result.errors)}")
+    print(f"  Failed: {len(result.failures)}")
+    print(f"  Errors: {len(result.errors)}")
+    print(f"  Total: {result.testsRun}")
     print()
 
     if result.wasSuccessful():
-        print(" ✓ 所有测试通过！")
+        print(" ✓ All tests passed!")
         print()
-        print(" 结论: Paddle 的 scaled_dot_product_attention 是完全确定性的")
-        print("       所有测试用例使用 paddle.equal 检查完全相等")
+        print(" Conclusion: Paddle's scaled_dot_product_attention is fully deterministic")
+        print("              All tests use paddle.equal to check exact equality")
         print()
-        print(" 测试覆盖:")
-        print("  - 多次运行一致性 (10次运行)")
-        print("  - 因果掩码模式")
-        print("  - 不同批大小 (1, 2, 4, 8)")
-        print("  - 不同序列长度 (16, 32, 64, 128)")
-        print("  - 不同Head配置 (4, 8, 16, 32 heads)")
-        print("  - FP16 精度")
-        print("  - 不同 Backend (auto, math, flash)")
-        print("  - 手动 Attention 实现")
+        print(" Test coverage:")
+        print("  - Multiple run consistency (10 runs)")
+        print("  - Causal mask mode")
+        print("  - Different batch sizes (1, 2, 4, 8)")
+        print("  - Different sequence lengths (16, 32, 64, 128)")
+        print("  - Different head configs (4, 8, 16, 32 heads)")
+        print("  - FP16 precision")
+        print("  - Different backends (auto, math, flash)")
+        print("  - Manual attention implementation")
     else:
         print(" ✗ 有测试失败")
         sys.exit(1)

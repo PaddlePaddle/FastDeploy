@@ -545,7 +545,7 @@ class FlashAttentionBackend(AttentionBackend):
         )
 
     def _log_attention_output(self, output, layer_id, stage):
-        """打印 Attention 输出"""
+        """Log attention output"""
         import time
 
         if output is None:

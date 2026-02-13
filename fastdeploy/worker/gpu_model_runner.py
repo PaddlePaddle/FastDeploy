@@ -763,14 +763,15 @@ class GPUModelRunner(ModelRunnerBase):
                 input_ids = prompt_token_ids + request.output_token_ids
                 prompt_len = len(prompt_token_ids)
 
-                # 打印完整的 input_ids，用于验证输入确定性
-                # 注意：这里只打印当前请求的信息，batch 信息在 forward 时统一打印
-                logger.info(
-                    f"[DETERMINISM] Prefill input - request_id: {request.request_id}, "
-                    f"idx: {idx}, prefill_start_index: {prefill_start_index}, "
-                    f"prefill_end_index: {prefill_end_index}, "
-                    f"input_ids: {input_ids}"
-                )
+                # Log complete input_ids for input determinism verification
+                # Note: Only current request info is logged here; batch info is logged during forward
+                if envs.FD_DETERMINISTIC_LOG_MODE:
+                    logger.info(
+                        f"[DETERMINISM] Prefill input - request_id: {request.request_id}, "
+                        f"idx: {idx}, prefill_start_index: {prefill_start_index}, "
+                        f"prefill_end_index: {prefill_end_index}, "
+                        f"input_ids: {input_ids}"
+                    )
 
                 self.share_inputs["prompt_ids"][idx : idx + 1, :prompt_len] = np.array(prompt_token_ids, dtype="int64")
                 logger.debug(
@@ -2299,7 +2300,7 @@ class GPUModelRunner(ModelRunnerBase):
         num_running_requests: int = None,
         last_token_num: int = -1,
     ) -> None:
-        # 检测当前运行轮次（从第一个非 None 的 request_id 中提取 _0, _1, _2 等）
+        # Detect current run iteration (extract _0, _1, _2 etc. from first non-None request_id)
         current_run_id = None
         for req in model_forward_batch or []:
             if req is not None:
@@ -2309,11 +2310,11 @@ class GPUModelRunner(ModelRunnerBase):
                     break
         if current_run_id is not None and current_run_id != self._current_run_id:
             self._current_run_id = current_run_id
-            self._batch_counter = 0  # 重置批次计数器
+            self._batch_counter = 0  # Reset batch counter
 
         self._batch_counter += 1
 
-        if envs.FD_DETERMINISTIC_MODE:
+        if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
             print(f"\n{'='*80}")
             print(f"[BATCH-START] Run_{self._current_run_id} Batch_{self._batch_counter}")
             print(f"{'='*80}\n")
@@ -2337,7 +2338,7 @@ class GPUModelRunner(ModelRunnerBase):
         # PERF: Disabled for performance
         # if envs.FD_DETERMINISTIC_MODE:
         # print(f"[DETERMINISM-DEBUG] FD_DETERMINISTIC_MODE={envs.FD_DETERMINISTIC_MODE}, step_use_cudagraph={self.forward_meta.step_use_cudagraph}")
-        # self._log_deterministic_input()  # 暂时注释，已在 insert_tasks_v1 的 prefill 阶段打印完整 input_ids
+        # self._log_deterministic_input()  # Temporarily disabled, complete input_ids logged in insert_tasks_v1 prefill stage
 
         if self.enable_mm:
             model_output = self.model(
@@ -2447,7 +2448,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 4. Compute logits, Sample
             if envs.FD_DETERMINISTIC_MODE:
-                # 打印 hidden_states 的 MD5（模型输出）
+                # Log MD5 of hidden_states (model output)
                 self._log_tensor_md5s(
                     {"hidden_states": hidden_states},
                     forward_batch_reqs_list=self.forward_batch_reqs_list,
@@ -2457,7 +2458,7 @@ class GPUModelRunner(ModelRunnerBase):
             logits = self.model.compute_logits(hidden_states)
 
             if envs.FD_DETERMINISTIC_MODE:
-                # 打印 logits 的 MD5（采样前）
+                # Log MD5 of logits (before sampling)
                 self._log_tensor_md5s(
                     {"logits": logits}, forward_batch_reqs_list=self.forward_batch_reqs_list, stage="logits"
                 )
@@ -2479,7 +2480,7 @@ class GPUModelRunner(ModelRunnerBase):
                 )
 
                 if envs.FD_DETERMINISTIC_MODE:
-                    # 打印采样结果的 MD5
+                    # Log MD5 of sampling results
                     self._log_tensor_md5s(
                         {"sampled_token_ids": sampler_output.sampled_token_ids},
                         forward_batch_reqs_list=self.forward_batch_reqs_list,
@@ -2652,27 +2653,27 @@ class GPUModelRunner(ModelRunnerBase):
         return model_output_data, sampler_output, post_process_event, token_num
 
     def _compute_tensor_md5(self, tensor, name="tensor", prefix=""):
-        """计算 tensor 的 MD5 哈希值，用于对比"""
+        """Compute MD5 hash of tensor for comparison"""
         if tensor is None:
             return f"{name}_md5=None"
 
-        # 将 tensor 拷贝到 CPU 并转换为 numpy 数组
+        # Copy tensor to CPU and convert to numpy array
         try:
             tensor_cpu = tensor.cpu().numpy().tobytes()
         except Exception:
-            # 对于不支持直接 tobytes 的数据类型（如 float16），先转换
+            # For data types that don't support direct tobytes (e.g., float16), convert first
             tensor_cpu = tensor.cpu().numpy().astype(np.float32).tobytes()
 
         md5_hash = hashlib.md5(tensor_cpu).hexdigest()
-        return f"{prefix}{name}_md5={md5_hash[:16]}"  # 只打印前 16 个字符，减少日志长度
+        return f"{prefix}{name}_md5={md5_hash[:16]}"  # Print only first 16 chars to reduce log length
 
     def _log_tensor_md5s(self, tensor_dict, forward_batch_reqs_list=None, stage="forward"):
-        """打印多个 tensor 的 MD5 哈希值，包括每个请求的独立 MD5
+        """Log MD5 hash values for multiple tensors, including per-request MD5
 
         Args:
-            tensor_dict: {name: tensor} 字典
-            forward_batch_reqs_list: forward_batch_reqs_list 列表（可能包含 None）
-            stage: 阶段标识（如 "prefill", "decode", "forward"）
+            tensor_dict: {name: tensor} dictionary
+            forward_batch_reqs_list: forward_batch_reqs_list list (may contain None)
+            stage: Stage identifier (e.g., "prefill", "decode", "forward")
         """
         batch_size = None
         for name, tensor in tensor_dict.items():
@@ -2683,7 +2684,7 @@ class GPUModelRunner(ModelRunnerBase):
         if batch_size is None:
             return
 
-        # 检查是否包含 prefill/decode 信息
+        # Check if it contains prefill/decode information
         prefill_count = 0
         decode_count = 0
         if hasattr(self, "share_inputs"):
@@ -2692,18 +2693,21 @@ class GPUModelRunner(ModelRunnerBase):
                 prefill_count = int((seq_lens_encoder > 0).sum())
                 decode_count = int(batch_size - prefill_count)
 
-        # 构建 stage 信息
+        # Build stage information
         stage_info = f"{stage}"
         if prefill_count > 0 or decode_count > 0:
             stage_info += f" (prefill={prefill_count}, decode={decode_count})"
 
-        # 计算整体 batch 的 MD5
+        # Compute overall batch MD5
         batch_md5_info = []
         for name, tensor in tensor_dict.items():
             if tensor is not None:
                 batch_md5_info.append(self._compute_tensor_md5(tensor, name, prefix="batch_"))
 
-        # 打印整体 batch MD5
+        # Log overall batch MD5
+        if not envs.FD_DETERMINISTIC_LOG_MODE:
+            return
+
         req_id_str = ""
         if forward_batch_reqs_list is not None:
             req_info = []
@@ -2718,31 +2722,31 @@ class GPUModelRunner(ModelRunnerBase):
             + " | ".join(batch_md5_info)
         )
 
-        # 只在 decode 阶段为每个请求计算独立 MD5（decode 时每个请求只有 1 个 token）
-        # 在 decode 阶段，tensor 的 shape 是 [batch_size, hidden_dim] 或 [batch_size, vocab_size]
-        # 可以直接按 batch 维度分割
-        # 注意：即使在混合批次中（同时有 prefill 和 decode），也要为 decode 请求输出 MD5
+        # Only compute per-request MD5 in decode phase (each request has only 1 token in decode)
+        # In decode phase, tensor shape is [batch_size, hidden_dim] or [batch_size, vocab_size]
+        # Can split by batch dimension directly
+        # Note: Even in mixed batch (both prefill and decode), output MD5 for decode requests
         if decode_count > 0 and forward_batch_reqs_list is not None:
             if seq_lens_encoder is not None:
-                # 使用 seq_lens_encoder 来区分 prefill 和 decode 请求
-                # seq_lens_encoder[i] == 0 表示是 decode 请求
+                # Use seq_lens_encoder to distinguish prefill and decode requests
+                # seq_lens_encoder[i] == 0 indicates decode request
                 for i, req in enumerate(forward_batch_reqs_list):
                     if req is not None and i < batch_size and i < len(seq_lens_encoder):
-                        # 只为 decode 请求（seq_lens_encoder[i] == 0）计算 MD5
+                        # Only compute MD5 for decode requests (seq_lens_encoder[i] == 0)
                         if int(seq_lens_encoder[i]) == 0:
                             req_id = req.request_id
                             req_md5_info = []
                             for name, tensor in tensor_dict.items():
                                 if tensor is not None and hasattr(tensor, "shape"):
-                                    # decode 阶段，每个请求只有 1 个 token，可以直接索引
+                                    # In decode phase, each request has only 1 token, can index directly
                                     if len(tensor.shape) >= 2:
-                                        req_tensor = tensor[i : i + 1]  # 取出单个请求的数据，保持维度
+                                        req_tensor = tensor[i : i + 1]  # Extract single request data, keep dimensions
                                         req_md5_info.append(self._compute_tensor_md5(req_tensor, name))
 
                             if req_md5_info:
                                 print(f"[DETERMINISM-MD5-REQ] {req_id} | decode | " + " | ".join(req_md5_info))
             else:
-                # 降级处理：如果无法获取 seq_lens_encoder，只处理纯 decode 批次
+                # Fallback: If cannot get seq_lens_encoder, only handle pure decode batches
                 if prefill_count == 0:
                     for i, req in enumerate(forward_batch_reqs_list):
                         if req is not None and i < batch_size:
@@ -2750,16 +2754,19 @@ class GPUModelRunner(ModelRunnerBase):
                             req_md5_info = []
                             for name, tensor in tensor_dict.items():
                                 if tensor is not None and hasattr(tensor, "shape"):
-                                    # decode 阶段，每个请求只有 1 个 token，可以直接索引
+                                    # In decode phase, each request has only 1 token, can index directly
                                     if len(tensor.shape) >= 2:
-                                        req_tensor = tensor[i : i + 1]  # 取出单个请求的数据，保持维度
+                                        req_tensor = tensor[i : i + 1]  # Extract single request data, keep dimensions
                                         req_md5_info.append(self._compute_tensor_md5(req_tensor, name))
 
                             if req_md5_info:
                                 print(f"[DETERMINISM-MD5-REQ] {req_id} | decode | " + " | ".join(req_md5_info))
 
     def _log_deterministic_input(self):
-        """打印确定性推理的输入信息，支持多批次请求"""
+        """Log determinism inference input information, supports multiple batch requests"""
+        if not envs.FD_DETERMINISTIC_LOG_MODE:
+            return
+
         import time
 
         ids = self.forward_meta.ids_remove_padding
@@ -2768,7 +2775,7 @@ class GPUModelRunner(ModelRunnerBase):
         seq_lens_encoder = self.share_inputs.get("seq_lens_encoder", None)
         seq_lens_decoder = self.share_inputs.get("seq_lens_decoder", None)
 
-        # 获取批次大小
+        # Get batch size
         num_requests = len(seq_lens_this_time) if seq_lens_this_time is not None else 0
 
         print(f"[DETERMINISM-INPUT] time={time.time():.6f} | batch_size={num_requests}")
@@ -2777,18 +2784,18 @@ class GPUModelRunner(ModelRunnerBase):
             print("[DETERMINISM-INPUT] No input data")
             return
 
-        # 将 ids 分割到每个请求
+        # Split ids for each request
         ids_list = ids.cpu().numpy().tolist()
         offset = 0
 
         for i in range(num_requests):
-            # 获取当前请求的信息
+            # Get current request information
             req_id = req_ids[i] if req_ids is not None and i < len(req_ids) else f"idx_{i}"
             seq_len = int(seq_lens_this_time[i])
             seq_len_enc = int(seq_lens_encoder[i]) if seq_lens_encoder is not None and i < len(seq_lens_encoder) else 0
             seq_len_dec = int(seq_lens_decoder[i]) if seq_lens_decoder is not None and i < len(seq_lens_decoder) else 0
 
-            # 获取当前请求的 tokens
+            # Get current request's tokens
             if seq_len > 0:
                 request_tokens = ids_list[offset : offset + seq_len]
             else:
@@ -2796,7 +2803,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             offset += seq_len
 
-            # 打印一行日志
+            # Print one line log
             print(
                 f"[DETERMINISM-INPUT] req_id={req_id} | tokens={request_tokens} | "
                 f"len={seq_len} | seq_len_enc={seq_len_enc} | seq_len_dec={seq_len_dec}"
@@ -3141,7 +3148,7 @@ class GPUModelRunner(ModelRunnerBase):
             if self.parallel_config.tensor_parallel_size > 1:
                 S, C = image_features.shape
                 image_features = image_features.reshape([-1, C * self.model_config.spatial_conv_size**2])
-                image_features = ScatterOp.apply(image_features, axis=-1)  # mp 切 Fea
+                image_features = ScatterOp.apply(image_features, axis=-1)  # MP split features
                 image_features = image_features.reshape([S, -1])
             # ernie-vl has resampler_model
             image_features = self.model.resampler_model(
