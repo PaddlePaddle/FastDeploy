@@ -17,7 +17,17 @@
 from typing import Optional
 
 import paddle
-from paddle.nn.functional import swiglu
+from paddle.nn.functional import silu
+
+try:
+    from paddle.nn.functional import swiglu
+except ImportError:
+
+    def swiglu(x, axis=-1):
+        x0, x1 = paddle.chunk(x, chunks=2, axis=axis)
+        return silu(x0) * x1
+
+
 from paddle.nn.quant import weight_only_linear
 
 try:
