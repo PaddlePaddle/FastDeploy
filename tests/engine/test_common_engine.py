@@ -23,8 +23,15 @@ import numpy as np
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import EngineService
+from fastdeploy.engine.engine_service_factory import create_engine_service
 
-MODEL_NAME = os.getenv("MODEL_PATH", "/path/to/models") + "/ERNIE-4.5-0.3B-Paddle"
+MODEL_PATH = os.getenv("MODEL_PATH", "/path/to/models")
+# If MODEL_PATH is a directory and contains config.json, use it directly
+# Otherwise, try to append default model name
+if os.path.isdir(MODEL_PATH) and os.path.exists(os.path.join(MODEL_PATH, "config.json")):
+    MODEL_NAME = MODEL_PATH
+else:
+    MODEL_NAME = os.path.join(MODEL_PATH, "ERNIE-4.5-0.3B-Paddle")
 
 
 class TestCommonEngine(unittest.TestCase):
@@ -45,7 +52,7 @@ class TestCommonEngine(unittest.TestCase):
 
             # Create and start the engine service
             cls.cfg = engine_args.create_engine_config()
-            cls.engine = EngineService(cls.cfg, start_queue=True, use_async_llm=True)
+            cls.engine = create_engine_service(cls.cfg, start_queue=True, use_async_llm=True)
 
             # Start the engine service
             cls.engine.start()
@@ -286,8 +293,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def get_disaggregated_tasks(self):
                 return []
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+        with patch("fastdeploy.inter_communicator.EngineWorkerQueue", DummyQ):
+            eng = create_engine_service(cfg, start_queue=False, use_async_llm=True)
 
         # Patch heavy pieces
         eng.create_data_processor = lambda: setattr(eng, "data_processor", self._stub_processor())
@@ -365,8 +372,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def get_disaggregated_tasks(self):
                 return []
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+        with patch("fastdeploy.inter_communicator.EngineWorkerQueue", DummyQ):
+            eng = create_engine_service(cfg, start_queue=False, use_async_llm=True)
 
         eng.create_data_processor = lambda: setattr(eng, "data_processor", self._stub_processor())
         eng._process_splitwise_task = lambda: None
@@ -420,6 +427,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         class DummyQ:
             def __init__(self, *a, **k):
                 self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
+                self.address = k.get("address", ("0.0.0.0", 0))
+                self.is_server = k.get("is_server", False)
 
             def get_server_port(self):
                 return 0
@@ -427,8 +436,14 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def cleanup(self):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+            def exist_tasks(self):
+                return False
+
+            def num_cache_infos(self):
+                return 0
+
+        with patch("fastdeploy.inter_communicator.EngineWorkerQueue", DummyQ):
+            eng = create_engine_service(cfg, start_queue=False, use_async_llm=False)
         eng.running = True
 
         class DummyRecv:
@@ -489,8 +504,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def cleanup(self):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+        with patch("fastdeploy.inter_communicator.EngineWorkerQueue", DummyQ):
+            eng = create_engine_service(cfg, start_queue=False, use_async_llm=True)
 
         # attach stubs used by cleanup
         class Sig:
@@ -581,8 +596,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+        with patch("fastdeploy.inter_communicator.EngineWorkerQueue", DummyQ):
+            eng = create_engine_service(cfg, start_queue=False, use_async_llm=True)
         eng.data_processor = self._stub_processor()
         eng.mm_max_tokens_per_item = None
 
@@ -625,8 +640,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+        with patch("fastdeploy.inter_communicator.EngineWorkerQueue", DummyQ):
+            eng = create_engine_service(cfg, start_queue=False, use_async_llm=True)
 
         class Sig:
             def __init__(self, v):
@@ -667,8 +682,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def cleanup(self):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=True, use_async_llm=True)
+        with patch("fastdeploy.inter_communicator.EngineWorkerQueue", DummyQ):
+            eng = create_engine_service(cfg, start_queue=True, use_async_llm=True)
 
         # Init signals to create launched_expert_service_signal
         with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_MULTI_API_SERVER", False):
@@ -677,7 +692,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
             # Don't create real queues/processes
             with (
-                patch("fastdeploy.engine.common_engine.EngineWorkerQueue") as FakeQ,
+                patch("fastdeploy.inter_communicator.EngineWorkerQueue") as FakeQ,
                 patch("fastdeploy.engine.common_engine.multiprocessing.Process") as FakeP,
             ):
                 # Fake queue instances with cleanup
@@ -713,8 +728,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+        with patch("fastdeploy.inter_communicator.EngineWorkerQueue", DummyQ):
+            eng = create_engine_service(cfg, start_queue=False, use_async_llm=True)
 
         # Fake worker process stdout content that matches regexes
         lines = [
@@ -782,8 +797,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+        with patch("fastdeploy.inter_communicator.EngineWorkerQueue", DummyQ):
+            eng = create_engine_service(cfg, start_queue=False, use_async_llm=True)
 
         class Sig:
             def __init__(self):
@@ -807,8 +822,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+        with patch("fastdeploy.inter_communicator.EngineWorkerQueue", DummyQ):
+            eng = create_engine_service(cfg, start_queue=False, use_async_llm=True)
         eng.ipc_signal_suffix = cfg.parallel_config.engine_worker_queue_port[0]
         with patch("fastdeploy.engine.common_engine.paddle.is_compiled_with_custom_device", return_value=True):
             eng._init_worker_signals()
@@ -837,8 +852,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+        with patch("fastdeploy.inter_communicator.EngineWorkerQueue", DummyQ):
+            eng = create_engine_service(cfg, start_queue=False, use_async_llm=True)
         # Patch scheduler.start so it doesn't do heavy work
         eng.scheduler.start = Mock()
         eng.launch_components()

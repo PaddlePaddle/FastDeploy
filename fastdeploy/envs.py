@@ -208,6 +208,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
+    # Whether to use new engine architecture (component-based design)
+    "FD_USE_NEW_ENGINE_ARCHITECTURE": lambda: bool(int(os.getenv("FD_USE_NEW_ENGINE_ARCHITECTURE", "0"))),
 }
 
 
