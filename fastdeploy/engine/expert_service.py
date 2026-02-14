@@ -25,7 +25,7 @@ import weakref
 
 import numpy as np
 
-from fastdeploy.engine.common_engine import EngineService
+from fastdeploy.engine.engine_service_factory import create_engine_service
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.utils import console_logger, envs, get_logger, llm_logger
 
@@ -90,7 +90,7 @@ class ExpertService:
                 f"local_rdma_comm_ports: {self.cfg.cache_config.local_rdma_comm_ports} "
             )
 
-        self.engine = EngineService(self.cfg, start_queue)
+        self.engine = create_engine_service(self.cfg, start_queue=start_queue)
         if self.cfg.scheduler_config.name == "splitwise":
             self.engine.scheduler.reset_nodeid(f"{self.engine.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
 

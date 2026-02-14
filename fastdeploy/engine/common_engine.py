@@ -70,6 +70,23 @@ from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import EngineError, console_logger, envs, get_logger, llm_logger
 
+# Import I/O capture module for testing and verification
+try:
+    from fastdeploy.engine.io_capture import (
+        IOTypes,
+        enable_capture,
+        get_global_capture,
+        is_capture_enabled,
+    )
+
+    llm_logger.info("I/O capture module loaded")
+except ImportError:
+    # Fallback for when module is not available
+    enable_capture = lambda *args, **kwargs: None
+    is_capture_enabled = lambda: False
+    get_global_capture = lambda: None
+    IOTypes = None
+
 try:
     TokenProcessor = load_token_processor_plugins()
     llm_logger.info(f"TokenProcessor plugin {TokenProcessor} loaded")
@@ -182,6 +199,17 @@ class EngineService:
             self.do_profile = 1 if self.cfg.cache_config.num_gpu_blocks_override is None else 0
             self.ipc_signal_suffix = None
             self.cache_manager_processes = None
+
+        # Initialize I/O capture if enabled via environment variable
+        if envs.FD_ENABLE_ENGINE_IO_CAPTURE == "1":
+            output_dir = getattr(envs, "FD_ENGINE_IO_CAPTURE_DIR", "./captured_io")
+            if self.cfg.parallel_config.data_parallel_size > 1:
+                output_dir = f"{output_dir}/dp{self.cfg.parallel_config.local_data_parallel_id}"
+            enable_capture(output_dir)
+            capture = get_global_capture()
+            capture.set_config(self.cfg)
+            capture.save_config_snapshot()
+            self.llm_logger.info(f"Engine I/O capture enabled, output dir: {output_dir}")
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
@@ -525,6 +553,12 @@ class EngineService:
                     self.update_requests_chunk_size(tasks)
                 else:
                     self.update_mm_requests_chunk_size(tasks)
+
+            # Capture tasks sent to worker if I/O capture is enabled
+            if is_capture_enabled():
+                capture = get_global_capture()
+                capture.capture_worker_task(tasks, self.resource_manager.real_bsz)
+
             self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
         return True
 
@@ -764,6 +798,11 @@ class EngineService:
                     max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
+                # Capture tasks from scheduler if I/O capture is enabled
+                if is_capture_enabled():
+                    capture = get_global_capture()
+                    capture.capture_schedule_task(tasks, current_id)
+
                 tasks = [task for task in tasks if task.request_id not in self.resource_manager.abort_req_ids_set]
                 for task in tasks:
                     task.metrics.engine_get_req_time = time.time()

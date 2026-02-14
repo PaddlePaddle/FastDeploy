@@ -538,9 +538,9 @@ class LLM:
             无。
         """
         # Initialize tqdm.
+        num_requests = len(req_ids)
 
         if use_tqdm:
-            num_requests = len(req_ids)
             pbar = tqdm(
                 total=num_requests,
                 desc="Processed prompts",

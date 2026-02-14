@@ -37,7 +37,7 @@ from tqdm import tqdm
 
 import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.args_utils import EngineArgs
-from fastdeploy.engine.common_engine import EngineService
+from fastdeploy.engine.engine_service_factory import create_engine_service
 from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
@@ -90,7 +90,7 @@ class LLMEngine:
         self.running = True
         self.is_started = False
 
-        self.engine = EngineService(cfg)
+        self.engine = create_engine_service(cfg)
 
         if self.cfg.cache_config.num_gpu_blocks_override is None:
             self.do_profile = 1

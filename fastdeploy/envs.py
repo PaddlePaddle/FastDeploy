@@ -210,6 +210,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
     # Whether to use new engine architecture (component-based design)
     "FD_USE_NEW_ENGINE_ARCHITECTURE": lambda: bool(int(os.getenv("FD_USE_NEW_ENGINE_ARCHITECTURE", "0"))),
+    # Whether to enable Engine I/O capture for testing and verification
+    "FD_ENABLE_ENGINE_IO_CAPTURE": lambda: str(os.getenv("FD_ENABLE_ENGINE_IO_CAPTURE", "0")),
+    # Directory to store captured Engine I/O data
+    "FD_ENGINE_IO_CAPTURE_DIR": lambda: str(os.getenv("FD_ENGINE_IO_CAPTURE_DIR", "./captured_io")),
 }
 
 

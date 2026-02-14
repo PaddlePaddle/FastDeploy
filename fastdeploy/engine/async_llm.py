@@ -30,7 +30,7 @@ import numpy as np
 import zmq
 
 from fastdeploy.engine.args_utils import EngineArgs
-from fastdeploy.engine.common_engine import EngineService
+from fastdeploy.engine.engine_service_factory import create_engine_service
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
@@ -141,7 +141,7 @@ class EngineServiceClient:
                 signal.signal(signal.SIGINT, signal_handler)
 
                 try:
-                    engine = EngineService(self.cfg, use_async_llm=True)
+                    engine = create_engine_service(self.cfg, use_async_llm=True)
                     # Start engine with ZMQ service
                     engine.start(async_llm_pid=self.engine_pid)
 
