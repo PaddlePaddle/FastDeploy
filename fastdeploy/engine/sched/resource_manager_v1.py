@@ -449,8 +449,13 @@ class ResourceManagerV1(ResourceManager):
         return matched_token_num
 
     def _get_num_new_tokens(self, request, token_budget):
+        # Handle edge case: request already completed or in invalid state
+        remaining = request.need_prefill_tokens - request.num_computed_tokens
+        if remaining <= 0:
+            return 0
+
         # TODO: set condition to new _get_num_new_tokens
-        num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
+        num_new_tokens = remaining
         num_new_tokens = min(num_new_tokens, token_budget)
 
         # Deterministic mode: align chunk boundaries to split_kv_size

@@ -62,7 +62,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
     def test_sdpa_multiple_runs_same_batch(self):
         """Test if scaled_dot_product_attention produces identical results for same input across multiple runs"""
-        print("\n[1] 多次运行一致性测试")
+        print("\n[1] Multiple run consistency test")
         print("-" * 70)
 
         paddle.seed(42)
@@ -89,7 +89,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
     def test_sdpa_causal_mask_determinism(self):
         """Test SDPA determinism with causal mask"""
-        print("\n[2] 因果掩码测试")
+        print("\n[2] Causal mask test")
         print("-" * 70)
 
         paddle.seed(42)
@@ -106,7 +106,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
     def test_sdpa_different_batch_sizes(self):
         """Test scaled_dot_product_attention determinism with different batch sizes"""
-        print("\n[3] 不同批大小测试")
+        print("\n[3] Different batch size test")
         print("-" * 70)
 
         paddle.seed(42)
@@ -134,7 +134,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
     def test_sdpa_different_sequence_lengths(self):
         """Test determinism with different sequence lengths"""
-        print("\n[4] 不同序列长度测试")
+        print("\n[4] Different sequence length test")
         print("-" * 70)
 
         seq_lengths = [16, 32, 64, 128]
@@ -154,7 +154,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
     def test_different_head_configs(self):
         """Test determinism with different head configurations"""
-        print("\n[5] 不同Head配置测试")
+        print("\n[5] Different head config test")
         print("-" * 70)
 
         configs = [(4, 64), (8, 64), (16, 32), (32, 32)]
@@ -174,7 +174,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
     def test_half_precision_determinism(self):
         """Test determinism at half precision (using exact equality check)"""
-        print("\n[6] FP16精度测试")
+        print("\n[6] FP16 precision test")
         print("-" * 70)
 
         if not paddle.is_compiled_with_cuda():
@@ -207,7 +207,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
     def test_different_backends_determinism(self):
         """Test determinism with different backends"""
-        print("\n[7] 不同Backend测试")
+        print("\n[7] Different backend test")
         print("-" * 70)
 
         if not paddle.is_compiled_with_cuda():
@@ -249,7 +249,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
     def test_fixed_sequence_lengths_multiple_runs(self):
         """Test multiple runs with fixed sequence length (simplified decode test)"""
-        print("\n[8] 固定序列长度的多次运行测试")
+        print("\n[8] Multiple runs with fixed sequence length test")
         print("-" * 70)
 
         sequence_lengths = [16, 32, 64]
@@ -273,7 +273,7 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
 
     def test_manual_attention_determinism(self):
         """Test manually implemented attention determinism"""
-        print("\n[9] 手动Attention实现测试")
+        print("\n[9] Manual attention implementation test")
         print("-" * 70)
 
         paddle.seed(42)
@@ -329,7 +329,7 @@ if __name__ == "__main__":
         print("  - Different backends (auto, math, flash)")
         print("  - Manual attention implementation")
     else:
-        print(" ✗ 有测试失败")
+        print(" ✗ Some tests failed")
         sys.exit(1)
 
     print("=" * 70)

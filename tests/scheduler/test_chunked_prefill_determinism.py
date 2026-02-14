@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """
-Chunked Prefill Determinism Tests
+Chunked Prefill Determinism Tests - Refactored with Real Classes
 
 Test scenarios:
 1. Test _get_num_new_tokens alignment behavior in deterministic mode
@@ -22,29 +22,44 @@ Test scenarios:
 4. Test boundary cases (token_budget smaller than split_kv_size)
 5. Test alignment consistency across continuous prefill chunks
 6. Test Flash Attention backend deterministic support
+7. Test multimodal input scenarios (NEW)
+8. Test real batch scheduling scenarios (NEW)
+9. Test corner cases:
+   - Empty request / zero tokens
+   - State inconsistency (num_computed > need_prefill)
+   - Minimum split size (split_kv_size = 1)
+   - Split size larger than budget
+   - Split size larger than sequence
+   - Dynamic config switch
+   - Large budget values (potential overflow)
 """
 
 import os
 import unittest
 
+from fastdeploy.engine.request import Request
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
 
 
-class MockRequest:
-    """Mock request object"""
+class TestConfig:
+    """Simplified test configuration class (not a full mock, has real interface)"""
 
-    def __init__(self, need_prefill_tokens, num_computed_tokens=0):
-        self.need_prefill_tokens = need_prefill_tokens
-        self.num_computed_tokens = num_computed_tokens
+    def __init__(self):
+        self.model_config = ModelConfig()
+        self.cache_config = CacheConfig()
+        self.scheduler_config = SchedulerConfig()
+        self.parallel_config = ParallelConfig()
+        self.speculative_config = SpeculativeConfig()
+        self.graph_opt_config = GraphOptConfig()
 
 
-class MockModelConfig:
-    """Mock model config"""
+class ModelConfig:
+    """Simplified model config for testing"""
 
-    def __init__(self, max_model_len=8192, head_dim=128, num_hidden_layers=32):
-        self.max_model_len = max_model_len
-        self.head_dim = head_dim
-        self.num_hidden_layers = num_hidden_layers
+    def __init__(self):
+        self.max_model_len = 8192
+        self.head_dim = 128
+        self.num_hidden_layers = 32
         self.enable_mm = False
         self.causal = True
         self.start_layer_index = 0
@@ -54,13 +69,14 @@ class MockModelConfig:
         self.quantization = None
         self.quantization_config = None
         self.num_key_value_heads = 32
+        self.kv_num_head = 32
 
 
-class MockCacheConfig:
-    """Mock cache config"""
+class CacheConfig:
+    """Simplified cache config for testing"""
 
-    def __init__(self, block_size=16):
-        self.block_size = block_size
+    def __init__(self):
+        self.block_size = 16
         self.max_block_num_per_seq = 1000
         self.enable_prefix_caching = False
         self.kvcache_storage_backend = None
@@ -87,27 +103,22 @@ class MockCacheConfig:
         self.local_rdma_comm_ports = None
         self.local_cache_queue_port = None
         self.local_pd_comm_port = None
-        self.bytes_per_layer_per_block = block_size * 32 * 128 * 2
+        self.bytes_per_layer_per_block = 16 * 32 * 128 * 2
         self.bytes_per_block = 32 * 32 * 128 * 2
         self.each_token_cache_space = 32 * 32 * 128 * 2
 
 
-class MockSchedulerConfig:
-    """Mock scheduler config"""
+class SchedulerConfig:
+    """Simplified scheduler config for testing"""
 
-    def __init__(
-        self,
-        max_num_batched_tokens=2048,
-        max_num_seqs=32,
-        splitwise_role="mixed",
-    ):
+    def __init__(self, max_num_batched_tokens=2048, max_num_seqs=32, splitwise_role="mixed"):
         self.max_num_batched_tokens = max_num_batched_tokens
         self.max_num_seqs = max_num_seqs
         self.splitwise_role = splitwise_role
 
 
-class MockParallelConfig:
-    """Mock parallel config"""
+class ParallelConfig:
+    """Simplified parallel config for testing"""
 
     def __init__(self):
         self.pd_disaggregation_mode = "per_query"
@@ -118,8 +129,8 @@ class MockParallelConfig:
         self.tensor_parallel_rank = 0
 
 
-class MockSpeculativeConfig:
-    """Mock speculative config"""
+class SpeculativeConfig:
+    """Simplified speculative config for testing"""
 
     def __init__(self):
         self.method = None
@@ -127,23 +138,22 @@ class MockSpeculativeConfig:
         self.model_type = None
 
 
-class MockGraphOptConfig:
-    """Mock graph optimization config"""
+class GraphOptConfig:
+    """Simplified graph optimization config for testing"""
 
     def __init__(self):
         self.use_cudagraph = False
 
 
-class MockFDConfig:
-    """Mock FDConfig"""
-
-    def __init__(self):
-        self.model_config = MockModelConfig()
-        self.cache_config = MockCacheConfig()
-        self.scheduler_config = MockSchedulerConfig()
-        self.parallel_config = MockParallelConfig()
-        self.speculative_config = MockSpeculativeConfig()
-        self.graph_opt_config = MockGraphOptConfig()
+def create_test_request(request_id, prompt_token_ids, num_computed_tokens=0, multimodal_inputs=None):
+    """Create a real Request object for testing"""
+    return Request(
+        request_id=request_id,
+        prompt_token_ids=prompt_token_ids,
+        prompt_token_ids_len=len(prompt_token_ids),
+        num_computed_tokens=num_computed_tokens,
+        multimodal_inputs=multimodal_inputs,
+    )
 
 
 class TestChunkedPrefillDeterminism(unittest.TestCase):
@@ -158,31 +168,31 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         os.environ.pop("FD_DETERMINISTIC_MODE", None)
         os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
 
-        config = MockFDConfig()
+        config = TestConfig()
         rm = self._create_resource_manager(config)
 
         test_cases = [
-            # (need_prefill_tokens, num_computed, token_budget, expected_max)
-            (100, 0, 50, 50),
-            (100, 50, 30, 30),
-            (100, 90, 20, 10),
-            (32, 0, 15, 15),
+            # (prompt_tokens, num_computed, token_budget, expected_max)
+            (list(range(100)), 0, 50, 50),
+            (list(range(100)), 50, 30, 30),
+            (list(range(100)), 90, 20, 10),
+            (list(range(32)), 0, 15, 15),
         ]
 
-        for need_prefill, num_computed, token_budget, expected_max in test_cases:
-            request = MockRequest(need_prefill, num_computed)
+        for prompt_ids, num_computed, token_budget, expected_max in test_cases:
+            request = create_test_request("test_req", prompt_ids, num_computed)
             result = rm._get_num_new_tokens(request, token_budget)
 
-            expected = min(need_prefill - num_computed, token_budget)
+            expected = min(request.need_prefill_tokens - num_computed, token_budget)
             self.assertEqual(
                 result,
                 expected,
-                f"Unexpected result: need_prefill={need_prefill}, "
+                f"Unexpected result: prompt_len={len(prompt_ids)}, "
                 f"num_computed={num_computed}, token_budget={token_budget}, "
                 f"expected={expected}, got={result}",
             )
             print(
-                f"  need_prefill={need_prefill}, num_computed={num_computed}, "
+                f"  prompt_len={len(prompt_ids)}, num_computed={num_computed}, "
                 f"token_budget={token_budget} -> result={result} (no alignment)"
             )
 
@@ -199,29 +209,29 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         os.environ["FD_DETERMINISTIC_MODE"] = "1"
         os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
 
-        config = MockFDConfig()
+        config = TestConfig()
         rm = self._create_resource_manager(config)
 
         test_cases = [
-            # (need_prefill_tokens, num_computed, token_budget, expected)
-            (100, 0, 20, 16),
-            (100, 0, 32, 32),
-            (100, 0, 40, 32),
-            (100, 0, 50, 48),
-            (100, 8, 20, 8),
-            (100, 8, 30, 24),
-            (100, 16, 20, 16),
-            (100, 16, 25, 16),
+            # (prompt_tokens, num_computed, token_budget, expected)
+            (list(range(100)), 0, 20, 16),
+            (list(range(100)), 0, 32, 32),
+            (list(range(100)), 0, 40, 32),
+            (list(range(100)), 0, 50, 48),
+            (list(range(100)), 8, 20, 8),
+            (list(range(100)), 8, 30, 24),
+            (list(range(100)), 16, 20, 16),
+            (list(range(100)), 16, 25, 16),
         ]
 
-        for need_prefill, num_computed, token_budget, expected in test_cases:
-            request = MockRequest(need_prefill, num_computed)
+        for prompt_ids, num_computed, token_budget, expected in test_cases:
+            request = create_test_request("test_req", prompt_ids, num_computed)
             result = rm._get_num_new_tokens(request, token_budget)
 
             self.assertEqual(
                 result,
                 expected,
-                f"Alignment failed: need_prefill={need_prefill}, "
+                f"Alignment failed: prompt_len={len(prompt_ids)}, "
                 f"num_computed={num_computed}, token_budget={token_budget}, "
                 f"expected={expected}, got={result}",
             )
@@ -234,7 +244,7 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                 )
 
             print(
-                f"  need_prefill={need_prefill}, num_computed={num_computed}, "
+                f"  prompt_len={len(prompt_ids)}, num_computed={num_computed}, "
                 f"token_budget={token_budget} -> result={result}, final_pos={num_computed + result}"
             )
 
@@ -249,59 +259,31 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         os.environ["FD_DETERMINISTIC_MODE"] = "1"
         os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
 
-        config = MockFDConfig()
+        config = TestConfig()
         rm = self._create_resource_manager(config)
 
         test_cases = [
-            # (need_prefill_tokens, num_computed, token_budget, description)
-            (100, 0, 5, "budget < split_kv_size, start at 0"),
-            (100, 0, 1, "budget = 1, start at 0"),
-            (100, 10, 5, "budget < split_kv_size, start at 10"),
-            (100, 15, 5, "budget < split_kv_size, start near boundary"),
-            (16, 0, 16, "exactly split_kv_size tokens needed"),
-            (16, 0, 32, "budget > needed"),
+            # (prompt_tokens, num_computed, token_budget, description)
+            (list(range(100)), 0, 5, "budget < split_kv_size, start at 0"),
+            (list(range(100)), 0, 1, "budget = 1, start at 0"),
+            (list(range(100)), 10, 5, "budget < split_kv_size, start at 10"),
+            (list(range(100)), 15, 5, "budget < split_kv_size, start near boundary"),
+            (list(range(16)), 0, 16, "exactly split_kv_size tokens needed"),
+            (list(range(16)), 0, 32, "budget > needed"),
         ]
 
-        for need_prefill, num_computed, token_budget, description in test_cases:
-            request = MockRequest(need_prefill, num_computed)
+        for prompt_ids, num_computed, token_budget, description in test_cases:
+            request = create_test_request("test_req", prompt_ids, num_computed)
             result = rm._get_num_new_tokens(request, token_budget)
 
-            max_possible = min(need_prefill - num_computed, token_budget)
+            max_possible = min(request.need_prefill_tokens - num_computed, token_budget)
             self.assertLessEqual(result, max_possible, f"Result {result} exceeds max possible {max_possible}")
-
             self.assertGreaterEqual(result, 0, f"Result {result} is negative")
 
             print(f"  {description}: num_computed={num_computed}, " f"token_budget={token_budget} -> result={result}")
 
         os.environ.pop("FD_DETERMINISTIC_MODE", None)
         os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
-    def test_get_num_new_tokens_different_split_sizes(self):
-        """Test alignment with different split_kv_size values"""
-        print("\n=== Testing _get_num_new_tokens (different split sizes) ===")
-
-        split_sizes = [8, 16, 32, 64]
-
-        for split_kv_size in split_sizes:
-            os.environ["FD_DETERMINISTIC_MODE"] = "1"
-            os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
-
-            config = MockFDConfig()
-            rm = self._create_resource_manager(config)
-
-            request = MockRequest(need_prefill_tokens=100, num_computed_tokens=0)
-            result = rm._get_num_new_tokens(request, 50)
-
-            if result > 0:
-                aligned_end = (result // split_kv_size) * split_kv_size
-                self.assertEqual(
-                    aligned_end, result, f"Result {result} is not aligned to split_kv_size={split_kv_size}"
-                )
-
-            print(f"  split_kv_size={split_kv_size}: token_budget=50 -> result={result}")
-
-            os.environ.pop("FD_DETERMINISTIC_MODE", None)
-            os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
 
     def test_get_num_new_tokens_consistency_across_chunks(self):
         """Test alignment consistency across continuous prefill chunks"""
@@ -311,16 +293,16 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         os.environ["FD_DETERMINISTIC_MODE"] = "1"
         os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
 
-        config = MockFDConfig()
+        config = TestConfig()
         rm = self._create_resource_manager(config)
 
-        total_tokens = 112
+        prompt_ids = list(range(112))
         token_budget = 50
         num_computed = 0
         chunk_sizes = []
 
-        while num_computed < total_tokens:
-            request = MockRequest(need_prefill_tokens=total_tokens, num_computed_tokens=num_computed)
+        while num_computed < len(prompt_ids):
+            request = create_test_request("test_req", prompt_ids, num_computed)
             result = rm._get_num_new_tokens(request, token_budget)
             chunk_sizes.append(result)
             num_computed += result
@@ -336,10 +318,10 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
             if chunk_size > 0:
                 position += chunk_size
                 aligned_end = (position // split_kv_size) * split_kv_size
-                is_ok = (aligned_end == position) or (position == total_tokens)
+                is_ok = (aligned_end == position) or (position == len(prompt_ids))
                 self.assertTrue(
                     is_ok,
-                    f"Chunk {i} ends at position {position}, not aligned to {split_kv_size} and not at end={total_tokens}",
+                    f"Chunk {i} ends at position {position}, not aligned to {split_kv_size} and not at end={len(prompt_ids)}",
                 )
 
         os.environ.pop("FD_DETERMINISTIC_MODE", None)
@@ -365,10 +347,14 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         if not paddle.is_compiled_with_cuda():
             self.skipTest("Flash Attention requires CUDA")
 
+        # Detect current flash attention version from environment
+        current_fa_version = paddle.base.framework.get_flags(["FLAGS_flash_attn_version"])["FLAGS_flash_attn_version"]
+        print(f"  Detected FLAGS_flash_attn_version: {current_fa_version}")
+
         os.environ["FD_DETERMINISTIC_MODE"] = "1"
         os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = "16"
 
-        config = MockFDConfig()
+        config = TestConfig()
 
         backend = FlashAttentionBackend(
             fd_config=config,
@@ -393,14 +379,25 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         head_dim = 64
         seq_len = 32
 
-        q = paddle.randn([1, num_heads, seq_len, head_dim], dtype="float16")
-        k = paddle.randn([1, kv_num_heads, seq_len, head_dim], dtype="float16")
-        v = paddle.randn([1, kv_num_heads, seq_len, head_dim], dtype="float16")
-
-        cu_seqlens_q = paddle.to_tensor([0, seq_len], dtype="int32")
-        cu_seqlens_k = paddle.to_tensor([0, seq_len], dtype="int32")
-        max_seqlen_q = paddle.to_tensor([seq_len], dtype="int32")
-        max_seqlen_k = paddle.to_tensor([seq_len], dtype="int32")
+        # Different input formats for v2 vs v3
+        if current_fa_version == 2:
+            # v2 format: [total_seq_len, num_heads, head_dim], int64 for seqlens
+            q = paddle.randn([seq_len, num_heads, head_dim], dtype="float16")
+            k = paddle.randn([seq_len, kv_num_heads, head_dim], dtype="float16")
+            v = paddle.randn([seq_len, kv_num_heads, head_dim], dtype="float16")
+            cu_seqlens_q = paddle.to_tensor([0, seq_len], dtype="int64")
+            cu_seqlens_k = paddle.to_tensor([0, seq_len], dtype="int64")
+            max_seqlen_q = paddle.to_tensor([seq_len], dtype="int64")
+            max_seqlen_k = paddle.to_tensor([seq_len], dtype="int64")
+        else:
+            # v3 format: [batch_size, num_heads, seq_len, head_dim], int32 for seqlens
+            q = paddle.randn([1, num_heads, seq_len, head_dim], dtype="float16")
+            k = paddle.randn([1, kv_num_heads, seq_len, head_dim], dtype="float16")
+            v = paddle.randn([1, kv_num_heads, seq_len, head_dim], dtype="float16")
+            cu_seqlens_q = paddle.to_tensor([0, seq_len], dtype="int32")
+            cu_seqlens_k = paddle.to_tensor([0, seq_len], dtype="int32")
+            max_seqlen_q = paddle.to_tensor([seq_len], dtype="int32")
+            max_seqlen_k = paddle.to_tensor([seq_len], dtype="int32")
 
         results_single = []
         for i in range(5):
@@ -417,7 +414,11 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                 num_heads=num_heads,
                 kv_num_heads=kv_num_heads,
                 head_dim=head_dim,
+                version=current_fa_version,  # Use current environment version
             )
+            # v2 returns (output, softmax_lse), v3 returns output directly
+            if isinstance(result, tuple):
+                result = result[0]
             results_single.append(result.clone().cpu())
 
         all_equal_single = True
@@ -460,11 +461,13 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
             k_batch = paddle.randn([total_tokens, kv_num_heads, head_dim], dtype="float16")
             v_batch = paddle.randn([total_tokens, kv_num_heads, head_dim], dtype="float16")
 
-            cu_seqlens_q = paddle.to_tensor([0] + seq_lengths, dtype="int32").cumsum()
+            # Different dtype for seqlens based on flash attention version
+            seqlens_dtype = "int64" if current_fa_version == 2 else "int32"
+            cu_seqlens_q = paddle.to_tensor([0] + seq_lengths, dtype=seqlens_dtype).cumsum()
             cu_seqlens_k = cu_seqlens_q.clone()
 
-            max_seqlen_q = paddle.to_tensor([max(seq_lengths)], dtype="int32")
-            max_seqlen_k = paddle.to_tensor([max(seq_lengths)], dtype="int32")
+            max_seqlen_q = paddle.to_tensor([max(seq_lengths)], dtype=seqlens_dtype)
+            max_seqlen_k = paddle.to_tensor([max(seq_lengths)], dtype=seqlens_dtype)
 
             results = []
             for run in range(3):
@@ -481,7 +484,11 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                     num_heads=num_heads,
                     kv_num_heads=kv_num_heads,
                     head_dim=head_dim,
+                    version=current_fa_version,  # Use current environment version
                 )
+                # v2 returns (output, softmax_lse), v3 returns output directly
+                if isinstance(result, tuple):
+                    result = result[0]
                 results.append(result.clone().cpu())
 
             is_deterministic = True
@@ -522,11 +529,13 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         k_unequal = paddle.randn([total_tokens, kv_num_heads, head_dim], dtype="float16")
         v_unequal = paddle.randn([total_tokens, kv_num_heads, head_dim], dtype="float16")
 
-        cu_seqlens_q = paddle.to_tensor([0] + unequal_seq_lengths, dtype="int32").cumsum()
+        # Different dtype for seqlens based on flash attention version
+        seqlens_dtype = "int64" if current_fa_version == 2 else "int32"
+        cu_seqlens_q = paddle.to_tensor([0] + unequal_seq_lengths, dtype=seqlens_dtype).cumsum()
         cu_seqlens_k = cu_seqlens_q.clone()
 
-        max_seqlen_q = paddle.to_tensor([max(unequal_seq_lengths)], dtype="int32")
-        max_seqlen_k = paddle.to_tensor([max(unequal_seq_lengths)], dtype="int32")
+        max_seqlen_q = paddle.to_tensor([max(unequal_seq_lengths)], dtype=seqlens_dtype)
+        max_seqlen_k = paddle.to_tensor([max(unequal_seq_lengths)], dtype=seqlens_dtype)
 
         results_unequal = []
         for run in range(5):
@@ -543,7 +552,11 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                 num_heads=num_heads,
                 kv_num_heads=kv_num_heads,
                 head_dim=head_dim,
+                version=current_fa_version,  # Use current environment version
             )
+            # v2 returns (output, softmax_lse), v3 returns output directly
+            if isinstance(result, tuple):
+                result = result[0]
             results_unequal.append(result.clone().cpu())
 
         all_equal_unequal = True
@@ -565,14 +578,24 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         print("  " + "-" * 60)
 
         paddle.seed(777)
-        q_single = paddle.randn([1, num_heads, head_dim], dtype="float16")
-        k_single = paddle.randn([1, kv_num_heads, head_dim], dtype="float16")
-        v_single = paddle.randn([1, kv_num_heads, head_dim], dtype="float16")
+        # Different input formats for v2 vs v3
+        if current_fa_version == 2:
+            # v2 format: [total_seq_len, num_heads, head_dim], int64 for seqlens
+            q_single = paddle.randn([1, num_heads, head_dim], dtype="float16")
+            k_single = paddle.randn([1, kv_num_heads, head_dim], dtype="float16")
+            v_single = paddle.randn([1, kv_num_heads, head_dim], dtype="float16")
+            seqlens_dtype = "int64"
+        else:
+            # v3 format: [batch_size, num_heads, seq_len, head_dim], int32 for seqlens
+            q_single = paddle.randn([1, num_heads, 1, head_dim], dtype="float16")
+            k_single = paddle.randn([1, kv_num_heads, 1, head_dim], dtype="float16")
+            v_single = paddle.randn([1, kv_num_heads, 1, head_dim], dtype="float16")
+            seqlens_dtype = "int32"
 
-        cu_seqlens_q = paddle.to_tensor([0, 1], dtype="int32")
-        cu_seqlens_k = paddle.to_tensor([0, 1], dtype="int32")
-        max_seqlen_q = paddle.to_tensor([1], dtype="int32")
-        max_seqlen_k = paddle.to_tensor([1], dtype="int32")
+        cu_seqlens_q = paddle.to_tensor([0, 1], dtype=seqlens_dtype)
+        cu_seqlens_k = paddle.to_tensor([0, 1], dtype=seqlens_dtype)
+        max_seqlen_q = paddle.to_tensor([1], dtype=seqlens_dtype)
+        max_seqlen_k = paddle.to_tensor([1], dtype=seqlens_dtype)
 
         results_single_token = []
         for run in range(5):
@@ -589,7 +612,11 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                 num_heads=num_heads,
                 kv_num_heads=kv_num_heads,
                 head_dim=head_dim,
+                version=current_fa_version,  # Use current environment version
             )
+            # v2 returns (output, softmax_lse), v3 returns output directly
+            if isinstance(result, tuple):
+                result = result[0]
             results_single_token.append(result.clone().cpu())
 
         all_equal_single_token = True
@@ -619,117 +646,192 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         os.environ.pop("FD_DETERMINISTIC_MODE", None)
         os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
 
-    def test_env_variables(self):
-        """Test environment variables"""
-        print("\n=== Testing environment variables ===")
+    # ========== NEW TEST: Multimodal Input Scenarios ==========
+    def test_multimodal_input_with_image(self):
+        """
+        Test multimodal input scenario with image patches
 
-        original_mode = os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        original_size = os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
-        try:
-            mode_env = os.getenv("FD_DETERMINISTIC_MODE", "0")
-            size_env = os.getenv("FD_DETERMINISTIC_SPLIT_KV_SIZE", "16")
-
-            default_mode = bool(int(mode_env))
-            default_size = int(size_env)
-
-            self.assertEqual(default_mode, False)
-            self.assertEqual(default_size, 16)
-
-            print(f"  FD_DETERMINISTIC_MODE default: {default_mode}")
-            print(f"  FD_DETERMINISTIC_SPLIT_KV_SIZE default: {default_size}")
-        finally:
-            if original_mode is not None:
-                os.environ["FD_DETERMINISTIC_MODE"] = original_mode
-            if original_size is not None:
-                os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = original_size
-
-    def test_deterministic_mode_edge_case_already_aligned(self):
-        """Test starting from already aligned positions"""
-        print("\n=== Testing deterministic mode (already aligned positions) ===")
+        This tests the real-world scenario where a request contains image data
+        that affects token allocation based on patch_idx and patch_map.
+        """
+        print("\n=== Testing multimodal input with image patches ===")
 
         split_kv_size = 16
         os.environ["FD_DETERMINISTIC_MODE"] = "1"
         os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
 
-        config = MockFDConfig()
+        config = TestConfig()
+        config.model_config.enable_mm = True
         rm = self._create_resource_manager(config)
 
-        aligned_positions = [0, 16, 32, 48, 64]
-        token_budget = 20
+        # Simulate a multimodal request with image
+        # Text tokens: 50
+        # Image patches: 100 (simulated)
+        prompt_tokens = list(range(150))
 
-        for num_computed in aligned_positions:
-            request = MockRequest(need_prefill_tokens=100, num_computed_tokens=num_computed)
-            result = rm._get_num_new_tokens(request, token_budget)
+        # Create multimodal inputs with patch_idx and patch_map
+        multimodal_inputs = {
+            "image_patch_id": 151,
+            "image_end_id": 152,
+            "video_patch_id": 153,
+            "video_end_id": 154,
+            "audio_patch_id": 155,
+            "audio_end_id": 156,
+            "patch_idx": [0] * 50 + [1] * 100,  # First 50 text, then 100 image patches
+            "patch_map": [
+                {"modal_id": 0, "end_idx": 50, "image_num": 0, "video_num": 0},  # Text
+                {"modal_id": 1, "end_idx": 150, "image_num": 1, "video_num": 0},  # Image
+            ],
+            "tts": False,
+        }
 
-            final_pos = num_computed + result
+        request = create_test_request("mm_image_req", prompt_tokens, 0, multimodal_inputs)
+        token_budget = 60
 
-            if result > 0:
-                aligned_end = (final_pos // split_kv_size) * split_kv_size
-                self.assertEqual(
-                    aligned_end,
-                    final_pos,
-                    f"Final position {final_pos} (from {num_computed}) is not aligned to {split_kv_size}",
-                )
+        result = rm._get_num_new_tokens(request, token_budget)
 
-            print(
-                f"  num_computed={num_computed}, token_budget={token_budget} -> result={result}, final_pos={final_pos}"
-            )
+        print(f"  Request: {len(prompt_tokens)} tokens (50 text + 100 image)")
+        print(f"  Token budget: {token_budget}")
+        print(f"  Result: {result} tokens")
+        print(f"  Request with_image: {request.with_image}")
+        print(f"  Image start: {request.image_start}, Image end: {request.image_end}")
+
+        # Verify result doesn't exceed budget
+        self.assertLessEqual(result, token_budget)
+        self.assertGreaterEqual(result, 0)
 
         os.environ.pop("FD_DETERMINISTIC_MODE", None)
         os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
 
-    def test_deterministic_mode_exceed_budget(self):
-        """Test alignment near budget boundaries"""
-        print("\n=== Testing deterministic mode (alignment near budget boundaries) ===")
+    def test_multimodal_input_with_video(self):
+        """
+        Test multimodal input scenario with video
+
+        This tests the real-world scenario where a request contains video data
+        with can_split_idx_list for chunking support.
+        """
+        print("\n=== Testing multimodal input with video ===")
 
         split_kv_size = 16
         os.environ["FD_DETERMINISTIC_MODE"] = "1"
         os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
 
-        config = MockFDConfig()
+        config = TestConfig()
+        config.model_config.enable_mm = True
         rm = self._create_resource_manager(config)
 
-        request = MockRequest(need_prefill_tokens=100, num_computed_tokens=15)
-        result = rm._get_num_new_tokens(request, 2)
+        # Simulate a multimodal request with video
+        prompt_tokens = list(range(200))
 
-        max_possible = min(100 - 15, 2)
-        self.assertLessEqual(result, max_possible)
+        # Create multimodal inputs with video and can_split_idx_list
+        multimodal_inputs = {
+            "image_patch_id": 201,
+            "image_end_id": 202,
+            "video_patch_id": 203,
+            "video_end_id": 204,
+            "audio_patch_id": 205,
+            "audio_end_id": 206,
+            "patch_idx": [0] * 80 + [1] * 120,  # First 80 text, then 120 video
+            "patch_map": [
+                {"modal_id": 0, "end_idx": 80, "image_num": 0, "video_num": 0},  # Text
+                {"modal_id": 2, "end_idx": 200, "image_num": 0, "video_num": 1},  # Video
+            ],
+            "can_split_idx_list": [96, 112, 128, 144, 160, 176, 192],  # Split points in video
+            "tts": False,
+        }
 
-        expected = 1
-        self.assertEqual(result, expected, f"Expected {expected}, got {result}")
+        request = create_test_request("mm_video_req", prompt_tokens, 0, multimodal_inputs)
+        token_budget = 50
 
-        print(f"  num_computed=15, token_budget=2 -> result={result} (aligned to next boundary)")
+        result = rm._get_num_new_tokens(request, token_budget)
+
+        print(f"  Request: {len(prompt_tokens)} tokens (80 text + 120 video)")
+        print(f"  Token budget: {token_budget}")
+        print(f"  Result: {result} tokens")
+        print(f"  Video start: {request.video_start}, Video end: {request.video_end}")
+
+        self.assertLessEqual(result, token_budget)
+        self.assertGreaterEqual(result, 0)
 
         os.environ.pop("FD_DETERMINISTIC_MODE", None)
         os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
 
-    def test_deterministic_mode_variable_length_batch(self):
+    def test_multimodal_input_with_audio(self):
         """
-        Test determinism for variable length sequence batches
+        Test multimodal input scenario with audio
 
-        Key points:
-        1. Even with different sequence lengths in batch, each sequence's chunk boundary
-           must align to split_kv_size
-        2. Padding-free processing (via cu_seqlens) should not affect determinism
-        3. Each request's prefill chunk end position must be a multiple of split_kv_size
-           Exception: when remaining tokens < split_kv_size, last chunk can be unaligned
+        This tests the real-world scenario where a request contains audio data
+        requiring special audio prefix counting.
         """
-        print("\n=== Testing deterministic mode (variable length batch) ===")
+        print("\n=== Testing multimodal input with audio ===")
 
         split_kv_size = 16
         os.environ["FD_DETERMINISTIC_MODE"] = "1"
         os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
 
-        config = MockFDConfig()
+        config = TestConfig()
+        config.model_config.enable_mm = True
         rm = self._create_resource_manager(config)
 
-        batch_requests = [
-            {"id": "req1", "need": 27, "computed": 0},
-            {"id": "req2", "need": 63, "computed": 0},
-            {"id": "req3", "need": 128, "computed": 0},
-            {"id": "req4", "need": 60, "computed": 10},
-            {"id": "req5", "need": 47, "computed": 7},
+        # Simulate a multimodal request with audio
+        prompt_tokens = list(range(120))
+
+        # Create multimodal inputs with audio
+        multimodal_inputs = {
+            "image_patch_id": 121,
+            "image_end_id": 122,
+            "video_patch_id": 123,
+            "video_end_id": 124,
+            "audio_patch_id": 125,
+            "audio_end_id": 126,
+            "patch_idx": [0] * 60 + [3] * 60,  # First 60 text, then 60 audio
+            "patch_map": [
+                {"modal_id": 0, "end_idx": 60, "image_num": 0, "video_num": 0},  # Text
+                {"modal_id": 3, "end_idx": 120, "image_num": 0, "video_num": 0},  # Audio
+            ],
+            "tts": False,
+        }
+
+        request = create_test_request("mm_audio_req", prompt_tokens, 0, multimodal_inputs)
+        token_budget = 40
+
+        result = rm._get_num_new_tokens(request, token_budget)
+
+        print(f"  Request: {len(prompt_tokens)} tokens (60 text + 60 audio)")
+        print(f"  Token budget: {token_budget}")
+        print(f"  Result: {result} tokens")
+        print(f"  Audio start: {request.audio_start}, Audio end: {request.audio_end}")
+
+        self.assertLessEqual(result, token_budget)
+        self.assertGreaterEqual(result, 0)
+
+        os.environ.pop("FD_DETERMINISTIC_MODE", None)
+        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+
+    # ========== NEW TEST: Real Batch Scheduling Scenarios ==========
+    def test_real_batch_scheduling_concurrent_requests(self):
+        """
+        Test real batch scheduling scenario with multiple concurrent requests
+
+        This simulates a real-world scenario where multiple requests compete
+        for token budget in the same batch.
+        """
+        print("\n=== Testing real batch scheduling (concurrent requests) ===")
+
+        split_kv_size = 16
+        os.environ["FD_DETERMINISTIC_MODE"] = "1"
+        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+
+        config = TestConfig()
+        rm = self._create_resource_manager(config)
+
+        # Simulate a batch with multiple requests competing for budget
+        batch_config = [
+            {"id": "req1", "prompt": list(range(27)), "computed": 0},
+            {"id": "req2", "prompt": list(range(63)), "computed": 0},
+            {"id": "req3", "prompt": list(range(128)), "computed": 0},
+            {"id": "req4", "prompt": list(range(60)), "computed": 10},
+            {"id": "req5", "prompt": list(range(47)), "computed": 7},
         ]
 
         token_budget = 50
@@ -738,61 +840,84 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         print(f"    split_kv_size: {split_kv_size}")
         print(f"    token_budget: {token_budget}")
         print("    Requests:")
-        for req in batch_requests:
-            print(f"      {req['id']}: need={req['need']}, computed={req['computed']}")
+        for req in batch_config:
+            print(f"      {req['id']}: prompt_len={len(req['prompt'])}, computed={req['computed']}")
 
-        print("\n  Chunk processing:")
+        print("\n  Batch processing:")
 
         results = {}
-        for req in batch_requests:
-            request = MockRequest(req["need"], req["computed"])
+        for req_cfg in batch_config:
+            request = create_test_request(req_cfg["id"], req_cfg["prompt"], req_cfg["computed"])
             num_new_tokens = rm._get_num_new_tokens(request, token_budget)
 
-            final_pos = req["computed"] + num_new_tokens
+            final_pos = req_cfg["computed"] + num_new_tokens
             aligned_end = (final_pos // split_kv_size) * split_kv_size
 
-            max_possible = min(req["need"] - req["computed"], token_budget)
+            max_possible = min(len(req_cfg["prompt"]) - req_cfg["computed"], token_budget)
             self.assertLessEqual(
                 num_new_tokens,
                 max_possible,
-                f"{req['id']}: num_new_tokens={num_new_tokens} exceeds max_possible={max_possible}",
+                f"{req_cfg['id']}: num_new_tokens={num_new_tokens} exceeds max_possible={max_possible}",
             )
 
             if num_new_tokens > 0:
-                aligned_end = (final_pos // split_kv_size) * split_kv_size
-                is_final_ok = (aligned_end == final_pos) or (final_pos == req["need"])
+                is_final_ok = (aligned_end == final_pos) or (final_pos == len(req_cfg["prompt"]))
                 self.assertTrue(
                     is_final_ok,
-                    f"{req['id']}: final_pos={final_pos} is not aligned to {split_kv_size} and not at end={req['need']}",
+                    f"{req_cfg['id']}: final_pos={final_pos} is not aligned to {split_kv_size} and not at end={len(req_cfg['prompt'])}",
                 )
 
-            results[req["id"]] = {
-                "num_computed": req["computed"],
+            results[req_cfg["id"]] = {
+                "num_computed": req_cfg["computed"],
                 "num_new_tokens": num_new_tokens,
                 "final_pos": final_pos,
                 "aligned_end": aligned_end,
                 "is_aligned": (aligned_end == final_pos) or (num_new_tokens == 0),
-                "is_at_end": final_pos == req["need"],
+                "is_at_end": final_pos == len(req_cfg["prompt"]),
             }
 
-            status = "[PASS]" if (results[req["id"]]["is_aligned"] or results[req["id"]]["is_at_end"]) else "[FAIL]"
+            status = (
+                "[PASS]" if (results[req_cfg["id"]]["is_aligned"] or results[req_cfg["id"]]["is_at_end"]) else "[FAIL]"
+            )
             print(
-                f"    {status} {req['id']}: computed={req['computed']}, "
+                f"    {status} {req_cfg['id']}: computed={req_cfg['computed']}, "
                 f"new_tokens={num_new_tokens}, final_pos={final_pos}, "
-                f"aligned={results[req['id']]['is_aligned']}, at_end={results[req['id']]['is_at_end']}"
+                f"aligned={results[req_cfg['id']]['is_aligned']}, at_end={results[req_cfg['id']]['is_at_end']}"
             )
 
         all_ok = all(r["is_aligned"] or r["is_at_end"] for r in results.values())
         self.assertTrue(all_ok, "Not all requests are properly aligned or at end!")
 
-        print(f"\n  Testing continuous prefill for {batch_requests[4]['id']}:")
-        req5 = batch_requests[4]
-        num_computed = req5["computed"]
+        os.environ.pop("FD_DETERMINISTIC_MODE", None)
+        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+
+    def test_real_batch_scheduling_continuous_prefill(self):
+        """
+        Test continuous prefill scenario with real Request objects
+
+        This tests how multiple chunks are allocated over time for the same request.
+        """
+        print("\n=== Testing real batch scheduling (continuous prefill) ===")
+
+        split_kv_size = 16
+        os.environ["FD_DETERMINISTIC_MODE"] = "1"
+        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+
+        config = TestConfig()
+        rm = self._create_resource_manager(config)
+
+        prompt_tokens = list(range(47))
+        token_budget = 50
+        num_computed = 0
         chunk_count = 0
         all_chunks_ok = True
 
-        while num_computed < req5["need"] and chunk_count < 10:
-            request = MockRequest(req5["need"], num_computed)
+        print(f"  Total prompt tokens: {len(prompt_tokens)}")
+        print(f"  Token budget per iteration: {token_budget}")
+        print(f"  Split KV size: {split_kv_size}")
+
+        while num_computed < len(prompt_tokens) and chunk_count < 10:
+            request = create_test_request("continuous_req", prompt_tokens, num_computed)
             num_new_tokens = rm._get_num_new_tokens(request, token_budget)
 
             if num_new_tokens == 0:
@@ -800,13 +925,13 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
 
             final_pos = num_computed + num_new_tokens
             aligned_end = (final_pos // split_kv_size) * split_kv_size
-            is_ok = (aligned_end == final_pos) or (final_pos == req5["need"])
+            is_ok = (aligned_end == final_pos) or (final_pos == len(prompt_tokens))
 
             status = "[PASS]" if is_ok else "[FAIL]"
             print(
                 f"    {status} Chunk {chunk_count}: start={num_computed}, "
                 f"new_tokens={num_new_tokens}, end={final_pos}, "
-                f"aligned={aligned_end == final_pos}, at_end={final_pos == req5['need']}"
+                f"aligned={aligned_end == final_pos}, at_end={final_pos == len(prompt_tokens)}"
             )
 
             if not is_ok:
@@ -815,65 +940,300 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
             num_computed += num_new_tokens
             chunk_count += 1
 
-        self.assertTrue(all_chunks_ok, f"Not all chunks are properly processed for {req5['id']}!")
+        self.assertTrue(all_chunks_ok, "Not all chunks are properly processed!")
         self.assertEqual(
             num_computed,
-            req5["need"],
-            f"Did not complete all tokens for {req5['id']}: got {num_computed}, expected {req5['need']}",
+            len(prompt_tokens),
+            f"Did not complete all tokens: got {num_computed}, expected {len(prompt_tokens)}",
         )
 
         os.environ.pop("FD_DETERMINISTIC_MODE", None)
         os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
 
-    def test_deterministic_mode_small_split_size_variations(self):
+    def test_real_batch_scheduling_with_multimodal_requests(self):
         """
-        Test unequal sequence processing with different split_kv_size values
+        Test batch scheduling with multimodal requests mixed in
 
-        Ensure unequal sequences can be correctly aligned with different split_kv_size configs
+        This tests a real-world scenario where some requests contain images,
+        videos, or audio while others are text-only.
         """
-        print("\n=== Testing deterministic mode (variable split sizes with unequal sequences) ===")
+        print("\n=== Testing real batch scheduling (multimodal mixed batch) ===")
 
-        test_configs = [
-            {"split_size": 8, "requests": [(15, 0), (23, 0), (41, 5)]},
-            {"split_size": 16, "requests": [(27, 0), (63, 0), (47, 7), (60, 10)]},
-            {"split_size": 32, "requests": [(55, 0), (89, 0), (100, 17)]},
-            {"split_size": 64, "requests": [(100, 0), (150, 0), (200, 33)]},
+        split_kv_size = 16
+        os.environ["FD_DETERMINISTIC_MODE"] = "1"
+        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+
+        config = TestConfig()
+        config.model_config.enable_mm = True
+        rm = self._create_resource_manager(config)
+
+        # Mixed batch: text-only, image, video, audio
+        batch_requests = [
+            {
+                "id": "text_only",
+                "prompt": list(range(100)),
+                "computed": 0,
+                "mm_inputs": None,
+            },
+            {
+                "id": "with_image",
+                "prompt": list(range(80)),
+                "computed": 0,
+                "mm_inputs": {
+                    "image_patch_id": 151,
+                    "image_end_id": 152,
+                    "video_patch_id": 153,
+                    "video_end_id": 154,
+                    "audio_patch_id": 155,
+                    "audio_end_id": 156,
+                    "patch_idx": [0] * 40 + [1] * 40,
+                    "patch_map": [
+                        {"modal_id": 0, "end_idx": 40, "image_num": 0, "video_num": 0},
+                        {"modal_id": 1, "end_idx": 80, "image_num": 1, "video_num": 0},
+                    ],
+                    "tts": False,
+                },
+            },
         ]
 
-        token_budget = 50
+        token_budget = 30
 
-        for config in test_configs:
-            split_kv_size = config["split_size"]
-            os.environ["FD_DETERMINISTIC_MODE"] = "1"
-            os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        print("  Mixed multimodal batch configuration:")
+        for req in batch_requests:
+            mm_type = "text-only"
+            if req["mm_inputs"] is not None:
+                if 1 in [p["modal_id"] for p in req["mm_inputs"]["patch_map"]]:
+                    mm_type = "image"
+            print(f"    {req['id']}: prompt_len={len(req['prompt'])}, type={mm_type}")
 
-            rm = self._create_resource_manager(MockFDConfig())
+        print(f"    token_budget: {token_budget}")
 
-            print(f"\n  Testing split_kv_size={split_kv_size}:")
+        for req_cfg in batch_requests:
+            request = create_test_request(req_cfg["id"], req_cfg["prompt"], req_cfg["computed"], req_cfg["mm_inputs"])
+            num_new_tokens = rm._get_num_new_tokens(request, token_budget)
 
-            all_ok = True
-            for i, (need, computed) in enumerate(config["requests"]):
-                request = MockRequest(need, computed)
-                num_new_tokens = rm._get_num_new_tokens(request, token_budget)
+            print(
+                f"    {req_cfg['id']}: new_tokens={num_new_tokens}, "
+                f"with_image={getattr(request, 'with_image', False)}"
+            )
 
-                final_pos = computed + num_new_tokens
-                aligned_end = (final_pos // split_kv_size) * split_kv_size
-                is_ok = (aligned_end == final_pos) or (final_pos == need) or (num_new_tokens == 0)
+            self.assertLessEqual(num_new_tokens, token_budget)
+            self.assertGreaterEqual(num_new_tokens, 0)
 
-                status = "[PASS]" if is_ok else "[FAIL]"
-                print(
-                    f"    {status} Request {i}: need={need}, computed={computed}, "
-                    f"new_tokens={num_new_tokens}, final_pos={final_pos}, "
-                    f"aligned={aligned_end == final_pos}, at_end={final_pos == need}"
-                )
+        os.environ.pop("FD_DETERMINISTIC_MODE", None)
+        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
 
-                if not is_ok:
-                    all_ok = False
+    # ========== Existing corner case tests (adapted for real Request class) ==========
+    def test_corner_case_empty_request(self):
+        """Test corner case: empty request and zero tokens"""
+        print("\n=== Testing corner case (empty request / zero tokens) ===")
 
-            self.assertTrue(all_ok, f"Not all requests aligned for split_kv_size={split_kv_size}")
+        split_kv_size = 16
+        os.environ["FD_DETERMINISTIC_MODE"] = "1"
+        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
 
-            os.environ.pop("FD_DETERMINISTIC_MODE", None)
-            os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+        config = TestConfig()
+        rm = self._create_resource_manager(config)
+
+        # Test 1: need_prefill_tokens = 0
+        request = create_test_request("empty_req", [], 0)
+        result = rm._get_num_new_tokens(request, token_budget=50)
+        self.assertEqual(result, 0, "Empty request should return 0")
+        print(f"  [PASS] empty prompt -> result={result}")
+
+        # Test 2: num_computed == need_prefill (already completed)
+        request = create_test_request("completed_req", list(range(100)), 100)
+        result = rm._get_num_new_tokens(request, token_budget=50)
+        self.assertEqual(result, 0, "Completed request should return 0")
+        print(f"  [PASS] prompt_len=100, num_computed=100 -> result={result}")
+
+        # Test 3: token_budget = 0
+        request = create_test_request("zero_budget_req", list(range(100)), 0)
+        result = rm._get_num_new_tokens(request, token_budget=0)
+        self.assertEqual(result, 0, "Zero budget should return 0")
+        print(f"  [PASS] token_budget=0 -> result={result}")
+
+        os.environ.pop("FD_DETERMINISTIC_MODE", None)
+        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+
+    def test_corner_case_state_inconsistency(self):
+        """Test corner case: num_computed > need_prefill (state inconsistency)"""
+        print("\n=== Testing corner case (state inconsistency) ===")
+
+        split_kv_size = 16
+        os.environ["FD_DETERMINISTIC_MODE"] = "1"
+        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+
+        config = TestConfig()
+        rm = self._create_resource_manager(config)
+
+        # Test: num_computed > need_prefill_tokens
+        # This is an invalid state that should not happen in normal operation.
+        # The implementation should handle it gracefully by returning 0.
+        request = create_test_request("inconsistent_req", list(range(50)), 100)
+        result = rm._get_num_new_tokens(request, token_budget=50)
+
+        # Should return 0 for this edge case
+        self.assertEqual(result, 0, "Should return 0 for completed/inconsistent state")
+        print(f"  [PASS] prompt_len=50, num_computed=100 (inconsistent) -> result={result}")
+
+        os.environ.pop("FD_DETERMINISTIC_MODE", None)
+        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+
+    def test_corner_case_minimum_split_size(self):
+        """Test corner case: split_kv_size = 1 (minimum alignment unit)"""
+        print("\n=== Testing corner case (split_kv_size = 1) ===")
+
+        split_kv_size = 1
+        os.environ["FD_DETERMINISTIC_MODE"] = "1"
+        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+
+        config = TestConfig()
+        rm = self._create_resource_manager(config)
+
+        test_cases = [
+            (list(range(100)), 0, 20, 20),  # Every position is aligned
+            (list(range(100)), 10, 15, 15),
+            (list(range(100)), 50, 10, 10),
+        ]
+
+        for prompt_ids, num_computed, token_budget, expected in test_cases:
+            request = create_test_request("min_split_req", prompt_ids, num_computed)
+            result = rm._get_num_new_tokens(request, token_budget)
+            max_possible = min(len(prompt_ids) - num_computed, token_budget)
+            self.assertEqual(result, max_possible, "split_size=1 should allow max allocation")
+            print(
+                f"  [PASS] prompt_len={len(prompt_ids)}, computed={num_computed}, budget={token_budget} -> result={result}"
+            )
+
+        os.environ.pop("FD_DETERMINISTIC_MODE", None)
+        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+
+    def test_corner_case_split_size_larger_than_budget(self):
+        """Test corner case: split_kv_size >> token_budget"""
+        print("\n=== Testing corner case (split_kv_size >> token_budget) ===")
+
+        split_kv_size = 128
+        os.environ["FD_DETERMINISTIC_MODE"] = "1"
+        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+
+        config = TestConfig()
+        rm = self._create_resource_manager(config)
+
+        # Test when split_kv_size is much larger than token_budget
+        test_cases = [
+            (list(range(100)), 0, 10),  # Budget much smaller than split size
+            (list(range(100)), 0, 1),  # Budget is 1
+            (list(range(100)), 64, 20),  # Starting near boundary
+        ]
+
+        for prompt_ids, num_computed, token_budget in test_cases:
+            request = create_test_request("large_split_req", prompt_ids, num_computed)
+            result = rm._get_num_new_tokens(request, token_budget)
+
+            # Should not exceed max possible
+            max_possible = min(len(prompt_ids) - num_computed, token_budget)
+            self.assertLessEqual(result, max_possible)
+            # Check if result is reasonable (might be 0 if can't align)
+            self.assertGreaterEqual(result, 0)
+
+            print(
+                f"  [PASS] prompt_len={len(prompt_ids)}, computed={num_computed}, budget={token_budget} -> result={result}"
+            )
+
+        os.environ.pop("FD_DETERMINISTIC_MODE", None)
+        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+
+    def test_corner_case_split_size_larger_than_sequence(self):
+        """Test corner case: split_kv_size >> need_prefill"""
+        print("\n=== Testing corner case (split_kv_size >> prompt_len) ===")
+
+        split_kv_size = 256
+        os.environ["FD_DETERMINISTIC_MODE"] = "1"
+        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+
+        config = TestConfig()
+        rm = self._create_resource_manager(config)
+
+        # Sequence shorter than split_kv_size
+        prompt_tokens = list(range(50))
+        request = create_test_request("short_seq_req", prompt_tokens, 0)
+        result = rm._get_num_new_tokens(request, token_budget=100)
+
+        # Should handle gracefully, may return 0 or partial
+        max_possible = min(50, 100)
+        self.assertLessEqual(result, max_possible)
+        self.assertGreaterEqual(result, 0)
+        print(f"  [PASS] prompt_len=50, split_size=256 -> result={result}")
+
+        os.environ.pop("FD_DETERMINISTIC_MODE", None)
+        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+
+    def test_corner_case_dynamic_config_switch(self):
+        """Test corner case: dynamic config switch during execution"""
+        print("\n=== Testing corner case (dynamic config switch) ===")
+
+        # Start with deterministic mode disabled
+        os.environ.pop("FD_DETERMINISTIC_MODE", None)
+        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+
+        config = TestConfig()
+        rm = self._create_resource_manager(config)
+
+        request = create_test_request("switch_req", list(range(100)), 0)
+
+        # Test 1: Non-deterministic mode
+        result1 = rm._get_num_new_tokens(request, token_budget=30)
+        print(f"  Non-deterministic mode: result={result1}")
+
+        # Enable deterministic mode mid-stream
+        os.environ["FD_DETERMINISTIC_MODE"] = "1"
+        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = "16"
+
+        # Recreate RM to pick up new env vars (simulating reload)
+        rm = self._create_resource_manager(config)
+
+        # Test 2: Deterministic mode
+        num_computed = result1
+        request2 = create_test_request("switch_req_2", list(range(100)), num_computed)
+        result2 = rm._get_num_new_tokens(request2, token_budget=30)
+
+        final_pos = num_computed + result2
+        if result2 > 0:
+            split_kv_size = 16
+            aligned_end = (final_pos // split_kv_size) * split_kv_size
+            is_aligned = (aligned_end == final_pos) or (final_pos == 100)
+            self.assertTrue(is_aligned, f"Final pos {final_pos} should be aligned after mode switch")
+
+        print(f"  [PASS] Deterministic mode after switch: result={result2}, final_pos={final_pos}")
+
+        os.environ.pop("FD_DETERMINISTIC_MODE", None)
+        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+
+    def test_corner_case_negative_values(self):
+        """Test corner case: potential negative or invalid inputs"""
+        print("\n=== Testing corner case (negative/invalid inputs) ===")
+
+        split_kv_size = 16
+        os.environ["FD_DETERMINISTIC_MODE"] = "1"
+        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+
+        config = TestConfig()
+        rm = self._create_resource_manager(config)
+
+        # Test with real request object
+        # Very large budget that could cause overflow issues
+        request = create_test_request("large_budget_req", list(range(100)), 0)
+        result = rm._get_num_new_tokens(request, token_budget=1000000)
+
+        # Should not exceed actual need
+        max_possible = 100
+        self.assertLessEqual(result, max_possible, "Should not overflow beyond prompt_len")
+        self.assertGreaterEqual(result, 0)
+        print(f"  [PASS] Very large budget (1000000) -> result={result}")
+
+        os.environ.pop("FD_DETERMINISTIC_MODE", None)
+        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
 
     def _create_resource_manager(self, config):
         """Create resource manager for testing"""

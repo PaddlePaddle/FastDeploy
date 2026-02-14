@@ -91,12 +91,9 @@ class Qwen2MLP(nn.Layer):
 
     def forward(self, x, forward_meta):
         """ """
-
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
-
         down_out = self.down_proj(act_out)
-
         return down_out
 
 
@@ -200,7 +197,6 @@ class Qwen2DecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
-
         # Self Attention
         hidden_states, residual = self.input_layernorm(
             hidden_states, residual_input=residual, forward_meta=forward_meta
