@@ -13,9 +13,9 @@
 # limitations under the License.
 
 """
-测试 Flash Attention V2 和 V3 的确定性
+Test determinism for Flash Attention V2 and V3
 
-检查不同 Flash Attention backend 的确定性表现：
+Check determinism behavior across different Flash Attention backends:
 - FA2 (Flash Attention V2)
 - FA3 (Flash Attention V3)
 """
@@ -30,7 +30,7 @@ print(" FLASH ATTENTION V2/V3 DETERMINISM TEST")
 print("=" * 70)
 print()
 
-# 基础配置
+# Base configuration
 BATCH_SIZE = 2
 NUM_HEADS = 32
 HEAD_DIM = 64
@@ -38,7 +38,7 @@ SEQ_LEN = 2048
 
 
 class TestFlashAttentionDeterminism(unittest.TestCase):
-    """测试 Flash Attention 的确定性"""
+    """Test Flash Attention determinism"""
 
     def setUp(self):
         """Set up test environment and save current flash attn version"""
@@ -54,425 +54,373 @@ class TestFlashAttentionDeterminism(unittest.TestCase):
         """Restore original flash attn version after each test"""
         paddle.set_flags({"FLAGS_flash_attn_version": self._saved_flash_attn_version})
 
-    def test_fa2_determinism(self):
-        """测试 Flash Attention V2 的确定性"""
-        print("\n[1] Flash Attention V2 确定性测试")
-        print("-" * 70)
+    def _check_fa3_support(self):
+        """Check if GPU architecture supports FA3"""
+        prop = paddle.device.cuda.get_device_properties()
+        sm_version = prop.major * 10 + prop.minor
+        if sm_version < 89 or sm_version >= 100:
+            self.skipTest(f"Flash Attention V3 requires SM89+ but SM100-. Current: SM{sm_version}")
 
+    def _check_cuda_support(self):
+        """Check if CUDA is supported"""
         if not paddle.is_compiled_with_cuda():
             self.skipTest("Flash Attention requires CUDA")
 
-        # 设置 Flash Attention V2
-        paddle.set_flags({"FLAGS_flash_attn_version": 2})
+    def _test_determinism(self, version, num_runs=5, dtype="float16", **attn_kwargs):
+        """Generic method for testing determinism
+
+        Args:
+            version: Flash Attention version (2 or 3)
+            num_runs: Number of runs
+            dtype: Data type
+            **attn_kwargs: Parameters passed to scaled_dot_product_attention
+        """
+        self._check_cuda_support()
+        if version == 3:
+            self._check_fa3_support()
+
+        paddle.set_flags({"FLAGS_flash_attn_version": version})
 
         paddle.seed(42)
-        query = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        key = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        value = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
+        query = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype=dtype)
+        key = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype=dtype)
+        value = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype=dtype)
 
         results = []
-        for i in range(5):
+        for _ in range(num_runs):
             paddle.device.synchronize()
-            result = F.scaled_dot_product_attention(
-                query, key, value, is_causal=False, enable_gqa=False, backend="flash"
-            )
+            result = F.scaled_dot_product_attention(query, key, value, backend="flash", **attn_kwargs)
             results.append(result.clone())
 
-        # 使用完全相等检查
         all_equal = True
-        for i in range(1, 5):
+        for i in range(1, num_runs):
             is_equal = paddle.equal(results[0], results[i]).all().item()
-            print(f"  Run 1 vs Run {i+1}: equal={is_equal}")
             if not is_equal:
                 all_equal = False
 
+        version_name = f"FA{version}"
+        mode = "causal" if attn_kwargs.get("is_causal") else "non-causal"
         if all_equal:
-            print("  结果: FA2 是确定性的（完全相等）")
+            print(f"  Result: {version_name} {mode} mode is deterministic")
         else:
-            print("  结果: FA2 不是完全确定性的")
+            print(f"  Result: {version_name} {mode} mode is NOT deterministic")
 
+        return all_equal
+
+    def _test_batch_invariance(self, version, dtype="float16", **attn_kwargs):
+        """Generic method for testing batch invariance
+
+        Verify that the same request's q,k,v yields consistent results
+        across different batch sizes.
+        """
+        self._check_cuda_support()
+        if version == 3:
+            self._check_fa3_support()
+
+        paddle.set_flags({"FLAGS_flash_attn_version": version})
+
+        MAX_BATCH_SIZE = 8
+        paddle.seed(42)
+        full_query = paddle.randn([MAX_BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype=dtype)
+        full_key = paddle.randn([MAX_BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype=dtype)
+        full_value = paddle.randn([MAX_BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype=dtype)
+
+        reference_result = None
+        batch_sizes = [1, 2, 4, 8]
+        all_equal = True
+
+        for bs in batch_sizes:
+            query = full_query[:bs]
+            key = full_key[:bs]
+            value = full_value[:bs]
+
+            result = F.scaled_dot_product_attention(query, key, value, backend="flash", **attn_kwargs)
+            current_result = result[0:1]
+
+            if reference_result is None:
+                reference_result = current_result.clone()
+                is_equal = True
+            else:
+                is_equal = paddle.equal(reference_result, current_result).all().item()
+
+            if not is_equal:
+                all_equal = False
+
+        version_name = f"FA{version}"
+        if all_equal:
+            print(f"  Result: {version_name} is batch invariant")
+        else:
+            print(f"  Result: {version_name} is NOT batch invariant")
+
+        return all_equal
+
+    def _test_seq_length_determinism(self, version, seq_lengths, dtype="float16", **attn_kwargs):
+        """Generic method for testing determinism across different sequence lengths"""
+        self._check_cuda_support()
+        if version == 3:
+            self._check_fa3_support()
+
+        paddle.set_flags({"FLAGS_flash_attn_version": version})
+
+        all_deterministic = []
+        for seq_len in seq_lengths:
+            paddle.seed(42)
+            query = paddle.randn([BATCH_SIZE, NUM_HEADS, seq_len, HEAD_DIM], dtype=dtype)
+            key = paddle.randn([BATCH_SIZE, NUM_HEADS, seq_len, HEAD_DIM], dtype=dtype)
+            value = paddle.randn([BATCH_SIZE, NUM_HEADS, seq_len, HEAD_DIM], dtype=dtype)
+
+            result1 = F.scaled_dot_product_attention(query, key, value, backend="flash", **attn_kwargs)
+            result2 = F.scaled_dot_product_attention(query, key, value, backend="flash", **attn_kwargs)
+
+            is_equal = paddle.equal(result1, result2).all().item()
+            all_deterministic.append(is_equal)
+
+        all_equal = all(all_deterministic)
+        version_name = f"FA{version}"
+        if all_equal:
+            print(f"  Result: {version_name} is deterministic for all sequence lengths")
+        else:
+            print(f"  Result: {version_name} is NOT deterministic for some sequence lengths")
+
+        return all_equal
+
+    # ==================== Basic Determinism Tests ====================
+
+    def test_fa2_determinism(self):
+        """Test Flash Attention V2 determinism"""
+        print("\n[1] Flash Attention V2 Determinism Test")
+        print("-" * 70)
+        all_equal = self._test_determinism(2, num_runs=5, is_causal=False, enable_gqa=False)
         self.assertTrue(all_equal, "FA2 results are not equal")
 
     def test_fa3_determinism(self):
-        """测试 Flash Attention V3 的确定性"""
-        print("\n[2] Flash Attention V3 确定性测试")
+        """Test Flash Attention V3 determinism"""
+        print("\n[2] Flash Attention V3 Determinism Test")
         print("-" * 70)
-
-        if not paddle.is_compiled_with_cuda():
-            self.skipTest("Flash Attention requires CUDA")
-
-        # 检查 GPU 架构是否支持 FA3
-        prop = paddle.device.cuda.get_device_properties()
-        sm_version = prop.major * 10 + prop.minor
-
-        if sm_version < 89 or sm_version >= 100:
-            self.skipTest(f"Flash Attention V3 requires SM89+ but SM100-. Current: SM{sm_version}")
-
-        # 设置 Flash Attention V3
-        paddle.set_flags({"FLAGS_flash_attn_version": 3})
-
-        paddle.seed(42)
-        query = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        key = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        value = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-
-        results = []
-        for i in range(5):
-            paddle.device.synchronize()
-            result = F.scaled_dot_product_attention(
-                query, key, value, is_causal=False, enable_gqa=False, backend="flash"
-            )
-            results.append(result.clone())
-
-        # 使用完全相等检查
-        all_equal = True
-        for i in range(1, 5):
-            is_equal = paddle.equal(results[0], results[i]).all().item()
-            print(f"  Run 1 vs Run {i+1}: equal={is_equal}")
-            if not is_equal:
-                all_equal = False
-
-        if all_equal:
-            print("  结果: FA3 是确定性的（完全相等）")
-        else:
-            print("  结果: FA3 不是完全确定性的")
-
+        all_equal = self._test_determinism(3, num_runs=5, is_causal=False, enable_gqa=False)
         self.assertTrue(all_equal, "FA3 results are not equal")
 
-    def test_fa2_different_batch_sizes(self):
-        """测试 FA2 不同批大小的确定性（批量不变性）
-
-        验证同一条 request 的 q,k,v 在不同 batch size 下计算，结果仍然一致。
-        """
-        print("\n[3] FA2 不同批大小批量不变性测试")
+    def test_fa2_causal_determinism(self):
+        """Test FA2 determinism with causal mask"""
+        print("\n[3] FA2 Causal Mask Test")
         print("-" * 70)
-
-        if not paddle.is_compiled_with_cuda():
-            self.skipTest("Flash Attention requires CUDA")
-
-        paddle.set_flags({"FLAGS_flash_attn_version": 2})
-
-        # 生成一份固定的数据（最大 batch size）
-        MAX_BATCH_SIZE = 8
-        paddle.seed(42)
-        full_query = paddle.randn([MAX_BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        full_key = paddle.randn([MAX_BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        full_value = paddle.randn([MAX_BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-
-        # 计算不同 batch size 下的结果，比较第 0 个 request 的结果
-        reference_result = None
-        batch_sizes = [1, 2, 4, 8]
-        all_equal = True
-
-        for bs in batch_sizes:
-            # 取前 bs 个 request 的数据
-            query = full_query[:bs]
-            key = full_key[:bs]
-            value = full_value[:bs]
-
-            result = F.scaled_dot_product_attention(
-                query, key, value, is_causal=False, enable_gqa=False, backend="flash"
-            )
-
-            # 取第 0 个 request 的结果
-            current_result = result[0:1]
-
-            if reference_result is None:
-                reference_result = current_result.clone()
-                is_equal = True
-            else:
-                is_equal = paddle.equal(reference_result, current_result).all().item()
-
-            print(f"  Batch {bs}: equal={is_equal}")
-            if not is_equal:
-                all_equal = False
-
-        if all_equal:
-            print("  结果: FA2 是批量不变的（同一 request 在不同 batch 下结果一致）")
-        else:
-            print("  结果: FA2 不是批量不变的（不同 batch 下同一 request 结果不同）")
-
-    def test_fa3_different_batch_sizes(self):
-        """测试 FA3 不同批大小的确定性（批量不变性）
-
-        验证同一条 request 的 q,k,v 在不同 batch size 下计算，结果仍然一致。
-        """
-        print("\n[4] FA3 不同批大小批量不变性测试")
-        print("-" * 70)
-
-        if not paddle.is_compiled_with_cuda():
-            self.skipTest("Flash Attention requires CUDA")
-
-        prop = paddle.device.cuda.get_device_properties()
-        sm_version = prop.major * 10 + prop.minor
-
-        if sm_version < 89 or sm_version >= 100:
-            self.skipTest(f"Flash Attention V3 requires SM89+ but SM100-. Current: SM{sm_version}")
-
-        paddle.set_flags({"FLAGS_flash_attn_version": 3})
-
-        # 生成一份固定的数据（最大 batch size）
-        MAX_BATCH_SIZE = 8
-        paddle.seed(42)
-        full_query = paddle.randn([MAX_BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        full_key = paddle.randn([MAX_BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        full_value = paddle.randn([MAX_BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-
-        # 计算不同 batch size 下的结果，比较第 0 个 request 的结果
-        reference_result = None
-        batch_sizes = [1, 2, 4, 8]
-        all_equal = True
-
-        for bs in batch_sizes:
-            # 取前 bs 个 request 的数据
-            query = full_query[:bs]
-            key = full_key[:bs]
-            value = full_value[:bs]
-
-            result = F.scaled_dot_product_attention(
-                query, key, value, is_causal=False, enable_gqa=False, backend="flash"
-            )
-
-            # 取第 0 个 request 的结果
-            current_result = result[0:1]
-
-            if reference_result is None:
-                reference_result = current_result.clone()
-                is_equal = True
-            else:
-                is_equal = paddle.equal(reference_result, current_result).all().item()
-
-            print(f"  Batch {bs}: equal={is_equal}")
-            if not is_equal:
-                all_equal = False
-
-        if all_equal:
-            print("  结果: FA3 是批量不变的（同一 request 在不同 batch 下结果一致）")
-        else:
-            print("  结果: FA3 不是批量不变的（不同 batch 下同一 request 结果不同）")
-
-    def test_fa2_different_sequence_lengths(self):
-        """测试 FA2 不同序列长度的确定性"""
-        print("\n[5] FA2 不同序列长度测试")
-        print("-" * 70)
-
-        if not paddle.is_compiled_with_cuda():
-            self.skipTest("Flash Attention requires CUDA")
-
-        paddle.set_flags({"FLAGS_flash_attn_version": 2})
-
-        seq_lengths = [16, 32, 64, 128, 256, 512]
-        all_deterministic = []
-
-        for seq_len in seq_lengths:
-            paddle.seed(42)
-            query = paddle.randn([BATCH_SIZE, NUM_HEADS, seq_len, HEAD_DIM], dtype="float16")
-            key = paddle.randn([BATCH_SIZE, NUM_HEADS, seq_len, HEAD_DIM], dtype="float16")
-            value = paddle.randn([BATCH_SIZE, NUM_HEADS, seq_len, HEAD_DIM], dtype="float16")
-
-            result1 = F.scaled_dot_product_attention(
-                query, key, value, is_causal=False, enable_gqa=False, backend="flash"
-            )
-            result2 = F.scaled_dot_product_attention(
-                query, key, value, is_causal=False, enable_gqa=False, backend="flash"
-            )
-
-            is_equal = paddle.equal(result1, result2).all().item()
-            all_deterministic.append(is_equal)
-            print(f"  Seq_len={seq_len:4d}: equal={is_equal}")
-
-        all_equal = all(all_deterministic)
-        if all_equal:
-            print("  结果: FA2 所有序列长度都是确定性的")
-        else:
-            print("  结果: FA2 部分序列长度不确定")
-
-    def test_fa3_different_sequence_lengths(self):
-        """测试 FA3 不同序列长度的确定性"""
-        print("\n[6] FA3 不同序列长度测试")
-        print("-" * 70)
-
-        if not paddle.is_compiled_with_cuda():
-            self.skipTest("Flash Attention requires CUDA")
-
-        prop = paddle.device.cuda.get_device_properties()
-        sm_version = prop.major * 10 + prop.minor
-
-        if sm_version < 89 or sm_version >= 100:
-            self.skipTest(f"Flash Attention V3 requires SM89+ but SM100-. Current: SM{sm_version}")
-
-        paddle.set_flags({"FLAGS_flash_attn_version": 3})
-
-        seq_lengths = [16, 32, 64, 128, 256, 512]
-        all_deterministic = []
-
-        for seq_len in seq_lengths:
-            paddle.seed(42)
-            query = paddle.randn([BATCH_SIZE, NUM_HEADS, seq_len, HEAD_DIM], dtype="float16")
-            key = paddle.randn([BATCH_SIZE, NUM_HEADS, seq_len, HEAD_DIM], dtype="float16")
-            value = paddle.randn([BATCH_SIZE, NUM_HEADS, seq_len, HEAD_DIM], dtype="float16")
-
-            result1 = F.scaled_dot_product_attention(
-                query, key, value, is_causal=False, enable_gqa=False, backend="flash"
-            )
-            result2 = F.scaled_dot_product_attention(
-                query, key, value, is_causal=False, enable_gqa=False, backend="flash"
-            )
-
-            is_equal = paddle.equal(result1, result2).all().item()
-            all_deterministic.append(is_equal)
-            print(f"  Seq_len={seq_len:4d}: equal={is_equal}")
-
-        all_equal = all(all_deterministic)
-        if all_equal:
-            print("  结果: FA3 所有序列长度都是确定性的")
-        else:
-            print("  结果: FA3 部分序列长度不确定")
-
-    def test_fa2_vs_fa3_comparison(self):
-        """比较 FA2 和 FA3 的结果（仅用于了解差异，非确定性测试）"""
-        print("\n[7] FA2 vs FA3 结果对比")
-        print("-" * 70)
-
-        if not paddle.is_compiled_with_cuda():
-            self.skipTest("Flash Attention requires CUDA")
-
-        prop = paddle.device.cuda.get_device_properties()
-        sm_version = prop.major * 10 + prop.minor
-
-        if sm_version < 89 or sm_version >= 100:
-            self.skipTest(f"Flash Attention V3 requires SM89+ but SM100-. Current: SM{sm_version}")
-
-        # 相同输入
-        paddle.seed(42)
-        query = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        key = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        value = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-
-        # FA2
-        paddle.set_flags({"FLAGS_flash_attn_version": 2})
-        result_fa2 = F.scaled_dot_product_attention(
-            query, key, value, is_causal=False, enable_gqa=False, backend="flash"
-        )
-
-        # FA3
-        paddle.set_flags({"FLAGS_flash_attn_version": 3})
-        result_fa3 = F.scaled_dot_product_attention(
-            query, key, value, is_causal=False, enable_gqa=False, backend="flash"
-        )
-
-        is_equal = paddle.equal(result_fa2, result_fa3).all().item()
-        max_diff = paddle.abs(result_fa2.cast("float32") - result_fa3.cast("float32")).max().item()
-
-        print(f"  FA2 vs FA3 equal: {is_equal}")
-        print(f"  FA2 vs FA3 max_diff: {max_diff:.2e}")
-
-        if is_equal:
-            print("  结果: FA2 和 FA3 产生完全相同的输出")
-        else:
-            print("  结果: FA2 和 FA3 输出不同（预期行为，不同实现可能精度不同）")
-
-    def test_fa2_causal_mask(self):
-        """测试 FA2 因果掩码模式的确定性"""
-        print("\n[8] FA2 因果掩码测试")
-        print("-" * 70)
-
-        if not paddle.is_compiled_with_cuda():
-            self.skipTest("Flash Attention requires CUDA")
-
-        paddle.set_flags({"FLAGS_flash_attn_version": 2})
-
-        paddle.seed(42)
-        query = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        key = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        value = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-
-        results = []
-        for i in range(5):
-            paddle.device.synchronize()
-            result = F.scaled_dot_product_attention(
-                query, key, value, is_causal=True, enable_gqa=False, backend="flash"
-            )
-            results.append(result.clone())
-
-        all_equal = True
-        for i in range(1, 5):
-            is_equal = paddle.equal(results[0], results[i]).all().item()
-            print(f"  Run 1 vs Run {i+1}: equal={is_equal}")
-            if not is_equal:
-                all_equal = False
-
-        if all_equal:
-            print("  结果: FA2 因果掩码模式是确定性的")
-        else:
-            print("  结果: FA2 因果掩码模式不是确定性的")
-
+        all_equal = self._test_determinism(2, num_runs=5, is_causal=True, enable_gqa=False)
         self.assertTrue(all_equal, "FA2 causal mode not deterministic")
 
-    def test_fa3_causal_mask(self):
-        """测试 FA3 因果掩码模式的确定性"""
-        print("\n[9] FA3 因果掩码测试")
+    def test_fa3_causal_determinism(self):
+        """Test FA3 determinism with causal mask"""
+        print("\n[4] FA3 Causal Mask Test")
         print("-" * 70)
+        all_equal = self._test_determinism(3, num_runs=5, is_causal=True, enable_gqa=False)
+        self.assertTrue(all_equal, "FA3 causal mode not deterministic")
 
-        if not paddle.is_compiled_with_cuda():
-            self.skipTest("Flash Attention requires CUDA")
+    # ==================== Batch Invariance Tests ====================
 
-        prop = paddle.device.cuda.get_device_properties()
-        sm_version = prop.major * 10 + prop.minor
+    def test_fa2_batch_invariance(self):
+        """Test FA2 determinism across different batch sizes"""
+        print("\n[5] FA2 Batch Invariance Test")
+        print("-" * 70)
+        self._test_batch_invariance(2, is_causal=False, enable_gqa=False)
 
-        if sm_version < 89 or sm_version >= 100:
-            self.skipTest(f"Flash Attention V3 requires SM89+ but SM100-. Current: SM{sm_version}")
+    def test_fa3_batch_invariance(self):
+        """Test FA3 determinism across different batch sizes"""
+        print("\n[6] FA3 Batch Invariance Test")
+        print("-" * 70)
+        self._test_batch_invariance(3, is_causal=False, enable_gqa=False)
 
-        paddle.set_flags({"FLAGS_flash_attn_version": 3})
+    # ==================== Sequence Length Tests ====================
+
+    def test_fa2_seq_length_determinism(self):
+        """Test FA2 determinism across different sequence lengths"""
+        print("\n[7] FA2 Different Sequence Lengths Test")
+        print("-" * 70)
+        seq_lengths = [16, 32, 64, 128, 256, 512]
+        self._test_seq_length_determinism(2, seq_lengths, is_causal=False, enable_gqa=False)
+
+    def test_fa3_seq_length_determinism(self):
+        """Test FA3 determinism across different sequence lengths"""
+        print("\n[8] FA3 Different Sequence Lengths Test")
+        print("-" * 70)
+        seq_lengths = [16, 32, 64, 128, 256, 512]
+        self._test_seq_length_determinism(3, seq_lengths, is_causal=False, enable_gqa=False)
+
+    # ==================== Boundary Sequence Length Tests ====================
+
+    def test_fa2_boundary_seq_lengths(self):
+        """Test FA2 determinism with boundary sequence lengths"""
+        print("\n[9] FA2 Boundary Sequence Lengths Test")
+        print("-" * 70)
+        # Include extremely small and large values to cover different code paths
+        seq_lengths = [1, 2, 4, 8, 64, 128, 1024, 2048, 4096]
+        self._test_seq_length_determinism(2, seq_lengths, is_causal=False, enable_gqa=False)
+
+    def test_fa3_boundary_seq_lengths(self):
+        """Test FA3 determinism with boundary sequence lengths"""
+        print("\n[10] FA3 Boundary Sequence Lengths Test")
+        print("-" * 70)
+        seq_lengths = [1, 2, 4, 8, 64, 128, 1024, 2048, 4096]
+        self._test_seq_length_determinism(3, seq_lengths, is_causal=False, enable_gqa=False)
+
+    # ==================== Data Type Tests ====================
+
+    def test_fa2_float16_determinism(self):
+        """Test FA2 determinism with float16"""
+        print("\n[11] FA2 float16 Data Type Test")
+        print("-" * 70)
+        all_equal = self._test_determinism(2, num_runs=3, dtype="float16", is_causal=False, enable_gqa=False)
+        self.assertTrue(all_equal, "FA2 float16 results are not equal")
+
+    def test_fa3_float16_determinism(self):
+        """Test FA3 determinism with float16"""
+        print("\n[12] FA3 float16 Data Type Test")
+        print("-" * 70)
+        all_equal = self._test_determinism(3, num_runs=3, dtype="float16", is_causal=False, enable_gqa=False)
+        self.assertTrue(all_equal, "FA3 float16 results are not equal")
+
+    def test_fa2_float32_determinism(self):
+        """Test FA2 determinism with float32"""
+        print("\n[13] FA2 float32 Data Type Test")
+        print("-" * 70)
+        all_equal = self._test_determinism(2, num_runs=3, dtype="float32", is_causal=False, enable_gqa=False)
+        self.assertTrue(all_equal, "FA2 float32 results are not equal")
+
+    def test_fa3_float32_determinism(self):
+        """Test FA3 determinism with float32"""
+        print("\n[14] FA3 float32 Data Type Test")
+        print("-" * 70)
+        all_equal = self._test_determinism(3, num_runs=3, dtype="float32", is_causal=False, enable_gqa=False)
+        self.assertTrue(all_equal, "FA3 float32 results are not equal")
+
+    # ==================== Head Configuration Tests ====================
+
+    def _test_head_config_determinism(self, version, num_heads, head_dim):
+        """Helper method for testing determinism with different head configurations"""
+        self._check_cuda_support()
+        if version == 3:
+            self._check_fa3_support()
+
+        paddle.set_flags({"FLAGS_flash_attn_version": version})
+
+        paddle.seed(42)
+        query = paddle.randn([BATCH_SIZE, num_heads, SEQ_LEN, head_dim], dtype="float16")
+        key = paddle.randn([BATCH_SIZE, num_heads, SEQ_LEN, head_dim], dtype="float16")
+        value = paddle.randn([BATCH_SIZE, num_heads, SEQ_LEN, head_dim], dtype="float16")
+
+        result1 = F.scaled_dot_product_attention(query, key, value, backend="flash", is_causal=False, enable_gqa=False)
+        result2 = F.scaled_dot_product_attention(query, key, value, backend="flash", is_causal=False, enable_gqa=False)
+
+        is_equal = paddle.equal(result1, result2).all().item()
+        return is_equal
+
+    def test_fa2_single_head(self):
+        """Test FA2 determinism with single head"""
+        print("\n[15] FA2 Single Head Test")
+        print("-" * 70)
+        is_equal = self._test_head_config_determinism(2, num_heads=1, head_dim=HEAD_DIM)
+        self.assertTrue(is_equal, "FA2 single head results are not equal")
+
+    def test_fa3_single_head(self):
+        """Test FA3 determinism with single head"""
+        print("\n[16] FA3 Single Head Test")
+        print("-" * 70)
+        is_equal = self._test_head_config_determinism(3, num_heads=1, head_dim=HEAD_DIM)
+        self.assertTrue(is_equal, "FA3 single head results are not equal")
+
+    def test_fa2_odd_num_heads(self):
+        """Test FA2 determinism with odd number of heads"""
+        print("\n[17] FA2 Odd Number of Heads Test")
+        print("-" * 70)
+        is_equal = self._test_head_config_determinism(2, num_heads=7, head_dim=HEAD_DIM)
+        self.assertTrue(is_equal, "FA2 odd number of heads results are not equal")
+
+    def test_fa3_odd_num_heads(self):
+        """Test FA3 determinism with odd number of heads"""
+        print("\n[18] FA3 Odd Number of Heads Test")
+        print("-" * 70)
+        is_equal = self._test_head_config_determinism(3, num_heads=7, head_dim=HEAD_DIM)
+        self.assertTrue(is_equal, "FA3 odd number of heads results are not equal")
+
+    # ==================== GQA/MQA Tests ====================
+
+    def test_fa2_gqa_determinism(self):
+        """Test FA2 determinism with GQA"""
+        print("\n[19] FA2 GQA Test")
+        print("-" * 70)
+        all_equal = self._test_determinism(2, num_runs=3, is_causal=False, enable_gqa=True)
+        self.assertTrue(all_equal, "FA2 GQA results are not equal")
+
+    def test_fa3_gqa_determinism(self):
+        """Test FA3 determinism with GQA"""
+        print("\n[20] FA3 GQA Test")
+        print("-" * 70)
+        all_equal = self._test_determinism(3, num_runs=3, is_causal=False, enable_gqa=True)
+        self.assertTrue(all_equal, "FA3 GQA results are not equal")
+
+    # ==================== Sliding Window Tests ====================
+
+    def _test_sliding_window_determinism(self, version, window_size):
+        """Helper method for testing determinism with sliding window"""
+        self._check_cuda_support()
+        if version == 3:
+            self._check_fa3_support()
+
+        paddle.set_flags({"FLAGS_flash_attn_version": version})
 
         paddle.seed(42)
         query = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
         key = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
         value = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
 
-        results = []
-        for i in range(5):
-            paddle.device.synchronize()
-            result = F.scaled_dot_product_attention(
-                query, key, value, is_causal=True, enable_gqa=False, backend="flash"
-            )
-            results.append(result.clone())
+        # Create sliding window mask
+        seq_range = paddle.arange(SEQ_LEN)
+        mask = paddle.abs(seq_range[:, None] - seq_range[None, :]) > window_size
+        mask = mask.cast("float16") * float("-inf")
 
-        all_equal = True
-        for i in range(1, 5):
-            is_equal = paddle.equal(results[0], results[i]).all().item()
-            print(f"  Run 1 vs Run {i+1}: equal={is_equal}")
-            if not is_equal:
-                all_equal = False
+        result1 = F.scaled_dot_product_attention(
+            query, key, value, attn_mask=mask, backend="flash", is_causal=False, enable_gqa=False
+        )
+        result2 = F.scaled_dot_product_attention(
+            query, key, value, attn_mask=mask, backend="flash", is_causal=False, enable_gqa=False
+        )
 
-        if all_equal:
-            print("  结果: FA3 因果掩码模式是确定性的")
-        else:
-            print("  结果: FA3 因果掩码模式不是确定性的")
+        is_equal = paddle.equal(result1, result2).all().item()
+        return is_equal
 
-        self.assertTrue(all_equal, "FA3 causal mode not deterministic")
+    def test_fa2_sliding_window(self):
+        """Test FA2 determinism with sliding window"""
+        print("\n[21] FA2 Sliding Window Test (window_size=128)")
+        print("-" * 70)
+        is_equal = self._test_sliding_window_determinism(2, window_size=128)
+        self.assertTrue(is_equal, "FA2 sliding window results are not equal")
+
+    def test_fa3_sliding_window(self):
+        """Test FA3 determinism with sliding window"""
+        print("\n[22] FA3 Sliding Window Test (window_size=128)")
+        print("-" * 70)
+        is_equal = self._test_sliding_window_determinism(3, window_size=128)
+        self.assertTrue(is_equal, "FA3 sliding window results are not equal")
 
 
 if __name__ == "__main__":
-    # 运行测试
+    # Run tests
     suite = unittest.TestLoader().loadTestsFromTestCase(TestFlashAttentionDeterminism)
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
 
     print()
     print("=" * 70)
-    print(" 测试结果总结")
+    print(" Test Summary")
     print("=" * 70)
-    print(f"  通过: {result.testsRun - len(result.failures) - len(result.errors)}")
-    print(f"  失败: {len(result.failures)}")
-    print(f"  错误: {len(result.errors)}")
-    print(f"  跳过: {len(result.skipped)}")
-    print(f"  总计: {result.testsRun}")
+    print(f"  Passed: {result.testsRun - len(result.failures) - len(result.errors)}")
+    print(f"  Failed: {len(result.failures)}")
+    print(f"  Errors: {len(result.errors)}")
+    print(f"  Skipped: {len(result.skipped)}")
+    print(f"  Total: {result.testsRun}")
     print()
 
     if result.wasSuccessful():
-        print(" ✓ 所有运行测试通过！")
+        print(" ✓ All tests passed!")
     else:
-        print(" ✗ 有测试失败或错误")
+        print(" ✗ Some tests failed or had errors")
 
     print("=" * 70)
