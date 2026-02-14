@@ -834,7 +834,7 @@ def step_cuda(
                 )
 
 
-_rebuild_padding_ops = None
+_rebuild_padding_ops_cache = {}
 
 
 def rebuild_padding(
@@ -852,15 +852,15 @@ def rebuild_padding(
     Args:
     Returns:
     """
-    global _rebuild_padding_ops
+    global _rebuild_padding_ops_cache
 
     if current_platform.is_cuda():
-        if _rebuild_padding_ops is None:
+        if "cuda" not in _rebuild_padding_ops_cache:
             from fastdeploy.model_executor.ops.gpu import rebuild_padding as ops
 
-            _rebuild_padding_ops = ops
+            _rebuild_padding_ops_cache["cuda"] = ops
 
-        hidden_states = _rebuild_padding_ops(
+        hidden_states = _rebuild_padding_ops_cache["cuda"](
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
@@ -872,12 +872,12 @@ def rebuild_padding(
             enable_logprob,
         )
     elif current_platform.is_dcu():
-        if _rebuild_padding_ops is None:
+        if "dcu" not in _rebuild_padding_ops_cache:
             from fastdeploy.model_executor.ops.gpu import rebuild_padding as ops
 
-            _rebuild_padding_ops = ops
+            _rebuild_padding_ops_cache["dcu"] = ops
 
-        hidden_states = _rebuild_padding_ops(
+        hidden_states = _rebuild_padding_ops_cache["dcu"](
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
@@ -886,12 +886,12 @@ def rebuild_padding(
             batch_id_per_token_output,
         )
     elif current_platform.is_iluvatar():
-        if _rebuild_padding_ops is None:
+        if "iluvatar" not in _rebuild_padding_ops_cache:
             from fastdeploy.model_executor.ops.iluvatar import rebuild_padding as ops
 
-            _rebuild_padding_ops = ops
+            _rebuild_padding_ops_cache["iluvatar"] = ops
 
-        hidden_states = _rebuild_padding_ops(
+        hidden_states = _rebuild_padding_ops_cache["iluvatar"](
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
@@ -903,12 +903,12 @@ def rebuild_padding(
             enable_logprob,
         )
     elif current_platform.is_gcu():
-        if _rebuild_padding_ops is None:
+        if "gcu" not in _rebuild_padding_ops_cache:
             from fastdeploy.model_executor.ops.gcu import rebuild_padding as ops
 
-            _rebuild_padding_ops = ops
+            _rebuild_padding_ops_cache["gcu"] = ops
 
-        hidden_states = _rebuild_padding_ops(
+        hidden_states = _rebuild_padding_ops_cache["gcu"](
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
@@ -917,12 +917,12 @@ def rebuild_padding(
             batch_id_per_token_output,
         )
     elif current_platform.is_cpu():
-        if _rebuild_padding_ops is None:
+        if "cpu" not in _rebuild_padding_ops_cache:
             from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu as ops
 
-            _rebuild_padding_ops = ops
+            _rebuild_padding_ops_cache["cpu"] = ops
 
-        hidden_states = _rebuild_padding_ops(
+        hidden_states = _rebuild_padding_ops_cache["cpu"](
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
@@ -931,12 +931,12 @@ def rebuild_padding(
             batch_id_per_token_output,
         )
     elif current_platform.is_maca():
-        if _rebuild_padding_ops is None:
+        if "maca" not in _rebuild_padding_ops_cache:
             from fastdeploy.model_executor.ops.gpu import rebuild_padding as ops
 
-            _rebuild_padding_ops = ops
+            _rebuild_padding_ops_cache["maca"] = ops
 
-        hidden_states = _rebuild_padding_ops(
+        hidden_states = _rebuild_padding_ops_cache["maca"](
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
