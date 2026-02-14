@@ -34,7 +34,11 @@ if current_platform.is_iluvatar():
         get_padding_offset,
         limit_thinking_content_length_v1,
         limit_thinking_content_length_v2,
+    )
+    from fastdeploy.model_executor.ops.iluvatar import (
         rebuild_padding as rebuild_padding_ops,
+    )
+    from fastdeploy.model_executor.ops.iluvatar import (
         save_output,
         set_stop_value_multi_ends,
         step_paddle,
@@ -42,17 +46,17 @@ if current_platform.is_iluvatar():
         update_inputs_v1,
     )
 elif current_platform.is_gcu():
+    from fastdeploy.model_executor.ops.gcu import get_padding_offset
+    from fastdeploy.model_executor.ops.gcu import rebuild_padding as rebuild_padding_ops
     from fastdeploy.model_executor.ops.gcu import (
-        get_padding_offset,
-        rebuild_padding as rebuild_padding_ops,
         save_output,
         set_stop_value_multi_ends,
         update_inputs,
     )
 elif current_platform.is_dcu():
+    from fastdeploy.model_executor.ops.gpu import get_padding_offset
+    from fastdeploy.model_executor.ops.gpu import rebuild_padding as rebuild_padding_ops
     from fastdeploy.model_executor.ops.gpu import (
-        get_padding_offset,
-        rebuild_padding as rebuild_padding_ops,
         save_output,
         set_stop_value_multi_ends,
         step_paddle,
@@ -63,7 +67,9 @@ elif current_platform.is_maca():
         get_padding_offset,
         limit_thinking_content_length_v1,
         limit_thinking_content_length_v2,
-        rebuild_padding as rebuild_padding_ops,
+    )
+    from fastdeploy.model_executor.ops.gpu import rebuild_padding as rebuild_padding_ops
+    from fastdeploy.model_executor.ops.gpu import (
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
