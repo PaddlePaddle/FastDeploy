@@ -948,7 +948,24 @@ def rebuild_padding(
             enable_logprob,
         )
     else:
-        raise RuntimeError("Not supported platform")
+        # Fallback to GPU ops for other platforms (e.g. XPU)
+        # This restores original behavior where the 'else' block imported from ops.gpu
+        if "fallback" not in _rebuild_padding_ops_cache:
+            from fastdeploy.model_executor.ops.gpu import rebuild_padding as ops
+
+            _rebuild_padding_ops_cache["fallback"] = ops
+
+        hidden_states = _rebuild_padding_ops_cache["fallback"](
+            tmp_out,
+            cu_seqlens_q,
+            seq_len_this_time,
+            seq_lens_decoder,
+            seq_lens_encoder,
+            batch_id_per_token_output,
+            cu_seqlens_q_output,
+            first_token_out,
+            enable_logprob,
+        )
     return hidden_states
 
 
