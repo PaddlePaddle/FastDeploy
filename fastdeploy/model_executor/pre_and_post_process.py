@@ -34,11 +34,6 @@ if current_platform.is_iluvatar():
         get_padding_offset,
         limit_thinking_content_length_v1,
         limit_thinking_content_length_v2,
-    )
-    from fastdeploy.model_executor.ops.iluvatar import (
-        rebuild_padding as rebuild_padding_ops,
-    )
-    from fastdeploy.model_executor.ops.iluvatar import (
         save_output,
         set_stop_value_multi_ends,
         step_paddle,
@@ -46,17 +41,15 @@ if current_platform.is_iluvatar():
         update_inputs_v1,
     )
 elif current_platform.is_gcu():
-    from fastdeploy.model_executor.ops.gcu import get_padding_offset
-    from fastdeploy.model_executor.ops.gcu import rebuild_padding as rebuild_padding_ops
     from fastdeploy.model_executor.ops.gcu import (
+        get_padding_offset,
         save_output,
         set_stop_value_multi_ends,
         update_inputs,
     )
 elif current_platform.is_dcu():
-    from fastdeploy.model_executor.ops.gpu import get_padding_offset
-    from fastdeploy.model_executor.ops.gpu import rebuild_padding as rebuild_padding_ops
     from fastdeploy.model_executor.ops.gpu import (
+        get_padding_offset,
         save_output,
         set_stop_value_multi_ends,
         step_paddle,
@@ -67,9 +60,6 @@ elif current_platform.is_maca():
         get_padding_offset,
         limit_thinking_content_length_v1,
         limit_thinking_content_length_v2,
-    )
-    from fastdeploy.model_executor.ops.gpu import rebuild_padding as rebuild_padding_ops
-    from fastdeploy.model_executor.ops.gpu import (
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
@@ -93,15 +83,12 @@ elif current_platform.is_maca():
 elif current_platform.is_intel_hpu():
     pass
 elif current_platform.is_cpu():
-    from fastdeploy.model_executor.ops.cpu import (
-        rebuild_padding_cpu as rebuild_padding_ops,
-    )
+    pass
 else:
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,
         limit_thinking_content_length_v1,
         limit_thinking_content_length_v2,
-        rebuild_padding as rebuild_padding_ops,
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
@@ -847,6 +834,9 @@ def step_cuda(
                 )
 
 
+_rebuild_padding_ops = None
+
+
 def rebuild_padding(
     tmp_out: paddle.Tensor,
     cu_seqlens_q: paddle.Tensor,
@@ -862,8 +852,15 @@ def rebuild_padding(
     Args:
     Returns:
     """
+    global _rebuild_padding_ops
+
     if current_platform.is_cuda():
-        hidden_states = rebuild_padding_ops(
+        if _rebuild_padding_ops is None:
+            from fastdeploy.model_executor.ops.gpu import rebuild_padding as ops
+
+            _rebuild_padding_ops = ops
+
+        hidden_states = _rebuild_padding_ops(
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
@@ -875,7 +872,12 @@ def rebuild_padding(
             enable_logprob,
         )
     elif current_platform.is_dcu():
-        hidden_states = rebuild_padding_ops(
+        if _rebuild_padding_ops is None:
+            from fastdeploy.model_executor.ops.gpu import rebuild_padding as ops
+
+            _rebuild_padding_ops = ops
+
+        hidden_states = _rebuild_padding_ops(
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
@@ -884,7 +886,12 @@ def rebuild_padding(
             batch_id_per_token_output,
         )
     elif current_platform.is_iluvatar():
-        hidden_states = rebuild_padding_ops(
+        if _rebuild_padding_ops is None:
+            from fastdeploy.model_executor.ops.iluvatar import rebuild_padding as ops
+
+            _rebuild_padding_ops = ops
+
+        hidden_states = _rebuild_padding_ops(
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
@@ -896,7 +903,12 @@ def rebuild_padding(
             enable_logprob,
         )
     elif current_platform.is_gcu():
-        hidden_states = rebuild_padding_ops(
+        if _rebuild_padding_ops is None:
+            from fastdeploy.model_executor.ops.gcu import rebuild_padding as ops
+
+            _rebuild_padding_ops = ops
+
+        hidden_states = _rebuild_padding_ops(
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
@@ -905,7 +917,12 @@ def rebuild_padding(
             batch_id_per_token_output,
         )
     elif current_platform.is_cpu():
-        hidden_states = rebuild_padding_ops(
+        if _rebuild_padding_ops is None:
+            from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu as ops
+
+            _rebuild_padding_ops = ops
+
+        hidden_states = _rebuild_padding_ops(
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
@@ -914,7 +931,12 @@ def rebuild_padding(
             batch_id_per_token_output,
         )
     elif current_platform.is_maca():
-        hidden_states = rebuild_padding_ops(
+        if _rebuild_padding_ops is None:
+            from fastdeploy.model_executor.ops.gpu import rebuild_padding as ops
+
+            _rebuild_padding_ops = ops
+
+        hidden_states = _rebuild_padding_ops(
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
