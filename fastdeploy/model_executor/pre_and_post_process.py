@@ -107,19 +107,14 @@ else:
         speculate_set_stop_value_multi_seqs,
         speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
+        speculate_step_reschedule,
         speculate_step_system_cache,
         speculate_update,
-        speculate_set_stop_value_multi_seqs,
         step_paddle,
+        step_reschedule,
         step_system_cache,
         update_inputs,
-        step_reschedule,
         update_inputs_v1,
-        speculate_step_reschedule,
-        limit_thinking_content_length_v1,
-        limit_thinking_content_length_v2,
-        speculate_limit_thinking_content_length_v1,
-        speculate_limit_thinking_content_length_v2,
     )
 
 from fastdeploy.model_executor.entropy_utils import (
