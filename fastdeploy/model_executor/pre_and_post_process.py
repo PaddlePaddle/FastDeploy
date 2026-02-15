@@ -860,7 +860,7 @@ if current_platform.is_cuda():
             enable_logprob,
         )
 
-elif current_platform.is_dcu():
+elif current_platform.is_dcu():  # pragma: no cover
     from fastdeploy.model_executor.ops.gpu import (
         rebuild_padding as _rebuild_padding_dcu,
     )
@@ -885,7 +885,7 @@ elif current_platform.is_dcu():
             batch_id_per_token_output,
         )
 
-elif current_platform.is_iluvatar():
+elif current_platform.is_iluvatar():  # pragma: no cover
     from fastdeploy.model_executor.ops.iluvatar import (
         rebuild_padding as _rebuild_padding_iluvatar,
     )
@@ -913,7 +913,7 @@ elif current_platform.is_iluvatar():
             enable_logprob,
         )
 
-elif current_platform.is_gcu():
+elif current_platform.is_gcu():  # pragma: no cover
     from fastdeploy.model_executor.ops.gcu import (
         rebuild_padding as _rebuild_padding_gcu,
     )
@@ -938,7 +938,7 @@ elif current_platform.is_gcu():
             batch_id_per_token_output,
         )
 
-elif current_platform.is_cpu():
+elif current_platform.is_cpu():  # pragma: no cover
     from fastdeploy.model_executor.ops.cpu import (
         rebuild_padding_cpu as _rebuild_padding_cpu,
     )
@@ -963,7 +963,7 @@ elif current_platform.is_cpu():
             batch_id_per_token_output,
         )
 
-elif current_platform.is_maca():
+elif current_platform.is_maca():  # pragma: no cover
     from fastdeploy.model_executor.ops.gpu import (
         rebuild_padding as _rebuild_padding_maca,
     )
