@@ -832,7 +832,7 @@ def step_cuda(
                 )
 
 
-elif current_platform.is_dcu():  # pragma: no cover
+if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
         rebuild_padding as _rebuild_padding_gpu,
     )
