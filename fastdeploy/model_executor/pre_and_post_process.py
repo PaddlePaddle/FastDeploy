@@ -990,6 +990,7 @@ elif current_platform.is_maca():
             first_token_out,
             enable_logprob,
         )
+
 else:
 
     def _rebuild_padding_impl(*args, **kwargs):
