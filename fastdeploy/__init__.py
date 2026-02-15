@@ -54,6 +54,13 @@ from fastdeploy.utils import (
     get_version_info,
 )
 
+# Shim for HPU environment where paddle.compat is missing
+if not hasattr(paddle, "compat"):
+    from types import SimpleNamespace
+
+    paddle.compat = SimpleNamespace()
+    paddle.compat.enable_torch_proxy = lambda *args, **kwargs: None
+
 if hasattr(paddle, "compat") and hasattr(paddle.compat, "enable_torch_proxy"):
     paddle.compat.enable_torch_proxy(scope={"triton"})
 # paddle.compat.enable_torch_proxy(scope={"triton"}) enables the torch proxy
