@@ -833,7 +833,9 @@ def step_cuda(
 
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import rebuild_padding as _rebuild_padding_gpu
+    from fastdeploy.model_executor.ops.gpu import (
+        rebuild_padding as _rebuild_padding_gpu,
+    )
 
     def _rebuild_padding_impl(
         tmp_out,
@@ -857,8 +859,11 @@ if current_platform.is_cuda():
             first_token_out,
             enable_logprob,
         )
+
 elif current_platform.is_dcu():
-    from fastdeploy.model_executor.ops.gpu import rebuild_padding as _rebuild_padding_dcu
+    from fastdeploy.model_executor.ops.gpu import (
+        rebuild_padding as _rebuild_padding_dcu,
+    )
 
     def _rebuild_padding_impl(
         tmp_out,
@@ -879,8 +884,11 @@ elif current_platform.is_dcu():
             seq_lens_encoder,
             batch_id_per_token_output,
         )
+
 elif current_platform.is_iluvatar():
-    from fastdeploy.model_executor.ops.iluvatar import rebuild_padding as _rebuild_padding_iluvatar
+    from fastdeploy.model_executor.ops.iluvatar import (
+        rebuild_padding as _rebuild_padding_iluvatar,
+    )
 
     def _rebuild_padding_impl(
         tmp_out,
@@ -904,8 +912,11 @@ elif current_platform.is_iluvatar():
             first_token_out,
             enable_logprob,
         )
+
 elif current_platform.is_gcu():
-    from fastdeploy.model_executor.ops.gcu import rebuild_padding as _rebuild_padding_gcu
+    from fastdeploy.model_executor.ops.gcu import (
+        rebuild_padding as _rebuild_padding_gcu,
+    )
 
     def _rebuild_padding_impl(
         tmp_out,
@@ -926,8 +937,11 @@ elif current_platform.is_gcu():
             seq_lens_encoder,
             batch_id_per_token_output,
         )
+
 elif current_platform.is_cpu():
-    from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu as _rebuild_padding_cpu
+    from fastdeploy.model_executor.ops.cpu import (
+        rebuild_padding_cpu as _rebuild_padding_cpu,
+    )
 
     def _rebuild_padding_impl(
         tmp_out,
@@ -948,8 +962,11 @@ elif current_platform.is_cpu():
             seq_lens_encoder,
             batch_id_per_token_output,
         )
+
 elif current_platform.is_maca():
-    from fastdeploy.model_executor.ops.gpu import rebuild_padding as _rebuild_padding_maca
+    from fastdeploy.model_executor.ops.gpu import (
+        rebuild_padding as _rebuild_padding_maca,
+    )
 
     def _rebuild_padding_impl(
         tmp_out,
