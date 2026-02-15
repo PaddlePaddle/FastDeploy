@@ -2081,6 +2081,17 @@ class EngineService:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
         self.llm_logger.info(f"Launch worker service command: {pd_cmd}")
+
+        # Capture launch parameters for verification if enabled
+        try:
+            from fastdeploy.engine.components.launch_param_capture import (
+                capture_if_enabled,
+            )
+
+            capture_if_enabled(pd_cmd, "old", log_dir)
+        except ImportError:
+            pass
+
         p = subprocess.Popen(
             pd_cmd,
             stdout=subprocess.PIPE,

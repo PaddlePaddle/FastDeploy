@@ -132,7 +132,30 @@ class LLMEngine:
 
         self.api_server_pid = api_server_pid
         self.ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
-        self._init_worker_signals()
+
+        # Detect if using new modular architecture
+        is_new_arch = getattr(self.engine, "_is_new_architecture", False)
+
+        # In new architecture, worker signals are managed by EngineServiceAdapter/IPCManager
+        # Do not create duplicate signals
+        if not is_new_arch:
+            self._init_worker_signals()
+        else:
+            # Use signals from EngineServiceAdapter's IPCManager
+            self.worker_ready_signal = self.engine._ipc.worker_ready_signal
+            self.loaded_model_signal = self.engine._ipc.loaded_model_signal
+            # get_profile_block_num_signal is only used when do_profile=True
+            console_logger.info(f"do_profile={self.do_profile}, checking get_profile_block_num_signal on ipc")
+            console_logger.info(
+                f"hasattr(self.engine._ipc, 'get_profile_block_num_signal')={hasattr(self.engine._ipc, 'get_profile_block_num_signal')}"
+            )
+            if hasattr(self.engine._ipc, "get_profile_block_num_signal"):
+                profile_signal_obj = self.engine._ipc.get_profile_block_num_signal
+                console_logger.info(f"profile_signal_obj={profile_signal_obj}")
+                self.get_profile_block_num_signal = profile_signal_obj
+            else:
+                console_logger.warning("get_profile_block_num_signal not found on ipc")
+            console_logger.info("Using signals from EngineServiceAdapter/IPCManager")
 
         self.launch_components()
 
@@ -146,10 +169,15 @@ class LLMEngine:
                 device_ids = self.cfg.parallel_config.device_ids.split(",")
                 self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
-        # Start workers
-        self.worker_proc = self._start_worker_service()
-        console_logger.info("Waiting for worker processes to be ready...")
-        time.sleep(5)
+        # Start workers (only in old architecture)
+        # In new architecture, workers are managed by EngineServiceAdapter
+        is_new_arch = getattr(self.engine, "_is_new_architecture", False)
+        if not is_new_arch:
+            self.worker_proc = self._start_worker_service()
+            console_logger.info("Waiting for worker processes to be ready...")
+            time.sleep(5)
+        else:
+            self.worker_proc = self.engine.worker_proc
         self.worker_init_status = dict()
 
         result_container = {}
@@ -440,11 +468,20 @@ class LLMEngine:
             self.get_profile_block_num_signal.clear()
 
         if hasattr(self, "worker_proc") and self.worker_proc is not None:
-            try:
-                pgid = os.getpgid(self.worker_proc.pid)
-                os.killpg(pgid, signal.SIGTERM)
-            except Exception as e:
-                console_logger.error(f"Error extracting sub services: {e}, {str(traceback.format_exc())}")
+            # In new architecture, worker processes are managed by ProcessManager
+            is_new_arch = getattr(self.engine, "_is_new_architecture", False)
+            # Check if worker_proc.pid is valid (not None)
+            worker_pid_valid = self.worker_proc.pid is not None
+            if not is_new_arch:
+                # Old architecture: kill worker process group
+                try:
+                    if worker_pid_valid:
+                        pgid = os.getpgid(self.worker_proc.pid)
+                        os.killpg(pgid, signal.SIGTERM)
+                except Exception as e:
+                    console_logger.error(f"Error extracting sub services: {e}, {str(traceback.format_exc())}")
+            # In new architecture, worker cleanup is handled by ProcessManager/IPCManager
+            # Worker process is a placeholder with pid=None, so skip getpgid check
 
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
             self.zmq_server.close()
@@ -672,13 +709,13 @@ class LLMEngine:
         """
         llm_logger.info(f"Starting generation for prompt: {prompts}")
         try:
-            req_id = self._format_and_add_data(prompts)
+            self._format_and_add_data(prompts)
         except Exception as e:
             llm_logger.error(f"Error happened while adding request, details={e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
         # Get the result of the current request
-        for result in self._get_generated_tokens(req_id):
+        for result in self._get_generated_result():
             is_end = result.finished
             if stream and not is_end:
                 processed = self.engine.data_processor.process_response(result)
@@ -706,12 +743,19 @@ class LLMEngine:
         Stop profiling of the model server and reset variables.
         """
         self.do_profile = 0
-        while self.get_profile_block_num_signal.value[0] == 0:
+        # Get profile_block_num_signal - in new architecture, access through self.engine
+        profile_signal = getattr(self, "get_profile_block_num_signal", None)
+        if profile_signal is None and hasattr(self.engine, "_ipc"):
+            profile_signal = getattr(self.engine._ipc, "get_profile_block_num_signal", None)
+        if profile_signal is None:
+            raise RuntimeError("get_profile_block_num_signal not found")
+        while profile_signal.value[0] == 0:
             if hasattr(self, "worker_proc") and self.worker_proc is not None:
-                if self.worker_proc.poll() is not None:
+                # In new architecture, worker_proc is a placeholder
+                if hasattr(self.worker_proc, "poll") and self.worker_proc.poll() is not None:
                     raise RuntimeError("Worker process failed to start." "Please check log/workerlog.* for details.")
             time.sleep(1)
-        num_gpu_blocks = self.get_profile_block_num_signal.value[0]
+        num_gpu_blocks = profile_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
@@ -808,9 +852,35 @@ class LLMEngine:
     def check_worker_initialize_status(self):
         """
         Check the initlialize status of workers by stdout logging
-        """
 
+        In new architecture, worker management is handled by ProcessManager
+        so we delegate to it instead of reading stdout directly.
+        """
+        # In new architecture, delegate to ProcessManager
+        is_new_arch = getattr(self.engine, "_is_new_architecture", False)
+        if is_new_arch:
+            if hasattr(self.engine, "_process") and self.engine._process is not None:
+                return self.engine._process.check_worker_initialize_status()
+            # Fallback: return True if worker_ready_signal is set
+            import numpy as np
+
+            if hasattr(self, "worker_ready_signal") and self.worker_ready_signal is not None:
+                max_wait = 300  # 5 minutes max
+                waited = 0
+                while waited < max_wait:
+                    ready_count = np.sum(self.worker_ready_signal.value > 0)
+                    if ready_count >= self.cfg.worker_num_per_node:
+                        return True
+                    time.sleep(1)
+                    waited += 1
+            return False
+
+        # Old architecture: read stdout to monitor worker loading
         def detect_thread():
+            # Check if worker_proc has stdout before trying to read from it
+            if not hasattr(self.worker_proc, "stdout") or self.worker_proc.stdout is None:
+                self.worker_init_status["finished"] = True
+                return
             for line in self.worker_proc.stdout:
                 line = line.decode("utf-8", errors="ignore")
                 if self.worker_init_status.get("finished", False):

@@ -1029,6 +1029,15 @@ def parse_args():
     )
 
     args = parser.parse_args()
+
+    # Dump parameters for verification if enabled
+    try:
+        from fastdeploy.engine.components.param_dump import dump_worker_params
+
+        dump_worker_params(args)
+    except ImportError:
+        pass
+
     return args
 
 

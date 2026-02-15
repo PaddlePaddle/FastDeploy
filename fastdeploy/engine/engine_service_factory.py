@@ -114,11 +114,12 @@ class EngineServiceAdapter:
         self._ipc = IPCManager(cfg, start_queue, self.llm_logger)
         self._resource = ResourceCoordinator(cfg)
         self._scheduler_coord = SchedulerCoordinator(cfg, self._resource, self._ipc)
-        self._process = ProcessManager(cfg, self._ipc)
+        self._process = ProcessManager(cfg, self._ipc, self._scheduler_coord)
 
+        self.do_profile = 1 if cfg.cache_config.num_gpu_blocks_override is None else 0
         # Initialize components
         self._ipc.init_worker_monitor_signals()
-        self._ipc.init_worker_signals()
+        self._ipc.init_worker_signals(do_profile=self.do_profile)
         self._ipc.start_queue_service()
         self._resource.start(cfg.parallel_config.local_data_parallel_id)
         self._scheduler_coord.start()
@@ -146,10 +147,15 @@ class EngineServiceAdapter:
             def __init__(self):
                 self.pid = None
                 self.stdout = None
+                self.poll_result = None
 
             def poll(self):
                 """Return None to indicate process is running."""
                 return None
+
+            def __bool__(self):
+                """Return True to indicate worker process exists."""
+                return True
 
         self.worker_proc = WorkerProcessPlaceholder()
         self.worker_init_status = {}
@@ -174,6 +180,9 @@ class EngineServiceAdapter:
 
         # Finalizer for cleanup
         self._finalizer = None
+
+        # Mark this as new architecture for LLMEngine to check
+        self._is_new_architecture = True
 
         # Test override attributes storage
         self._test_overrides = {}
@@ -270,8 +279,15 @@ class EngineServiceAdapter:
         self.running = True
         if self.use_async_llm and async_llm_pid:
             self._ipc.start_zmq(async_llm_pid, self)
+
         # Create data processor for compatibility
         self.create_data_processor()
+
+        # Start worker processes via ProcessManager
+        # This is critical for offline mode - workers must be started
+        if hasattr(self, "_process") and self._process is not None:
+            self.llm_logger.info("Starting worker processes...")
+            self._process.start_workers()
 
         # For test compatibility: check worker initialization status
         # This is a simplified version for the new architecture
@@ -306,6 +322,20 @@ class EngineServiceAdapter:
 
             if not result_container.get("worker_is_alive", False):
                 return False
+
+        # Start scheduler loop thread for offline mode
+        # This is critical for offline inference - scheduler must be running
+        # to process requests and generate results
+        import threading
+
+        scheduler_loop_method = (
+            self._schedule_request_to_worker_v1
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER
+            else self._schedule_request_to_worker
+        )
+        self._scheduler_loop_thread = threading.Thread(target=scheduler_loop_method, daemon=True)
+        self._scheduler_loop_thread.start()
+        self.llm_logger.info("Scheduler loop thread started")
 
         return True
 
@@ -748,7 +778,8 @@ class EngineServiceAdapter:
 
         import fastdeploy.main_process_metrics as main_process_metrics
         import fastdeploy.metrics.trace as tracing
-        from fastdeploy.engine.request_logging import LoggingEventName, trace_print
+        from fastdeploy.trace.constants import LoggingEventName
+        from fastdeploy.trace.trace_logger import print as trace_print
 
         tracing.trace_set_thread_info("Scheduler Task to Work")
         current_id = 0
@@ -841,7 +872,8 @@ class EngineServiceAdapter:
         import time
 
         import fastdeploy.metrics.trace as tracing
-        from fastdeploy.engine.request_logging import LoggingEventName, trace_print
+        from fastdeploy.trace.constants import LoggingEventName
+        from fastdeploy.trace.trace_logger import print as trace_print
         from fastdeploy.utils import envs
 
         tracing.trace_set_thread_info("Scheduler Task to Work")
@@ -1450,78 +1482,33 @@ class EngineServiceAdapter:
 
     def check_worker_initialize_status(self):
         """
-        Check the initialize status of workers by stdout logging.
-        Migrated from EngineService.check_worker_initialize_status().
+        Check the initialize status of workers by delegating to ProcessManager.
+
+        In new architecture, worker process management is handled by ProcessManager,
+        so we delegate the check to its check_worker_initialize_status method.
+
+        Returns:
+            True if worker initialized successfully, False otherwise
         """
-        import re
-        import threading
+        # Delegate to ProcessManager if available
+        if hasattr(self, "_process") and self._process is not None:
+            return self._process.check_worker_initialize_status()
+
+        # Fallback for test compatibility: check worker_ready_signal directly
         import time
 
-        from tqdm import tqdm
+        if not hasattr(self, "worker_ready_signal") or self.worker_ready_signal is None:
+            return False
+        import numpy as np
 
-        if hasattr(self, "worker_init_status"):
-            self.worker_init_status = {}
+        # Wait for worker to be ready
+        max_wait = 300  # 5 minutes max
+        waited = 0
+        while waited < max_wait:
+            ready_count = np.sum(self.worker_ready_signal.value > 0)
+            if ready_count >= self.cfg.worker_num_per_node:
+                return True
+            time.sleep(1)
+            waited += 1
 
-        def detect_thread():
-            if hasattr(self, "worker_proc") and self.worker_proc:
-                for line in self.worker_proc.stdout:
-                    line = line.decode("utf-8", errors="ignore")
-                    if self.worker_init_status.get("finished", False):
-                        break
-                    if match := re.search(
-                        r"Loading (?:fastsafetensors |safetensors )?checkpoint shards:\s*(\d+)",
-                        line,
-                    ):
-                        self.worker_init_status["weight_loading"] = eval(match.group(1)) * 1.0 / 100
-                    elif (match := re.search(r"Start load layer (\d+)", line)) or (
-                        match := re.search(r"set state for layer (\d+)", line)
-                    ):
-                        progress = eval(match.group(1)) * 1.0 / self.cfg.model_config.num_hidden_layers
-                        self.worker_init_status["layer_loading"] = progress
-                        if self.worker_init_status["layer_loading"] == self.cfg.model_config.num_hidden_layers - 1:
-                            self.worker_init_status["finished"] = True
-
-        self.checking_worker_status_thread = threading.Thread(target=detect_thread, daemon=True)
-        self.checking_worker_status_thread.start()
-
-        # Display weight loading progress
-        with tqdm(total=100, desc="Loading Weights") as pbar:
-            progress = 0
-            while progress < 100:
-                progress = int(self.worker_init_status.get("weight_loading", 0) * 100)
-                if self.worker_init_status.get("layer_loading", 0) > 0 or (
-                    hasattr(self, "worker_ready_signal")
-                    and self.worker_ready_signal is not None
-                    and self._worker_processes_ready()
-                ):
-                    progress = 100
-                pbar.update(progress - pbar.n)
-                pbar.refresh()
-                time.sleep(0.5)
-                if hasattr(self, "worker_proc") and self.worker_proc.poll() is not None:
-                    return False
-
-        # Display layer loading progress
-        with tqdm(total=100, desc="Loading Layers") as pbar:
-            progress = 0
-            while progress < 100:
-                progress = int(self.worker_init_status.get("layer_loading", 0) * 100)
-                if (
-                    hasattr(self, "worker_ready_signal")
-                    and self.worker_ready_signal is not None
-                    and self._worker_processes_ready()
-                ):
-                    progress = 100
-                pbar.update(progress - pbar.n)
-                pbar.refresh()
-                time.sleep(0.5)
-                if hasattr(self, "worker_proc") and self.worker_proc.poll() is not None:
-                    return False
-
-        self.worker_init_status["finished"] = True
-        try:
-            if hasattr(self, "checking_worker_status_thread"):
-                self.checking_worker_status_thread.join(timeout=1)
-        except Exception:
-            pass
-        return True
+        return False

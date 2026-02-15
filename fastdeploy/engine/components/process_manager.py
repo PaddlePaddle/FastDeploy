@@ -44,16 +44,18 @@ class ProcessManager:
     The old architecture (_use_new_architecture=False) uses the original EngineService code.
     """
 
-    def __init__(self, cfg, ipc_manager):
+    def __init__(self, cfg, ipc_manager, scheduler_coord=None):
         """
         Initialize process manager.
 
         Args:
             cfg: Configuration object
             ipc_manager: IPCManager instance for communication setup
+            scheduler_coord: SchedulerCoordinator instance (optional, for accessing data_processor)
         """
         self.cfg = cfg
         self.ipc = ipc_manager
+        self._scheduler_coord = scheduler_coord
 
         self._worker_procs: List[Process] = []
         self._cache_procs: List[Process] = []
@@ -83,7 +85,10 @@ class ProcessManager:
         log_dir = os.getenv("FD_LOG_DIR", default="log")
         command_prefix = self._setting_environ_variables()
         current_file_path = os.path.abspath(__file__)
-        current_dir_path = os.path.split(current_file_path)[0]
+        # Navigate to engine directory for correct relative path to worker
+        current_dir_path = os.path.dirname(current_file_path)
+        if os.path.basename(current_dir_path) == "components":
+            current_dir_path = os.path.dirname(current_dir_path)
         # TODO
         uncache_worker_stdout = "" if os.getenv("UNCACHE_WORKER_STDOUT", "0") == "1" else "-u"
         pd_cmd = f"{command_prefix} {sys.executable} {uncache_worker_stdout} -m paddle.distributed.launch"
@@ -93,7 +98,11 @@ class ProcessManager:
         py_script = os.path.join(current_dir_path, worker_path)
 
         # Access data_processor through scheduler coordinator
-        data_processor = self.ipc._scheduler_coord._data_processor if hasattr(self.ipc, "_scheduler_coord") else None
+        data_processor = (
+            self._scheduler_coord._data_processor
+            if self._scheduler_coord is not None and hasattr(self._scheduler_coord, "_data_processor")
+            else None
+        )
         if data_processor is None:
             self.llm_logger.warning("Data processor not available, using default tokenizer values")
             ori_vocab_size = 0
@@ -103,11 +112,12 @@ class ProcessManager:
             eos_token_id_len = 1
             pad_token_id = 0
         else:
-            ori_vocab_size = (
-                len(data_processor.tokenizer.sp_model)
-                if hasattr(data_processor.tokenizer, "sp_model")
-                else len(data_processor.tokenizer.vocab)
+            sp_model = (
+                data_processor.tokenizer.sp_model
+                if hasattr(data_processor.tokenizer, "sp_model") and data_processor.tokenizer.sp_model is not None
+                else None
             )
+            ori_vocab_size = len(sp_model) if sp_model is not None else len(data_processor.tokenizer.vocab)
 
             think_end_id = data_processor.tokenizer.get_vocab().get("", -1)
             if think_end_id > 0:
@@ -161,7 +171,6 @@ class ProcessManager:
             f" --cache-transfer-protocol {self.cfg.cache_config.cache_transfer_protocol}"
             f" --runner {self.cfg.model_config.runner}"
             f" --convert {self.cfg.model_config.convert}"
-            f" --override_pooler_config {self.cfg.model_config.override_pooler_config}"
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
@@ -171,10 +180,11 @@ class ProcessManager:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
         mm_max_tokens = None
         if (
-            hasattr(self.ipc._scheduler_coord, "mm_max_tokens_per_item")
-            and self.ipc._scheduler_coord.mm_max_tokens_per_item is not None
+            self._scheduler_coord is not None
+            and hasattr(self._scheduler_coord, "mm_max_tokens_per_item")
+            and self._scheduler_coord.mm_max_tokens_per_item is not None
         ):
-            mm_max_tokens = self.ipc._scheduler_coord.mm_max_tokens_per_item
+            mm_max_tokens = self._scheduler_coord.mm_max_tokens_per_item
         if mm_max_tokens is not None:
             arguments += f" --mm_max_tokens_per_item '{json.dumps(mm_max_tokens)}'"
 
@@ -200,6 +210,7 @@ class ProcessManager:
         worker_default_none_flag = {
             "num_gpu_blocks_override": self.cfg.cache_config.num_gpu_blocks_override,
             "kvcache_storage_backend": self.cfg.cache_config.kvcache_storage_backend,
+            "override-pooler-config": self.cfg.model_config.override_pooler_config,
         }
         for worker_flag, value in worker_default_none_flag.items():
             if value:
@@ -209,6 +220,17 @@ class ProcessManager:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
         self.llm_logger.info(f"Launch worker service command: {pd_cmd}")
+
+        # Capture launch parameters for verification if enabled
+        try:
+            from fastdeploy.engine.components.launch_param_capture import (
+                capture_if_enabled,
+            )
+
+            capture_if_enabled(pd_cmd, "new", log_dir)
+        except ImportError:
+            pass
+
         p = subprocess.Popen(
             pd_cmd,
             stdout=subprocess.PIPE,
@@ -388,6 +410,45 @@ class ProcessManager:
         if np.sum(self.ipc.worker_ready_signal.value) == self.cfg.worker_num_per_node:
             return True
         return False
+
+    def stop_profile(self) -> int:
+        """
+        Stop profiling of the model server and return the profiled GPU block number.
+
+        This method waits for the worker to complete profiling by checking the
+        get_profile_block_num_signal. The worker sets this signal after running
+        the profile to determine the optimal number of GPU blocks.
+
+        Returns:
+            The profiled number of GPU blocks
+
+        Raises:
+            RuntimeError: If worker process fails to start during profiling
+        """
+
+        self.do_profile = 0
+
+        # Check if profile signal is available
+        if not hasattr(self.ipc, "get_profile_block_num_signal") or self.ipc.get_profile_block_num_signal is None:
+            self.llm_logger.warning(
+                "get_profile_block_num_signal not available, " "profile mode may not be properly initialized"
+            )
+            return 0
+
+        # Wait for worker to set the profile signal
+        self.llm_logger.info("Waiting for worker profiling to complete...")
+        while self.ipc.get_profile_block_num_signal.value[0] == 0:
+            if len(self._worker_procs) > 0 and self._worker_procs[0] is not None:
+                if self._worker_procs[0].poll() is not None:
+                    raise RuntimeError(
+                        "Worker process failed to start during profiling. " "Please check log/workerlog.* for details."
+                    )
+            time.sleep(1)
+
+        num_gpu_blocks = self.ipc.get_profile_block_num_signal.value[0]
+        self.llm_logger.info(f"Profile completed: {num_gpu_blocks} GPU blocks")
+
+        return num_gpu_blocks
 
     @property
     def worker_proc(self) -> Optional[Process]:
