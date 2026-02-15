@@ -1009,8 +1009,21 @@ def rebuild_padding(
     enable_logprob: Optional[bool] = False,
 ):
     """
+    Rebuild padding from tokens. Dispatches to platform-specific implementation.
+
     Args:
+        tmp_out: Output tensor to be padded.
+        cu_seqlens_q: Cumulative sequence lengths for query.
+        seq_len_this_time: Sequence lengths for this iteration.
+        seq_lens_decoder: Sequence lengths for decoder.
+        seq_lens_encoder: Sequence lengths for encoder.
+        batch_id_per_token_output: Batch ID per token for output.
+        cu_seqlens_q_output: Cumulative sequence lengths for query output.
+        first_token_out: Output of the first token.
+        enable_logprob: Whether to enable log probabilities.
+
     Returns:
+        padded output tensor.
     """
     return _rebuild_padding_impl(
         tmp_out,
