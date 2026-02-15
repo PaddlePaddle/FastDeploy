@@ -35,7 +35,8 @@ from fastdeploy.utils import get_logger
 from ..moe import FusedMoE
 from .quant_base import QuantConfigBase, QuantMethodBase
 
-paddle.compat.enable_torch_proxy(scope={"flashinfer"})
+if hasattr(paddle, "compat") and hasattr(paddle.compat, "enable_torch_proxy"):
+    paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
 logger = get_logger("config", "config.log")
 

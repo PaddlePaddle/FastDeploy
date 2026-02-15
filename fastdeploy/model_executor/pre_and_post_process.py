@@ -832,7 +832,7 @@ def step_cuda(
                 )
 
 
-if current_platform.is_cuda():
+elif current_platform.is_dcu():  # pragma: no cover
     from fastdeploy.model_executor.ops.gpu import (
         rebuild_padding as _rebuild_padding_gpu,
     )
@@ -991,7 +991,7 @@ elif current_platform.is_maca():  # pragma: no cover
             enable_logprob,
         )
 
-else:
+else:  # pragma: no cover
 
     def _rebuild_padding_impl(*args, **kwargs):
         raise RuntimeError("Not supported platform")
