@@ -120,109 +120,8 @@ from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOu
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
 
-# Optimization: dispatch rebuild_padding implementation at module load time
+# Optimization: Cache the implementation function
 _rebuild_padding_impl = None
-
-if current_platform.is_iluvatar():
-    from fastdeploy.model_executor.ops.iluvatar import (
-        rebuild_padding as _rebuild_padding_iluvatar,
-    )
-
-    _rebuild_padding_impl = _rebuild_padding_iluvatar
-elif current_platform.is_gcu():
-    from fastdeploy.model_executor.ops.gcu import (
-        rebuild_padding as _rebuild_padding_gcu,
-    )
-
-    def _rebuild_padding_wrapper_gcu(
-        tmp_out,
-        cu_seqlens_q,
-        seq_len_this_time,
-        seq_lens_decoder,
-        seq_lens_encoder,
-        batch_id_per_token_output,
-        cu_seqlens_q_output=None,
-        first_token_out=None,
-        enable_logprob=False,
-    ):
-        return _rebuild_padding_gcu(
-            tmp_out,
-            cu_seqlens_q,
-            seq_len_this_time,
-            seq_lens_decoder,
-            seq_lens_encoder,
-            batch_id_per_token_output,
-        )
-
-    _rebuild_padding_impl = _rebuild_padding_wrapper_gcu
-elif current_platform.is_dcu():
-    from fastdeploy.model_executor.ops.gpu import (
-        rebuild_padding as _rebuild_padding_dcu,
-    )
-
-    def _rebuild_padding_wrapper_dcu(
-        tmp_out,
-        cu_seqlens_q,
-        seq_len_this_time,
-        seq_lens_decoder,
-        seq_lens_encoder,
-        batch_id_per_token_output,
-        cu_seqlens_q_output=None,
-        first_token_out=None,
-        enable_logprob=False,
-    ):
-        return _rebuild_padding_dcu(
-            tmp_out,
-            cu_seqlens_q,
-            seq_len_this_time,
-            seq_lens_decoder,
-            seq_lens_encoder,
-            batch_id_per_token_output,
-        )
-
-    _rebuild_padding_impl = _rebuild_padding_wrapper_dcu
-elif current_platform.is_cpu():
-    from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu
-
-    def _rebuild_padding_wrapper_cpu(
-        tmp_out,
-        cu_seqlens_q,
-        seq_len_this_time,
-        seq_lens_decoder,
-        seq_lens_encoder,
-        batch_id_per_token_output,
-        cu_seqlens_q_output=None,
-        first_token_out=None,
-        enable_logprob=False,
-    ):
-        return rebuild_padding_cpu(
-            tmp_out,
-            cu_seqlens_q,
-            seq_len_this_time,
-            seq_lens_decoder,
-            seq_lens_encoder,
-            batch_id_per_token_output,
-        )
-
-    _rebuild_padding_impl = _rebuild_padding_wrapper_cpu
-elif current_platform.is_maca():
-    from fastdeploy.model_executor.ops.gpu import (
-        rebuild_padding as _rebuild_padding_maca,
-    )
-
-    _rebuild_padding_impl = _rebuild_padding_maca
-elif current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        rebuild_padding as _rebuild_padding_cuda,
-    )
-
-    _rebuild_padding_impl = _rebuild_padding_cuda
-else:
-
-    def _rebuild_padding_error(*args, **kwargs):
-        raise RuntimeError("Not supported platform")
-
-    _rebuild_padding_impl = _rebuild_padding_error
 
 
 def limit_thinking_content_length(
@@ -952,6 +851,109 @@ def rebuild_padding(
     Args:
     Returns:
     """
+    global _rebuild_padding_impl
+    if _rebuild_padding_impl is None:
+        if current_platform.is_iluvatar():
+            from fastdeploy.model_executor.ops.iluvatar import (
+                rebuild_padding as _rebuild_padding_iluvatar,
+            )
+
+            _rebuild_padding_impl = _rebuild_padding_iluvatar
+        elif current_platform.is_gcu():
+            from fastdeploy.model_executor.ops.gcu import (
+                rebuild_padding as _rebuild_padding_gcu,
+            )
+
+            def _rebuild_padding_wrapper_gcu(
+                tmp_out,
+                cu_seqlens_q,
+                seq_len_this_time,
+                seq_lens_decoder,
+                seq_lens_encoder,
+                batch_id_per_token_output,
+                cu_seqlens_q_output=None,
+                first_token_out=None,
+                enable_logprob=False,
+            ):
+                return _rebuild_padding_gcu(
+                    tmp_out,
+                    cu_seqlens_q,
+                    seq_len_this_time,
+                    seq_lens_decoder,
+                    seq_lens_encoder,
+                    batch_id_per_token_output,
+                )
+
+            _rebuild_padding_impl = _rebuild_padding_wrapper_gcu
+        elif current_platform.is_dcu():
+            from fastdeploy.model_executor.ops.gpu import (
+                rebuild_padding as _rebuild_padding_dcu,
+            )
+
+            def _rebuild_padding_wrapper_dcu(
+                tmp_out,
+                cu_seqlens_q,
+                seq_len_this_time,
+                seq_lens_decoder,
+                seq_lens_encoder,
+                batch_id_per_token_output,
+                cu_seqlens_q_output=None,
+                first_token_out=None,
+                enable_logprob=False,
+            ):
+                return _rebuild_padding_dcu(
+                    tmp_out,
+                    cu_seqlens_q,
+                    seq_len_this_time,
+                    seq_lens_decoder,
+                    seq_lens_encoder,
+                    batch_id_per_token_output,
+                )
+
+            _rebuild_padding_impl = _rebuild_padding_wrapper_dcu
+        elif current_platform.is_cpu():
+            from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu
+
+            def _rebuild_padding_wrapper_cpu(
+                tmp_out,
+                cu_seqlens_q,
+                seq_len_this_time,
+                seq_lens_decoder,
+                seq_lens_encoder,
+                batch_id_per_token_output,
+                cu_seqlens_q_output=None,
+                first_token_out=None,
+                enable_logprob=False,
+            ):
+                return rebuild_padding_cpu(
+                    tmp_out,
+                    cu_seqlens_q,
+                    seq_len_this_time,
+                    seq_lens_decoder,
+                    seq_lens_encoder,
+                    batch_id_per_token_output,
+                )
+
+            _rebuild_padding_impl = _rebuild_padding_wrapper_cpu
+        elif current_platform.is_maca():
+            from fastdeploy.model_executor.ops.gpu import (
+                rebuild_padding as _rebuild_padding_maca,
+            )
+
+            _rebuild_padding_impl = _rebuild_padding_maca
+        elif current_platform.is_cuda():
+            from fastdeploy.model_executor.ops.gpu import (
+                rebuild_padding as _rebuild_padding_cuda,
+            )
+
+            _rebuild_padding_impl = _rebuild_padding_cuda
+        else:
+
+            def _rebuild_padding_error(*args, **kwargs):
+                raise RuntimeError("Not supported platform")
+
+            _rebuild_padding_impl = _rebuild_padding_error
+
     return _rebuild_padding_impl(
         tmp_out,
         cu_seqlens_q,
