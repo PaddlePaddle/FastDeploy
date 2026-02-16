@@ -124,11 +124,15 @@ DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 _rebuild_padding_impl = None
 
 if current_platform.is_iluvatar():
-    from fastdeploy.model_executor.ops.iluvatar import rebuild_padding as _rebuild_padding_iluvatar
+    from fastdeploy.model_executor.ops.iluvatar import (
+        rebuild_padding as _rebuild_padding_iluvatar,
+    )
 
     _rebuild_padding_impl = _rebuild_padding_iluvatar
 elif current_platform.is_gcu():
-    from fastdeploy.model_executor.ops.gcu import rebuild_padding as _rebuild_padding_gcu
+    from fastdeploy.model_executor.ops.gcu import (
+        rebuild_padding as _rebuild_padding_gcu,
+    )
 
     def _rebuild_padding_wrapper_gcu(
         tmp_out,
@@ -152,7 +156,9 @@ elif current_platform.is_gcu():
 
     _rebuild_padding_impl = _rebuild_padding_wrapper_gcu
 elif current_platform.is_dcu():
-    from fastdeploy.model_executor.ops.gpu import rebuild_padding as _rebuild_padding_dcu
+    from fastdeploy.model_executor.ops.gpu import (
+        rebuild_padding as _rebuild_padding_dcu,
+    )
 
     def _rebuild_padding_wrapper_dcu(
         tmp_out,
@@ -200,11 +206,15 @@ elif current_platform.is_cpu():
 
     _rebuild_padding_impl = _rebuild_padding_wrapper_cpu
 elif current_platform.is_maca():
-    from fastdeploy.model_executor.ops.gpu import rebuild_padding as _rebuild_padding_maca
+    from fastdeploy.model_executor.ops.gpu import (
+        rebuild_padding as _rebuild_padding_maca,
+    )
 
     _rebuild_padding_impl = _rebuild_padding_maca
 elif current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import rebuild_padding as _rebuild_padding_cuda
+    from fastdeploy.model_executor.ops.gpu import (
+        rebuild_padding as _rebuild_padding_cuda,
+    )
 
     _rebuild_padding_impl = _rebuild_padding_cuda
 else:
