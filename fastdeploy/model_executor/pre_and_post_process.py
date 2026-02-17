@@ -110,85 +110,98 @@ else:
 
 _rebuild_padding_impl = None
 
-if current_platform.is_cuda() or current_platform.is_maca():
-    from fastdeploy.model_executor.ops.gpu import (
-        rebuild_padding as _rebuild_padding_impl,
-    )
-elif current_platform.is_iluvatar():
-    from fastdeploy.model_executor.ops.iluvatar import (
-        rebuild_padding as _rebuild_padding_impl,
-    )
-elif current_platform.is_dcu():
-    from fastdeploy.model_executor.ops.gpu import (
-        rebuild_padding as _ops_rebuild_padding,
-    )
 
-    def _rebuild_padding_impl(
-        tmp_out,
-        cu_seqlens_q,
-        seq_len_this_time,
-        seq_lens_decoder,
-        seq_lens_encoder,
-        batch_id_per_token_output,
-        *args,
-        **kwargs,
-    ):
-        return _ops_rebuild_padding(
+def _init_rebuild_padding_impl():
+    global _rebuild_padding_impl
+    if current_platform.is_cuda() or current_platform.is_maca():
+        from fastdeploy.model_executor.ops.gpu import (
+            rebuild_padding as _ops_rebuild_padding,
+        )
+
+        _rebuild_padding_impl = _ops_rebuild_padding
+    elif current_platform.is_iluvatar():
+        from fastdeploy.model_executor.ops.iluvatar import (
+            rebuild_padding as _ops_rebuild_padding,
+        )
+
+        _rebuild_padding_impl = _ops_rebuild_padding
+    elif current_platform.is_dcu():
+        from fastdeploy.model_executor.ops.gpu import (
+            rebuild_padding as _ops_rebuild_padding,
+        )
+
+        def _wrapper(
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
             batch_id_per_token_output,
+            *args,
+            **kwargs,
+        ):
+            return _ops_rebuild_padding(
+                tmp_out,
+                cu_seqlens_q,
+                seq_len_this_time,
+                seq_lens_decoder,
+                seq_lens_encoder,
+                batch_id_per_token_output,
+            )
+
+        _rebuild_padding_impl = _wrapper
+
+    elif current_platform.is_gcu():
+        from fastdeploy.model_executor.ops.gcu import (
+            rebuild_padding as _ops_rebuild_padding,
         )
 
-elif current_platform.is_gcu():
-    from fastdeploy.model_executor.ops.gcu import (
-        rebuild_padding as _ops_rebuild_padding,
-    )
-
-    def _rebuild_padding_impl(
-        tmp_out,
-        cu_seqlens_q,
-        seq_len_this_time,
-        seq_lens_decoder,
-        seq_lens_encoder,
-        batch_id_per_token_output,
-        *args,
-        **kwargs,
-    ):
-        return _ops_rebuild_padding(
+        def _wrapper(
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
             batch_id_per_token_output,
+            *args,
+            **kwargs,
+        ):
+            return _ops_rebuild_padding(
+                tmp_out,
+                cu_seqlens_q,
+                seq_len_this_time,
+                seq_lens_decoder,
+                seq_lens_encoder,
+                batch_id_per_token_output,
+            )
+
+        _rebuild_padding_impl = _wrapper
+
+    elif current_platform.is_cpu():
+        from fastdeploy.model_executor.ops.cpu import (
+            rebuild_padding_cpu as _ops_rebuild_padding,
         )
 
-elif current_platform.is_cpu():
-    from fastdeploy.model_executor.ops.cpu import (
-        rebuild_padding_cpu as _ops_rebuild_padding,
-    )
-
-    def _rebuild_padding_impl(
-        tmp_out,
-        cu_seqlens_q,
-        seq_len_this_time,
-        seq_lens_decoder,
-        seq_lens_encoder,
-        batch_id_per_token_output,
-        *args,
-        **kwargs,
-    ):
-        return _ops_rebuild_padding(
+        def _wrapper(
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
             batch_id_per_token_output,
-        )
+            *args,
+            **kwargs,
+        ):
+            return _ops_rebuild_padding(
+                tmp_out,
+                cu_seqlens_q,
+                seq_len_this_time,
+                seq_lens_decoder,
+                seq_lens_encoder,
+                batch_id_per_token_output,
+            )
+
+        _rebuild_padding_impl = _wrapper
 
 
 from fastdeploy.model_executor.entropy_utils import (
@@ -930,6 +943,8 @@ def rebuild_padding(
     Args:
     Returns:
     """
+    if _rebuild_padding_impl is None:
+        _init_rebuild_padding_impl()
     if _rebuild_padding_impl is None:
         raise RuntimeError("Not supported platform")
     hidden_states = _rebuild_padding_impl(
