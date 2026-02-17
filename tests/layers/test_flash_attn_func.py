@@ -198,6 +198,9 @@ class TestFlashAttnFunc(unittest.TestCase):
             k,
             v,
             attn_mask_q=attn_mask_q,
+            num_heads=num_heads,
+            kv_num_heads=kv_num_heads,
+            head_dim=head_dim,
             version=4,
         )
 

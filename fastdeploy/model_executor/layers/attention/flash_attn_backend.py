@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 
 from fastdeploy.platforms import current_platform
 
-paddle.compat.enable_torch_proxy(scope={"flash_mask"})
+paddle.compat.enable_torch_proxy(scope={"cutlass"})
 flashmask_attention_v4 = None
 
 if current_platform.is_cuda():
@@ -118,9 +118,9 @@ def flash_attn_func(
     head_dim: int = 128,
     version: Optional[int] = None,
 ):
+    if FLASH_ATTN_VERSION is None:
+        init_flash_attn_version()
     if version is None:
-        if FLASH_ATTN_VERSION is None:
-            init_flash_attn_version()
         version = FLASH_ATTN_VERSION
     if version == 4:
         assert (

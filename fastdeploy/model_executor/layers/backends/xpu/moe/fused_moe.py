@@ -41,6 +41,8 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
 )
 
+from .utils import get_moe_scores
+
 
 class XPUMoEMethod(MoEMethodBase):
     """
@@ -339,12 +341,23 @@ class XPUMoEMethod(MoEMethodBase):
         Apply TP Scatter Op.
         """
         gate_out = gate(x.cast("float32"))
-        topk_idx, topk_weights = moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            layer.top_k,
-            True,
-        )
+        if layer.topk_method == "noaux_tc":
+            _, topk_idx, topk_weights = get_moe_scores(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                layer.top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+                layer.renormalize,
+            )
+        else:
+            topk_idx, topk_weights = moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                layer.top_k,
+                True,
+            )
         token_nums_per_expert_list = list(range(layer.num_local_experts))  # placeholder, not use
         (
             permute_input,
