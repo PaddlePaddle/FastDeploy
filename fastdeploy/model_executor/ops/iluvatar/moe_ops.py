@@ -28,6 +28,7 @@ except ImportError:
             x, y = paddle.chunk(x, 2, axis=-1)
         return paddle.nn.functional.silu(x) * y
 
+
 try:
     from fastdeploy.model_executor.ops.iluvatar import w8a16_group_gemm
 except ImportError:
