@@ -934,11 +934,16 @@ def rebuild_padding(
 
             _rebuild_padding_impl = rebuild_padding
         else:
+            try:
+                from fastdeploy.model_executor.ops.gpu import rebuild_padding
 
-            def raiser(*args, **kwargs):
-                raise RuntimeError("Not supported platform")
+                _rebuild_padding_impl = rebuild_padding
+            except ImportError:
 
-            _rebuild_padding_impl = raiser
+                def raiser(*args, **kwargs):
+                    raise RuntimeError("Not supported platform")
+
+                _rebuild_padding_impl = raiser
 
     return _rebuild_padding_impl(
         tmp_out,
