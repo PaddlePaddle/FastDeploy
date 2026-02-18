@@ -20,6 +20,7 @@ from unittest.mock import MagicMock
 # We need to mock modules BEFORE importing fastdeploy.model_executor.pre_and_post_process
 # to control the platform detection and import behavior.
 
+
 class TestRebuildPadding(unittest.TestCase):
     def setUp(self):
         # Create a mock for fastdeploy.platforms.current_platform
