@@ -48,9 +48,7 @@ class TestRebuildPadding(unittest.TestCase):
         self.mock_fastdeploy.model_executor = types.ModuleType("fastdeploy.model_executor")
         self.mock_fastdeploy.model_executor.entropy_utils = types.ModuleType("fastdeploy.model_executor.entropy_utils")
         self.mock_fastdeploy.model_executor.layers = types.ModuleType("fastdeploy.model_executor.layers")
-        self.mock_fastdeploy.model_executor.layers.sample = types.ModuleType(
-            "fastdeploy.model_executor.layers.sample"
-        )
+        self.mock_fastdeploy.model_executor.layers.sample = types.ModuleType("fastdeploy.model_executor.layers.sample")
         self.mock_fastdeploy.model_executor.layers.sample.meta_data = types.ModuleType(
             "fastdeploy.model_executor.layers.sample.meta_data"
         )
