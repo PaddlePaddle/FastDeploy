@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
-from unittest.mock import MagicMock, patch
 import sys
 import types
+import unittest
+from unittest.mock import MagicMock
 
 # We need to mock modules BEFORE importing fastdeploy.model_executor.pre_and_post_process
 # to control the platform detection and import behavior.
@@ -48,8 +48,12 @@ class TestRebuildPadding(unittest.TestCase):
         self.mock_fastdeploy.model_executor = types.ModuleType("fastdeploy.model_executor")
         self.mock_fastdeploy.model_executor.entropy_utils = types.ModuleType("fastdeploy.model_executor.entropy_utils")
         self.mock_fastdeploy.model_executor.layers = types.ModuleType("fastdeploy.model_executor.layers")
-        self.mock_fastdeploy.model_executor.layers.sample = types.ModuleType("fastdeploy.model_executor.layers.sample")
-        self.mock_fastdeploy.model_executor.layers.sample.meta_data = types.ModuleType("fastdeploy.model_executor.layers.sample.meta_data")
+        self.mock_fastdeploy.model_executor.layers.sample = types.ModuleType(
+            "fastdeploy.model_executor.layers.sample"
+        )
+        self.mock_fastdeploy.model_executor.layers.sample.meta_data = types.ModuleType(
+            "fastdeploy.model_executor.layers.sample.meta_data"
+        )
         self.mock_fastdeploy.output = types.ModuleType("fastdeploy.output")
         self.mock_fastdeploy.output.pooler = types.ModuleType("fastdeploy.output.pooler")
         self.mock_fastdeploy.output.stream_transfer_data = types.ModuleType("fastdeploy.output.stream_transfer_data")
@@ -81,6 +85,7 @@ class TestRebuildPadding(unittest.TestCase):
 
     def _load_module(self):
         import fastdeploy.model_executor.pre_and_post_process as pnp
+
         # Reset the global variable to None to force re-initialization
         pnp._rebuild_padding_impl = None
         return pnp
@@ -200,6 +205,7 @@ class TestRebuildPadding(unittest.TestCase):
 
         mock_impl.assert_called_once()
         self.assertEqual(len(mock_impl.call_args[0]), 9)
+
 
 if __name__ == "__main__":
     unittest.main()
