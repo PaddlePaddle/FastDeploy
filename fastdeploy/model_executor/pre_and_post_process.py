@@ -935,6 +935,8 @@ def rebuild_padding(
             _rebuild_padding_impl = rebuild_padding
         else:
             try:
+                # Fallback for platforms not explicitly listed above (e.g., XPU)
+                # that share the GPU implementation.
                 from fastdeploy.model_executor.ops.gpu import rebuild_padding
 
                 _rebuild_padding_impl = rebuild_padding
