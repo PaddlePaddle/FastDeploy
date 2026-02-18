@@ -103,6 +103,7 @@ try:
 
 except:
     tensor_model_parallel_all_reduce = None
+    decode_alltoall_transpose = None
 
 from paddle.distributed.communication import stream
 from paddle.distributed.communication.reduce import ReduceOp
