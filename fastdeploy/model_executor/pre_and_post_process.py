@@ -202,6 +202,15 @@ def _init_rebuild_padding_impl():
             )
 
         _rebuild_padding_impl = _wrapper
+    else:
+        try:
+            from fastdeploy.model_executor.ops.gpu import (
+                rebuild_padding as _ops_rebuild_padding,
+            )
+
+            _rebuild_padding_impl = _ops_rebuild_padding
+        except Exception:
+            pass
 
 
 from fastdeploy.model_executor.entropy_utils import (
