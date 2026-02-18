@@ -867,7 +867,7 @@ def rebuild_padding(
                 seq_lens_encoder,
                 batch_id_per_token_output,
                 *args,
-                **kwargs
+                **kwargs,
             ):
                 return rebuild_padding(
                     tmp_out,
@@ -894,7 +894,7 @@ def rebuild_padding(
                 seq_lens_encoder,
                 batch_id_per_token_output,
                 *args,
-                **kwargs
+                **kwargs,
             ):
                 return rebuild_padding(
                     tmp_out,
@@ -917,7 +917,7 @@ def rebuild_padding(
                 seq_lens_encoder,
                 batch_id_per_token_output,
                 *args,
-                **kwargs
+                **kwargs,
             ):
                 return rebuild_padding_cpu(
                     tmp_out,
