@@ -70,7 +70,7 @@ try:
         output_names=["out"],
         inplace_map={},
     )
-    def tensor_model_parallel_all_reduce(
+    def tensor_model_parallel_all_reduce(  # noqa: F811
         input_: paddle.Tensor,
         group_: paddle.distributed.communication.group.Group = None,
     ) -> paddle.Tensor:
@@ -93,7 +93,7 @@ try:
         return input_
 
     @paddle.jit.marker.unified
-    def decode_alltoall_transpose(
+    def decode_alltoall_transpose(  # noqa: F811
         input_: paddle.Tensor,
         out: paddle.Tensor = None,
     ) -> paddle.Tensor:
@@ -123,7 +123,7 @@ try:
         return stream.all_reduce(tensor, op=op, group=group, sync_op=sync_op, use_calc_stream=True)
 
     @paddle.jit.marker.unified
-    def tensor_model_parallel_all_reduce_custom(input_: paddle.Tensor) -> paddle.Tensor:
+    def tensor_model_parallel_all_reduce_custom(input_: paddle.Tensor) -> paddle.Tensor:  # noqa: F811
         """All-reduce the input tensor across model parallel group on calc stream."""
         if input_.shape[0] == 0:
             return input_
