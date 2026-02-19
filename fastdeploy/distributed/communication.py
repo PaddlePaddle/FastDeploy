@@ -53,6 +53,9 @@ def custom_ar_clear_ipc_handles():
         _TP_AR.clear_ipc_handles()
 
 
+tensor_model_parallel_all_reduce = None
+decode_alltoall_transpose = None
+
 try:
 
     def tensor_model_parallel_all_reduce_infer_meta(x: "paddle.static.MetaTensor", group_) -> paddle.static.MetaTensor:
@@ -102,11 +105,12 @@ try:
         return input_
 
 except:
-    tensor_model_parallel_all_reduce = None
-    decode_alltoall_transpose = None
+    pass
 
 from paddle.distributed.communication import stream
 from paddle.distributed.communication.reduce import ReduceOp
+
+tensor_model_parallel_all_reduce_custom = None
 
 try:
 
@@ -131,4 +135,4 @@ try:
             dist.all_reduce(input_)
 
 except:
-    tensor_model_parallel_all_reduce_custom = None
+    pass
