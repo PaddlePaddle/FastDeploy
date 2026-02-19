@@ -17,6 +17,7 @@
 from typing import Optional
 
 import paddle
+
 try:
     from paddle.nn.functional import swiglu
 except ImportError:
