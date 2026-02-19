@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 import queue
 from typing import Dict, List, Optional, Union
 
@@ -851,11 +852,12 @@ def rebuild_padding(
     Returns:
     """
     global _rebuild_padding_impl
-    if _rebuild_padding_impl is None:
+    pid = os.getpid()
+    if _rebuild_padding_impl is None or _rebuild_padding_impl[0] != pid:
         if current_platform.is_cuda():
             from fastdeploy.model_executor.ops.gpu import rebuild_padding as impl
 
-            _rebuild_padding_impl = impl
+            _rebuild_padding_impl = (pid, impl)
         elif current_platform.is_dcu():
             from fastdeploy.model_executor.ops.gpu import rebuild_padding as impl
 
@@ -879,11 +881,11 @@ def rebuild_padding(
                     batch_id_per_token_output,
                 )
 
-            _rebuild_padding_impl = wrapper
+            _rebuild_padding_impl = (pid, wrapper)
         elif current_platform.is_iluvatar():
             from fastdeploy.model_executor.ops.iluvatar import rebuild_padding as impl
 
-            _rebuild_padding_impl = impl
+            _rebuild_padding_impl = (pid, impl)
         elif current_platform.is_gcu():
             from fastdeploy.model_executor.ops.gcu import rebuild_padding as impl
 
@@ -907,7 +909,7 @@ def rebuild_padding(
                     batch_id_per_token_output,
                 )
 
-            _rebuild_padding_impl = wrapper
+            _rebuild_padding_impl = (pid, wrapper)
         elif current_platform.is_cpu():
             from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu as impl
 
@@ -931,16 +933,16 @@ def rebuild_padding(
                     batch_id_per_token_output,
                 )
 
-            _rebuild_padding_impl = wrapper
+            _rebuild_padding_impl = (pid, wrapper)
         elif current_platform.is_maca():
             from fastdeploy.model_executor.ops.gpu import rebuild_padding as impl
 
-            _rebuild_padding_impl = impl
+            _rebuild_padding_impl = (pid, impl)
         else:
             raise RuntimeError("Not supported platform")
 
     # Call the cached implementation
-    return _rebuild_padding_impl(
+    return _rebuild_padding_impl[1](
         tmp_out,
         cu_seqlens_q,
         seq_len_this_time,
