@@ -939,6 +939,7 @@ def rebuild_padding(
         else:
             raise RuntimeError("Not supported platform")
 
+    # Call the cached implementation
     return _rebuild_padding_impl(
         tmp_out,
         cu_seqlens_q,
