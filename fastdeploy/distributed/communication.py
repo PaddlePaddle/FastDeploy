@@ -131,6 +131,7 @@ except:
     ) -> paddle.Tensor:
         raise RuntimeError("decode_alltoall_transpose requires custom ops which failed to load.")
 
+
 from paddle.distributed.communication import stream
 from paddle.distributed.communication.reduce import ReduceOp
 
