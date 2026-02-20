@@ -116,13 +116,16 @@ def check_service_health(base_url: str, timeout: int = 3) -> bool:
         return False
 
 
-async def check_service_health_async(base_url: str, timeout: int = 3) -> bool:
+async def check_service_health_async(
+    base_url: str, timeout: int = 3, session: aiohttp.ClientSession = None
+) -> bool:
     """
     Asynchronously check the health status of a service.
 
     Args:
         base_url (str): The base URL of the service, e.g. "http://127.0.0.1:8080"
         timeout (int): Request timeout in seconds.
+        session (aiohttp.ClientSession): The aiohttp session to use for the request.
 
     Returns:
         bool: True if the service is healthy, False otherwise.
@@ -131,18 +134,27 @@ async def check_service_health_async(base_url: str, timeout: int = 3) -> bool:
         base_url = f"http://{base_url}"
 
     url = f"{base_url.rstrip('/')}/health"
-    try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
-            async with session.get(url) as resp:
-                status = resp.status
-                text = await resp.text()
 
-                if status == 200:
-                    print(f"[OK] Service is healthy ({status})")
-                    return True
-                else:
-                    print(f"[WARN] Service not healthy ({status}): {text}")
-                    return False
+    async def _check(sess):
+        async with sess.get(url, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+            status = resp.status
+            text = await resp.text()
+
+            if status == 200:
+                print(f"[OK] Service is healthy ({status})")
+                return True
+            else:
+                print(f"[WARN] Service not healthy ({status}): {text}")
+                return False
+
+    try:
+        if session:
+            return await _check(session)
+        else:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as sess:
+                return await _check(sess)
     except aiohttp.ClientError as e:
         print(f"[ERROR] Failed to connect to {url}: {e}")
         return False

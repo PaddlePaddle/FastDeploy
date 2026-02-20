@@ -13,6 +13,7 @@ import traceback
 from dataclasses import dataclass
 from itertools import chain
 from uuid import uuid4
+from typing import Optional
 
 import aiohttp
 import uvicorn
@@ -95,7 +96,27 @@ class Router:
         self.prefill_servers = []
         self.decode_servers = []
         self.lock = asyncio.Lock()  # async-safe lock
+        self.session: Optional[aiohttp.ClientSession] = None
+        self.monitor_task: Optional[asyncio.Task] = None
         logger.info("Router started at http://{}:{}".format(self.host, self.port))
+
+    async def startup(self):
+        self.session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=self.timeout)
+        )
+        self.monitor_task = asyncio.create_task(
+            self.monitor_instance_health(interval_secs=5)
+        )
+
+    async def shutdown(self):
+        if self.monitor_task:
+            self.monitor_task.cancel()
+            try:
+                await self.monitor_task
+            except asyncio.CancelledError:
+                pass
+        if self.session:
+            await self.session.close()
 
     async def register_instance(self, instance_info_dict: dict):
         """Register an instance asynchronously"""
@@ -110,7 +131,7 @@ class Router:
         ):
             raise ValueError(f"Invalid instance role: {inst_info.role}, splitwise: {self.splitwise}")
 
-        if not await check_service_health_async(inst_info.url()):
+        if not await check_service_health_async(inst_info.url(), session=self.session):
             raise RuntimeError(f"Instance {inst_info} is not healthy")
 
         async with self.lock:
@@ -225,26 +246,52 @@ class Router:
     async def _generate(
         self, modified_request, urls, return_result_url_index=-1, endpoint="v1/chat/completions"
     ) -> ORJSONResponse:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout)) as session:
-            tasks = [session.post(f"{url}/{endpoint}", json=modified_request) for url in urls]
-            results = await asyncio.gather(*tasks)
-            ret_json = await results[return_result_url_index].json()
-            return ORJSONResponse(content=ret_json, status_code=results[return_result_url_index].status)
+        tasks = [
+            self.session.post(f"{url}/{endpoint}", json=modified_request)
+            for url in urls
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Release unused responses and handle exceptions
+        for i, result in enumerate(results):
+            if i != return_result_url_index:
+                if not isinstance(result, Exception):
+                    result.release()
+            elif isinstance(result, Exception):
+                raise result
+
+        target_result = results[return_result_url_index]
+        ret_json = await target_result.json()
+        return ORJSONResponse(
+            content=ret_json, status_code=target_result.status
+        )
 
     async def _generate_stream(
         self, modified_request, urls, return_result_url_index=-1, endpoint="v1/chat/completions"
     ):
         async def stream_results():
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout)) as session:
-                tasks = [session.post(f"{url}/{endpoint}", json=modified_request) for url in urls]
-                results = await asyncio.gather(*tasks)
+            tasks = [
+                self.session.post(f"{url}/{endpoint}", json=modified_request)
+                for url in urls
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                AIOHTTP_STREAM_READ_CHUNK_SIZE = 1024 * 64  # prevent aiohttp's "Chunk too big" error
-                async for chunk in results[return_result_url_index].content.iter_chunked(
-                    AIOHTTP_STREAM_READ_CHUNK_SIZE
-                ):
-                    logger.debug(f"receive response chunk: {chunk}")
-                    yield chunk
+            # Release unused responses and handle exceptions
+            for i, result in enumerate(results):
+                if i != return_result_url_index:
+                    if not isinstance(result, Exception):
+                        result.release()
+                elif isinstance(result, Exception):
+                    raise result
+
+            target_result = results[return_result_url_index]
+
+            AIOHTTP_STREAM_READ_CHUNK_SIZE = 1024 * 64  # prevent aiohttp's "Chunk too big" error
+            async for chunk in target_result.content.iter_chunked(
+                AIOHTTP_STREAM_READ_CHUNK_SIZE
+            ):
+                logger.debug(f"receive response chunk: {chunk}")
+                yield chunk
 
         return StreamingResponse(stream_results(), media_type="text/event-stream")
 
@@ -262,110 +309,116 @@ class Router:
         async def stream_results():
             total_max_tokens = modified_request.get("max_tokens", 0)
             step_max_tokens = modified_request.get("step_max_tokens", 10)
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
 
             round_idx = -1
             generated_tokens = 0
             input_ids = []
             output_ids = []
 
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                while generated_tokens < total_max_tokens:
-                    round_idx += 1
-                    remain_tokens = total_max_tokens - generated_tokens
-                    cur_max_tokens = min(step_max_tokens, remain_tokens)
-                    is_last_round = remain_tokens <= step_max_tokens
+            while generated_tokens < total_max_tokens:
+                round_idx += 1
+                remain_tokens = total_max_tokens - generated_tokens
+                cur_max_tokens = min(step_max_tokens, remain_tokens)
+                is_last_round = remain_tokens <= step_max_tokens
 
-                    cur_request = copy.deepcopy(modified_request)
-                    cur_request["max_tokens"] = cur_max_tokens
-                    cur_request["return_token_ids"] = True
-                    cur_request["max_streaming_response_tokens"] = 1
-                    if round_idx == 0:
-                        cur_request["disable_chat_template"] = False
-                    else:
-                        cur_request["messages"] = []
-                        cur_request["prompt_token_ids"] = input_ids + output_ids
-                        cur_request["disable_chat_template"] = True
+                cur_request = copy.deepcopy(modified_request)
+                cur_request["max_tokens"] = cur_max_tokens
+                cur_request["return_token_ids"] = True
+                cur_request["max_streaming_response_tokens"] = 1
+                if round_idx == 0:
+                    cur_request["disable_chat_template"] = False
+                else:
+                    cur_request["messages"] = []
+                    cur_request["prompt_token_ids"] = input_ids + output_ids
+                    cur_request["disable_chat_template"] = True
 
-                    logger.debug(f"_divided_generate_stream, cur_request={cur_request}")
+                logger.debug(f"_divided_generate_stream, cur_request={cur_request}")
 
-                    resp = await session.post(
-                        f"{urls[return_result_url_index]}/{endpoint}",
-                        json=cur_request,
-                    )
-                    if resp.status != 200:
-                        text = await resp.text()
-                        raise RuntimeError(f"Request failed: {resp.status}, body={text}")
+                resp = await self.session.post(
+                    f"{urls[return_result_url_index]}/{endpoint}",
+                    json=cur_request,
+                )
+                if resp.status != 200:
+                    text = await resp.text()
+                    raise RuntimeError(f"Request failed: {resp.status}, body={text}")
 
-                    buffer = b""
-                    chunk_idx = -1
-                    is_real_finished = False
-                    async for raw_chunk in resp.content.iter_chunked(64 * 1024):
-                        try:
-                            buffer += raw_chunk
+                buffer = b""
+                chunk_idx = -1
+                is_real_finished = False
+                async for raw_chunk in resp.content.iter_chunked(64 * 1024):
+                    try:
+                        buffer += raw_chunk
 
-                            while b"\n\n" in buffer:
-                                event_bytes, buffer = buffer.split(b"\n\n", 1)
-                                event_str = event_bytes.decode("utf-8")
+                        while b"\n\n" in buffer:
+                            event_bytes, buffer = buffer.split(b"\n\n", 1)
+                            event_str = event_bytes.decode("utf-8")
 
-                                for chunk in event_str.splitlines():
-                                    logger.debug(f"receive response chunk: {chunk}")
-                                    if not chunk:
+                            for chunk in event_str.splitlines():
+                                logger.debug(f"receive response chunk: {chunk}")
+                                if not chunk:
+                                    continue
+
+                                chunk_idx += 1
+                                if round_idx > 0 and chunk_idx == 0:
+                                    continue
+
+                                assert chunk.startswith(
+                                    "data: "
+                                ), f"Invalid response chunk: {chunk}"
+                                if chunk.startswith("data: [DONE]"):
+                                    if is_real_finished:
+                                        yield chunk + "\n\n"
+                                else:
+                                    payload = json.loads(chunk[5:])
+                                    choices = payload.get("choices", [])
+                                    if not choices:
                                         continue
+                                    delta = payload["choices"][0]["delta"]
+                                    finish_reason = payload["choices"][0].get(
+                                        "finish_reason"
+                                    )
 
-                                    chunk_idx += 1
-                                    if round_idx > 0 and chunk_idx == 0:
-                                        continue
+                                    if not input_ids and len(delta["prompt_token_ids"]) > 0:
+                                        input_ids = delta["prompt_token_ids"]
 
-                                    assert chunk.startswith("data: "), f"Invalid response chunk: {chunk}"
-                                    if chunk.startswith("data: [DONE]"):
-                                        if is_real_finished:
-                                            yield chunk + "\n\n"
-                                    else:
-                                        payload = json.loads(chunk[5:])
-                                        choices = payload.get("choices", [])
-                                        if not choices:
-                                            continue
-                                        delta = payload["choices"][0]["delta"]
-                                        finish_reason = payload["choices"][0].get("finish_reason")
+                                    if finish_reason == "stop" or (
+                                        is_last_round and finish_reason == "length"
+                                    ):
+                                        is_real_finished = True
 
-                                        if not input_ids and len(delta["prompt_token_ids"]) > 0:
-                                            input_ids = delta["prompt_token_ids"]
+                                    token_ids = delta.get("completion_token_ids")
+                                    if (
+                                        token_ids
+                                        and isinstance(token_ids, list)
+                                        and (finish_reason is None or is_real_finished)
+                                    ):
+                                        output_ids.extend(token_ids)
+                                        generated_tokens += len(token_ids)
 
-                                        if finish_reason == "stop" or (is_last_round and finish_reason == "length"):
-                                            is_real_finished = True
+                                    if finish_reason is None or is_real_finished:
+                                        yield chunk + "\n\n"
 
-                                        token_ids = delta.get("completion_token_ids")
-                                        if (
-                                            token_ids
-                                            and isinstance(token_ids, list)
-                                            and (finish_reason is None or is_real_finished)
-                                        ):
-                                            output_ids.extend(token_ids)
-                                            generated_tokens += len(token_ids)
+                    except Exception as e:
+                        logger.error(
+                            f"Error decoding response chunk: {raw_chunk}, round_idx: {round_idx}, "
+                            f"chunk_idx: {chunk_idx}, error: {e}, traceback:{traceback.format_exc()}"
+                        )
+                        pass
 
-                                        if finish_reason is None or is_real_finished:
-                                            yield chunk + "\n\n"
+                resp.release()
 
-                        except Exception as e:
-                            logger.error(
-                                f"Error decoding response chunk: {raw_chunk}, round_idx: {round_idx}, "
-                                f"chunk_idx: {chunk_idx}, error: {e}, traceback:{traceback.format_exc()}"
-                            )
-                            pass
+                if not is_real_finished:
+                    expected_tokens = (step_max_tokens - 1) * (round_idx + 1)
+                    if generated_tokens != expected_tokens:
+                        err_msg = (
+                            f"Generated tokens mismatch: generated_tokens is {generated_tokens}, "
+                            f"expected is {expected_tokens}"
+                        )
+                        logger.error(err_msg)
+                        raise RuntimeError(err_msg)
 
-                    if not is_real_finished:
-                        expected_tokens = (step_max_tokens - 1) * (round_idx + 1)
-                        if generated_tokens != expected_tokens:
-                            err_msg = (
-                                f"Generated tokens mismatch: generated_tokens is {generated_tokens}, "
-                                f"expected is {expected_tokens}"
-                            )
-                            logger.error(err_msg)
-                            raise RuntimeError(err_msg)
-
-                    if is_real_finished:
-                        break
+                if is_real_finished:
+                    break
 
         return StreamingResponse(
             stream_results(),
@@ -382,48 +435,65 @@ class Router:
                 decode_to_remove = []
                 mixed_to_remove = []
 
-                async with aiohttp.ClientSession() as session:
-                    # check  servers
-                    prefill_tasks = [(inst, session.get(f"{inst.url()}/health")) for inst in self.prefill_servers]
-                    decode_tasks = [(inst, session.get(f"{inst.url()}/health")) for inst in self.decode_servers]
-                    mixed_tasks = [(inst, session.get(f"{inst.url()}/health")) for inst in self.mixed_servers]
+                # check  servers
+                prefill_tasks = [
+                    (inst, self.session.get(f"{inst.url()}/health"))
+                    for inst in self.prefill_servers
+                ]
+                decode_tasks = [
+                    (inst, self.session.get(f"{inst.url()}/health"))
+                    for inst in self.decode_servers
+                ]
+                mixed_tasks = [
+                    (inst, self.session.get(f"{inst.url()}/health"))
+                    for inst in self.mixed_servers
+                ]
 
-                    # gather all tasks concurrently
-                    all_tasks = prefill_tasks + decode_tasks + mixed_tasks
-                    for inst, coro in all_tasks:
-                        try:
-                            resp = await coro
-                            if resp.status != 200:
-                                logger.warning(f"Instance {inst.url()} unhealthy: {resp.status}")
-                                if inst in self.prefill_servers:
-                                    prefill_to_remove.append(inst)
-                                elif inst in self.decode_servers:
-                                    decode_to_remove.append(inst)
-                                elif inst in self.mixed_servers:
-                                    mixed_to_remove.append(inst)
-                        except Exception as e:
-                            logger.warning(f"Instance {inst.url()} check failed: {e}")
+                # gather all tasks concurrently
+                all_tasks = prefill_tasks + decode_tasks + mixed_tasks
+                for inst, coro in all_tasks:
+                    try:
+                        resp = await coro
+                        if resp.status != 200:
+                            logger.warning(
+                                f"Instance {inst.url()} unhealthy: {resp.status}"
+                            )
                             if inst in self.prefill_servers:
                                 prefill_to_remove.append(inst)
                             elif inst in self.decode_servers:
                                 decode_to_remove.append(inst)
                             elif inst in self.mixed_servers:
                                 mixed_to_remove.append(inst)
+                        resp.release()
+                    except Exception as e:
+                        logger.warning(f"Instance {inst.url()} check failed: {e}")
+                        if inst in self.prefill_servers:
+                            prefill_to_remove.append(inst)
+                        elif inst in self.decode_servers:
+                            decode_to_remove.append(inst)
+                        elif inst in self.mixed_servers:
+                            mixed_to_remove.append(inst)
 
                 # remove unhealthy instances under lock
                 async with self.lock:
                     if prefill_to_remove:
                         for inst in prefill_to_remove:
                             self.prefill_servers.remove(inst)
-                            logger.info(f"Removed unhealthy prefill instance: {inst.url()}")
+                            logger.info(
+                                f"Removed unhealthy prefill instance: {inst.url()}"
+                            )
                     if decode_to_remove:
                         for inst in decode_to_remove:
                             self.decode_servers.remove(inst)
-                            logger.info(f"Removed unhealthy decode instance: {inst.url()}")
+                            logger.info(
+                                f"Removed unhealthy decode instance: {inst.url()}"
+                            )
                     if mixed_to_remove:
                         for inst in mixed_to_remove:
                             self.mixed_servers.remove(inst)
-                            logger.info(f"Removed unhealthy mixed instance: {inst.url()}")
+                            logger.info(
+                                f"Removed unhealthy mixed instance: {inst.url()}"
+                            )
 
                 await asyncio.sleep(interval_secs)
 
@@ -435,7 +505,8 @@ class Router:
                     f"Healthy decode instances: {decode_instances}, "
                     f"Healthy mixed instance: {mixed_instance}"
                 )
-
+            except asyncio.CancelledError:
+                break
             except Exception as e:
                 logger.exception(f"Failed to monitor instance health: {e}")
 
@@ -476,12 +547,15 @@ async def health_check():
 async def health_generate():
     """Check all prefill and decode servers are healthy"""
     router = app.state.router
-    async with aiohttp.ClientSession() as session:
-        tasks = [session.get(f"{s.url()}/health") for s in chain(router.prefill_servers, router.decode_servers)]
-        for coro in asyncio.as_completed(tasks):
-            resp = await coro
-            if resp.status != 200:
-                logger.warning(f"Server {resp.url} not healthy: {resp.status}")
+    tasks = [
+        router.session.get(f"{s.url()}/health")
+        for s in chain(router.prefill_servers, router.decode_servers)
+    ]
+    for coro in asyncio.as_completed(tasks):
+        resp = await coro
+        if resp.status != 200:
+            logger.warning(f"Server {resp.url} not healthy: {resp.status}")
+        resp.release()
     return Response(status_code=200)
 
 
@@ -492,6 +566,10 @@ def launch_router(router_args: RouterArgs):
     @app.on_event("startup")
     async def startup_event():
         app.state.router = Router(app.state.router_args)
-        asyncio.create_task(app.state.router.monitor_instance_health(interval_secs=5))
+        await app.state.router.startup()
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        await app.state.router.shutdown()
 
     uvicorn.run(app, host=router_args.host, port=int(router_args.port))
