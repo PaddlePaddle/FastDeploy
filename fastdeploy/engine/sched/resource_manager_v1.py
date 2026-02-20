@@ -214,6 +214,8 @@ class ResourceManagerV1(ResourceManager):
         self.current_reserve_output_block_num = self.init_reserve_output_block_num
         self.current_reserve_output_block_num_float = self.init_reserve_output_block_num
         self.can_relax_prefill_strategy = True
+        # Scheduler-side requests that have not been moved into resource manager waiting queue yet.
+        self.scheduler_unhandled_request_num = 0
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -957,6 +959,8 @@ class ResourceManagerV1(ResourceManager):
                 if self.current_reserve_output_block_num == 0:
                     self.can_relax_prefill_strategy = True
 
+            self._log_console_scheduler_metrics(scheduled_reqs)
+
             self.update_metrics()
 
             return scheduled_reqs, error_reqs
@@ -1010,7 +1014,20 @@ class ResourceManagerV1(ResourceManager):
             result_list = []
             for status, feature in download_from_bos(self.bos_client, features_urls, retry=1):
                 if status:
-                    llm_logger.info(f"request {request.request_id} async download feature: {len(feature)}")
+                    start_download_time = time.time()
+                    if isinstance(feature, np.ndarray):
+                        feature_info = f"type=np.ndarray, shape={feature.shape}, dtype={feature.dtype}"
+                    elif isinstance(feature, list):
+                        feature_info = f"type=list, len={len(feature)}"
+                    else:
+                        feature_info = f"type={type(feature).__name__}"
+
+                    elapsed_time = round((time.time() - start_download_time) * 1000, 2)
+                    llm_logger.info(
+                        f"request {request.request_id} async download feature success: {feature_info}, "
+                        f"elapsed time: {elapsed_time} ms"
+                    )
+
                     result_list.append(feature)
                 else:
                     error_msg = f"request {request.request_id} download features error: {feature}"
@@ -1319,6 +1336,7 @@ class ResourceManagerV1(ResourceManager):
 
     def finish_requests(self, request_ids: Union[str, Iterable[str]]):
         llm_logger.info(f"recycle resources for requests: {request_ids}")
+        self.update_metrics(verbose=True)
         try:
             if isinstance(request_ids, str):
                 request_ids = (request_ids,)
@@ -1330,16 +1348,19 @@ class ResourceManagerV1(ResourceManager):
                 for req_id in request_ids:
                     request = self.requests.get(req_id)
                     if request is None:
+                        llm_logger.error(f"invalid request id: {req_id} self.requests: {self.requests}")
                         continue
                     if request in self.waiting:
                         llm_logger.error(f"request {request.request_id} scheduled into waiting list, after finished")
                         continue
                     if request in self.running:
+                        llm_logger.info(f"finish running request: {req_id}")
                         self.running.remove(request)
                         request.status = RequestStatus.FINISHED
                         need_postprocess_reqs.append(request)
                     if request.request_id in self.to_be_rescheduled_request_id_set:
                         # finished after preempted, blocks have been recycled.
+                        llm_logger.info(f"finish preempeted request: {req_id}")
                         self.to_be_rescheduled_request_id_set.remove(request.request_id)
 
                     self.tasks_list[request.idx] = None
@@ -1362,13 +1383,14 @@ class ResourceManagerV1(ResourceManager):
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
         finally:
-            self.update_metrics()
+            self.update_metrics(verbose=True)
 
     def clear_data(self):
         self.waiting: deque[Request] = deque()
         self.to_be_rescheduled_request_id_set = set()
+        self.update_metrics(verbose=True)
 
-    def update_metrics(self):
+    def update_metrics(self, verbose=False):
         # Update metrics
         num_tasks = sum([1 if task else 0 for task in self.tasks_list])
         blocks_used_by_tasks = set()
@@ -1380,6 +1402,8 @@ class ResourceManagerV1(ResourceManager):
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
         main_process_metrics.num_requests_running.set(len(self.running))
         main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
+        if verbose:
+            llm_logger.info(f"update metrics: running={len(self.running)}, waiting={num_tasks - len(self.running)}")
 
     def log_status(self):
         llm_logger.info(
@@ -1393,3 +1417,56 @@ class ResourceManagerV1(ResourceManager):
             f"requests={self.requests}, "
             f")"
         )
+
+    def _log_console_scheduler_metrics(self, scheduled_reqs: list[Request | ScheduledDecodeTask]) -> None:
+        if not (
+            hasattr(self, "scheduler_metrics_logger")
+            and self.scheduler_metrics_logger is not None
+            and envs.FD_CONSOLE_SCHEDULER_METRICS
+        ):
+            return
+
+        total_blocks = self.total_block_number()
+        free_blocks = self.available_block_num()
+        used_blocks = max(total_blocks - free_blocks, 0)
+        tokens_used = used_blocks * self.config.cache_config.block_size
+        token_usage = used_blocks / total_blocks if total_blocks > 0 else 0.0
+        running_cnt = len(self.running)
+        scheduler_queue_cnt = max(int(getattr(self, "scheduler_unhandled_request_num", 0) or 0), 0)
+        queue_cnt = len(self.waiting) + scheduler_queue_cnt
+
+        prefill_reqs = [r for r in scheduled_reqs if isinstance(r, Request) and r.task_type == RequestType.PREFILL]
+        has_decode = any(getattr(r, "task_type", None) == RequestType.DECODE for r in scheduled_reqs)
+
+        self.scheduler_metrics_logger.log_prefill_batch(
+            prefill_reqs=prefill_reqs,
+            running_cnt=running_cnt,
+            queue_cnt=queue_cnt,
+            tokens_used=tokens_used,
+            token_usage=token_usage,
+        )
+        if has_decode:
+            has_prefill = len(prefill_reqs) > 0
+            graph_opt_cfg = self.config.graph_opt_config
+            use_cudagraph_cfg = bool(getattr(graph_opt_cfg, "use_cudagraph", False))
+            graph_opt_level = int(getattr(graph_opt_cfg, "graph_opt_level", 0) or 0)
+            full_cuda_graph = bool(getattr(graph_opt_cfg, "full_cuda_graph", True))
+            cudagraph_only_prefill = bool(getattr(graph_opt_cfg, "cudagraph_only_prefill", False))
+            use_decode_cudagraph = (
+                has_decode
+                and use_cudagraph_cfg
+                and (
+                    # Reference PR https://github.com/PaddlePaddle/FastDeploy/pull/6196
+                    # Static split graph mode: Prefill+Mixed and Decode can use CUDAGraph.
+                    (graph_opt_level > 0 and not full_cuda_graph)
+                    # Dynamic / static-full modes: decode-only can use CUDAGraph.
+                    or (not has_prefill and not cudagraph_only_prefill)
+                )
+            )
+            self.scheduler_metrics_logger.log_decode_batch(
+                running_cnt=running_cnt,
+                queue_cnt=queue_cnt,
+                tokens_used=tokens_used,
+                token_usage=token_usage,
+                use_cudagraph=use_decode_cudagraph,
+            )

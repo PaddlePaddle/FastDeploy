@@ -15,6 +15,7 @@
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 
 import numpy as np
 from paddleformers.generation import GenerationConfig
@@ -146,6 +147,15 @@ class BaseDataProcessor(ABC):
             tokenizer (AutoTokenizer)
         """
         raise NotImplementedError
+
+    def get_mm_max_tokens_per_item(
+        self,
+        seq_len: int,
+    ) -> Mapping[str, int]:
+        """
+        Return the maximum number of tokens per item for each modality.
+        """
+        return None
 
 
 class DataProcessor(BaseDataProcessor):
@@ -313,17 +323,10 @@ class DataProcessor(BaseDataProcessor):
         # processing prompt_token_ids
         if not request.get("prompt_token_ids"):
             if request.get("prompt"):
-                prompt = request.get("prompt")
                 add_special_tokens = request.get("add_special_tokens", False)
-                assert isinstance(prompt, str) or (
-                    isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
-                ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
-                if isinstance(prompt, list):  # if prompt is a token id list
-                    request["prompt_token_ids"] = prompt
-                else:
-                    request["prompt_token_ids"] = self.text2ids(
-                        request["prompt"], max_model_len, add_special_tokens=add_special_tokens
-                    ).tolist()
+                request["prompt_token_ids"] = self.text2ids(
+                    request["prompt"], max_model_len, add_special_tokens=add_special_tokens
+                ).tolist()
             elif request.get("messages"):
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")

@@ -352,10 +352,11 @@ async def benchmark(
         raise ValueError(f"Unknown backend: {backend}")
 
     print("Starting initial single prompt test run...")
-    test_prompt, test_output_len, test_no = (
+    test_prompt, test_output_len, test_no, test_json_data = (
         input_requests[0].prompt,
         input_requests[0].expected_output_len,
         input_requests[0].no,
+        input_requests[0].json_data,
     )
     test_history_QA = input_requests[0].history_QA
     response_format = input_requests[0].response_format
@@ -381,15 +382,19 @@ async def benchmark(
         extra_body=extra_body,
         response_format=response_format,
         random_flag=random_flag,
+        json_data=test_json_data,
     )
 
     print("test_input:", test_input)
 
     test_output = await request_func(request_func_input=test_input)
 
-    print("test_output:", test_output)
+    if args.multi_turn:
+        out_list, metrics = test_output
+        test_output = out_list[0]
 
     if not test_output.success:
+        print("test_output:", test_output, flush=True)
         raise ValueError(
             f"Initial test run failed - Please make sure that 1. benchmark arguments are correctly specified and 2. the http_proxy and https_proxy are turned off. Error: {test_output.error}"
         )
@@ -452,10 +457,11 @@ async def benchmark(
         benchmark_start_time = time.perf_counter()
 
         async for request in get_request(input_requests, request_rate, burstiness):
-            prompt, output_len, no = (
+            prompt, output_len, no, json_data = (
                 request.prompt,
                 request.expected_output_len,
                 request.no,
+                request.json_data,
             )
             history_QA = request.history_QA
             response_format = request.response_format
@@ -483,6 +489,7 @@ async def benchmark(
                 extra_body=extra_body,
                 response_format=response_format,
                 random_flag=random_flag,
+                json_data=json_data,
             )
             tasks.append(asyncio.create_task(limited_request_func(request_func_input=request_func_input, pbar=pbar)))
 
@@ -538,7 +545,12 @@ async def benchmark(
             semaphore = semaphores[ip]
 
             for request in ip_requests_map[ip]:
-                prompt, output_len, no = request.prompt, request.expected_output_len, request.no
+                prompt, output_len, no, json_data = (
+                    request.prompt,
+                    request.expected_output_len,
+                    request.no,
+                    request.json_data,
+                )
                 history_QA = request.history_QA
 
                 req_model_id, req_model_name = model_id, model_name
@@ -563,11 +575,27 @@ async def benchmark(
                     extra_body=extra_body,
                     response_format=response_format,
                     random_flag=random_flag,
+                    json_data=json_data,
                 )
 
                 tasks.append(asyncio.create_task(limited_request_func_per_ip(req_input, semaphore, pbar)))
 
         outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
+
+    # 多轮对话需要flatten后统计
+    if args.multi_turn:
+        results = outputs
+        session_metrics = []
+        all_outputs = []
+
+        for out_list, metrics in results:
+            session_metrics.append(metrics)
+            all_outputs.extend(out_list)
+
+        outputs = all_outputs
+
+        print(f"####len session_metrics: {len(session_metrics)}")
+        print(f"####len outputs: {len(outputs)}")
 
     outputs.sort(key=lambda x: x.end_timestamp)
 
@@ -749,6 +777,38 @@ async def benchmark(
             )
         )
 
+    def print_metric_from_array(values, metric_key, is_time=True):
+        if not values:
+            print(f"[WARN] metric_key '{metric_key}' empty.")
+            return
+
+        percentiles = [float(p.strip()) for p in args.metric_percentiles.split(",") if p.strip()]
+
+        if is_time:
+            arr = np.array(values) * 1000
+            suffix = "(ms)"
+        else:
+            arr = np.array(values)
+            suffix = ""
+
+        print("{s:{c}^{n}}".format(s=metric_key, n=50, c="-"))
+
+        print(f"{f'Mean {metric_key} {suffix}:':<40} {arr.mean():<10.2f}")
+        print(f"{f'Median {metric_key} {suffix}:':<40} {np.median(arr):<10.2f}")
+        print(f"{f'Min {metric_key} {suffix}:':<40} {arr.min():<10.2f}")
+        print(f"{f'Max {metric_key} {suffix}:':<40} {arr.max():<10.2f}")
+
+        for p in percentiles:
+            v = np.percentile(arr, p)
+            label = f"P{int(p) if int(p) == p else p}"
+            print(f"{f'{label} {metric_key} {suffix}:':<40} {v:<10.2f}")
+
+        # print(f"{f'Successful {metric_key}:':<40} {len(arr):<10}")
+
+    def process_session_metrics(session_metrics, attr, metric_key, is_time=True):
+        values = [getattr(m, attr) for m in session_metrics]
+        print_metric_from_array(values, metric_key, is_time)
+
     def process_one_length(
         # E.g., "ttft"
         metric_attribute_name: str,
@@ -815,6 +875,20 @@ async def benchmark(
     process_one_length("s_input_len", "Input Length", "Infer Input Length")
     process_one_length("reasoning_len", "Reasoning Lenth", "思考长度")
     process_one_length("output_len", "Output Length", "Output Length")
+    # 多轮metrcis统计
+    if args.multi_turn:
+        process_session_metrics(session_metrics, "session_e2e_time", "Session E2EL")
+        process_session_metrics(session_metrics, "pure_llm_time", "Session llm_E2EL")
+        process_session_metrics(session_metrics, "tool_calls", "Tool Calls", is_time=False)
+        process_session_metrics(session_metrics, "input_tokens", "Session Input Tokens", is_time=False)
+        process_session_metrics(session_metrics, "output_tokens", "Session Output Tokens", is_time=False)
+        total_sessions = len(session_metrics)
+        total_requests = len(outputs)
+        success_requests = sum(1 for o in outputs if getattr(o, "success", False))
+        failed_requests = total_requests - success_requests
+        print(f"{'Total sessions :':<40} {total_sessions:<10}")
+        print(f"{'Total requests :':<40} {total_requests:<10}")
+        print(f"{'Failed requests :':<40} {failed_requests:<10}")
 
     print("=" * 50)
 
@@ -1040,6 +1114,9 @@ def main(args: argparse.Namespace):
     np.random.seed(args.seed)
 
     backend = args.backend
+    # 支持多轮对话方式请求，仅支持chat接口
+    if args.multi_turn:
+        backend = "openai-chat-multi-turn"
     model_id = args.model
     model_name = args.served_model_name
     tokenizer_id = args.tokenizer if args.tokenizer is not None else args.model
@@ -1344,6 +1421,11 @@ if __name__ == "__main__":
         "--pd-metrics",
         action="store_true",
         help="请求时增加PD分离参数，metrics: True",
+    )
+    parser.add_argument(
+        "--multi-turn",
+        action="store_true",
+        help="按多轮对话方式请求",
     )
     parser.add_argument(
         "--drop-ratio",

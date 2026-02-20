@@ -18,6 +18,7 @@ from typing import Optional
 
 import paddle
 
+import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
@@ -26,6 +27,7 @@ from fastdeploy.model_executor.layers.linear import (
 )
 from fastdeploy.model_executor.layers.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    deep_gemm,
     quant_weight_ue8m0,
     transform_scale_ue8m0,
 )
@@ -41,14 +43,10 @@ from ..utils import get_sm_version, get_tensor, per_block_cast_to_fp8
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 if current_platform.is_cuda():
-    if get_sm_version() == 100:
-        # SM100 should use PFCC DeepGemm
-        paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-        from deep_gemm import fp8_gemm_nt
-    else:
-        from fastdeploy.model_executor.ops.gpu.deep_gemm import (
-            gemm_fp8_fp8_bf16_nt as fp8_gemm_nt,
-        )
+    try:
+        fp8_gemm_nt = deep_gemm.fp8_gemm_nt
+    except:
+        fp8_gemm_nt = deep_gemm.gemm_fp8_fp8_bf16_nt
 else:
     fp8_gemm_nt = None
 
@@ -289,14 +287,18 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         linear_out = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
         if x.shape[0] == 0:
             return linear_out
-
-        x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            x,
-            using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
-            output_scale_transpose=True,
-            using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
-        )
-        x_scale_tensor = x_scale_tensor.T[: x.shape[0], ...]
+        if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
+            x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
+                x, self.quant_config.weight_block_size[0]
+            )
+        else:
+            x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
+                x,
+                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
+                output_scale_transpose=True,
+                using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
+            )
+            x_scale_tensor = x_scale_tensor.T[: x.shape[0], ...]
         deep_gemm_fp8_gemm_nt(
             x,
             x_scale_tensor,

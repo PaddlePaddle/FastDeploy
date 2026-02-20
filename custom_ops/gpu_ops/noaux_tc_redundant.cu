@@ -61,7 +61,8 @@ std::vector<paddle::Tensor> NoauxTcRedundant(
       redundant_ep_rank_num_plus_one,
       stream);
 
-  return {scores, topk_values, topk_indices};
+  // Return 4 values to match PD_BUILD_STATIC_OP Outputs definition
+  return {scores, topk_values, topk_indices, tokens_per_expert_stats_list};
 }
 
 std::vector<paddle::DataType> NoauxTcRedundantInferDtype(
