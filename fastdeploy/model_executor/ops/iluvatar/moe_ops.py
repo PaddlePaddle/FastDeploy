@@ -17,8 +17,16 @@
 from typing import Optional
 
 import paddle
-from paddle.nn.functional import swiglu
 from paddle.nn.quant import weight_only_linear
+
+try:
+    from paddle.nn.functional import swiglu
+except ImportError:
+
+    def swiglu(x):
+        x, y = paddle.chunk(x, chunks=2, axis=-1)
+        return paddle.nn.functional.silu(x) * y
+
 
 try:
     from fastdeploy.model_executor.ops.iluvatar import w8a16_group_gemm
