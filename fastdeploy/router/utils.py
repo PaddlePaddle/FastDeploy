@@ -116,9 +116,7 @@ def check_service_health(base_url: str, timeout: int = 3) -> bool:
         return False
 
 
-async def check_service_health_async(
-    base_url: str, timeout: int = 3, session: aiohttp.ClientSession = None
-) -> bool:
+async def check_service_health_async(base_url: str, timeout: int = 3, session: aiohttp.ClientSession = None) -> bool:
     """
     Asynchronously check the health status of a service.
 
@@ -151,9 +149,7 @@ async def check_service_health_async(
         if session:
             return await _check(session)
         else:
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=timeout)
-            ) as sess:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as sess:
                 return await _check(sess)
     except aiohttp.ClientError as e:
         print(f"[ERROR] Failed to connect to {url}: {e}")

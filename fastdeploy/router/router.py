@@ -12,8 +12,8 @@ import random
 import traceback
 from dataclasses import dataclass
 from itertools import chain
-from uuid import uuid4
 from typing import Optional
+from uuid import uuid4
 
 import aiohttp
 import uvicorn
@@ -101,12 +101,8 @@ class Router:
         logger.info("Router started at http://{}:{}".format(self.host, self.port))
 
     async def startup(self):
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=self.timeout)
-        )
-        self.monitor_task = asyncio.create_task(
-            self.monitor_instance_health(interval_secs=5)
-        )
+        self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout))
+        self.monitor_task = asyncio.create_task(self.monitor_instance_health(interval_secs=5))
 
     async def shutdown(self):
         if self.monitor_task:
@@ -246,10 +242,7 @@ class Router:
     async def _generate(
         self, modified_request, urls, return_result_url_index=-1, endpoint="v1/chat/completions"
     ) -> ORJSONResponse:
-        tasks = [
-            self.session.post(f"{url}/{endpoint}", json=modified_request)
-            for url in urls
-        ]
+        tasks = [self.session.post(f"{url}/{endpoint}", json=modified_request) for url in urls]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Release unused responses and handle exceptions
@@ -262,18 +255,13 @@ class Router:
 
         target_result = results[return_result_url_index]
         ret_json = await target_result.json()
-        return ORJSONResponse(
-            content=ret_json, status_code=target_result.status
-        )
+        return ORJSONResponse(content=ret_json, status_code=target_result.status)
 
     async def _generate_stream(
         self, modified_request, urls, return_result_url_index=-1, endpoint="v1/chat/completions"
     ):
         async def stream_results():
-            tasks = [
-                self.session.post(f"{url}/{endpoint}", json=modified_request)
-                for url in urls
-            ]
+            tasks = [self.session.post(f"{url}/{endpoint}", json=modified_request) for url in urls]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Release unused responses and handle exceptions
@@ -287,9 +275,7 @@ class Router:
             target_result = results[return_result_url_index]
 
             AIOHTTP_STREAM_READ_CHUNK_SIZE = 1024 * 64  # prevent aiohttp's "Chunk too big" error
-            async for chunk in target_result.content.iter_chunked(
-                AIOHTTP_STREAM_READ_CHUNK_SIZE
-            ):
+            async for chunk in target_result.content.iter_chunked(AIOHTTP_STREAM_READ_CHUNK_SIZE):
                 logger.debug(f"receive response chunk: {chunk}")
                 yield chunk
 
@@ -362,9 +348,7 @@ class Router:
                                 if round_idx > 0 and chunk_idx == 0:
                                     continue
 
-                                assert chunk.startswith(
-                                    "data: "
-                                ), f"Invalid response chunk: {chunk}"
+                                assert chunk.startswith("data: "), f"Invalid response chunk: {chunk}"
                                 if chunk.startswith("data: [DONE]"):
                                     if is_real_finished:
                                         yield chunk + "\n\n"
@@ -374,16 +358,12 @@ class Router:
                                     if not choices:
                                         continue
                                     delta = payload["choices"][0]["delta"]
-                                    finish_reason = payload["choices"][0].get(
-                                        "finish_reason"
-                                    )
+                                    finish_reason = payload["choices"][0].get("finish_reason")
 
                                     if not input_ids and len(delta["prompt_token_ids"]) > 0:
                                         input_ids = delta["prompt_token_ids"]
 
-                                    if finish_reason == "stop" or (
-                                        is_last_round and finish_reason == "length"
-                                    ):
+                                    if finish_reason == "stop" or (is_last_round and finish_reason == "length"):
                                         is_real_finished = True
 
                                     token_ids = delta.get("completion_token_ids")
@@ -436,18 +416,9 @@ class Router:
                 mixed_to_remove = []
 
                 # check  servers
-                prefill_tasks = [
-                    (inst, self.session.get(f"{inst.url()}/health"))
-                    for inst in self.prefill_servers
-                ]
-                decode_tasks = [
-                    (inst, self.session.get(f"{inst.url()}/health"))
-                    for inst in self.decode_servers
-                ]
-                mixed_tasks = [
-                    (inst, self.session.get(f"{inst.url()}/health"))
-                    for inst in self.mixed_servers
-                ]
+                prefill_tasks = [(inst, self.session.get(f"{inst.url()}/health")) for inst in self.prefill_servers]
+                decode_tasks = [(inst, self.session.get(f"{inst.url()}/health")) for inst in self.decode_servers]
+                mixed_tasks = [(inst, self.session.get(f"{inst.url()}/health")) for inst in self.mixed_servers]
 
                 # gather all tasks concurrently
                 all_tasks = prefill_tasks + decode_tasks + mixed_tasks
@@ -455,9 +426,7 @@ class Router:
                     try:
                         resp = await coro
                         if resp.status != 200:
-                            logger.warning(
-                                f"Instance {inst.url()} unhealthy: {resp.status}"
-                            )
+                            logger.warning(f"Instance {inst.url()} unhealthy: {resp.status}")
                             if inst in self.prefill_servers:
                                 prefill_to_remove.append(inst)
                             elif inst in self.decode_servers:
@@ -479,21 +448,15 @@ class Router:
                     if prefill_to_remove:
                         for inst in prefill_to_remove:
                             self.prefill_servers.remove(inst)
-                            logger.info(
-                                f"Removed unhealthy prefill instance: {inst.url()}"
-                            )
+                            logger.info(f"Removed unhealthy prefill instance: {inst.url()}")
                     if decode_to_remove:
                         for inst in decode_to_remove:
                             self.decode_servers.remove(inst)
-                            logger.info(
-                                f"Removed unhealthy decode instance: {inst.url()}"
-                            )
+                            logger.info(f"Removed unhealthy decode instance: {inst.url()}")
                     if mixed_to_remove:
                         for inst in mixed_to_remove:
                             self.mixed_servers.remove(inst)
-                            logger.info(
-                                f"Removed unhealthy mixed instance: {inst.url()}"
-                            )
+                            logger.info(f"Removed unhealthy mixed instance: {inst.url()}")
 
                 await asyncio.sleep(interval_secs)
 
@@ -547,10 +510,7 @@ async def health_check():
 async def health_generate():
     """Check all prefill and decode servers are healthy"""
     router = app.state.router
-    tasks = [
-        router.session.get(f"{s.url()}/health")
-        for s in chain(router.prefill_servers, router.decode_servers)
-    ]
+    tasks = [router.session.get(f"{s.url()}/health") for s in chain(router.prefill_servers, router.decode_servers)]
     for coro in asyncio.as_completed(tasks):
         resp = await coro
         if resp.status != 200:
