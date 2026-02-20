@@ -58,7 +58,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
             load_weights_from_cache(model, weights_iterator)
         else:
             model.load_weights(weights_iterator)
-
+        # Execute post-processing after weight loading
         process_final_after_loading(model, fd_config)
 
         self.clean_memory_fragments()
