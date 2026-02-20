@@ -139,7 +139,7 @@ def limit_thinking_content_length(
             step_idx,
             limit_think_status,
             stop_flags,
-            eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
+            eos_token_ids,  # Address the issue where the model outputs EOS tokens during the reasoning process due to model performance problems
             think_end_id,
         )
     elif limit_strategy == "\n</think>\n\n":
@@ -179,7 +179,7 @@ def speculate_limit_thinking_content_length(
             limit_think_status,
             accept_num,
             stop_flags,
-            eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
+            eos_token_ids,  # Address the issue where the model outputs EOS tokens during the reasoning process due to model performance problems
             think_end_id,
         )
     elif limit_strategy == "\n</think>\n\n":
@@ -882,6 +882,7 @@ def rebuild_padding(
             seq_lens_decoder,
             seq_lens_encoder,
             batch_id_per_token_output,
+            cu_seqlens_q_output,
             first_token_out,
             enable_logprob,
         )

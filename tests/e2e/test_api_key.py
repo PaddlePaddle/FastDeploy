@@ -79,6 +79,8 @@ def start_api_server(api_key_cli: Optional[list[str]] = None, api_key_env: Optio
         "wint4",
         "--graph-optimization-config",
         '{"cudagraph_capture_sizes": [1], "use_cudagraph":true}',
+        "--load-choices",
+        "dummy",
     ]
 
     if api_key_cli is not None:
