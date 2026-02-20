@@ -245,13 +245,18 @@ class Router:
         tasks = [self.session.post(f"{url}/{endpoint}", json=modified_request) for url in urls]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Release unused responses and handle exceptions
+        # Check for exceptions first to restore fail-fast behavior
+        exception = next((r for r in results if isinstance(r, Exception)), None)
+
+        # Release all responses if there is an exception, or unused responses otherwise
         for i, result in enumerate(results):
-            if i != return_result_url_index:
-                if not isinstance(result, Exception):
-                    result.release()
-            elif isinstance(result, Exception):
-                raise result
+            if isinstance(result, Exception):
+                continue
+            if exception or i != return_result_url_index:
+                result.release()
+
+        if exception:
+            raise exception
 
         target_result = results[return_result_url_index]
         ret_json = await target_result.json()
@@ -264,13 +269,18 @@ class Router:
             tasks = [self.session.post(f"{url}/{endpoint}", json=modified_request) for url in urls]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Release unused responses and handle exceptions
+            # Check for exceptions first to restore fail-fast behavior
+            exception = next((r for r in results if isinstance(r, Exception)), None)
+
+            # Release all responses if there is an exception, or unused responses otherwise
             for i, result in enumerate(results):
-                if i != return_result_url_index:
-                    if not isinstance(result, Exception):
-                        result.release()
-                elif isinstance(result, Exception):
-                    raise result
+                if isinstance(result, Exception):
+                    continue
+                if exception or i != return_result_url_index:
+                    result.release()
+
+            if exception:
+                raise exception
 
             target_result = results[return_result_url_index]
 
