@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
-from unittest.mock import MagicMock, patch
+import importlib.util
+import os
 import sys
 import types
-import os
-import importlib.util
+import unittest
+from unittest.mock import MagicMock, patch
 
 # Mock essential dependencies BEFORE importing the module under test
 mock_paddle = MagicMock()
@@ -28,7 +28,7 @@ sys.modules["numpy"] = mock_numpy
 
 # Mock fastdeploy top-level package
 fd = types.ModuleType("fastdeploy")
-fd.__path__ = [] # Ensure it is treated as a package
+fd.__path__ = []  # Ensure it is treated as a package
 sys.modules["fastdeploy"] = fd
 fd.envs = MagicMock()
 fd.envs.FD_DISABLED_RECOVER = "0"
@@ -112,12 +112,28 @@ mock_ops_gpu = types.ModuleType("fastdeploy.model_executor.ops.gpu")
 mock_ops_gpu.rebuild_padding = MagicMock(return_value="gpu_result")
 # Mock other functions imported from ops.gpu
 for attr in [
-    "get_padding_offset", "save_output", "set_stop_value_multi_ends", "step_paddle", "update_inputs",
-    "save_output_topk", "speculate_get_seq_lens_output", "speculate_limit_thinking_content_length_v1",
-    "speculate_limit_thinking_content_length_v2", "speculate_save_output", "speculate_save_output_topk",
-    "speculate_set_stop_value_multi_seqs", "speculate_set_value_by_flags_and_idx", "speculate_step_paddle",
-    "speculate_step_reschedule", "speculate_step_system_cache", "speculate_update", "step_reschedule",
-    "step_system_cache", "update_inputs_v1", "limit_thinking_content_length_v1", "limit_thinking_content_length_v2"
+    "get_padding_offset",
+    "save_output",
+    "set_stop_value_multi_ends",
+    "step_paddle",
+    "update_inputs",
+    "save_output_topk",
+    "speculate_get_seq_lens_output",
+    "speculate_limit_thinking_content_length_v1",
+    "speculate_limit_thinking_content_length_v2",
+    "speculate_save_output",
+    "speculate_save_output_topk",
+    "speculate_set_stop_value_multi_seqs",
+    "speculate_set_value_by_flags_and_idx",
+    "speculate_step_paddle",
+    "speculate_step_reschedule",
+    "speculate_step_system_cache",
+    "speculate_update",
+    "step_reschedule",
+    "step_system_cache",
+    "update_inputs_v1",
+    "limit_thinking_content_length_v1",
+    "limit_thinking_content_length_v2",
 ]:
     setattr(mock_ops_gpu, attr, MagicMock())
 sys.modules["fastdeploy.model_executor.ops.gpu"] = mock_ops_gpu
@@ -129,17 +145,21 @@ sys.modules["fastdeploy.model_executor.ops.cpu"] = mock_ops_cpu
 mock_ops_iluvatar = types.ModuleType("fastdeploy.model_executor.ops.iluvatar")
 mock_ops_iluvatar.rebuild_padding = MagicMock(return_value="iluvatar_result")
 for attr in [
-    "get_padding_offset", "limit_thinking_content_length_v1", "limit_thinking_content_length_v2",
-    "save_output", "set_stop_value_multi_ends", "step_paddle", "update_inputs", "update_inputs_v1"
+    "get_padding_offset",
+    "limit_thinking_content_length_v1",
+    "limit_thinking_content_length_v2",
+    "save_output",
+    "set_stop_value_multi_ends",
+    "step_paddle",
+    "update_inputs",
+    "update_inputs_v1",
 ]:
     setattr(mock_ops_iluvatar, attr, MagicMock())
 sys.modules["fastdeploy.model_executor.ops.iluvatar"] = mock_ops_iluvatar
 
 mock_ops_gcu = types.ModuleType("fastdeploy.model_executor.ops.gcu")
 mock_ops_gcu.rebuild_padding = MagicMock(return_value="gcu_result")
-for attr in [
-    "get_padding_offset", "save_output", "set_stop_value_multi_ends", "update_inputs"
-]:
+for attr in ["get_padding_offset", "save_output", "set_stop_value_multi_ends", "update_inputs"]:
     setattr(mock_ops_gcu, attr, MagicMock())
 sys.modules["fastdeploy.model_executor.ops.gcu"] = mock_ops_gcu
 
@@ -152,6 +172,7 @@ ppp = importlib.util.module_from_spec(spec)
 sys.modules[module_name] = ppp
 spec.loader.exec_module(ppp)
 
+
 class TestRebuildPaddingDispatch(unittest.TestCase):
     def setUp(self):
         # Reset the cached implementation before each test
@@ -159,15 +180,15 @@ class TestRebuildPaddingDispatch(unittest.TestCase):
 
     def test_cuda_dispatch(self):
         # Must patch ppp.current_platform because it was imported into ppp namespace
-        with patch.object(ppp.current_platform, "is_cuda", return_value=True), \
-             patch.object(ppp.current_platform, "is_iluvatar", return_value=False), \
-             patch.object(ppp.current_platform, "is_gcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_dcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_maca", return_value=False), \
-             patch.object(ppp.current_platform, "is_intel_hpu", return_value=False):
-            res = ppp.rebuild_padding(
-                MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock()
-            )
+        with (
+            patch.object(ppp.current_platform, "is_cuda", return_value=True),
+            patch.object(ppp.current_platform, "is_iluvatar", return_value=False),
+            patch.object(ppp.current_platform, "is_gcu", return_value=False),
+            patch.object(ppp.current_platform, "is_dcu", return_value=False),
+            patch.object(ppp.current_platform, "is_maca", return_value=False),
+            patch.object(ppp.current_platform, "is_intel_hpu", return_value=False),
+        ):
+            res = ppp.rebuild_padding(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock())
             self.assertEqual(res, "gpu_result")
             self.assertIsNotNone(ppp._rebuild_padding_impl)
             pid, impl = ppp._rebuild_padding_impl
@@ -175,15 +196,15 @@ class TestRebuildPaddingDispatch(unittest.TestCase):
             self.assertEqual(impl, mock_ops_gpu.rebuild_padding)
 
     def test_dcu_dispatch(self):
-        with patch.object(ppp.current_platform, "is_cuda", return_value=False), \
-             patch.object(ppp.current_platform, "is_iluvatar", return_value=False), \
-             patch.object(ppp.current_platform, "is_gcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_dcu", return_value=True), \
-             patch.object(ppp.current_platform, "is_maca", return_value=False), \
-             patch.object(ppp.current_platform, "is_intel_hpu", return_value=False):
-            res = ppp.rebuild_padding(
-                MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock()
-            )
+        with (
+            patch.object(ppp.current_platform, "is_cuda", return_value=False),
+            patch.object(ppp.current_platform, "is_iluvatar", return_value=False),
+            patch.object(ppp.current_platform, "is_gcu", return_value=False),
+            patch.object(ppp.current_platform, "is_dcu", return_value=True),
+            patch.object(ppp.current_platform, "is_maca", return_value=False),
+            patch.object(ppp.current_platform, "is_intel_hpu", return_value=False),
+        ):
+            res = ppp.rebuild_padding(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock())
             self.assertEqual(res, "gpu_result")
             pid, impl = ppp._rebuild_padding_impl
             self.assertEqual(pid, os.getpid())
@@ -191,77 +212,82 @@ class TestRebuildPaddingDispatch(unittest.TestCase):
             self.assertNotEqual(impl, mock_ops_gpu.rebuild_padding)
 
     def test_iluvatar_dispatch(self):
-        with patch.object(ppp.current_platform, "is_cuda", return_value=False), \
-             patch.object(ppp.current_platform, "is_iluvatar", return_value=True), \
-             patch.object(ppp.current_platform, "is_gcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_dcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_maca", return_value=False), \
-             patch.object(ppp.current_platform, "is_intel_hpu", return_value=False):
-            res = ppp.rebuild_padding(
-                MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock()
-            )
+        with (
+            patch.object(ppp.current_platform, "is_cuda", return_value=False),
+            patch.object(ppp.current_platform, "is_iluvatar", return_value=True),
+            patch.object(ppp.current_platform, "is_gcu", return_value=False),
+            patch.object(ppp.current_platform, "is_dcu", return_value=False),
+            patch.object(ppp.current_platform, "is_maca", return_value=False),
+            patch.object(ppp.current_platform, "is_intel_hpu", return_value=False),
+        ):
+            res = ppp.rebuild_padding(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock())
             self.assertEqual(res, "iluvatar_result")
 
     def test_gcu_dispatch(self):
-        with patch.object(ppp.current_platform, "is_cuda", return_value=False), \
-             patch.object(ppp.current_platform, "is_iluvatar", return_value=False), \
-             patch.object(ppp.current_platform, "is_gcu", return_value=True), \
-             patch.object(ppp.current_platform, "is_dcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_maca", return_value=False), \
-             patch.object(ppp.current_platform, "is_intel_hpu", return_value=False):
-            res = ppp.rebuild_padding(
-                MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock()
-            )
+        with (
+            patch.object(ppp.current_platform, "is_cuda", return_value=False),
+            patch.object(ppp.current_platform, "is_iluvatar", return_value=False),
+            patch.object(ppp.current_platform, "is_gcu", return_value=True),
+            patch.object(ppp.current_platform, "is_dcu", return_value=False),
+            patch.object(ppp.current_platform, "is_maca", return_value=False),
+            patch.object(ppp.current_platform, "is_intel_hpu", return_value=False),
+        ):
+            res = ppp.rebuild_padding(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock())
             self.assertEqual(res, "gcu_result")
 
     def test_cpu_dispatch(self):
-        with patch.object(ppp.current_platform, "is_cuda", return_value=False), \
-             patch.object(ppp.current_platform, "is_iluvatar", return_value=False), \
-             patch.object(ppp.current_platform, "is_gcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_dcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_maca", return_value=False), \
-             patch.object(ppp.current_platform, "is_intel_hpu", return_value=False), \
-             patch.object(ppp.current_platform, "is_cpu", return_value=True):
-            res = ppp.rebuild_padding(
-                MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock()
-            )
+        with (
+            patch.object(ppp.current_platform, "is_cuda", return_value=False),
+            patch.object(ppp.current_platform, "is_iluvatar", return_value=False),
+            patch.object(ppp.current_platform, "is_gcu", return_value=False),
+            patch.object(ppp.current_platform, "is_dcu", return_value=False),
+            patch.object(ppp.current_platform, "is_maca", return_value=False),
+            patch.object(ppp.current_platform, "is_intel_hpu", return_value=False),
+            patch.object(ppp.current_platform, "is_cpu", return_value=True),
+        ):
+            res = ppp.rebuild_padding(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock())
             self.assertEqual(res, "cpu_result")
 
     def test_maca_dispatch(self):
-        with patch.object(ppp.current_platform, "is_cuda", return_value=False), \
-             patch.object(ppp.current_platform, "is_iluvatar", return_value=False), \
-             patch.object(ppp.current_platform, "is_gcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_dcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_maca", return_value=True), \
-             patch.object(ppp.current_platform, "is_intel_hpu", return_value=False), \
-             patch.object(ppp.current_platform, "is_cpu", return_value=False):
-            res = ppp.rebuild_padding(
-                MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock()
-            )
+        with (
+            patch.object(ppp.current_platform, "is_cuda", return_value=False),
+            patch.object(ppp.current_platform, "is_iluvatar", return_value=False),
+            patch.object(ppp.current_platform, "is_gcu", return_value=False),
+            patch.object(ppp.current_platform, "is_dcu", return_value=False),
+            patch.object(ppp.current_platform, "is_maca", return_value=True),
+            patch.object(ppp.current_platform, "is_intel_hpu", return_value=False),
+            patch.object(ppp.current_platform, "is_cpu", return_value=False),
+        ):
+            res = ppp.rebuild_padding(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock())
             self.assertEqual(res, "gpu_result")
 
     def test_pid_change(self):
-        with patch.object(ppp.current_platform, "is_cuda", return_value=False), \
-             patch.object(ppp.current_platform, "is_iluvatar", return_value=False), \
-             patch.object(ppp.current_platform, "is_gcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_dcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_maca", return_value=False), \
-             patch.object(ppp.current_platform, "is_intel_hpu", return_value=False), \
-             patch.object(ppp.current_platform, "is_cpu", return_value=True):
+        with (
+            patch.object(ppp.current_platform, "is_cuda", return_value=False),
+            patch.object(ppp.current_platform, "is_iluvatar", return_value=False),
+            patch.object(ppp.current_platform, "is_gcu", return_value=False),
+            patch.object(ppp.current_platform, "is_dcu", return_value=False),
+            patch.object(ppp.current_platform, "is_maca", return_value=False),
+            patch.object(ppp.current_platform, "is_intel_hpu", return_value=False),
+            patch.object(ppp.current_platform, "is_cpu", return_value=True),
+        ):
             ppp.rebuild_padding(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock())
             self.assertEqual(ppp._rebuild_padding_impl[0], os.getpid())
 
         ppp._rebuild_padding_impl = (os.getpid() + 1, ppp._rebuild_padding_impl[1])
 
-        with patch.object(ppp.current_platform, "is_cuda", return_value=False), \
-             patch.object(ppp.current_platform, "is_iluvatar", return_value=False), \
-             patch.object(ppp.current_platform, "is_gcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_dcu", return_value=False), \
-             patch.object(ppp.current_platform, "is_maca", return_value=False), \
-             patch.object(ppp.current_platform, "is_intel_hpu", return_value=False), \
-             patch.object(ppp.current_platform, "is_cpu", return_value=True):
+        with (
+            patch.object(ppp.current_platform, "is_cuda", return_value=False),
+            patch.object(ppp.current_platform, "is_iluvatar", return_value=False),
+            patch.object(ppp.current_platform, "is_gcu", return_value=False),
+            patch.object(ppp.current_platform, "is_dcu", return_value=False),
+            patch.object(ppp.current_platform, "is_maca", return_value=False),
+            patch.object(ppp.current_platform, "is_intel_hpu", return_value=False),
+            patch.object(ppp.current_platform, "is_cpu", return_value=True),
+        ):
             ppp.rebuild_padding(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock())
             self.assertEqual(ppp._rebuild_padding_impl[0], os.getpid())
+
 
 if __name__ == "__main__":
     unittest.main()
