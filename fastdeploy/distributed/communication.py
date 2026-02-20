@@ -102,8 +102,34 @@ try:
         return input_
 
 except:
-    tensor_model_parallel_all_reduce = None
-    decode_alltoall_transpose = None
+
+    def tensor_model_parallel_all_reduce(
+        input_: paddle.Tensor,
+        group_: paddle.distributed.communication.group.Group = None,
+    ) -> paddle.Tensor:
+        """All-reduce the input tensor across model parallel group."""
+        if input_.shape[0] == 0:
+            return input_
+        global _TP_AR
+        if _TP_AR is not None and _TP_AR.should_custom_ar(input_):
+            # TODO: supports different_group custom allreduce
+            input_ = _TP_AR.custom_all_reduce(input_)
+        elif paddle.in_dynamic_mode():
+            if group_ is not None:
+                dist.all_reduce(input_, group=group_)
+            else:
+                hcg = fleet.get_hybrid_communicate_group()
+                mp_group = hcg.get_model_parallel_group()
+                dist.all_reduce(input_, group=mp_group)
+        else:
+            dist.all_reduce(input_)
+        return input_
+
+    def decode_alltoall_transpose(
+        input_: paddle.Tensor,
+        out: paddle.Tensor = None,
+    ) -> paddle.Tensor:
+        raise RuntimeError("decode_alltoall_transpose requires custom ops which failed to load.")
 
 from paddle.distributed.communication import stream
 from paddle.distributed.communication.reduce import ReduceOp
