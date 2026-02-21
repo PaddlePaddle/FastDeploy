@@ -530,6 +530,13 @@ def enable_batch_invariant_mode():
         # (ex: Could not import module 'PretrainedTokenizer' or No module named 'paddle.distributed.tensor')
         # Other side effects have not been observed yet, but they should be watched out for in the future.
     else:
+        # If compat is missing, assume it's an old version or specific environment
+        # where we might want to fail gracefully or skip enabling this mode.
+        # However, the original code raised RuntimeError, so we should stick to that behavior
+        # BUT, the issue is that in HPU environment, this file might be imported even if not used.
+        # The function `enable_batch_invariant_mode` is called explicitly, so RuntimeError is correct here
+        # IF the user tries to enable it.
+        # But for import time safety, we don't need changes here as this is inside a function.
         raise RuntimeError(
             "Unable to enable batch-invariant mode: Paddle version is too old. " "Please upgrade PaddlePaddle."
         )
