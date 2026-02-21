@@ -284,10 +284,13 @@ class Router:
 
             target_result = results[return_result_url_index]
 
-            AIOHTTP_STREAM_READ_CHUNK_SIZE = 1024 * 64  # prevent aiohttp's "Chunk too big" error
-            async for chunk in target_result.content.iter_chunked(AIOHTTP_STREAM_READ_CHUNK_SIZE):
-                logger.debug(f"receive response chunk: {chunk}")
-                yield chunk
+            try:
+                AIOHTTP_STREAM_READ_CHUNK_SIZE = 1024 * 64  # prevent aiohttp's "Chunk too big" error
+                async for chunk in target_result.content.iter_chunked(AIOHTTP_STREAM_READ_CHUNK_SIZE):
+                    logger.debug(f"receive response chunk: {chunk}")
+                    yield chunk
+            finally:
+                target_result.release()
 
         return StreamingResponse(stream_results(), media_type="text/event-stream")
 
@@ -338,64 +341,65 @@ class Router:
                     text = await resp.text()
                     raise RuntimeError(f"Request failed: {resp.status}, body={text}")
 
-                buffer = b""
-                chunk_idx = -1
-                is_real_finished = False
-                async for raw_chunk in resp.content.iter_chunked(64 * 1024):
-                    try:
-                        buffer += raw_chunk
+                try:
+                    buffer = b""
+                    chunk_idx = -1
+                    is_real_finished = False
+                    async for raw_chunk in resp.content.iter_chunked(64 * 1024):
+                        try:
+                            buffer += raw_chunk
 
-                        while b"\n\n" in buffer:
-                            event_bytes, buffer = buffer.split(b"\n\n", 1)
-                            event_str = event_bytes.decode("utf-8")
+                            while b"\n\n" in buffer:
+                                event_bytes, buffer = buffer.split(b"\n\n", 1)
+                                event_str = event_bytes.decode("utf-8")
 
-                            for chunk in event_str.splitlines():
-                                logger.debug(f"receive response chunk: {chunk}")
-                                if not chunk:
-                                    continue
-
-                                chunk_idx += 1
-                                if round_idx > 0 and chunk_idx == 0:
-                                    continue
-
-                                assert chunk.startswith("data: "), f"Invalid response chunk: {chunk}"
-                                if chunk.startswith("data: [DONE]"):
-                                    if is_real_finished:
-                                        yield chunk + "\n\n"
-                                else:
-                                    payload = json.loads(chunk[5:])
-                                    choices = payload.get("choices", [])
-                                    if not choices:
+                                for chunk in event_str.splitlines():
+                                    logger.debug(f"receive response chunk: {chunk}")
+                                    if not chunk:
                                         continue
-                                    delta = payload["choices"][0]["delta"]
-                                    finish_reason = payload["choices"][0].get("finish_reason")
 
-                                    if not input_ids and len(delta["prompt_token_ids"]) > 0:
-                                        input_ids = delta["prompt_token_ids"]
+                                    chunk_idx += 1
+                                    if round_idx > 0 and chunk_idx == 0:
+                                        continue
 
-                                    if finish_reason == "stop" or (is_last_round and finish_reason == "length"):
-                                        is_real_finished = True
+                                    assert chunk.startswith("data: "), f"Invalid response chunk: {chunk}"
+                                    if chunk.startswith("data: [DONE]"):
+                                        if is_real_finished:
+                                            yield chunk + "\n\n"
+                                    else:
+                                        payload = json.loads(chunk[5:])
+                                        choices = payload.get("choices", [])
+                                        if not choices:
+                                            continue
+                                        delta = payload["choices"][0]["delta"]
+                                        finish_reason = payload["choices"][0].get("finish_reason")
 
-                                    token_ids = delta.get("completion_token_ids")
-                                    if (
-                                        token_ids
-                                        and isinstance(token_ids, list)
-                                        and (finish_reason is None or is_real_finished)
-                                    ):
-                                        output_ids.extend(token_ids)
-                                        generated_tokens += len(token_ids)
+                                        if not input_ids and len(delta["prompt_token_ids"]) > 0:
+                                            input_ids = delta["prompt_token_ids"]
 
-                                    if finish_reason is None or is_real_finished:
-                                        yield chunk + "\n\n"
+                                        if finish_reason == "stop" or (is_last_round and finish_reason == "length"):
+                                            is_real_finished = True
 
-                    except Exception as e:
-                        logger.error(
-                            f"Error decoding response chunk: {raw_chunk}, round_idx: {round_idx}, "
-                            f"chunk_idx: {chunk_idx}, error: {e}, traceback:{traceback.format_exc()}"
-                        )
-                        pass
+                                        token_ids = delta.get("completion_token_ids")
+                                        if (
+                                            token_ids
+                                            and isinstance(token_ids, list)
+                                            and (finish_reason is None or is_real_finished)
+                                        ):
+                                            output_ids.extend(token_ids)
+                                            generated_tokens += len(token_ids)
 
-                resp.release()
+                                        if finish_reason is None or is_real_finished:
+                                            yield chunk + "\n\n"
+
+                        except Exception as e:
+                            logger.error(
+                                f"Error decoding response chunk: {raw_chunk}, round_idx: {round_idx}, "
+                                f"chunk_idx: {chunk_idx}, error: {e}, traceback:{traceback.format_exc()}"
+                            )
+                            pass
+                finally:
+                    resp.release()
 
                 if not is_real_finished:
                     expected_tokens = (step_max_tokens - 1) * (round_idx + 1)
@@ -426,15 +430,32 @@ class Router:
                 mixed_to_remove = []
 
                 # check  servers
-                prefill_tasks = [(inst, self.session.get(f"{inst.url()}/health")) for inst in self.prefill_servers]
-                decode_tasks = [(inst, self.session.get(f"{inst.url()}/health")) for inst in self.decode_servers]
-                mixed_tasks = [(inst, self.session.get(f"{inst.url()}/health")) for inst in self.mixed_servers]
+                timeout = aiohttp.ClientTimeout(total=3)
+                prefill_tasks = [
+                    (inst, self.session.get(f"{inst.url()}/health", timeout=timeout)) for inst in self.prefill_servers
+                ]
+                decode_tasks = [
+                    (inst, self.session.get(f"{inst.url()}/health", timeout=timeout)) for inst in self.decode_servers
+                ]
+                mixed_tasks = [
+                    (inst, self.session.get(f"{inst.url()}/health", timeout=timeout)) for inst in self.mixed_servers
+                ]
 
                 # gather all tasks concurrently
                 all_tasks = prefill_tasks + decode_tasks + mixed_tasks
-                for inst, coro in all_tasks:
+                if not all_tasks:
+                    await asyncio.sleep(interval_secs)
+                    continue
+
+                insts = [t[0] for t in all_tasks]
+                coros = [t[1] for t in all_tasks]
+                results = await asyncio.gather(*coros, return_exceptions=True)
+
+                for inst, result in zip(insts, results):
                     try:
-                        resp = await coro
+                        if isinstance(result, Exception):
+                            raise result
+                        resp = result
                         if resp.status != 200:
                             logger.warning(f"Instance {inst.url()} unhealthy: {resp.status}")
                             if inst in self.prefill_servers:
@@ -520,7 +541,11 @@ async def health_check():
 async def health_generate():
     """Check all prefill and decode servers are healthy"""
     router = app.state.router
-    tasks = [router.session.get(f"{s.url()}/health") for s in chain(router.prefill_servers, router.decode_servers)]
+    timeout = aiohttp.ClientTimeout(total=3)
+    tasks = [
+        router.session.get(f"{s.url()}/health", timeout=timeout)
+        for s in chain(router.prefill_servers, router.decode_servers)
+    ]
     for coro in asyncio.as_completed(tasks):
         resp = await coro
         if resp.status != 200:
