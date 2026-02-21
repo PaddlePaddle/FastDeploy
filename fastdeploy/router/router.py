@@ -127,7 +127,7 @@ class Router:
         ):
             raise ValueError(f"Invalid instance role: {inst_info.role}, splitwise: {self.splitwise}")
 
-        if not await check_service_health_async(inst_info.url(), session=self.session):
+        if not await check_service_health_async(inst_info.url()):
             raise RuntimeError(f"Instance {inst_info} is not healthy")
 
         async with self.lock:
@@ -431,48 +431,42 @@ class Router:
 
                 # check  servers
                 timeout = aiohttp.ClientTimeout(total=3)
-                prefill_tasks = [
-                    (inst, self.session.get(f"{inst.url()}/health", timeout=timeout)) for inst in self.prefill_servers
-                ]
-                decode_tasks = [
-                    (inst, self.session.get(f"{inst.url()}/health", timeout=timeout)) for inst in self.decode_servers
-                ]
-                mixed_tasks = [
-                    (inst, self.session.get(f"{inst.url()}/health", timeout=timeout)) for inst in self.mixed_servers
-                ]
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    prefill_tasks = [(inst, session.get(f"{inst.url()}/health")) for inst in self.prefill_servers]
+                    decode_tasks = [(inst, session.get(f"{inst.url()}/health")) for inst in self.decode_servers]
+                    mixed_tasks = [(inst, session.get(f"{inst.url()}/health")) for inst in self.mixed_servers]
 
-                # gather all tasks concurrently
-                all_tasks = prefill_tasks + decode_tasks + mixed_tasks
-                if not all_tasks:
-                    await asyncio.sleep(interval_secs)
-                    continue
+                    # gather all tasks concurrently
+                    all_tasks = prefill_tasks + decode_tasks + mixed_tasks
+                    if not all_tasks:
+                        await asyncio.sleep(interval_secs)
+                        continue
 
-                insts = [t[0] for t in all_tasks]
-                coros = [t[1] for t in all_tasks]
-                results = await asyncio.gather(*coros, return_exceptions=True)
+                    insts = [t[0] for t in all_tasks]
+                    coros = [t[1] for t in all_tasks]
+                    results = await asyncio.gather(*coros, return_exceptions=True)
 
-                for inst, result in zip(insts, results):
-                    try:
-                        if isinstance(result, Exception):
-                            raise result
-                        resp = result
-                        if resp.status != 200:
-                            logger.warning(f"Instance {inst.url()} unhealthy: {resp.status}")
+                    for inst, result in zip(insts, results):
+                        try:
+                            if isinstance(result, Exception):
+                                raise result
+                            resp = result
+                            if resp.status != 200:
+                                logger.warning(f"Instance {inst.url()} unhealthy: {resp.status}")
+                                if inst in self.prefill_servers:
+                                    prefill_to_remove.append(inst)
+                                elif inst in self.decode_servers:
+                                    decode_to_remove.append(inst)
+                                elif inst in self.mixed_servers:
+                                    mixed_to_remove.append(inst)
+                        except Exception as e:
+                            logger.warning(f"Instance {inst.url()} check failed: {e}")
                             if inst in self.prefill_servers:
                                 prefill_to_remove.append(inst)
                             elif inst in self.decode_servers:
                                 decode_to_remove.append(inst)
                             elif inst in self.mixed_servers:
                                 mixed_to_remove.append(inst)
-                        resp.release()
-                    except Exception as e:
-                        logger.warning(f"Instance {inst.url()} check failed: {e}")
-                        if inst in self.prefill_servers:
-                            prefill_to_remove.append(inst)
-                        elif inst in self.decode_servers:
-                            decode_to_remove.append(inst)
-                        elif inst in self.mixed_servers:
-                            mixed_to_remove.append(inst)
 
                 # remove unhealthy instances under lock
                 async with self.lock:
@@ -542,15 +536,12 @@ async def health_generate():
     """Check all prefill and decode servers are healthy"""
     router = app.state.router
     timeout = aiohttp.ClientTimeout(total=3)
-    tasks = [
-        router.session.get(f"{s.url()}/health", timeout=timeout)
-        for s in chain(router.prefill_servers, router.decode_servers)
-    ]
-    for coro in asyncio.as_completed(tasks):
-        resp = await coro
-        if resp.status != 200:
-            logger.warning(f"Server {resp.url} not healthy: {resp.status}")
-        resp.release()
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        tasks = [session.get(f"{s.url()}/health") for s in chain(router.prefill_servers, router.decode_servers)]
+        for coro in asyncio.as_completed(tasks):
+            resp = await coro
+            if resp.status != 200:
+                logger.warning(f"Server {resp.url} not healthy: {resp.status}")
     return Response(status_code=200)
 
 
