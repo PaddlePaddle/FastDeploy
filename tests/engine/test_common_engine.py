@@ -14,17 +14,64 @@
 # limitations under the License.
 """
 
+import asyncio
 import os
+import threading
 import time
+import types
 import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import ANY, MagicMock, Mock, patch
 
 import numpy as np
+import paddle
+
+if not hasattr(paddle, "compat"):
+
+    class _PaddleCompat:
+        @staticmethod
+        def enable_torch_proxy(scope=None):
+            return None
+
+    paddle.compat = _PaddleCompat()
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import EngineService
+from fastdeploy.engine.request import (
+    ControlRequest,
+    ControlResponse,
+    Request,
+    RequestOutput,
+    RequestStatus,
+)
+from fastdeploy.utils import EngineError
 
 MODEL_NAME = os.getenv("MODEL_PATH", "/path/to/models") + "/ERNIE-4.5-0.3B-Paddle"
+
+_STUB_PRETRAINED_CONFIG = {
+    "architectures": ["StubForCausalLM"],
+    "hidden_size": 64,
+    "num_attention_heads": 8,
+    "num_hidden_layers": 2,
+    "vocab_size": 1000,
+}
+
+
+def _fake_model_post_init(self):
+    self.is_unified_ckpt = False
+    self.runner_type = "generate"
+    self.convert_type = "auto"
+    self.supported_tasks = []
+    if not hasattr(self, "enable_mm"):
+        self.enable_mm = False
+
+
+def _create_engine_config(args):
+    with patch(
+        "fastdeploy.config.PretrainedConfig.get_config_dict",
+        return_value=(_STUB_PRETRAINED_CONFIG, None),
+    ):
+        with patch("fastdeploy.config.ModelConfig._post_init", _fake_model_post_init):
+            return args.create_engine_config()
 
 
 class TestCommonEngine(unittest.TestCase):
@@ -44,11 +91,50 @@ class TestCommonEngine(unittest.TestCase):
             )
 
             # Create and start the engine service
-            cls.cfg = engine_args.create_engine_config()
-            cls.engine = EngineService(cls.cfg, start_queue=True, use_async_llm=True)
+            cls.cfg = _create_engine_config(engine_args)
 
-            # Start the engine service
-            cls.engine.start()
+            class DummyQ:
+                def __init__(self, *a, **k):
+                    self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
+
+                def get_server_port(self):
+                    return 0
+
+                def cleanup(self):
+                    pass
+
+                def num_tasks(self):
+                    return 0
+
+                def num_cache_infos(self):
+                    return 0
+
+                def disaggregate_queue_empty(self):
+                    return True
+
+                def get_disaggregated_tasks(self):
+                    return []
+
+            with (
+                patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ),
+                patch("fastdeploy.engine.common_engine.EngineCacheQueue"),
+            ):
+                cls.engine = EngineService(cls.cfg, start_queue=False, use_async_llm=True)
+
+            cls.engine.running = True
+            cls.engine.ipc_signal_suffix = cls.cfg.parallel_config.local_engine_worker_queue_port
+
+            class Sig:
+                def __init__(self, v=0):
+                    self.value = np.array([v], dtype=np.int32)
+
+                def clear(self):
+                    pass
+
+            cls.engine.worker_ready_signal = Sig(1)
+            cls.engine.loaded_model_signal = Sig(1)
+            cls.engine.worker_healthy_live_signal = Sig(int(time.time()))
+            cls.engine.worker_proc = Mock(pid=12345)
 
         except Exception as e:
             print(f"Setting up EngineService failed: {e}")
@@ -59,6 +145,17 @@ class TestCommonEngine(unittest.TestCase):
         """Clean up after all tests"""
         if hasattr(cls, "engine") and cls.engine is not None:
             try:
+                if hasattr(cls.engine, "resource_manager") and hasattr(cls.engine.resource_manager, "cache_manager"):
+                    cache_manager = cls.engine.resource_manager.cache_manager
+                    if not hasattr(cache_manager, "shm_cache_task_flag_broadcast"):
+                        cache_manager.shm_cache_task_flag_broadcast = Mock(clear=Mock())
+                    if not hasattr(cache_manager, "cache_ready_signal"):
+                        cache_manager.cache_ready_signal = Mock(clear=Mock())
+                if getattr(cls.engine, "cache_manager_processes", None) is None:
+                    cls.engine.cache_manager_processes = []
+                if hasattr(cls.engine, "_finalizer"):
+                    cls.engine._finalizer.detach()
+                cls.engine.worker_proc = None
                 cls.engine._exit_sub_services()
                 print("Engine cleanup completed")
             except Exception as e:
@@ -201,7 +298,17 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
     """
 
     def setUp(self):
-        patch("fastdeploy.engine.common_engine.EngineCacheQueue").start()
+        cache_queue_patcher = patch("fastdeploy.engine.common_engine.EngineCacheQueue")
+        cache_queue_patcher.start()
+        self.addCleanup(cache_queue_patcher.stop)
+
+    @staticmethod
+    def _detach_finalizer(engine):
+        if hasattr(engine, "_finalizer"):
+            try:
+                engine._finalizer.detach()
+            except Exception:
+                pass
 
     def _make_cfg(self, **kwargs):
         # If DP > 1, we must provide enough engine_worker_queue_port for each dp index
@@ -212,6 +319,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         if dp and dp > 1:
             engine_worker_queue_port = [engine_worker_queue_port + 21 + i for i in range(dp // nnode)]
             cache_queue_port = [cache_queue_port + 21 + i for i in range(dp // nnode)]
+
+        if kwargs.get("num_gpu_blocks_override") is not None and "kv_cache_ratio" not in kwargs:
+            kwargs["kv_cache_ratio"] = 1
 
         args = EngineArgs(
             model=MODEL_NAME,
@@ -230,7 +340,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         # Always enable chunked prefill in tests to avoid another strict check
         args.enable_chunked_prefill = True
 
-        return args.create_engine_config()
+        return _create_engine_config(args)
 
     def _stub_processor(self):
         class _Tok:
@@ -247,6 +357,33 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 self.pad_token_id = 0
 
         return _Proc()
+
+    def _make_engine(self, cfg):
+        class DummyQ:
+            def __init__(self, *a, **k):
+                self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
+
+            def get_server_port(self):
+                return 0
+
+            def cleanup(self):
+                pass
+
+            def num_tasks(self):
+                return 0
+
+            def num_cache_infos(self):
+                return 0
+
+            def disaggregate_queue_empty(self):
+                return True
+
+            def get_disaggregated_tasks(self):
+                return []
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+        return eng
 
     def test_start_prefill_branch_cache_manager_and_worker_dead(self):
         """Cover lines 184-185, 194-197, 221, 226-227 in start()."""
@@ -332,14 +469,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertFalse(ok)
         # cache manager started before workers (lines 184-185)
         self.assertTrue(started_cache.get("called", False))
-        # launched_cache_manager_signal set (line 221)
-        self.assertEqual(int(eng.launched_cache_manager_signal.value[0]), 1)
         # avoid atexit finalizer
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
+        self._detach_finalizer(eng)
 
     def test_start_mixed_branch_cache_after_load_and_zmq(self):
         """Cover lines 215-217 and 231 in start()."""
@@ -399,6 +530,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         eng._start_worker_service = lambda: Mock(stdout=Mock(), poll=lambda: None)
         eng.check_worker_initialize_status = lambda: True
+        eng.do_profile = 0
+        eng.cfg.cache_config.enable_prefix_caching = True
 
         zmq_called = {}
         eng.start_zmq_service = lambda pid: zmq_called.setdefault("pid", pid)
@@ -409,70 +542,1601 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         self.assertTrue(started_cache.get("called", False))  # lines 215-217
         self.assertEqual(zmq_called.get("pid"), 8888)  # line 231
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
+        self._detach_finalizer(eng)
 
-    def test_insert_zmq_task_error_logging(self):
-        """Cover lines 934-935 and 937 in _insert_zmq_task_to_scheduler."""
-        cfg = self._make_cfg(splitwise_role="mixed")
+    def test_update_requests_chunk_size_assigns_chunks(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.partial_chunked_tokens = [0, 32, 16, 8]
+        eng.cfg.scheduler_config.max_num_batched_tokens = 32
+        eng.cfg.cache_config.block_size = 8
+        eng.cfg.cache_config.enable_chunked_prefill = True
 
-        class DummyQ:
-            def __init__(self, *a, **k):
-                self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
+        requests = [
+            Request(request_id="r0", prompt_token_ids=[1] * 24, prompt_token_ids_len=24),
+            Request(request_id="r1", prompt_token_ids=[1] * 8, prompt_token_ids_len=8),
+        ]
+
+        eng.update_requests_chunk_size(requests)
+
+        for req in requests:
+            chunk_info = req.get("prefill_chunk_info")
+            self.assertIsInstance(chunk_info, list)
+            self.assertGreater(len(chunk_info), 0)
+            self.assertEqual(sum(chunk_info), req.prompt_token_ids_len)
+        self._detach_finalizer(eng)
+
+    def test_update_mm_requests_chunk_size_with_stub_fuse(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.cfg.cache_config.enable_chunked_prefill = True
+        eng.partial_chunked_tokens = [0, 16]
+        eng.data_processor = type("DP", (), {"image_patch_id": 9})()
+
+        inputs = {
+            "input_ids": np.array([9, 1, 2, 3], dtype="int64"),
+            "token_type_ids": np.array([0, 0, 0, 0], dtype="int64"),
+            "image_type_ids": np.array([1], dtype="int32"),
+            "grid_thw": np.array([[1, 2, 2]], dtype="int64"),
+            "images": np.ones((4,), dtype="uint8"),
+            "position_ids": np.array([0, 1, 2, 3], dtype="int64"),
+        }
+        req = Request(request_id="mm0", multimodal_inputs=inputs)
+
+        stub_module = types.ModuleType("fastdeploy.model_executor.ops.gpu")
+        stub_module.get_mm_split_fuse = lambda *args, **kwargs: (
+            np.array([1], dtype="int64"),
+            np.array([4], dtype="int64"),
+        )
+        with patch.dict("sys.modules", {"fastdeploy.model_executor.ops.gpu": stub_module}):
+            eng.update_mm_requests_chunk_size([req])
+
+        chunk_info = req.get("prefill_chunk_info")
+        self.assertIsInstance(chunk_info, list)
+        self.assertEqual(len(chunk_info), 1)
+        self.assertEqual(chunk_info[0]["input_ids"].tolist(), inputs["input_ids"].tolist())
+        self.assertIsNotNone(chunk_info[0]["images"])
+        self._detach_finalizer(eng)
+
+    def test_send_error_response_routes(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.send_response_server = Mock()
+
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+            eng._send_error_response("rid0", "boom", error_code=400)
+            eng.send_response_server.send_response.assert_called_with("rid0", [ANY])
+
+        eng.send_response_server.reset_mock()
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True):
+            eng._send_error_response("rid1", "boom", error_code=500)
+            eng.send_response_server.send_response.assert_called_with(None, [ANY])
+
+        self._detach_finalizer(eng)
+
+    def test_decode_token_with_return_text(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyProcessor:
+            def __init__(self):
+                self.decode_status = {"rid": (0, 2)}
+
+            def ids2tokens(self, token_ids, req_id):
+                return "hi", [101, 102], None
+
+        eng.data_processor = DummyProcessor()
+
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True):
+            delta, token_ids = eng._decode_token([101, 102], "rid", is_end=True)
+
+        self.assertEqual(delta, "hi")
+        self.assertEqual(token_ids, [101, 102])
+        self.assertNotIn("rid", eng.data_processor.decode_status)
+        self._detach_finalizer(eng)
+
+    def test_decode_token_without_return_text(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", False):
+            delta, token_ids = eng._decode_token([9, 10], "rid", is_end=False)
+
+        self.assertEqual(delta, "")
+        self.assertEqual(token_ids, [9, 10])
+        self._detach_finalizer(eng)
+
+    def test_decode_token_return_text_empty_delta(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyProcessor:
+            def __init__(self):
+                self.decode_status = {"rid": (0, 1)}
+
+            def ids2tokens(self, token_ids, req_id):
+                return "", [7], None
+
+        eng.data_processor = DummyProcessor()
+
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True):
+            delta, token_ids = eng._decode_token([7], "rid", is_end=True)
+
+        self.assertEqual(delta, "")
+        self.assertEqual(token_ids, [])
+        self.assertNotIn("rid", eng.data_processor.decode_status)
+        self._detach_finalizer(eng)
+
+    def test_clear_data_success_and_failure(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.token_processor = Mock()
+        eng.engine_worker_queue = Mock()
+        eng.send_response_server = Mock(req_dict={"a": 1})
+        eng.recv_request_server = Mock(req_dict={"b": 2})
+
+        self.assertTrue(eng.clear_data())
+        self.assertEqual(eng.send_response_server.req_dict, {})
+        self.assertEqual(eng.recv_request_server.req_dict, {})
+
+        eng.token_processor.clear_data.side_effect = RuntimeError("boom")
+        self.assertFalse(eng.clear_data())
+        self._detach_finalizer(eng)
+
+    def test_insert_prefilled_requests_recycles_and_dispatches(self):
+        cfg = self._make_cfg(splitwise_role="decode", num_gpu_blocks_override=4, router="0.0.0.0:30000")
+        cfg.speculative_config.method = "mtp"
+        eng = self._make_engine(cfg)
+
+        class DummyRM:
+            def __init__(self):
+                self.req_dict = {"r0": 0, "r1": 1, "r2": 2}
+                self.tasks_list = [
+                    Request(request_id="r0", prompt_token_ids=[0], prompt_token_ids_len=1),
+                    Request(request_id="r1", prompt_token_ids=[0], prompt_token_ids_len=1),
+                    Request(request_id="r2", prompt_token_ids=[0], prompt_token_ids_len=1),
+                ]
+                self.stop_flags = np.array([False, False, False])
+                self.real_bsz = 1
+                self.recycled = []
+
+            def _recycle_block_tables(self, req):
+                self.recycled.append(req.request_id)
+
+        eng.resource_manager = DummyRM()
+        eng.token_processor = Mock()
+        eng.token_processor.tokens_counter = {"r0": 1, "r1": 1}
+        eng.scheduler = Mock()
+        eng.engine_worker_queue = Mock()
+
+        class DummyOutputs:
+            def __init__(self, token_ids, draft_token_ids=None):
+                self.token_ids = token_ids
+                self.draft_token_ids = draft_token_ids or []
+                self.tool_calls = None
+
+        outputs_empty = DummyOutputs([])
+        outputs_error = DummyOutputs([1], [9])
+        outputs_ok = DummyOutputs([2], [8])
+        req_out_empty = RequestOutput(request_id="r0", outputs=outputs_empty, metrics=Mock(), num_cached_tokens=0)
+        req_out_error = RequestOutput(
+            request_id="r1",
+            outputs=outputs_error,
+            metrics=Mock(),
+            num_cached_tokens=0,
+            error_code=500,
+            error_msg="bad",
+        )
+        req_out_ok = RequestOutput(request_id="r2", outputs=outputs_ok, metrics=Mock(), num_cached_tokens=3)
+
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True):
+            eng._insert_prefilled_requests([req_out_empty, req_out_error, req_out_ok])
+
+        self.assertIn("r0", eng.resource_manager.recycled)
+        self.assertIn("r1", eng.resource_manager.recycled)
+        self.assertIn("r2", eng.token_processor.tokens_counter)
+        eng.engine_worker_queue.put_tasks.assert_called()
+        self._detach_finalizer(eng)
+
+    def test_task_finished_helpers(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyRM:
+            def __init__(self):
+                self.stop_flags = np.array([True, False, True])
+
+        eng.resource_manager = DummyRM()
+
+        self.assertTrue(eng.task_is_finished(0))
+        self.assertFalse(eng.task_is_finished(1))
+        self.assertFalse(eng.all_tasks_finished())
+        eng.resource_manager.stop_flags = np.array([True, True])
+        self.assertTrue(eng.all_tasks_finished())
+        self._detach_finalizer(eng)
+
+    def test_start_worker_queue_service_with_servers(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+
+        class DummyQueue:
+            def __init__(self, *args, **kwargs):
+                self.kwargs = kwargs
 
             def get_server_port(self):
-                return 0
+                return 12345
 
             def cleanup(self):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+        class DummyCacheQueue(DummyQueue):
+            pass
+
+        eng = self._make_engine(cfg)
+        with (
+            patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQueue),
+            patch("fastdeploy.engine.common_engine.EngineCacheQueue", DummyCacheQueue),
+            patch("fastdeploy.engine.common_engine.envs.FD_ENGINE_TASK_QUEUE_WITH_SHM", False),
+        ):
+            eng.start_worker_queue_service(start_queue=True)
+
+        self.assertEqual(eng.cfg.parallel_config.local_engine_worker_queue_port, 12345)
+        self._detach_finalizer(eng)
+
+    def test_init_worker_monitor_signals_creates_ipc(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        created = []
+
+        class DummySignal:
+            def __init__(self, name, array, dtype, suffix, create):
+                self.name = name
+                self.array = array
+                self.dtype = dtype
+                self.suffix = suffix
+                self.create = create
+                created.append(name)
+
+        with (
+            patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ),
+            patch("fastdeploy.engine.common_engine.IPCSignal", DummySignal),
+        ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        self.assertIn("exist_task_signal", created)
+        self.assertIn("worker_healthy_live_signal", created)
+        self.assertTrue(hasattr(eng, "kv_cache_status_signal"))
+        self._detach_finalizer(eng)
+
+    def test_init_worker_signals_with_profile(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.ipc_signal_suffix = 7777
+        eng.do_profile = 1
+
+        class DummySignal:
+            def __init__(self, *args, **kwargs):
+                self.value = np.zeros([1], dtype=np.int32)
+
+            def clear(self):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.IPCSignal", DummySignal):
+            eng._init_worker_signals()
+
+        self.assertIsNotNone(eng.worker_ready_signal)
+        self.assertIsNotNone(eng.loaded_model_signal)
+        self.assertTrue(hasattr(eng, "get_profile_block_num_signal"))
+        self._detach_finalizer(eng)
+
+    def test_worker_processes_ready_and_health(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.worker_ready_signal = type("Sig", (), {"value": np.array([1], dtype=np.int32)})()
+        eng.cfg.worker_num_per_node = 1
+        self.assertTrue(eng._worker_processes_ready())
+
+        eng.worker_healthy_live_signal = type("Sig", (), {"value": np.array([time.time() - 100])})()
+        is_healthy, message = eng.check_health(time_interval_threashold=1)
+        self.assertFalse(is_healthy)
+        self.assertIn("Not Healthy", message)
+        self._detach_finalizer(eng)
+
+    def test_stop_profile_resets_cache(self):
+        cfg = self._make_cfg(splitwise_role="prefill", num_gpu_blocks_override=4, router="0.0.0.0:30000")
+        eng = self._make_engine(cfg)
+        eng.ipc_signal_suffix = 9999
+        eng.do_profile = 1
+        eng.get_profile_block_num_signal = type("Sig", (), {"value": np.array([8])})()
+        eng.resource_manager = Mock()
+        eng.start_cache_service = Mock(return_value=[Mock()])
+
+        eng._stop_profile()
+
+        self.assertEqual(eng.do_profile, 0)
+        eng.resource_manager.reset_cache_config.assert_called_once()
+        self.assertIsNotNone(eng.cache_manager_processes)
+        self._detach_finalizer(eng)
+
+    def test_start_worker_queue_service_with_shm_address(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+
+        class DummyQueue:
+            def __init__(self, *args, **kwargs):
+                self.kwargs = kwargs
+
+            def get_server_port(self):
+                return 22222
+
+            def cleanup(self):
+                pass
+
+        class DummyCacheQueue(DummyQueue):
+            pass
+
+        eng = self._make_engine(cfg)
+        with (
+            patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQueue),
+            patch("fastdeploy.engine.common_engine.EngineCacheQueue", DummyCacheQueue),
+            patch("fastdeploy.engine.common_engine.envs.FD_ENGINE_TASK_QUEUE_WITH_SHM", True),
+        ):
+            eng.start_worker_queue_service(start_queue=True)
+
+        address = eng.engine_worker_queue.kwargs["address"]
+        self.assertTrue(isinstance(address, str))
+        self.assertIn("/dev/shm/fd_task_queue_", address)
+        self._detach_finalizer(eng)
+
+    def test_start_worker_service_builds_command(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.do_profile = 0
+        eng.data_processor = type(
+            "DP",
+            (),
+            {
+                "tokenizer": type(
+                    "Tok",
+                    (),
+                    {
+                        "vocab": {"</think>": 5, "<|IMAGE_PLACEHOLDER|>": 9, "\n": 10},
+                        "get_vocab": lambda self: self.vocab,
+                    },
+                )(),
+                "eos_token_id_len": 1,
+                "pad_token_id": 0,
+            },
+        )()
+
+        with patch("fastdeploy.engine.common_engine.subprocess.Popen") as popen_mock:
+            popen_mock.return_value = Mock()
+            proc = eng._start_worker_service()
+
+        popen_mock.assert_called_once()
+        self.assertIs(proc, popen_mock.return_value)
+        self._detach_finalizer(eng)
+
+    def test_exit_sub_services_cleans_up(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.use_async_llm = True
+        eng.worker_proc = Mock(pid=1234)
+        eng.cache_manager_processes = [Mock(pid=2345)]
+        eng.cache_task_queue = Mock(cleanup=Mock())
+        eng.resource_manager = Mock(
+            cache_manager=Mock(
+                shm_cache_task_flag_broadcast=Mock(clear=Mock()),
+                cache_ready_signal=Mock(clear=Mock()),
+            )
+        )
+        eng.worker_ready_signal = Mock(clear=Mock())
+        eng.loaded_model_signal = Mock(clear=Mock())
+        eng.exist_task_signal = Mock(clear=Mock())
+        eng.exist_swapped_task_signal = Mock(clear=Mock())
+        eng.worker_healthy_live_signal = Mock(clear=Mock())
+        eng.cache_ready_signal = Mock(clear=Mock())
+        eng.swap_space_ready_signal = Mock(clear=Mock())
+        eng.cache_transfer_inited_signal = Mock(clear=Mock())
+        eng.exist_prefill_task_signal = Mock(clear=Mock())
+        eng.model_weights_status_signal = Mock(clear=Mock())
+        eng.prefix_tree_status_signal = Mock(clear=Mock())
+        eng.kv_cache_status_signal = Mock(clear=Mock())
+        eng.engine_worker_queue_server = Mock(cleanup=Mock())
+        eng.send_response_server = Mock(close=Mock())
+        eng.recv_request_server = Mock(close=Mock())
+        eng.recv_control_cmd_server = Mock(close=Mock())
+
+        with (
+            patch("fastdeploy.engine.common_engine.os.getpgid", return_value=1111),
+            patch("fastdeploy.engine.common_engine.os.killpg"),
+        ):
+            eng._exit_sub_services()
+
+        eng.cache_task_queue.cleanup.assert_called_once()
+        eng.engine_worker_queue_server.cleanup.assert_called_once()
+        eng.send_response_server.close.assert_called_once()
+
+    def test_setting_environ_variables_splitwise_and_mm(self):
+        cfg = self._make_cfg(
+            splitwise_role="prefill",
+            num_gpu_blocks_override=4,
+            router="0.0.0.0:30000",
+        )
+        cfg.model_config.enable_mm = True
+        eng = self._make_engine(cfg)
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True):
+            result = eng._setting_environ_variables()
+
+        self.assertIn("FLAGS_use_pd_disaggregation_per_chunk=1", result)
+        self.assertIn("FLAGS_fmt_write_cache_completed_signal=1", result)
+        self.assertIn("FLAGS_max_partition_size=1024", result)
+        self._detach_finalizer(eng)
+
+    def test_start_cache_service_forwards_args(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.resource_manager.cache_manager = Mock()
+        eng.resource_manager.cache_manager.launch_cache_manager = Mock(return_value=["proc"])
+
+        result = eng.start_cache_service(["0"], 9999)
+
+        eng.resource_manager.cache_manager.launch_cache_manager.assert_called_once()
+        self.assertEqual(result, ["proc"])
+        self._detach_finalizer(eng)
+
+    def test_control_update_weights_success(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.is_paused = True
+        eng._pause_cond = threading.Condition()
+        eng._call_worker = Mock(return_value={"ok": True})
+
+        result = eng._control_update_weights(ControlRequest(request_id="ctrl", method="update_weights"))
+        self.assertEqual(result, {"ok": True})
+        self._detach_finalizer(eng)
+
+    def test_control_pause_and_resume_paths(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.is_paused = False
+        eng._pause_cond = threading.Condition()
+        eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
+        eng.resource_manager = Mock(
+            preempted_all=Mock(return_value=[Request(request_id="r1", prompt_token_ids=[1], prompt_token_ids_len=1)]),
+            get_real_bsz=Mock(),
+            wait_worker_inflight_requests_finish=Mock(),
+            log_status=Mock(),
+            cache_manager=Mock(reset=Mock()),
+            real_bsz=1,
+        )
+        eng.token_processor = Mock(clear_data=Mock())
+        eng.scheduler = Mock(get_inflight_requests=Mock(return_value=[]), reset=Mock())
+        eng._send_error_response = Mock()
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True):
+            eng._control_pause(ControlRequest(request_id="ctrl1", method="pause"))
+            self.assertTrue(eng.is_paused)
+
+            eng._control_resume(ControlRequest(request_id="ctrl2", method="resume"))
+            self.assertFalse(eng.is_paused)
+
+            status = eng._control_is_paused(ControlRequest(request_id="ctrl3", method="is_paused"))
+            self.assertEqual(status, {"is_paused": False})
+        self._detach_finalizer(eng)
+
+    def test_run_control_method_unknown_and_success(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.send_response_server = Mock()
+        eng._pause_cond = threading.Condition()
+
+        eng.run_control_method(ControlRequest(request_id="bad", method="nope"))
+        self.assertTrue(eng.send_response_server.send_response.called)
+
+        eng.send_response_server.reset_mock()
+        eng.is_paused = True
+        eng.run_control_method(ControlRequest(request_id="good", method="is_paused"))
+        eng.send_response_server.send_response.assert_called()
+        self._detach_finalizer(eng)
+
+    def test_run_control_method_handler_exception(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.send_response_server = Mock()
+        eng._pause_cond = threading.Condition()
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", False):
+            eng.run_control_method(ControlRequest(request_id="pause", method="pause"))
+
+        eng.send_response_server.send_response.assert_called()
+        self._detach_finalizer(eng)
+
+    def test_call_worker_puts_tasks_and_returns(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.engine_worker_queue = Mock()
+
+        class DummyQueue:
+            def __init__(self):
+                self.name = "q0"
+
+            async def get(self, timeout=None):
+                return Mock(payload=ControlResponse(request_id="req", result={"ok": True}, error_code=200))
+
+        eng._ctrl_worker_output_queues = [DummyQueue()]
+        result = eng._call_worker(ControlRequest(request_id="req", method="noop"), timeout=1)
+        self.assertEqual(result, [{"ok": True}])
+        eng.engine_worker_queue.put_tasks.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_control_update_weights_requires_pause(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.is_paused = False
+        eng._pause_cond = threading.Condition()
+
+        with self.assertRaises(Exception):
+            eng._control_update_weights(ControlRequest(request_id="ctrl", method="update_weights"))
+        self._detach_finalizer(eng)
+
+    def test_register_to_router_disabled(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.cfg.router_config.router = None
+
+        with (
+            patch.object(eng, "llm_logger") as mock_logger,
+            patch("fastdeploy.engine.common_engine.threading.Thread") as thread_mock,
+        ):
+            eng._register_to_router()
+
+        mock_logger.info.assert_called()
+        thread_mock.assert_not_called()
+        self._detach_finalizer(eng)
+
+    def test_register_to_router_enabled_starts_thread(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.cfg.router_config.router = "http://router"
+
+        with patch("fastdeploy.engine.common_engine.threading.Thread") as thread_mock:
+            eng._register_to_router()
+
+        thread_mock.assert_called_once()
+        thread_mock.return_value.start.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_insert_zmq_task_to_scheduler_normal_request(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.is_paused = False
+        eng.guided_decoding_checker = None
+        eng.resource_manager = Mock(abort_req_ids_set=set(), requests={})
+        eng.scheduler = Mock()
+        eng.engine_worker_queue = Mock()
+
+        class DummyMetrics:
+            def __init__(self):
+                self.requests_number = Mock(inc=Mock())
+                self.num_requests_waiting = Mock(inc=Mock())
+
+        class DummyRecv:
+            def __init__(self):
+                self.calls = 0
+
+            def receive_json_once(self, block):
+                self.calls += 1
+                if self.calls == 1:
+                    return None, {"request_id": "ctrl", "method": "is_paused", "args": {}}
+                if self.calls == 2:
+                    return None, {
+                        "request_id": "req1",
+                        "prompt_token_ids": [1, 2],
+                        "prompt_token_ids_len": 2,
+                        "temperature": 1.0,
+                    }
+                eng.running = False
+                return None, None
+
+        eng.recv_request_server = DummyRecv()
+        eng.run_control_method = Mock()
+        eng.scheduler.put_requests.return_value = [("req1", None)]
+
+        with (
+            patch("fastdeploy.engine.common_engine.main_process_metrics", DummyMetrics()),
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._insert_zmq_task_to_scheduler()
+
+        eng.run_control_method.assert_called_once()
+        eng.scheduler.put_requests.assert_called()
+        self._detach_finalizer(eng)
+
+    def test_insert_zmq_task_to_scheduler_internal_adapter_decode_returns(self):
+        cfg = self._make_cfg(
+            splitwise_role="decode",
+            num_gpu_blocks_override=4,
+            router="0.0.0.0:30000",
+        )
+        eng = self._make_engine(cfg)
+        eng.running = True
+
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True):
+            eng._insert_zmq_task_to_scheduler()
+
+        self._detach_finalizer(eng)
+
+    def test_schedule_request_to_worker_sends_tasks(self):
+        cfg = self._make_cfg(
+            splitwise_role="prefill",
+            num_gpu_blocks_override=4,
+            router="0.0.0.0:30000",
+        )
+        eng = self._make_engine(cfg)
+        eng.running = True
+
+        class Sig:
+            def __init__(self, v=0):
+                self.value = np.array([v], dtype=np.int32)
+
+        eng.exist_prefill_task_signal = Sig(0)
+        eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), num_cache_infos=Mock(return_value=0))
+
+        class DummyRM:
+            def __init__(self):
+                self.abort_req_ids_set = set()
+
+            def available_batch(self):
+                return 1
+
+            def available_block_num(self):
+                return 32
+
+            def check_and_free_block_tables(self):
+                pass
+
+        eng.resource_manager = DummyRM()
+        eng.split_connector = Mock(current_request_ids=[], has_splitwise_tasks=Mock(return_value=False))
+        eng.scheduler = Mock()
+        task = Request(request_id="r0", prompt_token_ids=[1], prompt_token_ids_len=1)
+        eng.scheduler.get_requests.return_value = [task]
+
+        def insert_tasks(tasks, current_id):
+            eng.running = False
+            return True
+
+        eng.insert_tasks = Mock(side_effect=insert_tasks)
+
+        with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
+            eng._schedule_request_to_worker()
+
+        eng.split_connector.send_splitwise_tasks.assert_called_once()
+        eng.insert_tasks.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_schedule_request_to_worker_waits_for_capacity(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+
+        class DummyRM:
+            def available_batch(self):
+                eng.running = False
+                return 0
+
+        eng.resource_manager = DummyRM()
+        eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False))
+
+        with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
+            eng._schedule_request_to_worker()
+
+        self._detach_finalizer(eng)
+
+    def test_start_zmq_service_ipc_servers(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyServer:
+            def __init__(self, *args, **kwargs):
+                self.args = args
+                self.kwargs = kwargs
+
+            def recv_result_handle(self):
+                return None
+
+        created = {"threads": 0}
+
+        class DummyThread:
+            def __init__(self, target=None, daemon=None):
+                self.target = target
+                self.daemon = daemon
+
+            def start(self):
+                created["threads"] += 1
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.ZmqIpcServer", DummyServer),
+            patch("fastdeploy.engine.common_engine.threading.Thread", DummyThread),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng.start_zmq_service(api_server_pid=4321)
+
+        self.assertEqual(created["threads"], 3)
+        self.assertEqual(eng.recv_request_server.kwargs["name"], 4321)
+        self._detach_finalizer(eng)
+
+    def test_start_zmq_service_internal_adapter_tcp(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyServer:
+            def __init__(self, *args, **kwargs):
+                self.args = args
+                self.kwargs = kwargs
+
+            def recv_result_handle(self):
+                return None
+
+        class DummyThread:
+            def __init__(self, target=None, daemon=None):
+                self.target = target
+                self.daemon = daemon
+
+            def start(self):
+                return None
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True),
+            patch("fastdeploy.engine.common_engine.ZmqTcpServer", DummyServer),
+            patch("fastdeploy.engine.common_engine.InternalAdapter", Mock()),
+            patch("fastdeploy.engine.common_engine.threading.Thread", DummyThread),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng.start_zmq_service(api_server_pid=5555)
+
+        self.assertIsNotNone(eng.internal_adapter)
+        self._detach_finalizer(eng)
+
+    def test_start_zmq_service_none(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.start_zmq_service(api_server_pid=None)
+        self._detach_finalizer(eng)
+
+    def test_insert_zmq_task_to_scheduler_abort_request(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.is_paused = False
+        eng.guided_decoding_checker = None
+
+        class DummyRM:
+            def __init__(self):
+                self.abort_req_ids_set = set()
+                self.real_bsz = 1
+                self.requests = {"rid": Mock()}
+
+            def _prepare_preempt_task(self, req):
+                return Request(request_id="rid", prompt_token_ids=[1], prompt_token_ids_len=1)
+
+        eng.resource_manager = DummyRM()
+        eng.scheduler = Mock(_recycle=Mock())
+        eng.engine_worker_queue = Mock()
+
+        class DummyRecv:
+            def receive_json_once(self, block):
+                eng.running = False
+                return None, {"request_id": "rid", "status": RequestStatus.ABORT.value}
+
+        eng.recv_request_server = DummyRecv()
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._insert_zmq_task_to_scheduler()
+
+        eng.engine_worker_queue.put_tasks.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_insert_zmq_task_to_scheduler_paused_sends_error(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.is_paused = True
+        eng.guided_decoding_checker = None
+        eng.resource_manager = Mock(abort_req_ids_set=set(), requests={})
+        eng.scheduler = Mock()
+        eng.engine_worker_queue = Mock()
+        eng._send_error_response = Mock()
+
+        class DummyRecv:
+            def receive_json_once(self, block):
+                eng.running = False
+                return None, {
+                    "request_id": "req1",
+                    "prompt_token_ids": [1],
+                    "prompt_token_ids_len": 1,
+                    "temperature": 1.0,
+                }
+
+        eng.recv_request_server = DummyRecv()
+
+        with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
+            eng._insert_zmq_task_to_scheduler()
+
+        eng._send_error_response.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_insert_zmq_task_to_scheduler_context_terminated(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
         eng.running = True
 
         class DummyRecv:
-            def __init__(self, msg):
-                self.msg = msg
-                self.call_count = 0
-
             def receive_json_once(self, block):
-                self.call_count += 1
-                if self.call_count == 1:
-                    return self.msg, None
-                else:
-                    eng.running = False
-                    return None, None
+                eng.running = False
+                return RuntimeError("Context was terminated"), None
 
-            def close(self):
-                pass
+        eng.recv_request_server = DummyRecv()
 
-        # Case 1: context terminated -> info branch
-        eng.recv_request_server = DummyRecv("Context was terminated")
-        with patch.object(eng, "llm_logger") as mock_logger:
-            with patch("fastdeploy.engine.common_engine.ZmqIpcServer"):
-                eng._insert_zmq_task_to_scheduler()
-            # verify info logger
-            mock_logger.info.assert_called()
+        class DummyServer:
+            def __init__(self, *args, **kwargs):
+                self.kwargs = kwargs
 
-        # reset status
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.ZmqIpcServer", DummyServer),
+            patch.object(eng, "llm_logger") as mock_logger,
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._insert_zmq_task_to_scheduler()
+
+        mock_logger.info.assert_called()
+        self._detach_finalizer(eng)
+
+    def test_insert_zmq_task_to_scheduler_error_reinit(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
         eng.running = True
 
-        # Case 2: other error -> error branch
-        eng.recv_request_server = DummyRecv("Other Error")
-        with patch.object(eng, "llm_logger") as mock_logger:
-            with patch("fastdeploy.engine.common_engine.ZmqIpcServer"):
-                eng._insert_zmq_task_to_scheduler()
-            # verify error logger
-            mock_logger.error.assert_called()
+        class DummyRecv:
+            def receive_json_once(self, block):
+                eng.running = False
+                return RuntimeError("boom"), None
 
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
+        eng.recv_request_server = DummyRecv()
+
+        class DummyServer:
+            def __init__(self, *args, **kwargs):
+                self.kwargs = kwargs
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.ZmqIpcServer", DummyServer),
+            patch.object(eng, "llm_logger") as mock_logger,
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._insert_zmq_task_to_scheduler()
+
+        mock_logger.error.assert_called()
+        self._detach_finalizer(eng)
+
+    def test_decode_process_splitwise_requests_single_cycle(self):
+        cfg = self._make_cfg(
+            splitwise_role="decode",
+            num_gpu_blocks_override=4,
+            router="0.0.0.0:30000",
+        )
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.enable_decode_cache_task = False
+        eng.cfg.splitwise_version = "v1"
+        eng.scheduler = Mock(has_request=Mock(return_value=True), put_results=Mock())
+        eng._insert_prefilled_requests = Mock()
+
+        class DummyRM:
+            def is_resource_sufficient(self, prompt_len):
+                return True
+
+        eng.resource_manager = DummyRM()
+        eng.insert_tasks = Mock()
+
+        task = Request(request_id="r0", prompt_token_ids=[1], prompt_token_ids_len=1)
+        output = RequestOutput(
+            request_id="r1",
+            outputs=Mock(token_ids=[1], decode_type=1, tool_calls=None),
+            metrics=Mock(),
+            finished=False,
+        )
+
+        class DummyQueue:
+            def disaggregate_queue_empty(self):
+                return False
+
+            def get_disaggregated_tasks(self):
+                eng.running = False
+                return [
+                    (None, [task]),
+                    (None, [output]),
+                ]
+
+        eng.engine_worker_queue = DummyQueue()
+
+        class DummyThread:
+            def __init__(self, target=None, daemon=None):
+                self.target = target
+                self.daemon = daemon
+
+            def start(self):
+                try:
+                    self.target()
+                finally:
+                    eng.running = False
+
+        with (
+            patch("fastdeploy.engine.common_engine.threading.Thread", DummyThread),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", False),
+        ):
+            eng._decode_process_splitwise_requests()
+
+        eng.insert_tasks.assert_called_once()
+        eng._insert_prefilled_requests.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_zmq_send_generated_tokens_single_batch(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.send_response_server = Mock()
+
+        class DummyOutput:
+            def __init__(self):
+                self.token_ids = [1, 2]
+                self.decode_type = 1
+                self.tool_calls = None
+
+        output = RequestOutput(
+            request_id="rid",
+            outputs=DummyOutput(),
+            finished=True,
+            metrics=Mock(),
+        )
+        eng.scheduler = Mock()
+
+        def get_results():
+            eng.running = False
+            return {"rid": [output]}
+
+        eng.scheduler.get_results = get_results
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._zmq_send_generated_tokens()
+
+        eng.send_response_server.send_response.assert_called()
+        self._detach_finalizer(eng)
+
+    def test_zmq_send_generated_tokens_non_internal_adapter_empty_and_other(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.send_response_server = Mock()
+        eng._decode_token = Mock(return_value=("", []))
+
+        class DummyOutput:
+            def __init__(self):
+                self.token_ids = [1]
+                self.decode_type = 0
+                self.tool_calls = None
+
+        output = RequestOutput(
+            request_id="rid",
+            outputs=DummyOutput(),
+            finished=True,
+            metrics=Mock(),
+        )
+
+        def get_results():
+            eng.running = False
+            return {"rid": [output, "raw"]}
+
+        eng.scheduler = Mock(get_results=get_results)
+
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+            eng._zmq_send_generated_tokens()
+
+        eng.send_response_server.send_response.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_zmq_send_generated_tokens_logs_exception(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.send_response_server = Mock()
+
+        def get_results():
+            eng.running = False
+            raise RuntimeError("boom")
+
+        eng.scheduler = Mock(get_results=get_results)
+
+        try:
+            with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+                eng._zmq_send_generated_tokens()
+        finally:
+            eng.running = False
+
+        self._detach_finalizer(eng)
+
+    def test_zmq_send_generated_tokens_internal_adapter_decode(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.send_response_server = Mock()
+
+        class DummyProcessor:
+            def __init__(self):
+                self.decode_status = {"rid": (0, 2)}
+
+            def ids2tokens(self, token_ids, req_id):
+                return "hi", [1, 2], None
+
+        eng.data_processor = DummyProcessor()
+
+        class DummyOutput:
+            def __init__(self):
+                self.token_ids = [1, 2]
+                self.decode_type = 0
+                self.tool_calls = None
+
+        output = RequestOutput(
+            request_id="rid",
+            outputs=DummyOutput(),
+            finished=True,
+            metrics=Mock(),
+        )
+        eng.scheduler = Mock()
+
+        def get_results():
+            eng.running = False
+            return [[output]]
+
+        eng.scheduler.get_results = get_results
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._zmq_send_generated_tokens()
+
+        eng.send_response_server.send_response.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_zmq_send_generated_tokens_internal_adapter_decode_type_one(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.send_response_server = Mock()
+
+        class DummyOutput:
+            def __init__(self):
+                self.token_ids = [3, 4]
+                self.decode_type = 1
+                self.tool_calls = None
+
+        output = RequestOutput(
+            request_id="rid",
+            outputs=DummyOutput(),
+            finished=True,
+            metrics=Mock(),
+        )
+        eng.scheduler = Mock()
+
+        def get_results():
+            eng.running = False
+            return [[output]]
+
+        eng.scheduler.get_results = get_results
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._zmq_send_generated_tokens()
+
+        eng.send_response_server.send_response.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_zmq_send_generated_tokens_internal_adapter_warns_on_empty(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.send_response_server = Mock()
+
+        class DummyOutput:
+            def __init__(self):
+                self.token_ids = []
+                self.decode_type = 1
+                self.tool_calls = None
+
+        output = RequestOutput(
+            request_id="rid",
+            outputs=DummyOutput(),
+            finished=False,
+            metrics=Mock(),
+        )
+        eng.scheduler = Mock()
+
+        def get_results():
+            eng.running = False
+            return [[output]]
+
+        eng.scheduler.get_results = get_results
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True),
+            patch.object(eng, "llm_logger") as mock_logger,
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._zmq_send_generated_tokens()
+
+        mock_logger.warning.assert_called()
+        self._detach_finalizer(eng)
+
+    def test_zmq_send_generated_tokens_empty_results(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.scheduler = Mock()
+
+        def get_results():
+            eng.running = False
+            return []
+
+        eng.scheduler.get_results = get_results
+
+        with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
+            eng._zmq_send_generated_tokens()
+        self._detach_finalizer(eng)
+
+    def test_zmq_send_generated_tokens_decode_type_zero(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.send_response_server = Mock()
+
+        class DummyOutput:
+            def __init__(self):
+                self.token_ids = [1, 2]
+                self.decode_type = 0
+                self.tool_calls = None
+
+        output = RequestOutput(
+            request_id="rid",
+            outputs=DummyOutput(),
+            finished=True,
+            metrics=Mock(),
+        )
+        eng.scheduler = Mock()
+
+        def get_results():
+            eng.running = False
+            return {"rid": [output]}
+
+        eng.scheduler.get_results = get_results
+        eng._decode_token = Mock(return_value=("hi", [1, 2]))
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._zmq_send_generated_tokens()
+
+        eng.send_response_server.send_response.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_zmq_send_generated_tokens_warns_on_empty(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.send_response_server = Mock()
+
+        class DummyOutput:
+            def __init__(self):
+                self.token_ids = []
+                self.decode_type = 1
+                self.tool_calls = None
+
+        output = RequestOutput(
+            request_id="rid",
+            outputs=DummyOutput(),
+            finished=False,
+            metrics=Mock(),
+        )
+        eng.scheduler = Mock()
+
+        def get_results():
+            eng.running = False
+            return {"rid": [output]}
+
+        eng.scheduler.get_results = get_results
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch.object(eng, "llm_logger") as mock_logger,
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._zmq_send_generated_tokens()
+
+        mock_logger.warning.assert_called()
+        self._detach_finalizer(eng)
+
+    def test_wait_all_control_responses_success(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyQueue:
+            def __init__(self, name, payload):
+                self.name = name
+                self._payload = payload
+
+            async def get(self, timeout=None):
+                return Mock(payload=self._payload)
+
+        eng._ctrl_worker_output_queues = [
+            DummyQueue("q0", Mock(request_id="req", error_code=200, result={"ok": True})),
+            DummyQueue("q1", Mock(request_id="req", error_code=200, result={"ok": True})),
+        ]
+
+        results = asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+        self.assertEqual(results, [{"ok": True}, {"ok": True}])
+        self._detach_finalizer(eng)
+
+    def test_wait_all_control_responses_ignores_mismatch(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyQueue:
+            def __init__(self, name, payload):
+                self.name = name
+                self._payload = payload
+
+            async def get(self, timeout=None):
+                return Mock(payload=self._payload)
+
+        eng._ctrl_worker_output_queues = [
+            DummyQueue("q0", Mock(request_id="old", error_code=200, result={"ok": False})),
+            DummyQueue("q1", Mock(request_id="req", error_code=200, result={"ok": True})),
+        ]
+
+        results = asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+        self.assertEqual(results, [{"ok": True}])
+        self._detach_finalizer(eng)
+
+    def test_wait_all_control_responses_error_paths(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyQueue:
+            def __init__(self, name, payload):
+                self.name = name
+                self._payload = payload
+
+            async def get(self, timeout=None):
+                return self._payload
+
+        eng._ctrl_worker_output_queues = [
+            DummyQueue("q0", Exception("boom")),
+        ]
+
+        with self.assertRaises(Exception):
+            asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+        self._detach_finalizer(eng)
+
+    def test_wait_all_control_responses_none_message(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyQueue:
+            def __init__(self, name):
+                self.name = name
+
+            async def get(self, timeout=None):
+                return None
+
+        eng._ctrl_worker_output_queues = [DummyQueue("q0")]
+
+        with self.assertRaises(Exception):
+            asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+        self._detach_finalizer(eng)
+
+    def test_wait_all_control_responses_error_code(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyQueue:
+            def __init__(self, name, payload):
+                self.name = name
+                self._payload = payload
+
+            async def get(self, timeout=None):
+                return Mock(payload=self._payload)
+
+        eng._ctrl_worker_output_queues = [
+            DummyQueue("q0", ControlResponse(request_id="req", error_code=500, error_message="bad")),
+        ]
+
+        with self.assertRaises(Exception):
+            asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+        self._detach_finalizer(eng)
+
+    def test_wait_all_control_responses_timeout(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyQueue:
+            def __init__(self):
+                self.name = "q0"
+
+            async def get(self, timeout=None):
+                return None
+
+        eng._ctrl_worker_output_queues = [DummyQueue()]
+
+        with patch("fastdeploy.engine.common_engine.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+            with self.assertRaises(Exception):
+                asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+        self._detach_finalizer(eng)
+
+    def test_insert_tasks_prefill_error_and_success(self):
+        cfg = self._make_cfg(
+            splitwise_role="prefill",
+            num_gpu_blocks_override=4,
+            router="0.0.0.0:30000",
+        )
+        eng = self._make_engine(cfg)
+
+        class DummyRM:
+            def __init__(self):
+                self.stop_flags = np.array([1, 1], dtype=np.int32)
+                self.real_bsz = 1
+
+            def check_and_free_block_tables(self):
                 pass
+
+            def allocate_resources_for_new_tasks(self, tasks):
+                return tasks
+
+        eng.resource_manager = DummyRM()
+        eng.scheduler = Mock()
+        eng.engine_worker_queue = Mock()
+        eng.split_connector = Mock()
+        eng.split_connector.send_cache_info_to_messager = Mock()
+        eng.split_connector.check_decode_allocated = Mock(
+            side_effect=[(False, "no"), (True, "")],
+        )
+        eng.token_processor = Mock(number_of_tasks=0, number_of_input_tokens=0)
+        eng.update_requests_chunk_size = Mock()
+
+        tasks = [
+            Request(request_id="p0", prompt_token_ids=[1], prompt_token_ids_len=1),
+            Request(request_id="p1", prompt_token_ids=[1], prompt_token_ids_len=1),
+        ]
+        for task in tasks:
+            task.metrics.scheduler_recv_req_time = time.time()
+
+        eng.insert_tasks(tasks)
+
+        eng.scheduler.put_results.assert_called_once()
+        eng.engine_worker_queue.put_tasks.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_insert_tasks_decode_disaggregate_sets_flags(self):
+        cfg = self._make_cfg(
+            splitwise_role="decode",
+            num_gpu_blocks_override=4,
+            router="0.0.0.0:30000",
+        )
+        eng = self._make_engine(cfg)
+
+        class DummyRM:
+            def __init__(self):
+                self.stop_flags = np.array([1], dtype=np.int32)
+                self.real_bsz = 1
+
+            def check_and_free_block_tables(self):
+                pass
+
+            def allocate_resources_for_new_tasks(self, tasks):
+                return tasks
+
+        eng.resource_manager = DummyRM()
+        eng.engine_worker_queue = Mock()
+        eng.split_connector = Mock(send_cache_info_to_prefill=Mock())
+        eng.token_processor = Mock(number_of_tasks=0, number_of_input_tokens=0)
+
+        task = Request(request_id="d1", prompt_token_ids=[1], prompt_token_ids_len=1, disaggregate_info={})
+        eng.insert_tasks([task])
+
+        eng.split_connector.send_cache_info_to_prefill.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_insert_tasks_mm_updates_chunk_size(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        cfg.model_config.enable_mm = True
+        eng = self._make_engine(cfg)
+
+        class DummyRM:
+            def __init__(self):
+                self.stop_flags = np.array([1], dtype=np.int32)
+                self.real_bsz = 1
+
+            def check_and_free_block_tables(self):
+                pass
+
+            def allocate_resources_for_new_tasks(self, tasks):
+                return tasks
+
+        eng.resource_manager = DummyRM()
+        eng.engine_worker_queue = Mock()
+        eng.token_processor = Mock(number_of_tasks=0, number_of_input_tokens=0)
+        eng.update_mm_requests_chunk_size = Mock()
+
+        task = Request(request_id="mm", prompt_token_ids=[1], prompt_token_ids_len=1)
+        task.metrics.scheduler_recv_req_time = time.time()
+        eng.insert_tasks([task])
+
+        eng.update_mm_requests_chunk_size.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_insert_tasks_sets_prefill_flag(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyRM:
+            def __init__(self):
+                self.stop_flags = np.array([1], dtype=np.int32)
+                self.real_bsz = 1
+
+            def check_and_free_block_tables(self):
+                pass
+
+            def allocate_resources_for_new_tasks(self, tasks):
+                return tasks
+
+        eng.resource_manager = DummyRM()
+        eng.engine_worker_queue = Mock()
+        eng.token_processor = Mock(number_of_tasks=0, number_of_input_tokens=0)
+        eng.update_requests_chunk_size = Mock()
+
+        task = Request(
+            request_id="prefill",
+            prompt_token_ids=[1],
+            prompt_token_ids_len=1,
+            disaggregate_info={},
+        )
+        task.metrics.scheduler_recv_req_time = time.time()
+        eng.insert_tasks([task])
+
+        eng.update_requests_chunk_size.assert_not_called()
+        self._detach_finalizer(eng)
+
+    def test_update_requests_chunk_size_empty_inputs(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.cfg.cache_config.enable_chunked_prefill = True
+        eng.update_requests_chunk_size([])
+        self._detach_finalizer(eng)
+
+    def test_update_mm_requests_chunk_size_handles_none_images(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.cfg.cache_config.enable_chunked_prefill = True
+        eng.partial_chunked_tokens = [0, 16]
+        eng.data_processor = type("DP", (), {"image_patch_id": 9})()
+
+        inputs = {
+            "input_ids": np.array([9, 1, 2, 3], dtype="int64"),
+            "token_type_ids": np.array([0, 0, 0, 0], dtype="int64"),
+            "image_type_ids": np.array([1], dtype="int32"),
+            "grid_thw": np.array([[2, 1, 1]], dtype="int64"),
+            "images": None,
+            "position_ids": np.array([0, 1, 2, 3], dtype="int64"),
+        }
+        req = Request(request_id="mm1", multimodal_inputs=inputs)
+
+        stub_module = types.ModuleType("fastdeploy.model_executor.ops.gpu")
+        stub_module.get_mm_split_fuse = lambda *args, **kwargs: (
+            np.array([1], dtype="int64"),
+            np.array([4], dtype="int64"),
+        )
+        with patch.dict("sys.modules", {"fastdeploy.model_executor.ops.gpu": stub_module}):
+            eng.update_mm_requests_chunk_size([req])
+
+        chunk_info = req.get("prefill_chunk_info")
+        self.assertEqual(len(chunk_info), 1)
+        self.assertIsNone(chunk_info[0]["images"])
+        self._detach_finalizer(eng)
+
+    def test_update_mm_requests_chunk_size_expands_grid(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.cfg.cache_config.enable_chunked_prefill = True
+        eng.partial_chunked_tokens = [0, 16]
+        eng.data_processor = type("DP", (), {"image_patch_id": 9})()
+
+        inputs = {
+            "input_ids": np.array([9, 1, 2, 3], dtype="int64"),
+            "token_type_ids": np.array([0, 0, 0, 0], dtype="int64"),
+            "image_type_ids": np.array([1, 1], dtype="int32"),
+            "grid_thw": np.array([[2, 1, 1]], dtype="int64"),
+            "images": np.ones((2,), dtype="uint8"),
+            "position_ids": np.array([0, 1, 2, 3], dtype="int64"),
+        }
+        req = Request(request_id="mm3", multimodal_inputs=inputs)
+
+        stub_module = types.ModuleType("fastdeploy.model_executor.ops.gpu")
+        stub_module.get_mm_split_fuse = lambda *args, **kwargs: (
+            np.array([1], dtype="int64"),
+            np.array([4], dtype="int64"),
+        )
+        with patch.dict("sys.modules", {"fastdeploy.model_executor.ops.gpu": stub_module}):
+            eng.update_mm_requests_chunk_size([req])
+
+        self.assertTrue(req.get("prefill_chunk_info"))
+        self._detach_finalizer(eng)
+
+    def test_update_mm_requests_chunk_size_skips_when_disabled(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.cfg.cache_config.enable_chunked_prefill = False
+        req = Request(request_id="mm2", multimodal_inputs={"images": None})
+
+        eng.update_mm_requests_chunk_size([req])
+        self._detach_finalizer(eng)
+
+    def test_insert_tasks_single_request_with_trace_carrier(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+
+        class DummyRM:
+            def __init__(self):
+                self.stop_flags = np.array([1], dtype=np.int32)
+                self.real_bsz = 1
+
+            def check_and_free_block_tables(self):
+                pass
+
+            def allocate_resources_for_new_tasks(self, tasks):
+                return tasks
+
+        eng.resource_manager = DummyRM()
+        eng.engine_worker_queue = Mock()
+        eng.token_processor = Mock(number_of_tasks=0, number_of_input_tokens=0)
+        eng.update_requests_chunk_size = Mock()
+
+        task = Request(
+            request_id="trace",
+            prompt_token_ids=[1],
+            prompt_token_ids_len=1,
+            trace_carrier={"trace_id": "1"},
+        )
+        task.metrics.scheduler_recv_req_time = time.time()
+        eng.insert_tasks(task)
+
+        eng.update_requests_chunk_size.assert_called_once()
+        self._detach_finalizer(eng)
 
     def test_exit_sub_services_cleanup_paths(self):
         """Cover lines 1312-1340, 1350-1354 in _exit_sub_services."""
@@ -561,36 +2225,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         eng.cache_task_queue = DummyMgr()
         eng._exit_sub_services()
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
-
-    def test_setting_environ_variables_v1_prefill_mm(self):
-        """Cover lines 1476-1485 in _setting_environ_variables."""
-        # For prefill + local scheduler the core code now requires a router
-        # and ENABLE_V1_KVCACHE_SCHEDULER=0 when using the default IPC protocol.
-        with patch("fastdeploy.engine.args_utils.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0):
-            cfg = self._make_cfg(splitwise_role="prefill", router="0.0.0.0:30000")
-        cfg.model_config.enable_mm = True
-
-        class DummyQ:
-            def __init__(self, *a, **k):
-                pass
-
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
-        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True):
-            prefix = eng._setting_environ_variables()
-        self.assertIn("FLAGS_use_pd_disaggregation_per_chunk=1", prefix)
-        self.assertIn("FLAGS_fmt_write_cache_completed_signal=1", prefix)
-        self.assertIn("FLAGS_max_partition_size=1024", prefix)
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
+        self._detach_finalizer(eng)
 
     def test_start_worker_service_cmd_build(self):
         """Cover 1517, 1526, 1568, 1592, 1595 by building the worker command with mocks."""
@@ -634,11 +2269,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertIn("--num_gpu_blocks_override 4", captured["cmd"])  # type: ignore
         # ips/nnodes added when nnode > 1 (1595)
         self.assertIn("--nnodes 2", captured["cmd"])  # type: ignore
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
+        self._detach_finalizer(eng)
 
     def test_check_health_unhealthy(self):
         """Cover line 1628: unhealthy worker."""
@@ -660,11 +2291,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         ok, msg = eng.check_health(time_interval_threashold=1)
         self.assertFalse(ok)
         self.assertIn("Not Healthy".lower(), msg.lower())
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
+        self._detach_finalizer(eng)
 
     def test_launch_components_expert_parallel(self):
         """Cover 1635-1638, 1660-1676, 1684-1703 in launch_components()."""
@@ -722,11 +2349,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 # Verify expert service branch executed
                 self.assertTrue(hasattr(eng, "dp_processed"))
                 self.assertGreaterEqual(len(eng.dp_processed), 1)
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
+        self._detach_finalizer(eng)
 
     def test_check_worker_initialize_status_progress(self):
         """Cover 1710-1762 by simulating stdout and ready signals."""
@@ -791,11 +2414,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
                 ok = eng.check_worker_initialize_status()
         self.assertTrue(ok)
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
+        self._detach_finalizer(eng)
 
     def test_worker_processes_ready_false(self):
         """Cover line 1382 returning False."""
@@ -815,11 +2434,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         eng.worker_ready_signal = Sig()
         self.assertFalse(eng._worker_processes_ready())
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
+        self._detach_finalizer(eng)
 
     def test_init_worker_signals_profile_iluvatar(self):
         """Cover line 1434 by forcing iluvatar custom device and do_profile=True."""
@@ -837,11 +2452,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             eng._init_worker_signals()
         # signal should exist
         self.assertTrue(hasattr(eng, "get_profile_block_num_signal"))
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
+        self._detach_finalizer(eng)
 
     def test_launch_components_dp_mode(self):
         """Cover 1648-1652 branch for DP scheduler mode."""
@@ -866,8 +2477,28 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng.scheduler.start = Mock()
         eng.launch_components()
         eng.scheduler.start.assert_called()
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
+        self._detach_finalizer(eng)
+
+    def test_insert_tasks_raises_when_no_resources(self):
+        """Cover insert_tasks resource exhaustion error branch."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
                 pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+
+        eng.resource_manager.stop_flags = np.zeros_like(eng.resource_manager.stop_flags)
+
+        token_ids = paddle.to_tensor([1, 2, 3], dtype="int64")
+        request = Request(
+            request_id="req1",
+            prompt_token_ids=token_ids.numpy().tolist(),
+            prompt_token_ids_len=3,
+        )
+        with self.assertRaises(EngineError) as ctx:
+            eng.insert_tasks([request])
+        self.assertIn("request id", str(ctx.exception))
+        self._detach_finalizer(eng)

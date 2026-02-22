@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import asyncio
 import inspect
 import os
 import re
@@ -29,7 +30,12 @@ from filelock import FileLock
 import fastdeploy.metrics.trace as tracing
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.engine.request import RequestStatus
+from fastdeploy.engine.request import (
+    ControlRequest,
+    ControlResponse,
+    Request,
+    RequestStatus,
+)
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.eplb.utils import RedundantExpertWorkload
@@ -51,8 +57,22 @@ from fastdeploy.utils import (
     ParameterError,
     StatefulSemaphore,
     api_server_logger,
+    obj_logger,
     to_tensor,
 )
+
+try:
+    import objgraph
+
+    _has_objgraph = True
+except ImportError:
+    _has_objgraph = False
+try:
+    import psutil
+
+    _has_psutil = True
+except ImportError:
+    _has_psutil = False
 
 
 class EngineClient:
@@ -87,6 +107,14 @@ class EngineClient:
         )
         self.enable_splitwise = self.fd_config.scheduler_config.splitwise_role != "mixed"
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.num_dp_per_node = self.max_chips_per_node // self.fd_config.parallel_config.tensor_parallel_size
+        self.data_parallel_rank = (
+            self.fd_config.node_rank * self.num_dp_per_node + self.fd_config.parallel_config.local_data_parallel_id
+        )
+        self.data_parallel_info = {
+            "dp_rank": self.data_parallel_rank,
+            "local_dp_rank": self.fd_config.parallel_config.local_data_parallel_id,
+        }
 
         if self.tensor_parallel_size <= self.max_chips_per_node:
             self.is_master = True
@@ -250,19 +278,19 @@ class EngineClient:
         self.zmq_client = ZmqIpcClient(model, mode)
         self.zmq_client.connect()
 
-    async def format_and_add_data(self, prompts: dict):
+    async def format_and_add_data(self, request: Request | dict):
         """
         Format the request data and send the request to the server.
         """
-        if "request_id" not in prompts:
+        if "request_id" not in request:
             request_id = str(uuid.uuid4())
-            prompts["request_id"] = request_id
+            request["request_id"] = request_id
 
-        if "max_tokens" not in prompts:
-            prompts["max_tokens"] = self.max_model_len - 1
+        if "max_tokens" not in request:
+            request["max_tokens"] = self.max_model_len - 1
 
-        await self.add_requests(prompts)
-        return prompts["prompt_token_ids"]
+        await self.add_requests(request)
+        return request["prompt_token_ids"]
 
     async def add_requests(self, task):
         """
@@ -275,8 +303,37 @@ class EngineClient:
         Returns:
             None
         """
+        # objgraph 统计，通过环境变量控制是否启用
+        if os.getenv("FD_ENABLE_OBJGRAPH_DEBUG") == "1":
+            if not _has_objgraph:
+                obj_logger.warning(
+                    "FD_ENABLE_OBJGRAPH_DEBUG is enabled but objgraph is not installed. Run `pip install objgraph` to enable it."
+                )
+            else:
+                request_id = task.get("request_id", "unknown")
+                obj_logger.info(f"\n{'='*60} OBJGRAPH DEBUG [request_id={request_id}] {'='*60}")
+                # 打印内存占用
+                if not _has_psutil:
+                    obj_logger.warning(
+                        "FD_ENABLE_OBJGRAPH_DEBUG is enabled but psutil is not installed. Run `pip install psutil` to enable it."
+                    )
+                else:
+                    process = psutil.Process()
+                    rss_memory = process.memory_info().rss / 1024**3
+                    obj_logger.info(f"Process Memory (RSS): {rss_memory:.2f} GB")
+                obj_logger.info("Object growth statistics:")
+                growth_data = objgraph.growth(limit=20)
+                for item in growth_data:
+                    if len(item) == 3:
+                        obj_type, current_count, growth = item
+                        obj_logger.info(f"  {obj_type:30s} {current_count:8d} +{growth}")
+                    elif len(item) == 2:
+                        obj_type, count = item
+                        obj_logger.info(f"  {obj_type:30s} +{count}")
+                    else:
+                        obj_logger.info(f"  {item}")
 
-        task["preprocess_start_time"] = time.time()
+        task["metrics"]["preprocess_start_time"] = time.time()
         request_id = task.get("request_id").split("_")[0]
         tracing.trace_slice_start(tracing.TraceSpanName.PREPROCESSING, request_id)
         trace_print(LoggingEventName.PREPROCESSING_START, task["request_id"], task.get("user", ""))
@@ -291,11 +348,12 @@ class EngineClient:
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
+            task["need_prefill_tokens"] = task["prompt_token_ids_len"]
 
             task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
-                del task["messages"]
+                task["messages"] = None
             api_server_logger.info(f"task['max_tokens']:{task['max_tokens']}")
             main_process_metrics.request_params_max_tokens.observe(task["max_tokens"])
             main_process_metrics.prompt_tokens_total.inc(input_ids_len)
@@ -319,7 +377,7 @@ class EngineClient:
             api_server_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
-        if "stop_seqs_len" in task:
+        if "stop_seqs_len" in task and task["stop_seqs_len"]:
             stop_seqs_len = task["stop_seqs_len"]
             max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
             if len(stop_seqs_len) > max_stop_seqs_num:
@@ -339,8 +397,8 @@ class EngineClient:
                     api_server_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-        task["preprocess_end_time"] = time.time()
-        preprocess_cost_time = task["preprocess_end_time"] - task["preprocess_start_time"]
+        task["metrics"]["preprocess_end_time"] = time.time()
+        preprocess_cost_time = task["metrics"]["preprocess_end_time"] - task["metrics"]["preprocess_start_time"]
         api_server_logger.info(
             f"Cache request with request_id ({task.get('request_id')}), "
             f"preprocess time cost {preprocess_cost_time}"
@@ -371,7 +429,7 @@ class EngineClient:
             raise EngineError(str(e), error_code=400)
 
     def _send_task(self, task):
-        if not self.enable_mm:
+        if not self.enable_mm and not envs.ENABLE_V1_DATA_PROCESSOR:
             self.zmq_client.send_json(task)
         else:
             if envs.FD_ENABLE_E2W_TENSOR_CONVERT:
@@ -517,6 +575,23 @@ class EngineClient:
 
         return True, ""
 
+    async def run_control_method(self, request: ControlRequest):
+        api_server_logger.info(f"Start Run Control Method: {request}")
+        self.zmq_client.send_json(request.to_dict())
+        request_id = request.request_id
+        dealer, response_queue = await self.connection_manager.get_connection(request_id)
+        dealer.write([b"", request_id.encode("utf-8")])
+        try:
+            # todo: support user specified timeout. default 600s is enough for most control cases
+            response = await asyncio.wait_for(response_queue.get(), timeout=600)
+            response = ControlResponse.from_dict(response[0])
+            api_server_logger.info(f"End Run Control Method: {response}")
+            return response
+        except asyncio.TimeoutError:
+            error_response = ControlResponse(request_id, 500, "Timeout waiting for control method response")
+            api_server_logger.error(f"Error Run Control Method: {error_response}")
+            return error_response
+
     def is_workers_alive(self):
         """
         Check the health of the model server by checking whether all workers are alive.
@@ -534,57 +609,85 @@ class EngineClient:
         2 : worker update finish and notify client
         """
         with self.clear_update_lock:
-            if self.enable_prefix_caching:
+
+            skip_action = False
+            return_code = None
+            return_body = {}
+
+            # model_weights_status_signal: CLEARED -> UPDATING -> NORMAL
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
+                skip_action = True
+                return_code = 200
+                return_body = {**self.data_parallel_info, "msg": "model weight is updated"}
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
+                skip_action = True
+                return_code = 400
+                return_body = {**self.data_parallel_info, "msg": "worker is updating model weight already"}
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
+                skip_action = True
+                return_code = 403
+                return_body = {**self.data_parallel_info, "msg": "worker is clearing model weight, cannot update now"}
+
+            if not skip_action:
+                self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
+                api_server_logger.info(
+                    f"[RL] >>> start updating model weight (weight status: {self.model_weights_status_signal.value[0]})"
+                    if not self.enable_cache_transfer
+                    else f"[RL] >>> start updating model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
+                )
+                while timeout >= 0:
+                    api_server_logger.info(
+                        f"[RL] ... weight status: {self.model_weights_status_signal.value[0]}"
+                        if not self.enable_cache_transfer
+                        else f"[RL] ... weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]}"
+                    )
+                    weight_updated = self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL
+                    cache_updated = self.kv_cache_status_signal.value[0] == KVCacheStatus.NORMAL
+                    if weight_updated and (not self.enable_cache_transfer or cache_updated):
+                        break
+                    time.sleep(1)
+                    timeout -= 1
+                if timeout < 0:
+                    return_code = 404
+                    return_body = {**self.data_parallel_info, "msg": "update model weight timeout"}
+                else:
+                    api_server_logger.info(
+                        f"[RL] <<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]})"
+                        if not self.enable_cache_transfer
+                        else f"[RL] <<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
+                    )
+            else:
+                api_server_logger.info(
+                    f"[RL] !!! skip updating model weight for the following reason: {return_body.get('msg')}"
+                )
+
+            if timeout >= 0 and self.enable_prefix_caching:
                 # prefix_tree_status_signal: CLEARED -> UPDATING -> NORMAL
                 if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARED:
                     self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.UPDATING
                     api_server_logger.info(
-                        f">>> start updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
+                        f"[RL] >>> start updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
                     )
                     while timeout >= 0 and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
-                        api_server_logger.info(f"... prefix tree status: {self.prefix_tree_status_signal.value[0]}")
+                        api_server_logger.info(
+                            f"[RL] ... prefix tree status: {self.prefix_tree_status_signal.value[0]}"
+                        )
                         time.sleep(1)
                         timeout -= 1
                     if timeout < 0:
-                        return False, "Update prefix tree timeout"
-                    api_server_logger.info(
-                        f"<<< finish updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
-                    )
+                        return_code = 404
+                        return_body = {**self.data_parallel_info, "msg": "update prefix tree timeout"}
+                    else:
+                        api_server_logger.info(
+                            f"[RL] <<< finish updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
+                        )
 
-            # model_weights_status_signal: CLEARED -> UPDATING -> NORMAL
-            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
-                return True, ""
-            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
-                return False, "worker is updating model weight already"
-            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
-                return False, "worker is clearing model weight, cannot update now"
-
-            self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
-            api_server_logger.info(
-                f">>> start updating model weight (weight status: {self.model_weights_status_signal.value[0]})"
-                if not self.enable_cache_transfer
-                else f">>> start updating model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
-            )
-            while timeout >= 0:
-                api_server_logger.info(
-                    f"... weight status: {self.model_weights_status_signal.value[0]}"
-                    if not self.enable_cache_transfer
-                    else f"... weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]}"
-                )
-                weight_updated = self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL
-                cache_updated = self.kv_cache_status_signal.value[0] == KVCacheStatus.NORMAL
-                if weight_updated and (not self.enable_cache_transfer or cache_updated):
-                    break
-                time.sleep(1)
-                timeout -= 1
-            if timeout < 0:
-                return False, "Update model weight timeout"
-            api_server_logger.info(
-                f"<<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]}"
-                if not self.enable_cache_transfer
-                else f"<<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
-            )
-            return True, ""
+            if return_code:
+                if return_code == 404:
+                    api_server_logger.error("[RL] ??? updating model weight time out")
+                return return_code, return_body
+            else:
+                return 200, {**self.data_parallel_info, "msg": "update model weight successfully"}
 
     def clear_load_weight(self, timeout=300):
         """
@@ -594,57 +697,84 @@ class EngineClient:
         """
 
         with self.clear_update_lock:
-            if self.enable_prefix_caching:
+
+            skip_action = False
+            return_code = None
+            return_body = {}
+
+            # model_weights_status_signal: NORMAL -> CLEARING -> CLEARED
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
+                skip_action = True
+                return_code = 200
+                return_body = {**self.data_parallel_info, "msg": "model weight is cleared"}
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
+                skip_action = True
+                return_code = 400
+                return_body = {**self.data_parallel_info, "msg": "worker is clearing model weight already"}
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
+                skip_action = True
+                return_code = 403
+                return_body = {**self.data_parallel_info, "msg": "worker is updating model weight, cannot clear now"}
+
+            if not skip_action:
+                self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
+                api_server_logger.info(
+                    f"[RL] >>> start clearing model weight (weight status: {self.model_weights_status_signal.value[0]}"
+                    if not self.enable_cache_transfer
+                    else f"[RL] >>> start clearing model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
+                )
+                while timeout >= 0:
+                    api_server_logger.info(
+                        f"[RL] ... weight status: {self.model_weights_status_signal.value[0]}"
+                        if not self.enable_cache_transfer
+                        else f"[RL] ... weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]}"
+                    )
+                    weight_cleared = self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED
+                    cache_cleared = self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARED
+                    if weight_cleared and (not self.enable_cache_transfer or cache_cleared):
+                        break
+                    time.sleep(1)
+                    timeout -= 1
+                if timeout < 0:
+                    return_code = 404
+                    return_body = {**self.data_parallel_info, "msg": "clear model weight timeout"}
+                else:
+                    api_server_logger.info(
+                        f"[RL] <<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]})"
+                        if not self.enable_cache_transfer
+                        else f"[RL] <<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
+                    )
+            else:
+                api_server_logger.info(
+                    f"[RL] !!! skip clearing model weight for the following reason: {return_body.get('msg')}"
+                )
+
+            if timeout >= 0 and self.enable_prefix_caching:
                 # prefix_tree_status_signal: NORMAL -> CLEARING -> CLEARED
                 if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL:
                     self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARING
                     api_server_logger.info(
-                        f">>> start clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
+                        f"[RL] >>> start clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
                     )
                     while timeout >= 0 and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.CLEARED:
-                        api_server_logger.info(f"... prefix tree status: {self.prefix_tree_status_signal.value[0]}")
+                        api_server_logger.info(
+                            f"[RL] ... prefix tree status: {self.prefix_tree_status_signal.value[0]}"
+                        )
                         time.sleep(1)
                         timeout -= 1
                     if timeout < 0:
-                        return False, "Clear prefix tree timeout"
-                    api_server_logger.info(
-                        f"<<< finish clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
-                    )
-
-            # model_weights_status_signal: NORMAL -> CLEARING -> CLEARED
-            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
-                return True, ""
-            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
-                return False, "worker is clearing model weight already"
-            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
-                return False, "worker is updating model weight, cannot clear now"
-
-            self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
-            api_server_logger.info(
-                f">>> start clearing model weight (weight status: {self.model_weights_status_signal.value[0]}"
-                if not self.enable_cache_transfer
-                else f">>> start clearing model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
-            )
-            while timeout >= 0:
-                api_server_logger.info(
-                    f"... weight status: {self.model_weights_status_signal.value[0]}"
-                    if not self.enable_cache_transfer
-                    else f"... weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]}"
-                )
-                weight_cleared = self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED
-                cache_cleared = self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARED
-                if weight_cleared and (not self.enable_cache_transfer or cache_cleared):
-                    break
-                time.sleep(1)
-                timeout -= 1
-            if timeout < 0:
-                return False, "Clear model weight timeout"
-            api_server_logger.info(
-                f"<<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]}"
-                if not self.enable_cache_transfer
-                else f"<<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
-            )
-            return True, ""
+                        return_code = 404
+                        return_body = {**self.data_parallel_info, "msg": "clear prefix tree timeout"}
+                    else:
+                        api_server_logger.info(
+                            f"[RL] <<< finish clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
+                        )
+            if return_code:
+                if return_code == 404:
+                    api_server_logger.error("[RL] ??? clearing model weight time out")
+                return return_code, return_body
+            else:
+                return 200, {**self.data_parallel_info, "msg": "clear model weight successfully"}
 
     def check_model_weight_status(self):
         return self.model_weights_status_signal.value[0] < 0

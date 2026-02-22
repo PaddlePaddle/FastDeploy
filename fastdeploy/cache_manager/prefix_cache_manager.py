@@ -31,7 +31,9 @@ import numpy as np
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.cache_metrics import CacheMetrics
+from fastdeploy.cache_manager.cache_tasks import ReadStorageTask, WriteStorageTask
 from fastdeploy.cache_manager.ops import get_all_visible_devices
+from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
@@ -47,7 +49,7 @@ class PrefixCacheManager:
 
     def __init__(
         self,
-        config,
+        config: FDConfig,
         tensor_parallel_size,
         splitwise_role="mixed",
         local_data_parallel_id=0,
@@ -118,14 +120,17 @@ class PrefixCacheManager:
         self.free_gpu_executor_pool = ThreadPoolExecutor(max_workers=1)
         self.free_cpu_executor_pool = ThreadPoolExecutor(max_workers=1)
         self.gpu_free_task_future = None
+        self.cpu_free_future = None
         self.cache_status_lock = Lock()
 
         logger.info(
-            f"num_gpu_blocks_server_owned {self.num_gpu_blocks} num_cpu_blocks "
-            + f"{self.num_cpu_blocks}, bytes_per_layer_per_block {self.cache_config.bytes_per_layer_per_block}"
+            f"Prefix cache manager is initialized with {self.num_gpu_blocks} gpu blocks "
+            f"and {self.num_cpu_blocks} cpu blocks, bytes_per_token_per_layer for each rank: "
+            f"{self.cache_config.bytes_per_token_per_layer / self.config.parallel_config.tensor_parallel_size}"
         )
 
         main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.max_cpu_block_num.set(self.num_cpu_blocks)
         main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
@@ -190,6 +195,22 @@ class PrefixCacheManager:
             create=True,
         )
 
+        self.cache_task_is_paused_signal = IPCSignal(
+            name="cache_task_is_paused",
+            array=np.zeros([1], dtype=np.int32),
+            dtype=np.int32,
+            suffix=engine_worker_queue_port,
+            create=True,
+        )
+
+        self.cache_task_inflight_signal = IPCSignal(
+            name="cache_task_inflight",
+            array=np.zeros([tensor_parallel_size], dtype=np.int32),
+            dtype=np.int32,
+            suffix=engine_worker_queue_port,
+            create=True,
+        )
+
         self.cache_task_queue = EngineCacheQueue(
             address=(pod_ip, cache_config.local_cache_queue_port),
             authkey=b"cache_queue_service",
@@ -207,7 +228,6 @@ class PrefixCacheManager:
         key_cache_shape, val_cache_shape = self._get_kv_cache_shape(cache_config.total_block_num)
         key_cache_shape = ",".join([str(i) for i in key_cache_shape])
         val_cache_shape = ",".join([str(i) for i in val_cache_shape])
-        logger.info(f"key_cache_shape {key_cache_shape} value_cache_shape {val_cache_shape}")
         if self.enable_splitwise:
             cache_messager_processes = self.launch_cache_messager(
                 cache_config,
@@ -247,6 +267,14 @@ class PrefixCacheManager:
             suffix=engine_worker_queue_port,
             create=False,
         )
+        cache_transfer_inited_signal_data = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
+        self.cache_transfer_inited_signal = IPCSignal(
+            name="cache_transfer_inited_signal",
+            array=cache_transfer_inited_signal_data,
+            dtype=np.int32,
+            suffix=engine_worker_queue_port,
+            create=False,
+        )
 
         # Run command to launch cache transfer managers
         log_dir = envs.FD_LOG_DIR
@@ -261,9 +289,9 @@ class PrefixCacheManager:
                 val_shape_str = str(val_cache_shape)
             val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
         if cache_config.kvcache_storage_backend:
-            kvcache_storage_backend_str = cache_config.kvcache_storage_backend
+            storage_arg_str = f" --kvcache_storage_backend {cache_config.kvcache_storage_backend}"
         else:
-            kvcache_storage_backend_str = "none"
+            storage_arg_str = " "
 
         if self.cache_config.swap_space or self.cache_config.kvcache_storage_backend:
             for i in range(tensor_parallel_size):
@@ -292,14 +320,19 @@ class PrefixCacheManager:
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                     + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                     + f" --default_dtype '{self.config.model_config.dtype}'"
-                    + (" --create_cache_tensor" if create_cache_tensor else "")
-                    + f" --kvcache_storage_backend {kvcache_storage_backend_str}"
+                    + (" --create_cache_tensor" if not self.enable_splitwise else "")
+                    + storage_arg_str
                     + f" --write_policy {cache_config.write_policy}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
+                    + f" --model_path {self.config.model_config.model}"
                     + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
                 )
                 logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
                 cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
+
+            logger.info("PrefixCacheManager is waiting for cache transfer manager to be initialized.")
+            while np.sum(self.cache_transfer_inited_signal.value) != tensor_parallel_size:
+                time.sleep(1)
 
         logger.info("PrefixCacheManager is waiting for kv cache to be initialized.")
         while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
@@ -321,7 +354,7 @@ class PrefixCacheManager:
         # Start additional threads
         if cache_config.kvcache_storage_backend or self.num_cpu_blocks > 0:
             logger.info("Enable hierarchical cache.")
-            threading.Thread(target=self.recv_data_transfer_result).start()
+            threading.Thread(target=self.recv_data_transfer_result, daemon=True).start()
         if cache_config.enable_prefix_caching:
             threading.Thread(target=self.clear_prefix_cache, daemon=True).start()
 
@@ -390,7 +423,7 @@ class PrefixCacheManager:
                 + f" --ipc_suffix {ipc_suffix}"
                 + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                + f" >{log_dir}/launch_cache_messager_tprank{i}.log 2>&1"
+                + f" >{log_dir}/launch_cache_messager_{i}.log 2>&1"
             )
             logger.info(f"Launch cache messager, command:{launch_cmd}")
             cache_messager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -426,6 +459,7 @@ class PrefixCacheManager:
         self.node_id_pool = list(range(self.num_gpu_blocks + self.num_cpu_blocks))
 
         main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.max_cpu_block_num.set(self.num_cpu_blocks)
         main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
@@ -533,7 +567,12 @@ class PrefixCacheManager:
         """
         sync swap task
         """
-        self.task_swapping_event[transfer_task_id].wait()
+        while True:
+            flag = self.task_swapping_event[transfer_task_id].wait(timeout=0.1)
+            if flag or self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
+                if not flag:
+                    logger.info(f"swap task timeout because prefix tree status is not normal: {transfer_task_id}")
+                break
         del self.task_swapping_event[transfer_task_id]
 
     def _check_validity(self, req_id, match_gpu_blocks_num, expected_block_num):
@@ -660,8 +699,13 @@ class PrefixCacheManager:
                 self.req_to_radix_tree_info[req_id] = [leaf_node, can_cache_computed_tokens]
                 task.num_cached_blocks = can_cache_computed_tokens // block_size
         except Exception as e:
-            logger.error(f"update_cache_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
-            raise e
+            if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
+                logger.warning(
+                    f"update_cache_blocks: an error occured while prefix tree status is not normal, ignore it. {e}"
+                )
+            else:
+                logger.error(f"update_cache_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
+                raise e
 
     def is_chunked_mm_input(self, mm_inputs, matched_token_num):
         """
@@ -789,9 +833,15 @@ class PrefixCacheManager:
                         f"start prefetch cache from storage, req_id: {req_id}, block num: {len(no_match_block_keys)}"
                     )
                     start_time = time.time()
-                    storage_matched_block_ids = self.issue_prefetch_storage_task(
-                        req_id, no_match_block_keys, gpu_recv_storage_block_ids
+                    read_storage_task = ReadStorageTask(
+                        task_id=req_id,
+                        keys=no_match_block_keys,
+                        token_ids=input_token_ids,
+                        gpu_block_ids=gpu_recv_storage_block_ids,
+                        start_read_block_idx=match_token_num // block_size,
                     )
+                    logger.debug(f"issue read storage task: {read_storage_task}")
+                    storage_matched_block_ids = self.issue_prefetch_storage_task(read_storage_task)
                     storage_matched_block_num = len(storage_matched_block_ids)
                     storage_match_token_num = storage_matched_block_num * block_size
                     cost_time = time.time() - start_time
@@ -837,8 +887,13 @@ class PrefixCacheManager:
                 task.num_cached_blocks = len(common_block_ids)
                 return common_block_ids, match_token_num, metrics
             except Exception as e:
-                logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
-                raise e
+                if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
+                    logger.warning(
+                        f"request_match_blocks: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    )
+                else:
+                    logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
+                    raise e
 
     def request_block_ids(self, task, block_size, dec_token_num, *args):
         """
@@ -939,8 +994,13 @@ class PrefixCacheManager:
                 )
                 return common_block_ids, unique_block_ids, hit_info
             except Exception as e:
-                logger.error(f"request_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
-                raise e
+                if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
+                    logger.warning(
+                        f"request_block_ids: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    )
+                else:
+                    logger.error(f"request_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
+                    raise e
 
     def release_block_ids_async(self, task):
         """
@@ -995,8 +1055,13 @@ class PrefixCacheManager:
                 )
                 return
             except Exception as e:
-                logger.error(f"release_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
-                raise e
+                if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
+                    logger.warning(
+                        f"release_block_ids: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    )
+                else:
+                    logger.error(f"release_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
+                    raise e
 
     def write_cache_to_storage(self, request: Request):
         """
@@ -1005,6 +1070,12 @@ class PrefixCacheManager:
         """
         if self.kvcache_storage_backend is None:
             return
+
+        token_ids = request.prompt_token_ids
+        if isinstance(token_ids, np.ndarray):
+            token_ids = token_ids.tolist()
+        if self.config.cache_config.enable_output_caching:
+            token_ids += request.output_token_ids
 
         req_id = request.request_id
         keys = []
@@ -1018,24 +1089,33 @@ class PrefixCacheManager:
 
         gpu_block_ids = request.block_tables[: len(keys)]
         logger.info(f"start write cache back to storage, req_id: {req_id}, block num: {len(keys)}")
+        write_storage_task = WriteStorageTask(
+            task_id=req_id,
+            keys=keys,
+            token_ids=token_ids,
+            gpu_block_ids=gpu_block_ids,
+        )
+        logger.debug(f"issue write storage task: {write_storage_task}")
         tic = time.time()
-        self.issue_write_back_storage_task(req_id=req_id, hash_keys=keys, gpu_block_ids=gpu_block_ids, is_sync=True)
+        self.issue_write_back_storage_task(write_storage_task, is_sync=True)
         cost_time = time.time() - tic
         logger.info(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
 
-    def issue_write_back_storage_task(self, req_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.5):
+    def issue_write_back_storage_task(self, task: WriteStorageTask, is_sync=True):
         if self.kvcache_storage_backend is None:
             return
 
-        if len(hash_keys) != len(gpu_block_ids):
-            err_msg = f"write_back_storage error: hash_keys({len(hash_keys)}) != gpu_block_ids({len(gpu_block_ids)})"
+        if len(task.keys) != len(task.gpu_block_ids):
+            err_msg = (
+                f"write_back_storage error: hash_keys({len(task.keys)}) != gpu_block_ids({len(task.gpu_block_ids)})"
+            )
             logger.error(err_msg)
             raise ValueError(err_msg)
 
-        self.task_write_back_event[req_id] = Event()
-        self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, req_id, hash_keys, gpu_block_ids, timeout))
+        self.task_write_back_event[task.task_id] = Event()
+        self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task))
         if is_sync:
-            self.wait_write_storage_task(req_id)
+            self.wait_write_storage_task(task.task_id)
 
     def wait_write_storage_task(self, req_id):
         """
@@ -1045,16 +1125,19 @@ class PrefixCacheManager:
             self.task_write_back_event[req_id].wait()
             del self.task_write_back_event[req_id]
 
-    def issue_prefetch_storage_task(self, req_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.5):
+    def issue_prefetch_storage_task(self, task: ReadStorageTask, is_sync=True):
         """
         Prefetch cache from storage task
         """
+        if self.kvcache_storage_backend is None:
+            return []
+
         storage_block_ids = []
-        self.task_prefetch_event[req_id] = Event()
+        self.task_prefetch_event[task.task_id] = Event()
         # issue task to cache_transfer_manager
-        self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, req_id, hash_keys, gpu_block_ids, timeout))
+        self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, task))
         if is_sync:
-            storage_block_ids = self.wait_prefetch_storage_task(req_id)
+            storage_block_ids = self.wait_prefetch_storage_task(task.task_id)
         return storage_block_ids
 
     def wait_prefetch_storage_task(self, req_id):
@@ -1102,8 +1185,13 @@ class PrefixCacheManager:
                     else:
                         break
             except Exception as e:
-                logger.error(f"free_nodes_directly: error: {type(e)} {e}")
-                raise e
+                if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
+                    logger.warning(
+                        f"free_nodes_directly: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    )
+                else:
+                    logger.error(f"free_nodes_directly: error: {type(e)} {e}")
+                    raise e
 
     def _handle_free_gpu_node_without_cpu(self, node):
         """
@@ -1274,15 +1362,17 @@ class PrefixCacheManager:
 
                 # swap cache to cpu
                 if hash_value_gpu_block_ids_map:
-                    cpu_free_future = None
+                    self.cpu_free_future = None
                     if total_gpu_free_count > len(self.cpu_free_block_list):
                         cpu_free_count = total_gpu_free_count
                         if cpu_free_count < need_block_num:
                             cpu_free_count = need_block_num
-                        cpu_free_future = self.free_cpu_executor_pool.submit(self.free_cpu_block_ids, cpu_free_count)
+                        self.cpu_free_future = self.free_cpu_executor_pool.submit(
+                            self.free_cpu_block_ids, cpu_free_count
+                        )
                     self.gpu_free_task_future = self.free_gpu_executor_pool.submit(
                         self._evict_cache_async,
-                        cpu_free_future,
+                        self.cpu_free_future,
                         total_gpu_free_count,
                         hash_value_gpu_block_ids_map,
                         hash_value_block_ids_map,
@@ -1293,8 +1383,13 @@ class PrefixCacheManager:
                 else:
                     self.gpu_free_task_future = None
             except Exception as e:
-                logger.error(f"free_block_ids_async: error: {type(e)} {e}, {str(traceback.format_exc())}")
-                raise e
+                if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
+                    logger.warning(
+                        f"free_block_ids_async: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    )
+                else:
+                    logger.error(f"free_block_ids_async: error: {type(e)} {e}, {str(traceback.format_exc())}")
+                    raise e
 
     def free_cpu_block_ids(self, need_block_num):
         """
@@ -1608,6 +1703,96 @@ class PrefixCacheManager:
             node.req_id_set.add(req_id)
             node = node.parent
 
+    def cache_output_blocks(self, task, block_size):
+        """
+        Cache blocks already computed.
+        """
+        try:
+            with self.request_release_lock:
+                req_id = task.request_id
+                logger.info(f"Cache output tokens for task {req_id}")
+                last_node, num_cached_tokens = self.req_to_radix_tree_info[req_id]
+                if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
+                    self.leaf_req_map[last_node].remove(req_id)
+                if isinstance(task.prompt_token_ids, np.ndarray):
+                    prompt_token_ids = task.prompt_token_ids.tolist()
+                else:
+                    prompt_token_ids = task.prompt_token_ids
+                input_ids = prompt_token_ids + task.output_token_ids
+                total_token_num = len(input_ids)
+                can_cache_computed_tokens = total_token_num - total_token_num % block_size
+                current_match_node = last_node
+                has_modified_gpu_lru_leaf_heap = False
+                has_modified_cpu_lru_leaf_heap = False
+                can_recycle_gpu_block_ids = []
+                can_recycle_cpu_block_ids = []
+                gpu_block_ids_to_cache = task.block_tables[num_cached_tokens // block_size :].copy()
+                current_time = time.time()
+                prefix_block_key = [] if last_node.hash_value is None else [last_node.hash_value]
+
+                with self.cache_status_lock:
+                    while num_cached_tokens < total_token_num:
+                        token_block = input_ids[num_cached_tokens : num_cached_tokens + block_size]
+                        token_num = len(token_block)
+                        if token_num != block_size:
+                            break
+                        hash_value = get_hash_str(token_block, prefix_block_key)
+                        prefix_block_key = [hash_value]
+                        if hash_value in current_match_node.children:
+                            child = current_match_node.children[hash_value]
+                            child.increment_shared_count()
+                            child.last_used_time = current_time
+                            child.req_id_set.add(req_id)
+                            if child in self.gpu_lru_leaf_set:
+                                self.gpu_lru_leaf_set.remove(child)
+                                self.gpu_lru_leaf_heap.remove(child)
+                                has_modified_gpu_lru_leaf_heap = True
+                            elif child in self.cpu_lru_leaf_set:
+                                self.cpu_lru_leaf_set.remove(child)
+                                self.cpu_lru_leaf_heap.remove(child)
+                                has_modified_cpu_lru_leaf_heap = True
+                            if child.has_in_gpu:
+                                can_recycle_gpu_block_ids.append(gpu_block_ids_to_cache.pop(0))
+                            else:
+                                if child.cache_status == CacheStatus.SWAP2CPU:
+                                    logger.info(
+                                        f"cache_output_blocks: req_id {task.request_id} matched node"
+                                        + f" {child.node_id} which is being SWAP2CPU"
+                                    )
+                                    child.cache_status = CacheStatus.GPU
+                                    can_recycle_gpu_block_ids.append(gpu_block_ids_to_cache.pop(0))
+                                elif child.cache_status == CacheStatus.CPU:
+                                    can_recycle_cpu_block_ids.append(child.block_id)
+                                    child.cache_status = CacheStatus.GPU
+                                    gpu_block_id = gpu_block_ids_to_cache.pop(0)
+                                    child.block_id = gpu_block_id
+                            num_cached_tokens = num_cached_tokens + block_size
+                            current_match_node = child
+                        else:
+                            break
+
+                if has_modified_gpu_lru_leaf_heap:
+                    heapq.heapify(self.gpu_lru_leaf_heap)
+                if has_modified_cpu_lru_leaf_heap:
+                    heapq.heapify(self.cpu_lru_leaf_heap)
+                self.recycle_gpu_blocks(can_recycle_gpu_block_ids)
+                self.recycle_cpu_blocks(can_recycle_cpu_block_ids)
+
+                leaf_node = self.mm_build_path(
+                    request=task,
+                    num_computed_tokens=can_cache_computed_tokens,
+                    block_size=block_size,
+                    last_node=current_match_node,
+                    num_cached_tokens=num_cached_tokens,
+                )
+                self.req_leaf_map[req_id] = leaf_node
+                self.leaf_req_map[leaf_node].add(req_id)
+                self.req_to_radix_tree_info[req_id] = (leaf_node, can_cache_computed_tokens)
+                task.num_cached_blocks = can_cache_computed_tokens // block_size
+        except Exception as e:
+            logger.error(f"cache_output_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
+            raise e
+
     def mm_build_path(self, request, num_computed_tokens, block_size, last_node, num_cached_tokens):
         """
         Constructs a caching path in radix tree for multimodal requests by processing computed tokens.
@@ -1876,25 +2061,40 @@ class PrefixCacheManager:
                         + f"task_cpu_block_id {task_cpu_block_id} event_type {event_type} done"
                     )
             except Exception as e:
-                logger.warning(f"recv_data_transfer_result: error: {e}, {str(traceback.format_exc())}")
-                raise e
+                if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
+                    logger.warning(
+                        f"recv_data_transfer_result: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    )
+                else:
+                    logger.error(f"recv_data_transfer_result: {str(traceback.format_exc())}")
+                    raise e
 
     def reset(self):
         """
         Reset the RadixTree.
         """
+        logger.info(f"wait for cache_task_inflight_signal to reset {self.cache_task_inflight_signal.value}")
+        while np.sum(self.cache_task_inflight_signal.value) != 0:
+            time.sleep(0.1)
 
-        if len(self.node_map) == 0:
-            return
+        logger.info("wait for recv_data_transfer_result done")
+        while not self.cache_task_queue.result_queue_empty():
+            time.sleep(0.1)
 
-        logger.info("Resetting the RadixTree!")
+        logger.info(f"Resetting the RadixTree! node_map len {len(self.node_map)}")
 
-        # wait for swap tasks to finish
+        logger.info("waiting for cpu_free_future to finish")
+        if self.cpu_free_future is not None:
+            self.cpu_free_future.result()
+        self.cpu_free_future = None
+        logger.info("reset cpu_free_future")
+
+        logger.info("waiting for gpu_free_task_future to finish")
         if self.gpu_free_task_future is not None:
             self.gpu_free_task_future.result()
-            self.gpu_free_task_future = None
-        for event in list(self.task_swapping_event.values()):
-            event.wait()
+        self.gpu_free_task_future = None
+        logger.info("reset gpu_free_task_future")
+
         self.task_swapping_event.clear()
 
         # clear node map

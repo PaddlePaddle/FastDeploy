@@ -17,6 +17,7 @@
 import unittest
 from unittest.mock import MagicMock
 
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.serving_completion import (
     CompletionRequest,
     OpenAIServingCompletion,
@@ -39,15 +40,17 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         request = CompletionRequest(prompt="test prompt", max_tokens=10, echo=True, logprobs=1)
 
         mock_output = {
+            "request_id": "test_id",
             "outputs": {
                 "text": " generated text",
                 "token_ids": [1, 2, 3],
                 "top_logprobs": {"token1": -0.1, "token2": -0.2},
                 "finished": True,
             },
-            "output_token_ids": 3,
             "metrics": {},
         }
+        mock_output = RequestOutput.from_dict(mock_output)
+        mock_output.output_token_ids = 3
         self.mock_engine.generate.return_value = [mock_output]
 
         response = self.completion_handler.request_output_to_completion_response(
@@ -74,15 +77,17 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         request = CompletionRequest(prompt=[1, 2, 3], max_tokens=10, echo=True, logprobs=1)
 
         mock_output = {
+            "request_id": "test_id",
             "outputs": {
                 "text": " generated text",
                 "token_ids": [1, 2, 3],
                 "top_logprobs": {"token1": -0.1, "token2": -0.2},
                 "finished": True,
             },
-            "output_token_ids": 3,
             "metrics": {},
         }
+        mock_output = RequestOutput.from_dict(mock_output)
+        mock_output.output_token_ids = 3
         self.mock_engine.generate.return_value = [mock_output]
 
         response = self.completion_handler.request_output_to_completion_response(
@@ -109,16 +114,19 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
 
         mock_outputs = [
             {
+                "request_id": "test_id",
                 "outputs": {"text": " response1", "token_ids": [1, 2], "top_logprobs": None, "finished": True},
-                "output_token_ids": 2,
                 "metrics": {},
             },
             {
+                "request_id": "test_id",
                 "outputs": {"text": " response2", "token_ids": [3, 4], "top_logprobs": None, "finished": True},
-                "output_token_ids": 2,
                 "metrics": {},
             },
         ]
+        mock_outputs = [RequestOutput.from_dict(item) for item in mock_outputs]
+        for item in mock_outputs:
+            item.output_token_ids = 2
         self.mock_engine.generate.return_value = mock_outputs
 
         response = self.completion_handler.request_output_to_completion_response(
@@ -148,16 +156,19 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
 
         mock_outputs = [
             {
+                "request_id": "test_id",
                 "outputs": {"text": " response1", "token_ids": [1, 2], "top_logprobs": None, "finished": True},
-                "output_token_ids": 2,
                 "metrics": {},
             },
             {
+                "request_id": "test_id",
                 "outputs": {"text": " response2", "token_ids": [3, 4], "top_logprobs": None, "finished": True},
-                "output_token_ids": 2,
                 "metrics": {},
             },
         ]
+        mock_outputs = [RequestOutput.from_dict(item) for item in mock_outputs]
+        for item in mock_outputs:
+            item.output_token_ids = 2
         self.mock_engine.generate.return_value = mock_outputs
 
         response = self.completion_handler.request_output_to_completion_response(
@@ -180,34 +191,37 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
 
     async def test_single_str_prompt_streaming(self):
         request = CompletionRequest(prompt="test prompt", max_tokens=10, stream=True, echo=True)
-        res = {"outputs": {"send_idx": 0, "text": "!"}}
+        res = {"request_id": "test_id", "outputs": {"send_idx": 0, "text": "!"}}
+        res = RequestOutput.from_dict(res)
         idx = 0
 
         instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
-        res = await instance._process_echo_logic(request, idx, res["outputs"])
-        self.assertEqual(res["text"], "test prompt!")
+        res = await instance._process_echo_logic(request, idx, res.outputs)
+        self.assertEqual(res.text, "test prompt!")
 
     """Testing echo prompts in streaming of a single int prompt"""
 
     async def test_single_int_prompt_streaming(self):
         request = CompletionRequest(prompt=[1, 2, 3], max_tokens=10, stream=True, echo=True)
-        res = {"outputs": {"send_idx": 0, "text": "!"}}
+        res = {"request_id": "test_id", "outputs": {"send_idx": 0, "text": "!"}}
+        res = RequestOutput.from_dict(res)
         idx = 0
 
         instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
-        res = await instance._process_echo_logic(request, idx, res["outputs"])
-        self.assertEqual(res["text"], "decoded_[1, 2, 3]!")
+        res = await instance._process_echo_logic(request, idx, res.outputs)
+        self.assertEqual(res.text, "decoded_[1, 2, 3]!")
 
     """Testing echo prompts in streaming of multi str prompt"""
 
     async def test_multi_str_prompt_streaming(self):
         request = CompletionRequest(prompt=["test prompt1", "test prompt2"], max_tokens=10, stream=True, echo=True)
-        res = {"outputs": {"send_idx": 0, "text": "!"}}
+        res = {"request_id": "test_id", "outputs": {"send_idx": 0, "text": "!"}}
+        res = RequestOutput.from_dict(res)
         idx = 0
 
         instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
-        res = await instance._process_echo_logic(request, idx, res["outputs"])
-        self.assertEqual(res["text"], "test prompt1!")
+        res = await instance._process_echo_logic(request, idx, res.outputs)
+        self.assertEqual(res.text, "test prompt1!")
 
 
 if __name__ == "__main__":

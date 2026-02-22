@@ -41,6 +41,8 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
 )
 
+from .utils import get_moe_scores
+
 
 class XPUMoEMethod(MoEMethodBase):
     """
@@ -339,12 +341,23 @@ class XPUMoEMethod(MoEMethodBase):
         Apply TP Scatter Op.
         """
         gate_out = gate(x.cast("float32"))
-        topk_idx, topk_weights = moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            layer.top_k,
-            True,
-        )
+        if layer.topk_method == "noaux_tc":
+            _, topk_idx, topk_weights = get_moe_scores(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                layer.top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+                layer.renormalize,
+            )
+        else:
+            topk_idx, topk_weights = moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                layer.top_k,
+                True,
+            )
         token_nums_per_expert_list = list(range(layer.num_local_experts))  # placeholder, not use
         (
             permute_input,
@@ -453,18 +466,19 @@ class XPUMoEMethod(MoEMethodBase):
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
         # 2. Dynamic compute blockwise quantization scales
-        if "a_tokenwise_int8" in self.xpu_moe_quant_type:
+        if "a_tokenwise_int8" in self.xpu_moe_quant_type and x.shape[0] > 0:
             x, x_scale = quant2d_per_token(x)
         else:
             x_scale = None
+
         # 3. EP Dispatch
         (
             recv_x,
-            recv_x_scales,
             recv_topk_idx,
             recv_topk_weights,
             recv_num_tokens_per_expert_list,
-            _,
+            handle,
+            event,
         ) = self.ep_prefill_runner.dispatch(
             x,
             topk_idx,
@@ -472,9 +486,13 @@ class XPUMoEMethod(MoEMethodBase):
             x_scale=x_scale,
         )
 
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+
+        recv_x, recv_x_scales = recv_x if isinstance(recv_x, tuple) else (recv_x, None)
+
         # 4. Compute ffn
-        token_num_per_expert = recv_num_tokens_per_expert_list.numpy().tolist()
-        token_all_num = sum(token_num_per_expert)
+        token_all_num = sum(recv_num_tokens_per_expert_list)
         if "a_expertwise_int8" in self.xpu_moe_quant_type:
             moe_dispatch_scale = getattr(layer, self.added_in_scale_attrs[0])
         elif "a_tokenwise_int8" in self.xpu_moe_quant_type:
@@ -492,7 +510,7 @@ class XPUMoEMethod(MoEMethodBase):
             recv_topk_idx,
             recv_topk_weights,
             moe_dispatch_scale,
-            token_num_per_expert,
+            recv_num_tokens_per_expert_list,
             token_all_num,
             self.moe_quant_type,
         )
@@ -521,8 +539,10 @@ class XPUMoEMethod(MoEMethodBase):
         )
 
         # 5. EP combine
-        handle = None
-        return self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+        return tmp_ffn_out
 
     def apply_ep_decode(
         self,

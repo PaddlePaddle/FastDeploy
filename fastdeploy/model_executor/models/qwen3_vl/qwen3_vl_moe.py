@@ -244,6 +244,7 @@ class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration):
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         logger.info(f"[Qwen3Moe-VL] params_dict names: {list(params_dict.keys())} ")
         for loaded_weight_name, loaded_weight in weights_iterator:
+            logger.debug(f"Loading weight: {loaded_weight_name}")
             loaded_weight_name = loaded_weight_name.replace(".language_model", "")
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if "experts.gate_up_proj" in loaded_weight_name or "experts.down_proj" in loaded_weight_name:

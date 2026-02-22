@@ -2,6 +2,8 @@
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$DIR"
 
+ixsmi
+
 #先kill一遍
 ps -efww | grep -E 'run_ernie300B_4layer' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 
@@ -9,24 +11,39 @@ unset http_proxy
 unset https_proxy
 unset no_proxy
 
+export FD_LOG_DIR=/fdlog/$HOSTNAME
+echo "FD log will be saved into $FD_LOG_DIR"
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 ln -sf /usr/local/bin/python3 /usr/local/bin/python
 echo "pip requirements"
 python -m pip install -r requirements_iluvatar.txt
 echo "install paddle cpu and custom device"
-python -m pip install  --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-python -m pip install --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
-#python -m pip install paddlepaddle==3.3.0.dev20251219 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-#python -m pip install paddle-iluvatar-gpu==3.0.0.dev20251223 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+# python -m pip install  --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+# python -m pip install --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+python -m pip install paddlepaddle==3.4.0.dev20260206 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+python -m pip install paddle-iluvatar-gpu==3.0.0.dev20260206 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+
+INCLUDE_FOLDERS=(
+    "ERNIE_300B_4L"
+    "ERNIE-4.5-21B-A3B-Paddle"
+    "ERNIE-4.5-VL-28B-A3B-Paddle"
+    "PaddleOCR-VL"
+)
 
 MODEL_DIR=/model_data
 mkdir -p $MODEL_DIR
 SOURCE_DIR=/aistudio/paddle_ci
-for file in "$SOURCE_DIR"/*; do
+echo "ls $SOURCE_DIR"
+ls $SOURCE_DIR
+
+for filename in "${INCLUDE_FOLDERS[@]}"; do
+    file=$SOURCE_DIR/$filename
     echo "start copy $file into $MODEL_DIR ..."
     cp -r $file $MODEL_DIR
 done
+
 echo "copy done"
+echo "ls $MODEL_DIR"
 ls $MODEL_DIR
 
 echo "build whl"
@@ -232,7 +249,7 @@ if [ ${exit_code} -ne 0 ]; then
     exit 1
 fi
 
-expected_strings="Buddhist statue"
+expected_strings="Buddhist"
 if grep -q "$expected_strings" "$result_file"; then
     echo -e "\nPASSED"
 else

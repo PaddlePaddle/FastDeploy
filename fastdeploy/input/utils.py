@@ -16,10 +16,12 @@
 
 __all__ = [
     "IDS_TYPE_FLAG",
+    "MAX_IMAGE_DIMENSION",
 ]
 
 IDS_TYPE_FLAG = {"text": 0, "image": 1, "video": 2, "audio": 3}
 
+MAX_IMAGE_DIMENSION = 9999999
 
 from typing import Any, Callable, Dict, List, Tuple
 

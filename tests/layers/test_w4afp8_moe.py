@@ -6,6 +6,9 @@ import unittest
 import paddle
 from paddle.distributed import fleet
 
+# from fastdeploy.worker.worker_process import init_distributed_environment
+from utils import OpPerformanceTester
+
 from fastdeploy.config import (
     CacheConfig,
     FDConfig,
@@ -18,9 +21,6 @@ from fastdeploy.config import (
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.w4afp8 import W4AFP8Config
 from fastdeploy.scheduler import SchedulerConfig
-
-# from fastdeploy.worker.worker_process import init_distributed_environment
-from tests.utils import OpPerformanceTester
 
 paddle.set_default_dtype("bfloat16")
 
