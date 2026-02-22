@@ -338,6 +338,20 @@ class PrefixCacheManagerTest(unittest.TestCase):
             self.assertTrue(manager.can_allocate_gpu_blocks(1))
             mock_free.assert_called_once_with(1)
 
+    def test_sync_swap_task_breaks_when_tree_status_changes(self):
+        manager = _create_manager()
+        manager.prefix_tree_status_signal.value[0] = PrefixTreeStatus.UPDATING
+
+        class _NeverSetEvent:
+            def wait(self, timeout=None):
+                return False
+
+        manager.task_swapping_event["timeout-task"] = _NeverSetEvent()
+
+        manager.sync_swap_task("timeout-task")
+
+        self.assertNotIn("timeout-task", manager.task_swapping_event)
+
     def test_check_validity_raises_when_memory_is_insufficient(self):
         manager = _create_manager(num_gpu_blocks=2)
 
@@ -2321,6 +2335,82 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
         manager.cache_task_queue = _BadQueue()
 
         with self.assertRaises(AttributeError):
+            manager.recv_data_transfer_result()
+
+    def test_cache_output_blocks_handles_cpu_hit_and_updates_leaf(self):
+        manager = _create_manager(num_gpu_blocks=4, num_cpu_blocks=1)
+        req_id = "cache-out"
+        child = _make_block_node(manager, node_id=230, input_ids=[1, 2], cache_status=CacheStatus.CPU)
+        child.block_id = 9
+        manager.cpu_lru_leaf_heap.append(child)
+        manager.cpu_lru_leaf_set.add(child)
+        manager.req_to_radix_tree_info[req_id] = (manager.radix_tree_root, 0)
+        manager.leaf_req_map[manager.radix_tree_root].add(req_id)
+        task = SimpleNamespace(
+            request_id=req_id,
+            prompt_token_ids=[1, 2],
+            output_token_ids=[3, 4],
+            block_tables=[7, 8],
+        )
+
+        with (
+            patch.object(manager, "mm_build_path", return_value=child) as mock_build,
+            patch.object(manager, "recycle_gpu_blocks") as mock_recycle_gpu,
+            patch.object(manager, "recycle_cpu_blocks") as mock_recycle_cpu,
+        ):
+            manager.cache_output_blocks(task, block_size=2)
+
+        mock_build.assert_called_once()
+        mock_recycle_gpu.assert_called_once_with([])
+        mock_recycle_cpu.assert_called_once_with([9])
+        self.assertEqual(child.cache_status, CacheStatus.GPU)
+        self.assertEqual(child.block_id, 7)
+        self.assertEqual(task.num_cached_blocks, 2)
+
+    def test_non_normal_prefix_tree_status_swallows_expected_errors(self):
+        manager = _create_manager()
+        manager.prefix_tree_status_signal.value[0] = PrefixTreeStatus.UPDATING
+
+        with patch.object(manager, "match_block", side_effect=RuntimeError("boom")):
+            manager.request_block_ids(
+                SimpleNamespace(prompt_token_ids=[1], request_id="req"), block_size=2, dec_token_num=0
+            )
+
+        with patch.object(manager, "mm_match_block", side_effect=RuntimeError("boom")):
+            manager.request_match_blocks(
+                SimpleNamespace(prompt_token_ids=[1], output_token_ids=[], request_id="req"),
+                block_size=2,
+            )
+
+        manager.update_cache_blocks(
+            SimpleNamespace(request_id="missing", output_token_ids=[1], block_tables=[0]),
+            block_size=2,
+            num_computed_tokens=2,
+        )
+        manager.release_block_ids(SimpleNamespace(request_id="missing"))
+
+        node = _make_block_node(manager, node_id=231, input_ids=[1, 2])
+        node.shared_count = 0
+        with patch.object(manager, "_handle_free_gpu_node_without_cpu", side_effect=ValueError("boom")):
+            manager.free_nodes_directly(node)
+
+        manager.gpu_lru_leaf_heap.append(node)
+        manager.gpu_lru_leaf_set.add(node)
+        with patch("fastdeploy.cache_manager.prefix_cache_manager.heapq.heappop", side_effect=RuntimeError("boom")):
+            manager.free_block_ids_async(need_block_num=1)
+
+        class _OneBadThenExitQueue:
+            def __init__(self):
+                self.calls = 0
+
+            def get_transfer_done_signal(self):
+                self.calls += 1
+                if self.calls == 1:
+                    return ("bad",)
+                raise SystemExit
+
+        manager.cache_task_queue = _OneBadThenExitQueue()
+        with self.assertRaises(SystemExit):
             manager.recv_data_transfer_result()
 
     def test_release_block_ids_async_submits(self):
