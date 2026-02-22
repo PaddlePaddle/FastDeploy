@@ -303,6 +303,63 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         cache_queue_patcher.start()
         self.addCleanup(cache_queue_patcher.stop)
 
+    class _Sig:
+        def __init__(self, v=0):
+            self.value = np.array([v], dtype=np.int32)
+
+        def clear(self):
+            pass
+
+    @staticmethod
+    def _make_full_dummy_q_cls():
+        class DummyQ:
+            def __init__(self, *a, **k):
+                self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
+
+            def get_server_port(self):
+                return 0
+
+            def cleanup(self):
+                pass
+
+            def num_tasks(self):
+                return 0
+
+            def num_cache_infos(self):
+                return 0
+
+            def disaggregate_queue_empty(self):
+                return True
+
+            def get_disaggregated_tasks(self):
+                return []
+
+        return DummyQ
+
+    @staticmethod
+    def _make_dummy_executor(eng):
+        class DummyExecutor:
+            def __init__(self, max_workers=None):
+                pass
+
+            def submit(self, fn):
+                try:
+                    fn()
+                finally:
+                    eng.running = False
+
+        return DummyExecutor
+
+    def _make_mixed_engine(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        return self._make_engine(cfg)
+
+    def _setup_v1_engine(self, eng):
+        eng.running = True
+        eng.is_paused = False
+        eng._pause_cond = threading.Condition()
+        self.addCleanup(lambda: setattr(eng, "running", False))
+
     @staticmethod
     def _detach_finalizer(engine):
         if hasattr(engine, "_finalizer"):
@@ -360,29 +417,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         return _Proc()
 
     def _make_engine(self, cfg):
-        class DummyQ:
-            def __init__(self, *a, **k):
-                self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
-
-            def get_server_port(self):
-                return 0
-
-            def cleanup(self):
-                pass
-
-            def num_tasks(self):
-                return 0
-
-            def num_cache_infos(self):
-                return 0
-
-            def disaggregate_queue_empty(self):
-                return True
-
-            def get_disaggregated_tasks(self):
-                return []
-
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_full_dummy_q_cls()):
             eng = EngineService(cfg, start_queue=False, use_async_llm=False)
         return eng
 
@@ -424,7 +459,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def get_disaggregated_tasks(self):
                 return []
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_full_dummy_q_cls()):
             eng = EngineService(cfg, start_queue=False, use_async_llm=True)
 
         # Patch heavy pieces
@@ -499,7 +534,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def get_disaggregated_tasks(self):
                 return []
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_full_dummy_q_cls()):
             eng = EngineService(cfg, start_queue=False, use_async_llm=True)
 
         eng.create_data_processor = lambda: setattr(eng, "data_processor", self._stub_processor())
@@ -546,8 +581,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_update_requests_chunk_size_assigns_chunks(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.partial_chunked_tokens = [0, 32, 16, 8]
         eng.cfg.scheduler_config.max_num_batched_tokens = 32
         eng.cfg.cache_config.block_size = 8
@@ -568,8 +602,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_update_mm_requests_chunk_size_with_stub_fuse(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.cfg.cache_config.enable_chunked_prefill = True
         eng.partial_chunked_tokens = [0, 16]
         eng.data_processor = type("DP", (), {"image_patch_id": 9})()
@@ -600,8 +633,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_send_error_response_routes(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.send_response_server = Mock()
 
         with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
@@ -616,8 +648,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_decode_token_with_return_text(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyProcessor:
             def __init__(self):
@@ -637,8 +668,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_decode_token_without_return_text(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", False):
             delta, token_ids = eng._decode_token([9, 10], "rid", is_end=False)
@@ -648,8 +678,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_decode_token_return_text_empty_delta(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyProcessor:
             def __init__(self):
@@ -669,8 +698,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_clear_data_success_and_failure(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.token_processor = Mock()
         eng.engine_worker_queue = Mock()
         eng.send_response_server = Mock(req_dict={"a": 1})
@@ -740,8 +768,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_task_finished_helpers(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyRM:
             def __init__(self):
@@ -813,8 +840,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_init_worker_signals_with_profile(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.ipc_signal_suffix = 7777
         eng.do_profile = 1
 
@@ -834,8 +860,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_worker_processes_ready_and_health(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.worker_ready_signal = type("Sig", (), {"value": np.array([1], dtype=np.int32)})()
         eng.cfg.worker_num_per_node = 1
         self.assertTrue(eng._worker_processes_ready())
@@ -892,8 +917,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_start_worker_service_builds_command(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.do_profile = 0
         eng.data_processor = type(
             "DP",
@@ -921,8 +945,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_exit_sub_services_cleans_up(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.use_async_llm = True
         eng.worker_proc = Mock(pid=1234)
         eng.cache_manager_processes = [Mock(pid=2345)]
@@ -978,8 +1001,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_start_cache_service_forwards_args(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.resource_manager.cache_manager = Mock()
         eng.resource_manager.cache_manager.launch_cache_manager = Mock(return_value=["proc"])
 
@@ -990,8 +1012,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_control_update_weights_success(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.is_paused = True
         eng._pause_cond = threading.Condition()
         eng._call_worker = Mock(return_value={"ok": True})
@@ -1001,8 +1022,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_control_pause_and_resume_paths(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.is_paused = False
         eng._pause_cond = threading.Condition()
         eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
@@ -1030,8 +1050,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_run_control_method_unknown_and_success(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.send_response_server = Mock()
         eng._pause_cond = threading.Condition()
 
@@ -1045,8 +1064,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_run_control_method_handler_exception(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.send_response_server = Mock()
         eng._pause_cond = threading.Condition()
 
@@ -1057,8 +1075,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_call_worker_puts_tasks_and_returns(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.engine_worker_queue = Mock()
 
         class DummyQueue:
@@ -1075,8 +1092,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_control_update_weights_requires_pause(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.is_paused = False
         eng._pause_cond = threading.Condition()
 
@@ -1085,8 +1101,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_register_to_router_disabled(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.cfg.router_config.router = None
 
         with (
@@ -1100,8 +1115,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_register_to_router_enabled_starts_thread(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.cfg.router_config.router = "http://router"
 
         with patch("fastdeploy.engine.common_engine.threading.Thread") as thread_mock:
@@ -1112,8 +1126,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_insert_zmq_task_to_scheduler_normal_request(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
         eng.is_paused = False
         eng.guided_decoding_checker = None
@@ -1222,8 +1235,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_schedule_request_to_worker_waits_for_capacity(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
 
         class DummyRM:
@@ -1240,12 +1252,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_schedule_request_to_worker_v1_mixed_single_iteration(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
-        eng.running = True
-        eng.is_paused = False
-        eng._pause_cond = threading.Condition()
-        self.addCleanup(lambda: setattr(eng, "running", False))
+        eng = self._make_mixed_engine()
+        self._setup_v1_engine(eng)
 
         task = Request(request_id="v1_r0", prompt_token_ids=[1], prompt_token_ids_len=1)
         task.metrics.scheduler_recv_req_time = time.time()
@@ -1284,7 +1292,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         try:
             with (
-                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", DummyExecutor),
+                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
                 patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
             ):
                 eng._schedule_request_to_worker_v1()
@@ -1302,10 +1310,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             kv_cache_ratio=1,
         )
         eng = self._make_engine(cfg)
-        eng.running = True
-        eng.is_paused = False
-        eng._pause_cond = threading.Condition()
-        self.addCleanup(lambda: setattr(eng, "running", False))
+        self._setup_v1_engine(eng)
 
         task = Request(request_id="v1_p0", prompt_token_ids=[2], prompt_token_ids_len=1)
         task.idx = 0
@@ -1361,7 +1366,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         try:
             with (
                 patch("fastdeploy.engine.common_engine.envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", False),
-                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", DummyExecutor),
+                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
                 patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
             ):
                 eng._schedule_request_to_worker_v1()
@@ -1379,10 +1384,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             router="0.0.0.0:30000",
         )
         eng = self._make_engine(cfg)
-        eng.running = True
-        eng.is_paused = False
-        eng._pause_cond = threading.Condition()
-        self.addCleanup(lambda: setattr(eng, "running", False))
+        self._setup_v1_engine(eng)
 
         task = Request(request_id="v1_d0", prompt_token_ids=[3], prompt_token_ids_len=1)
         task.task_type = RequestType.PREEMPTED
@@ -1421,7 +1423,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         try:
             with (
-                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", DummyExecutor),
+                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
                 patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
             ):
                 eng._schedule_request_to_worker_v1()
@@ -1440,10 +1442,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             router="0.0.0.0:30000",
         )
         eng = self._make_engine(cfg)
-        eng.running = True
-        eng.is_paused = False
-        eng._pause_cond = threading.Condition()
-        self.addCleanup(lambda: setattr(eng, "running", False))
+        self._setup_v1_engine(eng)
 
         task = Request(request_id="v1_d1", prompt_token_ids=[4], prompt_token_ids_len=1)
         task.task_type = RequestType.PREFILL
@@ -1482,7 +1481,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         try:
             with (
-                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", DummyExecutor),
+                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
                 patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
             ):
                 eng._schedule_request_to_worker_v1()
@@ -1499,10 +1498,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             router="0.0.0.0:30000",
         )
         eng = self._make_engine(cfg)
-        eng.running = True
-        eng.is_paused = False
-        eng._pause_cond = threading.Condition()
-        self.addCleanup(lambda: setattr(eng, "running", False))
+        self._setup_v1_engine(eng)
 
         task = Request(request_id="v1_e0", prompt_token_ids=[1], prompt_token_ids_len=1)
         task.task_type = RequestType.PREFILL
@@ -1541,7 +1537,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                     eng.running = False
 
         with (
-            patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", DummyExecutor),
+            patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
             eng._schedule_request_to_worker_v1()
@@ -1551,12 +1547,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_schedule_request_to_worker_v1_threadpool_shutdown_breaks(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
-        eng.running = True
-        eng.is_paused = False
-        eng._pause_cond = threading.Condition()
-        self.addCleanup(lambda: setattr(eng, "running", False))
+        eng = self._make_mixed_engine()
+        self._setup_v1_engine(eng)
 
         eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False))
 
@@ -1578,7 +1570,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 raise RuntimeError("cannot schedule new futures after shutdown")
 
         with (
-            patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", DummyExecutor),
+            patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
             eng._schedule_request_to_worker_v1()
@@ -1593,10 +1585,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             kv_cache_ratio=1,
         )
         eng = self._make_engine(cfg)
-        eng.running = True
-        eng.is_paused = False
-        eng._pause_cond = threading.Condition()
-        self.addCleanup(lambda: setattr(eng, "running", False))
+        self._setup_v1_engine(eng)
 
         task = Request(request_id="pc_ok", prompt_token_ids=[1], prompt_token_ids_len=1)
         task.idx = 0
@@ -1664,7 +1653,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", True),
-            patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", DummyExecutor),
+            patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
             eng._schedule_request_to_worker_v1()
@@ -1683,10 +1672,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             kv_cache_ratio=1,
         )
         eng = self._make_engine(cfg)
-        eng.running = True
-        eng.is_paused = False
-        eng._pause_cond = threading.Condition()
-        self.addCleanup(lambda: setattr(eng, "running", False))
+        self._setup_v1_engine(eng)
 
         task = Request(request_id="pc_fail", prompt_token_ids=[1], prompt_token_ids_len=1)
         task.idx = 0
@@ -1756,7 +1742,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", True),
-            patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", DummyExecutor),
+            patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
             eng._schedule_request_to_worker_v1()
@@ -1767,8 +1753,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_start_zmq_service_ipc_servers(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyServer:
             def __init__(self, *args, **kwargs):
@@ -1801,8 +1786,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_start_zmq_service_internal_adapter_tcp(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyServer:
             def __init__(self, *args, **kwargs):
@@ -1833,14 +1817,12 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_start_zmq_service_none(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.start_zmq_service(api_server_pid=None)
         self._detach_finalizer(eng)
 
     def test_insert_zmq_task_to_scheduler_abort_request(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
         eng.is_paused = False
         eng.guided_decoding_checker = None
@@ -1875,8 +1857,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_insert_zmq_task_to_scheduler_paused_sends_error(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
         eng.is_paused = True
         eng.guided_decoding_checker = None
@@ -1904,8 +1885,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_insert_zmq_task_to_scheduler_context_terminated(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
 
         class DummyRecv:
@@ -1931,8 +1911,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_insert_zmq_task_to_scheduler_error_reinit(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
 
         class DummyRecv:
@@ -2021,8 +2000,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_zmq_send_generated_tokens_single_batch(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
         eng.send_response_server = Mock()
 
@@ -2056,8 +2034,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_zmq_send_generated_tokens_non_internal_adapter_empty_and_other(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
         eng.send_response_server = Mock()
         eng._decode_token = Mock(return_value=("", []))
@@ -2088,8 +2065,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_zmq_send_generated_tokens_logs_exception(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
         eng.send_response_server = Mock()
 
@@ -2108,8 +2084,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_zmq_send_generated_tokens_internal_adapter_decode(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
         eng.send_response_server = Mock()
 
@@ -2152,8 +2127,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_zmq_send_generated_tokens_internal_adapter_decode_type_one(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
         eng.send_response_server = Mock()
 
@@ -2187,8 +2161,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_zmq_send_generated_tokens_internal_adapter_warns_on_empty(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
         eng.send_response_server = Mock()
 
@@ -2223,8 +2196,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_zmq_send_generated_tokens_empty_results(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
         eng.scheduler = Mock()
 
@@ -2239,8 +2211,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_zmq_send_generated_tokens_decode_type_zero(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
         eng.send_response_server = Mock()
 
@@ -2275,8 +2246,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_zmq_send_generated_tokens_warns_on_empty(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.running = True
         eng.send_response_server = Mock()
 
@@ -2311,8 +2281,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_wait_all_control_responses_success(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyQueue:
             def __init__(self, name, payload):
@@ -2332,8 +2301,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_wait_all_control_responses_ignores_mismatch(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyQueue:
             def __init__(self, name, payload):
@@ -2353,8 +2321,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_wait_all_control_responses_error_paths(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyQueue:
             def __init__(self, name, payload):
@@ -2373,8 +2340,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_wait_all_control_responses_none_message(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyQueue:
             def __init__(self, name):
@@ -2390,8 +2356,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_wait_all_control_responses_error_code(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyQueue:
             def __init__(self, name, payload):
@@ -2410,8 +2375,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_wait_all_control_responses_timeout(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyQueue:
             def __init__(self):
@@ -2529,8 +2493,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_insert_tasks_sets_prefill_flag(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyRM:
             def __init__(self):
@@ -2561,15 +2524,13 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_update_requests_chunk_size_empty_inputs(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.cfg.cache_config.enable_chunked_prefill = True
         eng.update_requests_chunk_size([])
         self._detach_finalizer(eng)
 
     def test_update_mm_requests_chunk_size_handles_none_images(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.cfg.cache_config.enable_chunked_prefill = True
         eng.partial_chunked_tokens = [0, 16]
         eng.data_processor = type("DP", (), {"image_patch_id": 9})()
@@ -2598,8 +2559,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_update_mm_requests_chunk_size_expands_grid(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.cfg.cache_config.enable_chunked_prefill = True
         eng.partial_chunked_tokens = [0, 16]
         eng.data_processor = type("DP", (), {"image_patch_id": 9})()
@@ -2626,8 +2586,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_update_mm_requests_chunk_size_skips_when_disabled(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
         eng.cfg.cache_config.enable_chunked_prefill = False
         req = Request(request_id="mm2", multimodal_inputs={"images": None})
 
@@ -2635,8 +2594,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_insert_tasks_single_request_with_trace_carrier(self):
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
-        eng = self._make_engine(cfg)
+        eng = self._make_mixed_engine()
 
         class DummyRM:
             def __init__(self):
@@ -2680,7 +2638,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def cleanup(self):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_full_dummy_q_cls()):
             eng = EngineService(cfg, start_queue=False, use_async_llm=True)
 
         # attach stubs used by cleanup
@@ -2768,7 +2726,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_full_dummy_q_cls()):
             eng = EngineService(cfg, start_queue=False, use_async_llm=True)
         eng.data_processor = self._stub_processor()
 
@@ -2807,7 +2765,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_full_dummy_q_cls()):
             eng = EngineService(cfg, start_queue=False, use_async_llm=True)
 
         class Sig:
@@ -2845,7 +2803,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def cleanup(self):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_full_dummy_q_cls()):
             eng = EngineService(cfg, start_queue=True, use_async_llm=True)
 
         # Init signals to create launched_expert_service_signal
@@ -2887,7 +2845,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_full_dummy_q_cls()):
             eng = EngineService(cfg, start_queue=False, use_async_llm=True)
 
         # Fake worker process stdout content that matches regexes
@@ -2952,7 +2910,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_full_dummy_q_cls()):
             eng = EngineService(cfg, start_queue=False, use_async_llm=True)
 
         class Sig:
@@ -2973,7 +2931,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_full_dummy_q_cls()):
             eng = EngineService(cfg, start_queue=False, use_async_llm=True)
         eng.ipc_signal_suffix = cfg.parallel_config.engine_worker_queue_port[0]
         with patch("fastdeploy.engine.common_engine.paddle.is_compiled_with_custom_device", return_value=True):
@@ -2999,7 +2957,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_full_dummy_q_cls()):
             eng = EngineService(cfg, start_queue=False, use_async_llm=True)
         # Patch scheduler.start so it doesn't do heavy work
         eng.scheduler.start = Mock()
@@ -3015,7 +2973,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self, *a, **k):
                 pass
 
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_full_dummy_q_cls()):
             eng = EngineService(cfg, start_queue=False, use_async_llm=False)
 
         eng.resource_manager.stop_flags = np.zeros_like(eng.resource_manager.stop_flags)

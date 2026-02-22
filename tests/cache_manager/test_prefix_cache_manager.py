@@ -16,6 +16,7 @@ import sys
 import threading
 import types
 import unittest
+from contextlib import ExitStack, contextmanager
 from functools import partial
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -237,6 +238,70 @@ def _make_block_node(manager, node_id, input_ids, *, block_size=2, parent=None, 
     return node
 
 
+@contextmanager
+def _launch_cache_manager_patches(manager, *, popen, kv_shape=([1], [1]), signal=_DummyIPCSignal):
+    with ExitStack() as stack:
+        stack.enter_context(patch("fastdeploy.cache_manager.prefix_cache_manager.IPCSignal", side_effect=signal))
+        stack.enter_context(
+            patch("fastdeploy.cache_manager.prefix_cache_manager.EngineCacheQueue", _DummyEngineCacheQueue)
+        )
+        stack.enter_context(
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value="CUDA_VISIBLE_DEVICES=0",
+                create=True,
+            )
+        )
+        stack.enter_context(patch("fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen", popen))
+        stack.enter_context(patch("fastdeploy.cache_manager.prefix_cache_manager.threading.Thread", _TrackingThread))
+        stack.enter_context(patch.object(manager, "_get_kv_cache_shape", return_value=kv_shape))
+        yield stack
+
+
+@contextmanager
+def _launch_cache_messager_patches(*, popen, signal=_DummyIPCSignal, sleep_side_effect=None):
+    with ExitStack() as stack:
+        stack.enter_context(patch("fastdeploy.cache_manager.prefix_cache_manager.IPCSignal", side_effect=signal))
+        stack.enter_context(
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value="CUDA_VISIBLE_DEVICES=0",
+                create=True,
+            )
+        )
+        stack.enter_context(patch("fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen", popen))
+        if sleep_side_effect is not None:
+            stack.enter_context(
+                patch("fastdeploy.cache_manager.prefix_cache_manager.time.sleep", side_effect=sleep_side_effect)
+            )
+        yield stack
+
+
+def _make_parent_child_nodes(manager, *, parent_id, child_id, cache_status=CacheStatus.GPU):
+    parent = _make_block_node(manager, node_id=parent_id, input_ids=[1, 2], cache_status=cache_status)
+    child = _make_block_node(
+        manager, node_id=child_id, input_ids=[1, 2, 3, 4], parent=parent, cache_status=cache_status
+    )
+    return parent, child
+
+
+def _set_pending_executors(manager):
+    manager.free_gpu_executor_pool = types.SimpleNamespace(submit=lambda *_: _PendingFuture())
+    manager.free_cpu_executor_pool = types.SimpleNamespace(submit=lambda *_: _PendingFuture())
+
+
+def _make_mm_build_request(
+    request_id, prompt_token_ids, *, output_token_ids=None, block_tables=None, multimodal_inputs=None
+):
+    return SimpleNamespace(
+        prompt_token_ids=prompt_token_ids,
+        output_token_ids=[] if output_token_ids is None else output_token_ids,
+        block_tables=[0] if block_tables is None else block_tables,
+        request_id=request_id,
+        multimodal_inputs={"mm_positions": [], "mm_hashes": []} if multimodal_inputs is None else multimodal_inputs,
+    )
+
+
 # Core behavior validation tests. These cases focus on black-box behavior
 # instead of binding to internal implementation details.
 class PrefixCacheManagerTest(unittest.TestCase):
@@ -420,34 +485,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
         manager = _create_manager()
         manager.cache_config.enable_hierarchical_cache = False
 
-        with (
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.IPCSignal",
-                side_effect=_DummyIPCSignal,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.EngineCacheQueue",
-                _DummyEngineCacheQueue,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
-                return_value="CUDA_VISIBLE_DEVICES=0",
-                create=True,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                _DummyProcess,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
-                _TrackingThread,
-            ),
-            patch.object(
-                manager,
-                "_get_kv_cache_shape",
-                return_value=([1], [1]),
-            ),
-        ):
+        with _launch_cache_manager_patches(manager, popen=_DummyProcess):
             processes = manager.launch_cache_manager(
                 cache_config=manager.cache_config,
                 tensor_parallel_size=1,
@@ -463,39 +501,10 @@ class PrefixCacheManagerTest(unittest.TestCase):
     def test_launch_cache_manager_invokes_splitwise_messager(self):
         manager = _create_manager(splitwise_role="decode")
         manager.cache_config.enable_hierarchical_cache = False
-        with (
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.IPCSignal",
-                side_effect=_DummyIPCSignal,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.EngineCacheQueue",
-                _DummyEngineCacheQueue,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
-                return_value="CUDA_VISIBLE_DEVICES=0",
-                create=True,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                _DummyProcess,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
-                _TrackingThread,
-            ),
-            patch.object(
-                manager,
-                "_get_kv_cache_shape",
-                return_value=([1], [1]),
-            ),
-            patch.object(
-                manager,
-                "launch_cache_messager",
-                return_value=[_DummyProcess()],
-            ) as mock_launch,
-        ):
+        with _launch_cache_manager_patches(manager, popen=_DummyProcess) as stack:
+            mock_launch = stack.enter_context(
+                patch.object(manager, "launch_cache_messager", return_value=[_DummyProcess()])
+            )
             manager.launch_cache_manager(
                 cache_config=manager.cache_config,
                 tensor_parallel_size=1,
@@ -511,26 +520,8 @@ class PrefixCacheManagerTest(unittest.TestCase):
     def test_launch_cache_manager_errors_when_messager_fails(self):
         manager = _create_manager(splitwise_role="decode")
         manager.cache_config.enable_hierarchical_cache = False
-        with (
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.IPCSignal",
-                side_effect=_DummyIPCSignal,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.EngineCacheQueue",
-                _DummyEngineCacheQueue,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                _DummyProcess,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
-                _TrackingThread,
-            ),
-            patch.object(manager, "_get_kv_cache_shape", return_value=([1], [1])),
-            patch.object(manager, "launch_cache_messager", return_value=None),
-        ):
+        with _launch_cache_manager_patches(manager, popen=_DummyProcess) as stack:
+            stack.enter_context(patch.object(manager, "launch_cache_messager", return_value=None))
             with self.assertRaises(RuntimeError):
                 manager.launch_cache_manager(
                     cache_config=manager.cache_config,
@@ -560,24 +551,8 @@ class PrefixCacheManagerTest(unittest.TestCase):
             signal.value[:] = 1
             ready_snapshots["after_ready"] = signal.value.copy()
 
-        with (
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.IPCSignal",
-                side_effect=_signal_factory,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
-                return_value="CUDA_VISIBLE_DEVICES=0",
-                create=True,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                _DummyProcess,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.time.sleep",
-                side_effect=_fake_sleep,
-            ),
+        with _launch_cache_messager_patches(
+            popen=_DummyProcess, signal=_signal_factory, sleep_side_effect=_fake_sleep
         ):
             processes = manager.launch_cache_messager(
                 cache_config=manager.cache_config,
@@ -598,21 +573,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
     def test_launch_cache_messager_returns_none_when_process_fails(self):
         manager = _create_manager()
 
-        with (
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.IPCSignal",
-                side_effect=_DummyIPCSignal,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
-                return_value="CUDA_VISIBLE_DEVICES=0",
-                create=True,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                partial(_DummyProcess, poll_value=2),
-            ),
-        ):
+        with _launch_cache_messager_patches(popen=partial(_DummyProcess, poll_value=2)):
             processes = manager.launch_cache_messager(
                 cache_config=manager.cache_config,
                 tensor_parallel_size=1,
@@ -638,33 +599,10 @@ class PrefixCacheManagerTest(unittest.TestCase):
             def poll(self):
                 return None
 
-        with (
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.IPCSignal",
-                side_effect=_DummyIPCSignal,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.EngineCacheQueue",
-                _DummyEngineCacheQueue,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
-                return_value="CUDA_VISIBLE_DEVICES=0",
-                create=True,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                side_effect=lambda cmd, **_: _CmdProcess(cmd),
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
-                _TrackingThread,
-            ),
-            patch.object(
-                manager,
-                "_get_kv_cache_shape",
-                return_value=([1], [2, 3]),
-            ),
+        with _launch_cache_manager_patches(
+            manager,
+            popen=lambda cmd, **_: _CmdProcess(cmd),
+            kv_shape=([1], [2, 3]),
         ):
             manager.launch_cache_manager(
                 cache_config=manager.cache_config,
@@ -1748,12 +1686,8 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
 
     def test_free_cpu_block_ids_continues_when_parent_in_lru(self):
         manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=2)
-        parent = BlockNode(143, [1, 2], 0, 1, 0, 2, get_hash_str([1, 2]), 0, parent=manager.radix_tree_root)
-        child_hash = get_hash_str([3, 4])
-        child = BlockNode(144, [1, 2, 3, 4], 0, 2, 1, 2, child_hash, 0, parent=parent)
-        child.cache_status = CacheStatus.CPU
+        parent, child = _make_parent_child_nodes(manager, parent_id=143, child_id=144, cache_status=CacheStatus.CPU)
         child.shared_count = 0
-        parent.children[child_hash] = child
         manager.cpu_lru_leaf_heap.append(child)
         manager.cpu_lru_leaf_set.add(child)
         manager.cpu_lru_leaf_set.add(parent)
@@ -1764,14 +1698,9 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
 
     def test_free_cpu_block_ids_pushes_parent_when_eligible(self):
         manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=2)
-        parent = BlockNode(145, [1, 2], 0, 1, 0, 2, get_hash_str([1, 2]), 0, parent=manager.radix_tree_root)
-        child_hash = get_hash_str([3, 4])
-        child = BlockNode(146, [1, 2, 3, 4], 0, 2, 1, 2, child_hash, 0, parent=parent)
-        child.cache_status = CacheStatus.CPU
+        parent, child = _make_parent_child_nodes(manager, parent_id=145, child_id=146, cache_status=CacheStatus.CPU)
         child.shared_count = 0
-        parent.cache_status = CacheStatus.CPU
         parent.shared_count = 0
-        parent.children[child_hash] = child
         manager.cpu_lru_leaf_heap.append(child)
         manager.cpu_lru_leaf_set.add(child)
 
@@ -1824,12 +1753,9 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
 
     def test_free_block_ids_async_breaks_when_enough_blocks_freed(self):
         manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=0)
-        parent = BlockNode(181, [1, 2], 0, 1, 0, 2, get_hash_str([1, 2]), 0, parent=manager.radix_tree_root)
+        parent, child = _make_parent_child_nodes(manager, parent_id=181, child_id=182)
         parent.shared_count = 0
-        child_hash = get_hash_str([3, 4])
-        child = BlockNode(182, [1, 2, 3, 4], 0, 2, 1, 2, child_hash, 0, parent=parent)
         child.shared_count = 0
-        parent.children[child_hash] = child
         manager.gpu_lru_leaf_heap.append(child)
         manager.gpu_lru_leaf_set.add(child)
 
@@ -1839,11 +1765,8 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
 
     def test_free_block_ids_async_continues_when_parent_in_lru(self):
         manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=0)
-        parent = BlockNode(183, [1, 2], 0, 1, 0, 2, get_hash_str([1, 2]), 0, parent=manager.radix_tree_root)
-        child_hash = get_hash_str([3, 4])
-        child = BlockNode(184, [1, 2, 3, 4], 0, 2, 1, 2, child_hash, 0, parent=parent)
+        parent, child = _make_parent_child_nodes(manager, parent_id=183, child_id=184)
         child.shared_count = 0
-        parent.children[child_hash] = child
         manager.gpu_lru_leaf_heap.append(child)
         manager.gpu_lru_leaf_set.update([child, parent])
 
@@ -1865,17 +1788,12 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
     def test_free_block_ids_async_handles_parent_in_lru_for_swap(self):
         manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=2)
         manager.cache_config.num_cpu_blocks = 2
-        node_hash = get_hash_str([1, 2])
-        parent = BlockNode(186, [1, 2], node_hash, 1, 0, 2, node_hash, 0, parent=manager.radix_tree_root)
-        child_hash = get_hash_str([3, 4])
-        child = BlockNode(187, [1, 2, 3, 4], node_hash, 2, 1, 2, child_hash, 0, parent=parent)
+        parent, child = _make_parent_child_nodes(manager, parent_id=186, child_id=187)
         child.shared_count = 0
-        parent.children[child_hash] = child
         manager.gpu_lru_leaf_heap.append(child)
         manager.gpu_lru_leaf_set.update([child, parent])
 
-        manager.free_gpu_executor_pool = types.SimpleNamespace(submit=lambda *_: _PendingFuture())
-        manager.free_cpu_executor_pool = types.SimpleNamespace(submit=lambda *_: _PendingFuture())
+        _set_pending_executors(manager)
 
         manager.free_block_ids_async(need_block_num=1)
 
@@ -1896,18 +1814,13 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
     def test_free_block_ids_async_pushes_parent_when_eligible_for_swap(self):
         manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=2)
         manager.cache_config.num_cpu_blocks = 2
-        node_hash = get_hash_str([1, 2])
-        parent = BlockNode(188, [1, 2], node_hash, 1, 0, 2, node_hash, 0, parent=manager.radix_tree_root)
-        child_hash = get_hash_str([3, 4])
-        child = BlockNode(189, [1, 2, 3, 4], node_hash, 2, 1, 2, child_hash, 0, parent=parent)
+        parent, child = _make_parent_child_nodes(manager, parent_id=188, child_id=189)
         child.shared_count = 0
         parent.shared_count = 0
-        parent.children[child_hash] = child
         manager.gpu_lru_leaf_heap.append(child)
         manager.gpu_lru_leaf_set.add(child)
 
-        manager.free_gpu_executor_pool = types.SimpleNamespace(submit=lambda *_: _PendingFuture())
-        manager.free_cpu_executor_pool = types.SimpleNamespace(submit=lambda *_: _PendingFuture())
+        _set_pending_executors(manager)
 
         manager.free_block_ids_async(need_block_num=1)
 
@@ -1974,13 +1887,7 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
 
     def test_mm_build_path_returns_last_node_when_already_cached(self):
         manager = _create_manager()
-        request = SimpleNamespace(
-            prompt_token_ids=np.array([1, 2]),
-            output_token_ids=[],
-            block_tables=[0],
-            request_id="cached",
-            multimodal_inputs={"mm_positions": [], "mm_hashes": []},
-        )
+        request = _make_mm_build_request("cached", np.array([1, 2]))
 
         leaf = manager.mm_build_path(
             request=request,
@@ -1994,13 +1901,7 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
 
     def test_mm_build_path_records_unfilled_block_on_root(self):
         manager = _create_manager(num_gpu_blocks=2)
-        request = SimpleNamespace(
-            prompt_token_ids=[1],
-            output_token_ids=[],
-            block_tables=[0],
-            request_id="unfilled",
-            multimodal_inputs={"mm_positions": [], "mm_hashes": []},
-        )
+        request = _make_mm_build_request("unfilled", [1])
 
         leaf = manager.mm_build_path(
             request=request,
@@ -2032,9 +1933,7 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
     def test_mm_match_block_handles_lru_removals(self):
         manager = _create_manager(num_gpu_blocks=2)
         block_size = 2
-        node_hash = get_hash_str([1, 2])
-        node = BlockNode(190, [1, 2], 0, 1, 0, block_size, node_hash, 0, parent=manager.radix_tree_root)
-        manager.radix_tree_root.children[node_hash] = node
+        node = _make_block_node(manager, node_id=190, input_ids=[1, 2], block_size=block_size)
         manager.gpu_lru_leaf_heap.append(node)
         manager.gpu_lru_leaf_set.add(node)
 
@@ -2052,10 +1951,8 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
     def test_mm_match_block_swaps_from_swap2cpu(self):
         manager = _create_manager(num_gpu_blocks=2)
         block_size = 2
-        node_hash = get_hash_str([1, 2])
-        node = BlockNode(192, [1, 2], 0, 1, 0, block_size, node_hash, 0, parent=manager.radix_tree_root)
+        node = _make_block_node(manager, node_id=192, input_ids=[1, 2], block_size=block_size)
         node.cache_status = CacheStatus.SWAP2CPU
-        manager.radix_tree_root.children[node_hash] = node
 
         request = SimpleNamespace(
             prompt_token_ids=[1, 2],
@@ -2090,10 +1987,8 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
     def test_mm_match_block_swaps_from_cpu_lru(self):
         manager = _create_manager(num_gpu_blocks=2)
         block_size = 2
-        node_hash = get_hash_str([1, 2])
-        node = BlockNode(191, [1, 2], 0, 1, 0, block_size, node_hash, 0, parent=manager.radix_tree_root)
+        node = _make_block_node(manager, node_id=191, input_ids=[1, 2], block_size=block_size)
         node.cache_status = CacheStatus.CPU
-        manager.radix_tree_root.children[node_hash] = node
         manager.cpu_lru_leaf_heap.append(node)
         manager.cpu_lru_leaf_set.add(node)
 
@@ -2140,10 +2035,8 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
     def test_match_block_swaps_node_from_swap2cpu(self):
         manager = _create_manager(num_gpu_blocks=2)
         block_size = 2
-        node_hash = get_hash_str([1, 2])
-        node = BlockNode(150, [1, 2], 0, 1, 0, block_size, node_hash, 0, parent=manager.radix_tree_root)
+        node = _make_block_node(manager, node_id=150, input_ids=[1, 2], block_size=block_size)
         node.cache_status = CacheStatus.SWAP2CPU
-        manager.radix_tree_root.children[node_hash] = node
         manager.gpu_lru_leaf_heap.append(node)
         manager.gpu_lru_leaf_set.add(node)
 
@@ -2163,10 +2056,8 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
     def test_match_block_handles_cpu_lru_leaf(self):
         manager = _create_manager(num_gpu_blocks=2)
         block_size = 2
-        node_hash = get_hash_str([1, 2])
-        node = BlockNode(155, [1, 2], 0, 1, 0, block_size, node_hash, 0, parent=manager.radix_tree_root)
+        node = _make_block_node(manager, node_id=155, input_ids=[1, 2], block_size=block_size)
         node.cache_status = CacheStatus.CPU
-        manager.radix_tree_root.children[node_hash] = node
         manager.cpu_lru_leaf_heap.append(node)
         manager.cpu_lru_leaf_set.add(node)
 
