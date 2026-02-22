@@ -314,6 +314,11 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/reasoning_phase_token_constraint.cu",
         "gpu_ops/get_attn_mask_q.cu",
     ]
+    sm_versions = get_sm_version(archs)
+    # Some kernels in this file require SM75+ instructions. Exclude them when building SM70 (V100).
+    disable_gelu_tanh = 70 in sm_versions
+    if disable_gelu_tanh:
+        sources = [s for s in sources if s != "gpu_ops/gelu_tanh.cu"]
 
     # pd_disaggregation
     sources += [
@@ -353,6 +358,9 @@ elif paddle.is_compiled_with_cuda():
 
     cc_compile_args = []
     nvcc_compile_args = get_gencode_flags(archs)
+    if disable_gelu_tanh:
+        cc_compile_args += ["-DDISABLE_GELU_TANH_OP"]
+        nvcc_compile_args += ["-DDISABLE_GELU_TANH_OP"]
     nvcc_compile_args += ["-DPADDLE_DEV"]
     nvcc_compile_args += ["-DPADDLE_ON_INFERENCE"]
     nvcc_compile_args += ["-DPy_LIMITED_API=0x03090000"]
@@ -371,7 +379,7 @@ elif paddle.is_compiled_with_cuda():
     print(f"nvcc_version = {nvcc_version}")
     if nvcc_version >= 12.0:
         sources += ["gpu_ops/sample_kernels/air_top_p_sampling.cu"]
-    cc = max(get_sm_version(archs))
+    cc = max(sm_versions)
     print(f"cc = {cc}")
     fp8_auto_gen_directory = "gpu_ops/cutlass_kernels/fp8_gemm_fused/autogen"
     if os.path.isdir(fp8_auto_gen_directory):
@@ -386,9 +394,14 @@ elif paddle.is_compiled_with_cuda():
             "gpu_ops/cutlass_kernels/w8a8/scaled_mm_entry.cu",
             "gpu_ops/cutlass_kernels/w8a8/scaled_mm_c2x.cu",
             "gpu_ops/quantization/common.cu",
+            # cpp_extensions.cc always registers these two ops; include their kernels on SM75 as well.
+            "gpu_ops/moe/moe_deepgemm_permute.cu",
+            "gpu_ops/moe/moe_deepgemm_depermute.cu",
         ]
 
     if cc >= 80:
+        cc_compile_args += ["-DENABLE_SM80_EXT_OPS"]
+        nvcc_compile_args += ["-DENABLE_SM80_EXT_OPS"]
         # append_attention
         os.system(
             "python utils/auto_gen_template_instantiation.py --config gpu_ops/append_attn/template_config.json --output gpu_ops/append_attn/template_instantiation/autogen"
