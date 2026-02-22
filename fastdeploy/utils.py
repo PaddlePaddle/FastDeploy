@@ -1166,9 +1166,13 @@ def download_from_bos(bos_client, bos_links, retry: int = 0):
     """
 
     def _bos_download(bos_client, link):
-        if link.startswith("bos://"):
-            link = link.replace("bos://", "")
-
+        try:
+            if isinstance(link, list) and len(link) > 0:
+                link = link[0]
+            if link.startswith("bos://"):
+                link = link.replace("bos://", "")
+        except Exception as e:
+            raise Exception(f"Bos Download link Error, Please check your links: {link} \n" f"{str(e)}")
         bucket_name = "/".join(link.split("/")[1:-1])
         object_key = link.split("/")[-1]
         return bos_client.get_object_as_string(bucket_name, object_key)
@@ -1210,6 +1214,7 @@ zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
 trace_logger = FastDeployLogger().get_trace_logger("trace", "trace.log")
 router_logger = get_logger("router", "router.log")
 fmq_logger = get_logger("fmq", "fmq.log")
+obj_logger = get_logger("obj", "obj.log")  # debug内存问题
 
 
 def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:
@@ -1323,6 +1328,30 @@ def to_tensor(tasks: List[Any]):
                     multimodal_inputs[key] = [paddle.to_tensor(v) for v in value]
     except Exception as e:
         llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
+
+
+def fill_paddle_tensor(shared_inputs_object, key, value):
+    """
+    Fill a paddle tensor with the given value.
+
+    Args:
+        shared_inputs_object: Either an object with attributes or a dictionary
+        key: The key/attribute name to access
+        value: The value to fill the tensor with
+    """
+    try:
+        # Handle both dictionary-style and object-style access
+        if hasattr(shared_inputs_object, key):
+            attr = getattr(shared_inputs_object, key)
+        elif hasattr(shared_inputs_object, "__getitem__") and key in shared_inputs_object:
+            attr = shared_inputs_object[key]
+        else:
+            return
+
+        if isinstance(attr, paddle.Tensor):
+            attr.fill_(value)
+    except Exception as e:
+        llm_logger.warning(f"Failed to fill key {key} with value {value}: {e}")
 
 
 def do_nothing(*args, **kwargs):

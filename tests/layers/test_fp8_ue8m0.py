@@ -80,17 +80,14 @@ class TestFP8LinearWithUe8m0Scale(unittest.TestCase):
             fake = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm")
             fake2 = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm.utils.math")
             fake2.per_block_cast_to_fp8 = fake_per_block_cast_to_fp8
-            fake3 = types.ModuleType("deep_gemm")
-            fake4 = types.ModuleType("deep_gemm.utils")
-            fake4.align = lambda x, y: (x + y - 1) // y * y
-            fake4.get_tma_aligned_size = lambda x, y: (x + 16 // y - 1) // (16 // y) * (16 // y)
-            sys.modules["deep_gemm"] = fake3
-            sys.modules["deep_gemm.utils"] = fake4
+            fake3 = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm.utils")
+            fake3.align = lambda x, y: (x + y - 1) // y * y
+            fake3.get_tma_aligned_size = lambda x, y: (x + 16 // y - 1) // (16 // y) * (16 // y)
 
-            deep_gemm_utils = sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm.utils"]
-            fake.utils = deep_gemm_utils
-            deep_gemm_utils.math = fake2
-            fake3.utils = fake4
+            fake.utils = fake3
+            fake3.math = fake2
+
+            sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm"].utils = fake3
 
         method.model_format = "torch"
         method.process_weights_after_loading(layer)
@@ -126,17 +123,14 @@ class TestFP8FusedMoeWithUe8m0Scale(unittest.TestCase):
             fake = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm")
             fake2 = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm.utils.math")
             fake2.per_block_cast_to_fp8 = fake_per_block_cast_to_fp8
-            fake3 = types.ModuleType("deep_gemm")
-            fake4 = types.ModuleType("deep_gemm.utils")
-            fake4.align = lambda x, y: (x + y - 1) // y * y
-            fake4.get_tma_aligned_size = lambda x, y: (x + 16 // y - 1) // (16 // y) * (16 // y)
-            sys.modules["deep_gemm"] = fake3
-            sys.modules["deep_gemm.utils"] = fake4
+            fake3 = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm.utils")
+            fake3.align = lambda x, y: (x + y - 1) // y * y
+            fake3.get_tma_aligned_size = lambda x, y: (x + 16 // y - 1) // (16 // y) * (16 // y)
 
-            deep_gemm_utils = sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm.utils"]
-            fake.utils = deep_gemm_utils
-            deep_gemm_utils.math = fake2
-            fake3.utils = fake4
+            fake.utils = fake3
+            fake3.math = fake2
+
+            sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm"].utils = fake3
 
         method.model_format = "torch"
         method.process_weights_after_loading(layer)

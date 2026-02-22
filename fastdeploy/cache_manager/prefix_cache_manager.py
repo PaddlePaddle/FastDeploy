@@ -124,11 +124,13 @@ class PrefixCacheManager:
         self.cache_status_lock = Lock()
 
         logger.info(
-            f"num_gpu_blocks_server_owned {self.num_gpu_blocks} num_cpu_blocks "
-            + f"{self.num_cpu_blocks}, bytes_per_layer_per_block {self.cache_config.bytes_per_layer_per_block}"
+            f"Prefix cache manager is initialized with {self.num_gpu_blocks} gpu blocks "
+            f"and {self.num_cpu_blocks} cpu blocks, bytes_per_token_per_layer for each rank: "
+            f"{self.cache_config.bytes_per_token_per_layer / self.config.parallel_config.tensor_parallel_size}"
         )
 
         main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.max_cpu_block_num.set(self.num_cpu_blocks)
         main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
@@ -352,7 +354,7 @@ class PrefixCacheManager:
         # Start additional threads
         if cache_config.kvcache_storage_backend or self.num_cpu_blocks > 0:
             logger.info("Enable hierarchical cache.")
-            threading.Thread(target=self.recv_data_transfer_result).start()
+            threading.Thread(target=self.recv_data_transfer_result, daemon=True).start()
         if cache_config.enable_prefix_caching:
             threading.Thread(target=self.clear_prefix_cache, daemon=True).start()
 
@@ -457,6 +459,7 @@ class PrefixCacheManager:
         self.node_id_pool = list(range(self.num_gpu_blocks + self.num_cpu_blocks))
 
         main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.max_cpu_block_num.set(self.num_cpu_blocks)
         main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)

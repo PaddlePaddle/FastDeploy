@@ -56,6 +56,7 @@ class TestRedundantExpertManager(unittest.TestCase):
         model_cfg.moe_layer_start_index = 1
         model_cfg.model = "/test/model"
         model_cfg.architectures = ["test_model"]
+        model_cfg.mm_max_tokens_per_item = None
         cache_cfg.bytes_per_layer_per_block = 1
 
         parallel_cfg = ParallelConfig(args)

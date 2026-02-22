@@ -705,6 +705,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         expert_id = None
         shard_id = None
         for loaded_weight_name, loaded_weight in weights_iterator:
+            logger.debug(f"Loading weight: {loaded_weight_name}")
             loaded_weight_name = (
                 self.process_weights_before_loading_fn(loaded_weight_name)
                 if getattr(self, "process_weights_before_loading_fn", None)

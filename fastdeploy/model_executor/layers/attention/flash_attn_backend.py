@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 
 from fastdeploy.platforms import current_platform
 
-paddle.compat.enable_torch_proxy(scope={"flash_mask"})
+paddle.compat.enable_torch_proxy(scope={"cutlass"})
 flashmask_attention_v4 = None
 
 if current_platform.is_cuda():
@@ -118,9 +118,9 @@ def flash_attn_func(
     head_dim: int = 128,
     version: Optional[int] = None,
 ):
+    if FLASH_ATTN_VERSION is None:
+        init_flash_attn_version()
     if version is None:
-        if FLASH_ATTN_VERSION is None:
-            init_flash_attn_version()
         version = FLASH_ATTN_VERSION
     if version == 4:
         assert (
@@ -261,9 +261,6 @@ class FlashAttentionBackend(AttentionBackend):
         )
         # Note(ZKK): here must be consistent with append_attn_backend.py
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
-        self.zero_seq_enc_lens_for_decode = paddle.zeros(
-            shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype=paddle.int32
-        )
 
     def get_attention_meta(self):
         """get_attention_meta"""
