@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import ast
 import sys
 import threading
 import types
@@ -131,53 +130,6 @@ class _ImmediateFuture:
 
     def done(self):
         return True
-
-
-def _exec_at_lineno(source, lineno, globals_dict):
-    node = ast.parse(source)
-    ast.increment_lineno(node, lineno - 1)
-    code = compile(node, "fastdeploy/cache_manager/prefix_cache_manager.py", "exec")
-    exec(code, globals_dict)
-
-
-def _exec_true_arc(start_line, body_line, globals_dict=None):
-    globals_dict = {} if globals_dict is None else globals_dict
-    gap = body_line - start_line
-    lines = ["if True:"]
-    lines.extend(["    "] * max(0, gap - 1))
-    lines.append("    hit = True")
-    _exec_at_lineno("\n".join(lines), start_line, globals_dict)
-    return globals_dict
-
-
-def _exec_false_arc(start_line, next_line, globals_dict=None):
-    globals_dict = {} if globals_dict is None else globals_dict
-    lines = ["if False:", "    hit = True"]
-    blanks = max(0, next_line - start_line - 2)
-    lines.extend([""] * blanks)
-    lines.append("after = True")
-    _exec_at_lineno("\n".join(lines), start_line, globals_dict)
-    return globals_dict
-
-
-def _exec_false_to_exit(start_line, body_line, globals_dict=None):
-    globals_dict = {} if globals_dict is None else globals_dict
-    lines = ["if False:"]
-    blanks = max(0, body_line - start_line - 1)
-    lines.extend(["    "] * blanks)
-    lines.append("    hit = True")
-    _exec_at_lineno("\n".join(lines), start_line, globals_dict)
-    return globals_dict
-
-
-def _exec_loop_arc(condition_line, body_line, globals_dict=None):
-    globals_dict = {"counter": 0} if globals_dict is None else globals_dict
-    gap = body_line - condition_line
-    lines = ["while counter < 2:"]
-    lines.extend(["    "] * max(0, gap - 1))
-    lines.append("    counter += 1")
-    _exec_at_lineno("\n".join(lines), condition_line, globals_dict)
-    return globals_dict
 
 
 class _PendingFuture:
@@ -1274,74 +1226,6 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
 
         mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=6, end_idx=8, mm_idx=0)
         self.assertEqual(hash_keys, [])
-
-    def test_executes_lines_for_unreachable_branches(self):
-        globals_dict = {"val_cache_shape": [1, 2]}
-
-        _exec_at_lineno("val_shape_str = ','.join(map(str, val_cache_shape))", 268, globals_dict)
-
-        self.assertEqual(globals_dict["val_shape_str"], "1,2")
-
-        sleep_calls = []
-        globals_dict = {"time": SimpleNamespace(sleep=lambda _: sleep_calls.append("sleep"))}
-        _exec_at_lineno("time.sleep(1)", 320, globals_dict)
-        _exec_at_lineno("time.sleep(1)", 324, globals_dict)
-        self.assertEqual(sleep_calls, ["sleep", "sleep"])
-
-    def test_executes_branch_arcs_for_coverage(self):
-        true_arcs = [
-            (147, 155),
-            (267, 268),
-            (319, 320),
-            (323, 324),
-            (1524, 1529),
-            (1611, 1616),
-        ]
-        for start_line, body_line in true_arcs:
-            result = _exec_true_arc(start_line, body_line)
-            self.assertTrue(result["hit"])
-
-        false_arcs = [
-            (687, 693),
-            (266, 272),
-            (277, 318),
-            (326, 336),
-            (339, 342),
-            (377, 384),
-            (452, 454),
-            (620, 623),
-            (624, 627),
-            (627, 636),
-            (657, 659),
-            (757, 774),
-            (987, 989),
-            (1009, 1012),
-            (1094, 1096),
-            (1268, 1270),
-            (1370, 1372),
-            (1841, 1845),
-            (1880, 1882),
-            (1909, 1911),
-        ]
-        for start_line, next_line in false_arcs:
-            result = _exec_false_arc(start_line, next_line)
-            self.assertTrue(result["after"])
-            self.assertNotIn("hit", result)
-
-        exit_result = _exec_false_to_exit(1079, 1080)
-        self.assertNotIn("hit", exit_result)
-
-        loop_arcs = [
-            (687, 691),
-            (1254, 1270),
-            (1349, 1372),
-            (1868, 1884),
-            (1868, 1886),
-            (1868, 1891),
-        ]
-        for condition_line, body_line in loop_arcs:
-            result = _exec_loop_arc(condition_line, body_line)
-            self.assertEqual(result["counter"], 2)
 
     def test_mm_build_path_handles_unfilled_block_with_paddle_prompt(self):
         manager = _create_manager(num_gpu_blocks=4)
