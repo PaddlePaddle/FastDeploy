@@ -85,6 +85,9 @@ class _DummyEngineCacheQueue:
     def put_transfer_task(self, payload):
         self.tasks.append(payload)
 
+    def result_queue_empty(self):
+        return True
+
 
 # Test double for process objects spawned by PrefixCacheManager.
 class _DummyProcess:
@@ -235,6 +238,7 @@ def _create_manager(
         local_rdma_comm_ports=None,
         kvcache_storage_backend=None,
         write_policy="write_through",
+        bytes_per_token_per_layer=2048,
         swap_space=4,
     )
     model_config = SimpleNamespace(
@@ -253,7 +257,13 @@ def _create_manager(
         parallel_config=SimpleNamespace(tensor_parallel_size=1),
         quant_config=quant_config,
     )
-    return PrefixCacheManager(config, tensor_parallel_size=1, splitwise_role=splitwise_role)
+    manager = PrefixCacheManager(config, tensor_parallel_size=1, splitwise_role=splitwise_role)
+    # Newer manager code initializes these IPC attributes in launch_cache_manager,
+    # while many unit tests exercise methods directly on a fresh manager.
+    manager.cache_task_inflight_signal = SimpleNamespace(value=np.zeros([1], dtype=np.int32))
+    manager.prefix_tree_status_signal = SimpleNamespace(value=np.array([PrefixTreeStatus.NORMAL], dtype=np.int32))
+    manager.cache_task_queue = _DummyEngineCacheQueue()
+    return manager
 
 
 def _make_block_node(manager, node_id, input_ids, *, block_size=2, parent=None, cache_status=CacheStatus.GPU):
@@ -742,6 +752,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
     def test_issue_swap_task_sync_path(self):
         manager = _create_manager()
         manager.cache_task_queue = _DummyEngineCacheQueue()
+        prefix_tree_status_data = np.zeros([manager.config.parallel_config.tensor_parallel_size], dtype=np.int32)
+        manager.prefix_tree_status_signal = _DummyIPCSignal("prefix_tree_status", prefix_tree_status_data)
+        manager.prefix_tree_status_signal.value[:] = 0
 
         class _NoWaitEvent:
             instances = []
@@ -750,8 +763,10 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 self.wait_called = False
                 _NoWaitEvent.instances.append(self)
 
-            def wait(self):
+            def wait(self, timeout=None):
                 self.wait_called = True
+                self.timeout = timeout
+                return True
 
         with patch("fastdeploy.cache_manager.prefix_cache_manager.Event", _NoWaitEvent):
             manager.issue_swap_task(
@@ -811,6 +826,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_issue_and_sync_swap_tasks(self):
         manager = _create_manager()
+        prefix_tree_status_data = np.zeros([manager.config.parallel_config.tensor_parallel_size], dtype=np.int32)
+        manager.prefix_tree_status_signal = _DummyIPCSignal("prefix_tree_status", prefix_tree_status_data)
+        manager.prefix_tree_status_signal.value[:] = 0
         manager.cache_task_queue = _DummyEngineCacheQueue()
         manager.issue_swap_task(
             transfer_task_id="task-1",
@@ -1096,6 +1114,28 @@ class PrefixCacheManagerTest(unittest.TestCase):
         )
         self.assertNotEqual(leaf, manager.radix_tree_root)
 
+    def test_mm_build_path_full_blocks_no_unfilled(self):
+        manager = _create_manager(num_gpu_blocks=4)
+        request = SimpleNamespace(
+            prompt_token_ids=[1, 2, 3, 4],
+            output_token_ids=[],
+            block_tables=[0, 1],
+            request_id="mm-full",
+            multimodal_inputs={"mm_positions": [], "mm_hashes": []},
+        )
+
+        leaf = manager.mm_build_path(
+            request=request,
+            num_computed_tokens=4,
+            block_size=2,
+            last_node=manager.radix_tree_root,
+            num_cached_tokens=0,
+        )
+
+        self.assertIsNot(leaf, manager.radix_tree_root)
+        self.assertEqual(leaf.reverved_dec_block_ids, [])
+        self.assertEqual(manager.unfilled_req_block_map, {})
+
     def test_handle_swap_result_updates_status(self):
         manager = _create_manager(num_gpu_blocks=4, num_cpu_blocks=2)
         node = BlockNode(90, [1], 0, 1, 0, 1, get_hash_str([1]), 0, parent=manager.radix_tree_root)
@@ -1110,6 +1150,11 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_reset_clears_internal_state(self):
         manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=1)
+        cache_task_inflight_data = np.zeros([manager.config.parallel_config.tensor_parallel_size], dtype=np.int32)
+        manager.cache_task_inflight_signal = _DummyIPCSignal("cache_task_inflight", cache_task_inflight_data)
+        manager.cache_task_inflight_signal.value[:] = 0
+        manager.cache_task_queue = _DummyEngineCacheQueue()
+
         node = BlockNode(100, [1], 0, 1, 0, 1, get_hash_str([1]), 0, parent=manager.radix_tree_root)
         manager.node_map[node.node_id] = node
         manager.task_swapping_event["evt"] = threading.Event()
@@ -1117,6 +1162,18 @@ class PrefixCacheManagerTest(unittest.TestCase):
         manager.gpu_free_task_future = _ImmediateFuture(lambda: None)
         manager.reset()
         self.assertEqual(len(manager.node_map), 0)
+
+    def test_reset_without_gpu_free_future(self):
+        manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=1)
+        node = BlockNode(101, [1], 0, 1, 0, 1, get_hash_str([1]), 0, parent=manager.radix_tree_root)
+        manager.node_map[node.node_id] = node
+        manager.task_swapping_event["evt"] = threading.Event()
+        manager.task_swapping_event["evt"].set()
+
+        manager.reset()
+
+        self.assertIsNone(manager.gpu_free_task_future)
+        self.assertEqual(manager.task_swapping_event, {})
 
     def test_recv_data_transfer_result_processes_queue(self):
         manager = _create_manager(num_gpu_blocks=4, num_cpu_blocks=1)
@@ -1143,6 +1200,16 @@ class PrefixCacheManagerTest(unittest.TestCase):
         with patch("fastdeploy.cache_manager.prefix_cache_manager.time.sleep", side_effect=SystemExit):
             with self.assertRaises(SystemExit):
                 manager.clear_prefix_cache()
+
+    def test_clear_prefix_cache_noop_for_normal_status(self):
+        manager = _create_manager()
+        manager.prefix_tree_status_signal = SimpleNamespace(value=np.array([PrefixTreeStatus.NORMAL], dtype=np.int32))
+        manager.reset = MagicMock()
+        with patch("fastdeploy.cache_manager.prefix_cache_manager.time.sleep", side_effect=SystemExit):
+            with self.assertRaises(SystemExit):
+                manager.clear_prefix_cache()
+        manager.reset.assert_not_called()
+        self.assertEqual(manager.prefix_tree_status_signal.value[0], PrefixTreeStatus.NORMAL)
 
 
 # Coverage-oriented tests. These are used to lightly exercise specific
