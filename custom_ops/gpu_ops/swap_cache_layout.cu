@@ -25,25 +25,23 @@ void SwapCacheImpLayout(
     const std::vector<int64_t>& gpu_block_ids,
     const std::vector<int64_t>& cpu_block_ids,
     int mode) {
-  // mode is 0: gpu to cpu; 1: cpu to gpu
-  // cache layout: layer_num * [block_num, head_num, block_size, head_dim]
-  // buffer layout: [block_num, layer_num, head_num, block_size, head_dim]
+  /*
+  mode is 0: gpu to cpu; 1: cpu to gpu
+
+  cache layout: layer_num * [block_num, head_num, block_size, head_dim]
+  scale layout: layer_num * [block_num, head_num, block_size]
+  cache buffer layout: [block_num, layer_num, head_num, block_size, head_dim]
+  scale buffer layout: [block_num, layer_num, head_num, block_size]
+  */
   typedef PDTraits<D> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
 
   const int64_t layer_number = cache_gpu_tensors.size();
-  const int64_t num_heads = cache_shape[1];
-  const int64_t block_size = cache_shape[2];
-  const int64_t head_dim = cache_shape[3];
-  const int64_t cache_block_stride = num_heads * block_size * head_dim;
-
-#ifdef SWAP_DEBUG
-  std::cout << "layer_number:" << layer_number << std::endl;
-  std::cout << "cache_shape:" << cache_shape[0] << ", " << cache_shape[1]
-            << ", " << cache_shape[2] << ", " << cache_shape[3] << std::endl;
-  std::cout << "cache_block_stride:" << cache_block_stride << std::endl;
-#endif
+  int64_t cache_block_stride = 1;
+  for (int i = 1; i < cache_shape.size(); i++) {
+    cache_block_stride *= cache_shape[i];
+  }
 
   auto stream = cache_gpu_tensors[0].stream();
   const cudaMemcpyKind copy_kind =

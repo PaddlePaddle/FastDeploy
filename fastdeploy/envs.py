@@ -107,16 +107,20 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_USE_GET_SAVE_OUTPUT_V1": lambda: bool(int(os.getenv("FD_USE_GET_SAVE_OUTPUT_V1", "0"))),
     # Whether to enable model cache feature
     "FD_ENABLE_MODEL_CACHE": lambda: bool(int(os.getenv("FD_ENABLE_MODEL_CACHE", "0"))),
+    # Whether to print scheduler prefill/decode batch logs.
+    "FD_CONSOLE_SCHEDULER_METRICS": lambda: bool(int(os.getenv("FD_CONSOLE_SCHEDULER_METRICS", "1"))),
+    # Decode log interval for scheduler metrics logs.
+    "FD_CONSOLE_DECODE_LOG_INTERVAL": lambda: int(os.getenv("FD_CONSOLE_DECODE_LOG_INTERVAL", "5")),
     # enable internal module to access LLMEngine.
     "FD_ENABLE_INTERNAL_ADAPTER": lambda: int(os.getenv("FD_ENABLE_INTERNAL_ADAPTER", "0")),
     # LLMEngine receive requests port, used when FD_ENABLE_INTERNAL_ADAPTER=1
-    "FD_ZMQ_RECV_REQUEST_SERVER_PORT": lambda: os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORT", "8200"),
+    "FD_ZMQ_RECV_REQUEST_SERVER_PORT": lambda: os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORT", None),
     # LLMEngine send response port, used when FD_ENABLE_INTERNAL_ADAPTER=1
-    "FD_ZMQ_SEND_RESPONSE_SERVER_PORT": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORT", "8201"),
+    "FD_ZMQ_SEND_RESPONSE_SERVER_PORT": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORT", None),
     # LLMEngine receive requests port, used when FD_ENABLE_INTERNAL_ADAPTER=1
-    "FD_ZMQ_RECV_REQUEST_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORTS", "8200"),
+    "FD_ZMQ_RECV_REQUEST_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORTS", None),
     # LLMEngine send response port, used when FD_ENABLE_INTERNAL_ADAPTER=1
-    "FD_ZMQ_SEND_RESPONSE_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORTS", "8201"),
+    "FD_ZMQ_SEND_RESPONSE_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORTS", None),
     # LLMEngine receive control command port, used when FD_ENABLE_INTERNAL_ADAPTER=1
     "FD_ZMQ_CONTROL_CMD_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_CONTROL_CMD_SERVER_PORTS", "8202"),
     # Whether to enable the decode caches requests for preallocating resource
@@ -186,6 +190,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
     # Whether to enable low latency in mixed scenario
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
+    # Whether to use phi FP8 quantization,if 1,use paddle default.
+    "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
     # Reserve output blocks for decoding requests when schedule new prefill requests
     "FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
         os.getenv("FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "16")
@@ -198,6 +204,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     ),
     # Timeout for worker process health check in seconds
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
+    # File path for file storage backend
+    "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
+    # Whether to use PD REORDER, can set 0 or 1
+    "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
 }
 
 

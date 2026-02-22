@@ -64,3 +64,53 @@ def test_rollout_model_with_distributed_launch():
     print(stderr)
 
     assert return_code in (0, 250), f"Process exited with code {return_code}"
+
+
+def test_rollout_model_with_distributed_launch_mtp():
+    """
+    test_rollout_model
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    utils_dir = os.path.join(os.path.dirname(current_dir), "utils")
+    rollout_script = os.path.join(utils_dir, "rollout_model.py")
+    baseline_path = os.path.join(current_dir, "baseline_mtp.txt")
+
+    base_path = os.getenv("MODEL_PATH")
+    if base_path:
+        model_path = os.path.join(base_path, "GLM-4.5-Air-Fake")
+    else:
+        model_path = "./GLM-4.5-Air-Fake"
+    print(f"model_path = {model_path}")
+
+    command = [
+        sys.executable,
+        "-m",
+        "paddle.distributed.launch",
+        "--gpus",
+        "0,1",
+        rollout_script,
+        "--model_path",
+        model_path,
+        "--baseline_path",
+        baseline_path,
+        "--enable_speculative_decoding",
+    ]
+
+    print(f"Executing command: {' '.join(command)}")
+
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    try:
+        stdout, stderr = process.communicate(timeout=300)
+        return_code = process.returncode
+    except subprocess.TimeoutExpired:
+        process.kill()
+        stdout, stderr = process.communicate()
+        return_code = -1
+
+    print("\n" + "=" * 50 + " STDOUT " + "=" * 50)
+    print(stdout)
+    print("\n" + "=" * 50 + " STDERR " + "=" * 50)
+    print(stderr)
+
+    assert return_code in (0, 250), f"Process exited with code {return_code}"

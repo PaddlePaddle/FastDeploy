@@ -14,5 +14,5 @@ if [ -n "$PID" ]; then
 fi
 
 echo "Starting new fd-router process..."
-nohup ./fd-router --config_path ./config/config.yaml --splitwise > fd-router.log 2>&1 &
+nohup /usr/local/bin/fd-router --config_path ./config/config.yaml --splitwise > fd-router.log 2>&1 &
 echo "fd-router started with PID: $!"

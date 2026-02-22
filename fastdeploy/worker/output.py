@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import NamedTuple, Optional
 
 import paddle
@@ -119,9 +119,9 @@ class LogprobsTensors(NamedTuple):
         """
         with paddle.no_grad():
             return LogprobsTensors(
-                paddle.to_tensor(self.logprob_token_ids[start:end], place=self.logprob_token_ids.place),
-                paddle.to_tensor(self.logprobs[start:end], place=self.logprob_token_ids.place),
-                paddle.to_tensor(self.selected_token_ranks[start:end], place=self.logprob_token_ids.place),
+                paddle.to_tensor(self.logprob_token_ids.cpu()[start:end], place="cpu"),
+                paddle.to_tensor(self.logprobs.cpu()[start:end], place="cpu"),
+                paddle.to_tensor(self.selected_token_ranks.cpu()[start:end], place="cpu"),
             )
 
 
@@ -313,9 +313,19 @@ class ModelOutputData:
     prompt_logprobs_list: Optional[LogprobsTensors] = None
 
     """
+        index -> request_id
+    """
+    index_to_batch_id: dict[int, int] = field(default_factory=dict)
+
+    """
         the minimum tokens that will be generated
     """
     min_tokens: paddle.Tensor = None
+
+    """
+        enable_pd_reorder
+    """
+    enable_pd_reorder: bool = False
 
     """
         stop nums for every sequence

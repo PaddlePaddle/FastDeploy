@@ -704,9 +704,10 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
             fd_config (FDConfig): Configurations for the LLM model.
         """
         super(Glm4MoeForCausalLMRL, self).__init__(fd_config)
-        self.num_nextn_predict_layers = fd_config.model_config.num_nextn_predict_layers
+        self.speculative_decoding = fd_config.speculative_config.method is not None
+        self.speculative_method = fd_config.speculative_config.method
 
-        if self.num_nextn_predict_layers > 0:
+        if self.speculative_decoding and self.speculative_method == "mtp":
             fd_config.parallel_config.tp_group = None
             fd_config.parallel_config.ep_group = None
             self.mtp_fd_config = copy.deepcopy(fd_config)
@@ -733,12 +734,21 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
     def update_mtp_config(self, mtp_fd_config):
         mtp_fd_config.model_config.architectures[0] = mtp_fd_config.model_config.architectures[0].replace("Moe", "MTP")
         mtp_fd_config.speculative_config.sharing_model = None
-        mtp_fd_config.model_config.start_layer_index = mtp_fd_config.model_config.num_hidden_layers
         mtp_fd_config.model_config.num_hidden_layers = 1
         mtp_fd_config.model_config.model = mtp_fd_config.speculative_config.model
         if mtp_fd_config.speculative_config.quantization != "":
             mtp_fd_config.model_config.quantization = mtp_fd_config.speculative_config.quantization
+        mtp_fd_config.model_config.start_layer_index = mtp_fd_config.model_config.num_hidden_layers
         mtp_fd_config.speculative_config.model_type = "mtp"
+
+    def state_dict(self):
+        """state_dict"""
+        main_state_dict = super().state_dict()
+        state_dict = {k: v for k, v in main_state_dict.items() if not k.startswith("mtp_layers")}
+        if self.speculative_decoding and self.speculative_method == "mtp":
+            mtp_state_dict = self.mtp_layers.state_dict()
+            state_dict.update(mtp_state_dict)
+        return state_dict
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Generate mapping between inference and training parameter for RL(donot delete!)."""
@@ -795,7 +805,7 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
         self._complete_missing_mappings()
 
         # extra for mtp
-        if self.num_nextn_predict_layers > 0:
+        if self.speculative_decoding and self.speculative_method == "mtp":
             mtp_infer_to_train_mapping = self.mtp_layers.get_name_mappings_to_training(trainer_degree)
             self.infer_to_train_mapping.update(mtp_infer_to_train_mapping)
 

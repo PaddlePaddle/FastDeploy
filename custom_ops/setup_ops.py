@@ -293,6 +293,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/cpp_extensions.cc",
         "gpu_ops/share_external_data.cu",
+        "gpu_ops/fused_mask_swiglu_fp8_quant_kernel.cu",
         "gpu_ops/per_token_quant_fp8.cu",
         "gpu_ops/update_split_fuse_input.cu",
         "gpu_ops/text_image_index_out.cu",
@@ -312,6 +313,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/fused_neox_rope_embedding.cu",
         "gpu_ops/gelu_tanh.cu",
         "gpu_ops/reasoning_phase_token_constraint.cu",
+        "gpu_ops/get_attn_mask_q.cu",
     ]
 
     # pd_disaggregation
@@ -562,6 +564,7 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "gpu_ops/recover_decode_task.cu",
                 "gpu_ops/update_inputs_v1.cu",
                 "gpu_ops/get_img_boundaries.cc",
+                "gpu_ops/set_stop.cu",
                 "iluvatar_ops/moe_dispatch.cu",
                 "iluvatar_ops/moe_reduce.cu",
                 "iluvatar_ops/paged_attn.cu",
@@ -569,6 +572,7 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "iluvatar_ops/mixed_fused_attn.cu",
                 "iluvatar_ops/w8a16_group_gemm.cu",
                 "iluvatar_ops/runtime/iluvatar_context.cc",
+                "iluvatar_ops/cpp_extensions.cc",
             ],
             include_dirs=["iluvatar_ops/runtime", "gpu_ops"],
             extra_link_args=[
