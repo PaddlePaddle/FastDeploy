@@ -2440,6 +2440,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             eng.insert_tasks([request])
         self.assertIn("request id", str(ctx.exception))
         self._detach_finalizer(eng)
+
     def test_get_scheduler_unhandled_request_num(self):
         """Cover _get_scheduler_unhandled_request_num normal/fallback paths."""
         eng = EngineService.__new__(EngineService)
