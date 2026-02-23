@@ -1393,6 +1393,7 @@ class CacheConfig:
         self.kvcache_storage_backend = None
         self.write_policy = None
         self.num_cpu_blocks = None
+        self.use_mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
 
         for key, value in args.items():
             if hasattr(self, key):
@@ -1407,35 +1408,16 @@ class CacheConfig:
                 self.cache_dtype = self.model_cfg.quantization.get("kv_cache_quant_type", self.cache_dtype)
             if self.model_cfg.quantization_config is not None:
                 self.cache_dtype = self.model_cfg.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
-            if (
-                hasattr(self.model_cfg, "num_key_value_heads")
-                and hasattr(self.model_cfg, "num_key_value_heads")
-                and self.model_cfg.num_key_value_heads is not None
-                and int(self.model_cfg.num_key_value_heads) > 0
-            ):
-                kv_num_head = int(self.model_cfg.num_key_value_heads)
-            else:
-                kv_num_head = self.model_cfg.num_attention_heads
-            self.model_cfg.kv_num_head = kv_num_head
-            # TODO check name
-            if "int4" in self.cache_dtype.lower() or "float4" in self.cache_dtype.lower():
-                byte_size = 0.5
-                self.cache_dtype = "uint8"
-            elif "int8" in self.cache_dtype.lower() or "float8" in self.cache_dtype.lower():
-                self.cache_dtype = "uint8"
-                byte_size = 1
-            else:
-                byte_size = 2
-            self.each_token_cache_space = int(
-                self.model_cfg.num_hidden_layers * kv_num_head * self.model_cfg.head_dim * byte_size
+            self.head_num = getattr(self.model_cfg, "num_key_value_heads", None) or getattr(
+                self.model_cfg, "num_attention_heads", None
             )
-            self.bytes_per_block = int(self.each_token_cache_space * self.block_size)
-            self.bytes_per_layer_per_block = int(
-                self.block_size
-                * self.model_cfg.kv_num_head
-                * self.model_cfg.head_dim
-                // args["tensor_parallel_size"]
-                * byte_size
+            self.head_dim = getattr(self.model_cfg, "head_dim")
+            self.byte_size = self.get_cache_bytes(self.cache_dtype)
+            self.kv_factor = 1 if self.use_mla_cache else 2
+
+            self.bytes_per_token_per_layer = int(self.head_num * self.head_dim * self.byte_size * self.kv_factor)
+            self.bytes_per_block = int(
+                self.bytes_per_token_per_layer * self.block_size * self.model_cfg.num_hidden_layers
             )
 
         if self.num_cpu_blocks is None:
@@ -1445,6 +1427,19 @@ class CacheConfig:
                 self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
 
         self._verify_args()
+
+    @staticmethod
+    def get_cache_bytes(cache_dtype: str):
+        if any(t in cache_dtype.lower() for t in ["float32", "fp32"]):
+            return 4
+        elif any(t in cache_dtype.lower() for t in ["float16", "bf16", "fp16"]):
+            return 2
+        elif any(t in cache_dtype.lower() for t in ["uint8", "int8", "float8", "fp8"]):
+            return 1
+        elif any(t in cache_dtype.lower() for t in ["int4"]):
+            return 0.5
+        else:
+            raise ValueError(f"Unsupported cache dtype: {cache_dtype}")
 
     def metrics_info(self):
         """Convert cache_config to dict(key: str, value: str) for prometheus metrics info."""
@@ -1690,7 +1685,6 @@ class FDConfig:
         self.quant_config: Optional[QuantConfigBase] = quant_config
         self.graph_opt_config: Optional[GraphOptimizationConfig] = graph_opt_config
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
-        self.cache_config: CacheConfig = cache_config  # type: ignore
         self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
