@@ -386,7 +386,9 @@ elif paddle.is_compiled_with_cuda():
         shutil.rmtree(fp8_auto_gen_directory)
 
     if cc >= 75:
+        cc_compile_args += ["-DENABLE_SM75_EXT_OPS"]
         nvcc_compile_args += [
+            "-DENABLE_SM75_EXT_OPS",
             "-DENABLE_SCALED_MM_C2X=1",
             "-Igpu_ops/cutlass_kernels/w8a8",
         ]

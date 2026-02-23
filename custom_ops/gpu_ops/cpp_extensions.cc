@@ -1172,9 +1172,11 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("wait_flag"),
         "get_output_kv_signal function");
 
+#ifdef ENABLE_SM75_EXT_OPS
   m.def("moe_deepgemm_permute", &MoEDeepGEMMPermute, "MoEDeepGEMMPermute");
   m.def(
       "moe_deepgemm_depermute", &MoEDeepGEMMDePermute, "MoEDeepGEMMDePermute");
+#endif
   /**
    * alloc_cache_pinned.cc
    * cuda_host_alloc
