@@ -524,6 +524,10 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/machete", ".cu")
         cc_compile_args += ["-DENABLE_MACHETE"]
 
+    # Deduplicate translation units while preserving order. Some files are
+    # appended explicitly for SM75 and also discovered by later directory globs.
+    sources = list(dict.fromkeys(sources))
+
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
