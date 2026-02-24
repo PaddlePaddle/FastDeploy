@@ -273,6 +273,7 @@ class SchedulerConfig:
         self.max_num_seqs = 34
         self.splitwise_role = "mixed"
         self.enable_overlap_schedule = False
+        self.enable_priority_scheduling = False 
         self.config = None
 
         for key, value in args.items():

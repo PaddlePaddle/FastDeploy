@@ -444,6 +444,10 @@ class EngineArgs:
     """
     Flag to enable overlapping schedule. Default is False (disabled).
     """
+    enable_priority_scheduling: bool = False
+    """
+    Flag to enable priority scheduling with preemption. 
+    """
     graph_optimization_config: Optional[Dict[str, Any]] = None
     """
     Configuration for graph optimization backend execution.
@@ -1323,6 +1327,12 @@ class EngineArgs:
             default=EngineArgs.enable_overlap_schedule,
             help="Enable overlapping schedule.",
         )
+        scheduler_group.add_argument(
+            "--enable-priority-scheduling",
+            action="store_true",
+            default=EngineArgs.enable_priority_scheduling,
+            help="Enable priority scheduling with preemption. ",
+        )
 
         return parser
 
@@ -1439,7 +1449,7 @@ class EngineArgs:
                 if current_platform.is_maca():
                     self.max_num_batched_tokens = self.max_model_len
                 else:
-                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                    self.max_num_batched_tokens = 16384  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048

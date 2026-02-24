@@ -1037,7 +1037,10 @@ class ResourceManagerV1(ResourceManager):
                         # Prepare prefill task
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                     else:  # Not enough blocks to allocate, trigger preemption
-                        can_schedule = self._trigger_preempt(request, num_new_block, preempted_reqs, scheduled_reqs)
+                        if self.config.scheduler_config.enable_priority_scheduling:
+                            can_schedule = self._trigger_preempt(request, num_new_block, preempted_reqs, scheduled_reqs)
+                        else:
+                            can_schedule = False                        
                         if not can_schedule:
                             break
                         request.block_tables.extend(
