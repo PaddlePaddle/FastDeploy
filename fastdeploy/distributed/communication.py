@@ -37,6 +37,7 @@ def capture_custom_allreduce():
 
     Yields a null context unless custom all-reduce is initialized.
     """
+    global _TP_AR
     ar_context = nullcontext()
     if _TP_AR is not None:
         ar_context = _TP_AR.capture()
@@ -70,6 +71,7 @@ def custom_ar_clear_ipc_handles() -> None:
 
     Should be called when shutting down or reinitializing custom all-reduce.
     """
+    global _TP_AR
     if _TP_AR is not None:
         _TP_AR.clear_ipc_handles()
 
@@ -107,6 +109,7 @@ try:
                 or when input does not meet custom all-reduce requirements.
             AssertionError: In deterministic mode when input dtype is not supported.
         """
+        global _TP_AR
         inp_size = input_.numel() * input_.element_size()
         if inp_size == 0:
             return input_
@@ -182,6 +185,7 @@ try:
         Raises:
             RuntimeError: If custom all-reduce is not initialized.
         """
+        global _TP_AR
         if input_.shape[0] == 0:
             return input_
         if _TP_AR is None:
