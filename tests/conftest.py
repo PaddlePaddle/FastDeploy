@@ -11,11 +11,41 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import pytest
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "gpu: mark test as requiring GPU platform")
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip GPU-marked tests when not on a GPU platform."""
+    try:
+        from fastdeploy.platforms import current_platform
+
+        has_gpu = current_platform.is_cuda_alike()
+    except Exception:
+        try:
+            import paddle
+
+            has_gpu = paddle.is_compiled_with_cuda()
+        except Exception:
+            has_gpu = False
+
+    if has_gpu:
+        return
+
+    skip_marker = pytest.mark.skip(reason="Test requires GPU platform, skipping on non-GPU")
+    for item in items:
+        if "gpu" in item.keywords:
+            item.add_marker(skip_marker)
+
+
 import time
 from typing import Any, Union
 
-import pytest
-from e2e.utils.serving_utils import (
+from e2e.utils.serving_utils import (  # noqa: E402
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,
     FD_ENGINE_QUEUE_PORT,

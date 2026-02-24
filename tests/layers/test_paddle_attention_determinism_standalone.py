@@ -32,6 +32,10 @@ Test scenarios:
 import sys
 import unittest
 
+import pytest
+
+pytestmark = pytest.mark.gpu
+
 import paddle
 import paddle.nn.functional as F
 

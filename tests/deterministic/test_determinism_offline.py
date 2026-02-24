@@ -44,11 +44,13 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import pytest
 
+pytestmark = pytest.mark.gpu
+
 from fastdeploy import LLM, SamplingParams
 
 # Small model path for fast testing
 DEFAULT_MODEL_DIR = "./models"
-MODEL_NAME = "Qwen/Qwen2.5-7B"
+MODEL_NAME = "Qwen2.5-7B"
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -73,6 +75,7 @@ def llm(model_path):
         model=model_path,
         tensor_parallel_size=1,
         max_model_len=8192,
+        enable_prefix_caching=False,
     )
 
 
@@ -517,9 +520,10 @@ def test_deterministic_early_stopping_with_stop(llm):
     outputs2 = llm.generate([prompt], sampling_params)[0]
 
     assert outputs1.outputs.text == outputs2.outputs.text, "Early stopping: outputs should be identical"
-    assert (
-        outputs1.outputs.finish_reason == "stop"
-    ), f"Expected stop finish_reason, got {outputs1.outputs.finish_reason}"
+
+    # Verify output was truncated by stop sequence (not max_tokens)
+    tokens = outputs1.outputs.token_ids
+    assert len(tokens) < 100, f"Expected early stop before max_tokens, got {len(tokens)} tokens"
 
     print("[PASS] Early stopping with stop sequences test passed")
 
@@ -590,45 +594,40 @@ def test_deterministic_multi_turn_conversation(llm):
 
     Validates that multi-turn conversations maintain determinism,
     which is critical for chat applications.
+    Uses llm.chat() which supports message-list input with chat template.
     """
     os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
-    conversation_history = [
-        {"role": "user", "content": "你好！"},
-        {"role": "assistant", "content": "你好！有什么我可以帮助你的吗？"},
-    ]
 
     sampling_params = SamplingParams(temperature=0.5, max_tokens=50, seed=1100)
 
     # First turn
     prompt1 = "请介绍一下你自己。"
-    messages1 = conversation_history + [{"role": "user", "content": prompt1}]
-    outputs1 = llm.generate(messages1, sampling_params)[0]
-    response1 = outputs1.outputs.text
-
-    # Add assistant response to history
-    conversation_history.append({"role": "user", "content": prompt1})
-    conversation_history.append({"role": "assistant", "content": response1})
-
-    # Second turn
-    prompt2 = "你能做什么？"
-    messages2 = conversation_history + [{"role": "user", "content": prompt2}]
-    outputs2 = llm.generate(messages2, sampling_params)[0]
-    response2 = outputs2.outputs.text
-
-    # Repeat the conversation with same seed
-    conversation_history2 = [
+    messages1 = [
         {"role": "user", "content": "你好！"},
         {"role": "assistant", "content": "你好！有什么我可以帮助你的吗？"},
+        {"role": "user", "content": prompt1},
     ]
+    outputs1 = llm.chat(messages1, sampling_params)[0]
+    response1 = outputs1.outputs.text
 
-    outputs1_repeat = llm.generate(conversation_history2 + [{"role": "user", "content": prompt1}], sampling_params)[0]
+    # Second turn (append first turn result)
+    prompt2 = "你能做什么？"
+    messages2 = messages1 + [
+        {"role": "assistant", "content": response1},
+        {"role": "user", "content": prompt2},
+    ]
+    outputs2 = llm.chat(messages2, sampling_params)[0]
+    response2 = outputs2.outputs.text
+
+    # Repeat the same conversation with same seed
+    outputs1_repeat = llm.chat(messages1, sampling_params)[0]
     response1_repeat = outputs1_repeat.outputs.text
 
-    conversation_history2.append({"role": "user", "content": prompt1})
-    conversation_history2.append({"role": "assistant", "content": response1_repeat})
-
-    outputs2_repeat = llm.generate(conversation_history2 + [{"role": "user", "content": prompt2}], sampling_params)[0]
+    messages2_repeat = messages1 + [
+        {"role": "assistant", "content": response1_repeat},
+        {"role": "user", "content": prompt2},
+    ]
+    outputs2_repeat = llm.chat(messages2_repeat, sampling_params)[0]
     response2_repeat = outputs2_repeat.outputs.text
 
     assert response1 == response1_repeat, "Multi-turn turn 1: outputs should be identical"

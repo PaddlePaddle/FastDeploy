@@ -2,6 +2,10 @@ import os
 import subprocess
 import sys
 
+import pytest
+
+pytestmark = pytest.mark.gpu
+
 
 def test_rollout_model_with_distributed_launch():
     """

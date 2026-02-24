@@ -33,6 +33,8 @@ import paddle
 import paddle.distributed as dist
 import pytest
 
+pytestmark = pytest.mark.gpu
+
 from fastdeploy import envs
 from fastdeploy.distributed import communication
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce

@@ -24,6 +24,10 @@ Test scenarios:
 
 import unittest
 
+import pytest
+
+pytestmark = pytest.mark.gpu
+
 import paddle
 
 from fastdeploy.model_executor.layers.attention.native_paddle_backend import (

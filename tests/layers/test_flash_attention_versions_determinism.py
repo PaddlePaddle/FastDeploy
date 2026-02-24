@@ -22,6 +22,10 @@ Check determinism behavior across different Flash Attention backends:
 
 import unittest
 
+import pytest
+
+pytestmark = pytest.mark.gpu
+
 import paddle
 import paddle.nn.functional as F
 
