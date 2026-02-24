@@ -52,14 +52,15 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
-from fastdeploy.model_executor.ops.gpu import get_stop, set_stop
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
+        get_stop,
         recover_decode_task,
         set_data_ipc,
+        set_stop,
         set_value_by_flags_and_idx,
     )
 
@@ -71,7 +72,9 @@ elif current_platform.is_dcu():
     share_external_data = None
 else:
     from fastdeploy.model_executor.ops.gpu import (
+        get_stop,
         recover_decode_task,
+        set_stop,
         set_value_by_flags_and_idx,
         share_external_data,
         speculate_schedule_cache,
@@ -1530,12 +1533,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
         cache_kvs_list = []
-
-        # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
-        # To rationalize the allocation of kvcache.
-        from fastdeploy import envs
-
-        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         for i in range(self.model_config.num_hidden_layers):
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
@@ -2745,7 +2742,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # NOTE:(changwenbin) Determie whether it is Multi-Head Latent Attention,
         # To rationalize the allocation of kvcache.
-        if self.mla_cache:
+        if self.fd_config.cache_config.use_mla_cache:
             required_memory = (
                 byte_of_dtype
                 * (self.fd_config.model_config.kv_lora_rank + self.fd_config.model_config.qk_rope_head_dim)

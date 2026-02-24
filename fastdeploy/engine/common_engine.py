@@ -996,6 +996,8 @@ class EngineService:
                             else:
                                 raise
 
+                if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
+                    self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
 
@@ -1062,6 +1064,20 @@ class EngineService:
             except Exception as e:
                 err_msg = "Error happend while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
+
+    def _get_scheduler_unhandled_request_num(self) -> int:
+        """
+        Get scheduler-level pending request count when supported.
+        """
+        get_unhandled = getattr(self.scheduler, "get_unhandled_request_num", None)
+        if not callable(get_unhandled):
+            return 0
+        try:
+            unhandled = int(get_unhandled())
+        except Exception as e:
+            self.llm_logger.debug(f"Failed to get scheduler unhandled request num: {e}")
+            return 0
+        return max(unhandled, 0)
 
     def start_zmq_service(self, api_server_pid=None):
         if api_server_pid is None:
