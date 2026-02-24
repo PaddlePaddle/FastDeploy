@@ -80,16 +80,13 @@ except ImportError:
 
 # Deterministic mode: auto-enable batch invariant ops
 if envs.FD_DETERMINISTIC_MODE:
-    try:
-        from fastdeploy.model_executor.layers.batch_invariant_ops import (
-            enable_batch_invariant_mode,
-            is_batch_invariant_mode_enabled,
-        )
+    from fastdeploy.model_executor.layers.batch_invariant_ops import (
+        enable_batch_invariant_mode,
+        is_batch_invariant_mode_enabled,
+    )
 
-        if not is_batch_invariant_mode_enabled():
-            enable_batch_invariant_mode()
-    except ImportError:
-        pass
+    if not is_batch_invariant_mode_enabled():
+        enable_batch_invariant_mode()
 
 __version__ = current_package_version()
 

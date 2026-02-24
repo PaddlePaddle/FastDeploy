@@ -2292,21 +2292,21 @@ class GPUModelRunner(ModelRunnerBase):
         num_running_requests: int = None,
         last_token_num: int = -1,
     ) -> None:
-        # Detect current run iteration (extract _0, _1, _2 etc. from first non-None request_id)
-        current_run_id = None
-        for req in model_forward_batch or []:
-            if req is not None:
-                parts = req.request_id.split("_")
-                if len(parts) > 1:
-                    current_run_id = parts[-1]
-                    break
-        if current_run_id is not None and current_run_id != self._current_run_id:
-            self._current_run_id = current_run_id
-            self._batch_counter = 0  # Reset batch counter
-
-        self._batch_counter += 1
-
         if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
+            # Detect current run iteration (extract _0, _1, _2 etc. from first non-None request_id)
+            current_run_id = None
+            for req in model_forward_batch or []:
+                if req is not None:
+                    parts = req.request_id.split("_")
+                    if len(parts) > 1:
+                        current_run_id = parts[-1]
+                        break
+            if current_run_id is not None and current_run_id != self._current_run_id:
+                self._current_run_id = current_run_id
+                self._batch_counter = 0  # Reset batch counter
+
+            self._batch_counter += 1
+
             det_logger.info(f"\n{'='*80}")
             det_logger.info(f"[BATCH-START] Run_{self._current_run_id} Batch_{self._batch_counter}")
             det_logger.info(f"{'='*80}\n")
@@ -2327,6 +2327,7 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
+        # 3. Execute model
         if self.enable_mm:
             model_output = self.model(
                 self.forward_meta.ids_remove_padding,
@@ -3147,7 +3148,7 @@ class GPUModelRunner(ModelRunnerBase):
             if self.parallel_config.tensor_parallel_size > 1:
                 S, C = image_features.shape
                 image_features = image_features.reshape([-1, C * self.model_config.spatial_conv_size**2])
-                image_features = ScatterOp.apply(image_features, axis=-1)  # MP split features
+                image_features = ScatterOp.apply(image_features, axis=-1)  # mp 切 Fea
                 image_features = image_features.reshape([S, -1])
             # ernie-vl has resampler_model
             image_features = self.model.resampler_model(

@@ -150,12 +150,7 @@ class Qwen2DecoderLayer(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        # Extract layer_id from prefix, use -1 if prefix is empty or invalid
-        try:
-            layer_id = int(prefix.split(sep=".")[-1]) if prefix else -1
-        except (ValueError, IndexError):
-            layer_id = -1
-        self.layer_id = layer_id
+        layer_id = int(prefix.split(sep=".")[-1])
 
         self.self_attn = Qwen2Attention(
             fd_config=fd_config,
@@ -209,6 +204,7 @@ class Qwen2DecoderLayer(nn.Layer):
 
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+
         hidden_states = self.mlp(hidden_states, forward_meta)
 
         return hidden_states, residual

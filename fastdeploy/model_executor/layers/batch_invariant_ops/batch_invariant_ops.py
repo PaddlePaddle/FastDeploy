@@ -526,7 +526,7 @@ def is_batch_invariant_mode_enabled():
 
 
 def enable_batch_invariant_mode():
-    global _batch_invariant_MODE
+    global _batch_invariant_MODE, _original_ops
     if _batch_invariant_MODE:
         return
 
@@ -556,7 +556,7 @@ def enable_batch_invariant_mode():
 
 
 def disable_batch_invariant_mode():
-    global _batch_invariant_MODE
+    global _batch_invariant_MODE, _original_ops
     if not _batch_invariant_MODE:
         return
 
@@ -574,6 +574,7 @@ def disable_batch_invariant_mode():
 
 @contextlib.contextmanager
 def set_batch_invariant_mode(enabled: bool = True):
+    global _batch_invariant_MODE, _original_ops
     old_mode = _batch_invariant_MODE
     if enabled:
         enable_batch_invariant_mode()

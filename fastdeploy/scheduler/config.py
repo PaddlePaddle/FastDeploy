@@ -122,7 +122,6 @@ class DPLocalSchedulerConfig(LocalSchedulerConfig):
             max_num_partial_prefills: Max partial prefill operations allowed
             max_long_partial_prefills: Max long-running partial prefill ops
             long_prefill_token_threshold: Token count threshold for long prefill
-            splitwise_role: Role for splitwise scheduler
             **kwargs: Additional unused arguments (for forward compatibility)
         Note:
             - If long_prefill_token_threshold is 0, it's auto-calculated as 4% of max_model_len
