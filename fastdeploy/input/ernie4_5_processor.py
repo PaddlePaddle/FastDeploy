@@ -137,8 +137,11 @@ class Ernie4_5Processor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
             request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
+        max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
-            request.set("max_tokens", max(1, max_model_len - len(request.prompt_token_ids)))
+            request["max_tokens"] = max(1, max_tokens)
+        else:
+            request["max_tokens"] = min(max_tokens, request["max_tokens"])
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request.set("temperature", 1)
@@ -221,8 +224,11 @@ class Ernie4_5Processor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+        max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
+            request["max_tokens"] = max(1, max_tokens)
+        else:
+            request["max_tokens"] = min(max_tokens, request["max_tokens"])
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request["temperature"] = 1

@@ -538,7 +538,9 @@ class LLMEngine:
                 self.data_processor.tokenizer.tokenize(self.data_processor.tokenizer.think_truncate_prompt)
             )
         except Exception:
-            think_truncate_prompt_ids = [-1]
+            think_truncate_prompt_ids = self.data_processor.tokenizer.convert_tokens_to_ids(
+                self.data_processor.tokenizer.tokenize(envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR)
+            )
         llm_logger.info(f"Get think_truncate_prompt_ids {think_truncate_prompt_ids} from tokenizer.")
 
         ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))

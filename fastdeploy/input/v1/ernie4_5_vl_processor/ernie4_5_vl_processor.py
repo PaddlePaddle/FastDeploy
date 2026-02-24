@@ -263,12 +263,11 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
             request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
 
-        if request.sampling_params.max_tokens is None:
-            request.sampling_params.max_tokens = max(1, max_model_len - len(request.prompt_token_ids))
+        max_tokens = max_model_len - len(request.prompt_token_ids)
+        if getattr(request.sampling_params, "max_tokens", None) is None:
+            request.sampling_params.max_tokens = max(1, max_tokens)
         else:
-            request.sampling_params.max_tokens = min(
-                max_model_len - len(request.prompt_token_ids), request.sampling_params.max_tokens
-            )
+            request.sampling_params.max_tokens = min(max_tokens, request.sampling_params.max_tokens)
         if request.sampling_params.reasoning_max_tokens is None:
             request.sampling_params.reasoning_max_tokens = max(int(request.sampling_params.max_tokens * 0.8), 1)
             request.reasoning_max_tokens = request.sampling_params.reasoning_max_tokens
