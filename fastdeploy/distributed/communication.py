@@ -133,6 +133,14 @@ try:
                     f"Custom all-reduce only supports: {', '.join(str(d) for d in SUPPORTED_DTYPES)}. "
                     f"Input tensor shape: {input_.shape}, dtype: {input_.dtype}."
                 )
+            # Check 16-byte alignment requirement for deterministic mode
+            if inp_size % 16 != 0:
+                raise RuntimeError(
+                    f"DETERMINISTIC_MODE is enabled but input tensor size ({inp_size} bytes) "
+                    f"is not a multiple of 16. Custom all-reduce requires 16-byte aligned tensors. "
+                    f"Input tensor shape: {input_.shape}, element_size: {input_.element_size()} bytes, "
+                    f"total size: {inp_size} bytes."
+                )
 
         # Use custom all-reduce if available and applicable
         if _TP_AR is not None and _TP_AR.should_custom_ar(input_):

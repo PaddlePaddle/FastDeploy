@@ -23,7 +23,7 @@ Tests:
 4. Unsupported dtypes (int32) raise AssertionError in deterministic mode
 
 Run with 2 GPUs:
-    python -m paddle.distributed.launch --gpus=0,1 tests/distributed/test_allreduce_deterministic_real.py
+    python -m paddle.distributed.launch --gpus=0,1,2,3 tests/distributed/allreduce_deterministic.py
 """
 
 import os
