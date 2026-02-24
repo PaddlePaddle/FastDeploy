@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Communication module for distributed tensor parallel operations."""
 
 from contextlib import contextmanager, nullcontext
 
@@ -33,10 +32,6 @@ _TP_AR = None
 
 @contextmanager
 def capture_custom_allreduce():
-    """Context manager for capturing custom all-reduce operations.
-
-    Yields a null context unless custom all-reduce is initialized.
-    """
     global _TP_AR
     ar_context = nullcontext()
     if _TP_AR is not None:
@@ -49,14 +44,6 @@ def use_custom_allreduce(
     tp_group: paddle.distributed.communication.group.Group = None,
     custom_all_reduce_max_bytes: int = DEFAULT_CUSTOM_ALL_REDUCE_MAX_BYTES,
 ) -> None:
-    """Initialize custom all-reduce for tensor parallel operations.
-
-    Args:
-        tp_group: The tensor parallel group. If None, uses the model parallel group
-            from the fleet's hybrid communicate group.
-        custom_all_reduce_max_bytes: Maximum tensor size in bytes for which custom
-            all-reduce will be used.
-    """
     if tp_group is None:
         hcg = fleet.get_hybrid_communicate_group()
         tp_group = hcg.get_model_parallel_group()
@@ -67,10 +54,6 @@ def use_custom_allreduce(
 
 
 def custom_ar_clear_ipc_handles() -> None:
-    """Clear IPC handles for custom all-reduce.
-
-    Should be called when shutting down or reinitializing custom all-reduce.
-    """
     global _TP_AR
     if _TP_AR is not None:
         _TP_AR.clear_ipc_handles()
@@ -81,7 +64,6 @@ try:
     def tensor_model_parallel_all_reduce_infer_meta(
         x: "paddle.static.MetaTensor", group_: paddle.distributed.communication.group.Group
     ) -> paddle.static.MetaTensor:
-        """Infer meta tensor shape and dtype for tensor_model_parallel_all_reduce."""
         return paddle.static.MetaTensor(shape=x.shape, dtype=x.dtype)
 
     @register_custom_python_op(
@@ -95,20 +77,6 @@ try:
         input_: paddle.Tensor,
         group_: paddle.distributed.communication.group.Group = None,
     ) -> paddle.Tensor:
-        """All-reduce the input tensor across model parallel group.
-
-        Args:
-            input_: Input tensor to all-reduce. Expected shape [seq_len, hidden_size].
-            group_: Communication group. If None, uses the model parallel group.
-
-        Returns:
-            All-reduced tensor with same shape and dtype as input.
-
-        Raises:
-            RuntimeError: In deterministic mode when custom all-reduce is not initialized
-                or when input does not meet custom all-reduce requirements.
-            AssertionError: In deterministic mode when input dtype is not supported.
-        """
         global _TP_AR
         inp_size = input_.numel() * input_.element_size()
         if inp_size == 0:
@@ -179,29 +147,17 @@ try:
         input_: paddle.Tensor,
         out: paddle.Tensor = None,
     ) -> paddle.Tensor:
-        """Perform alltoall and transpose operations for decoding.
 
-        Args:
-            input_: Input tensor.
-            out: Optional output tensor for in-place operation.
-
-        Returns:
-            Transposed alltoall result.
-
-        Raises:
-            RuntimeError: If custom all-reduce is not initialized.
-        """
-        global _TP_AR
         if input_.shape[0] == 0:
             return input_
-        if _TP_AR is None:
-            raise RuntimeError("decode_alltoall_transpose requires custom all-reduce to be initialized.")
-        return _TP_AR.decode_alltoall_transpose(input_, out)
+
+        global _TP_AR
+        input_ = _TP_AR.decode_alltoall_transpose(input_, out)
+        return input_
 
 except Exception:  # pylint: disable=broad-except
     # Registration may fail in certain environments; set functions to None
     tensor_model_parallel_all_reduce = None
-    decode_alltoall_transpose = None
 
 
 # Import stream and reduce operations for custom all-reduce
@@ -210,58 +166,21 @@ from paddle.distributed.communication.reduce import ReduceOp
 
 
 def _get_model_parallel_group():
-    """Get the model parallel group from fleet.
-
-    Returns:
-        The model parallel communication group.
-
-    Raises:
-        RuntimeError: If fleet is not initialized.
-    """
     hcg = fleet.get_hybrid_communicate_group()
     return hcg.get_model_parallel_group()
-
-
-def _stream_all_reduce(
-    tensor: paddle.Tensor,
-    op,
-    group: paddle.distributed.communication.group.Group,
-    sync_op: bool = True,
-) -> paddle.Tensor:
-    """Perform all-reduce using stream API.
-
-    Args:
-        tensor: Input tensor to all-reduce.
-        op: Reduce operation (e.g., ReduceOp.SUM).
-        group: Communication group.
-        sync_op: Whether to synchronize operation.
-
-    Returns:
-        All-reduced tensor.
-    """
-    return stream.all_reduce(tensor, op=op, group=group, sync_op=sync_op, use_calc_stream=True)
 
 
 try:
 
     @paddle.jit.marker.unified
     def tensor_model_parallel_all_reduce_custom(input_: paddle.Tensor) -> paddle.Tensor:
-        """All-reduce the input tensor across model parallel group on calc stream.
-
-        Args:
-            input_: Input tensor to all-reduce.
-
-        Returns:
-            All-reduced tensor.
-        """
         if input_.shape[0] == 0:
             return input_
         if paddle.in_dynamic_mode():
             mp_group = _get_model_parallel_group()
-            _stream_all_reduce(input_, op=ReduceOp.SUM, group=mp_group)
+            stream.all_reduce(input_, op=ReduceOp.SUM, group=mp_group, sync_op=True, use_calc_stream=True)
         else:
             dist.all_reduce(input_)
 
-except Exception:  # pylint: disable=broad-except
-    # Registration may fail in certain environments; set function to None
+except Exception:
     tensor_model_parallel_all_reduce_custom = None
