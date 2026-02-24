@@ -207,6 +207,7 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     decode_env = os.environ.copy()
     decode_env["FD_LOG_DIR"] = "log_decode"
     decode_env["XPU_VISIBLE_DEVICES"] = "4,5,6,7"
+    del decode_env["FD_XPU_MOE_FFN_QUANT_TYPE_MAP"]
 
     decode_cmd = [
         "python",
