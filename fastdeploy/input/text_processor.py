@@ -15,6 +15,7 @@
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 
 import numpy as np
 from paddleformers.generation import GenerationConfig
@@ -147,6 +148,15 @@ class BaseDataProcessor(ABC):
         """
         raise NotImplementedError
 
+    def get_mm_max_tokens_per_item(
+        self,
+        seq_len: int,
+    ) -> Mapping[str, int]:
+        """
+        Return the maximum number of tokens per item for each modality.
+        """
+        return None
+
 
 class DataProcessor(BaseDataProcessor):
     def __init__(self, model_name_or_path, reasoning_parser_obj=None, tool_parser_obj=None):
@@ -184,7 +194,10 @@ class DataProcessor(BaseDataProcessor):
                                 eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
         )
 
-        from paddleformers.trl.llm_utils import get_eos_token_id
+        try:
+            from paddleformers.trl.llm_utils import get_eos_token_id
+        except Exception:
+            from paddleformers.cli.utils.llm_utils import get_eos_token_id
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
         data_processor_logger.info(

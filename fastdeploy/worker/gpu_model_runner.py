@@ -53,14 +53,15 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
-from fastdeploy.model_executor.ops.gpu import get_stop, set_stop
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
+        get_stop,
         recover_decode_task,
         set_data_ipc,
+        set_stop,
         set_value_by_flags_and_idx,
     )
 
@@ -72,7 +73,9 @@ elif current_platform.is_dcu():
     share_external_data = None
 else:
     from fastdeploy.model_executor.ops.gpu import (
+        get_stop,
         recover_decode_task,
+        set_stop,
         set_value_by_flags_and_idx,
         share_external_data,
         speculate_schedule_cache,
@@ -1546,12 +1549,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
         cache_kvs_list = []
-
-        # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
-        # To rationalize the allocation of kvcache.
-        from fastdeploy import envs
-
-        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         for i in range(self.model_config.num_hidden_layers):
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
@@ -2079,7 +2076,7 @@ class GPUModelRunner(ModelRunnerBase):
                         num_tokens=(
                             self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
                             if self.scheduler_config.splitwise_role == "decode"
-                            else self.scheduler_config.max_num_batched_tokens
+                            else self.fd_config.get_max_chunk_tokens()
                         ),
                         batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
                         in_capturing=True,
@@ -2092,11 +2089,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
-                        num_tokens=(
-                            self.scheduler_config.max_num_seqs
-                            if self.scheduler_config.splitwise_role == "decode"
-                            else self.scheduler_config.max_num_batched_tokens
-                        ),
+                        num_tokens=self.fd_config.get_max_chunk_tokens(),
                         batch_size=batch_size,
                         in_capturing=True,
                         expected_decode_len=expected_decode_len,
@@ -2177,11 +2170,7 @@ class GPUModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=(
-                    self.scheduler_config.max_num_seqs
-                    if self.scheduler_config.splitwise_role == "decode"
-                    else self.scheduler_config.max_num_batched_tokens
-                ),
+                num_tokens=self.fd_config.get_max_chunk_tokens(),
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
@@ -2900,12 +2889,12 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Profile with multimodal encoder & encoder cache
 
         # 2. Dummy run
+        num_tokens = self.fd_config.get_max_chunk_tokens()
+        logger.info(
+            f"Dummy run with {num_tokens} tokens, mm_max_tokens_per_item: {self.model_config.mm_max_tokens_per_item}"
+        )
         self._dummy_run(
-            num_tokens=(
-                self.scheduler_config.max_num_seqs
-                if self.scheduler_config.splitwise_role == "decode"
-                else self.scheduler_config.max_num_batched_tokens
-            ),
+            num_tokens=num_tokens,
             batch_size=self.scheduler_config.max_num_seqs,
         )
 
@@ -2978,7 +2967,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # NOTE:(changwenbin) Determie whether it is Multi-Head Latent Attention,
         # To rationalize the allocation of kvcache.
-        if self.mla_cache:
+        if self.fd_config.cache_config.use_mla_cache:
             required_memory = (
                 byte_of_dtype
                 * (self.fd_config.model_config.kv_lora_rank + self.fd_config.model_config.qk_rope_head_dim)
@@ -3045,7 +3034,11 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.update_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
+
+        # Reset share_inputs
+        self.share_inputs.reset_share_inputs()
         if self.speculative_method in ["mtp"]:
+            self.proposer.model_inputs.reset_model_inputs()
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
         # Recapture CUDAGraph
@@ -3342,6 +3335,8 @@ class GPUModelRunner(ModelRunnerBase):
             token_ids, logprobs, ranks = self.sampler.gather_logprobs(
                 raw_logprobs, num_prompt_logprobs, prompt_token_ids_tensor
             )
+            # Synchronize before using token_ids, logprobs and ranks to ensure async copy are completed.
+            paddle.device.synchronize()
             chunk_slice = slice(start_idx, start_idx + num_logits)
             logprobs_tensors.logprob_token_ids[chunk_slice].copy_(token_ids, False)
             logprobs_tensors.logprobs[chunk_slice].copy_(logprobs, False)

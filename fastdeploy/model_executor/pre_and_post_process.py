@@ -139,7 +139,7 @@ def limit_thinking_content_length(
             step_idx,
             limit_think_status,
             stop_flags,
-            eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
+            eos_token_ids,  # Address the issue where the model outputs EOS tokens during the reasoning process due to model performance problems
             think_end_id,
         )
     elif limit_strategy == "\n</think>\n\n":
@@ -179,7 +179,7 @@ def speculate_limit_thinking_content_length(
             limit_think_status,
             accept_num,
             stop_flags,
-            eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
+            eos_token_ids,  # Address the issue where the model outputs EOS tokens during the reasoning process due to model performance problems
             think_end_id,
         )
     elif limit_strategy == "\n</think>\n\n":
@@ -436,26 +436,32 @@ def save_output_normal(
             )
             async_output_queue.put(output)
     else:
-        recover_share_inputs_map = recover_batch_index_for_output(
-            share_inputs,
-            model_output.index_to_batch_id,
-            model_output.enable_pd_reorder,
-            ["last_preempted_idx"],
-        )
         if sampler_output.logprobs_tensors is None:
+            recover_share_inputs_map = recover_batch_index_for_output(
+                share_inputs,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["last_preempted_idx", "sampled_token_ids"],
+            )
             save_output(
-                share_inputs["sampled_token_ids"],
+                recover_share_inputs_map["sampled_token_ids"],
                 model_output.not_need_stop,
                 recover_share_inputs_map["last_preempted_idx"],
                 model_output.mp_rank,
                 save_each_rank,
             )
         else:
+            recover_share_inputs_map = recover_batch_index_for_output(
+                share_inputs,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["last_preempted_idx"],
+            )
             recover_batch_index_for_sampler_output(
                 sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
             )
             save_output_topk(
-                sampler_output.sampled_token_ids,
+                share_inputs["sampled_token_ids"],
                 sampler_output.logprobs_tensors.logprob_token_ids,
                 sampler_output.logprobs_tensors.logprobs,
                 sampler_output.logprobs_tensors.selected_token_ranks,
@@ -876,6 +882,7 @@ def rebuild_padding(
             seq_lens_decoder,
             seq_lens_encoder,
             batch_id_per_token_output,
+            cu_seqlens_q_output,
             first_token_out,
             enable_logprob,
         )
@@ -911,6 +918,7 @@ def rebuild_padding(
             seq_lens_decoder,
             seq_lens_encoder,
             batch_id_per_token_output,
+            cu_seqlens_q_output,
             first_token_out,
             enable_logprob,
         )

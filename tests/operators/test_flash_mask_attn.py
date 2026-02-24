@@ -91,6 +91,8 @@ class TestFlashMaskAttention(unittest.TestCase):
         )
 
     def test_flash_mask_attention(self):
+        if self.sm_version < 89 or self.sm_version >= 100:
+            self.skipTest("flash_mask_attention V3 requires SM89+ but less than SM100.")
         q_input = paddle.randn([self.q_len, self.num_head * self.head_dim], dtype="bfloat16")
         k_input = paddle.randn([self.q_len + self.k_len, self.num_kv_head, self.head_dim], dtype="bfloat16")
         v_input = paddle.randn(k_input.shape, dtype="bfloat16")
