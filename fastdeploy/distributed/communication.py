@@ -150,6 +150,13 @@ try:
             # TODO: supports different_group custom allreduce
             input_ = _TP_AR.custom_all_reduce(input_)
         elif paddle.in_dynamic_mode():
+            if envs.FD_DETERMINISTIC_MODE:
+                raise RuntimeError(
+                    "DETERMINISTIC_MODE is enabled but falling back to NCCL all-reduce in dynamic mode. "
+                    "This may produce non-deterministic results due to floating-point "
+                    "accumulation order. "
+                    "Ensure custom all-reduce is properly initialized via use_custom_allreduce()."
+                )
             if group_ is not None:
                 dist.all_reduce(input_, group=group_)
             else:
@@ -157,7 +164,6 @@ try:
                 mp_group = hcg.get_model_parallel_group()
                 dist.all_reduce(input_, group=mp_group)
         else:
-            # Static mode - fail fast if deterministic mode is enabled
             if envs.FD_DETERMINISTIC_MODE:
                 raise RuntimeError(
                     "DETERMINISTIC_MODE is enabled but using NCCL all-reduce in static mode. "
