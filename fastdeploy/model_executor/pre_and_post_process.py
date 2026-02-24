@@ -933,6 +933,10 @@ def rebuild_padding(
             from fastdeploy.model_executor.ops.gpu import rebuild_padding
 
             _rebuild_padding_impl = rebuild_padding
+        elif current_platform.is_xpu():
+            from fastdeploy.model_executor.ops.gpu import rebuild_padding
+
+            _rebuild_padding_impl = rebuild_padding
         else:
             raise RuntimeError("Not supported platform")
 
