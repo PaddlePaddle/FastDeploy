@@ -76,7 +76,8 @@ class TestCommunicationBasic(unittest.TestCase):
 
         mock_all_reduce.side_effect = fake_all_reduce
 
-        x = paddle.to_tensor([1.0])
+        # tensor_model_parallel_all_reduce expects 2D tensor [seq_len, hidden_size]
+        x = paddle.to_tensor([[1.0]])
         # call should not raise, ensure all_reduce was invoked
         _ = communication.tensor_model_parallel_all_reduce(x)
         mock_all_reduce.assert_called()

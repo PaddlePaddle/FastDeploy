@@ -106,6 +106,7 @@ class CacheConfig:
         self.bytes_per_layer_per_block = 16 * 32 * 128 * 2
         self.bytes_per_block = 32 * 32 * 128 * 2
         self.each_token_cache_space = 32 * 32 * 128 * 2
+        self.bytes_per_token_per_layer = 32 * 32 * 128 * 2
 
 
 class SchedulerConfig:
@@ -342,14 +343,18 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         from fastdeploy.model_executor.layers.attention.flash_attn_backend import (
             FlashAttentionBackend,
             flash_attn_func,
+            init_flash_attn_version,
         )
 
         if not paddle.is_compiled_with_cuda():
             self.skipTest("Flash Attention requires CUDA")
 
-        # Detect current flash attention version from environment
+        # Initialize Flash Attention version based on environment
         current_fa_version = paddle.base.framework.get_flags(["FLAGS_flash_attn_version"])["FLAGS_flash_attn_version"]
         print(f"  Detected FLAGS_flash_attn_version: {current_fa_version}")
+
+        # Initialize flash_attn_func version to match environment variable
+        init_flash_attn_version(fa_version=current_fa_version)
 
         os.environ["FD_DETERMINISTIC_MODE"] = "1"
         os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = "16"
@@ -380,15 +385,16 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         seq_len = 32
 
         # Different input formats for v2 vs v3
+        # Note: flash_attn_unpadded requires int32 for seqlens
         if current_fa_version == 2:
-            # v2 format: [total_seq_len, num_heads, head_dim], int64 for seqlens
+            # v2 format: [total_seq_len, num_heads, head_dim], int32 for seqlens
             q = paddle.randn([seq_len, num_heads, head_dim], dtype="float16")
             k = paddle.randn([seq_len, kv_num_heads, head_dim], dtype="float16")
             v = paddle.randn([seq_len, kv_num_heads, head_dim], dtype="float16")
-            cu_seqlens_q = paddle.to_tensor([0, seq_len], dtype="int64")
-            cu_seqlens_k = paddle.to_tensor([0, seq_len], dtype="int64")
-            max_seqlen_q = paddle.to_tensor([seq_len], dtype="int64")
-            max_seqlen_k = paddle.to_tensor([seq_len], dtype="int64")
+            cu_seqlens_q = paddle.to_tensor([0, seq_len], dtype="int32")
+            cu_seqlens_k = paddle.to_tensor([0, seq_len], dtype="int32")
+            max_seqlen_q = paddle.to_tensor([seq_len], dtype="int32")
+            max_seqlen_k = paddle.to_tensor([seq_len], dtype="int32")
         else:
             # v3 format: [batch_size, num_heads, seq_len, head_dim], int32 for seqlens
             q = paddle.randn([1, num_heads, seq_len, head_dim], dtype="float16")
@@ -414,7 +420,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                 num_heads=num_heads,
                 kv_num_heads=kv_num_heads,
                 head_dim=head_dim,
-                version=current_fa_version,  # Use current environment version
             )
             # v2 returns (output, softmax_lse), v3 returns output directly
             if isinstance(result, tuple):
@@ -461,9 +466,13 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
             k_batch = paddle.randn([total_tokens, kv_num_heads, head_dim], dtype="float16")
             v_batch = paddle.randn([total_tokens, kv_num_heads, head_dim], dtype="float16")
 
-            # Different dtype for seqlens based on flash attention version
-            seqlens_dtype = "int64" if current_fa_version == 2 else "int32"
-            cu_seqlens_q = paddle.to_tensor([0] + seq_lengths, dtype=seqlens_dtype).cumsum()
+            # flash_attn_unpadded and flash_attention_v3_varlen both require int32 for seqlens
+            seqlens_dtype = "int32"
+            # Manual cumsum to avoid dtype issues
+            cu_seq = [0]
+            for seq_len in seq_lengths:
+                cu_seq.append(cu_seq[-1] + seq_len)
+            cu_seqlens_q = paddle.to_tensor(cu_seq, dtype=seqlens_dtype)
             cu_seqlens_k = cu_seqlens_q.clone()
 
             max_seqlen_q = paddle.to_tensor([max(seq_lengths)], dtype=seqlens_dtype)
@@ -484,7 +493,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                     num_heads=num_heads,
                     kv_num_heads=kv_num_heads,
                     head_dim=head_dim,
-                    version=current_fa_version,  # Use current environment version
                 )
                 # v2 returns (output, softmax_lse), v3 returns output directly
                 if isinstance(result, tuple):
@@ -529,9 +537,13 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         k_unequal = paddle.randn([total_tokens, kv_num_heads, head_dim], dtype="float16")
         v_unequal = paddle.randn([total_tokens, kv_num_heads, head_dim], dtype="float16")
 
-        # Different dtype for seqlens based on flash attention version
-        seqlens_dtype = "int64" if current_fa_version == 2 else "int32"
-        cu_seqlens_q = paddle.to_tensor([0] + unequal_seq_lengths, dtype=seqlens_dtype).cumsum()
+        # flash_attn_unpadded and flash_attention_v3_varlen both require int32 for seqlens
+        seqlens_dtype = "int32"
+        # Manual cumsum to avoid dtype issues
+        cu_seq = [0]
+        for seq_len in unequal_seq_lengths:
+            cu_seq.append(cu_seq[-1] + seq_len)
+        cu_seqlens_q = paddle.to_tensor(cu_seq, dtype=seqlens_dtype)
         cu_seqlens_k = cu_seqlens_q.clone()
 
         max_seqlen_q = paddle.to_tensor([max(unequal_seq_lengths)], dtype=seqlens_dtype)
@@ -552,7 +564,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                 num_heads=num_heads,
                 kv_num_heads=kv_num_heads,
                 head_dim=head_dim,
-                version=current_fa_version,  # Use current environment version
             )
             # v2 returns (output, softmax_lse), v3 returns output directly
             if isinstance(result, tuple):
@@ -579,12 +590,13 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
 
         paddle.seed(777)
         # Different input formats for v2 vs v3
+        # Note: both flash_attn_unpadded and flash_attention_v3_varlen require int32 for seqlens
         if current_fa_version == 2:
-            # v2 format: [total_seq_len, num_heads, head_dim], int64 for seqlens
+            # v2 format: [total_seq_len, num_heads, head_dim], int32 for seqlens
             q_single = paddle.randn([1, num_heads, head_dim], dtype="float16")
             k_single = paddle.randn([1, kv_num_heads, head_dim], dtype="float16")
             v_single = paddle.randn([1, kv_num_heads, head_dim], dtype="float16")
-            seqlens_dtype = "int64"
+            seqlens_dtype = "int32"
         else:
             # v3 format: [batch_size, num_heads, seq_len, head_dim], int32 for seqlens
             q_single = paddle.randn([1, num_heads, 1, head_dim], dtype="float16")
@@ -612,7 +624,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                 num_heads=num_heads,
                 kv_num_heads=kv_num_heads,
                 head_dim=head_dim,
-                version=current_fa_version,  # Use current environment version
             )
             # v2 returns (output, softmax_lse), v3 returns output directly
             if isinstance(result, tuple):

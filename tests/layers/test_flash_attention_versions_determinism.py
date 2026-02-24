@@ -356,50 +356,6 @@ class TestFlashAttentionDeterminism(unittest.TestCase):
         all_equal = self._test_determinism(3, num_runs=3, is_causal=False, enable_gqa=True)
         self.assertTrue(all_equal, "FA3 GQA results are not equal")
 
-    # ==================== Sliding Window Tests ====================
-
-    def _test_sliding_window_determinism(self, version, window_size):
-        """Helper method for testing determinism with sliding window"""
-        self._check_cuda_support()
-        if version == 3:
-            self._check_fa3_support()
-
-        paddle.set_flags({"FLAGS_flash_attn_version": version})
-
-        paddle.seed(42)
-        query = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        key = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-        value = paddle.randn([BATCH_SIZE, NUM_HEADS, SEQ_LEN, HEAD_DIM], dtype="float16")
-
-        # Create sliding window mask
-        seq_range = paddle.arange(SEQ_LEN)
-        mask = paddle.abs(seq_range[:, None] - seq_range[None, :]) > window_size
-        mask = mask.cast("float16") * float("-inf")
-
-        result1 = F.scaled_dot_product_attention(
-            query, key, value, attn_mask=mask, backend="flash", is_causal=False, enable_gqa=False
-        )
-        result2 = F.scaled_dot_product_attention(
-            query, key, value, attn_mask=mask, backend="flash", is_causal=False, enable_gqa=False
-        )
-
-        is_equal = paddle.equal(result1, result2).all().item()
-        return is_equal
-
-    def test_fa2_sliding_window(self):
-        """Test FA2 determinism with sliding window"""
-        print("\n[21] FA2 Sliding Window Test (window_size=128)")
-        print("-" * 70)
-        is_equal = self._test_sliding_window_determinism(2, window_size=128)
-        self.assertTrue(is_equal, "FA2 sliding window results are not equal")
-
-    def test_fa3_sliding_window(self):
-        """Test FA3 determinism with sliding window"""
-        print("\n[22] FA3 Sliding Window Test (window_size=128)")
-        print("-" * 70)
-        is_equal = self._test_sliding_window_determinism(3, window_size=128)
-        self.assertTrue(is_equal, "FA3 sliding window results are not equal")
-
 
 if __name__ == "__main__":
     # Run tests

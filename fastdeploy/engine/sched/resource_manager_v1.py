@@ -502,7 +502,11 @@ class ResourceManagerV1(ResourceManager):
             return num_new_tokens
 
         inputs = request.multimodal_inputs
-        if inputs.get("patch_idx", None) is not None and inputs.get("patch_map", None) is not None:
+        if (
+            inputs is not None
+            and inputs.get("patch_idx", None) is not None
+            and inputs.get("patch_map", None) is not None
+        ):
             pre_end_idx = request.num_computed_tokens
             new_end_idx = pre_end_idx + num_new_tokens
 
@@ -577,7 +581,8 @@ class ResourceManagerV1(ResourceManager):
             request.video_end = end_patch_map["video_num"]
             request.audio_end = _compute_audio_prefix_count(new_end_idx, end_patch_idx)
         elif (
-            inputs.get("images", None) is not None
+            inputs is not None
+            and inputs.get("images", None) is not None
             and inputs.get("image_patch_id", None) is not None
             and inputs.get("grid_thw", None) is not None
         ):
