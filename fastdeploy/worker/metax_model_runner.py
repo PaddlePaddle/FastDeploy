@@ -1481,7 +1481,7 @@ class MetaxModelRunner(ModelRunnerBase):
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
-            line_break_id=self.model_config.line_break_id,
+            splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
         )
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
@@ -1945,7 +1945,7 @@ class MetaxModelRunner(ModelRunnerBase):
             skip_save_output=skip_save_output,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
-            line_break_id=self.model_config.line_break_id,
+            splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
         )
         if self.guided_backend is not None and sampler_output is not None:
             self.sampler.post_process(sampler_output.sampled_token_ids)
