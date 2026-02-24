@@ -273,13 +273,12 @@ class ZmqOpenAIServing(OpenAIServing):
         request_id = ctx.request_id
         try:
             num_choices = len(ctx.preprocess_requests)
-            dealer, request_output_queue = await self.engine_client.connection_manager.get_connection(
+            # Get response queue for batch mode (dealer is not needed)
+            _, request_output_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
-            for pr in ctx.preprocess_requests:
-                dealer.write([b"", pr["request_id"].encode("utf-8")])
-            # if self.engine_client.check_model_weight_status():
-            #     raise ValueError("Engine is clearing model weight")
+            # Request already sent via format_and_add_data in _preprocess
+            # No need for dealer.write() in batch PUSH/PULL mode
             while num_choices > 0:
                 request_output_dicts = await asyncio.wait_for(request_output_queue.get(), timeout=60)
                 for request_output_dict in request_output_dicts:

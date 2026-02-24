@@ -255,12 +255,10 @@ class OpenAIServingChat:
         api_server_logger.info(f"create chat completion request: {request_id}")
 
         try:
-            dealer, response_queue = await self.engine_client.connection_manager.get_connection(
-                request_id, num_choices
-            )
-            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
-            for rid in request_ids:
-                dealer.write([b"", rid.encode("utf-8")])
+            # Get response queue for batch mode (dealer is not needed)
+            _, response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
+            # Request already sent via format_and_add_data in preprocessing
+            # No need for dealer.write() in batch PUSH/PULL mode
             choices = []
             current_waiting_time = 0
             response_processor = ChatResponseProcessor(
@@ -274,6 +272,9 @@ class OpenAIServingChat:
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
+                except asyncio.CancelledError:
+                    # Client disconnected, propagate to outer handler
+                    raise
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
@@ -548,13 +549,10 @@ class OpenAIServingChat:
 
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
-            dealer, response_queue = await self.engine_client.connection_manager.get_connection(
-                request_id, num_choices
-            )
-            # dealer.write([b"", request_id.encode("utf-8")])
-            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
-            for rid in request_ids:
-                dealer.write([b"", rid.encode("utf-8")])
+            # Get response queue for batch mode (dealer is not needed)
+            _, response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
+            # Request already sent via format_and_add_data in preprocessing
+            # No need for dealer.write() in batch PUSH/PULL mode
             previous_num_tokens = [0] * num_choices
             reasoning_num_tokens = [0] * num_choices
             current_waiting_time = 0

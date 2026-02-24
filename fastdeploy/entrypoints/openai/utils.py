@@ -91,13 +91,27 @@ class DealerConnectionManager:
         self.lock = asyncio.Lock()
         self.connection_tasks = []
         self.running = False
+        # Batch mode: PULL client and dispatcher task
+        self.pull_client = None
+        self.dispatcher_task = None
 
     async def initialize(self):
         """initialize all connections"""
         self.running = True
-        for index in range(self.max_connections):
-            await self._add_connection(index)
-        api_server_logger.info(f"Started {self.max_connections} connections, pid {self.pid}")
+
+        # Create PULL client for batch response reception
+        try:
+            self.pull_client = await aiozmq.create_zmq_stream(
+                zmq.PULL, connect=f"ipc:///dev/shm/response_{self.pid}.push"
+            )
+            # Start dispatcher task
+            self.dispatcher_task = asyncio.create_task(self._dispatch_batch_responses())
+            api_server_logger.info(f"Started PULL client for batch response, pid {self.pid}")
+        except Exception as e:
+            api_server_logger.error(f"Failed to create PULL client: {str(e)}")
+
+        # Batch mode: no longer need dealer connections
+        api_server_logger.info(f"Batch mode: dealer connections not needed, pid {self.pid}")
 
     async def _add_connection(self, index):
         """create a new connection and start listening task"""
@@ -152,6 +166,59 @@ class DealerConnectionManager:
                 api_server_logger.error(f"Listener error: {str(e)}")
                 break
 
+    async def _dispatch_batch_responses(self):
+        """
+        Receive batch responses and dispatch to corresponding request queues.
+        batch_data format: [[req_id, [outputs]], [req_id, [outputs]], ...]
+        """
+        while self.running:
+            try:
+                raw_data = await self.pull_client.read()
+                batch_data = ForkingPickler.loads(raw_data[-1])
+
+                # Record metrics
+                _zmq_metrics_stats = ZMQMetricsStats()
+                _zmq_metrics_stats.msg_recv_total += 1
+                address = f"ipc:///dev/shm/response_{self.pid}.push"
+                main_process_metrics.record_zmq_stats(_zmq_metrics_stats, address)
+
+                # Parse request_ids first (outside lock)
+                parsed_items = []
+                for req_id, outputs in batch_data:
+                    req_id_str = req_id
+                    if req_id_str[:4] in ["cmpl", "embd"]:
+                        req_id_str = req_id_str.rsplit("_", 1)[0]
+                    elif "reward" == req_id_str[:6]:
+                        req_id_str = req_id_str.rsplit("_", 1)[0]
+                    elif "chatcmpl" == req_id_str[:8]:
+                        req_id_str = req_id_str.rsplit("_", 1)[0]
+
+                    # Check if finished (outside lock)
+                    finished = False
+                    for output in outputs:
+                        if isinstance(output, dict) and output.get("finished"):
+                            finished = True
+                            break
+                        elif hasattr(output, "finished") and output.finished:
+                            finished = True
+                            break
+                    parsed_items.append((req_id_str, outputs, finished))
+
+                # Dispatch all items with single lock acquisition
+                async with self.lock:
+                    for req_id_str, outputs, finished in parsed_items:
+                        if req_id_str in self.request_map:
+                            await self.request_map[req_id_str].put(outputs)
+                            if finished:
+                                self.request_num[req_id_str] -= 1
+                                if self.request_num[req_id_str] == 0:
+                                    self.request_num.pop(req_id_str, None)
+
+            except Exception as e:
+                if self.running:
+                    api_server_logger.error(f"Dispatcher error: {str(e)}")
+                break
+
     def _update_load(self, conn_index, delta):
         """Update connection load and maintain the heap"""
         self.connection_load[conn_index] += delta
@@ -183,9 +250,8 @@ class DealerConnectionManager:
         async with self.lock:
             self.request_map[request_id] = response_queue
             self.request_num[request_id] = num_choices
-            dealer = self._get_least_loaded_connection()
-            if not dealer:
-                raise RuntimeError("No available connections")
+            # Batch mode: no longer need dealer, return None for compatibility
+            dealer = None
 
         return dealer, response_queue
 
@@ -193,16 +259,33 @@ class DealerConnectionManager:
         """
         clean up the request after it is finished
         """
-        async with self.lock:
-            if request_id in self.request_map:
-                del self.request_map[request_id]
-                del self.request_num[request_id]
+        try:
+            async with self.lock:
+                # Use pop to avoid KeyError if already cleaned
+                self.request_map.pop(request_id, None)
+                self.request_num.pop(request_id, None)
+        except asyncio.CancelledError:
+            # If cancelled during lock acquisition, try cleanup without lock
+            self.request_map.pop(request_id, None)
+            self.request_num.pop(request_id, None)
+            raise
 
     async def close(self):
         """
         close all connections and tasks
         """
         self.running = False
+
+        # Cancel dispatcher task
+        if self.dispatcher_task:
+            self.dispatcher_task.cancel()
+
+        # Close PULL client
+        if self.pull_client:
+            try:
+                self.pull_client.close()
+            except:
+                pass
 
         for task in self.connection_tasks:
             task.cancel()

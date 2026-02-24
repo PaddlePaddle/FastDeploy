@@ -313,11 +313,49 @@ class ZmqServerBase(ABC):
                     llm_logger.info(f"send_multipart finished, req_id: {req_id}")
                     self.req_dict.pop(req_id, None)
 
+    def _send_batch_response(self, batch_data):
+        """
+        Batch send responses for multiple requests.
+        batch_data: List[[req_id, [output, ...]], ...]
+        """
+        self._ensure_socket()
+        if self.socket is None:
+            raise RuntimeError("Socket not created.")
+
+        try:
+            # Convert outputs to dict if needed
+            for req_id, outputs in batch_data:
+                for i, output in enumerate(outputs):
+                    if not envs.ENABLE_V1_DATA_PROCESSOR:
+                        outputs[i] = output.to_dict()
+
+            result = ForkingPickler.dumps(batch_data)
+            start_send = time.time()
+
+            with self.response_token_lock:
+                _zmq_metrics_stats = ZMQMetricsStats()
+                try:
+                    self.socket.send(result, copy=False)
+                    _zmq_metrics_stats.msg_bytes_send_total += len(result)
+                except Exception as e:
+                    _zmq_metrics_stats.msg_send_failed_total += 1
+                    raise e
+                finally:
+                    _zmq_metrics_stats.msg_send_total += 1
+                    main_process_metrics.record_zmq_stats(_zmq_metrics_stats, self.address)
+
+            llm_logger.debug(f"send_batch: {len(batch_data)} requests, elapse: {time.time() - start_send}")
+
+        except Exception as e:
+            llm_logger.error(f"Send batch response failed: {e}")
+
     def send_response(self, req_id, data):
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
             self._send_response_per_step(req_id, data)
         else:
-            self._send_response_per_query(req_id, data)
+            # Non-Internal Adapter mode: batch send all request results
+            # data format: List[[req_id, [output, ...]], ...]
+            self._send_batch_response(data)
 
     @abstractmethod
     def close(self):
@@ -339,13 +377,15 @@ class ZmqIpcServer(ZmqServerBase):
         self.cached_results = defaultdict(list)
         if mode == zmq.PULL:
             self.file_name = f"/dev/shm/{name}.socket"
+        elif mode == zmq.PUSH:
+            self.file_name = f"/dev/shm/response_{name}.push"
         elif mode == zmq.ROUTER:
             self.file_name = f"/dev/shm/router_{name}.ipc"
         self.ZMQ_SNDHWM = int(envs.FD_ZMQ_SNDHWM)
         self.aggregate_send = envs.FD_USE_AGGREGATE_SEND
         self.mutex = threading.Lock()
         self.response_token_lock = threading.Lock()
-        self.req_dict = dict()
+        self.req_dict = dict()  # Retained for compatibility, but no longer used
         self.running = True
         self.context = zmq.Context()
         self._create_socket()

@@ -1073,13 +1073,16 @@ class EngineService:
             self.internal_adapter = InternalAdapter(
                 cfg=self.cfg, engine=self, dp_rank=self.cfg.parallel_config.local_data_parallel_id
             )
+            # ROUTER mode: need to receive client handles
+            self.recv_result_handle_thread = threading.Thread(
+                target=self.send_response_server.recv_result_handle, daemon=True
+            )
+            self.recv_result_handle_thread.start()
         else:
+            # Non-Internal Adapter mode: use PULL for requests, PUSH for batch responses
+            # PUSH mode: no need to receive client handles
             self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
-            self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
-        self.recv_result_handle_thread = threading.Thread(
-            target=self.send_response_server.recv_result_handle, daemon=True
-        )
-        self.recv_result_handle_thread.start()
+            self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PUSH)
         time.sleep(3)
         self.insert_task_to_scheduler_thread = threading.Thread(target=self._insert_zmq_task_to_scheduler, daemon=True)
         self.insert_task_to_scheduler_thread.start()
@@ -1474,6 +1477,9 @@ class EngineService:
                         self.send_response_server.send_response(None, new_contents)
 
                 else:
+                    # Non-Internal Adapter mode: batch collect and send all request results
+                    batch_data = []
+
                     for request_id, contents in results.items():
                         new_contents = []
                         for content in contents:
@@ -1498,9 +1504,12 @@ class EngineService:
                                     )
                             else:
                                 new_contents.append(content)
-                        if len(new_contents):
-                            self.llm_logger.debug(f"Send response for request id: {request_id}")
-                            self.send_response_server.send_response(request_id, new_contents)
+                        if new_contents:
+                            batch_data.append([request_id, new_contents])
+
+                    # Send all request results together in one batch
+                    if batch_data:
+                        self.send_response_server.send_response(None, batch_data)
             except Exception as e:
                 self.llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
 

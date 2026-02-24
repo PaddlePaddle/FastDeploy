@@ -259,16 +259,11 @@ class OpenAIServingCompletion:
         """
         Process the full completion request with multiple choices.
         """
-        dealer = None
         try:
-            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
-            # create dealer
-            dealer, response_queue = await self.engine_client.connection_manager.get_connection(
-                request_id, num_choices
-            )
-
-            for rid in request_ids:
-                dealer.write([b"", rid.encode("utf-8")])
+            # Get response queue for batch mode (dealer is not needed)
+            _, response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
+            # Request already sent via format_and_add_data in preprocessing
+            # No need for dealer.write() in batch PUSH/PULL mode
 
             valid_results = [dict()] * num_choices
             output_tokens = [0] * num_choices
@@ -291,6 +286,9 @@ class OpenAIServingCompletion:
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
+                except asyncio.CancelledError:
+                    # Client disconnected, propagate to outer handler
+                    raise
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
@@ -378,8 +376,8 @@ class OpenAIServingCompletion:
             tracing.trace_req_finish(request_id)
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             self.engine_client.semaphore.release()
-            if dealer is not None:
-                await self.engine_client.connection_manager.cleanup_request(request_id)
+            # if dealer is not None:
+            #     await self.engine_client.connection_manager.cleanup_request(request_id)
 
     def _echo_back_prompt(self, request, idx):
         """
@@ -429,13 +427,11 @@ class OpenAIServingCompletion:
         Process the stream completion request.
         """
         try:
-            dealer, response_queue = await self.engine_client.connection_manager.get_connection(
-                request_id, num_choices
-            )
+            # Get response queue for batch mode (dealer is not needed)
+            _, response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
+            # Request already sent via format_and_add_data in preprocessing
+            # No need for dealer.write() in batch PUSH/PULL mode
 
-            for i in range(num_choices):
-                req_id = f"{request_id}_{i}"
-                dealer.write([b"", req_id.encode("utf-8")])  # 发送多路请求
             output_tokens = [0] * num_choices
             num_cache_tokens = [0] * num_choices
             num_image_tokens = [0] * num_choices
@@ -463,6 +459,9 @@ class OpenAIServingCompletion:
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
+                except asyncio.CancelledError:
+                    # Client disconnected, propagate to outer handler
+                    raise
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
@@ -656,9 +655,9 @@ class OpenAIServingCompletion:
             tracing.trace_req_finish(request_id)
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             del request
-            if dealer is not None:
-                await self.engine_client.connection_manager.cleanup_request(request_id)
-                self.engine_client.semaphore.release()
+            # if dealer is not None:
+            #     await self.engine_client.connection_manager.cleanup_request(request_id)
+            #     self.engine_client.semaphore.release()
             yield "data: [DONE]\n\n"
 
     def request_output_to_completion_response(
