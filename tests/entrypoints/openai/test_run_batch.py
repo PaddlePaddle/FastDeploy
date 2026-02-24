@@ -1404,7 +1404,11 @@ class TestFastDeployBatch(unittest.TestCase):
         clean_ports()
 
         # 3. 确定模型路径
-        self.model_path = "baidu/ERNIE-4.5-0.3B-PT"
+        base_path = os.getenv("MODEL_PATH")
+        if base_path:
+            self.model_path = os.path.join(base_path, "ERNIE-4.5-0.3B-Paddle")
+        else:
+            self.model_path = "./ERNIE-4.5-0.3B-Paddle"
 
         self.run_batch_command = [sys.executable, "fastdeploy/entrypoints/openai/run_batch.py"]
 
@@ -1465,7 +1469,7 @@ class TestFastDeployBatch(unittest.TestCase):
                 "--max-num-seqs",
                 "64",
                 "--load-choices",
-                "default_v1",
+                "dummy",
                 "--engine-worker-queue-port",
                 str(FD_ENGINE_QUEUE_PORT),
             ]
@@ -1494,7 +1498,7 @@ class TestFastDeployBatch(unittest.TestCase):
                     "--max-num-seqs",
                     "64",
                     "--load-choices",
-                    "default_v1",
+                    "dummy",
                     "--engine-worker-queue-port",
                     str(FD_ENGINE_QUEUE_PORT),
                 ]
