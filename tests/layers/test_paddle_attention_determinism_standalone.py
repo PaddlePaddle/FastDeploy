@@ -209,6 +209,8 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         else:
             print("  Result: FP16 is not fully deterministic")
 
+        self.assertTrue(is_deterministic, "FP16 SDPA results are not deterministic across runs")
+
     def test_different_backends_determinism(self):
         """Test determinism with different backends"""
         print("\n[7] Different backend test")

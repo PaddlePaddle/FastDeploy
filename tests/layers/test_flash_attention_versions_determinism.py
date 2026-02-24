@@ -224,13 +224,15 @@ class TestFlashAttentionDeterminism(unittest.TestCase):
         """Test FA2 determinism across different batch sizes"""
         print("\n[5] FA2 Batch Invariance Test")
         print("-" * 70)
-        self._test_batch_invariance(2, is_causal=False, enable_gqa=False)
+        all_equal = self._test_batch_invariance(2, is_causal=False, enable_gqa=False)
+        self.assertTrue(all_equal, "FA2 is not batch invariant")
 
     def test_fa3_batch_invariance(self):
         """Test FA3 determinism across different batch sizes"""
         print("\n[6] FA3 Batch Invariance Test")
         print("-" * 70)
-        self._test_batch_invariance(3, is_causal=False, enable_gqa=False)
+        all_equal = self._test_batch_invariance(3, is_causal=False, enable_gqa=False)
+        self.assertTrue(all_equal, "FA3 is not batch invariant")
 
     # ==================== Sequence Length Tests ====================
 
@@ -239,14 +241,16 @@ class TestFlashAttentionDeterminism(unittest.TestCase):
         print("\n[7] FA2 Different Sequence Lengths Test")
         print("-" * 70)
         seq_lengths = [16, 32, 64, 128, 256, 512]
-        self._test_seq_length_determinism(2, seq_lengths, is_causal=False, enable_gqa=False)
+        all_equal = self._test_seq_length_determinism(2, seq_lengths, is_causal=False, enable_gqa=False)
+        self.assertTrue(all_equal, "FA2 is not deterministic for all sequence lengths")
 
     def test_fa3_seq_length_determinism(self):
         """Test FA3 determinism across different sequence lengths"""
         print("\n[8] FA3 Different Sequence Lengths Test")
         print("-" * 70)
         seq_lengths = [16, 32, 64, 128, 256, 512]
-        self._test_seq_length_determinism(3, seq_lengths, is_causal=False, enable_gqa=False)
+        all_equal = self._test_seq_length_determinism(3, seq_lengths, is_causal=False, enable_gqa=False)
+        self.assertTrue(all_equal, "FA3 is not deterministic for all sequence lengths")
 
     # ==================== Boundary Sequence Length Tests ====================
 
@@ -256,14 +260,16 @@ class TestFlashAttentionDeterminism(unittest.TestCase):
         print("-" * 70)
         # Include extremely small and large values to cover different code paths
         seq_lengths = [1, 2, 4, 8, 64, 128, 1024, 2048, 4096]
-        self._test_seq_length_determinism(2, seq_lengths, is_causal=False, enable_gqa=False)
+        all_equal = self._test_seq_length_determinism(2, seq_lengths, is_causal=False, enable_gqa=False)
+        self.assertTrue(all_equal, "FA2 is not deterministic for boundary sequence lengths")
 
     def test_fa3_boundary_seq_lengths(self):
         """Test FA3 determinism with boundary sequence lengths"""
         print("\n[10] FA3 Boundary Sequence Lengths Test")
         print("-" * 70)
         seq_lengths = [1, 2, 4, 8, 64, 128, 1024, 2048, 4096]
-        self._test_seq_length_determinism(3, seq_lengths, is_causal=False, enable_gqa=False)
+        all_equal = self._test_seq_length_determinism(3, seq_lengths, is_causal=False, enable_gqa=False)
+        self.assertTrue(all_equal, "FA3 is not deterministic for boundary sequence lengths")
 
     # ==================== Data Type Tests ====================
 

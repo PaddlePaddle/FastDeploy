@@ -15,6 +15,7 @@
 """
 
 import hashlib
+import logging
 import math
 import pickle
 import random
@@ -35,6 +36,8 @@ from fastdeploy.engine.request import (
 )
 from fastdeploy.utils import envs
 from fastdeploy.utils import scheduler_logger as logger
+
+det_logger = logging.getLogger("fastdeploy.deterministic")
 
 
 class SplitWiseSchedulerConfig:
@@ -614,9 +617,9 @@ class APIScheduler:
             # Use deterministic selection in deterministic mode, otherwise keep original random behavior
             if envs.FD_DETERMINISTIC_MODE:
                 # Use deterministic selection strategy: select based on request_id hash
-                node_index = hash(str(req.request_id)) % (blur_idx + 1)
+                node_index = int(hashlib.md5(str(req.request_id).encode()).hexdigest(), 16) % (blur_idx + 1)
                 node = nodes[node_index]
-                print(
+                det_logger.info(
                     f"[DETERMINISM-SCHEDULER] time={time.time():.6f} | req_id={req.request_id} | role={role} | node_index={node_index}/{blur_idx} | min_load={min_load}"
                 )
             else:

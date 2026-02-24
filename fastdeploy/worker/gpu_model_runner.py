@@ -16,6 +16,7 @@
 
 import copy
 import hashlib
+import logging
 import os
 import queue
 import time
@@ -27,6 +28,8 @@ import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
+
+det_logger = logging.getLogger("fastdeploy.deterministic")
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
@@ -1637,8 +1640,8 @@ class GPUModelRunner(ModelRunnerBase):
         decoder_block_shape_q = 16
 
         # Deterministic mode: use deterministic_split_kv_size to ensure batch-invariant attention
-        if getattr(self.scheduler_config, "enable_deterministic_mode", False):
-            decoder_block_shape_q = self.scheduler_config.deterministic_split_kv_size
+        if envs.FD_DETERMINISTIC_MODE:
+            decoder_block_shape_q = envs.FD_DETERMINISTIC_SPLIT_KV_SIZE
 
         res_buffer = allocate_launch_related_buffer(
             max_batch_size=self.scheduler_config.max_num_seqs,
@@ -2304,9 +2307,9 @@ class GPUModelRunner(ModelRunnerBase):
         self._batch_counter += 1
 
         if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
-            print(f"\n{'='*80}")
-            print(f"[BATCH-START] Run_{self._current_run_id} Batch_{self._batch_counter}")
-            print(f"{'='*80}\n")
+            det_logger.info(f"\n{'='*80}")
+            det_logger.info(f"[BATCH-START] Run_{self._current_run_id} Batch_{self._batch_counter}")
+            det_logger.info(f"{'='*80}\n")
 
         # 1. Prepare inputs of model and sampler.
         p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
@@ -2684,7 +2687,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Log overall batch MD5
         req_id_str = self._build_req_id_str(forward_batch_reqs_list)
-        print(
+        det_logger.info(
             f"[DETERMINISM-MD5] stage={stage_info} | batch_size={batch_size} | "
             + (f"requests: {req_id_str} | " if req_id_str else "")
             + " | ".join(batch_md5_info)
@@ -2752,7 +2755,7 @@ class GPUModelRunner(ModelRunnerBase):
             ]
 
             if req_md5_info:
-                print(f"[DETERMINISM-MD5-REQ] {req_id} | decode | " + " | ".join(req_md5_info))
+                det_logger.info(f"[DETERMINISM-MD5-REQ] {req_id} | decode | " + " | ".join(req_md5_info))
 
     def _log_deterministic_input(self):
         """Log determinism inference input information, supports multiple batch requests"""
@@ -2770,10 +2773,10 @@ class GPUModelRunner(ModelRunnerBase):
         # Get batch size
         num_requests = len(seq_lens_this_time) if seq_lens_this_time is not None else 0
 
-        print(f"[DETERMINISM-INPUT] time={time.time():.6f} | batch_size={num_requests}")
+        det_logger.info(f"[DETERMINISM-INPUT] time={time.time():.6f} | batch_size={num_requests}")
 
         if num_requests == 0 or ids is None:
-            print("[DETERMINISM-INPUT] No input data")
+            det_logger.info("[DETERMINISM-INPUT] No input data")
             return
 
         # Split ids for each request
@@ -2796,7 +2799,7 @@ class GPUModelRunner(ModelRunnerBase):
             offset += seq_len
 
             # Print one line log
-            print(
+            det_logger.info(
                 f"[DETERMINISM-INPUT] req_id={req_id} | tokens={request_tokens} | "
                 f"len={seq_len} | seq_len_enc={seq_len_enc} | seq_len_dec={seq_len_dec}"
             )

@@ -107,7 +107,7 @@ try:
                 or when input does not meet custom all-reduce requirements.
             AssertionError: In deterministic mode when input dtype is not supported.
         """
-        inp_size = input_.shape[0] * input_.shape[1] * input_.element_size()
+        inp_size = input_.numel() * input_.element_size()
         if inp_size == 0:
             return input_
 

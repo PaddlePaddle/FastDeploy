@@ -214,7 +214,9 @@ class TestMatmulPersistent(unittest.TestCase):
         if all_equal:
             print("  [PASS] All runs produced identical results")
         else:
-            print("  [INFO] Results differ (may be expected on GPU without deterministic mode)")
+            print("  [FAIL] Results differ across runs")
+
+        self.assertTrue(all_equal, "matmul_persistent results are not deterministic across runs")
 
     def test_matmul_persistent_different_shapes(self):
         """Test matmul_persistent with different input shapes"""
@@ -330,6 +332,10 @@ class TestLogSoftmaxBatchInvariant(unittest.TestCase):
 
         if all_equal:
             print("  [PASS] All runs produced identical results")
+        else:
+            print("  [FAIL] Results differ across runs")
+
+        self.assertTrue(all_equal, "log_softmax results are not deterministic across runs")
 
     def test_log_softmax_different_sizes(self):
         """Test log_softmax with different input sizes"""
@@ -420,6 +426,82 @@ class TestMeanBatchInvariant(unittest.TestCase):
         self.assertEqual(result.shape, expected_shape)
         print(f"  mean_batch_invariant({input_tensor.shape}, axis=[1,2], keepdim=True) -> {result.shape}")
 
+    def test_mean_batch_invariant_global_mean(self):
+        """Test mean_batch_invariant with axis=None (global mean)"""
+        print("\n=== Testing mean_batch_invariant global mean (axis=None) ===")
+
+        if not paddle.is_compiled_with_cuda() and self.device == "gpu":
+            self.skipTest("CUDA not available")
+
+        paddle.seed(42)
+
+        # Test 1: Basic global mean correctness
+        input_tensor = paddle.randn([4, 8, 16], dtype="float16")
+        result = mean_batch_invariant(input_tensor, axis=None, keepdim=False, dtype=None)
+
+        # Verify it returns a 0-D scalar tensor
+        self.assertEqual(len(result.shape), 0)
+        print(f"  Global mean shape: {result.shape}")
+
+        # Verify value matches paddle.mean reference
+        reference = paddle.mean(input_tensor.cast("float32"))
+        self.assertTrue(
+            paddle.allclose(result, reference, rtol=1e-3, atol=1e-3),
+            f"Global mean mismatch: got {result.item():.6f}, expected {reference.item():.6f}",
+        )
+        print(f"  Global mean value: {result.item():.6f}, reference: {reference.item():.6f}")
+
+        # Test 2: 1-D tensor
+        input_1d = paddle.randn([128], dtype="float16")
+        result_1d = mean_batch_invariant(input_1d, axis=None, keepdim=False, dtype=None)
+        reference_1d = paddle.mean(input_1d.cast("float32"))
+        self.assertTrue(
+            paddle.allclose(result_1d, reference_1d, rtol=1e-3, atol=1e-3),
+            "Global mean mismatch for 1-D tensor",
+        )
+        print(f"  1-D global mean: {result_1d.item():.6f}, reference: {reference_1d.item():.6f}")
+
+        # Test 3: 2-D tensor
+        input_2d = paddle.randn([32, 64], dtype="float16")
+        result_2d = mean_batch_invariant(input_2d, axis=None, keepdim=False, dtype=None)
+        reference_2d = paddle.mean(input_2d.cast("float32"))
+        self.assertTrue(
+            paddle.allclose(result_2d, reference_2d, rtol=1e-3, atol=1e-3),
+            "Global mean mismatch for 2-D tensor",
+        )
+        print(f"  2-D global mean: {result_2d.item():.6f}, reference: {reference_2d.item():.6f}")
+
+        # Test 4: Result dtype should be float32
+        self.assertEqual(result.dtype, paddle.float32, "Global mean result should be float32")
+        print(f"  Result dtype: {result.dtype} (expected float32)")
+
+    def test_mean_batch_invariant_global_mean_determinism(self):
+        """Test mean_batch_invariant with axis=None is deterministic"""
+        print("\n=== Testing mean_batch_invariant global mean determinism ===")
+
+        if not paddle.is_compiled_with_cuda() and self.device == "gpu":
+            self.skipTest("CUDA not available")
+
+        paddle.seed(42)
+        input_tensor = paddle.randn([4, 8, 16], dtype="float16")
+
+        results = []
+        num_runs = 5
+        for i in range(num_runs):
+            paddle.device.synchronize() if self.device == "gpu" else None
+            result = mean_batch_invariant(input_tensor, axis=None, dtype=None)
+            results.append(result.clone().cpu())
+            print(f"  Run {i+1}: value={result.item():.6f}")
+
+        all_equal = True
+        for i in range(1, num_runs):
+            is_equal = paddle.equal(results[0], results[i]).all().item()
+            if not is_equal:
+                all_equal = False
+
+        self.assertTrue(all_equal, "Global mean results are not deterministic across runs")
+        print(f"  [{'PASS' if all_equal else 'FAIL'}] Determinism check")
+
     def test_mean_batch_invariant_determinism(self):
         """Test mean_batch_invariant determinism"""
         print("\n=== Testing mean_batch_invariant determinism ===")
@@ -450,6 +532,10 @@ class TestMeanBatchInvariant(unittest.TestCase):
 
         if all_equal:
             print("  [PASS] All runs produced identical results")
+        else:
+            print("  [FAIL] Results differ across runs")
+
+        self.assertTrue(all_equal, "mean_batch_invariant results are not deterministic across runs")
 
 
 class TestAddmmBatchInvariant(unittest.TestCase):

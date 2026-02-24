@@ -247,21 +247,6 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
             print(f"  Manual SDPA Run 1 vs Run {i+1}: equal={is_equal}")
             self.assertTrue(is_equal, f"Manual SDPA results differ between run 1 and run {i+1}")
 
-    def test_attention_backend_prefill_determinism(self):
-        """Test Attention Backend Prefill mode determinism"""
-        print("\n=== Testing Attention Backend Prefill Determinism ===")
-
-        # This test requires more complete setup, skip for now
-        self.skipTest("Full backend setup required for prefill test")
-
-    def test_attention_backend_decode_determinism(self):
-        """Test Attention Backend Decode mode determinism"""
-
-        print("\n=== Testing Attention Backend Decode Determinism ===")
-
-        # This test requires more complete setup, skip for now
-        self.skipTest("Full backend setup required for decode test")
-
     def test_batch_invariant_mode_compatibility(self):
         """Test compatibility of batch invariant mode with attention"""
         print("\n=== Testing Batch Invariant Mode Compatibility ===")
@@ -370,6 +355,8 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         else:
             print("  Result: FP16 is not fully deterministic (results not exactly equal)")
 
+        self.assertTrue(is_deterministic, "FP16 SDPA results are not deterministic across runs")
+
     def test_different_backends_determinism(self):
         """Test determinism with different backends"""
         print("\n=== Testing Different Backends Determinism ===")
@@ -476,17 +463,22 @@ class TestAttentionDeterminismReport(unittest.TestCase):
         print("=" * 70)
 
         # Basic tests
-        self._test_basic_determinism()
+        basic_ok = self._test_basic_determinism()
         # Batch size tests
-        self._test_batch_size_determinism()
+        batch_ok = self._test_batch_size_determinism()
         # Sequence length tests
-        self._test_seq_length_determinism()
+        seq_ok = self._test_seq_length_determinism()
         # Head config tests
-        self._test_head_config_determinism()
+        head_ok = self._test_head_config_determinism()
 
         print("\n" + "=" * 70)
         print(" REPORT COMPLETE")
         print("=" * 70)
+
+        self.assertTrue(basic_ok, "Basic determinism test failed")
+        self.assertTrue(batch_ok, "Batch size determinism test failed")
+        self.assertTrue(seq_ok, "Sequence length determinism test failed")
+        self.assertTrue(head_ok, "Head config determinism test failed")
 
     def _test_basic_determinism(self):
         """Basic determinism test"""

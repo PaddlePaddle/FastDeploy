@@ -35,7 +35,7 @@ In non-deterministic mode with explicit seed, results should still be consistent
 Without explicit seed, non-deterministic mode produces different results.
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0 pytest tests/determinitic/test_determinism_offline.py -v
+    CUDA_VISIBLE_DEVICES=0 pytest tests/deterministic/test_determinism_offline.py -v
 """
 
 import os
@@ -50,7 +50,7 @@ from fastdeploy import LLM, SamplingParams
 
 # Small model path for fast testing
 DEFAULT_MODEL_DIR = "./models"
-MODEL_NAME = "Qwen2.5-7B"
+MODEL_NAME = "Qwen2-7B-Instruct"
 
 
 @pytest.fixture(scope="function", autouse=True)
