@@ -41,6 +41,7 @@ Usage:
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["FD_DETERMINISTIC_MODE"] = "1"  # Must be set before importing fastdeploy to enable batch_invariant_ops
 
 import pytest
 

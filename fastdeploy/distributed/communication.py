@@ -78,8 +78,7 @@ try:
         group_: paddle.distributed.communication.group.Group = None,
     ) -> paddle.Tensor:
         global _TP_AR
-        inp_size = input_.numel() * input_.element_size()
-        if inp_size == 0:
+        if input_.shape[0] == 0:
             return input_
 
         if envs.FD_DETERMINISTIC_MODE:
@@ -104,6 +103,12 @@ try:
                     f"Custom all-reduce only supports: {', '.join(str(d) for d in SUPPORTED_DTYPES)}. "
                     f"Input tensor shape: {input_.shape}, dtype: {input_.dtype}."
                 )
+            # Compute size from .shape to avoid numel() which triggers
+            # cudaErrorStreamCaptureImplicit during CUDA Graph capture
+            inp_size = 1
+            for s in input_.shape:
+                inp_size *= s
+            inp_size *= input_.element_size()
             # Check 16-byte alignment requirement for deterministic mode
             if inp_size % 16 != 0:
                 raise RuntimeError(

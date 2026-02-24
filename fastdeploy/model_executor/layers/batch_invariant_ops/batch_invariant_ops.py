@@ -497,7 +497,10 @@ def mean_batch_invariant(
     x: paddle.Tensor, axis: list[int] = [], keepdim: bool = False, dtype: paddle.dtype | None = None, out=None
 ) -> paddle.Tensor:
     assert dtype is None or dtype == paddle.float32, f"unsupported dtype: {dtype}"
-    if type(axis) is int:
+    if axis is None:  # Global mean (no axis specified)
+        n_elems = x.numel()
+        result = paddle.sum(x, keepdim=keepdim, dtype=paddle.float32) / n_elems
+    elif type(axis) is int:
         result = mean_dim(x, axis, keepdim=keepdim)
     elif len(axis) == 1:  # axis: int | Sequence[int]
         result = mean_dim(x, axis[0], keepdim=keepdim)
