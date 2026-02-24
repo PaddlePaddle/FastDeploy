@@ -1030,6 +1030,17 @@ void LimitThinkingContentLengthV2(const paddle::Tensor& next_tokens,
                                   const int64_t think_end_id,
                                   const int64_t line_break_id);
 
+void LimitThinkingContentLengthV3(const paddle::Tensor& next_tokens,
+                                  const paddle::Tensor& max_think_lens,
+                                  const paddle::Tensor& max_reply_lens,
+                                  const paddle::Tensor& step_idx,
+                                  const paddle::Tensor& limit_status,
+                                  const paddle::Tensor& stop_flags,
+                                  const paddle::Tensor& eos_token_ids,
+                                  const paddle::Tensor& inject_token_ids,
+                                  const int64_t think_end_id,
+                                  const bool splitwise_role_is_decode);
+
 void SpeculateLimitThinkingContentLengthV1(
     const paddle::Tensor& next_tokens,
     const paddle::Tensor& max_think_lens,
@@ -1049,6 +1060,19 @@ void SpeculateLimitThinkingContentLengthV2(
     const paddle::Tensor& stop_flags,
     const int64_t think_end_id,
     const int64_t line_break_id);
+
+void SpeculateLimitThinkingContentLengthV3(
+    const paddle::Tensor& next_tokens,
+    const paddle::Tensor& max_think_lens,
+    const paddle::Tensor& max_reply_lens,
+    const paddle::Tensor& step_idx,
+    const paddle::Tensor& limit_status,
+    const paddle::Tensor& accept_num,
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& eos_token_ids,
+    const paddle::Tensor& inject_token_ids,
+    const int64_t think_end_id,
+    const bool splitwise_role_is_decode);
 
 void SpeculateGetLogits(const paddle::Tensor& draft_logits,
                         const paddle::Tensor& next_token_num,
@@ -1686,12 +1710,20 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &LimitThinkingContentLengthV2,
         "limit_thinking_content_length_v2 function");
 
+  m.def("limit_thinking_content_length_v3",
+        &LimitThinkingContentLengthV3,
+        "limit_thinking_content_length_v3 function");
+
   m.def("speculate_limit_thinking_content_length_v1",
         &SpeculateLimitThinkingContentLengthV1,
         "speculate limit thinking content length function");
 
   m.def("speculate_limit_thinking_content_length_v2",
         &SpeculateLimitThinkingContentLengthV2,
+        "speculate limit thinking content length function");
+
+  m.def("speculate_limit_thinking_content_length_v3",
+        &SpeculateLimitThinkingContentLengthV3,
         "speculate limit thinking content length function");
 
   m.def("speculate_get_logits",
