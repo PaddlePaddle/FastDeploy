@@ -214,6 +214,8 @@ class ResourceManagerV1(ResourceManager):
         self.current_reserve_output_block_num = self.init_reserve_output_block_num
         self.current_reserve_output_block_num_float = self.init_reserve_output_block_num
         self.can_relax_prefill_strategy = True
+        # Scheduler-side requests that have not been moved into resource manager waiting queue yet.
+        self.scheduler_unhandled_request_num = 0
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -957,56 +959,7 @@ class ResourceManagerV1(ResourceManager):
                 if self.current_reserve_output_block_num == 0:
                     self.can_relax_prefill_strategy = True
 
-            if (
-                hasattr(self, "scheduler_metrics_logger")
-                and self.scheduler_metrics_logger is not None
-                and envs.FD_CONSOLE_SCHEDULER_METRICS
-            ):
-                total_blocks = self.total_block_number()
-                free_blocks = self.available_block_num()
-                used_blocks = max(total_blocks - free_blocks, 0)
-                tokens_used = used_blocks * self.config.cache_config.block_size
-                token_usage = used_blocks / total_blocks if total_blocks > 0 else 0.0
-                running_cnt = len(self.running)
-                queue_cnt = len(self.waiting)
-
-                prefill_reqs = [
-                    r for r in scheduled_reqs if isinstance(r, Request) and r.task_type == RequestType.PREFILL
-                ]
-                has_decode = any(getattr(r, "task_type", None) == RequestType.DECODE for r in scheduled_reqs)
-
-                self.scheduler_metrics_logger.log_prefill_batch(
-                    prefill_reqs=prefill_reqs,
-                    running_cnt=running_cnt,
-                    queue_cnt=queue_cnt,
-                    tokens_used=tokens_used,
-                    token_usage=token_usage,
-                )
-                if has_decode:
-                    has_prefill = len(prefill_reqs) > 0
-                    graph_opt_cfg = self.config.graph_opt_config
-                    use_cudagraph_cfg = bool(getattr(graph_opt_cfg, "use_cudagraph", False))
-                    graph_opt_level = int(getattr(graph_opt_cfg, "graph_opt_level", 0) or 0)
-                    full_cuda_graph = bool(getattr(graph_opt_cfg, "full_cuda_graph", True))
-                    cudagraph_only_prefill = bool(getattr(graph_opt_cfg, "cudagraph_only_prefill", False))
-                    use_decode_cudagraph = (
-                        has_decode
-                        and use_cudagraph_cfg
-                        and (
-                            # Reference PR https://github.com/PaddlePaddle/FastDeploy/pull/6196
-                            # Static split graph mode: Prefill+Mixed and Decode can use CUDAGraph.
-                            (graph_opt_level > 0 and not full_cuda_graph)
-                            # Dynamic / static-full modes: decode-only can use CUDAGraph.
-                            or (not has_prefill and not cudagraph_only_prefill)
-                        )
-                    )
-                    self.scheduler_metrics_logger.log_decode_batch(
-                        running_cnt=running_cnt,
-                        queue_cnt=queue_cnt,
-                        tokens_used=tokens_used,
-                        token_usage=token_usage,
-                        use_cudagraph=use_decode_cudagraph,
-                    )
+            self._log_console_scheduler_metrics(scheduled_reqs)
 
             self.update_metrics()
 
@@ -1464,3 +1417,56 @@ class ResourceManagerV1(ResourceManager):
             f"requests={self.requests}, "
             f")"
         )
+
+    def _log_console_scheduler_metrics(self, scheduled_reqs: list[Request | ScheduledDecodeTask]) -> None:
+        if not (
+            hasattr(self, "scheduler_metrics_logger")
+            and self.scheduler_metrics_logger is not None
+            and envs.FD_CONSOLE_SCHEDULER_METRICS
+        ):
+            return
+
+        total_blocks = self.total_block_number()
+        free_blocks = self.available_block_num()
+        used_blocks = max(total_blocks - free_blocks, 0)
+        tokens_used = used_blocks * self.config.cache_config.block_size
+        token_usage = used_blocks / total_blocks if total_blocks > 0 else 0.0
+        running_cnt = len(self.running)
+        scheduler_queue_cnt = max(int(getattr(self, "scheduler_unhandled_request_num", 0) or 0), 0)
+        queue_cnt = len(self.waiting) + scheduler_queue_cnt
+
+        prefill_reqs = [r for r in scheduled_reqs if isinstance(r, Request) and r.task_type == RequestType.PREFILL]
+        has_decode = any(getattr(r, "task_type", None) == RequestType.DECODE for r in scheduled_reqs)
+
+        self.scheduler_metrics_logger.log_prefill_batch(
+            prefill_reqs=prefill_reqs,
+            running_cnt=running_cnt,
+            queue_cnt=queue_cnt,
+            tokens_used=tokens_used,
+            token_usage=token_usage,
+        )
+        if has_decode:
+            has_prefill = len(prefill_reqs) > 0
+            graph_opt_cfg = self.config.graph_opt_config
+            use_cudagraph_cfg = bool(getattr(graph_opt_cfg, "use_cudagraph", False))
+            graph_opt_level = int(getattr(graph_opt_cfg, "graph_opt_level", 0) or 0)
+            full_cuda_graph = bool(getattr(graph_opt_cfg, "full_cuda_graph", True))
+            cudagraph_only_prefill = bool(getattr(graph_opt_cfg, "cudagraph_only_prefill", False))
+            use_decode_cudagraph = (
+                has_decode
+                and use_cudagraph_cfg
+                and (
+                    # Reference PR https://github.com/PaddlePaddle/FastDeploy/pull/6196
+                    # Static split graph mode: Prefill+Mixed and Decode can use CUDAGraph.
+                    (graph_opt_level > 0 and not full_cuda_graph)
+                    # Dynamic / static-full modes: decode-only can use CUDAGraph.
+                    or (not has_prefill and not cudagraph_only_prefill)
+                )
+            )
+            self.scheduler_metrics_logger.log_decode_batch(
+                running_cnt=running_cnt,
+                queue_cnt=queue_cnt,
+                tokens_used=tokens_used,
+                token_usage=token_usage,
+                use_cudagraph=use_decode_cudagraph,
+            )

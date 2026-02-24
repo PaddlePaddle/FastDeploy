@@ -217,6 +217,7 @@ class DataProcessor(BaseDataProcessor):
             f"tokenizer information: bos_token is {self.tokenizer.bos_token}, {self.tokenizer.bos_token_id}, \
                                 eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
         )
+
         try:
             from paddleformers.trl.llm_utils import get_eos_token_id
         except Exception:
