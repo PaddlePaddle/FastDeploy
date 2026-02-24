@@ -453,6 +453,10 @@ class ResourceManagerV1(ResourceManager):
     def _get_num_new_tokens(self, request, token_budget):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
+        assert num_new_tokens > 0, (
+            f"Request {request.request_id} has no remaining tokens: "
+            f"need_prefill={request.need_prefill_tokens}, computed={request.num_computed_tokens}"
+        )
         num_new_tokens = min(num_new_tokens, token_budget)
 
         # Deterministic mode: align chunk boundaries to split_kv_size
@@ -464,15 +468,12 @@ class ResourceManagerV1(ResourceManager):
             remaining_tokens = request.need_prefill_tokens - current_pos
 
             # Case 1: Final chunk - no alignment needed
-            if remaining_tokens <= split_kv_size:
+            if remaining_tokens < split_kv_size:
                 aligned_end = current_pos + remaining_tokens
             else:
                 # Case 2: Need to align to split_kv_size boundary
-                # Calculate next boundary position (if already on boundary, advance by split_kv_size)
-                if current_pos % split_kv_size == 0:
-                    next_boundary = current_pos + split_kv_size
-                else:
-                    next_boundary = ((current_pos + split_kv_size - 1) // split_kv_size) * split_kv_size
+                # Calculate next boundary position
+                next_boundary = ((current_pos + split_kv_size - 1) // split_kv_size) * split_kv_size
                 tokens_to_boundary = next_boundary - current_pos
 
                 # Not enough budget to reach the next boundary: defer to next iteration
