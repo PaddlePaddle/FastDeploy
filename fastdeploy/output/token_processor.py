@@ -231,7 +231,7 @@ class TokenProcessor:
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             need_to_be_reschedule_req_ids = list(self.resource_manager.to_be_rescheduled_request_id_set)
             for request_id in need_to_be_reschedule_req_ids:
-                if self.resource_manager.requests[request_id].idx >= (
+                if self.resource_manager.requests[request_id].idx > (
                     batch_size - 1
                 ):  # No more token generated for preempted request
                     self.resource_manager.requests[request_id].last_recv_token_time = None
@@ -288,11 +288,21 @@ class TokenProcessor:
 
             task_id = task.request_id
             token_ids = stream_data.tokens  # numpy.array
-            if token_ids is not None and token_ids[-1] <= 0:
+            if token_ids is not None and token_ids[-1] < 0:
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                     if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
                         self.resource_manager.reschedule_preempt_task(task_id)
+                    if task_id in self.resource_manager.to_be_aborted_req_id_set:
+                        self.resource_manager.recycle_abort_task(task_id)
                 continue
+
+            if self.cfg.scheduler_config.splitwise_role == "decode":
+                # In D instance, if preempted, error has been reported and resource recycled, tokens generated async not need to be handled
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        continue
+                    if task_id in self.resource_manager.to_be_aborted_req_id_set:
+                        continue
 
             current_time = time.time()
             if self.tokens_counter[task_id] == 0:
@@ -739,7 +749,8 @@ class TokenProcessor:
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
                             task.last_recv_token_time = None
                             self.resource_manager.reschedule_preempt_task(task_id)
-
+                        if task_id in self.resource_manager.to_be_aborted_req_id_set:
+                            self.resource_manager.recycle_abort_task(task_id)
                     continue
             else:
                 token_id = int(tokens[i, 0])
@@ -752,12 +763,16 @@ class TokenProcessor:
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
                             task.last_recv_token_time = None
                             self.resource_manager.reschedule_preempt_task(task_id)
+                        if task_id in self.resource_manager.to_be_aborted_req_id_set:
+                            self.resource_manager.recycle_abort_task(task_id)
                     continue
 
             if self.cfg.scheduler_config.splitwise_role == "decode":
                 # In D instance, if preempted, error has been reported and resource recycled, tokens generated async not need to be handled
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                     if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        continue
+                    if task_id in self.resource_manager.to_be_aborted_req_id_set:
                         continue
 
             if task.get("prefill_chunk_info", None) is not None:
