@@ -934,9 +934,8 @@ def rebuild_padding(
 
             _rebuild_padding_impl = rebuild_padding
         elif current_platform.is_xpu():
-            from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu
 
-            def _wrapper(
+            def _rebuild_padding_paddle(
                 tmp_out,
                 cu_seqlens_q,
                 seq_len_this_time,
@@ -946,16 +945,50 @@ def rebuild_padding(
                 *args,
                 **kwargs,
             ):
-                return rebuild_padding_cpu(
-                    tmp_out,
-                    cu_seqlens_q,
-                    seq_len_this_time,
-                    seq_lens_decoder,
-                    seq_lens_encoder,
-                    batch_id_per_token_output,
-                )
+                # Basic implementation using Paddle ops for XPU
+                bsz = cu_seqlens_q.shape[0] - 1
+                if batch_id_per_token_output is None:
+                    # Case 1: Standard rebuild padding
+                    seq_id = paddle.where(
+                        seq_lens_encoder > 0, seq_lens_encoder - 1, paddle.zeros_like(seq_lens_encoder)
+                    )
+                    indices = cu_seqlens_q[:-1] + seq_id
 
-            _rebuild_padding_impl = _wrapper
+                    # Ensure indices are within bounds
+                    indices = paddle.minimum(indices, paddle.to_tensor(tmp_out.shape[0] - 1, dtype=indices.dtype))
+
+                    out = paddle.gather(tmp_out, indices)
+
+                    # Apply masking
+                    mask = (seq_len_this_time > 0) & ((seq_lens_decoder > 0) | (seq_lens_encoder > 0))
+                    mask = mask.unsqueeze(-1).cast(out.dtype)
+                    out = out * mask
+                    return out
+                else:
+                    # Case 2: Speculative decoding / MTP
+                    # This path requires complex logic similar to RebuildAppendPaddingKernel
+                    # For now, fallback to CPU implementation if possible, or attempt rudimentary implementation
+                    # Since MTP failed with rebuild_padding_cpu, we try to move to CPU explicitly for this complex op
+                    # if performance allows, or implement a basic version.
+                    # Given the complexity of RebuildAppendPaddingKernel with batch_id mapping,
+                    # explicitly moving to CPU might be safer for correctness if ops.cpu is available.
+                    try:
+                        from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu
+
+                        return rebuild_padding_cpu(
+                            tmp_out.cpu(),
+                            cu_seqlens_q.cpu(),
+                            seq_len_this_time.cpu(),
+                            seq_lens_decoder.cpu(),
+                            seq_lens_encoder.cpu(),
+                            batch_id_per_token_output.cpu()
+                        ).cuda() # move back to XPU (cuda() on XPU moves to XPU)
+                    except (ImportError, RuntimeError):
+                        # If CPU op fails, return zeros to avoid crash (though incorrect)
+                        # or raise explicit error
+                        raise NotImplementedError("rebuild_padding with batch_id_per_token_output not fully implemented for XPU yet")
+
+            _rebuild_padding_impl = _rebuild_padding_paddle
         else:
             raise RuntimeError("Not supported platform")
 
