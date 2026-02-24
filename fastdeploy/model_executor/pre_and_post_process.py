@@ -946,11 +946,12 @@ def rebuild_padding(
                 **kwargs,
             ):
                 # Basic implementation using Paddle ops for XPU
-                bsz = cu_seqlens_q.shape[0] - 1
                 if batch_id_per_token_output is None:
                     # Case 1: Standard rebuild padding
                     seq_id = paddle.where(
-                        seq_lens_encoder > 0, seq_lens_encoder - 1, paddle.zeros_like(seq_lens_encoder)
+                        seq_lens_encoder > 0,
+                        seq_lens_encoder - 1,
+                        paddle.zeros_like(seq_lens_encoder),
                     )
                     indices = cu_seqlens_q[:-1] + seq_id
 
@@ -973,7 +974,9 @@ def rebuild_padding(
                     # Given the complexity of RebuildAppendPaddingKernel with batch_id mapping,
                     # explicitly moving to CPU might be safer for correctness if ops.cpu is available.
                     try:
-                        from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu
+                        from fastdeploy.model_executor.ops.cpu import (
+                            rebuild_padding_cpu,
+                        )
 
                         return rebuild_padding_cpu(
                             tmp_out.cpu(),
@@ -981,12 +984,14 @@ def rebuild_padding(
                             seq_len_this_time.cpu(),
                             seq_lens_decoder.cpu(),
                             seq_lens_encoder.cpu(),
-                            batch_id_per_token_output.cpu()
-                        ).cuda() # move back to XPU (cuda() on XPU moves to XPU)
+                            batch_id_per_token_output.cpu(),
+                        ).cuda()  # move back to XPU (cuda() on XPU moves to XPU)
                     except (ImportError, RuntimeError):
                         # If CPU op fails, return zeros to avoid crash (though incorrect)
                         # or raise explicit error
-                        raise NotImplementedError("rebuild_padding with batch_id_per_token_output not fully implemented for XPU yet")
+                        raise NotImplementedError(
+                            "rebuild_padding with batch_id_per_token_output not fully implemented for XPU yet"
+                        )
 
             _rebuild_padding_impl = _rebuild_padding_paddle
         else:
