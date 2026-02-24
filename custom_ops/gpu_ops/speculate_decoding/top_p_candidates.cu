@@ -407,7 +407,7 @@ template <typename T, int MaxLength, int TopPBeamTopK, int BlockSize>
 __global__ void KeMatrixTopPBeamTopKFt(
     const T* src,
     const T* top_ps,
-    const int* output_padding_offset,
+    const int* batch_id_per_token_output,
     int64_t* out_id,  // [max_cadidate_len, 1]
     T* out_val,       // [max_cadidate_len, 1]
     int* actual_candidates_lens,
@@ -418,8 +418,7 @@ __global__ void KeMatrixTopPBeamTopKFt(
   const int wid = tid / 32;
   const int lane = tid % 32;
   const int token_id = blockIdx.x;
-  const int ori_token_id = token_id + output_padding_offset[token_id];
-  const int bid = ori_token_id / max_seq_len;
+  const int bid = batch_id_per_token_output[token_id];
 
   int top_num = TopPBeamTopK;
   float top_p_value = static_cast<float>(top_ps[bid]);
@@ -479,7 +478,7 @@ __global__ void KeMatrixTopPBeamTopKFt(
 template <typename T, int TopKMaxLength>
 void DispatchTopK(const T* src,
                   const T* top_ps,
-                  const int* output_padding_offset,
+                  const int* batch_id_per_token_output,
                   int64_t* out_id,  // topk id
                   T* out_val,       // topk val
                   int* actual_candidates_lens_data,
@@ -495,7 +494,7 @@ void DispatchTopK(const T* src,
           KeMatrixTopPBeamTopKFt<T, TopKMaxLength, kTopK, kBlockDim>
           <<<token_num, kBlockDim, 0, stream>>>(src,
                                                 top_ps,
-                                                output_padding_offset,
+                                                batch_id_per_token_output,
                                                 out_id,
                                                 out_val,
                                                 actual_candidates_lens_data,
@@ -516,7 +515,7 @@ template <paddle::DataType D>
 std::vector<paddle::Tensor> LaunchTopPCandidates(
     const paddle::Tensor& probs,  // [token_num, vocab_size]
     const paddle::Tensor& top_p,  // [token_num]
-    const paddle::Tensor& output_padding_offset,
+    const paddle::Tensor& batch_id_per_token_output,
     const int candidates_len,
     const int max_seq_len) {
   typedef PDTraits<D> traits_;
@@ -540,7 +539,7 @@ std::vector<paddle::Tensor> LaunchTopPCandidates(
   DispatchTopK<DataType_, TopKMaxLength>(
       reinterpret_cast<const DataType_*>(probs.data<data_t>()),
       reinterpret_cast<const DataType_*>(top_p.data<data_t>()),
-      output_padding_offset.data<int>(),
+      batch_id_per_token_output.data<int>(),
       verify_tokens.data<int64_t>(),
       reinterpret_cast<DataType_*>(verify_scores.data<data_t>()),
       actual_candidate_lens.data<int>(),
@@ -556,21 +555,21 @@ std::vector<paddle::Tensor> LaunchTopPCandidates(
 std::vector<paddle::Tensor> DispatchTopPCandidatesWithDtype(
     const paddle::Tensor& probs,
     const paddle::Tensor& top_p,
-    const paddle::Tensor& output_padding_offset,
+    const paddle::Tensor& batch_id_per_token_output,
     int candidates_len,
     int max_seq_len) {
   switch (probs.type()) {
     case paddle::DataType::BFLOAT16:
       return LaunchTopPCandidates<paddle::DataType::BFLOAT16>(
-          probs, top_p, output_padding_offset, candidates_len, max_seq_len);
+          probs, top_p, batch_id_per_token_output, candidates_len, max_seq_len);
       break;
     case paddle::DataType::FLOAT16:
       return LaunchTopPCandidates<paddle::DataType::FLOAT16>(
-          probs, top_p, output_padding_offset, candidates_len, max_seq_len);
+          probs, top_p, batch_id_per_token_output, candidates_len, max_seq_len);
       break;
     case paddle::DataType::FLOAT32:
       return LaunchTopPCandidates<paddle::DataType::FLOAT32>(
-          probs, top_p, output_padding_offset, candidates_len, max_seq_len);
+          probs, top_p, batch_id_per_token_output, candidates_len, max_seq_len);
       break;
     default:
       PD_THROW(
@@ -583,17 +582,17 @@ std::vector<paddle::Tensor> DispatchTopPCandidatesWithDtype(
 std::vector<paddle::Tensor> TopPCandidates(
     const paddle::Tensor& probs,
     const paddle::Tensor& top_p,
-    const paddle::Tensor& output_padding_offset,
+    const paddle::Tensor& batch_id_per_token_output,
     int candidates_len,
     int max_seq_len) {
   return DispatchTopPCandidatesWithDtype(
-      probs, top_p, output_padding_offset, candidates_len, max_seq_len);
+      probs, top_p, batch_id_per_token_output, candidates_len, max_seq_len);
 }
 
 std::vector<std::vector<int64_t>> TopPCandidatesInferShape(
     const std::vector<int64_t>& probs_shape,
     const std::vector<int64_t>& top_p_shape,
-    const std::vector<int64_t>& output_padding_offset_shape,
+    const std::vector<int64_t>& batch_id_per_token_output_shape,
     int max_candidates_len) {
   int token_num = probs_shape[0];
   return {{token_num, max_candidates_len},
@@ -604,12 +603,12 @@ std::vector<std::vector<int64_t>> TopPCandidatesInferShape(
 std::vector<paddle::DataType> TopPCandidatesInferDtype(
     const paddle::DataType& probs_dtype,
     const paddle::DataType& top_p_dtype,
-    const paddle::DataType& output_padding_offset_dtype) {
+    const paddle::DataType& batch_id_per_token_output_dtype) {
   return {probs_dtype, paddle::DataType::INT64, paddle::DataType::INT32};
 }
 
 PD_BUILD_STATIC_OP(top_p_candidates)
-    .Inputs({"probs", "top_p", "output_padding_offset"})
+    .Inputs({"probs", "top_p", "batch_id_per_token_output"})
     .Outputs({"verify_scores", "verify_tokens", "actual_candidate_lens"})
     .Attrs({"candidates_len: int", "max_seq_len: int"})
     .SetKernelFn(PD_KERNEL(TopPCandidates))

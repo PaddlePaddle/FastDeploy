@@ -15,6 +15,7 @@
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 
 import numpy as np
 from paddleformers.generation import GenerationConfig
@@ -147,6 +148,15 @@ class BaseDataProcessor(ABC):
         """
         raise NotImplementedError
 
+    def get_mm_max_tokens_per_item(
+        self,
+        seq_len: int,
+    ) -> Mapping[str, int]:
+        """
+        Return the maximum number of tokens per item for each modality.
+        """
+        return None
+
 
 class DataProcessor(BaseDataProcessor):
     def __init__(self, model_name_or_path, reasoning_parser_obj=None, tool_parser_obj=None):
@@ -184,7 +194,10 @@ class DataProcessor(BaseDataProcessor):
                                 eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
         )
 
-        from paddleformers.trl.llm_utils import get_eos_token_id
+        try:
+            from paddleformers.trl.llm_utils import get_eos_token_id
+        except Exception:
+            from paddleformers.cli.utils.llm_utils import get_eos_token_id
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
         data_processor_logger.info(
@@ -313,17 +326,10 @@ class DataProcessor(BaseDataProcessor):
         # processing prompt_token_ids
         if not request.get("prompt_token_ids"):
             if request.get("prompt"):
-                prompt = request.get("prompt")
                 add_special_tokens = request.get("add_special_tokens", False)
-                assert isinstance(prompt, str) or (
-                    isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
-                ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
-                if isinstance(prompt, list):  # if prompt is a token id list
-                    request["prompt_token_ids"] = prompt
-                else:
-                    request["prompt_token_ids"] = self.text2ids(
-                        request["prompt"], max_model_len, add_special_tokens=add_special_tokens
-                    ).tolist()
+                request["prompt_token_ids"] = self.text2ids(
+                    request["prompt"], max_model_len, add_special_tokens=add_special_tokens
+                ).tolist()
             elif request.get("messages"):
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")

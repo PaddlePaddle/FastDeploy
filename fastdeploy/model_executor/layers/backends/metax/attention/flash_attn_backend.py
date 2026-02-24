@@ -240,8 +240,8 @@ class FlashAttentionBackend(AttentionBackend):
                 [prefill_ptr + decode_ptr, self.num_heads, self.head_dim], dtype=self.dtype
             )
 
-    def get_attntion_meta(self) -> AttentionMetadata:
-        """get_attntion_meta"""
+    def get_attention_meta(self) -> AttentionMetadata:
+        """get_attention_meta"""
         return self.attention_metadata
 
     def get_kv_cache_shape(

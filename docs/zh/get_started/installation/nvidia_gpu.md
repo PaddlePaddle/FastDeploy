@@ -41,7 +41,7 @@ python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/
 python -m pip install fastdeploy-gpu==2.4.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # 安装Nightly Build的最新版本fastdeploy
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 如你的 GPU 是 SM86/89 架构(4090/L20/L40等)，按如下方式安装
@@ -51,7 +51,7 @@ python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages
 python -m pip install fastdeploy-gpu==2.4.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # 安装Nightly Build的最新版本fastdeploy
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 ## 3. 镜像自行构建

@@ -27,6 +27,7 @@ from fastdeploy.cache_manager.transfer_factory.kvcache_storage import (
 )
 
 try:
+    import attentionstore_sdk.api.common.common_pb2 as common_pb2
     from attentionstore_sdk.sdk import AttentionStoreSDK, Tokens
     from attentionstore_sdk.utils.err import AttentionStoreSDKError
 
@@ -187,6 +188,34 @@ class AttentionStore(KVCacheStorage):
                 f"[QUERY ERROR] Failed to execute sdk match, task_id: {task_id}, traceback:\n{traceback.format_exc()}"
             )
         return num
+
+    def flush_token_index(self, task_id: str, token_ids: List[int], start_block_idx: int, reside_in_gpu: bool):
+        logger.debug(
+            f"[FLUSH BEGIN] task_id: {task_id} token_ids: {token_ids} start_block_idx: {start_block_idx} reside_in_gpu: {reside_in_gpu}"
+        )
+        tokens = Tokens(token_ids, self.config.block_token_size)
+        try:
+            if reside_in_gpu:
+                self.sdk.flush_token_index(
+                    list(range(self.config.layer_num)),
+                    tokens,
+                    start_block_idx,
+                    None,
+                    common_pb2.MEDIA_HBM,
+                )
+            else:
+                self.sdk.flush_token_index(
+                    list(range(self.config.layer_num)),
+                    tokens,
+                    start_block_idx,
+                    common_pb2.MEDIA_HBM,
+                    None,
+                )
+            logger.debug(f"[FLUSH END] task_id: {task_id}")
+        except AttentionStoreSDKError:
+            logger.error(
+                f"[FLUSH ERROR] Failed to execute sdk flush_token_index, task_id: {task_id}, traceback:\n{traceback.format_exc()}"
+            )
 
     def get(self, **kwargs):
         raise NotImplementedError("AttentionStore does not support this method")
