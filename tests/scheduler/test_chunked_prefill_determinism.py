@@ -160,14 +160,35 @@ def create_test_request(request_id, prompt_token_ids, num_computed_tokens=0, mul
 class TestChunkedPrefillDeterminism(unittest.TestCase):
     """Test Chunked Prefill determinism alignment functionality"""
 
+    def setUp(self):
+        """Save original env vars before each test"""
+        self._saved_env = {}
+        for key in ("FD_DETERMINISTIC_MODE", "FD_DETERMINISTIC_SPLIT_KV_SIZE"):
+            self._saved_env[key] = os.environ.get(key)
+
+    def tearDown(self):
+        """Restore original env vars after each test"""
+        for key, value in self._saved_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    def _enable_deterministic(self, split_kv_size=16):
+        """Enable deterministic mode with given split_kv_size"""
+        os.environ["FD_DETERMINISTIC_MODE"] = "1"
+        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+
+    def _disable_deterministic(self):
+        """Disable deterministic mode"""
+        os.environ.pop("FD_DETERMINISTIC_MODE", None)
+        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+
     def test_get_num_new_tokens_deterministic_disabled(self):
         """Test token allocation when deterministic mode is disabled (no alignment)"""
         print("\n=== Testing _get_num_new_tokens (deterministic mode disabled) ===")
 
-        original_mode = os.environ.get("FD_DETERMINISTIC_MODE")
-        original_size = os.environ.get("FD_DETERMINISTIC_SPLIT_KV_SIZE")
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+        self._disable_deterministic()
 
         config = TestConfig()
         rm = self._create_resource_manager(config)
@@ -197,18 +218,12 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                 f"token_budget={token_budget} -> result={result} (no alignment)"
             )
 
-        if original_mode is not None:
-            os.environ["FD_DETERMINISTIC_MODE"] = original_mode
-        if original_size is not None:
-            os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = original_size
-
     def test_get_num_new_tokens_deterministic_enabled_alignment(self):
         """Test correct alignment to split_kv_size boundary when deterministic mode is enabled"""
         print("\n=== Testing _get_num_new_tokens (deterministic mode enabled - alignment) ===")
 
         split_kv_size = 16
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         rm = self._create_resource_manager(config)
@@ -249,16 +264,12 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                 f"token_budget={token_budget} -> result={result}, final_pos={num_computed + result}"
             )
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_get_num_new_tokens_boundary_cases(self):
         """Test boundary cases"""
         print("\n=== Testing _get_num_new_tokens (boundary cases) ===")
 
         split_kv_size = 16
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         rm = self._create_resource_manager(config)
@@ -283,16 +294,12 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
 
             print(f"  {description}: num_computed={num_computed}, " f"token_budget={token_budget} -> result={result}")
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_get_num_new_tokens_consistency_across_chunks(self):
         """Test alignment consistency across continuous prefill chunks"""
         print("\n=== Testing _get_num_new_tokens (chunk consistency) ===")
 
         split_kv_size = 16
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         rm = self._create_resource_manager(config)
@@ -325,9 +332,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                     f"Chunk {i} ends at position {position}, not aligned to {split_kv_size} and not at end={len(prompt_ids)}",
                 )
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_flash_attention_backend_deterministic_support(self):
         """
         Test FlashAttentionBackend deterministic support
@@ -356,8 +360,7 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         # Initialize flash_attn_func version to match environment variable
         init_flash_attn_version(fa_version=current_fa_version)
 
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = "16"
+        self._enable_deterministic(16)
 
         config = TestConfig()
 
@@ -654,9 +657,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         print("    [PASS] Test 5: Boundary case (single token)")
         print("  " + "=" * 60)
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     # ========== NEW TEST: Multimodal Input Scenarios ==========
     def test_multimodal_input_with_image(self):
         """
@@ -668,8 +668,7 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         print("\n=== Testing multimodal input with image patches ===")
 
         split_kv_size = 16
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         config.model_config.enable_mm = True
@@ -711,9 +710,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         self.assertLessEqual(result, token_budget)
         self.assertGreaterEqual(result, 0)
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_multimodal_input_with_video(self):
         """
         Test multimodal input scenario with video
@@ -724,8 +720,7 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         print("\n=== Testing multimodal input with video ===")
 
         split_kv_size = 16
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         config.model_config.enable_mm = True
@@ -764,9 +759,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         self.assertLessEqual(result, token_budget)
         self.assertGreaterEqual(result, 0)
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_multimodal_input_with_audio(self):
         """
         Test multimodal input scenario with audio
@@ -777,8 +769,7 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         print("\n=== Testing multimodal input with audio ===")
 
         split_kv_size = 16
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         config.model_config.enable_mm = True
@@ -816,9 +807,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         self.assertLessEqual(result, token_budget)
         self.assertGreaterEqual(result, 0)
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     # ========== NEW TEST: Real Batch Scheduling Scenarios ==========
     def test_real_batch_scheduling_concurrent_requests(self):
         """
@@ -830,8 +818,7 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         print("\n=== Testing real batch scheduling (concurrent requests) ===")
 
         split_kv_size = 16
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         rm = self._create_resource_manager(config)
@@ -899,9 +886,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         all_ok = all(r["is_aligned"] or r["is_at_end"] for r in results.values())
         self.assertTrue(all_ok, "Not all requests are properly aligned or at end!")
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_real_batch_scheduling_continuous_prefill(self):
         """
         Test continuous prefill scenario with real Request objects
@@ -911,8 +895,7 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         print("\n=== Testing real batch scheduling (continuous prefill) ===")
 
         split_kv_size = 16
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         rm = self._create_resource_manager(config)
@@ -958,9 +941,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
             f"Did not complete all tokens: got {num_computed}, expected {len(prompt_tokens)}",
         )
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_real_batch_scheduling_with_multimodal_requests(self):
         """
         Test batch scheduling with multimodal requests mixed in
@@ -971,8 +951,7 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         print("\n=== Testing real batch scheduling (multimodal mixed batch) ===")
 
         split_kv_size = 16
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         config.model_config.enable_mm = True
@@ -1031,17 +1010,13 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
             self.assertLessEqual(num_new_tokens, token_budget)
             self.assertGreaterEqual(num_new_tokens, 0)
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     # ========== Existing corner case tests (adapted for real Request class) ==========
     def test_corner_case_empty_request(self):
         """Test corner case: empty request and zero tokens"""
         print("\n=== Testing corner case (empty request / zero tokens) ===")
 
         split_kv_size = 16
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         rm = self._create_resource_manager(config)
@@ -1064,16 +1039,12 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         self.assertEqual(result, 0, "Zero budget should return 0")
         print(f"  [PASS] token_budget=0 -> result={result}")
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_corner_case_state_inconsistency(self):
         """Test corner case: num_computed > need_prefill (state inconsistency)"""
         print("\n=== Testing corner case (state inconsistency) ===")
 
         split_kv_size = 16
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         rm = self._create_resource_manager(config)
@@ -1088,16 +1059,12 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         self.assertEqual(result, 0, "Should return 0 for completed/inconsistent state")
         print(f"  [PASS] prompt_len=50, num_computed=100 (inconsistent) -> result={result}")
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_corner_case_minimum_split_size(self):
         """Test corner case: split_kv_size = 1 (minimum alignment unit)"""
         print("\n=== Testing corner case (split_kv_size = 1) ===")
 
         split_kv_size = 1
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         rm = self._create_resource_manager(config)
@@ -1117,16 +1084,12 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                 f"  [PASS] prompt_len={len(prompt_ids)}, computed={num_computed}, budget={token_budget} -> result={result}"
             )
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_corner_case_split_size_larger_than_budget(self):
         """Test corner case: split_kv_size >> token_budget"""
         print("\n=== Testing corner case (split_kv_size >> token_budget) ===")
 
         split_kv_size = 128
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         rm = self._create_resource_manager(config)
@@ -1152,16 +1115,12 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
                 f"  [PASS] prompt_len={len(prompt_ids)}, computed={num_computed}, budget={token_budget} -> result={result}"
             )
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_corner_case_split_size_larger_than_sequence(self):
         """Test corner case: split_kv_size >> need_prefill"""
         print("\n=== Testing corner case (split_kv_size >> prompt_len) ===")
 
         split_kv_size = 256
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         rm = self._create_resource_manager(config)
@@ -1177,17 +1136,11 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         self.assertGreaterEqual(result, 0)
         print(f"  [PASS] prompt_len=50, split_size=256 -> result={result}")
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_corner_case_dynamic_config_switch(self):
         """Test corner case: dynamic config switch during execution"""
         print("\n=== Testing corner case (dynamic config switch) ===")
 
         # Start with deterministic mode disabled
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
         config = TestConfig()
         rm = self._create_resource_manager(config)
 
@@ -1198,8 +1151,7 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         print(f"  Non-deterministic mode: result={result1}")
 
         # Enable deterministic mode mid-stream
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = "16"
+        self._enable_deterministic(16)
 
         # Recreate RM to pick up new env vars (simulating reload)
         rm = self._create_resource_manager(config)
@@ -1218,16 +1170,12 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
 
         print(f"  [PASS] Deterministic mode after switch: result={result2}, final_pos={final_pos}")
 
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
-
     def test_corner_case_negative_values(self):
         """Test corner case: potential negative or invalid inputs"""
         print("\n=== Testing corner case (negative/invalid inputs) ===")
 
         split_kv_size = 16
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = str(split_kv_size)
+        self._enable_deterministic(split_kv_size)
 
         config = TestConfig()
         rm = self._create_resource_manager(config)
@@ -1242,9 +1190,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         self.assertLessEqual(result, max_possible, "Should not overflow beyond prompt_len")
         self.assertGreaterEqual(result, 0)
         print(f"  [PASS] Very large budget (1000000) -> result={result}")
-
-        os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
 
     def _create_resource_manager(self, config):
         """Create resource manager for testing"""

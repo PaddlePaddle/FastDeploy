@@ -20,23 +20,19 @@ from fastdeploy.engine.sampling_params import SamplingParams
 class TestSamplingParamsDeterminism(unittest.TestCase):
     """Test SamplingParams deterministic seed behavior"""
 
+    _ENV_KEYS = ("FD_DETERMINISTIC_MODE", "FD_DETERMINISTIC_SPLIT_KV_SIZE")
+
     def setUp(self):
-        """Set up testing environment"""
-        # Save original environment variables
-        self.original_mode = os.environ.pop("FD_DETERMINISTIC_MODE", None)
-        self.original_size = os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+        """Save and clear deterministic env vars"""
+        self._saved_env = {k: os.environ.pop(k, None) for k in self._ENV_KEYS}
 
     def tearDown(self):
-        """Restore original environment variables"""
-        if self.original_mode is not None:
-            os.environ["FD_DETERMINISTIC_MODE"] = self.original_mode
-        else:
-            os.environ.pop("FD_DETERMINISTIC_MODE", None)
-
-        if self.original_size is not None:
-            os.environ["FD_DETERMINISTIC_SPLIT_KV_SIZE"] = self.original_size
-        else:
-            os.environ.pop("FD_DETERMINISTIC_SPLIT_KV_SIZE", None)
+        """Restore original env vars"""
+        for key, value in self._saved_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
     def test_sampling_params_uses_fixed_seed_in_deterministic_mode(self):
         """Test that SamplingParams uses fixed seed (42) when FD_DETERMINISTIC_MODE=1 and seed=None"""
