@@ -40,12 +40,15 @@ Usage:
 
 import os
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 import pytest
 
 from fastdeploy import LLM, SamplingParams
 
 # Small model path for fast testing
-DEFAULT_MODEL_PATH = "./models/Qwen/Qwen2.5-7B"
+DEFAULT_MODEL_DIR = "./models"
+MODEL_NAME = "Qwen/Qwen2.5-7B"
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -58,8 +61,9 @@ def cleanup_env():
 
 @pytest.fixture(scope="module")
 def model_path():
-    """Get model path from environment variable or use default"""
-    return os.getenv("MODEL_PATH", DEFAULT_MODEL_PATH)
+    """Get model path from MODEL_PATH env variable or use default ./models/"""
+    model_dir = os.getenv("MODEL_PATH", DEFAULT_MODEL_DIR)
+    return os.path.join(model_dir, MODEL_NAME)
 
 
 @pytest.fixture(scope="module")
