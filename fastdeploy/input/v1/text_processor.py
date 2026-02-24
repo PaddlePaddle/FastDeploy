@@ -257,7 +257,7 @@ class DataProcessor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
             request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
-        max_tokens = max_model_len - len(request["prompt_token_ids"])
+        max_tokens = max_model_len - len(request.prompt_token_ids)
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_tokens)
         else:
