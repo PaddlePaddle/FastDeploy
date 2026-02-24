@@ -558,7 +558,6 @@ DLL_EXPORT int speculate_set_value_by_flag_and_id(Context* ctx,
                                                   int length,
                                                   int max_draft_tokens);
 
-
 DLL_EXPORT int speculate_get_output_padding_offset(
     Context* ctx,
     int* output_padding_offset,

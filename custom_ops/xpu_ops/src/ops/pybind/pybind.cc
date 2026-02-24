@@ -218,7 +218,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& base_model_draft_tokens,
                       const int max_seq_len,
                       const int substep);
-                      
+
 void SpeculateUpdate(const paddle::Tensor& seq_lens_encoder,
                      const paddle::Tensor& seq_lens_decoder,
                      const paddle::Tensor& not_need_stop,
@@ -241,8 +241,6 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor& accept_tokens,
                                const paddle::Tensor& stop_seqs_len,
                                const paddle::Tensor& end_ids,
                                const paddle::Tensor& min_tokens);
-
-
 
 void SpeculateTokenPenaltyMultiScores(
     const paddle::Tensor& pre_ids,
@@ -314,7 +312,7 @@ void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
                                     const paddle::Tensor& seq_lens_encoder,
                                     const paddle::Tensor& seq_lens_decoder,
                                     const paddle::Tensor& step_idx);
-                                    
+
 void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
                                       const paddle::Tensor& accept_num,
                                       const paddle::Tensor& not_need_stop,

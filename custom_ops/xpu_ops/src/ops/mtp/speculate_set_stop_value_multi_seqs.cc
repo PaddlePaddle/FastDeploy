@@ -84,4 +84,4 @@ PD_BUILD_STATIC_OP(speculate_set_stop_value_multi_seqs)
     .Outputs({"accept_tokens_out", "stop_flags_out"})
     .SetInplaceMap({{"accept_tokens", "accept_tokens_out"},
                     {"stop_flags", "stop_flags_out"}})
-  .SetKernelFn(PD_KERNEL(SpecGetStopFlagsMultiSeqs));
+    .SetKernelFn(PD_KERNEL(SpecGetStopFlagsMultiSeqs));
