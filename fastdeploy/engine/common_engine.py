@@ -184,20 +184,6 @@ class EngineService:
             self.cache_manager_processes = None
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
-        # Register signal handlers for graceful shutdown
-        self._register_signal_handlers()
-
-    def _register_signal_handlers(self):
-        """Register signal handlers for graceful shutdown to clean up shared memory."""
-
-        def signal_handler(signum, frame):
-            self.llm_logger.info(f"Received signal {signum}, cleaning up shared memory...")
-            self._exit_sub_services()
-            sys.exit(0)
-
-        # Register handlers for SIGTERM and SIGINT
-        signal.signal(signal.SIGTERM, signal_handler)
-        signal.signal(signal.SIGINT, signal_handler)
 
     def start(self, async_llm_pid=None):
         self.running = True

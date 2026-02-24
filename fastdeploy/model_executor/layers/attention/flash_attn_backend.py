@@ -33,7 +33,6 @@ try:
 except:
     flashmask_attention = None
 
-from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
@@ -244,15 +243,6 @@ class FlashAttentionBackend(AttentionBackend):
         self.num_layers: int = fd_config.model_config.num_hidden_layers
         self.encoder_block_shape_q: int = encoder_block_shape_q
         self.decoder_block_shape_q: int = decoder_block_shape_q
-
-        # Deterministic mode support for chunked prefill alignment
-        self.enable_deterministic_mode = envs.FD_DETERMINISTIC_MODE
-        self.deterministic_split_kv_size = envs.FD_DETERMINISTIC_SPLIT_KV_SIZE
-
-        # Deterministic mode: override decoder_block_shape_q to ensure batch-invariant attention
-        # When enabled, this aligns the split-KV block size with the chunked prefill alignment
-        if self.enable_deterministic_mode:
-            self.decoder_block_shape_q = self.deterministic_split_kv_size
 
         self.speculative_method = fd_config.speculative_config.method
         self.use_speculate = self.speculative_method is not None

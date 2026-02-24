@@ -18,8 +18,6 @@ export FD_DETERMINISTIC_MODE=${1:-1}
 export FD_DETERMINISTIC_LOG_MODE=${2:-0}
 
 
-source /root/paddlejob/workspace/env_run/gongweibao/fdenv/bin/activate
-
 python -m fastdeploy.entrypoints.openai.api_server \
        --model ./models/Qwen/Qwen2.5-7B \
        --port 8188 \

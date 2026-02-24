@@ -2435,7 +2435,7 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
             # 4. Compute logits, Sample
-            if envs.FD_DETERMINISTIC_MODE:
+            if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
                 # Log MD5 of hidden_states (model output)
                 self._log_tensor_md5s(
                     {"hidden_states": hidden_states},
@@ -2445,7 +2445,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             logits = self.model.compute_logits(hidden_states)
 
-            if envs.FD_DETERMINISTIC_MODE:
+            if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
                 # Log MD5 of logits (before sampling)
                 self._log_tensor_md5s(
                     {"logits": logits}, forward_batch_reqs_list=self.forward_batch_reqs_list, stage="logits"
@@ -2467,7 +2467,7 @@ class GPUModelRunner(ModelRunnerBase):
                     p_done_idxs,
                 )
 
-                if envs.FD_DETERMINISTIC_MODE:
+                if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
                     # Log MD5 of sampling results
                     self._log_tensor_md5s(
                         {"sampled_token_ids": sampler_output.sampled_token_ids},

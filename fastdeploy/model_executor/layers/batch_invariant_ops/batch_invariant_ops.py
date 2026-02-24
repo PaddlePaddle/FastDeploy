@@ -482,6 +482,8 @@ def addmm_batch_invariant(
     So we use `alpha * (x @ y) + beta * input  =  alpha * [ (x @ y) + (beta / alpha) * input ]`
     to minimize the effection on performance
     """
+    if alpha == 0:
+        return beta * input
     matmul_result = matmul_persistent(a=x, b=y, bias=input * beta / alpha)
     result = alpha * matmul_result
     return result
@@ -495,10 +497,7 @@ def mean_batch_invariant(
     x: paddle.Tensor, axis: list[int] = [], keepdim: bool = False, dtype: paddle.dtype | None = None, out=None
 ) -> paddle.Tensor:
     assert dtype is None or dtype == paddle.float32, f"unsupported dtype: {dtype}"
-    if axis is None:  # Global mean (no axis specified)
-        n_elems = x.numel()
-        result = paddle.sum(x, keepdim=keepdim, dtype=paddle.float32) / n_elems
-    elif type(axis) is int:
+    if type(axis) is int:
         result = mean_dim(x, axis, keepdim=keepdim)
     elif len(axis) == 1:  # axis: int | Sequence[int]
         result = mean_dim(x, axis[0], keepdim=keepdim)

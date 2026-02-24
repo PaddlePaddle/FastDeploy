@@ -201,6 +201,7 @@ try:
 except Exception:  # pylint: disable=broad-except
     # Registration may fail in certain environments; set functions to None
     tensor_model_parallel_all_reduce = None
+    decode_alltoall_transpose = None
 
 
 # Import stream and reduce operations for custom all-reduce

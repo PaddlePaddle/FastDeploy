@@ -34,7 +34,6 @@ from fastdeploy.engine.request import (
     RequestMetrics,
     RequestOutput,
 )
-from fastdeploy.utils import envs
 from fastdeploy.utils import scheduler_logger as logger
 
 det_logger = logging.getLogger("fastdeploy.deterministic")
@@ -614,17 +613,7 @@ class APIScheduler:
                 if node.load >= blur_max:
                     break
                 blur_idx = idx
-            # Use deterministic selection in deterministic mode, otherwise keep original random behavior
-            if envs.FD_DETERMINISTIC_MODE:
-                # Use deterministic selection strategy: select based on request_id hash
-                node_index = int(hashlib.md5(str(req.request_id).encode()).hexdigest(), 16) % (blur_idx + 1)
-                node = nodes[node_index]
-                det_logger.info(
-                    f"[DETERMINISM-SCHEDULER] time={time.time():.6f} | req_id={req.request_id} | role={role} | node_index={node_index}/{blur_idx} | min_load={min_load}"
-                )
-            else:
-                # Keep original random selection behavior
-                node = random.choice(nodes[: blur_idx + 1])
+            node = random.choice(nodes[: blur_idx + 1])
             logger.info(f"Schedule Req {req.request_id}(len:{req.prompt_token_ids_len}) to {node}")
             return node
 
