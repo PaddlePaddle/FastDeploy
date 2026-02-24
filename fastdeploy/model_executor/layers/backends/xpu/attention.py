@@ -39,6 +39,8 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 
+from fastdeploy.model_executor.ops.xpu import split_rope_kvcache, block_attn_decouple
+
 
 @dataclass
 class XPUAttentionMetadata(AttentionMetadata):
@@ -155,6 +157,225 @@ class XPUAttentionBackend(AttentionBackend):
         key_cache_shape = value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         return key_cache_shape, value_cache_shape
 
+    def decouple_block_attn(
+        self,
+        qkv,
+        key_cache,
+        value_cache,
+        cum_offsets,
+        rotary_embs,
+        block_tables,
+        prefix_block_tables,
+        len_info_cpu,
+        encoder_seq_lod_cpu,
+        decoder_seq_lod_cpu,
+        encoder_kv_lod_cpu,
+        encoder_batch_map_cpu,
+        decoder_context_len_cpu,
+        decoder_context_len_cache_cpu,
+        decoder_batch_map_cpu,
+        prefix_len_cpu,
+        encoder_seq_lod,
+        decoder_seq_lod,
+        encoder_kv_lod,
+        encoder_batch_map,
+        decoder_context_len,
+        decoder_context_len_cache,
+        decoder_batch_map,
+        prefix_len,
+        k_scales,
+        v_scales,
+        k_scales_inv,
+        v_scales_inv,
+        k_zeros,
+        v_zeros,
+        shift,
+        smooth,
+        q_norm_weight,
+        k_norm_weight,
+        kv_signal_data_cpu,
+        cachekv_signal_thread_cpu,
+        use_neox_rotary_style,
+        rope_3d):
+        
+        '''
+        is_cache_int8 = key_cache.dtype == paddle.int8
+        has_zp = k_zeros is not None and v_zeros is not None
+        is_prefix_cache = len_info_cpu[5] > 0
+        
+        token_num = qkv.shape[0]
+        head_dim = key_cache.shape[3]
+        total_num_head = qkv.shape[-1] // head_dim
+        kv_num_heads = key_cache.shape[1]
+        num_heads = total_num_head - 2 * kv_num_heads
+        hidden_dim = num_heads * head_dim
+
+        enc_batch = len_info_cpu[0]
+        dec_batch = len_info_cpu[1]
+        total_enc_len = len_info_cpu[2]
+        total_dec_len = token_num - total_enc_len
+        '''
+        
+        q_enc, k_enc, v_enc, q_dec, k_dec, v_dec = split_rope_kvcache(
+            qkv,
+            key_cache,
+            value_cache,
+            cum_offsets,
+            rotary_embs,
+            block_tables,
+            len_info_cpu,
+            encoder_seq_lod_cpu,
+            decoder_seq_lod_cpu,
+            encoder_batch_map_cpu,
+            decoder_context_len_cpu,
+            decoder_context_len_cache_cpu,
+            decoder_batch_map_cpu,
+            prefix_len_cpu,
+            encoder_seq_lod,
+            decoder_seq_lod,
+            encoder_batch_map,
+            decoder_context_len,
+            decoder_context_len_cache,
+            decoder_batch_map,
+            prefix_len,
+            k_scales,
+            v_scales,
+            k_zeros,
+            v_zeros,
+            q_norm_weight,
+            k_norm_weight,
+            kv_signal_data_cpu,
+            cachekv_signal_thread_cpu,
+            use_neox_rotary_style,
+            rope_3d)
+        
+        '''
+        # q = q * k_scales_inv
+        if is_cache_int8 and has_zp:
+            if enc_batch > 0 and is_prefix_cache:
+                origin_shape = q_enc.shape
+                q_enc_reshaped = paddle.view(
+                    q_enc,
+                    [total_enc_len, kv_num_heads, num_heads // kv_num_heads, head_dim])
+                q_enc_reshaped = q_enc_reshaped * paddle.view(k_scales_inv, [1, kv_num_heads, 1, head_dim])
+                q_enc = paddle.view(q_enc_reshaped, origin_shape)
+                
+                # q_enc_reshaped = paddle.reshape(
+                #     q_enc,
+                #     [total_enc_len, kv_num_heads, num_heads // kv_num_heads, head_dim])
+                # q_enc_reshaped = q_enc_reshaped * paddle.reshape(k_scales_inv, [1, kv_num_heads, 1, head_dim])
+                # q_enc = paddle.reshape(q_enc_reshaped, q_enc.shape)
+            if dec_batch > 0:
+                origin_shape = q_dec.shape
+                q_dec_reshaped = paddle.view(
+                    q_dec,
+                    [total_dec_len, kv_num_heads, num_heads // kv_num_heads, head_dim])
+                q_dec_reshaped = q_dec_reshaped * paddle.view(k_scales_inv, [1, kv_num_heads, 1, head_dim])
+                q_dec = paddle.view(q_dec_reshaped, origin_shape)
+                
+                # q_dec_reshaped = paddle.reshape(
+                #     q_dec,
+                #     [total_dec_len, kv_num_heads, num_heads // kv_num_heads, head_dim])
+                # q_dec_reshaped = q_dec_reshaped * paddle.reshape(k_scales_inv, [1, kv_num_heads, 1, head_dim])
+                # q_dec = paddle.reshape(q_dec_reshaped, q_dec.shape)
+        '''
+                
+        out = block_attn_decouple(
+            q_enc,
+            k_enc,
+            v_enc,
+            q_dec,
+            k_dec,
+            v_dec,
+            key_cache,
+            value_cache,
+            block_tables,
+            prefix_block_tables,
+            len_info_cpu,
+            encoder_seq_lod_cpu,
+            decoder_seq_lod_cpu,
+            encoder_kv_lod_cpu,
+            encoder_batch_map_cpu,
+            decoder_context_len_cpu,
+            decoder_context_len_cache_cpu,
+            decoder_batch_map_cpu,
+            encoder_seq_lod,
+            decoder_seq_lod,
+            encoder_kv_lod,
+            encoder_batch_map,
+            decoder_context_len,
+            decoder_batch_map,
+            k_scales_inv,
+            v_scales_inv,
+            k_zeros,
+            v_zeros)
+        
+        '''
+        if enc_batch > 0:
+            if is_cache_int8 and has_zp and is_prefix_cache or shift or smooth:
+                sliced_out = out[:total_enc_len, :]
+                origin_shape = sliced_out.shape
+            if is_cache_int8 and has_zp and is_prefix_cache:
+                # out = (out - v_zeros) * v_scales_inv
+                out_reshaped = paddle.view(
+                    sliced_out,
+                    [total_enc_len, kv_num_heads, num_heads // kv_num_heads, head_dim]) - paddle.view(v_zeros, [1, kv_num_heads, 1, head_dim])
+                out_reshaped = out_reshaped * paddle.view(v_scales_inv, [1, kv_num_heads, 1, head_dim])
+                sliced_out = paddle.view(out_reshaped, origin_shape)
+            if shift:
+                sliced_out = sliced_out + shift
+            if smooth:
+                sliced_out = sliced_out * smooth
+            if is_cache_int8 and has_zp and is_prefix_cache or shift or smooth:
+                out[:total_enc_len, :] = sliced_out
+                
+            # if is_cache_int8 and has_zp and is_prefix_cache:
+            #     # out = (out - v_zeros) * v_scales_inv
+            #     out_reshaped = paddle.reshape(
+            #         out[:total_enc_len, :],
+            #         [total_enc_len, kv_num_heads, num_heads // kv_num_heads, head_dim]) - paddle.reshape(v_zeros, [1, kv_num_heads, 1, head_dim])
+            #     out_reshaped = out_reshaped * paddle.reshape(v_scales_inv, [1, kv_num_heads, 1, head_dim])
+            #     out[:total_enc_len, :] = paddle.reshape(out_reshaped, out[:total_enc_len, :].shape)
+            # if shift:
+            #     out[:total_enc_len, :] = out[:total_enc_len, :] + shift
+            # if smooth:
+            #     out[:total_enc_len, :] = out[:total_enc_len, :] * smooth
+        if dec_batch > 0:
+            if is_cache_int8 and has_zp and is_prefix_cache or shift or smooth:
+                sliced_out = out[total_enc_len:, :]
+                origin_shape = sliced_out.shape
+            if is_cache_int8 and has_zp:
+                # out = (out - v_zeros) * v_scales_inv
+                out_reshaped = paddle.view(
+                    sliced_out,
+                    [total_dec_len, kv_num_heads, num_heads // kv_num_heads, head_dim])
+                if v_zeros is not None:
+                    out_reshaped = out_reshaped - paddle.view(v_zeros, [1, kv_num_heads, 1, head_dim])
+                out_reshaped = out_reshaped * paddle.view(v_scales_inv, [1, kv_num_heads, 1, head_dim])
+                sliced_out = paddle.view(out_reshaped, origin_shape)
+            if shift:
+                sliced_out = sliced_out + shift
+            if smooth:
+                sliced_out = sliced_out * smooth
+            if is_cache_int8 and has_zp and is_prefix_cache or shift or smooth:
+                out[total_enc_len:, :] = sliced_out
+                
+            # if is_cache_int8 and has_zp:
+            #     # out = (out - v_zeros) * v_scales_inv
+            #     out_reshaped = paddle.reshape(
+            #         out[total_enc_len:, :],
+            #         [total_dec_len, kv_num_heads, num_heads // kv_num_heads, head_dim])
+            #     if v_zeros is not None:
+            #         out_reshaped = out_reshaped - paddle.reshape(v_zeros, [1, kv_num_heads, 1, head_dim])
+            #     out_reshaped = out_reshaped * paddle.reshape(v_scales_inv, [1, kv_num_heads, 1, head_dim])
+            #     out[total_enc_len:, :] = paddle.reshape(out_reshaped, out[total_enc_len:, :].shape)
+            # if shift:
+            #     out[total_enc_len:, :] = out[total_enc_len:, :] + shift
+            # if smooth:
+            #     out[total_enc_len:, :] = out[total_enc_len:, :] * smooth
+        '''
+        return out
+
     def forward_mixed(
         self,
         q: paddle.Tensor,
@@ -190,7 +411,9 @@ class XPUAttentionBackend(AttentionBackend):
             q_norm_weight = None
             k_norm_weight = None
 
-        res = block_attn(
+        # func = block_attn
+        func = self.decouple_block_attn
+        res = func(
             qkv,
             forward_meta.caches[2 * layer.layer_id],
             forward_meta.caches[2 * layer.layer_id + 1],
@@ -230,5 +453,5 @@ class XPUAttentionBackend(AttentionBackend):
             layer.use_neox_rotary_style,
             self.rope_3d,
         )
-
+        
         return res
