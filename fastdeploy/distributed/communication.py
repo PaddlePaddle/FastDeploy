@@ -53,7 +53,7 @@ def use_custom_allreduce(
     _TP_AR = CustomAllreduce(tp_group, custom_all_reduce_max_bytes)
 
 
-def custom_ar_clear_ipc_handles() -> None:
+def custom_ar_clear_ipc_handles():
     global _TP_AR
     if _TP_AR is not None:
         _TP_AR.clear_ipc_handles()
@@ -147,40 +147,41 @@ try:
         input_: paddle.Tensor,
         out: paddle.Tensor = None,
     ) -> paddle.Tensor:
-
+        """alltoall and transpose in decode."""
         if input_.shape[0] == 0:
             return input_
-
         global _TP_AR
         input_ = _TP_AR.decode_alltoall_transpose(input_, out)
         return input_
 
-except Exception:  # pylint: disable=broad-except
-    # Registration may fail in certain environments; set functions to None
+except:
     tensor_model_parallel_all_reduce = None
 
 
-# Import stream and reduce operations for custom all-reduce
 from paddle.distributed.communication import stream
 from paddle.distributed.communication.reduce import ReduceOp
 
-
-def _get_model_parallel_group():
-    hcg = fleet.get_hybrid_communicate_group()
-    return hcg.get_model_parallel_group()
-
-
 try:
+
+    def all_reduce(
+        tensor,
+        op,
+        group,
+        sync_op: bool = True,
+    ):
+        return stream.all_reduce(tensor, op=op, group=group, sync_op=sync_op, use_calc_stream=True)
 
     @paddle.jit.marker.unified
     def tensor_model_parallel_all_reduce_custom(input_: paddle.Tensor) -> paddle.Tensor:
+        """All-reduce the input tensor across model parallel group on calc stream."""
         if input_.shape[0] == 0:
             return input_
         if paddle.in_dynamic_mode():
-            mp_group = _get_model_parallel_group()
-            stream.all_reduce(input_, op=ReduceOp.SUM, group=mp_group, sync_op=True, use_calc_stream=True)
+            hcg = dist.fleet.get_hybrid_communicate_group()
+            mp_group = hcg.get_model_parallel_group()
+            all_reduce(input_, op=ReduceOp.SUM, group=mp_group)
         else:
             dist.all_reduce(input_)
 
-except Exception:
+except:
     tensor_model_parallel_all_reduce_custom = None

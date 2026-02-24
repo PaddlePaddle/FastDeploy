@@ -15,7 +15,6 @@
 """
 
 import hashlib
-import logging
 import math
 import pickle
 import random
@@ -35,8 +34,6 @@ from fastdeploy.engine.request import (
     RequestOutput,
 )
 from fastdeploy.utils import scheduler_logger as logger
-
-det_logger = logging.getLogger("fastdeploy.deterministic")
 
 
 class SplitWiseSchedulerConfig:
