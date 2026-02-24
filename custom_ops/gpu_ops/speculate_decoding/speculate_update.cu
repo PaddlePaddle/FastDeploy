@@ -34,6 +34,7 @@ __global__ void speculate_update(int *seq_lens_encoder,
   int stop_flag_now_int = 0;
   if (!(is_block_step[bid] || bid >= real_bsz)) {
     if (stop_flags[bid]) {
+      seq_lens_decoder[bid] += accept_num_now;
       stop_flag_now_int = 1;
       mask_rollback[bid] = 0;
     } else if (seq_lens_encoder[bid] == 0) {  // decoder
