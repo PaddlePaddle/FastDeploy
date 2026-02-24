@@ -15,7 +15,7 @@
 #include "helper.h"
 #include "paddle/extension.h"
 
-__global__ void limit_thinking_content_length_kernel_v3(
+__global__ void limit_thinking_content_length_kernel(
     int64_t* next_tokens,
     const int* max_think_lens,
     int* max_reply_lens,
@@ -137,16 +137,16 @@ __global__ void limit_thinking_content_length_kernel_v3(
   max_reply_lens[bid] = max_reply_len;
 }
 
-void LimitThinkingContentLengthV3(const paddle::Tensor& next_tokens,
-                                  const paddle::Tensor& max_think_lens,
-                                  const paddle::Tensor& max_reply_lens,
-                                  const paddle::Tensor& step_idx,
-                                  const paddle::Tensor& limit_status,
-                                  const paddle::Tensor& stop_flags,
-                                  const paddle::Tensor& eos_token_ids,
-                                  const paddle::Tensor& inject_token_ids,
-                                  const int64_t think_end_id,
-                                  const bool splitwise_role_is_decode) {
+void LimitThinkingContentLength(const paddle::Tensor& next_tokens,
+                                const paddle::Tensor& max_think_lens,
+                                const paddle::Tensor& max_reply_lens,
+                                const paddle::Tensor& step_idx,
+                                const paddle::Tensor& limit_status,
+                                const paddle::Tensor& stop_flags,
+                                const paddle::Tensor& eos_token_ids,
+                                const paddle::Tensor& inject_token_ids,
+                                const int64_t think_end_id,
+                                const bool splitwise_role_is_decode) {
   const int batch_size = next_tokens.shape()[0];
   const int eos_token_id_len = eos_token_ids.shape()[0];
   const int inject_len = inject_token_ids.shape()[0];
@@ -154,10 +154,10 @@ void LimitThinkingContentLengthV3(const paddle::Tensor& next_tokens,
   const int threads = 256;
   const int blocks = (batch_size + threads - 1) / threads;
 
-  limit_thinking_content_length_kernel_v3<<<blocks,
-                                            threads,
-                                            0,
-                                            next_tokens.stream()>>>(
+  limit_thinking_content_length_kernel<<<blocks,
+                                         threads,
+                                         0,
+                                         next_tokens.stream()>>>(
       const_cast<int64_t*>(next_tokens.data<int64_t>()),
       max_think_lens.data<int>(),
       const_cast<int*>(max_reply_lens.data<int>()),
@@ -173,7 +173,7 @@ void LimitThinkingContentLengthV3(const paddle::Tensor& next_tokens,
       splitwise_role_is_decode);
 }
 
-PD_BUILD_STATIC_OP(limit_thinking_content_length_v3)
+PD_BUILD_STATIC_OP(limit_thinking_content_length)
     .Inputs({"next_tokens",
              "max_think_lens",
              "max_reply_lens",
@@ -185,4 +185,4 @@ PD_BUILD_STATIC_OP(limit_thinking_content_length_v3)
     .Attrs({"think_end_id: int64_t", "splitwise_role_is_decode: bool"})
     .Outputs({"next_tokens_out"})
     .SetInplaceMap({{"next_tokens", "next_tokens_out"}})
-    .SetKernelFn(PD_KERNEL(LimitThinkingContentLengthV3));
+    .SetKernelFn(PD_KERNEL(LimitThinkingContentLength));

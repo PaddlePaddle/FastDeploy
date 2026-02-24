@@ -17,7 +17,7 @@
 
 // 1) 支持 inject_token_ids（任意长度）
 // 2) 支持限制回复长度 max_reply_lens
-// 3) 语义对齐非MTP limit_thinking_content_length_v3：
+// 3) 语义对齐非MTP limit_thinking_content_length：
 //    - max_think_len < 0：不强制截断思考，但仍会监听 think_end_id
 //    来进入回复阶段
 //    - max_reply_len >= 0：仅在"思考结束后的下一个 token"开始计回复长度
@@ -30,7 +30,7 @@
 // - reply_base = done_status + 1
 // - status >= reply_base：回复阶段计数，reply_len = status -
 // reply_base（已输出回复 token 数）
-__global__ void speculate_limit_thinking_content_length_kernel_v3(
+__global__ void speculate_limit_thinking_content_length_kernel(
     int64_t* next_tokens,          // [bs, tokens_per_step]
     const int* max_think_lens,     // [bs]
     int* max_reply_lens,           // [bs]
@@ -67,7 +67,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v3(
 
   int new_accept_num = original_accept_num;
 
-  // 本 step 的 token offset 对应的绝对 step（与 v2 保持一致）
+  // 本 step 的 token offset 对应的绝对 step
   const int64_t current_base_step = step_idx[bid] - original_accept_num + 1;
 
   for (int token_offset = 0; token_offset < original_accept_num;
@@ -79,7 +79,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v3(
     const int prev_status = status;
     bool condition_triggered = false;
 
-    // ======================= 1) 思考阶段监听 think_end_id（语义对齐非MTP v3）
+    // ======================= 1) 思考阶段监听 think_end_id（语义对齐非MTP）
     // =======================
     // 注意：这里必须放在"注入触发逻辑"之前，因为如果模型自然输出 </think>，
     // 这一 token 应该把 status 置为 done_status，但"本 token 不计入回复"。
@@ -127,8 +127,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v3(
       }
 
       // 注入序列：如果进入注入区间，则覆盖 next_token，并推进状态。
-      // 由于覆盖了 token，必须截断 accept_num（和 v2
-      // 行为一致），避免一口气接受后续 token。
+      // 由于覆盖了 token，必须截断 accept_num，避免一口气接受后续 token。
       if (inject_len > 0 && status >= 1 && status <= inject_len) {
         next_token = inject_token_ids[status - 1];
         status += 1;
@@ -144,7 +143,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v3(
                                         (prev_status != done_status) &&
                                         (prev_status < reply_base);
 
-    // ======================= 3) 回复长度限制（对齐非MTP v3）
+    // ======================= 3) 回复长度限制（对齐非MTP）
     // ======================= 关键：刚进入 done_status 的这一 token（</think>
     // 或注入 token）不计入回复，也不在这一 token 开始回复计数
     if (max_reply_len >= 0) {
@@ -182,7 +181,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v3(
     }
   }
 
-  // 更新 step_idx / accept_num（保持 v2 的语义：被截断的 token 需要回退
+  // 更新 step_idx / accept_num（被截断的 token 需要回退
   // step_idx）
   const int discarded_tokens = original_accept_num - new_accept_num;
   if (discarded_tokens > 0) {
@@ -194,7 +193,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v3(
   max_reply_lens[bid] = max_reply_len;
 }
 
-void SpeculateLimitThinkingContentLengthV3(
+void SpeculateLimitThinkingContentLength(
     const paddle::Tensor& next_tokens,
     const paddle::Tensor& max_think_lens,
     const paddle::Tensor& max_reply_lens,  // 新增
@@ -215,10 +214,10 @@ void SpeculateLimitThinkingContentLengthV3(
   int blocks = (batch_size + threads - 1) / threads;
   if (blocks > 1024) blocks = 1024;
 
-  speculate_limit_thinking_content_length_kernel_v3<<<blocks,
-                                                      threads,
-                                                      0,
-                                                      next_tokens.stream()>>>(
+  speculate_limit_thinking_content_length_kernel<<<blocks,
+                                                   threads,
+                                                   0,
+                                                   next_tokens.stream()>>>(
       const_cast<int64_t*>(next_tokens.data<int64_t>()),
       max_think_lens.data<int>(),
       const_cast<int*>(max_reply_lens.data<int>()),
@@ -236,7 +235,7 @@ void SpeculateLimitThinkingContentLengthV3(
       splitwise_role_is_decode);
 }
 
-PD_BUILD_STATIC_OP(speculate_limit_thinking_content_length_v3)
+PD_BUILD_STATIC_OP(speculate_limit_thinking_content_length)
     .Inputs({"next_tokens",
              "max_think_lens",
              "max_reply_lens",
@@ -249,4 +248,4 @@ PD_BUILD_STATIC_OP(speculate_limit_thinking_content_length_v3)
     .Attrs({"think_end_id: int64_t", "splitwise_role_is_decode: bool"})
     .Outputs({"next_tokens_out"})
     .SetInplaceMap({{"next_tokens", "next_tokens_out"}})
-    .SetKernelFn(PD_KERNEL(SpeculateLimitThinkingContentLengthV3));
+    .SetKernelFn(PD_KERNEL(SpeculateLimitThinkingContentLength));

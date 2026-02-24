@@ -744,15 +744,30 @@ class GPUModelRunner(ModelRunnerBase):
                 length = prefill_end_index - prefill_start_index
                 if not self.is_pooling_model:
                     if request.get("enable_thinking") is not None:
-                        self.share_inputs["enable_thinking"][idx : idx + 1, :] = request.get("enable_thinking")
-                    if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
-                        # Enable thinking
-                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
-                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
-                    else:
-                        # Disable thinking
-                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
-                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                        enable_thinking = bool(request.get("enable_thinking"))
+                        logger.debug(f"request {request.request_id} with {enable_thinking=} at idx {idx}")
+                        self.share_inputs["enable_thinking"][idx : idx + 1, :] = enable_thinking
+                        if enable_thinking:
+                            self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                            if request.get("reasoning_max_tokens") is not None:
+                                # Enable thinking
+                                self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get(
+                                    "reasoning_max_tokens"
+                                )
+                            else:
+                                self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                            if request.get("response_max_tokens") is not None:
+                                # Enable thinking
+                                self.share_inputs["max_reply_lens"][idx : idx + 1, :] = request.get(
+                                    "response_max_tokens"
+                                )
+                            else:
+                                self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
+                        else:
+                            # Disable thinking
+                            self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                            self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
+                            self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
                 if isinstance(request.prompt_token_ids, np.ndarray):
                     prompt_token_ids = request.prompt_token_ids.tolist()
@@ -1744,7 +1759,7 @@ class GPUModelRunner(ModelRunnerBase):
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
-            line_break_id=self.model_config.line_break_id,
+            splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
         )
         self.exist_prefill_flag = False
         return pooler_output
@@ -1849,7 +1864,7 @@ class GPUModelRunner(ModelRunnerBase):
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
-            line_break_id=self.model_config.line_break_id,
+            splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
             enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
         )
         self.exist_prefill_flag = False
@@ -2508,7 +2523,7 @@ class GPUModelRunner(ModelRunnerBase):
                 skip_save_output=skip_save_output,
                 async_output_queue=self.async_output_queue,
                 think_end_id=self.model_config.think_end_id,
-                line_break_id=self.model_config.line_break_id,
+                splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
             )
 
