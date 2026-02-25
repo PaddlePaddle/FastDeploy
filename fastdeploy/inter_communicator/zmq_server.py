@@ -350,12 +350,27 @@ class ZmqServerBase(ABC):
             llm_logger.error(f"Send batch response failed: {e}")
 
     def send_response(self, req_id, data):
+        """
+        Unified response sending interface.
+
+        Args:
+            req_id: Request ID
+            data: Response data
+                  - Internal Adapter mode: List[output] or List[List[output]] (batch)
+                  - Batch mode: List[output] or List[[req_id, [output]]] (batch)
+                  - When req_id=None, data is already in batch format
+        """
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
             self._send_response_per_step(req_id, data)
         else:
-            # Non-Internal Adapter mode: batch send all request results
-            # data format: List[[req_id, [output, ...]], ...]
-            self._send_batch_response(data)
+            # Batch mode: ensure data format is [[req_id, [outputs]], ...]
+            if req_id is None:
+                # Already in batch format, send directly
+                self._send_batch_response(data)
+            else:
+                # Convert single request to batch format
+                batch_data = [[req_id, data]]
+                self._send_batch_response(batch_data)
 
     @abstractmethod
     def close(self):

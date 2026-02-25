@@ -579,10 +579,8 @@ class EngineClient:
         api_server_logger.info(f"Start Run Control Method: {request}")
         self.zmq_client.send_json(request.to_dict())
         request_id = request.request_id
-        dealer, response_queue = await self.connection_manager.get_connection(request_id)
+        _, response_queue = await self.connection_manager.get_connection(request_id)
         # In batch mode, dealer is None, no need to send request_id
-        if dealer is not None:
-            dealer.write([b"", request_id.encode("utf-8")])
         try:
             # todo: support user specified timeout. default 600s is enough for most control cases
             response = await asyncio.wait_for(response_queue.get(), timeout=600)

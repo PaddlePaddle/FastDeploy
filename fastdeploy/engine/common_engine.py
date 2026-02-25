@@ -1255,31 +1255,19 @@ class EngineService:
             if handler is None or not callable(handler):
                 error_result = ControlResponse(request_id, 400, f"unknown control method:{method}")
                 self.llm_logger.error(str(error_result))
-                if envs.FD_ENABLE_INTERNAL_ADAPTER:
-                    self.send_response_server.send_response(request_id, [error_result])
-                else:
-                    # Non-Internal Adapter mode: use batch format [[req_id, [outputs]], ...]
-                    self.send_response_server.send_response(request_id, [[request_id, [error_result]]])
+                self.send_response_server.send_response(request_id, [error_result])
                 return
 
             result = handler(control_req)
             self.llm_logger.info(f"SUCCESS run control method {method}.")
             succ_result = ControlResponse(request_id, 200, "Success", result)
-            if envs.FD_ENABLE_INTERNAL_ADAPTER:
-                self.send_response_server.send_response(request_id, [succ_result])
-            else:
-                # Non-Internal Adapter mode: use batch format [[req_id, [outputs]], ...]
-                self.send_response_server.send_response(request_id, [[request_id, [succ_result]]])
+            self.send_response_server.send_response(request_id, [succ_result])
 
         except Exception as e:
             error_msg = f"Failed run control method {method}: {str(e)}"
             self.llm_logger.error(f"{error_msg}\n{traceback.format_exc()}")
             error_result = ControlResponse(request_id, 500, error_msg)
-            if envs.FD_ENABLE_INTERNAL_ADAPTER:
-                self.send_response_server.send_response(request_id, [error_result])
-            else:
-                # Non-Internal Adapter mode: use batch format [[req_id, [outputs]], ...]
-                self.send_response_server.send_response(request_id, [[request_id, [error_result]]])
+            self.send_response_server.send_response(request_id, [error_result])
 
     def _control_pause(self, control_request: ControlRequest):
         """Pauses the LLM engine and aborts all running/inflight requests.
@@ -1444,13 +1432,8 @@ class EngineService:
             error_code=error_code,
             error_msg=error_msg,
         )
-        # Since the request is not in scheduler
-        # Send result by zmq directly
-        if envs.FD_ENABLE_INTERNAL_ADAPTER:
-            self.send_response_server.send_response(None, [[error_result]])
-        else:
-            # Non-Internal Adapter mode: use batch format [[req_id, [outputs]], ...]
-            self.send_response_server.send_response(None, [[request_id, [error_result]]])
+        # Since the request is not in scheduler, send result by zmq directly
+        self.send_response_server.send_response(request_id, [error_result])
 
     def _decode_token(self, token_ids, req_id, is_end):
         delta_text = ""
