@@ -23,6 +23,7 @@ import paddle
 
 # ZKK: Copyied from fastdeploy/platforms/base.py
 def is_cuda() -> bool:
+    return False
     """
     whether platform is cuda
     """
