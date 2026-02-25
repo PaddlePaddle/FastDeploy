@@ -37,6 +37,7 @@ from e2e.utils.serving_utils import (
 )
 
 os.environ["FD_USE_MACHETE"] = "0"
+os.environ["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
 
 
 @pytest.fixture(scope="session", autouse=True)
