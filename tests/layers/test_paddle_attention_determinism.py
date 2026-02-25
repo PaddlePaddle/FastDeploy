@@ -17,7 +17,8 @@ Tests for Paddle Attention Determinism
 
 Test scenarios:
 1. Multiple runs with same batch size, check if results are consistent
-2. Different batch sizes, check if results are consistent (test batch invariance)
+2. Different batch sizes, document that native SDPA is not batch-invariant by default,
+   and check that results are consistent only when batch-invariant mode is explicitly enabled
 3. Test determinism in both prefill and decode modes
 4. Test determinism under different sequence lengths
 """
