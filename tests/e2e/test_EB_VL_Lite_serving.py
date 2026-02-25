@@ -695,7 +695,7 @@ def test_chat_with_response_max_tokens(openai_client):
         stream=False,
         max_tokens=10,
     )
-    assert response.choices[0].message.reasoning_content == ""
+    assert response.choices[0].message.reasoning_content is None
     assert "</think>" not in response.choices[0].message.content
     assert response.usage.completion_tokens <= response_max_tokens
 
