@@ -67,11 +67,8 @@ __global__ void update_attn_mask_offsets_kernel(
 
         // Speculative decoding in text_generation
         for (int i = 0; i < decode_states_len; i++) {
-          if (i < seq_len_this_time) {
-            // for other mm mode
-            if (decode_states_now[i] != 1) {
-              decode_states_now[i] = 0;
-            }
+          if (i < seq_len_this_time && decode_states_now[i] != 1) {
+            decode_states_now[i] = 0;
           } else {
             decode_states_now[i] = -1;
           }
