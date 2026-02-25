@@ -289,8 +289,10 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request.enable_thinking = model_status == "think_start"
         if request.sampling_params.top_p is not None and request.sampling_params.top_p < _SAMPLING_EPS:
             request.sampling_params.top_p = _SAMPLING_EPS
-        if request.response_max_tokens is not None and request.enable_thinking is False:
-            request.sampling_params.max_tokens = min(request.response_max_tokens, request.sampling_params.max_tokens)
+        if request.sampling_params.response_max_tokens is not None and request.enable_thinking is False:
+            request.sampling_params.max_tokens = min(
+                request.sampling_params.response_max_tokens, request.sampling_params.max_tokens
+            )
         return request
 
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):

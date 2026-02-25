@@ -373,9 +373,9 @@ class DataProcessor(BaseDataProcessor):
 
         max_tokens = max_model_len - len(request.prompt_token_ids)
         if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_tokens)
+            request.set("max_tokens", max(1, max_tokens))
         else:
-            request["max_tokens"] = min(max_tokens, request["max_tokens"])
+            request.set("max_tokens", min(max_tokens, request["max_tokens"]))
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request.set("temperature", 1)
