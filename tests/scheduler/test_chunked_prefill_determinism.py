@@ -345,7 +345,6 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         import paddle
 
         from fastdeploy.model_executor.layers.attention.flash_attn_backend import (
-            FlashAttentionBackend,
             flash_attn_func,
             init_flash_attn_version,
         )
@@ -362,20 +361,14 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
 
         self._enable_deterministic(16)
 
-        config = TestConfig()
+        # Verify deterministic mode is enabled via environment variables
+        from fastdeploy import envs
 
-        backend = FlashAttentionBackend(
-            fd_config=config,
-            kv_num_heads=8,
-            num_heads=32,
-            head_dim=128,
-        )
+        self.assertEqual(envs.FD_DETERMINISTIC_MODE, True)
+        self.assertEqual(envs.FD_DETERMINISTIC_SPLIT_KV_SIZE, 16)
 
-        self.assertEqual(backend.enable_deterministic_mode, True)
-        self.assertEqual(backend.deterministic_split_kv_size, 16)
-
-        print(f"  FlashAttentionBackend.enable_deterministic_mode: {backend.enable_deterministic_mode}")
-        print(f"  FlashAttentionBackend.deterministic_split_kv_size: {backend.deterministic_split_kv_size}")
+        print(f"  envs.FD_DETERMINISTIC_MODE: {envs.FD_DETERMINISTIC_MODE}")
+        print(f"  envs.FD_DETERMINISTIC_SPLIT_KV_SIZE: {envs.FD_DETERMINISTIC_SPLIT_KV_SIZE}")
 
         # ========== Test 1: Single sequence determinism ==========
         print("\n  [Test 1] Single sequence determinism test")

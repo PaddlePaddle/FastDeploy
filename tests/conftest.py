@@ -20,18 +20,16 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip GPU-marked tests when not on a GPU platform."""
-    try:
-        from fastdeploy.platforms import current_platform
+    """Skip GPU-marked tests when not on a GPU platform.
 
-        has_gpu = current_platform.is_cuda_alike()
-    except Exception:
-        try:
-            import paddle
+    IMPORTANT: Do NOT import paddle or fastdeploy here. This function runs
+    during pytest collection (before fork). Importing paddle initializes the
+    CUDA runtime, which makes forked child processes unable to re-initialize
+    CUDA (OSError: CUDA error(3), initialization error).
+    """
+    import glob
 
-            has_gpu = paddle.is_compiled_with_cuda()
-        except Exception:
-            has_gpu = False
+    has_gpu = len(glob.glob("/dev/nvidia[0-9]*")) > 0
 
     if has_gpu:
         return
