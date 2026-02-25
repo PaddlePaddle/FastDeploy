@@ -1,0 +1,57 @@
+# Python-only 快速安装
+
+## 功能说明
+
+`build.sh` 支持 `BUILD_WHEEL=2` 模式，只将 Python 文件同步到已安装的 site-packages 目录，跳过 C++ custom ops 编译和 wheel 打包。适用于只修改了 Python 代码、需要快速验证的场景。
+
+## 前提条件
+
+必须先做过一次完整编译安装：
+```bash
+bash build.sh 1 python false "[90]"
+```
+Python-only 模式依赖已安装的 `.so` 编译产物，首次使用前需要确保这些产物已存在于 site-packages 中。
+
+## 使用方式
+
+```bash
+bash build.sh 2 [PYTHON]
+```
+
+第二个参数 `PYTHON` 是 Python **可执行文件**的路径或命令名（不是 site-packages 目录），默认值为 `python`。脚本内部通过该可执行文件来定位 site-packages 路径、执行 pip 等操作。
+
+```bash
+# 使用默认 python 命令
+bash build.sh 2
+
+# 显式指定 python 命令名
+bash build.sh 2 python
+
+# 使用 python3
+bash build.sh 2 python3
+
+# 使用完整路径
+bash build.sh 2 /root/paddlejob/workspace/env_run/gongweibao/fdenv/bin/python
+```
+
+## 原理
+
+`setup.py` 中使用 `find_packages()` + `package_dir={"fastdeploy": "fastdeploy/"}` 配置，所有 Python 文件安装到 `site-packages/fastdeploy/` 下，目录结构与源码一致，无重映射。因此可以直接用 rsync 将源码目录下的 `.py` 文件同步到安装目录：
+
+```bash
+rsync -av --include='*/' --include='*.py' --exclude='*' fastdeploy/ ${INSTALL_DIR}/fastdeploy/
+```
+
+rsync 只同步 `.py` 文件，不影响 `.so`、`.txt` 等已编译产物。
+
+## 防御机制
+
+同步完成后，脚本会自动校验 `setup.py` 的安装映射是否发生变化：通过 `pip show -f` 获取已安装文件列表，检查是否有 `.py` 文件被安装到 `fastdeploy/` 目录之外。如果检测到映射变化，脚本会报错并提示执行完整编译。
+
+## 适用场景
+
+| 场景 | 推荐方式 |
+|------|----------|
+| 只修改了 Python 文件 | `bash build.sh 2` |
+| 修改了 C++/CUDA 代码 | `bash build.sh 1 python false "[90]"` |
+| 首次编译 | `bash build.sh 1 python false "[90]"` |
