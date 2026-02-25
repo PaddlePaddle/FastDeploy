@@ -39,10 +39,11 @@ pytestmark = pytest.mark.gpu
 import paddle
 import paddle.nn.functional as F
 
-print("=" * 70)
-print(" PADDLE ATTENTION DETERMINISM TEST")
-print("=" * 70)
-print()
+if __name__ == "__main__":
+    print("=" * 70)
+    print(" PADDLE ATTENTION DETERMINISM TEST")
+    print("=" * 70)
+    print()
 
 # Basic configuration
 BATCH_SIZE = 2
