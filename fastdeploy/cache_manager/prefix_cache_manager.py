@@ -124,8 +124,9 @@ class PrefixCacheManager:
         self.cache_status_lock = Lock()
 
         logger.info(
-            f"num_gpu_blocks_server_owned {self.num_gpu_blocks} num_cpu_blocks "
-            + f"{self.num_cpu_blocks}, bytes_per_layer_per_block {self.cache_config.bytes_per_layer_per_block}"
+            f"Prefix cache manager is initialized with {self.num_gpu_blocks} gpu blocks "
+            f"and {self.num_cpu_blocks} cpu blocks, bytes_per_token_per_layer for each rank: "
+            f"{self.cache_config.bytes_per_token_per_layer / self.config.parallel_config.tensor_parallel_size}"
         )
 
         main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
