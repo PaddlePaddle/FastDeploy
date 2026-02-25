@@ -368,12 +368,24 @@ function build_and_install() {
 }
 
 function install_python_only() {
+  # Check rsync is available
+  if ! command -v rsync &>/dev/null; then
+    echo -e "${RED}[FAIL]${NONE} 'rsync' is not installed. Please install it first (e.g. apt-get install rsync / yum install rsync)."
+    exit 1
+  fi
+
   echo -e "${BLUE}[python-only]${NONE} Syncing Python files to installed site-packages..."
 
-  # Get site-packages path (more reliable than pip show Location)
-  INSTALL_DIR=$(${python} -c "import site; print(site.getsitepackages()[0])" 2>/dev/null)
-  if [ $? -ne 0 ] || [ -z "$INSTALL_DIR" ] || [ ! -d "${INSTALL_DIR}/fastdeploy" ]; then
-    echo -e "${RED}[FAIL]${NONE} fastdeploy is not installed in site-packages. Please run a full build first (BUILD_WHEEL=1)."
+  # Locate fastdeploy install directory: try pip show first, then fall back to site.getsitepackages
+  INSTALL_DIR=$(${python} -c "
+import importlib.util, os
+spec = importlib.util.find_spec('fastdeploy')
+if spec and spec.submodule_search_locations:
+    print(os.path.dirname(spec.submodule_search_locations[0]))
+" 2>/dev/null)
+
+  if [ -z "$INSTALL_DIR" ] || [ ! -d "${INSTALL_DIR}/fastdeploy" ]; then
+    echo -e "${RED}[FAIL]${NONE} fastdeploy is not installed. Please run a full build first (BUILD_WHEEL=1) or pip install -e ."
     exit 1
   fi
   echo -e "${BLUE}[python-only]${NONE} Detected install directory: ${GREEN}${INSTALL_DIR}/fastdeploy/${NONE}"
