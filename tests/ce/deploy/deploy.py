@@ -1,6 +1,9 @@
 import ast
 import json
 import os
+
+os.environ["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
+
 import re
 import signal
 import socket
