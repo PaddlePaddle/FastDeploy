@@ -647,11 +647,17 @@ def run_benchmark():
 
         cos = rotary_embs[0, 0, :, 0, :]
         sin = rotary_embs[1, 0, :, 0, :]
+        cos_f32 = cos.cast("float32")
+        sin_f32 = sin.cast("float32")
+        for _ in range(warmup):
+            q_c, k_c = q.clone(), k.clone()
+            ref_apply_rope_interleaved(q_c.cast("float32"), k_c.cast("float32"), cos_f32, sin_f32, positions)
+        paddle.device.cuda.synchronize()
+
         start = time.perf_counter()
         for _ in range(repeat):
-            ref_apply_rope_interleaved(
-                q.cast("float32"), k.cast("float32"), cos.cast("float32"), sin.cast("float32"), positions
-            )
+            q_c, k_c = q.clone(), k.clone()
+            ref_apply_rope_interleaved(q_c.cast("float32"), k_c.cast("float32"), cos_f32, sin_f32, positions)
         paddle.device.cuda.synchronize()
         python_time = (time.perf_counter() - start) / repeat * 1000
 
