@@ -848,3 +848,27 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 eng._finalizer.detach()
             except Exception:
                 pass
+
+    def test_get_scheduler_unhandled_request_num(self):
+        """Cover _get_scheduler_unhandled_request_num normal/fallback paths."""
+        eng = EngineService.__new__(EngineService)
+        eng.llm_logger = Mock()
+
+        # Scheduler does not provide API -> fallback 0
+        eng.scheduler = object()
+        self.assertEqual(eng._get_scheduler_unhandled_request_num(), 0)
+
+        # Positive value -> return int value
+        eng.scheduler = type("SchedOK", (), {"get_unhandled_request_num": lambda self: "3"})()
+        self.assertEqual(eng._get_scheduler_unhandled_request_num(), 3)
+
+        # Negative value -> clamp to 0
+        eng.scheduler = type("SchedNeg", (), {"get_unhandled_request_num": lambda self: -5})()
+        self.assertEqual(eng._get_scheduler_unhandled_request_num(), 0)
+
+        # Exception -> debug log + fallback 0
+        eng.scheduler = type(
+            "SchedErr", (), {"get_unhandled_request_num": lambda self: (_ for _ in ()).throw(RuntimeError("boom"))}
+        )()
+        self.assertEqual(eng._get_scheduler_unhandled_request_num(), 0)
+        eng.llm_logger.debug.assert_called()
