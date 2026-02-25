@@ -1183,20 +1183,6 @@ def run_worker_proc() -> None:
     # Get fd_config
     fd_config = initialize_fd_config(args, ranks, local_rank)
 
-    # Enable batch-invariant mode for deterministic inference.
-    # This must happen in the worker process (where model forward runs),
-    # NOT at module import time, because enable_batch_invariant_mode()
-    # calls paddle.compat.enable_torch_proxy() which has global side effects
-    # that can break pytest collection and other import-time scenarios.
-    if envs.FD_DETERMINISTIC_MODE:
-        from fastdeploy.model_executor.layers.batch_invariant_ops import (
-            enable_batch_invariant_mode,
-            is_batch_invariant_mode_enabled,
-        )
-
-        if not is_batch_invariant_mode_enabled():
-            enable_batch_invariant_mode()
-
     # Create worker process
     if current_platform.is_iluvatar():
         from fastdeploy.worker.iluvatar_worker import IluvatarPaddleDisWorkerProc
@@ -1205,6 +1191,21 @@ def run_worker_proc() -> None:
     else:
         worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
         worker_proc.init_control()
+
+    # Enable batch-invariant mode for deterministic inference.
+    # This must happen AFTER worker creation but BEFORE model loading,
+    # because enable_batch_invariant_mode() calls paddle.compat.enable_torch_proxy()
+    # which makes torch appear available via proxy. If called before worker creation,
+    # the gpu_model_runner import chain (ernie4_5_vl_processor → paddleformers →
+    # transformers) will fail when transformers tries to query torch metadata.
+    if envs.FD_DETERMINISTIC_MODE:
+        from fastdeploy.model_executor.layers.batch_invariant_ops import (
+            enable_batch_invariant_mode,
+            is_batch_invariant_mode_enabled,
+        )
+
+        if not is_batch_invariant_mode_enabled():
+            enable_batch_invariant_mode()
 
     # Initialize device and create model runner
     worker_proc.init_device()
