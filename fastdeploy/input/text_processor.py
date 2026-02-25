@@ -297,6 +297,8 @@ class DataProcessor(BaseDataProcessor):
                 self.model_status_dict[request.request_id] = model_status
             request.enable_thinking = model_status == "think_start"
 
+        if request.get("response_max_tokens") is not None and request.enable_thinking is False:
+            request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
         data_processor_logger.info(f"Processed request: {request}")
         return request
 

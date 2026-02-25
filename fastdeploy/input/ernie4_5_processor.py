@@ -214,6 +214,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                                 request[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                    request.setdefault("enable_thinking", True)
                 request["prompt_token_ids"] = self.messages2ids(request, **chat_template_kwargs)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
@@ -247,6 +248,8 @@ class Ernie4_5Processor(BaseDataProcessor):
             else:
                 self.model_status_dict[request["request_id"]] = model_status
             request["enable_thinking"] = model_status == "think_start"
+        if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
+            request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
         data_processor_logger.info(f"Processed request dict: {request}")
         return request
 
