@@ -426,49 +426,47 @@ def v100_decode_attn_stage1(
     acc = tl.zeros([BLOCK_D], dtype=tl.float32)
 
     # Iterate over KV blocks in this split
-    # Use constexpr MAX_BLOCKS_PER_SPLIT as loop bound, with runtime early exit
+    # Use constexpr MAX_BLOCKS_PER_SPLIT as loop bound, with conditional guard (no break)
     for bi in range(MAX_BLOCKS_PER_SPLIT):
         block_idx = split_start_block + bi
-        if block_idx >= split_end_block:
-            break
+        if block_idx < split_end_block:
+            physical_block = tl.load(block_tables_ptr + pid_batch * max_blocks_per_seq + block_idx)
 
-        physical_block = tl.load(block_tables_ptr + pid_batch * max_blocks_per_seq + block_idx)
+            # Number of valid tokens in this block
+            block_start_pos = block_idx * block_size
+            valid_tokens = tl.minimum(block_size, total_kv_len - block_start_pos)
 
-        # Number of valid tokens in this block
-        block_start_pos = block_idx * block_size
-        valid_tokens = tl.minimum(block_size, total_kv_len - block_start_pos)
+            # Process all tokens in this block at once (block_size is constexpr)
+            kv_range = tl.arange(0, block_size)
+            kv_mask = kv_range < valid_tokens
 
-        # Process all tokens in this block at once (block_size is constexpr)
-        # block_size is typically 64 or 128, fits in one tile for SM70
-        kv_range = tl.arange(0, block_size)
-        kv_mask = kv_range < valid_tokens
+            # Load K: cache[physical_block, kv_head_id, :, :]
+            k_base = physical_block * (kv_num_heads * block_size * head_dim) + kv_head_id * (block_size * head_dim)
+            k_ptrs = k_base + kv_range[:, None] * head_dim + offs_d[None, :]
+            k_vals = tl.load(key_cache_ptr + k_ptrs, mask=kv_mask[:, None] & d_mask[None, :], other=0.0).to(tl.float32)
 
-        # Load K: cache[physical_block, kv_head_id, :, :]
-        # cache layout: [max_num_blocks, kv_num_heads, block_size, head_dim]
-        k_base = physical_block * (kv_num_heads * block_size * head_dim) + kv_head_id * (block_size * head_dim)
-        k_ptrs = k_base + kv_range[:, None] * head_dim + offs_d[None, :]
-        k_vals = tl.load(key_cache_ptr + k_ptrs, mask=kv_mask[:, None] & d_mask[None, :], other=0.0).to(tl.float32)
+            # QK^T: [block_size]
+            qk = tl.sum(q_vec[None, :] * k_vals, axis=1) * sm_scale
+            qk = tl.where(kv_mask, qk, float("-inf"))
 
-        # QK^T: [block_size]
-        qk = tl.sum(q_vec[None, :] * k_vals, axis=1) * sm_scale
-        qk = tl.where(kv_mask, qk, float("-inf"))
+            # Online softmax update
+            m_new = tl.maximum(m_i, tl.max(qk, axis=0))
+            alpha = tl.exp(m_i - m_new)
+            p = tl.exp(qk - m_new)
 
-        # Online softmax update
-        m_new = tl.maximum(m_i, tl.max(qk, axis=0))
-        alpha = tl.exp(m_i - m_new)
-        p = tl.exp(qk - m_new)
+            l_i = l_i * alpha + tl.sum(p, axis=0)
 
-        l_i = l_i * alpha + tl.sum(p, axis=0)
+            # Load V
+            v_base = physical_block * (kv_num_heads * block_size * head_dim) + kv_head_id * (block_size * head_dim)
+            v_ptrs = v_base + kv_range[:, None] * head_dim + offs_d[None, :]
+            v_vals = tl.load(value_cache_ptr + v_ptrs, mask=kv_mask[:, None] & d_mask[None, :], other=0.0).to(
+                tl.float32
+            )
 
-        # Load V
-        v_base = physical_block * (kv_num_heads * block_size * head_dim) + kv_head_id * (block_size * head_dim)
-        v_ptrs = v_base + kv_range[:, None] * head_dim + offs_d[None, :]
-        v_vals = tl.load(value_cache_ptr + v_ptrs, mask=kv_mask[:, None] & d_mask[None, :], other=0.0).to(tl.float32)
+            # Update accumulator: acc = acc * alpha + p @ V
+            acc = acc * alpha + tl.sum(p[:, None] * v_vals, axis=0)
 
-        # Update accumulator: acc = acc * alpha + p @ V
-        acc = acc * alpha + tl.sum(p[:, None] * v_vals, axis=0)
-
-        m_i = m_new
+            m_i = m_new
 
     # Store partial output and LSE
     # partial_out: [batch_size, num_heads, num_kv_splits, head_dim]
@@ -697,65 +695,65 @@ def v100_extend_attention_kernel(
 
     for kv_iter in range(total_kv_iters):
         kv_start = kv_iter * BLOCK_N
-        if kv_start >= kv_len:
-            break
+        if kv_start < kv_len:
+            kv_range = kv_start + tl.arange(0, BLOCK_N)
+            kv_valid = kv_range < kv_len
 
-        kv_range = kv_start + tl.arange(0, BLOCK_N)
-        kv_valid = kv_range < kv_len
+            # Map kv positions to block cache
+            kv_block_idx = kv_range // block_size
+            kv_block_offset = kv_range % block_size
 
-        # Map kv positions to block cache
-        kv_block_idx = kv_range // block_size
-        kv_block_offset = kv_range % block_size
+            # Load physical block numbers
+            bt_ptrs = block_tables_ptr + pid_batch * max_blocks_per_seq + kv_block_idx
+            physical_blocks = tl.load(bt_ptrs, mask=kv_valid, other=0)
 
-        # Load physical block numbers
-        bt_ptrs = block_tables_ptr + pid_batch * max_blocks_per_seq + kv_block_idx
-        physical_blocks = tl.load(bt_ptrs, mask=kv_valid, other=0)
+            # Load K: [BLOCK_N, BLOCK_D]
+            k_base = (
+                physical_blocks[:, None] * (kv_num_heads * block_size * head_dim)
+                + kv_head_id * (block_size * head_dim)
+                + kv_block_offset[:, None] * head_dim
+                + offs_d[None, :]
+            )
+            k_vals = tl.load(key_cache_ptr + k_base, mask=kv_valid[:, None] & d_mask[None, :], other=0.0).to(
+                tl.float32
+            )
 
-        # Load K: [BLOCK_N, BLOCK_D]
-        k_base = (
-            physical_blocks[:, None] * (kv_num_heads * block_size * head_dim)
-            + kv_head_id * (block_size * head_dim)
-            + kv_block_offset[:, None] * head_dim
-            + offs_d[None, :]
-        )
-        k_vals = tl.load(key_cache_ptr + k_base, mask=kv_valid[:, None] & d_mask[None, :], other=0.0).to(tl.float32)
+            # QK^T: [BLOCK_M, BLOCK_N]
+            qk = tl.dot(q_tile, tl.trans(k_vals)) * sm_scale
 
-        # QK^T: [BLOCK_M, BLOCK_N] — use element-wise broadcast multiply + reduce for SM70
-        # q_tile: [BLOCK_M, BLOCK_D], k_vals: [BLOCK_N, BLOCK_D]
-        # qk[m, n] = sum_d(q_tile[m, d] * k_vals[n, d]) * sm_scale
-        qk = tl.dot(q_tile, tl.trans(k_vals)) * sm_scale
+            # Apply causal mask
+            if is_causal:
+                q_positions = q_pos_base + offs_m
+                causal_mask = q_positions[:, None] >= kv_range[None, :]
+                qk = tl.where(causal_mask & kv_valid[None, :], qk, float("-inf"))
+            else:
+                qk = tl.where(kv_valid[None, :], qk, float("-inf"))
 
-        # Apply causal mask
-        if is_causal:
-            q_positions = q_pos_base + offs_m
-            causal_mask = q_positions[:, None] >= kv_range[None, :]
-            qk = tl.where(causal_mask & kv_valid[None, :], qk, float("-inf"))
-        else:
-            qk = tl.where(kv_valid[None, :], qk, float("-inf"))
+            # Also mask out invalid query positions
+            qk = tl.where(m_mask[:, None], qk, float("-inf"))
 
-        # Also mask out invalid query positions
-        qk = tl.where(m_mask[:, None], qk, float("-inf"))
+            # Online softmax
+            m_new = tl.maximum(m_i, tl.max(qk, axis=1))
+            alpha = tl.exp(m_i - m_new)
+            p = tl.exp(qk - m_new[:, None])
 
-        # Online softmax
-        m_new = tl.maximum(m_i, tl.max(qk, axis=1))
-        alpha = tl.exp(m_i - m_new)
-        p = tl.exp(qk - m_new[:, None])
+            l_i = l_i * alpha + tl.sum(p, axis=1)
 
-        l_i = l_i * alpha + tl.sum(p, axis=1)
+            # Load V: [BLOCK_N, BLOCK_D]
+            v_base = (
+                physical_blocks[:, None] * (kv_num_heads * block_size * head_dim)
+                + kv_head_id * (block_size * head_dim)
+                + kv_block_offset[:, None] * head_dim
+                + offs_d[None, :]
+            )
+            v_vals = tl.load(value_cache_ptr + v_base, mask=kv_valid[:, None] & d_mask[None, :], other=0.0).to(
+                tl.float32
+            )
 
-        # Load V: [BLOCK_N, BLOCK_D]
-        v_base = (
-            physical_blocks[:, None] * (kv_num_heads * block_size * head_dim)
-            + kv_head_id * (block_size * head_dim)
-            + kv_block_offset[:, None] * head_dim
-            + offs_d[None, :]
-        )
-        v_vals = tl.load(value_cache_ptr + v_base, mask=kv_valid[:, None] & d_mask[None, :], other=0.0).to(tl.float32)
+            # Update accumulator: acc = acc * alpha + P @ V
+            acc = acc * alpha[:, None] + tl.dot(p.to(tl.float32), v_vals)
 
-        # Update accumulator: acc = acc * alpha + P @ V
-        acc = acc * alpha[:, None] + tl.dot(p.to(tl.float32), v_vals)
-
-        m_i = m_new
+            m_i = m_new
 
     # Normalize
     acc = acc / l_i[:, None]
