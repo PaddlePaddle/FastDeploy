@@ -376,33 +376,38 @@ function install_python_only() {
 
   echo -e "${BLUE}[python-only]${NONE} Syncing Python files to installed site-packages..."
 
-  # Locate fastdeploy install directory: try pip show first, then fall back to site.getsitepackages
+  # Locate fastdeploy install directory (exclude cwd to avoid finding local source)
   INSTALL_DIR=$(${python} -c "
-import importlib.util, os
+import sys, os, importlib.util
+# Remove cwd and project root from sys.path to avoid finding local source
+project_root = os.path.abspath('.')
+sys.path = [p for p in sys.path if os.path.abspath(p) != project_root and p != '']
 spec = importlib.util.find_spec('fastdeploy')
 if spec and spec.submodule_search_locations:
     print(os.path.dirname(spec.submodule_search_locations[0]))
 " 2>/dev/null)
 
   if [ -z "$INSTALL_DIR" ] || [ ! -d "${INSTALL_DIR}/fastdeploy" ]; then
-    echo -e "${RED}[FAIL]${NONE} fastdeploy is not installed. Please run a full build first (BUILD_WHEEL=1) or pip install -e ."
+    echo -e "${RED}[FAIL]${NONE} fastdeploy is not installed. Please run a full build first (BUILD_WHEEL=1)."
     exit 1
   fi
   echo -e "${BLUE}[python-only]${NONE} Detected install directory: ${GREEN}${INSTALL_DIR}/fastdeploy/${NONE}"
 
   # Safety check: skip if target is the same as source (e.g. editable install or misconfigured env)
   SRC_REAL=$(cd fastdeploy && pwd -P)
-  DST_REAL=$(cd ${INSTALL_DIR}/fastdeploy && pwd -P)
-  if [ "$SRC_REAL" = "$DST_REAL" ]; then
-    echo -e "${GREEN}[SKIP]${NONE} Source and target are the same directory: ${SRC_REAL}"
-    echo -e "${GREEN}[SKIP]${NONE} No sync needed (you may be using an editable install or running from site-packages)."
-    return 0
+  if [ -d "${INSTALL_DIR}/fastdeploy" ]; then
+    DST_REAL=$(cd ${INSTALL_DIR}/fastdeploy && pwd -P)
+    if [ "$SRC_REAL" = "$DST_REAL" ]; then
+      echo -e "${GREEN}[SKIP]${NONE} Source and target are the same directory: ${SRC_REAL}"
+      echo -e "${GREEN}[SKIP]${NONE} No sync needed (you may be using an editable install or running from site-packages)."
+      return 0
+    fi
   fi
 
   # Sync only .py files, --delete removes .py files that no longer exist in source
   # --exclude='__pycache__/' must come before --include='*/' so rsync ignores __pycache__ entirely
   # --filter protects all non-.py files (.so, .txt, etc.) from being deleted
-  RSYNC_OUTPUT=$(rsync -av --exclude='__pycache__/' --include='*/' --include='*.py' --filter='P *.so' --filter='P *.txt' --filter='P *.sh' --filter='P *.h' --filter='P *.hpp' --exclude='*' --delete fastdeploy/ ${INSTALL_DIR}/fastdeploy/ 2>&1)
+  RSYNC_OUTPUT=$(rsync -avc --exclude='__pycache__/' --include='*/' --include='*.py' --filter='P *.so' --filter='P *.txt' --filter='P *.sh' --filter='P *.h' --filter='P *.hpp' --exclude='*' --delete fastdeploy/ ${INSTALL_DIR}/fastdeploy/ 2>&1)
   RSYNC_EXIT=$?
 
   if [ $RSYNC_EXIT -ne 0 ]; then
