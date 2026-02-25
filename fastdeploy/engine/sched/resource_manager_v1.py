@@ -830,6 +830,9 @@ class ResourceManagerV1(ResourceManager):
                         req_index += 1
                         continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                    if num_new_tokens == 0:
+                        req_index += 1
+                        continue
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
@@ -903,6 +906,12 @@ class ResourceManagerV1(ResourceManager):
                             continue
                         # Allocate blocks for the tokens that does not hit cache
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                        if num_new_tokens == 0:
+                            if self.config.cache_config.enable_prefix_caching:
+                                self._free_blocks(request)
+                            skip_requests.append(request)
+                            self.waiting.popleft()
+                            continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             request, num_new_block
@@ -956,6 +965,12 @@ class ResourceManagerV1(ResourceManager):
 
                         # Allocate blocks for the tokens that does not hit cache
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                        if num_new_tokens == 0:
+                            if self.config.cache_config.enable_prefix_caching:
+                                self._free_blocks(request)
+                            skip_requests.append(request)
+                            self.waiting.popleft()
+                            continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             request, num_new_block

@@ -1183,6 +1183,20 @@ def run_worker_proc() -> None:
     # Get fd_config
     fd_config = initialize_fd_config(args, ranks, local_rank)
 
+    # Enable batch-invariant mode for deterministic inference.
+    # This must happen in the worker process (where model forward runs),
+    # NOT at module import time, because enable_batch_invariant_mode()
+    # calls paddle.compat.enable_torch_proxy() which has global side effects
+    # that can break pytest collection and other import-time scenarios.
+    if envs.FD_DETERMINISTIC_MODE:
+        from fastdeploy.model_executor.layers.batch_invariant_ops import (
+            enable_batch_invariant_mode,
+            is_batch_invariant_mode_enabled,
+        )
+
+        if not is_batch_invariant_mode_enabled():
+            enable_batch_invariant_mode()
+
     # Create worker process
     if current_platform.is_iluvatar():
         from fastdeploy.worker.iluvatar_worker import IluvatarPaddleDisWorkerProc

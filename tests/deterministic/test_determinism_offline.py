@@ -40,26 +40,62 @@ Usage:
 
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ["FD_DETERMINISTIC_MODE"] = "1"  # Must be set before importing fastdeploy to enable batch_invariant_ops
-
 import pytest
 
 pytestmark = pytest.mark.gpu
-
-from fastdeploy import LLM, SamplingParams
 
 # Small model path for fast testing
 DEFAULT_MODEL_DIR = "./models"
 MODEL_NAME = "Qwen2-7B-Instruct"
 
+# Environment variable keys managed by fixtures
+_ENV_CUDA_VISIBLE_DEVICES = "CUDA_VISIBLE_DEVICES"
+_ENV_FD_DETERMINISTIC_MODE = "FD_DETERMINISTIC_MODE"
 
-@pytest.fixture(scope="function", autouse=True)
-def cleanup_env():
-    """Clean up environment variables before and after each test"""
+
+@pytest.fixture(scope="module", autouse=True)
+def _module_env():
+    """Set CUDA_VISIBLE_DEVICES and FD_DETERMINISTIC_MODE for the entire
+    module, then restore the original values when the module is done.
+
+    FD_DETERMINISTIC_MODE must be set *before* importing fastdeploy so that
+    batch-invariant ops are activated.  The fixture therefore also performs
+    the deferred import here.
+    """
+    old_cuda = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES)
+    old_det = os.environ.get(_ENV_FD_DETERMINISTIC_MODE)
+
+    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0")
+    os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
+
+    # Deferred import: fastdeploy must be imported *after* env vars are set
+    # so that batch-invariant ops are properly activated.
+    global LLM, SamplingParams  # noqa: PLW0603
+    from fastdeploy import LLM, SamplingParams
+
     yield
-    # Clean up FD_DETERMINISTIC_MODE after each test
-    os.environ.pop("FD_DETERMINISTIC_MODE", None)
+
+    # Restore original values
+    if old_cuda is None:
+        os.environ.pop(_ENV_CUDA_VISIBLE_DEVICES, None)
+    else:
+        os.environ[_ENV_CUDA_VISIBLE_DEVICES] = old_cuda
+
+    if old_det is None:
+        os.environ.pop(_ENV_FD_DETERMINISTIC_MODE, None)
+    else:
+        os.environ[_ENV_FD_DETERMINISTIC_MODE] = old_det
+
+
+@pytest.fixture(autouse=True)
+def _reset_deterministic_mode():
+    """Reset FD_DETERMINISTIC_MODE to '1' before each test and restore
+    the module-level value after the test, so individual tests that flip
+    the flag do not leak state to subsequent tests.
+    """
+    os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
+    yield
+    os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
 
 
 @pytest.fixture(scope="module")
@@ -70,8 +106,12 @@ def model_path():
 
 
 @pytest.fixture(scope="module")
-def llm(model_path):
-    """Initialize LLM model for offline inference"""
+def llm(model_path, _module_env):
+    """Initialize LLM model for offline inference.
+
+    Depends on ``_module_env`` to guarantee environment variables are set
+    and ``fastdeploy`` has been imported before we instantiate the model.
+    """
     return LLM(
         model=model_path,
         tensor_parallel_size=1,
@@ -89,8 +129,6 @@ def test_deterministic_mode_same_prompt(llm):
 
     Uses explicit seed for reproducibility.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     prompt = "请用一句话介绍人工智能。"
     sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=50, seed=123)
 
@@ -113,8 +151,6 @@ def test_deterministic_mode_batch_invariance(llm):
 
     Uses explicit seed for reproducibility.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     prompt = "Python 是一种什么编程语言？"
     sampling_params = SamplingParams(temperature=0.5, max_tokens=40, seed=456)
 
@@ -148,8 +184,6 @@ def test_deterministic_mode_different_batch_sizes(llm):
 
     Uses explicit seed for reproducibility.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     prompt = "什么是机器学习？"
     sampling_params = SamplingParams(temperature=0.5, max_tokens=30, seed=789)
 
@@ -177,8 +211,6 @@ def test_deterministic_with_explicit_seed(llm):
     This test should PASS with or without FD_DETERMINISTIC_MODE
     as long as the same explicit seed is used.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     prompt = "请列举三种水果。"
     sampling_params = SamplingParams(temperature=0.7, seed=42, max_tokens=30)
 
@@ -283,8 +315,6 @@ def test_deterministic_long_sequence_generation(llm):
 
     Note: This test takes longer due to the long sequence generation.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     # Use a prompt that encourages longer output
     prompt = "请详细介绍一下人工智能的发展历史，包括主要里程碑和关键技术突破。"
     sampling_params = SamplingParams(
@@ -337,8 +367,6 @@ def test_deterministic_long_sequence_different_temperatures(llm):
 
     Uses explicit seed for reproducibility.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     prompt = "请解释机器学习的基本概念和应用场景."
 
     # Test different temperatures with long sequence generation
@@ -373,8 +401,6 @@ def test_deterministic_long_prompt(llm):
 
     Uses explicit seed for reproducibility.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     # Create a long prompt by repeating a pattern
     base_text = "这是一段关于自然语言处理的说明。"
     long_prompt = (base_text * 50) + "请总结以上内容。"
@@ -403,8 +429,6 @@ def test_deterministic_extreme_top_p(llm):
 
     Tests boundary cases: top_p=0.0 (greedy) and top_p=1.0 (no filtering)
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     prompt = "什么是神经网络？"
 
     for top_p in [0.0, 1.0]:
@@ -424,8 +448,6 @@ def test_deterministic_extreme_temperature(llm):
 
     Tests boundary cases: temperature=0.0 (greedy) and high temperature
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     prompt = "简述机器学习的三个主要分支。"
 
     for temp in [0.0, 1.5]:
@@ -448,8 +470,6 @@ def test_deterministic_parameter_combinations(llm):
     Tests interactions between temperature and top_p at different combinations
     to ensure determinism holds across code paths.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     prompt = "什么是强化学习？"
 
     # Test various parameter combinations
@@ -482,8 +502,6 @@ def test_deterministic_max_tokens_one(llm):
 
     Tests boundary case with minimal generation.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     prompt = "天空是什么颜色的？"
     sampling_params = SamplingParams(temperature=0.1, max_tokens=1, seed=700)
 
@@ -507,8 +525,6 @@ def test_deterministic_early_stopping_with_stop(llm):
 
     Tests that early stopping with stop sequences is deterministic.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     prompt = "请列举三种颜色："
     sampling_params = SamplingParams(
         temperature=0.7,
@@ -538,8 +554,6 @@ def test_deterministic_special_characters(llm):
 
     Tests handling of unicode, emojis, and special symbols.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     prompts_with_special_chars = [
         "What is AI? 🔬🧠",  # Emoji
         "数学公式：E = mc²",  # Superscript
@@ -564,8 +578,6 @@ def test_deterministic_multi_language(llm):
 
     Tests that determinism holds across different languages.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     multi_lang_prompts = [
         ("中文", "请用一句话介绍人工智能。"),
         ("English", "What is artificial intelligence in one sentence?"),
@@ -597,8 +609,6 @@ def test_deterministic_multi_turn_conversation(llm):
     which is critical for chat applications.
     Uses llm.chat() which supports message-list input with chat template.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     sampling_params = SamplingParams(temperature=0.5, max_tokens=50, seed=1100)
 
     # First turn
@@ -649,8 +659,6 @@ def test_deterministic_state_isolation_between_prompts(llm):
     Validates that running different prompts doesn't affect the
     determinism of subsequent runs of the same prompt.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     target_prompt = "什么是深度学习？"
     sampling_params = SamplingParams(temperature=0.5, max_tokens=30, seed=1200)
 
@@ -683,8 +691,6 @@ def test_deterministic_interleaved_prompts(llm):
     Validates that interleaved runs of different prompts don't affect
     each other's determinism.
     """
-    os.environ["FD_DETERMINISTIC_MODE"] = "1"
-
     prompt_a = "什么是Python？"
     prompt_b = "什么是JavaScript？"
 

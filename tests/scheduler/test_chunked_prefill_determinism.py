@@ -1012,7 +1012,13 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
 
     # ========== Existing corner case tests (adapted for real Request class) ==========
     def test_corner_case_empty_request(self):
-        """Test corner case: empty request and zero tokens"""
+        """Test corner case: empty request and zero tokens
+
+        - Empty prompt (need_prefill == 0) and completed prefill (num_computed == need_prefill)
+          violate the entry invariant (num_new_tokens > 0), so they must trigger AssertionError.
+        - token_budget == 0 is a legitimate scenario (budget exhausted by earlier requests),
+          _get_num_new_tokens should return 0 gracefully.
+        """
         print("\n=== Testing corner case (empty request / zero tokens) ===")
 
         split_kv_size = 16
@@ -1021,26 +1027,30 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         config = TestConfig()
         rm = self._create_resource_manager(config)
 
-        # Test 1: need_prefill_tokens = 0
+        # Test 1: need_prefill_tokens = 0 -> assert fires (entry invariant violation)
         request = create_test_request("empty_req", [], 0)
-        result = rm._get_num_new_tokens(request, token_budget=50)
-        self.assertEqual(result, 0, "Empty request should return 0")
-        print(f"  [PASS] empty prompt -> result={result}")
+        with self.assertRaises(AssertionError):
+            rm._get_num_new_tokens(request, token_budget=50)
+        print("  [PASS] empty prompt -> AssertionError raised")
 
-        # Test 2: num_computed == need_prefill (already completed)
+        # Test 2: num_computed == need_prefill (already completed) -> assert fires
         request = create_test_request("completed_req", list(range(100)), 100)
-        result = rm._get_num_new_tokens(request, token_budget=50)
-        self.assertEqual(result, 0, "Completed request should return 0")
-        print(f"  [PASS] prompt_len=100, num_computed=100 -> result={result}")
+        with self.assertRaises(AssertionError):
+            rm._get_num_new_tokens(request, token_budget=50)
+        print("  [PASS] prompt_len=100, num_computed=100 -> AssertionError raised")
 
-        # Test 3: token_budget = 0
+        # Test 3: token_budget = 0 -> legitimate, should return 0
         request = create_test_request("zero_budget_req", list(range(100)), 0)
         result = rm._get_num_new_tokens(request, token_budget=0)
         self.assertEqual(result, 0, "Zero budget should return 0")
         print(f"  [PASS] token_budget=0 -> result={result}")
 
     def test_corner_case_state_inconsistency(self):
-        """Test corner case: num_computed > need_prefill (state inconsistency)"""
+        """Test corner case: num_computed > need_prefill (state inconsistency)
+
+        This is an invalid state that should not happen in normal operation.
+        The assert guards the entry invariant, so it must raise AssertionError.
+        """
         print("\n=== Testing corner case (state inconsistency) ===")
 
         split_kv_size = 16
@@ -1049,15 +1059,11 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         config = TestConfig()
         rm = self._create_resource_manager(config)
 
-        # Test: num_computed > need_prefill_tokens
-        # This is an invalid state that should not happen in normal operation.
-        # The implementation should handle it gracefully by returning 0.
+        # Test: num_computed > need_prefill_tokens -> assert fires
         request = create_test_request("inconsistent_req", list(range(50)), 100)
-        result = rm._get_num_new_tokens(request, token_budget=50)
-
-        # Should return 0 for this edge case
-        self.assertEqual(result, 0, "Should return 0 for completed/inconsistent state")
-        print(f"  [PASS] prompt_len=50, num_computed=100 (inconsistent) -> result={result}")
+        with self.assertRaises(AssertionError):
+            rm._get_num_new_tokens(request, token_budget=50)
+        print("  [PASS] prompt_len=50, num_computed=100 (inconsistent) -> AssertionError raised")
 
     def test_corner_case_minimum_split_size(self):
         """Test corner case: split_kv_size = 1 (minimum alignment unit)"""
@@ -1190,6 +1196,72 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         self.assertLessEqual(result, max_possible, "Should not overflow beyond prompt_len")
         self.assertGreaterEqual(result, 0)
         print(f"  [PASS] Very large budget (1000000) -> result={result}")
+
+    # ========== NEW: Tests for num_new_tokens == 0 caller guard ==========
+    def test_deterministic_return_zero_budget_below_boundary(self):
+        """Test deterministic mode returns 0 when budget < tokens_to_boundary.
+
+        This is the primary legitimate return-0 path: when current_pos is
+        not aligned and token_budget is too small to reach the next boundary,
+        _get_num_new_tokens returns 0 so the caller can skip this request.
+        """
+        print("\n=== Testing deterministic return 0 (budget < boundary) ===")
+
+        split_kv_size = 16
+        self._enable_deterministic(split_kv_size)
+
+        config = TestConfig()
+        rm = self._create_resource_manager(config)
+
+        test_cases = [
+            # (num_computed, tokens_to_boundary, token_budget)
+            # current_pos=10, next_boundary=16, need 6 tokens, budget=5
+            (list(range(100)), 10, 5),
+            # current_pos=1, next_boundary=16, need 15 tokens, budget=3
+            (list(range(100)), 1, 3),
+            # current_pos=17, next_boundary=32, need 15 tokens, budget=14
+            (list(range(100)), 17, 14),
+        ]
+
+        for prompt_ids, num_computed, token_budget in test_cases:
+            request = create_test_request("det_zero_req", prompt_ids, num_computed)
+            result = rm._get_num_new_tokens(request, token_budget)
+            self.assertEqual(
+                result,
+                0,
+                f"Expected 0: computed={num_computed}, budget={token_budget}, "
+                f"split_kv_size={split_kv_size}, got={result}",
+            )
+            print(
+                f"  [PASS] computed={num_computed}, budget={token_budget} " f"-> result=0 (can't reach next boundary)"
+            )
+
+    def test_token_budget_zero_returns_zero(self):
+        """Test that token_budget=0 returns 0 in both deterministic and non-deterministic modes.
+
+        This happens when earlier requests in the running queue exhaust the
+        budget. The running queue loop has no `token_budget > 0` guard before
+        calling _get_num_new_tokens, so budget=0 is a realistic input.
+        """
+        print("\n=== Testing token_budget=0 returns 0 ===")
+
+        config = TestConfig()
+
+        # Non-deterministic mode
+        self._disable_deterministic()
+        rm = self._create_resource_manager(config)
+        request = create_test_request("budget0_ndet", list(range(100)), 0)
+        result = rm._get_num_new_tokens(request, token_budget=0)
+        self.assertEqual(result, 0, "token_budget=0 should return 0 (non-deterministic)")
+        print("  [PASS] non-deterministic, token_budget=0 -> result=0")
+
+        # Deterministic mode
+        self._enable_deterministic(16)
+        rm = self._create_resource_manager(config)
+        request = create_test_request("budget0_det", list(range(100)), 0)
+        result = rm._get_num_new_tokens(request, token_budget=0)
+        self.assertEqual(result, 0, "token_budget=0 should return 0 (deterministic)")
+        print("  [PASS] deterministic, token_budget=0 -> result=0")
 
     def _create_resource_manager(self, config):
         """Create resource manager for testing"""

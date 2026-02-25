@@ -78,16 +78,6 @@ except ImportError:
     pass
 # TODO(tangbinhan): remove this code
 
-# Deterministic mode: auto-enable batch invariant ops
-if envs.FD_DETERMINISTIC_MODE:
-    from fastdeploy.model_executor.layers.batch_invariant_ops import (
-        enable_batch_invariant_mode,
-        is_batch_invariant_mode_enabled,
-    )
-
-    if not is_batch_invariant_mode_enabled():
-        enable_batch_invariant_mode()
-
 __version__ = current_package_version()
 
 # Version check mechanism: Check if the Paddle version used at runtime matches the one used during FastDeploy compilation

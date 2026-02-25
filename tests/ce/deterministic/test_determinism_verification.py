@@ -77,7 +77,7 @@ def extract_md5_from_log(log_file: str, request_id: str) -> list[str]:
     md5_values = []
     try:
         with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
-            pattern = rf"DETERMINISM-MD5-REQ\] chatcmpl-{request_id}_[0-]+ \| decode"
+            pattern = rf"DETERMINISM-MD5-REQ\] chatcmpl-{request_id}_[0-9]+ \| decode"
             for line in f:
                 if re.search(pattern, line):
                     match = re.search(r"hidden_states_md5=([a-f0-9]+)", line)
