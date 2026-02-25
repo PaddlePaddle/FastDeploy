@@ -275,8 +275,10 @@ class TestPaddleAttentionDeterminism(unittest.TestCase):
         is_equal = paddle.equal(result_bi, result_normal).all().item()
         print(f"  Batch invariant vs Normal: equal={is_equal}")
 
-        if not is_equal:
-            print("  Note: Batch invariant mode may not affect Paddle's native SDPA")
+        self.assertTrue(
+            is_equal,
+            "Batch invariant mode should not change results of Paddle's native SDPA",
+        )
 
     def test_attention_with_different_head_configs(self):
         """Test determinism with different head configurations"""
