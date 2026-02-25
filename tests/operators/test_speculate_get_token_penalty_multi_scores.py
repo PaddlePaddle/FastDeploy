@@ -130,6 +130,7 @@ def ban_bad_words(
 
 def speculate_get_token_penalty_multi_scores_ref(
     token_ids_all,
+    prompt_lens,
     logits,
     penalty_scores,
     frequency_score,

@@ -80,11 +80,11 @@ class TestSetValueByFlagsAndIdxRandom(unittest.TestCase):
         prompt_lens = paddle.to_tensor(self.prompt_lens_np)
         set_value_by_flags_and_idx(
             pre_ids_all,
-            prompt_lens,
             paddle.to_tensor(self.input_ids_np),
             paddle.to_tensor(self.seq_lens_this_time_np),
             paddle.to_tensor(self.seq_lens_encoder_np),
             paddle.to_tensor(self.seq_lens_decoder_np),
+            prompt_lens,
             paddle.to_tensor(self.step_idx_np),
             paddle.to_tensor(self.stop_flags_np),
         )
@@ -98,6 +98,7 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
     def test_encoder_update(self):
         # encoder case: seq_lens_encoder > 0, use last token
         pre_ids_all = np.zeros((1, 5), dtype="int64")
+        prompt_lens_np = np.zeros((1, 1), dtype="int64")
         input_ids = np.array([[11, 12, 13]], dtype="int64")
         seq_lens_this_time = np.array([3], dtype="int32")
         seq_lens_encoder = np.array([3], dtype="int32")
@@ -109,14 +110,14 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
             pre_ids_all, input_ids, seq_lens_this_time, seq_lens_encoder, seq_lens_decoder, step_idx, stop_flags
         )
         pre_ids_all_tensor = paddle.to_tensor(pre_ids_all)
-        prompt_lens = paddle.to_tensor(self.prompt_lens_np)
+        prompt_lens = paddle.to_tensor(prompt_lens_np)
         set_value_by_flags_and_idx(
             pre_ids_all_tensor,
-            prompt_lens,
             paddle.to_tensor(input_ids),
             paddle.to_tensor(seq_lens_this_time),
             paddle.to_tensor(seq_lens_encoder),
             paddle.to_tensor(seq_lens_decoder),
+            prompt_lens,
             paddle.to_tensor(step_idx),
             paddle.to_tensor(stop_flags),
         )
@@ -125,6 +126,7 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
     def test_decoder_update(self):
         # decoder case: seq_lens_encoder=0, use first token
         pre_ids_all = np.zeros((1, 4), dtype="int64")
+        prompt_lens_np = np.zeros((1, 1), dtype="int64")
         input_ids = np.array([[101, 102]], dtype="int64")
         seq_lens_this_time = np.array([2], dtype="int32")
         seq_lens_encoder = np.array([0], dtype="int32")
@@ -136,14 +138,14 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
             pre_ids_all, input_ids, seq_lens_this_time, seq_lens_encoder, seq_lens_decoder, step_idx, stop_flags
         )
         pre_ids_all_tensor = paddle.to_tensor(pre_ids_all)
-        prompt_lens = paddle.to_tensor(self.prompt_lens_np)
+        prompt_lens = paddle.to_tensor(prompt_lens_np)
         set_value_by_flags_and_idx(
             pre_ids_all_tensor,
-            prompt_lens,
             paddle.to_tensor(input_ids),
             paddle.to_tensor(seq_lens_this_time),
             paddle.to_tensor(seq_lens_encoder),
             paddle.to_tensor(seq_lens_decoder),
+            prompt_lens,
             paddle.to_tensor(step_idx),
             paddle.to_tensor(stop_flags),
         )
@@ -152,6 +154,7 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
     def test_stop_flag(self):
         # stop_flags=True, no update
         pre_ids_all = np.zeros((1, 3), dtype="int64")
+        prompt_lens_np = np.zeros((1, 1), dtype="int64")
         input_ids = np.array([[5, 6, 7]], dtype="int64")
         seq_lens_this_time = np.array([3], dtype="int32")
         seq_lens_encoder = np.array([3], dtype="int32")
@@ -163,14 +166,14 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
             pre_ids_all, input_ids, seq_lens_this_time, seq_lens_encoder, seq_lens_decoder, step_idx, stop_flags
         )
         pre_ids_all_tensor = paddle.to_tensor(pre_ids_all)
-        prompt_lens = paddle.to_tensor(self.prompt_lens_np)
+        prompt_lens = paddle.to_tensor(prompt_lens_np)
         set_value_by_flags_and_idx(
             pre_ids_all_tensor,
-            prompt_lens,
             paddle.to_tensor(input_ids),
             paddle.to_tensor(seq_lens_this_time),
             paddle.to_tensor(seq_lens_encoder),
             paddle.to_tensor(seq_lens_decoder),
+            prompt_lens,
             paddle.to_tensor(step_idx),
             paddle.to_tensor(stop_flags),
         )
@@ -179,6 +182,7 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
     def test_skip_when_both_len_zero(self):
         # seq_lens_encoder=0 and seq_lens_decoder=0, skip
         pre_ids_all = np.zeros((1, 3), dtype="int64")
+        prompt_lens_np = np.zeros((1, 1), dtype="int64")
         input_ids = np.array([[8, 9, 10]], dtype="int64")
         seq_lens_this_time = np.array([3], dtype="int32")
         seq_lens_encoder = np.array([0], dtype="int32")
@@ -188,14 +192,14 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
 
         expected = pre_ids_all.copy()
         pre_ids_all_tensor = paddle.to_tensor(pre_ids_all)
-        prompt_lens = paddle.to_tensor(self.prompt_lens_np)
+        prompt_lens = paddle.to_tensor(prompt_lens_np)
         set_value_by_flags_and_idx(
             pre_ids_all_tensor,
-            prompt_lens,
             paddle.to_tensor(input_ids),
             paddle.to_tensor(seq_lens_this_time),
             paddle.to_tensor(seq_lens_encoder),
             paddle.to_tensor(seq_lens_decoder),
+            prompt_lens,
             paddle.to_tensor(step_idx),
             paddle.to_tensor(stop_flags),
         )
@@ -204,6 +208,7 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
     def test_step_idx_negative(self):
         # step_idx < 0, skip
         pre_ids_all = np.zeros((1, 3), dtype="int64")
+        prompt_lens_np = np.zeros((1, 1), dtype="int64")
         input_ids = np.array([[42, 43, 44]], dtype="int64")
         seq_lens_this_time = np.array([3], dtype="int32")
         seq_lens_encoder = np.array([2], dtype="int32")
@@ -213,14 +218,14 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
 
         expected = pre_ids_all.copy()
         pre_ids_all_tensor = paddle.to_tensor(pre_ids_all)
-        prompt_lens = paddle.to_tensor(self.prompt_lens_np)
+        prompt_lens = paddle.to_tensor(prompt_lens_np)
         set_value_by_flags_and_idx(
             pre_ids_all_tensor,
-            prompt_lens,
             paddle.to_tensor(input_ids),
             paddle.to_tensor(seq_lens_this_time),
             paddle.to_tensor(seq_lens_encoder),
             paddle.to_tensor(seq_lens_decoder),
+            prompt_lens,
             paddle.to_tensor(step_idx),
             paddle.to_tensor(stop_flags),
         )

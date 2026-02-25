@@ -64,6 +64,9 @@ class MockConfig:
     cache_config = CacheConfig()
     parallel_config = ParallelConfig()
 
+    def get_max_chunk_tokens(self):
+        return 8192
+
 
 class MockTask:
     def __init__(self):

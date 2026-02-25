@@ -82,6 +82,11 @@ def create_mock_config():
     fd_config.structured_outputs_config = structured_outputs_config
     fd_config.pad_to = 8
 
+    def get_max_chunk_tokens():
+        return 100
+
+    fd_config.get_max_chunk_tokens = get_max_chunk_tokens
+
     return fd_config
 
 
