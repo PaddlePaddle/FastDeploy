@@ -39,10 +39,44 @@ bash build.sh 2 /root/paddlejob/workspace/env_run/gongweibao/fdenv/bin/python
 `setup.py` 中使用 `find_packages()` + `package_dir={"fastdeploy": "fastdeploy/"}` 配置，所有 Python 文件安装到 `site-packages/fastdeploy/` 下，目录结构与源码一致，无重映射。因此可以直接用 rsync 将源码目录下的 `.py` 文件同步到安装目录：
 
 ```bash
-rsync -av --include='*/' --include='*.py' --exclude='*' fastdeploy/ ${INSTALL_DIR}/fastdeploy/
+rsync -av --exclude='__pycache__/' --include='*/' --include='*.py' \
+  --filter='P *.so' --filter='P *.txt' --filter='P *.sh' --filter='P *.h' --filter='P *.hpp' \
+  --exclude='*' --delete fastdeploy/ ${INSTALL_DIR}/fastdeploy/
 ```
 
-rsync 只同步 `.py` 文件，不影响 `.so`、`.txt` 等已编译产物。
+- `--exclude='__pycache__/'`：放在最前面，完全跳过 `__pycache__` 目录（避免 "cannot delete non-empty directory" 警告）
+- `--include='*.py'` + `--exclude='*'`：只同步 `.py` 文件
+- `--filter='P ...'`：保护 `.so`、`.txt` 等已编译产物不被删除
+- `--delete`：删除源码中已不存在的 `.py` 文件，保持 site-packages 与源码一致
+
+## 同步摘要
+
+虽然 rsync 会扫描所有 `.py` 文件，但只有**内容有变化**的文件才会实际传输。同步完成后，脚本会输出变更摘要，列出本次实际更新和删除的文件：
+
+```
+======== Sync Summary ========
+[UPDATED] 3 file(s) synced:
+  fastdeploy/config.py
+  fastdeploy/engine/engine.py
+  fastdeploy/entrypoints/api_server.py
+[TOTAL] 506 Python files tracked, target: /path/to/site-packages/fastdeploy/
+==============================
+```
+
+如果没有任何文件变化，则显示：
+
+```
+======== Sync Summary ========
+[NO CHANGE] All 506 Python files are already up-to-date.
+==============================
+```
+
+如果源码中删除了某个 `.py` 文件，site-packages 中对应文件也会被删除，并在摘要中显示：
+
+```
+[DELETED] 1 file(s) removed from site-packages:
+  fastdeploy/old_module.py
+```
 
 ## 防御机制
 

@@ -379,13 +379,21 @@ function install_python_only() {
   echo -e "${BLUE}[python-only]${NONE} Detected install directory: ${GREEN}${INSTALL_DIR}/fastdeploy/${NONE}"
 
   # Sync only .py files, --delete removes .py files that no longer exist in source
+  # --exclude='__pycache__/' must come before --include='*/' so rsync ignores __pycache__ entirely
   # --filter protects all non-.py files (.so, .txt, etc.) from being deleted
-  rsync -av --include='*/' --include='*.py' --filter='P *.so' --filter='P *.txt' --filter='P *.sh' --filter='P *.h' --filter='P *.hpp' --filter='P __pycache__/' --exclude='*' --delete fastdeploy/ ${INSTALL_DIR}/fastdeploy/
+  RSYNC_OUTPUT=$(rsync -av --exclude='__pycache__/' --include='*/' --include='*.py' --filter='P *.so' --filter='P *.txt' --filter='P *.sh' --filter='P *.h' --filter='P *.hpp' --exclude='*' --delete fastdeploy/ ${INSTALL_DIR}/fastdeploy/ 2>&1)
+  RSYNC_EXIT=$?
 
-  if [ $? -ne 0 ]; then
+  if [ $RSYNC_EXIT -ne 0 ]; then
+    echo "$RSYNC_OUTPUT"
     echo -e "${RED}[FAIL]${NONE} rsync failed"
     exit 1
   fi
+
+  # Extract actually transferred .py files from rsync verbose output
+  # rsync -v only lists files that were actually transferred (changed), not unchanged ones
+  CHANGED_FILES=$(echo "$RSYNC_OUTPUT" | grep '\.py$' || true)
+  DELETED_FILES=$(echo "$RSYNC_OUTPUT" | grep '^deleting .*\.py$' || true)
 
   # Defensive check: verify setup.py package mapping hasn't changed
   PKG_NAME=$(${python} -c "
@@ -407,7 +415,26 @@ print(dist)
   fi
 
   PY_COUNT=$(find fastdeploy/ -name '*.py' | wc -l)
-  echo -e "${GREEN}[SUCCESS]${NONE} Synced ${PY_COUNT} Python files to ${INSTALL_DIR}/fastdeploy/"
+
+  # Print summary
+  echo ""
+  echo -e "${BLUE}======== Sync Summary ========${NONE}"
+  if [ -n "$CHANGED_FILES" ]; then
+    CHANGED_COUNT=$(echo "$CHANGED_FILES" | wc -l)
+    echo -e "${GREEN}[UPDATED]${NONE} ${CHANGED_COUNT} file(s) synced:"
+    echo "$CHANGED_FILES" | sed 's/^/  /'
+  fi
+  if [ -n "$DELETED_FILES" ]; then
+    DEL_COUNT=$(echo "$DELETED_FILES" | wc -l)
+    echo -e "${YELLOW}[DELETED]${NONE} ${DEL_COUNT} file(s) removed from site-packages:"
+    echo "$DELETED_FILES" | sed 's/^deleting /  /'
+  fi
+  if [ -z "$CHANGED_FILES" ] && [ -z "$DELETED_FILES" ]; then
+    echo -e "${GREEN}[NO CHANGE]${NONE} All ${PY_COUNT} Python files are already up-to-date."
+  else
+    echo -e "${BLUE}[TOTAL]${NONE} ${PY_COUNT} Python files tracked, target: ${INSTALL_DIR}/fastdeploy/"
+  fi
+  echo -e "${BLUE}==============================${NONE}"
 }
 
 function version_info() {
