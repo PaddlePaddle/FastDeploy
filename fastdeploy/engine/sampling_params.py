@@ -73,6 +73,7 @@ class SamplingParams:
             can complete the sequence.
         max_tokens: Maximum number of tokens to generate per output sequence.
         reasoning_max_tokens: Maximum number of tokens to generate for reasoning per output sequence.
+        response_max_tokens: Maximum number of tokens to generate for response per output sequence.
         min_tokens: Minimum number of tokens to generate per output sequence
             before EOS or stop_token_ids can be generated
         logprobs: Number of log probabilities to return per output token.
@@ -99,6 +100,7 @@ class SamplingParams:
     stop_seqs_len: Optional[int] = None
     max_tokens: Optional[int] = None
     reasoning_max_tokens: Optional[int] = None
+    response_max_tokens: Optional[int] = None
     min_tokens: int = 1
     logprobs: Optional[int] = None
     prompt_logprobs: Optional[int] = None
@@ -176,6 +178,11 @@ class SamplingParams:
                 if getattr(req, "reasoning_max_tokens", None) is not None
                 else cls.reasoning_max_tokens
             ),
+            response_max_tokens=(
+                getattr(req, "response_max_tokens", None)
+                if getattr(req, "response_max_tokens", None) is not None
+                else cls.response_max_tokens
+            ),
             min_tokens=(
                 getattr(req, "min_tokens", None) if getattr(req, "min_tokens", None) is not None else cls.min_tokens
             ),
@@ -232,6 +239,7 @@ class SamplingParams:
         stop_token_ids=None,
         max_tokens=None,
         reasoning_max_tokens=None,
+        response_max_tokens=None,
         min_tokens=1,
         logprobs=None,
         prompt_logprobs=None,
@@ -256,6 +264,7 @@ class SamplingParams:
             stop_token_ids=stop_token_ids,
             max_tokens=max_tokens if max_tokens is not None else 8192,
             reasoning_max_tokens=reasoning_max_tokens,
+            response_max_tokens=response_max_tokens,
             min_tokens=min_tokens,
             logprobs=logprobs,
             prompt_logprobs=prompt_logprobs,
@@ -298,6 +307,7 @@ class SamplingParams:
 
         if self.reasoning_max_tokens is not None and self.reasoning_max_tokens > self.max_tokens:
             self.reasoning_max_tokens = self.max_tokens
+        # response_max_tokens TODO
 
         if self.min_tokens < 0:
             raise ValueError(f"min_tokens must be greater than or equal to 0, " f"got {self.min_tokens}.")
