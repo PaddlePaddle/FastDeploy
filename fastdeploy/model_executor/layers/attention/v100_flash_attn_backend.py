@@ -21,10 +21,11 @@ This backend is designed for NVIDIA V100 GPUs (SM70) which do not support:
 
 It uses Triton kernels (SM70 compatible) for:
 1. Position computation (v100_compute_positions)
-2. Fused RoPE application (v100_fused_rope)
-3. KV cache write (v100_write_kv_cache)
-4. Decode attention via 2-stage flash-decoding (v100_decode_attention)
-5. Prefill attention via tiled flash attention (v100_extend_attention)
+2. KV cache write (v100_write_kv_cache)
+3. Decode attention via 2-stage flash-decoding (v100_decode_attention)
+4. Prefill attention via tiled flash attention (v100_extend_attention)
+
+RoPE is applied using Paddle native vectorized ops for better performance at small token counts.
 
 Falls back to pure Python/Paddle implementations when Triton is unavailable.
 """
@@ -53,7 +54,6 @@ if TYPE_CHECKING:
 try:
     from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
         v100_compute_positions,
-        v100_fused_rope,
         v100_paged_attention,
         v100_write_kv_cache,
     )
@@ -612,12 +612,9 @@ class V100FlashAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_this_time,
         )
 
-        # Step 3: Apply RoPE in-place (Kernel 2)
+        # Step 3: Apply RoPE using Paddle native ops
         if forward_meta.rotary_embs is not None:
-            # Make contiguous copies for in-place Triton kernel
-            q_reshaped = q_reshaped.contiguous()
-            k_reshaped = k_reshaped.contiguous()
-            v100_fused_rope(
+            q_reshaped, k_reshaped = self._python_apply_rope_to_qk(
                 q_reshaped,
                 k_reshaped,
                 forward_meta.rotary_embs,
