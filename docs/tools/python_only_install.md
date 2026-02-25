@@ -12,6 +12,11 @@ bash build.sh 1 python false "[90]"
 ```
 Python-only 模式依赖已安装的 `.so` 编译产物，首次使用前需要确保这些产物已存在于 site-packages 中。
 
+**如果未做过完整安装，`build.sh 2` 会报错退出：**
+```
+[FAIL] fastdeploy is not installed. Please run a full build first (BUILD_WHEEL=1).
+```
+
 ## 使用方式
 
 ```bash
@@ -39,19 +44,24 @@ bash build.sh 2 /root/paddlejob/workspace/env_run/gongweibao/fdenv/bin/python
 `setup.py` 中使用 `find_packages()` + `package_dir={"fastdeploy": "fastdeploy/"}` 配置，所有 Python 文件安装到 `site-packages/fastdeploy/` 下，目录结构与源码一致，无重映射。因此可以直接用 rsync 将源码目录下的 `.py` 文件同步到安装目录：
 
 ```bash
-rsync -av --exclude='__pycache__/' --include='*/' --include='*.py' \
+rsync -avc --exclude='__pycache__/' --include='*/' --include='*.py' \
   --filter='P *.so' --filter='P *.txt' --filter='P *.sh' --filter='P *.h' --filter='P *.hpp' \
   --exclude='*' --delete fastdeploy/ ${INSTALL_DIR}/fastdeploy/
 ```
 
+- `--checksum`（`-c`）：基于文件内容校验判断是否需要同步，而非时间戳。确保安装后首次运行 `build.sh 2` 时，只有内容真正不同的文件才会被传输
 - `--exclude='__pycache__/'`：放在最前面，完全跳过 `__pycache__` 目录（避免 "cannot delete non-empty directory" 警告）
 - `--include='*.py'` + `--exclude='*'`：只同步 `.py` 文件
 - `--filter='P ...'`：保护 `.so`、`.txt` 等已编译产物不被删除
 - `--delete`：删除源码中已不存在的 `.py` 文件，保持 site-packages 与源码一致
 
+### 安装目录定位
+
+脚本通过 `importlib.util.find_spec('fastdeploy')` 定位安装目录。为避免在项目根目录执行时 Python 把当前目录（即源码）误识别为安装位置，脚本会从 `sys.path` 中排除当前工作目录，确保只在 site-packages 中查找。
+
 ## 同步摘要
 
-虽然 rsync 会扫描所有 `.py` 文件，但只有**内容有变化**的文件才会实际传输。同步完成后，脚本会输出变更摘要，列出本次实际更新和删除的文件：
+rsync 使用 `--checksum` 模式，只有**内容有变化**的文件才会实际传输。同步完成后，脚本会输出变更摘要，列出本次实际更新和删除的文件：
 
 ```
 ======== Sync Summary ========
@@ -79,6 +89,10 @@ rsync -av --exclude='__pycache__/' --include='*/' --include='*.py' \
 ```
 
 ## 防御机制
+
+### 未安装检测
+
+如果 site-packages 中找不到已安装的 fastdeploy（从未执行过 `build.sh 1`），脚本会直接报错退出，避免在缺少 `.so` 编译产物的情况下产生不完整的安装。
 
 ### 同目录检测
 

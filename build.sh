@@ -367,16 +367,7 @@ function build_and_install() {
   echo -e "${BLUE}[build]${NONE} ${GREEN}build fastdeploy wheel success${NONE}\n"
 }
 
-function install_python_only() {
-  # Check rsync is available
-  if ! command -v rsync &>/dev/null; then
-    echo -e "${RED}[FAIL]${NONE} 'rsync' is not installed. Please install it first (e.g. apt-get install rsync / yum install rsync)."
-    exit 1
-  fi
-
-  echo -e "${BLUE}[python-only]${NONE} Syncing Python files to installed site-packages..."
-
-  # Locate fastdeploy install directory (exclude cwd to avoid finding local source)
+function find_install_dir() {
   INSTALL_DIR=$(${python} -c "
 import sys, os, importlib.util
 # Remove cwd and project root from sys.path to avoid finding local source
@@ -392,19 +383,22 @@ if spec and spec.submodule_search_locations:
     exit 1
   fi
   echo -e "${BLUE}[python-only]${NONE} Detected install directory: ${GREEN}${INSTALL_DIR}/fastdeploy/${NONE}"
+}
 
-  # Safety check: skip if target is the same as source (e.g. editable install or misconfigured env)
+function check_same_directory() {
   SRC_REAL=$(cd fastdeploy && pwd -P)
   if [ -d "${INSTALL_DIR}/fastdeploy" ]; then
     DST_REAL=$(cd ${INSTALL_DIR}/fastdeploy && pwd -P)
     if [ "$SRC_REAL" = "$DST_REAL" ]; then
       echo -e "${GREEN}[SKIP]${NONE} Source and target are the same directory: ${SRC_REAL}"
       echo -e "${GREEN}[SKIP]${NONE} No sync needed (you may be using an editable install or running from site-packages)."
-      return 0
+      return 1
     fi
   fi
+  return 0
+}
 
-  # Sync only .py files, --delete removes .py files that no longer exist in source
+function sync_python_files() {
   # --exclude='__pycache__/' must come before --include='*/' so rsync ignores __pycache__ entirely
   # --filter protects all non-.py files (.so, .txt, etc.) from being deleted
   RSYNC_OUTPUT=$(rsync -avc --exclude='__pycache__/' --include='*/' --include='*.py' --filter='P *.so' --filter='P *.txt' --filter='P *.sh' --filter='P *.h' --filter='P *.hpp' --exclude='*' --delete fastdeploy/ ${INSTALL_DIR}/fastdeploy/ 2>&1)
@@ -416,12 +410,11 @@ if spec and spec.submodule_search_locations:
     exit 1
   fi
 
-  # Extract actually transferred .py files from rsync verbose output
-  # rsync -v only lists files that were actually transferred (changed), not unchanged ones
   CHANGED_FILES=$(echo "$RSYNC_OUTPUT" | grep '\.py$' || true)
   DELETED_FILES=$(echo "$RSYNC_OUTPUT" | grep '^deleting .*\.py$' || true)
+}
 
-  # Defensive check: verify setup.py package mapping hasn't changed
+function verify_package_mapping() {
   PKG_NAME=$(${python} -c "
 import importlib.metadata
 dist = importlib.metadata.packages_distributions()['fastdeploy'][0]
@@ -439,10 +432,11 @@ print(dist)
       exit 1
     fi
   fi
+}
 
+function print_sync_summary() {
   PY_COUNT=$(find fastdeploy/ -name '*.py' | wc -l)
 
-  # Print summary
   echo ""
   echo -e "${BLUE}======== Sync Summary ========${NONE}"
   if [ -n "$CHANGED_FILES" ]; then
@@ -461,6 +455,21 @@ print(dist)
     echo -e "${BLUE}[TOTAL]${NONE} ${PY_COUNT} Python files tracked, target: ${INSTALL_DIR}/fastdeploy/"
   fi
   echo -e "${BLUE}==============================${NONE}"
+}
+
+function install_python_only() {
+  if ! command -v rsync &>/dev/null; then
+    echo -e "${RED}[FAIL]${NONE} 'rsync' is not installed. Please install it first (e.g. apt-get install rsync / yum install rsync)."
+    exit 1
+  fi
+
+  echo -e "${BLUE}[python-only]${NONE} Syncing Python files to installed site-packages..."
+
+  find_install_dir
+  check_same_directory || return 0
+  sync_python_files
+  verify_package_mapping
+  print_sync_summary
 }
 
 function version_info() {
