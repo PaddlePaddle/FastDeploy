@@ -151,6 +151,7 @@ def limit_thinking_content_length(
             step_idx,
             limit_think_status,
             stop_flags,
+            eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
             think_end_id,
             line_break_id,
         )
@@ -192,6 +193,7 @@ def speculate_limit_thinking_content_length(
             limit_think_status,
             accept_num,
             stop_flags,
+            eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
             think_end_id,
             line_break_id,
         )
