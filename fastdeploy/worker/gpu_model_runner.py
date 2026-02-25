@@ -897,7 +897,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
-        raise NotImplementedError("GPUs only support KVCACHE SCHEDULER V1 in versions 2.5 and above.")
+        raise NotImplementedError("GPUs only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")
 
     def get_input_length_list(
         self, num_tokens: int, batch_size: int, expected_decode_len: int, capture_prefill: bool = False
