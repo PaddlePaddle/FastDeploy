@@ -267,6 +267,7 @@ class ModelConfig:
             setattr(self, "freq_allocation", self.rope_scaling["mrope_section"][0])
 
         self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
+        self.think_start_id = args.get("think_start_id", -1)
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
