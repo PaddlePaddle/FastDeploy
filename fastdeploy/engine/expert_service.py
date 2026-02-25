@@ -197,9 +197,12 @@ class ExpertService:
             for p in self.cache_manager_processes:
                 self.llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
-                    os.killpg(p.pid, signal.SIGTERM)
-                except:
-                    pass
+                    pgid = os.getpgid(p.pid)
+                    os.killpg(pgid, signal.SIGTERM)
+                except Exception as e:
+                    console_logger.error(
+                        f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
+                    )
 
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
             self.zmq_server.close()
@@ -227,3 +230,8 @@ def start_data_parallel_service(
         t_deamon.join()
     except Exception as e:
         llm_logger.exception(f"Expert service failed to start: {e}, {str(traceback.format_exc())}")
+    finally:
+        try:
+            expert_service._exit_sub_services()
+        except Exception:
+            pass

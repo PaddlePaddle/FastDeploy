@@ -68,7 +68,10 @@ class Ernie4_5Processor(BaseDataProcessor):
                                    {self.tokenizer.bos_token_id}, \
                                    eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
         )
-        from paddleformers.trl.llm_utils import get_eos_token_id
+        try:
+            from paddleformers.trl.llm_utils import get_eos_token_id
+        except Exception:
+            from paddleformers.cli.utils.llm_utils import get_eos_token_id
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
         self.eos_token_id_len = len(self.eos_token_ids)
@@ -107,21 +110,13 @@ class Ernie4_5Processor(BaseDataProcessor):
         # processing prompt_token_ids
         if request.prompt_token_ids is None or len(request.prompt_token_ids) == 0:
             if request.prompt is not None:
-                # prompt = request.prompt if request.prompt is not None else request.messages[0]
                 prompt = request.prompt
-                assert isinstance(prompt, str) or (
-                    isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
-                ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
-
-                if isinstance(prompt, list):  # if prompt is a token id list
-                    request.prompt_token_ids = prompt
-                else:
-                    tokens = self.tokenizer.tokenize(prompt)
-                    token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-                    request.prompt_token_ids = token_ids
-                    data_processor_logger.debug(
-                        f"request_ids: {request.request_id}, prompt: {prompt}, tokens: {tokens}, token_ids: {token_ids}"
-                    )
+                tokens = self.tokenizer.tokenize(prompt)
+                token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+                request.prompt_token_ids = token_ids
+                data_processor_logger.debug(
+                    f"request_ids: {request.request_id}, prompt: {prompt}, tokens: {tokens}, token_ids: {token_ids}"
+                )
             elif request.messages is not None:
                 task = request.to_dict()
                 chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
