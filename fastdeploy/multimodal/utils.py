@@ -46,3 +46,29 @@ def process_transparency(image):
         pass
 
     return ImageOps.exif_transpose(image)
+
+def set_processor_kwargs(func):
+    """
+    set processor kwargs by requests
+    """
+    def wrapper(self, *args, **kwargs):
+        original_kwargs = {}
+        for k, v in kwargs.items():
+            if hasattr(self, k.replace("video_", "")):
+                k = k.replace("video_", "")
+            if hasattr(self, k):
+                if k.endswith("min_pixels"):
+                    assert getattr(self, k) <= v, f"{k} should be larger than its initial value"
+                if k.endswith("max_pixels"):
+                    assert getattr(self, k) >= v, f"{k} should be smaller than its initial value"
+                original_kwargs[k] = getattr(self, k)
+                setattr(self, k, v)
+
+        ret = func(self, *args, **kwargs)
+
+        for k, v in original_kwargs.items():
+            setattr(self, k, v)
+            
+        return ret
+    return wrapper
+

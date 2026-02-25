@@ -719,6 +719,7 @@ class ChatCompletionRequest(BaseModel):
     guided_regex: Optional[str] = None
     guided_choice: Optional[list[str]] = None
     guided_grammar: Optional[str] = None
+    mm_processor_kwargs: Optional[dict] = None
 
     return_token_ids: Optional[bool] = None
     prompt_token_ids: Optional[List[int]] = None

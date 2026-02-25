@@ -2394,7 +2394,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
-
+            
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
                     self.share_inputs["pre_ids"],

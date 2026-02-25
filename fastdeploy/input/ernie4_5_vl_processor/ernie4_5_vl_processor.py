@@ -218,12 +218,13 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
             request["bad_words_token_ids"] = bad_words_token_ids
 
+        processor_kwargs = self._parse_processor_kwargs(request.get("mm_processor_kwargs"))
         if request.get("prompt_token_ids"):
             messages = request.get("messages")
             if messages:
                 self._check_mm_limits(messages)
             request.setdefault("enable_thinking", True)
-            outputs = self.ernie4_5_processor.prompt_token_ids2outputs(request)
+            outputs = self.ernie4_5_processor.prompt_token_ids2outputs(request, **processor_kwargs)
         elif request.get("prompt"):
             multimodal_data = request.get("multimodal_data")
             if multimodal_data is None:
@@ -232,7 +233,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
             request["prompt_tokens"] = request.get("prompt")
-            outputs = self.ernie4_5_processor.text2ids(request["prompt"], images, videos)
+            outputs = self.ernie4_5_processor.text2ids(request["prompt"], images, videos, **processor_kwargs)
         elif request.get("messages"):
             messages = request["messages"]
             self._check_mm_limits(messages)
@@ -244,7 +245,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
                             request[k] = v
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-            outputs = self.ernie4_5_processor.request2ids(request)
+            outputs = self.ernie4_5_processor.request2ids(request, **processor_kwargs)
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
