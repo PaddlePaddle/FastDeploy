@@ -682,6 +682,23 @@ def test_chat_with_response_max_tokens(openai_client):
     assert completion_tokens + reasoning_tokens == total_tokens
     assert completion_tokens <= response_max_tokens + 1
 
+    # Test disable-thinking case: response_max_tokens limits tokens when thinking is off
+    response_max_tokens = 3
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": False},
+            "response_max_tokens": response_max_tokens,
+        },
+        stream=False,
+        max_tokens=10,
+    )
+    assert response.choices[0].message.reasoning_content == ""
+    assert "</think>" not in response.choices[0].message.content
+    assert response.usage.completion_tokens <= response_max_tokens
+
 
 def test_profile_reset_block_num():
     """测试profile reset_block_num功能，与baseline diff不能超过5%"""
