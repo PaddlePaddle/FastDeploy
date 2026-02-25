@@ -14,6 +14,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+function show_help() {
+  echo "Usage: bash build.sh [BUILD_WHEEL] [PYTHON] [FD_CPU_USE_BF16] [FD_BUILDING_ARCS] [FD_USE_PRECOMPILED] [FD_COMMIT_ID]"
+  echo ""
+  echo "BUILD_WHEEL modes:"
+  echo "  0  Build custom ops only (no wheel packaging or pip install)"
+  echo "  1  Full build: compile C++ ops + build wheel + pip install (default)"
+  echo "  2  Python-only: sync .py files to site-packages (skip C++ compilation)"
+  echo ""
+  echo "Arguments:"
+  echo "  PYTHON            Python executable (default: python)"
+  echo "  FD_CPU_USE_BF16   Enable CPU BF16 ops: true/false (default: false)"
+  echo "  FD_BUILDING_ARCS  Target CUDA architectures, e.g. \"[80, 90, 100]\""
+  echo "  FD_USE_PRECOMPILED  Use precompiled ops: 0=source, 1=precompiled (default: 0)"
+  echo "  FD_COMMIT_ID      Commit ID for precompiled wheel lookup"
+  echo ""
+  echo "Examples:"
+  echo "  bash build.sh 1 python false \"[90]\"   # Full build for SM90"
+  echo "  bash build.sh 2 python                 # Python-only quick install"
+  echo "  bash build.sh 0 python false \"[80,90]\" # Build ops only"
+  exit 0
+}
+
+if [ "${1}" = "-h" ] || [ "${1}" = "--help" ]; then
+  show_help
+fi
+
 BUILD_WHEEL=${1:-1}
 PYTHON_VERSION=${2:-"python"}
 export python=$PYTHON_VERSION
@@ -341,6 +367,49 @@ function build_and_install() {
   echo -e "${BLUE}[build]${NONE} ${GREEN}build fastdeploy wheel success${NONE}\n"
 }
 
+function install_python_only() {
+  echo -e "${BLUE}[python-only]${NONE} Syncing Python files to installed site-packages..."
+
+  # Get site-packages path (more reliable than pip show Location)
+  INSTALL_DIR=$(${python} -c "import site; print(site.getsitepackages()[0])" 2>/dev/null)
+  if [ $? -ne 0 ] || [ -z "$INSTALL_DIR" ] || [ ! -d "${INSTALL_DIR}/fastdeploy" ]; then
+    echo -e "${RED}[FAIL]${NONE} fastdeploy is not installed in site-packages. Please run a full build first (BUILD_WHEEL=1)."
+    exit 1
+  fi
+  echo -e "${BLUE}[python-only]${NONE} Detected install directory: ${GREEN}${INSTALL_DIR}/fastdeploy/${NONE}"
+
+  # Sync only .py files, --delete removes .py files that no longer exist in source
+  # --filter protects all non-.py files (.so, .txt, etc.) from being deleted
+  rsync -av --include='*/' --include='*.py' --filter='P *.so' --filter='P *.txt' --filter='P *.sh' --filter='P *.h' --filter='P *.hpp' --filter='P __pycache__/' --exclude='*' --delete fastdeploy/ ${INSTALL_DIR}/fastdeploy/
+
+  if [ $? -ne 0 ]; then
+    echo -e "${RED}[FAIL]${NONE} rsync failed"
+    exit 1
+  fi
+
+  # Defensive check: verify setup.py package mapping hasn't changed
+  PKG_NAME=$(${python} -c "
+import importlib.metadata
+dist = importlib.metadata.packages_distributions()['fastdeploy'][0]
+print(dist)
+" 2>/dev/null) || true
+
+  if [ -n "$PKG_NAME" ]; then
+    OUTSIDE_FILES=$(${python} -m pip show -f ${PKG_NAME} 2>/dev/null \
+      | awk '/^Files:/{found=1; next} found && /\.py$/' \
+      | grep -v '^\.\.\/' | grep -v '^  fastdeploy/' | grep -v '^  __pycache__' || true)
+    if [ -n "$OUTSIDE_FILES" ]; then
+      echo -e "${YELLOW}[WARNING]${NONE} Detected .py files installed outside fastdeploy/ directory:"
+      echo "$OUTSIDE_FILES"
+      echo -e "${YELLOW}[WARNING]${NONE} setup.py package mapping may have changed. Please run a full build (BUILD_WHEEL=1) instead."
+      exit 1
+    fi
+  fi
+
+  PY_COUNT=$(find fastdeploy/ -name '*.py' | wc -l)
+  echo -e "${GREEN}[SUCCESS]${NONE} Synced ${PY_COUNT} Python files to ${INSTALL_DIR}/fastdeploy/"
+}
+
 function version_info() {
   output_file="fastdeploy/version.txt"
   fastdeploy_git_commit_id=$(git rev-parse HEAD)
@@ -452,10 +521,12 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
   echo -e "${GREEN}wheel install success${NONE}\n"
 
   trap : 0
-else
+elif [ "$BUILD_WHEEL" -eq 0 ]; then
   init
   build_custom_ops
   version_info
   rm -rf $BUILD_DIR $EGG_DIR
   rm -rf $OPS_SRC_DIR/$BUILD_DIR $OPS_SRC_DIR/$EGG_DIR
+elif [ "$BUILD_WHEEL" -eq 2 ]; then
+  install_python_only
 fi
