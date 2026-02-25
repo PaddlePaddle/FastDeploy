@@ -92,6 +92,13 @@ class TestCacheTransferManager(unittest.TestCase):
         self.addCleanup(patcher2.stop)
 
         # --------------------------
+        # mock threading.Thread
+        # --------------------------
+        patcher_thread = patch("fastdeploy.cache_manager.cache_transfer_manager.threading.Thread")
+        patcher_thread.start()
+        self.addCleanup(patcher_thread.stop)
+
+        # --------------------------
         # mock _init_cpu_cache 和 _init_gpu_cache
         # --------------------------
         patcher3 = patch.object(CacheTransferManager, "_init_cpu_cache", lambda self, args: None)
