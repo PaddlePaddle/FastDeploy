@@ -27,8 +27,7 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
         get_padding_offset,
-        limit_thinking_content_length_v1,
-        limit_thinking_content_length_v2,
+        limit_thinking_content_length,
         save_output,
         set_stop_value_multi_ends,
         step_paddle,
@@ -52,12 +51,10 @@ elif current_platform.is_dcu():
 elif current_platform.is_maca():
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,
-        limit_thinking_content_length_v1,
-        limit_thinking_content_length_v2,
+        limit_thinking_content_length,
         save_output,
         set_stop_value_multi_ends,
-        speculate_limit_thinking_content_length_v1,
-        speculate_limit_thinking_content_length_v2,
+        speculate_limit_thinking_content_length,
         step_paddle,
         update_inputs,
         update_inputs_v1,
@@ -86,10 +83,8 @@ else:
         step_reschedule,
         update_inputs_v1,
         speculate_step_reschedule,
-        limit_thinking_content_length_v1,
-        limit_thinking_content_length_v2,
-        speculate_limit_thinking_content_length_v1,
-        speculate_limit_thinking_content_length_v2,
+        limit_thinking_content_length,
+        speculate_limit_thinking_content_length,
     )
 
 from fastdeploy.model_executor.entropy_utils import (
@@ -105,85 +100,6 @@ from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferD
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
-
-
-def limit_thinking_content_length(
-    limit_strategy: str,
-    sampled_token_ids: paddle.Tensor,
-    max_think_lens: paddle.Tensor,
-    step_idx: paddle.Tensor,
-    limit_think_status: paddle.Tensor,
-    stop_flags: paddle.Tensor,
-    eos_token_ids: paddle.Tensor,
-    think_end_id: int,
-    line_break_id: int = None,
-):
-    if limit_strategy == "</think>":
-        # for ernie-45-vl
-        limit_thinking_content_length_v1(
-            sampled_token_ids,
-            max_think_lens,
-            step_idx,
-            limit_think_status,
-            stop_flags,
-            eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
-            think_end_id,
-        )
-    elif limit_strategy == "\n</think>\n\n":
-        # for ernie-x1
-        assert line_break_id > 0
-        limit_thinking_content_length_v2(
-            sampled_token_ids,
-            max_think_lens,
-            step_idx,
-            limit_think_status,
-            stop_flags,
-            think_end_id,
-            line_break_id,
-        )
-    else:
-        raise NotImplementedError(f"Not support {limit_strategy=} for limit thinking content length.")
-
-
-def speculate_limit_thinking_content_length(
-    limit_strategy: str,
-    accept_tokens: paddle.Tensor,
-    max_think_lens: paddle.Tensor,
-    step_idx: paddle.Tensor,
-    limit_think_status: paddle.Tensor,
-    accept_num: paddle.Tensor,
-    stop_flags: paddle.Tensor,
-    eos_token_ids: paddle.Tensor,
-    think_end_id: int,
-    line_break_id: int = None,
-):
-    if limit_strategy == "</think>":
-        # for ernie-45-vl
-        speculate_limit_thinking_content_length_v1(
-            accept_tokens,
-            max_think_lens,
-            step_idx,
-            limit_think_status,
-            accept_num,
-            stop_flags,
-            eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
-            think_end_id,
-        )
-    elif limit_strategy == "\n</think>\n\n":
-        # for ernie-x1
-        assert line_break_id > 0
-        speculate_limit_thinking_content_length_v2(
-            accept_tokens,
-            max_think_lens,
-            step_idx,
-            limit_think_status,
-            accept_num,
-            stop_flags,
-            think_end_id,
-            line_break_id,
-        )
-    else:
-        raise NotImplementedError(f"Not support {limit_strategy=} for limit thinking content length.")
 
 
 def pre_process(
@@ -327,22 +243,23 @@ def post_process_normal(
     skip_save_output: bool = False,
     async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
-    line_break_id: int = -1,
+    splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
     routing_replay_manager: RoutingReplayManager = None,
 ):
     """Post-processing steps after completing a single token generation."""
     if think_end_id > 0:
         limit_thinking_content_length(
-            limit_strategy=envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR,
-            sampled_token_ids=sampler_output.sampled_token_ids,
-            max_think_lens=share_inputs["max_think_lens"],
-            step_idx=share_inputs["step_idx"],
-            limit_think_status=share_inputs["limit_think_status"],
-            stop_flags=share_inputs["stop_flags"],
-            eos_token_ids=share_inputs["eos_token_id"],
-            think_end_id=think_end_id,
-            line_break_id=line_break_id,
+            sampler_output.sampled_token_ids,
+            share_inputs["max_think_lens"],
+            share_inputs["max_reply_lens"],
+            share_inputs["step_idx"],
+            share_inputs["limit_think_status"],
+            share_inputs["stop_flags"],
+            share_inputs["eos_token_id"],
+            share_inputs["inject_token_ids"],
+            think_end_id,
+            splitwise_role_is_decode,
         )
     # 1. Set stop value
     paddle.assign(
@@ -482,22 +399,23 @@ def post_process_specualate(
     save_each_rank: bool = False,
     skip_save_output: bool = False,
     think_end_id: int = -1,
-    line_break_id: int = -1,
+    splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
     routing_replay_manager: RoutingReplayManager = None,
 ):
     if think_end_id > 0:
         speculate_limit_thinking_content_length(
-            limit_strategy=envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR,
-            accept_tokens=share_inputs["accept_tokens"],
-            max_think_lens=share_inputs["max_think_lens"],
-            step_idx=share_inputs["step_idx"],
-            limit_think_status=share_inputs["limit_think_status"],
-            accept_num=share_inputs["accept_num"],
-            stop_flags=share_inputs["stop_flags"],
-            eos_token_ids=share_inputs["eos_token_id"],
-            think_end_id=think_end_id,
-            line_break_id=line_break_id,
+            share_inputs["accept_tokens"],
+            share_inputs["max_think_lens"],
+            share_inputs["max_reply_lens"],
+            share_inputs["step_idx"],
+            share_inputs["limit_think_status"],
+            share_inputs["accept_num"],
+            share_inputs["stop_flags"],
+            share_inputs["eos_token_id"],
+            share_inputs["inject_token_ids"],
+            think_end_id,
+            splitwise_role_is_decode,
         )
     speculate_set_stop_value_multi_seqs(
         model_output.accept_tokens,
@@ -606,6 +524,7 @@ def post_process(
     async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
     line_break_id: int = -1,
+    splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
     routing_replay_manager: RoutingReplayManager = None,
 ) -> None:
@@ -632,7 +551,7 @@ def post_process(
                 save_each_rank,
                 skip_save_output,
                 think_end_id,
-                line_break_id,
+                splitwise_role_is_decode,
                 enable_entropy,
                 routing_replay_manager,
             )
@@ -647,7 +566,7 @@ def post_process(
                 skip_save_output,
                 async_output_queue,
                 think_end_id,
-                line_break_id,
+                splitwise_role_is_decode,
                 enable_entropy,
                 routing_replay_manager,
             )

@@ -663,6 +663,7 @@ class ChatCompletionRequest(BaseModel):
     chat_template_kwargs: Optional[dict] = None
     chat_template: Optional[str] = None
     reasoning_max_tokens: Optional[int] = None
+    response_max_tokens: Optional[int] = None
     structural_tag: Optional[str] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
     guided_regex: Optional[str] = None
