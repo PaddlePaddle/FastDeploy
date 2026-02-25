@@ -35,9 +35,7 @@ from conftest import (
     cleanup_resources,
     get_model_path,
     get_port_num,
-    restore_moe_quant_env,
     restore_pd_ep_env,
-    setup_moe_quant_env,
     setup_pd_ep_env,
     stop_processes,
 )
@@ -215,8 +213,6 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     decode_env = os.environ.copy()
     decode_env["FD_LOG_DIR"] = "log_decode"
     decode_env["XPU_VISIBLE_DEVICES"] = "4,5,6,7"
-    if "FD_XPU_MOE_FFN_QUANT_TYPE_MAP" in decode_env:
-        del decode_env["FD_XPU_MOE_FFN_QUANT_TYPE_MAP"]
 
     decode_cmd = [
         "python",
@@ -280,9 +276,6 @@ def test_pd_separation():
     # 设置PD分离环境变量
     original_env = setup_pd_ep_env()
 
-    # 设置MOE量化环境变量
-    original_env_moe = setup_moe_quant_env()
-
     # 检查RDMA网卡是否配置成功
     rdma_nics = os.environ.get("KVCACHE_RDMA_NICS", "")
     if not rdma_nics:
@@ -334,7 +327,6 @@ def test_pd_separation():
         stop_processes()
 
         # 恢复环境变量
-        restore_moe_quant_env(original_env_moe)
         restore_pd_ep_env(original_env)
 
 
