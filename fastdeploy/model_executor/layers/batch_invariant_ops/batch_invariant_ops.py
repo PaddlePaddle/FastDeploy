@@ -483,7 +483,7 @@ def addmm_batch_invariant(
     to minimize the effection on performance
     """
     if alpha == 0:
-        return beta * input
+        return paddle.broadcast_to(beta * input, [x.shape[0], y.shape[1]])
     matmul_result = matmul_persistent(a=x, b=y, bias=input * beta / alpha)
     result = alpha * matmul_result
     return result
