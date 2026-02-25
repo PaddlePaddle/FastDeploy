@@ -475,7 +475,7 @@ def v100_decode_attn_stage1(
         + pid_head * (num_kv_splits * head_dim)
         + pid_split * head_dim
     )
-    tl.store(partial_out_ptr + out_base + offs_d, acc, mask=d_mask)
+    tl.store(partial_out_ptr + out_base + offs_d, acc / l_i, mask=d_mask)
 
     # LSE = m_i + log(l_i)
     lse = m_i + tl.log(l_i)
