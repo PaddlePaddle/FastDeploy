@@ -5,19 +5,19 @@ Reference: test_batch_invariant.py. Verifies whether determinism works correctly
 
 Usage:
     # Step 1: Start server with determinism disabled
-    bash ./tests/determinitic/start_fd.sh 0
+    bash ./tests/deterministic/start_fd.sh 0
 
     # Step 2: Run non-deterministic test (expected: results differ)
-    python ./tests/determinitic/test_determinism_verification.py --phase non-deterministic
+    python ./tests/deterministic/test_determinism_verification.py --phase non-deterministic
 
     # Step 3: Stop server
     bash fastdeploy/stop.sh
 
     # Step 4: Start server with determinism enabled and logging ON
-    bash ./tests/determinitic/start_fd.sh 1 1
+    bash ./tests/deterministic/start_fd.sh 1 1
 
     # Step 5: Run deterministic test (expected: results consistent)
-    python ./tests/determinitic/test_determinism_verification.py --phase deterministic
+    python ./tests/deterministic/test_determinism_verification.py --phase deterministic
 
 Arguments:
     --phase {deterministic,non-deterministic}
