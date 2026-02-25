@@ -99,8 +99,13 @@ class SuffixProposer(Proposer):
         self.context_tokens[idx, :] = -1
         self.context_tokens[idx, : len(prompt_token_ids)] = prompt_array
         self._update_request_mapping(idx, req_id)
-        self.suffix_cache.start_request(req_id, prompt_array)
-        spec_logger.debug(f"[SuffixDecoding] Start request {req_id}.")
+        if req_id not in self.suffix_cache.active_requests:
+            if req_id in self.suffix_cache.cached_requests:
+                # Reset the suffix cache for current req_id
+                self.suffix_cache.evict_cached_response(req_id)
+                spec_logger.debug(f"[SuffixDecoding] Reset suffix cache for request {req_id}.")
+            self.suffix_cache.start_request(req_id, prompt_array)
+            spec_logger.debug(f"[SuffixDecoding] Start request {req_id}.")
 
     def stop_request(self, req_id: str):
         """
