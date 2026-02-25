@@ -58,6 +58,7 @@ class MockModelConfig:
     rope_theta = 1000
     partial_rotary_factor = 0.5
     architectures = ["mock"]
+    mm_max_tokens_per_item = None
 
 
 class MockCacheConfig:
@@ -90,6 +91,9 @@ class MockFDConfig:
     model_config = MockModelConfig()
     cache_config = MockCacheConfig()
     speculative_config = MockSpecaulativeConfig()
+
+    def get_max_chunk_tokens(self, mm_max_tokens_per_item=None):
+        return 8192
 
 
 class MockAttentionBackend:
