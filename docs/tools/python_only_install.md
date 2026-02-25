@@ -80,6 +80,17 @@ rsync -av --exclude='__pycache__/' --include='*/' --include='*.py' \
 
 ## 防御机制
 
+### 同目录检测
+
+rsync 前会比较源目录和目标目录的真实路径（`pwd -P`，解析软链接）。如果两者相同（例如 editable install 或从 site-packages 目录运行脚本），脚本会跳过同步并提示：
+
+```
+[SKIP] Source and target are the same directory: /path/to/fastdeploy
+[SKIP] No sync needed (you may be using an editable install or running from site-packages).
+```
+
+### 安装映射校验
+
 同步完成后，脚本会自动校验 `setup.py` 的安装映射是否发生变化：通过 `pip show -f` 获取已安装文件列表，检查是否有 `.py` 文件被安装到 `fastdeploy/` 目录之外。如果检测到映射变化，脚本会报错并提示执行完整编译。
 
 ## 适用场景

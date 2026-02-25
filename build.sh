@@ -378,6 +378,15 @@ function install_python_only() {
   fi
   echo -e "${BLUE}[python-only]${NONE} Detected install directory: ${GREEN}${INSTALL_DIR}/fastdeploy/${NONE}"
 
+  # Safety check: skip if target is the same as source (e.g. editable install or misconfigured env)
+  SRC_REAL=$(cd fastdeploy && pwd -P)
+  DST_REAL=$(cd ${INSTALL_DIR}/fastdeploy && pwd -P)
+  if [ "$SRC_REAL" = "$DST_REAL" ]; then
+    echo -e "${GREEN}[SKIP]${NONE} Source and target are the same directory: ${SRC_REAL}"
+    echo -e "${GREEN}[SKIP]${NONE} No sync needed (you may be using an editable install or running from site-packages)."
+    return 0
+  fi
+
   # Sync only .py files, --delete removes .py files that no longer exist in source
   # --exclude='__pycache__/' must come before --include='*/' so rsync ignores __pycache__ entirely
   # --filter protects all non-.py files (.so, .txt, etc.) from being deleted
