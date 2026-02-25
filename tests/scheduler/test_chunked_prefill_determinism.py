@@ -345,6 +345,7 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         import paddle
 
         from fastdeploy.model_executor.layers.attention.flash_attn_backend import (
+            FlashAttentionBackend,
             flash_attn_func,
             init_flash_attn_version,
         )
@@ -360,6 +361,15 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
         init_flash_attn_version(fa_version=current_fa_version)
 
         self._enable_deterministic(16)
+
+        # Verify FlashAttentionBackend can be constructed in deterministic mode
+        config = TestConfig()
+        _ = FlashAttentionBackend(
+            fd_config=config,
+            kv_num_heads=8,
+            num_heads=32,
+            head_dim=128,
+        )
 
         # Verify deterministic mode is enabled via environment variables
         from fastdeploy import envs
