@@ -28,6 +28,27 @@ class DeterministicLogger:
 
     def __init__(self, share_inputs):
         self.share_inputs = share_inputs
+        self._current_run_id = None
+        self._batch_counter = 0
+
+    def log_batch_start(self, model_forward_batch):
+        """Log batch start with run_id tracking and batch counting."""
+        current_run_id = None
+        for req in model_forward_batch or []:
+            if req is not None:
+                parts = req.request_id.split("_")
+                if len(parts) > 1:
+                    current_run_id = parts[-1]
+                    break
+        if current_run_id is not None and current_run_id != self._current_run_id:
+            self._current_run_id = current_run_id
+            self._batch_counter = 0
+
+        self._batch_counter += 1
+
+        det_logger.info(f"\n{'='*80}")
+        det_logger.info(f"[BATCH-START] Run_{self._current_run_id} Batch_{self._batch_counter}")
+        det_logger.info(f"{'='*80}\n")
 
     @staticmethod
     def _compute_tensor_md5(tensor, name="tensor", prefix=""):

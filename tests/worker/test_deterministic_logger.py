@@ -236,5 +236,70 @@ class TestLogDeterministicInput(unittest.TestCase):
         self.assertIn("req_id=idx_1", output)
 
 
+class TestLogBatchStart(unittest.TestCase):
+    def _make_logger(self):
+        return DeterministicLogger(share_inputs={})
+
+    def _make_req(self, request_id):
+        return Mock(request_id=request_id)
+
+    def test_logs_batch_start(self):
+        logger = self._make_logger()
+        batch = [self._make_req("prompt_0")]
+        with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
+            logger.log_batch_start(batch)
+        output = "\n".join(cm.output)
+        self.assertIn("[BATCH-START]", output)
+        self.assertIn("Run_0", output)
+        self.assertIn("Batch_1", output)
+
+    def test_batch_counter_increments(self):
+        logger = self._make_logger()
+        batch = [self._make_req("prompt_0")]
+        with self.assertLogs("fastdeploy.deterministic", level="INFO"):
+            logger.log_batch_start(batch)
+        with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
+            logger.log_batch_start(batch)
+        output = "\n".join(cm.output)
+        self.assertIn("Batch_2", output)
+
+    def test_run_id_change_resets_counter(self):
+        logger = self._make_logger()
+        batch_0 = [self._make_req("prompt_0")]
+        batch_1 = [self._make_req("prompt_1")]
+        with self.assertLogs("fastdeploy.deterministic", level="INFO"):
+            logger.log_batch_start(batch_0)
+            logger.log_batch_start(batch_0)  # Batch_2
+        # Switch to run_id 1 => counter resets
+        with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
+            logger.log_batch_start(batch_1)
+        output = "\n".join(cm.output)
+        self.assertIn("Run_1", output)
+        self.assertIn("Batch_1", output)
+
+    def test_skips_none_requests(self):
+        logger = self._make_logger()
+        batch = [None, self._make_req("req_5")]
+        with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
+            logger.log_batch_start(batch)
+        output = "\n".join(cm.output)
+        self.assertIn("Run_5", output)
+
+    def test_empty_batch(self):
+        logger = self._make_logger()
+        with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
+            logger.log_batch_start([])
+        output = "\n".join(cm.output)
+        self.assertIn("Run_None", output)
+        self.assertIn("Batch_1", output)
+
+    def test_none_batch(self):
+        logger = self._make_logger()
+        with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
+            logger.log_batch_start(None)
+        output = "\n".join(cm.output)
+        self.assertIn("Batch_1", output)
+
+
 if __name__ == "__main__":
     unittest.main()

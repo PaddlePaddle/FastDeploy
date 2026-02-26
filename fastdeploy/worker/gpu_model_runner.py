@@ -15,7 +15,6 @@
 """
 
 import copy
-import logging
 import os
 import queue
 import time
@@ -27,8 +26,6 @@ import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
-
-det_logger = logging.getLogger("fastdeploy.deterministic")
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
@@ -274,9 +271,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.last_post_process_event = None
         self.last_token_num = -1
 
-        # for determinism logging: batch counter
-        self._batch_counter = 0
-        self._current_run_id = None
         self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule and (
             not self.speculative_decoding
         )
@@ -2299,24 +2293,8 @@ class GPUModelRunner(ModelRunnerBase):
         num_running_requests: int = None,
         last_token_num: int = -1,
     ) -> None:
-        if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
-            # Detect current run iteration (extract _0, _1, _2 etc. from first non-None request_id)
-            current_run_id = None
-            for req in model_forward_batch or []:
-                if req is not None:
-                    parts = req.request_id.split("_")
-                    if len(parts) > 1:
-                        current_run_id = parts[-1]
-                        break
-            if current_run_id is not None and current_run_id != self._current_run_id:
-                self._current_run_id = current_run_id
-                self._batch_counter = 0  # Reset batch counter
-
-            self._batch_counter += 1
-
-            det_logger.info(f"\n{'='*80}")
-            det_logger.info(f"[BATCH-START] Run_{self._current_run_id} Batch_{self._batch_counter}")
-            det_logger.info(f"{'='*80}\n")
+        if self.deterministic_logger is not None:
+            self.deterministic_logger.log_batch_start(model_forward_batch)
 
         # 1. Prepare inputs of model and sampler.
         p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
@@ -2442,7 +2420,7 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
             # 4. Compute logits, Sample
-            if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
+            if self.deterministic_logger is not None:
                 # Log MD5 of hidden_states (model output)
                 self.deterministic_logger.log_tensor_md5s(
                     {"hidden_states": hidden_states},
@@ -2452,7 +2430,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             logits = self.model.compute_logits(hidden_states)
 
-            if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
+            if self.deterministic_logger is not None:
                 # Log MD5 of logits (before sampling)
                 self.deterministic_logger.log_tensor_md5s(
                     {"logits": logits}, forward_batch_reqs_list=self.forward_batch_reqs_list, stage="logits"
@@ -2474,7 +2452,7 @@ class GPUModelRunner(ModelRunnerBase):
                     p_done_idxs,
                 )
 
-                if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
+                if self.deterministic_logger is not None:
                     # Log MD5 of sampling results
                     self.deterministic_logger.log_tensor_md5s(
                         {"sampled_token_ids": sampler_output.sampled_token_ids},
