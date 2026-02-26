@@ -645,6 +645,11 @@ class V100FlashAttentionBackend(AttentionBackend):
             forward_meta.batch_id_per_token,
         )
 
+        # Ensure KV cache writes are visible before attention reads from cache.
+        # Triton kernels may execute on a different CUDA stream than Paddle ops,
+        # causing the attention kernel to read stale/zero data without this barrier.
+        paddle.device.cuda.synchronize()
+
         # Step 5: Compute total_seq_lens on GPU (no Python loop)
         is_prefill = (forward_meta.seq_lens_this_time == forward_meta.seq_lens_encoder) & (
             forward_meta.seq_lens_decoder == 0
