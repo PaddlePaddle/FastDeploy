@@ -59,6 +59,7 @@ class MockModelConfig:
     partial_rotary_factor = 0.5
     architectures = ["mock"]
     mm_max_tokens_per_item = None
+    think_truncate_prompt_ids = [-1]
 
 
 class MockCacheConfig:

@@ -183,8 +183,12 @@ class XPUAttentionBackend(AttentionBackend):
         cache_k_zp = getattr(self, "cache_k_zp", None)
         cache_v_zp = getattr(self, "cache_v_zp", None)
 
-        q_norm_weight = getattr(layer, "q_norm_weight", None)
-        k_norm_weight = getattr(layer, "k_norm_weight", None)
+        if layer.use_qk_norm:
+            q_norm_weight = layer.q_norm_weight
+            k_norm_weight = layer.k_norm_weight
+        else:
+            q_norm_weight = None
+            k_norm_weight = None
 
         res = block_attn(
             qkv,
