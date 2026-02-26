@@ -32,9 +32,7 @@ from conftest import (
     get_port_num,
     print_logs_on_failure,
     restore_env,
-    restore_moe_quant_env,
     setup_ep_env,
-    setup_moe_quant_env,
     start_server,
 )
 
@@ -46,9 +44,6 @@ def test_ep4tp4_online(xpu_env):
 
     # 设置EP环境变量
     original_env = setup_ep_env()
-
-    # 设置MOE量化环境变量
-    original_env_moe = setup_moe_quant_env()
 
     try:
         # 获取配置
@@ -118,7 +113,6 @@ def test_ep4tp4_online(xpu_env):
 
     finally:
         # 恢复环境变量
-        restore_moe_quant_env(original_env_moe)
         restore_env(original_env)
 
 

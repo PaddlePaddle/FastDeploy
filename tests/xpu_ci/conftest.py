@@ -279,49 +279,6 @@ def get_model_path():
     return model_path
 
 
-def setup_moe_quant_env(quant_type_map=None):
-    """
-    设置MOE量化相关环境变量
-
-    Args:
-        quant_type_map: FD_XPU_MOE_FFN_QUANT_TYPE_MAP的值
-                       如果为None,使用默认值 "w_channelwise_int4_a_tokenwise_int8:8->53"
-
-    Returns:
-        dict: 原始环境变量值,用于后续恢复
-    """
-    if quant_type_map is None:
-        quant_type_map = "w_channelwise_int4_a_tokenwise_int8:8->53"
-
-    # 保存原始值
-    original_value = os.environ.get("FD_XPU_MOE_FFN_QUANT_TYPE_MAP")
-
-    # 设置新值
-    os.environ["FD_XPU_MOE_FFN_QUANT_TYPE_MAP"] = quant_type_map
-    print(f"设置环境变量: FD_XPU_MOE_FFN_QUANT_TYPE_MAP={quant_type_map}")
-
-    return {"FD_XPU_MOE_FFN_QUANT_TYPE_MAP": original_value}
-
-
-def restore_moe_quant_env(original_values):
-    """
-    恢复MOE量化相关环境变量
-
-    Args:
-        original_values: setup_moe_quant_env()返回的原始环境变量值
-    """
-    key = "FD_XPU_MOE_FFN_QUANT_TYPE_MAP"
-    value = original_values.get(key)
-
-    if value is None:
-        if key in os.environ:
-            del os.environ[key]
-            print(f"删除环境变量: {key}")
-    else:
-        os.environ[key] = value
-        print(f"恢复环境变量: {key}={value}")
-
-
 def setup_ep_env():
     """
     设置EP(Expert Parallel)相关环境变量

@@ -24,6 +24,7 @@ EP4TP1在线服务测试 - Expert Parallel + Tensor Parallel
 """
 
 
+import os
 import subprocess
 import time
 
@@ -35,9 +36,7 @@ from conftest import (
     get_port_num,
     print_logs_on_failure,
     restore_env,
-    restore_moe_quant_env,
     setup_ep_env,
-    setup_moe_quant_env,
     stop_processes,
 )
 
@@ -99,7 +98,8 @@ def test_ep4tp1_online(xpu_env):
     original_env = setup_ep_env()
 
     # 设置MOE量化环境变量
-    original_env_moe = setup_moe_quant_env()
+    os.environ["FD_XPU_MOE_FFN_QUANT_TYPE_MAP"] = "w_channelwise_int4_a_tokenwise_int8:8->53"
+    print(f"设置环境变量: FD_XPU_MOE_FFN_QUANT_TYPE_MAP={os.environ['FD_XPU_MOE_FFN_QUANT_TYPE_MAP']}")
 
     stop_processes()
 
@@ -201,7 +201,9 @@ def test_ep4tp1_online(xpu_env):
 
     finally:
         # 恢复环境变量
-        restore_moe_quant_env(original_env_moe)
+        if "FD_XPU_MOE_FFN_QUANT_TYPE_MAP" in os.environ:
+            del os.environ["FD_XPU_MOE_FFN_QUANT_TYPE_MAP"]
+            print("删除环境变量: FD_XPU_MOE_FFN_QUANT_TYPE_MAP")
         restore_env(original_env)
 
 
