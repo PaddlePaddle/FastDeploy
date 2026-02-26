@@ -478,7 +478,7 @@ struct CollectiveMainloopAttn {
     Tensor scores_scale = make_fragment_like(softmax.row_max);
     clear(scores_scale);
 
-#pragma unroll 2
+#pragma unroll 1
     for (; n_block > 0; --n_block) {
       Tensor tSrS =
           partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}));
