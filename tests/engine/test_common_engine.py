@@ -23,6 +23,7 @@ import numpy as np
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import EngineService
+from fastdeploy.engine.request import RequestStatus
 
 MODEL_NAME = os.getenv("MODEL_PATH", "/path/to/models") + "/ERNIE-4.5-0.3B-Paddle"
 
@@ -872,3 +873,343 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         )()
         self.assertEqual(eng._get_scheduler_unhandled_request_num(), 0)
         eng.llm_logger.debug.assert_called()
+
+    def test_start_zmq_service_internal_adapter_thread(self):
+        """Cover lines 1093, 1096: recv_result_handle_thread creation in Internal Adapter mode."""
+        with patch("fastdeploy.engine.args_utils.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0):
+            cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
+
+            def get_server_port(self):
+                return 0
+
+            def cleanup(self):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        # Mock the ZMQ servers and InternalAdapter
+        mock_recv_server = Mock()
+        mock_send_server = Mock()
+        mock_send_server.recv_result_handle = Mock()
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True),
+            patch("fastdeploy.engine.common_engine.envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT", 5555),
+            patch("fastdeploy.engine.common_engine.envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT", 5556),
+            patch("fastdeploy.engine.common_engine.ZmqTcpServer", side_effect=[mock_recv_server, mock_send_server]),
+            patch("fastdeploy.engine.common_engine.InternalAdapter") as mock_internal_adapter,
+            patch("fastdeploy.engine.common_engine.threading.Thread") as mock_thread,
+            patch("fastdeploy.engine.common_engine.time.sleep"),
+        ):
+            mock_thread_instance = Mock()
+            mock_thread.return_value = mock_thread_instance
+
+            eng.start_zmq_service(api_server_pid="test_pid")
+
+            # Verify Thread was created with recv_result_handle target (line 1093)
+            mock_thread.assert_called()
+            call_kwargs = mock_thread.call_args[1]
+            self.assertEqual(call_kwargs["target"], mock_send_server.recv_result_handle)
+            self.assertTrue(call_kwargs["daemon"])
+
+            # Verify thread was started (line 1096)
+            mock_thread_instance.start.assert_called_once()
+
+            # Verify InternalAdapter was created
+            mock_internal_adapter.assert_called_once()
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_insert_zmq_task_abort_with_v1_kvcache_scheduler_paused(self):
+        """Cover lines 1159, 1161, 1162, 1163: abort request with ENABLE_V1_KVCACHE_SCHEDULER and paused engine."""
+        with patch("fastdeploy.engine.args_utils.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
+            cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
+
+            def get_server_port(self):
+                return 0
+
+            def cleanup(self):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        eng.running = True
+        eng.is_paused = True
+        eng.resource_manager = Mock()
+        eng.resource_manager.abort_req_ids_set = set()
+
+        class DummyRecv:
+            def __init__(self):
+                self.call_count = 0
+
+            def receive_json_once(self, block):
+                self.call_count += 1
+                if self.call_count == 1:
+                    # Return abort request (line 1159-1162 path)
+                    return None, {"status": RequestStatus.ABORT.value, "request_id": "abort_req_1"}
+                else:
+                    eng.running = False
+                    return None, None
+
+            def receive_pyobj_once(self, block):
+                return self.receive_json_once(block)
+
+        eng.recv_request_server = DummyRecv()
+        eng.cfg.model_config.enable_mm = False
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True),
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False),
+            patch.object(eng, "llm_logger") as mock_logger,
+        ):
+            eng._insert_zmq_task_to_scheduler()
+
+            # Verify abort request was processed (line 1157)
+            self.assertIn("abort_req_1", eng.resource_manager.abort_req_ids_set)
+
+            # Since is_paused=True, should discard from abort_req_ids_set (line 1162)
+            # and log info (line 1161)
+            mock_logger.info.assert_called()
+
+        # Test the else branch: req_id in self.resource_manager.requests (line 1163)
+        eng.running = True
+        eng.is_paused = False
+        eng.resource_manager.abort_req_ids_set = set()
+        eng.resource_manager.requests = {"abort_req_2": Mock()}
+
+        class DummyRecv2:
+            def __init__(self):
+                self.call_count = 0
+
+            def receive_json_once(self, block):
+                self.call_count += 1
+                if self.call_count == 1:
+                    return None, {"status": RequestStatus.ABORT.value, "request_id": "abort_req_2"}
+                else:
+                    eng.running = False
+                    return None, None
+
+            def receive_pyobj_once(self, block):
+                return self.receive_json_once(block)
+
+        eng.recv_request_server = DummyRecv2()
+        eng.resource_manager._prepare_preempt_task = Mock(return_value=Mock())
+        eng.engine_worker_queue = Mock()
+        eng.engine_worker_queue.put_tasks = Mock()
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True),
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False),
+            patch.object(eng, "llm_logger"),
+        ):
+            eng._insert_zmq_task_to_scheduler()
+
+            # Verify preempt task was prepared and put in queue (lines 1165-1166)
+            eng.resource_manager._prepare_preempt_task.assert_called_once()
+            eng.engine_worker_queue.put_tasks.assert_called_once()
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_send_error_response(self):
+        """Cover line 1436: send_response_server.send_response in _send_error_response."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+            def get_server_port(self):
+                return 0
+
+            def cleanup(self):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        eng.send_response_server = Mock()
+        eng.send_response_server.send_response = Mock()
+        eng.llm_logger = Mock()
+
+        # Call _send_error_response (line 1436)
+        eng._send_error_response("test_req_id", "test error message", error_code=500)
+
+        # Verify send_response was called with request_id and error result
+        eng.send_response_server.send_response.assert_called_once()
+        call_args = eng.send_response_server.send_response.call_args
+        self.assertEqual(call_args[0][0], "test_req_id")
+        # Verify error result has correct attributes
+        error_result = call_args[0][1][0]
+        self.assertEqual(error_result.request_id, "test_req_id")
+        self.assertEqual(error_result.error_code, 500)
+        self.assertEqual(error_result.error_msg, "test error message")
+        self.assertTrue(error_result.finished)
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_zmq_send_generated_tokens_non_internal_adapter(self):
+        """Cover lines 1497, 1523, 1524, 1527, 1528: batch data for non-Internal Adapter mode."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+            def get_server_port(self):
+                return 0
+
+            def cleanup(self):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        eng.running = True
+        eng.send_response_server = Mock()
+        eng.send_response_server.send_response = Mock()
+        eng.llm_logger = Mock()
+
+        # Create mock RequestOutput with outputs
+
+        mock_output = Mock()
+        mock_output.outputs = Mock()
+        mock_output.outputs.decode_type = 0
+        mock_output.outputs.token_ids = [1, 2, 3]
+        mock_output.finished = False
+
+        mock_output2 = Mock()
+        mock_output2.outputs = Mock()
+        mock_output2.outputs.decode_type = 0
+        mock_output2.outputs.token_ids = [4, 5, 6]
+        mock_output2.finished = True
+
+        results = {"req_1": [mock_output], "req_2": [mock_output2]}
+
+        # Mock scheduler to return results once then stop
+        call_count = [0]
+
+        def mock_get_results():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return results
+            else:
+                eng.running = False
+                return {}
+
+        eng.scheduler = Mock()
+        eng.scheduler.get_results = mock_get_results
+
+        # Mock data_processor for _decode_token
+        eng.data_processor = Mock()
+        eng.data_processor.ids2tokens = Mock(return_value=("decoded_text", [1, 2, 3], None))
+        eng.data_processor.decode_status = {"req_1": [0, 3], "req_2": [0, 3]}
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True),
+            patch("fastdeploy.engine.common_engine.time.sleep"),
+        ):
+            eng._zmq_send_generated_tokens()
+
+        # Verify batch_data was created and sent (lines 1497, 1523-1524, 1527-1528)
+        eng.send_response_server.send_response.assert_called_once()
+        call_args = eng.send_response_server.send_response.call_args
+        # First arg is None (request_id), second is batch_data
+        self.assertIsNone(call_args[0][0])
+        batch_data = call_args[0][1]
+        self.assertIsInstance(batch_data, list)
+        self.assertEqual(len(batch_data), 2)  # Two requests
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_zmq_send_generated_tokens_non_internal_adapter_with_finished(self):
+        """Cover lines 1515-1516: finished request with empty token_ids."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+            def get_server_port(self):
+                return 0
+
+            def cleanup(self):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        eng.running = True
+        eng.send_response_server = Mock()
+        eng.send_response_server.send_response = Mock()
+        eng.llm_logger = Mock()
+
+        # Create mock RequestOutput with empty token_ids but finished=True
+        mock_output = Mock()
+        mock_output.outputs = Mock()
+        mock_output.outputs.decode_type = 0
+        mock_output.outputs.token_ids = []  # Empty token_ids
+        mock_output.finished = True  # But finished
+
+        results = {"req_1": [mock_output]}
+
+        call_count = [0]
+
+        def mock_get_results():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return results
+            else:
+                eng.running = False
+                return {}
+
+        eng.scheduler = Mock()
+        eng.scheduler.get_results = mock_get_results
+
+        eng.data_processor = Mock()
+        eng.data_processor.ids2tokens = Mock(return_value=("", [], None))
+        eng.data_processor.decode_status = {"req_1": [0, 0]}
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True),
+            patch("fastdeploy.engine.common_engine.time.sleep"),
+        ):
+            eng._zmq_send_generated_tokens()
+
+        # Verify the finished request with empty token_ids was still added (lines 1515-1516)
+        eng.send_response_server.send_response.assert_called_once()
+        batch_data = eng.send_response_server.send_response.call_args[0][1]
+        self.assertEqual(len(batch_data), 1)
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass

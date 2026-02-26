@@ -274,9 +274,7 @@ class ZmqOpenAIServing(OpenAIServing):
         try:
             num_choices = len(ctx.preprocess_requests)
             # Get response queue for batch mode (dealer is not needed)
-            _, request_output_queue = await self.engine_client.connection_manager.get_connection(
-                request_id, num_choices
-            )
+            request_output_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
             # Request already sent via format_and_add_data in _preprocess
             # No need for dealer.write() in batch PUSH/PULL mode
             while num_choices > 0:

@@ -212,13 +212,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = response_data
 
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
-
         # Mock the connection manager call
-        self.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
-        )
+        self.engine_client.connection_manager.get_connection = AsyncMock(return_value=mock_response_queue)
 
         mock_processor_instance = Mock()
 
@@ -335,13 +330,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = response_data
 
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
-
         # Mock the connection manager call
-        self.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
-        )
+        self.engine_client.connection_manager.get_connection = AsyncMock(return_value=mock_response_queue)
 
         request = CompletionRequest(model="test-model", prompt="Hello", stream=True, max_streaming_response_tokens=3)
 
@@ -425,10 +415,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             [final_response_data[1]],
         ]
 
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
-
-        self.engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        self.engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
         expected_completion_response = Mock()
         self.completion_serving.request_output_to_completion_response = Mock(return_value=expected_completion_response)
@@ -475,8 +462,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         self.completion_serving.request_output_to_completion_response.assert_called_once()
 
         self.engine_client.semaphore.release.assert_called_once()
-        # Batch mode: cleanup_request is not called (commented out in serving_completion.py)
-        # self.engine_client.connection_manager.cleanup_request.assert_awaited_once_with(request_id)
+        self.engine_client.connection_manager.cleanup_request.assert_awaited_once_with(request_id)
 
     async def test_create_chat_completion_choice(self):
         """
@@ -628,12 +614,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = response_data
-
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
-        self.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
-        )
+        self.engine_client.connection_manager.get_connection = AsyncMock(return_value=mock_response_queue)
 
         mock_processor_instance = Mock()
 
@@ -780,12 +761,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = response_data
-
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
-        self.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
-        )
+        self.engine_client.connection_manager.get_connection = AsyncMock(return_value=mock_response_queue)
 
         from fastdeploy.entrypoints.openai.protocol import StreamOptions
 
@@ -886,10 +862,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             [final_response_data[1]],
         ]
 
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
-
-        self.engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        self.engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
         expected_completion_response = Mock()
         self.completion_serving.request_output_to_completion_response = Mock(return_value=expected_completion_response)
@@ -1017,12 +990,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = final_response_data
 
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
-
-        self.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
-        )
+        self.engine_client.connection_manager.get_connection = AsyncMock(return_value=mock_response_queue)
 
         request = CompletionRequest(
             model="test-model",

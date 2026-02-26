@@ -160,10 +160,8 @@ class DealerConnectionManager:
 
         async with self.lock:
             self.request_map[request_id] = response_queue
-            # Batch mode: no longer need dealer, return None for compatibility
-            dealer = None
 
-        return dealer, response_queue
+        return response_queue
 
     async def cleanup_request(self, request_id):
         """

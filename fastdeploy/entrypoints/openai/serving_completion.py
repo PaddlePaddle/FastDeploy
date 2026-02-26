@@ -261,7 +261,7 @@ class OpenAIServingCompletion:
         """
         try:
             # Get response queue for batch mode (dealer is not needed)
-            _, response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
+            response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
             # Request already sent via format_and_add_data in preprocessing
             # No need for dealer.write() in batch PUSH/PULL mode
 
@@ -376,8 +376,7 @@ class OpenAIServingCompletion:
             tracing.trace_req_finish(request_id)
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             self.engine_client.semaphore.release()
-            # if dealer is not None:
-            #     await self.engine_client.connection_manager.cleanup_request(request_id)
+            await self.engine_client.connection_manager.cleanup_request(request_id)
 
     def _echo_back_prompt(self, request, idx):
         """
@@ -428,7 +427,7 @@ class OpenAIServingCompletion:
         """
         try:
             # Get response queue for batch mode (dealer is not needed)
-            _, response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
+            response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
             # Request already sent via format_and_add_data in preprocessing
             # No need for dealer.write() in batch PUSH/PULL mode
 
@@ -655,9 +654,8 @@ class OpenAIServingCompletion:
             tracing.trace_req_finish(request_id)
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             del request
-            # if dealer is not None:
-            #     await self.engine_client.connection_manager.cleanup_request(request_id)
-            #     self.engine_client.semaphore.release()
+            await self.engine_client.connection_manager.cleanup_request(request_id)
+            self.engine_client.semaphore.release()
             yield "data: [DONE]\n\n"
 
     def request_output_to_completion_response(

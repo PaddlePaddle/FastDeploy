@@ -256,7 +256,7 @@ class OpenAIServingChat:
 
         try:
             # Get response queue for batch mode (dealer is not needed)
-            _, response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
+            response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
             # Request already sent via format_and_add_data in preprocessing
             # No need for dealer.write() in batch PUSH/PULL mode
             choices = []
@@ -550,7 +550,7 @@ class OpenAIServingChat:
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
             # Get response queue for batch mode (dealer is not needed)
-            _, response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
+            response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
             # Request already sent via format_and_add_data in preprocessing
             # No need for dealer.write() in batch PUSH/PULL mode
             previous_num_tokens = [0] * num_choices

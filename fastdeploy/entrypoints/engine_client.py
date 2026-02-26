@@ -579,7 +579,7 @@ class EngineClient:
         api_server_logger.info(f"Start Run Control Method: {request}")
         self.zmq_client.send_json(request.to_dict())
         request_id = request.request_id
-        _, response_queue = await self.connection_manager.get_connection(request_id)
+        response_queue = await self.connection_manager.get_connection(request_id)
         # In batch mode, dealer is None, no need to send request_id
         try:
             # todo: support user specified timeout. default 600s is enough for most control cases

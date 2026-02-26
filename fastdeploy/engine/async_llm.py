@@ -512,7 +512,7 @@ class AsyncLLM(EngineServiceClient):
                 await self.add_request(child_request_id, prompt, sampling_params, **kwargs)
 
             # 2) Get a shared connection for conn_request_id and handshake all sub-requests
-            _, response_queue = await self.connection_manager.get_connection(
+            response_queue = await self.connection_manager.get_connection(
                 request_id=conn_request_id, num_choices=num_choices
             )
 
