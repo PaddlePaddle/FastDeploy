@@ -931,7 +931,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--gate_fp32",
+        "--moe_gate_fp32",
         action="store_true",
         help="Flag to specify dtype of gate as FP32",
     )

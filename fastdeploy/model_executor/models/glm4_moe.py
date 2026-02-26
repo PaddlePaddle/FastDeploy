@@ -150,7 +150,7 @@ class Glm4Moe(nn.Layer):
             with_bias=False,
             skip_quant=True,
             weight_dtype=(
-                "float32" if fd_config.load_config.dynamic_load_weight or fd_config.model_config.gate_fp32 else ""
+                "float32" if fd_config.load_config.dynamic_load_weight or fd_config.model_config.moe_gate_fp32 else ""
             ),
         )
         self.gate.e_score_correction_bias = self.create_parameter(
