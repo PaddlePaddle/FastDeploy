@@ -721,7 +721,7 @@ class SpeculativeConfig:
         self,
         args,
     ):
-        self.method_list = ["ngram_match", "mtp"]
+        self.method_list = ["ngram_match", "mtp", "suffix"]
         self.mtp_strategy_list = ["default", "with_ngram"]
 
         # speculative method, choose in [None, "ngram_match", "mtp", "hybrid_mtp_ngram"]
@@ -739,6 +739,15 @@ class SpeculativeConfig:
         # ngram match
         self.max_ngram_size: int = 5
         self.min_ngram_size: int = 2
+        # Suffix Decoding
+        # The maximum length of token sequences cached in suffix trees.
+        self.suffix_decoding_max_tree_depth: int = 64
+        # The limits of requests that can be stored in the cache.
+        self.suffix_decoding_max_cached_requests: int = -1
+        # The factor of matched length, calculated as num_draft_tokens = suffix_max_spec_factor * matched_length
+        self.suffix_decoding_max_spec_factor: float = 1.0
+        # The probability threshold for speculated tokens.
+        self.suffix_decoding_min_token_prob: float = 0.1
         # model for mtp/eagle/draft_model
         self.model: Optional[str] = None
         # quantization of model
@@ -939,6 +948,8 @@ class GraphOptimizationConfig:
         self.max_capture_size: int = None
         """ Record maps mapped from real shape to captured size to reduce runtime overhead """
         self.real_shape_to_captured_size: dict[int, int] = None
+        """ Record maps mapped from real batch size to captured size"""
+        self.real_bsz_to_captured_size: dict[int, int] = {}
         """ Whether to use shared memory pool for multi capture_size """
         self.use_unique_memory_pool: bool = True
         """ Whether to use cudagraph for draft model."""
@@ -1694,15 +1705,20 @@ class FDConfig:
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
-        if self.speculative_config is not None and self.speculative_config.method == "mtp":
+        if self.speculative_config is not None and self.speculative_config.method in ["mtp", "suffix"]:
             max_capture_shape = self.scheduler_config.max_num_seqs * (
                 self.speculative_config.num_speculative_tokens + 1
             )
             assert max_capture_shape % 2 == 0, "CUDAGraph only supports capturing even token nums in MTP scenarios."
+            self.graph_opt_config.real_bsz_to_captured_size = {
+                k: 0 for k in range(1, self.scheduler_config.max_num_seqs + 1)
+            }
         if self.graph_opt_config.cudagraph_only_prefill:
             max_capture_shape = 512
         else:
-            max_capture_shape = min(512, max_capture_shape)
+            max_capture_shape = (
+                max_capture_shape if self.speculative_config is not None else min(512, max_capture_shape)
+            )
 
         max_capture_shape_prefill = graph_opt_config.max_capture_shape_prefill
 
@@ -1717,6 +1733,31 @@ class FDConfig:
                 max_capture_shape_prefill=max_capture_shape_prefill,
                 dec_token_per_query_per_step=dec_token_per_query_per_step,
             )
+        if self.speculative_config is not None and self.speculative_config.method in ["mtp", "suffix"]:
+            real_bsz_to_captured_size = {}
+            for capture_size in self.graph_opt_config.cudagraph_capture_sizes:
+                dummy_batch_size = int(capture_size / (self.speculative_config.num_speculative_tokens + 1))
+                real_bsz_to_captured_size[dummy_batch_size] = capture_size
+
+            def expand_bsz_map(real_bsz_to_captured_size):
+                """
+                Expand a sparse batch size mapping into a dense one.
+
+                Args:
+                    real_bsz_to_captured_size (dict): Sparse batch size to capture size mapping.
+                Returns:
+                    dict: Dense batch size to capture size mapping.
+                """
+                sorted_items = sorted(real_bsz_to_captured_size.items())
+                result = {}
+                prev_bsz = 0
+                for curr_bsz, cap in sorted_items:
+                    for bsz in range(prev_bsz + 1, curr_bsz + 1):
+                        result[bsz] = cap
+                    prev_bsz = curr_bsz
+                return result
+
+            self.graph_opt_config.real_bsz_to_captured_size = expand_bsz_map(real_bsz_to_captured_size)
         self.graph_opt_config.init_with_cudagrpah_size(
             max_capture_size=max_capture_shape,
             max_capture_shape_prefill=max_capture_shape_prefill,

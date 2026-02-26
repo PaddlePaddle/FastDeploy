@@ -8,6 +8,8 @@
 
 - **Ngram**
 
+- **后缀解码**
+
 - **MTP (Multi-Token Prediction)**
   - ✅ 已支持：TP 切分
   - ✅ 已支持：共享前缀
@@ -36,7 +38,7 @@
 - **高效 DraftModel/MTP 框架**：开发多个融合 Cuda Kernel，统一完成模型类方法的前后处理，相比传统的循环、切片方法，性能高效且易维护
 
 ## 🔧 参数说明
-- `method`: 解码策略，可选值为 `"mtp"` 或 `"ngram"`
+- `method`: 解码策略，可选值为 `"mtp"` 、 `"ngram"` 或 `"suffix"`
 - `num_speculative_tokens`: 每轮预测的 Token 数，最大支持 5（当前 MTP 仅支持 1）
 - `model`: 若选择 MTP，则需指定 MTP 模型路径
 - `quantization`: 模型量化方式，推荐使用 `wint8`
@@ -132,4 +134,36 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --tensor-parallel-size 4 \
     --config ${path_to_FastDeploy}benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml \
     --speculative-config '{"method": "ngram", "num_speculative_tokens": 1, "model": "${mtp_model_path}"}'
+```
+
+## 🌲 使用后缀解码 (Suffix Decoding)
+
+后缀解码是一种无模型推理框架，通过在 CPU 上使用高效后缀树进行快速草稿 Token 预测，加速重复性推理任务（如代理工作流程、编码等），消除 GPU 开销。
+
+使用 4×H100；量化方式选择 WINT4:
+
+> 配置文件：benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml
+
+```
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model ${path_to_main_model} \
+    --tensor-parallel-size 4 \
+    --config ${path_to_FastDeploy}benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml \
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 4, "suffix_decoding_max_tree_depth": 64, "suffix_decoding_max_cached_requests": 10000, "suffix_decoding_max_spec_factor": 1.0, "suffix_decoding_min_token_prob": 0.1}'
+```
+
+参数描述
+
+```
+# 后缀树中缓存的token序列的最大长度
+self.suffix_decoding_max_tree_depth: int = 64
+
+# 缓存中可存储的请求数量上限
+self.suffix_decoding_max_cached_requests: int = -1
+
+# 匹配长度的系数，计算方式为 num_draft_tokens = suffix_max_spec_factor * matched_length
+self.suffix_decoding_max_spec_factor: float = 1.0
+
+# 推测token的概率阈值
+self.suffix_decoding_min_token_prob: float = 0.1
 ```

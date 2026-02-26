@@ -25,6 +25,7 @@ from fastdeploy.config import (
     GraphOptimizationConfig,
     ParallelConfig,
     SchedulerConfig,
+    SpeculativeConfig,
 )
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -103,6 +104,7 @@ class TestCUDAGrpahSpecDecode(unittest.TestCase):
         scheduler_config.max_num_seqs = 1
         cache_config = CacheConfig({})
         parallel_config = ParallelConfig(args={})
+        speculative_config = SpeculativeConfig(args={})
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
@@ -116,6 +118,7 @@ class TestCUDAGrpahSpecDecode(unittest.TestCase):
             cache_config=cache_config,
             parallel_config=parallel_config,
             model_config=model_config,
+            speculative_config=speculative_config,
             test_mode=True,
         )
 

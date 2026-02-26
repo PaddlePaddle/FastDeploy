@@ -90,7 +90,7 @@ from fastdeploy.model_executor.pre_and_post_process import (
 )
 
 if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
-    from fastdeploy.spec_decode import MTPProposer, NgramProposer
+    from fastdeploy.spec_decode import MTPProposer, NgramProposer, SuffixProposer
 
 import zmq
 
@@ -385,6 +385,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.device_id,
                 self.share_inputs,
             )
+        elif self.speculative_method == "suffix":
+            self.proposer = SuffixProposer(self.fd_config)
         else:
             self.proposer = None
 
@@ -806,6 +808,13 @@ class GPUModelRunner(ModelRunnerBase):
                     self.prompt_logprobs_reqs[request.request_id] = request
                 self.forward_batch_reqs_list[idx] = request
                 has_prefill_task = True
+
+                if self.speculative_decoding and self.speculative_method == "suffix" and self.proposer is not None:
+                    if isinstance(request.prompt_token_ids, np.ndarray):
+                        prompt_token_ids = request.prompt_token_ids.tolist()
+                    else:
+                        prompt_token_ids = request.prompt_token_ids
+                    self.proposer.start_request(idx, request.request_id, prompt_token_ids)
 
                 # Routing Replay
                 if self.fd_config.routing_replay_config.enable_routing_replay:
@@ -1535,6 +1544,7 @@ class GPUModelRunner(ModelRunnerBase):
         self,
         hidden_states: paddle.Tensor,
         model_output: paddle.Tensor,
+        batch_size: int,
         accept_all_drafts=False,
         reject_all_drafts=False,
     ) -> paddle.Tensor:
@@ -1644,8 +1654,7 @@ class GPUModelRunner(ModelRunnerBase):
                     is_dummy_run=True,
                 )
             else:
-                self.proposer.run(share_inputs=self.share_inputs)
-
+                self.proposer.prepare_dummy_speculative_drafts(share_inputs=self.share_inputs, batch_size=batch_size)
         return sampler_output
 
     def _dummy_run(
@@ -1722,7 +1731,7 @@ class GPUModelRunner(ModelRunnerBase):
                     (self.share_inputs["batch_id_per_token_output"] if self.speculative_decoding else None),
                     (self.share_inputs["cu_seqlens_q_output"] if self.speculative_decoding else None),
                 )
-                self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
+                self._dummy_sampler_run(hidden_states, model_output, batch_size, accept_all_drafts, reject_all_drafts)
 
             # 7. Updata 'infer_seed' and step_cuda()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
@@ -1761,22 +1770,19 @@ class GPUModelRunner(ModelRunnerBase):
                     logger.info(
                         f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
                     )
-            elif self.speculative_decoding and self.speculative_method == "mtp":
+            elif self.speculative_decoding:
                 # Capture Target Model without bsz 1
                 for capture_size in sorted(capture_sizes, reverse=True):
+                    expected_decode_len = self.speculative_config.num_speculative_tokens * 2 + 1
                     self._dummy_run(
-                        num_tokens=(
-                            self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
-                            if self.scheduler_config.splitwise_role == "decode"
-                            else self.fd_config.get_max_chunk_tokens()
-                        ),
+                        num_tokens=self.fd_config.get_max_chunk_tokens(),
                         batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
                         in_capturing=True,
-                        expected_decode_len=self.speculative_config.num_speculative_tokens * 2 + 1,
+                        expected_decode_len=expected_decode_len,
                         accept_all_drafts=True,
                     )
                     logger.info(
-                        f"Warm up the model with the num_tokens:{capture_size}, expected_decode_len:{self.speculative_config.num_speculative_tokens}"
+                        f"Warm up the model with the num_tokens:{capture_size}, expected_decode_len:{expected_decode_len}"
                     )
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
@@ -2214,6 +2220,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self.proposer.run(
                         full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
                     )
+                elif self.speculative_method == "suffix":
+                    self.proposer.run(share_inputs=self.share_inputs)
                 else:
                     self.proposer.run(share_inputs=self.share_inputs)
 
