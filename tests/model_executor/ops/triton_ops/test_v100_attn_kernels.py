@@ -401,6 +401,38 @@ class TestWriteKVCache(unittest.TestCase):
         np.testing.assert_array_equal(key_cache_triton.numpy(), key_cache_ref.numpy())
         np.testing.assert_array_equal(val_cache_triton.numpy(), val_cache_ref.numpy())
 
+    @skip_if_no_gpu
+    @skip_if_no_triton
+    def test_write_kv_heads_2(self):
+        """Test KV cache write with kv_num_heads=2 (ERNIE 4.5 0.3B config)."""
+        from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
+            v100_write_kv_cache,
+        )
+
+        num_tokens = 6
+        kv_num_heads = 2
+        head_dim = 128
+        block_size = 64
+        max_num_blocks = 16
+
+        k = paddle.randn([num_tokens, kv_num_heads, head_dim], dtype="float16")
+        v = paddle.randn([num_tokens, kv_num_heads, head_dim], dtype="float16")
+
+        positions = paddle.to_tensor([0, 1, 2, 3, 4, 5], dtype="int64")
+        batch_id_per_token = paddle.to_tensor([0, 0, 0, 0, 0, 0], dtype="int32")
+        block_tables = paddle.to_tensor([[0, 1, 2, 3]], dtype="int32")
+
+        key_cache_triton = paddle.zeros([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        val_cache_triton = paddle.zeros([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        v100_write_kv_cache(k, v, key_cache_triton, val_cache_triton, block_tables, positions, batch_id_per_token)
+
+        key_cache_ref = paddle.zeros([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        val_cache_ref = paddle.zeros([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        ref_write_kv_cache(k, v, key_cache_ref, val_cache_ref, block_tables, positions, batch_id_per_token, block_size)
+
+        np.testing.assert_array_equal(key_cache_triton.numpy(), key_cache_ref.numpy())
+        np.testing.assert_array_equal(val_cache_triton.numpy(), val_cache_ref.numpy())
+
 
 class TestDecodeAttention(unittest.TestCase):
     """Test v100_decode_attention (2-stage flash-decoding)."""
@@ -629,6 +661,136 @@ class TestDecodeAttention(unittest.TestCase):
                 err_msg=f"Sequence {i} (kv_len={kv_len}) mismatch",
             )
 
+    @skip_if_no_gpu
+    @skip_if_no_triton
+    def test_decode_kv_heads_2(self):
+        """Test decode with num_heads=8, kv_num_heads=2 (ERNIE 4.5 0.3B config)."""
+        from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
+            v100_decode_attention,
+        )
+
+        num_heads = 8
+        kv_num_heads = 2
+        head_dim = 128
+        group_size = num_heads // kv_num_heads
+        block_size = 64
+        kv_len = 7
+        max_num_blocks = 8
+
+        key_cache = paddle.randn([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        value_cache = paddle.randn([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        block_tables = paddle.to_tensor([[0, 1, 2, 3]], dtype="int32")
+
+        q = paddle.randn([1, num_heads, head_dim], dtype="float16")
+
+        k_seq = key_cache[0, :, :kv_len, :].transpose([1, 0, 2])
+        v_seq = value_cache[0, :, :kv_len, :].transpose([1, 0, 2])
+
+        k_expanded = k_seq.unsqueeze(2).tile([1, 1, group_size, 1]).reshape([kv_len, num_heads, head_dim])
+        v_expanded = v_seq.unsqueeze(2).tile([1, 1, group_size, 1]).reshape([kv_len, num_heads, head_dim])
+
+        ref_out = ref_attention(q, k_expanded, v_expanded, is_causal=True)
+
+        output = paddle.empty([1, num_heads, head_dim], dtype="float16")
+        seq_lens = paddle.to_tensor([kv_len], dtype="int32")
+        q_start_locs = paddle.to_tensor([0], dtype="int32")
+
+        v100_decode_attention(
+            q,
+            key_cache,
+            value_cache,
+            output,
+            block_tables,
+            seq_lens,
+            q_start_locs,
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            head_dim**-0.5,
+        )
+
+        self.assertFalse(
+            np.any(np.isnan(output.cast("float32").numpy())),
+            "Decode attention (kv_heads=2) output contains NaN",
+        )
+        np.testing.assert_allclose(
+            output.cast("float32").numpy(),
+            ref_out.cast("float32").numpy(),
+            atol=5e-2,
+            rtol=5e-2,
+        )
+
+    @skip_if_no_gpu
+    @skip_if_no_triton
+    def test_decode_multi_split(self):
+        """Test decode with kv_len large enough to trigger num_kv_splits > 1."""
+        from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
+            v100_decode_attention,
+        )
+
+        num_heads = 8
+        kv_num_heads = 2
+        head_dim = 128
+        group_size = num_heads // kv_num_heads
+        block_size = 64
+        kv_len = 600  # 10 blocks, should trigger num_kv_splits=2
+        max_num_blocks = 16
+
+        key_cache = paddle.randn([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        value_cache = paddle.randn([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        # 10 blocks needed for 600 tokens
+        block_tables = paddle.to_tensor([[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], dtype="int32")
+
+        q = paddle.randn([1, num_heads, head_dim], dtype="float16")
+
+        # Build reference KV from cache blocks
+        k_blocks = []
+        v_blocks = []
+        remaining = kv_len
+        num_blocks = (kv_len + block_size - 1) // block_size
+        for b in range(num_blocks):
+            phys_block = int(block_tables[0, b].item())
+            tokens_in_block = min(block_size, remaining)
+            k_blocks.append(key_cache[phys_block, :, :tokens_in_block, :].transpose([1, 0, 2]))
+            v_blocks.append(value_cache[phys_block, :, :tokens_in_block, :].transpose([1, 0, 2]))
+            remaining -= tokens_in_block
+        k_seq = paddle.concat(k_blocks, axis=0)
+        v_seq = paddle.concat(v_blocks, axis=0)
+
+        k_expanded = k_seq.unsqueeze(2).tile([1, 1, group_size, 1]).reshape([kv_len, num_heads, head_dim])
+        v_expanded = v_seq.unsqueeze(2).tile([1, 1, group_size, 1]).reshape([kv_len, num_heads, head_dim])
+
+        ref_out = ref_attention(q, k_expanded, v_expanded, is_causal=True)
+
+        output = paddle.empty([1, num_heads, head_dim], dtype="float16")
+        seq_lens = paddle.to_tensor([kv_len], dtype="int32")
+        q_start_locs = paddle.to_tensor([0], dtype="int32")
+
+        v100_decode_attention(
+            q,
+            key_cache,
+            value_cache,
+            output,
+            block_tables,
+            seq_lens,
+            q_start_locs,
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            head_dim**-0.5,
+        )
+
+        self.assertFalse(
+            np.any(np.isnan(output.cast("float32").numpy())),
+            "Multi-split decode attention output contains NaN",
+        )
+        np.testing.assert_allclose(
+            output.cast("float32").numpy(),
+            ref_out.cast("float32").numpy(),
+            atol=5e-2,
+            rtol=5e-2,
+        )
+
 
 class TestExtendAttention(unittest.TestCase):
     """Test v100_extend_attention (tiled flash attention for prefill)."""
@@ -658,6 +820,65 @@ class TestExtendAttention(unittest.TestCase):
 
         # Gather KV from cache
         k_seq = key_cache[0, :, :kv_len, :].transpose([1, 0, 2])  # [kv_len, kv_num_heads, head_dim]
+        v_seq = value_cache[0, :, :kv_len, :].transpose([1, 0, 2])
+
+        k_expanded = k_seq.unsqueeze(2).tile([1, 1, group_size, 1]).reshape([kv_len, num_heads, head_dim])
+        v_expanded = v_seq.unsqueeze(2).tile([1, 1, group_size, 1]).reshape([kv_len, num_heads, head_dim])
+
+        ref_out = ref_attention(q, k_expanded, v_expanded, is_causal=True)
+
+        output = paddle.empty([q_len, num_heads, head_dim], dtype="float16")
+        q_start_locs = paddle.to_tensor([0], dtype="int32")
+        q_seq_lens = paddle.to_tensor([q_len], dtype="int32")
+        kv_seq_lens = paddle.to_tensor([kv_len], dtype="int32")
+
+        v100_extend_attention(
+            q,
+            key_cache,
+            value_cache,
+            output,
+            block_tables,
+            q_start_locs,
+            q_seq_lens,
+            kv_seq_lens,
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            head_dim**-0.5,
+            is_causal=True,
+        )
+
+        np.testing.assert_allclose(
+            output.cast("float32").numpy(),
+            ref_out.cast("float32").numpy(),
+            atol=5e-2,
+            rtol=5e-2,
+        )
+
+    @skip_if_no_gpu
+    @skip_if_no_triton
+    def test_extend_kv_heads_2(self):
+        """Test prefill with num_heads=8, kv_num_heads=2 (ERNIE 4.5 0.3B config)."""
+        from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
+            v100_extend_attention,
+        )
+
+        num_heads = 8
+        kv_num_heads = 2
+        head_dim = 128
+        group_size = num_heads // kv_num_heads
+        block_size = 64
+        q_len = 6
+        kv_len = 6
+        max_num_blocks = 8
+
+        key_cache = paddle.randn([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        value_cache = paddle.randn([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        block_tables = paddle.to_tensor([[0, 1, 2, 3]], dtype="int32")
+
+        q = paddle.randn([q_len, num_heads, head_dim], dtype="float16")
+
+        k_seq = key_cache[0, :, :kv_len, :].transpose([1, 0, 2])
         v_seq = value_cache[0, :, :kv_len, :].transpose([1, 0, 2])
 
         k_expanded = k_seq.unsqueeze(2).tile([1, 1, group_size, 1]).reshape([kv_len, num_heads, head_dim])

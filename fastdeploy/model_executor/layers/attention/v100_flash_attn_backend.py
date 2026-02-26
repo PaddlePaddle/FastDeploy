@@ -19,15 +19,15 @@ This backend is designed for NVIDIA V100 GPUs (SM70) which do not support:
 1. cp.async instructions required by append_attention and gqa_rope_write_cache
 2. flash_attn_unpadded which requires SM80+ (check: is_sm8x || is_sm90_or_larger)
 
-It uses Triton kernels (SM70 compatible) for:
-1. Position computation (v100_compute_positions)
-2. KV cache write (v100_write_kv_cache)
-3. Decode attention via 2-stage flash-decoding (v100_decode_attention)
-4. Prefill attention via tiled flash attention (v100_extend_attention)
+Default mode uses Triton kernels (SM70 compatible) for paged attention only:
+- Decode: 2-stage flash-decoding (v100_decode_attention)
+- Prefill: tiled flash attention with fp16 tl.dot (v100_extend_attention)
 
-RoPE is applied using Paddle native vectorized ops for better performance at small token counts.
+All data prep (positions, RoPE, KV cache write) uses Python/Paddle because Triton
+kernels writing to tensors consumed by other ops produce incorrect results through
+the Paddle compat guard.
 
-Falls back to pure Python/Paddle implementations when Triton is unavailable.
+Set FD_V100_USE_PYTHON_ATTN=1 to force full Python/Paddle fallback (no Triton at all).
 """
 
 from __future__ import annotations
@@ -53,9 +53,7 @@ if TYPE_CHECKING:
 # Try importing Triton kernels
 try:
     from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
-        v100_compute_positions,
         v100_paged_attention,
-        v100_write_kv_cache,
     )
 
     _TRITON_KERNELS_AVAILABLE = True
@@ -130,19 +128,22 @@ class V100FlashAttentionBackend(AttentionBackend):
 
         import os
 
+        # Use Triton kernels by default when available.
+        # Set FD_V100_USE_PYTHON_ATTN=1 to force Python/Paddle fallback.
         force_python = os.environ.get("FD_V100_USE_PYTHON_ATTN", "0") == "1"
         self._use_triton = _TRITON_KERNELS_AVAILABLE and not force_python
+
         if force_python:
             logger.info(
                 "V100FlashAttentionBackend: FD_V100_USE_PYTHON_ATTN=1 set, "
                 "forcing Python/Paddle fallback (Triton kernels disabled)."
             )
         elif self._use_triton:
-            logger.info("V100FlashAttentionBackend initialized for SM70 GPU (using Triton kernels).")
+            logger.info("V100FlashAttentionBackend initialized for SM70 GPU (Triton attention, Paddle data prep).")
         else:
             logger.info(
                 "V100FlashAttentionBackend initialized for SM70 GPU "
-                "(Triton kernels unavailable, using Python fallback)."
+                "(Triton unavailable, using Python/Paddle fallback)."
             )
 
     def get_attention_meta(self):
@@ -212,6 +213,83 @@ class V100FlashAttentionBackend(AttentionBackend):
         v = qkv[:, q_size + kv_size :]
 
         return q, k, v
+
+    # ------------------------------------------------------------------
+    # Vectorized Paddle implementations (no for-loops, no .item() calls)
+    # ------------------------------------------------------------------
+
+    def _paddle_compute_positions(
+        self,
+        batch_id_per_token,
+        seq_lens_encoder,
+        seq_lens_decoder,
+        seq_lens_this_time,
+        num_tokens,
+        batch_size,
+    ):
+        """Vectorized position computation using Paddle ops. No for-loops."""
+        # Base position per batch: 0 for prefill, enc+dec for decode
+        is_prefill = (seq_lens_this_time == seq_lens_encoder) & (seq_lens_decoder == 0)
+        base_pos = paddle.where(
+            is_prefill,
+            paddle.zeros_like(seq_lens_encoder),
+            seq_lens_encoder + seq_lens_decoder,
+        ).cast("int64")
+
+        # cu_seqlens_q for computing per-token offset within each sequence
+        cu_seqlens_q = paddle.zeros([batch_size + 1], dtype="int32")
+        cu_seqlens_q[1:] = paddle.cumsum(seq_lens_this_time)
+
+        # Per-token: base + (token_global_idx - seq_start_idx)
+        batch_ids_i64 = batch_id_per_token.reshape([-1]).cast("int64")
+        base_per_token = paddle.gather(base_pos.reshape([-1]), batch_ids_i64).reshape([-1])
+        seq_start = paddle.gather(cu_seqlens_q[:batch_size].reshape([-1]), batch_ids_i64).reshape([-1])
+        offset = (paddle.arange(num_tokens, dtype="int32") - seq_start).cast("int64")
+
+        positions = (base_per_token + offset).reshape([-1])  # ensure 1D [num_tokens]
+        return positions, cu_seqlens_q
+
+    def _paddle_compute_total_seq_lens(
+        self,
+        seq_lens_encoder,
+        seq_lens_decoder,
+        seq_lens_this_time,
+    ):
+        """Vectorized total_seq_lens computation. No for-loops."""
+        is_prefill = (seq_lens_this_time == seq_lens_encoder) & (seq_lens_decoder == 0)
+        return paddle.where(
+            is_prefill,
+            seq_lens_encoder,
+            seq_lens_encoder + seq_lens_decoder + seq_lens_this_time,
+        )
+
+    def _paddle_write_kv_to_block_cache(
+        self,
+        k,
+        v,
+        key_cache,
+        value_cache,
+        block_tables,
+        positions,
+        batch_id_per_token,
+    ):
+        """Vectorized KV cache write using Paddle ops. No .item() calls."""
+        # k, v: [num_tokens, kv_num_heads, head_dim]
+        num_tokens = k.shape[0]
+
+        # Compute block indices on GPU
+        block_idx = (positions // self.block_size).cast("int64")
+        block_offset = (positions % self.block_size).cast("int64")
+
+        # 2D fancy index: block_tables[batch_id, block_idx] → physical_block
+        max_bps = block_tables.shape[1]
+        flat_bt_idx = batch_id_per_token.cast("int64") * max_bps + block_idx
+        physical_blocks = block_tables.reshape([-1])[flat_bt_idx]
+
+        # Scatter write — loop over tokens but NO .item() calls (GPU tensor indexing)
+        for i in range(num_tokens):
+            key_cache[physical_blocks[i], :, block_offset[i], :] = k[i]
+            value_cache[physical_blocks[i], :, block_offset[i], :] = v[i]
 
     # ------------------------------------------------------------------
     # Python fallback implementations (kept as _python_* methods)
@@ -522,15 +600,8 @@ class V100FlashAttentionBackend(AttentionBackend):
         """
         Forward pass for mixed prefill and decode.
 
-        When Triton kernels are available:
-        1. Split QKV
-        2. Compute positions on GPU (Kernel 1)
-        3. Apply RoPE in-place via Triton (Kernel 2)
-        4. Write KV to cache via Triton (Kernel 3)
-        5. Compute total_seq_lens on GPU
-        6. Run paged attention via Triton (Kernel 4/5)
-
-        Falls back to pure Python/Paddle when Triton is unavailable.
+        Default: uses Triton kernels for positions, KV write, and paged attention.
+        If FD_V100_USE_PYTHON_ATTN=1: uses Python/Paddle fallback.
         """
         # Step 1: Split QKV tensor
         if qkv is not None:
@@ -613,17 +684,23 @@ class V100FlashAttentionBackend(AttentionBackend):
         batch_size,
         use_neox_rotary_style,
     ):
-        """Forward using Triton kernels — no Python for-loops."""
-        # Step 2: Compute positions on GPU (Kernel 1)
-        positions = v100_compute_positions(
+        """Forward using Python data prep + Triton paged attention.
+
+        Only the attention kernel runs via Triton (decode: flash-decoding,
+        prefill: tiled flash attention with fp16 tl.dot). All other ops
+        (positions, RoPE, KV write) use the proven-correct Python fallbacks.
+
+        Flow: Python(pos, RoPE, write, total_seq_lens) → sync → Triton(attn) → sync
+        """
+        # ── Data prep with Python fallbacks (proven correct) ──
+        positions = self._python_compute_positions(
             forward_meta.batch_id_per_token,
-            forward_meta.cu_seqlens_q,
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
+            num_tokens,
         )
 
-        # Step 3: Apply RoPE using Paddle native ops
         if forward_meta.rotary_embs is not None:
             q_reshaped, k_reshaped = self._python_apply_rope_to_qk(
                 q_reshaped,
@@ -633,35 +710,35 @@ class V100FlashAttentionBackend(AttentionBackend):
                 use_neox_rotary_style,
             )
 
-        # Step 4: Write KV to cache (Kernel 3)
-        v_reshaped = v.reshape([num_tokens, kv_num_heads, qk_head_dim])
-        v100_write_kv_cache(
-            k_reshaped,
-            v_reshaped,
+        k_flat = k_reshaped.reshape([num_tokens, kv_num_heads * qk_head_dim])
+        self._python_write_kv_to_block_cache(
+            k_flat,
+            v,
             key_cache,
             value_cache,
             forward_meta.block_tables,
             positions,
             forward_meta.batch_id_per_token,
+            kv_num_heads,
+            qk_head_dim,
         )
 
-        # Ensure KV cache writes are visible before attention reads from cache.
-        # Triton kernels may execute on a different CUDA stream than Paddle ops,
-        # causing the attention kernel to read stale/zero data without this barrier.
+        total_seq_lens = self._python_compute_total_seq_lens(
+            forward_meta.seq_lens_encoder,
+            forward_meta.seq_lens_decoder,
+            forward_meta.seq_lens_this_time,
+            batch_size,
+        )
+
+        # Build cu_seqlens_q from seq_lens_this_time
+        cu_seqlens_q = paddle.zeros([batch_size + 1], dtype="int32")
+        cu_seqlens_q[1:] = paddle.cumsum(forward_meta.seq_lens_this_time)
+
+        # ▶ SYNC: Paddle → Triton (ensure all Paddle writes are visible)
         paddle.device.cuda.synchronize()
 
-        # Step 5: Compute total_seq_lens on GPU (no Python loop)
-        is_prefill = (forward_meta.seq_lens_this_time == forward_meta.seq_lens_encoder) & (
-            forward_meta.seq_lens_decoder == 0
-        )
-        total_seq_lens = paddle.where(
-            is_prefill,
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_encoder + forward_meta.seq_lens_decoder + forward_meta.seq_lens_this_time,
-        )
-
-        # Step 6: Paged attention (Kernel 4 for decode, Kernel 5 for prefill)
-        output = paddle.empty([num_tokens, num_heads, qk_head_dim], dtype=q_reshaped.dtype)
+        # ── Triton: paged attention only ──
+        output = paddle.empty_like(q_reshaped)
         v100_paged_attention(
             q_reshaped,
             key_cache,
@@ -670,7 +747,7 @@ class V100FlashAttentionBackend(AttentionBackend):
             forward_meta.block_tables,
             forward_meta.seq_lens_this_time,
             total_seq_lens,
-            forward_meta.cu_seqlens_q,
+            cu_seqlens_q,
             forward_meta.batch_id_per_token,
             num_heads,
             kv_num_heads,
@@ -678,7 +755,10 @@ class V100FlashAttentionBackend(AttentionBackend):
             is_causal=self.causal,
         )
 
-        return output.reshape([-1, num_heads * v_head_dim])
+        # ▶ SYNC: Triton → Paddle (output ready for downstream)
+        paddle.device.cuda.synchronize()
+
+        return output.reshape([num_tokens, num_heads * v_head_dim])
 
     def _python_forward(
         self,

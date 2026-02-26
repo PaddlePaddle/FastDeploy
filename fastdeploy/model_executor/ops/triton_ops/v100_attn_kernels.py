@@ -651,8 +651,8 @@ def v100_extend_attention_kernel(
     Tiled flash attention for prefill, reading K/V from block cache.
     Grid: (ceil_div(q_len, BLOCK_M), batch_size, num_heads)
 
-    Uses element-wise multiply + reduce instead of tl.dot for SM70
-    compatibility with fp32 and non-power-of-2 head_dim.
+    Uses fp16 tl.dot (SM70 Tensor Core: fp16 inputs, fp32 accumulator)
+    for QK^T and P@V computations.
     """
     pid_m = tl.program_id(0)  # query tile index
     pid_batch = tl.program_id(1)
@@ -720,8 +720,9 @@ def v100_extend_attention_kernel(
                 tl.float32
             )
 
-            # QK^T: [BLOCK_M, BLOCK_N]
-            qk = tl.dot(q_tile, tl.trans(k_vals)) * sm_scale
+            # QK^T: [BLOCK_M, BLOCK_N] — fp16 dot for SM70 Tensor Core
+            # SM70 mma.sync: fp16 inputs, fp32 accumulator
+            qk = tl.dot(q_tile.to(tl.float16), tl.trans(k_vals.to(tl.float16)), out_dtype=tl.float32) * sm_scale
 
             # Apply causal mask
             if is_causal:
@@ -753,7 +754,8 @@ def v100_extend_attention_kernel(
             )
 
             # Update accumulator: acc = acc * alpha + P @ V
-            acc = acc * alpha[:, None] + tl.dot(p.to(tl.float32), v_vals)
+            # fp16 dot for SM70 Tensor Core, fp32 accumulator
+            acc = acc * alpha[:, None] + tl.dot(p.to(tl.float16), v_vals.to(tl.float16), out_dtype=tl.float32)
 
             m_i = m_new
 
