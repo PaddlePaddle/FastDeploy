@@ -61,7 +61,6 @@ elif current_platform.is_maca():
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
-        speculate_get_seq_lens_output,
         speculate_limit_thinking_content_length,
         speculate_save_output,
         speculate_save_output_topk,
@@ -85,7 +84,6 @@ else:
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
-        speculate_get_seq_lens_output,
         speculate_pre_process,
         speculate_save_output,
         speculate_save_output_topk,
@@ -164,8 +162,10 @@ def pre_process(
             cu_seqlens_k,
             cu_seqlens_q_output,
             batch_id_per_token_output,
-            real_output_token_num
-        ) = speculate_pre_process(token_num_cpu, input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, seq_lens_decoder)
+            real_output_token_num,
+        ) = speculate_pre_process(
+            token_num_cpu, input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, seq_lens_decoder
+        )
     return (
         ids_remove_padding,
         batch_id_per_token,
@@ -173,7 +173,7 @@ def pre_process(
         cu_seqlens_k,
         cu_seqlens_q_output,
         batch_id_per_token_output,
-        real_output_token_num
+        real_output_token_num,
     )
 
 
