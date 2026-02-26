@@ -223,6 +223,24 @@ async def async_request_eb_openai_chat_completions(
     # 超参由yaml传入
     payload.update(request_func_input.hyper_parameters)
 
+    # tools信息，yaml优先级最高
+    json_data = request_func_input.json_data or {}
+    hyper = request_func_input.hyper_parameters or {}
+
+    tools = None
+    tool_choice = None
+
+    if hyper.get("tools"):
+        tools = hyper.get("tools")
+        tool_choice = hyper.get("tool_choice", "auto")
+    elif json_data.get("tools"):
+        tools = json_data.get("tools")
+        tool_choice = json_data.get("tool_choice", "auto")
+
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = tool_choice
+
     # 随机输入开关
     if request_func_input.random_flag:
         payload["max_tokens"] = request_func_input.output_len
@@ -406,9 +424,10 @@ async def async_request_eb_openai_chat_completions_multi_turn(
     request_func_input: RequestFuncInput,
     pbar: Optional[tqdm] = None,
 ):
-    # yaml中带tools才走工具调用逻辑
+    # yaml中或数据集中带tools才走工具调用逻辑
+    json_data = request_func_input.json_data or {}
     hyper = request_func_input.hyper_parameters or {}
-    enable_tools = bool(hyper.get("tools"))
+    enable_tools = bool(json_data.get("tools") or hyper.get("tools"))
 
     outputs = []
 
@@ -419,7 +438,6 @@ async def async_request_eb_openai_chat_completions_multi_turn(
     output_tokens = 0
 
     ori_history = request_func_input.history_QA
-    json_data = request_func_input.json_data
     user_count = sum(msg.get("role") == "user" for msg in ori_history)
     print("START", request_func_input.no, "user对话轮数:", user_count, flush=True)
     history = []
@@ -500,6 +518,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
 
                             session_end = time.perf_counter()
                             session_e2e_time = session_end - session_start
+                            tool_call_count += 1
 
                             metrics = SessionMetrics(
                                 session_no=request_func_input.no,
@@ -549,8 +568,6 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                         llm_time += s1 - s0
 
                         outputs.append(output)
-                        input_tokens += output.prompt_tokens
-                        output_tokens += output.output_tokens
 
                         if not output.success:
                             session_end = time.perf_counter()
@@ -563,6 +580,9 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                                 tool_calls=tool_call_count,
                             )
                             return outputs, metrics
+
+                        input_tokens += output.prompt_tokens
+                        output_tokens += output.output_tokens
                     else:
                         print(f"Warning exceed max_loop={max_loop}, force stop tool loop")
 

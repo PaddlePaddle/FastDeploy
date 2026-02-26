@@ -95,6 +95,7 @@ plugins:
             Speculative Decoding: 投机解码
             Structured Outputs: 结构化输出
             Reasoning Output: 思考链内容
+            Thinking Budget: 思考预算
             Early Stop: 早停功能
             Plugins: 插件机制
             PaddleFormers Backend: PaddleFormers 后端
@@ -155,6 +156,7 @@ nav:
       - Speculative Decoding: features/speculative_decoding.md
       - Structured Outputs: features/structured_outputs.md
       - Reasoning Output: features/reasoning_output.md
+      - Thinking Budget: features/thinking_budget.md
       - Early Stop: features/early_stop.md
       - Plugins: features/plugins.md
       - PaddleFormers Backend: features/paddleformers_backend.md
