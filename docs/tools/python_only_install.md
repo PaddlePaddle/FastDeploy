@@ -1,35 +1,39 @@
-# Python-only 快速安装
+# Python-only 快速安装指南
 
-## 功能说明
+## 1. 功能概述
 
-`build.sh` 支持 `BUILD_WHEEL=2` 模式，只将 Python 文件同步到已安装的 site-packages 目录，跳过 C++ custom ops 编译和 wheel 打包。适用于只修改了 Python 代码、需要快速验证的场景。
+`build.sh` 支持 `BUILD_WHEEL=2` 模式，将 Python 源文件直接同步到已安装的 `site-packages` 目录，**跳过 C++ Custom Ops 编译和 Wheel 打包**。适用于仅修改 Python 代码、需要快速验证的开发场景。
 
-## 前提条件
+## 2. 前提条件
 
-必须先做过一次完整编译安装：
+使用 Python-only 模式前，**必须先完成一次完整编译安装**：
+
 ```bash
 bash build.sh 1 python false "[90]"
 ```
-Python-only 模式依赖已安装的 `.so` 编译产物，首次使用前需要确保这些产物已存在于 site-packages 中。
 
-**如果未做过完整安装，`build.sh 2` 会报错退出：**
+该模式依赖完整编译产生的 `.so` 文件。若 `site-packages` 中不存在这些产物，`build.sh 2` 会报错退出：
+
 ```
 [FAIL] fastdeploy is not installed. Please run a full build first (BUILD_WHEEL=1).
 ```
 
-## 使用方式
+## 3. 使用方式
 
 ```bash
 bash build.sh 2 [PYTHON]
 ```
 
-第二个参数 `PYTHON` 是 Python **可执行文件**的路径或命令名（不是 site-packages 目录），默认值为 `python`。脚本内部通过该可执行文件来定位 site-packages 路径、执行 pip 等操作。
+- **`PYTHON`**：Python 可执行文件的路径或命令名（**不是** `site-packages` 目录路径），默认值为 `python`。
+- 脚本内部通过该可执行文件定位 `site-packages` 路径并执行 `pip` 等操作。
+
+**示例：**
 
 ```bash
-# 使用默认 python 命令
+# 使用默认 python
 bash build.sh 2
 
-# 显式指定 python 命令名
+# 显式指定 python
 bash build.sh 2 python
 
 # 使用 python3
@@ -39,9 +43,11 @@ bash build.sh 2 python3
 bash build.sh 2 /root/paddlejob/workspace/env_run/gongweibao/fdenv/bin/python
 ```
 
-## 原理
+## 4. 工作原理
 
-`setup.py` 中使用 `find_packages()` + `package_dir={"fastdeploy": "fastdeploy/"}` 配置，所有 Python 文件安装到 `site-packages/fastdeploy/` 下，目录结构与源码一致，无重映射。因此可以直接用 rsync 将源码目录下的 `.py` 文件同步到安装目录：
+### 4.1 文件同步
+
+`setup.py` 中通过 `find_packages()` + `package_dir={"fastdeploy": "fastdeploy/"}` 配置，所有 Python 文件安装到 `site-packages/fastdeploy/` 下，目录结构与源码保持一致，无路径重映射。因此可直接使用 `rsync` 将源码目录中的 `.py` 文件同步到安装目录：
 
 ```bash
 rsync -avc --exclude='__pycache__/' --include='*/' --include='*.py' \
@@ -49,19 +55,25 @@ rsync -avc --exclude='__pycache__/' --include='*/' --include='*.py' \
   --exclude='*' --delete fastdeploy/ ${INSTALL_DIR}/fastdeploy/
 ```
 
-- `--checksum`（`-c`）：基于文件内容校验判断是否需要同步，而非时间戳。确保安装后首次运行 `build.sh 2` 时，只有内容真正不同的文件才会被传输
-- `--exclude='__pycache__/'`：放在最前面，完全跳过 `__pycache__` 目录（避免 "cannot delete non-empty directory" 警告）
-- `--include='*.py'` + `--exclude='*'`：只同步 `.py` 文件
-- `--filter='P ...'`：保护 `.so`、`.txt` 等已编译产物不被删除
-- `--delete`：删除源码中已不存在的 `.py` 文件，保持 site-packages 与源码一致
+各参数说明：
 
-### 安装目录定位
+| 参数 | 作用 |
+|------|------|
+| `-c`（`--checksum`） | 基于文件内容校验判断是否需要同步，而非依赖时间戳 |
+| `--exclude='__pycache__/'` | 置于最前，完全跳过 `__pycache__` 目录，避免删除非空目录的警告 |
+| `--include='*.py'` + `--exclude='*'` | 仅同步 `.py` 文件 |
+| `--filter='P ...'` | 保护 `.so`、`.txt` 等已编译产物不被删除 |
+| `--delete` | 删除源码中已移除的 `.py` 文件，保持 `site-packages` 与源码一致 |
 
-脚本通过 `importlib.util.find_spec('fastdeploy')` 定位安装目录。为避免在项目根目录执行时 Python 把当前目录（即源码）误识别为安装位置，脚本会从 `sys.path` 中排除当前工作目录，确保只在 site-packages 中查找。
+### 4.2 安装目录定位
 
-## 同步摘要
+脚本通过 `importlib.util.find_spec('fastdeploy')` 定位安装目录。为避免在项目根目录执行时 Python 将当前目录（即源码）误识别为安装位置，脚本会从 `sys.path` 中排除当前工作目录，确保只在 `site-packages` 中查找。
 
-rsync 使用 `--checksum` 模式，只有**内容有变化**的文件才会实际传输。同步完成后，脚本会输出变更摘要，列出本次实际更新和删除的文件：
+## 5. 同步摘要
+
+同步完成后，脚本输出变更摘要，列出实际更新和删除的文件。
+
+**有文件更新时：**
 
 ```
 ======== Sync Summary ========
@@ -73,7 +85,7 @@ rsync 使用 `--checksum` 模式，只有**内容有变化**的文件才会实�
 ==============================
 ```
 
-如果没有任何文件变化，则显示：
+**无文件变化时：**
 
 ```
 ======== Sync Summary ========
@@ -81,36 +93,36 @@ rsync 使用 `--checksum` 模式，只有**内容有变化**的文件才会实�
 ==============================
 ```
 
-如果源码中删除了某个 `.py` 文件，site-packages 中对应文件也会被删除，并在摘要中显示：
+**有文件被删除时：**
 
 ```
 [DELETED] 1 file(s) removed from site-packages:
   fastdeploy/old_module.py
 ```
 
-## 防御机制
+## 6. 防御机制
 
-### 未安装检测
+### 6.1 未安装检测
 
-如果 site-packages 中找不到已安装的 fastdeploy（从未执行过 `build.sh 1`），脚本会直接报错退出，避免在缺少 `.so` 编译产物的情况下产生不完整的安装。
+若 `site-packages` 中找不到已安装的 `fastdeploy`（即从未执行过 `build.sh 1`），脚本直接报错退出，避免在缺少 `.so` 编译产物时产生不完整的安装。
 
-### 同目录检测
+### 6.2 同目录检测
 
-rsync 前会比较源目录和目标目录的真实路径（`pwd -P`，解析软链接）。如果两者相同（例如 editable install 或从 site-packages 目录运行脚本），脚本会跳过同步并提示：
+`rsync` 执行前，脚本会比较源目录和目标目录的真实路径（通过 `pwd -P` 解析软链接）。若两者相同（例如 editable install 或从 `site-packages` 目录运行脚本），则跳过同步并提示：
 
 ```
 [SKIP] Source and target are the same directory: /path/to/fastdeploy
 [SKIP] No sync needed (you may be using an editable install or running from site-packages).
 ```
 
-### 安装映射校验
+### 6.3 安装映射校验
 
-同步完成后，脚本会自动校验 `setup.py` 的安装映射是否发生变化：通过 `pip show -f` 获取已安装文件列表，检查是否有 `.py` 文件被安装到 `fastdeploy/` 目录之外。如果检测到映射变化，脚本会报错并提示执行完整编译。
+同步完成后，脚本自动校验 `setup.py` 的安装映射是否发生变化：通过 `pip show -f` 获取已安装文件列表，检查是否有 `.py` 文件被安装到 `fastdeploy/` 目录之外。若检测到映射变化，脚本会报错并提示执行完整编译。
 
-## 适用场景
+## 7. 适用场景速查
 
 | 场景 | 推荐方式 |
 |------|----------|
-| 只修改了 Python 文件 | `bash build.sh 2` |
+| 仅修改 Python 文件 | `bash build.sh 2` |
 | 修改了 C++/CUDA 代码 | `bash build.sh 1 python false "[90]"` |
 | 首次编译 | `bash build.sh 1 python false "[90]"` |
