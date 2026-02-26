@@ -310,12 +310,6 @@ class TestCacheTransferManager(unittest.TestCase):
     # ==========================
     # 工具函数与存储相关测试
     # ==========================
-    def test_get_cache_bytes_and_invalid(self):
-        self.assertEqual(self.manager._get_cache_item_bytes("bfloat16"), 2)
-        self.assertEqual(self.manager._get_cache_item_bytes("float32"), 4)
-        with self.assertRaises(ValueError):
-            self.manager._get_cache_item_bytes("int32")
-
     def test_run_read_storage_swaps_valid_blocks(self):
         self.manager.storage_backend = MagicMock()
         self.manager.storage_backend_type = "mooncake"

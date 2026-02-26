@@ -389,14 +389,12 @@ async def benchmark(
 
     test_output = await request_func(request_func_input=test_input)
 
-    if args.debug:
-        print("test_output:", test_output, flush=True)
-
     if args.multi_turn:
         out_list, metrics = test_output
         test_output = out_list[0]
 
     if not test_output.success:
+        print("test_output:", test_output, flush=True)
         raise ValueError(
             f"Initial test run failed - Please make sure that 1. benchmark arguments are correctly specified and 2. the http_proxy and https_proxy are turned off. Error: {test_output.error}"
         )

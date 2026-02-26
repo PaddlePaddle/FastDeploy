@@ -22,6 +22,7 @@ from paddleformers.utils.log import logger
 
 import fastdeploy
 from fastdeploy.model_executor.layers.moe.ep import deep_ep
+from fastdeploy.model_executor.layers.quantization.fp8_utils import deep_gemm
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
 from fastdeploy.platforms import current_platform
@@ -33,19 +34,11 @@ from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 
 if current_platform.is_cuda():
     try:
-        m_grouped_fp8_gemm_nt_contiguous = (
-            fastdeploy.model_executor.layers.quantization.fp8_utils.deep_gemm.m_grouped_fp8_gemm_nt_contiguous
-        )
-        m_grouped_fp8_gemm_nt_masked = (
-            fastdeploy.model_executor.layers.quantization.fp8_utils.deep_gemm.m_grouped_fp8_gemm_nt_masked
-        )
+        m_grouped_fp8_gemm_nt_contiguous = deep_gemm.m_grouped_fp8_gemm_nt_contiguous
+        m_grouped_fp8_gemm_nt_masked = deep_gemm.m_grouped_fp8_gemm_nt_masked
     except:
-        m_grouped_fp8_gemm_nt_contiguous = (
-            fastdeploy.model_executor.layers.quantization.fp8_utils.deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous
-        )
-        m_grouped_fp8_gemm_nt_masked = (
-            fastdeploy.model_executor.layers.quantization.fp8_utils.deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_masked
-        )
+        m_grouped_fp8_gemm_nt_contiguous = deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous
+        m_grouped_fp8_gemm_nt_masked = deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_masked
 else:
     m_grouped_fp8_gemm_nt_contiguous = None
     m_grouped_fp8_gemm_nt_masked = None
