@@ -326,13 +326,13 @@ class TestZmqServerBase(unittest.TestCase):
     def test_send_response_dispatches_by_env(self):
         server = _DummyServer(socket=_FakeSocket())
         server._send_response_per_step = mock.Mock()
-        server._send_response_per_query = mock.Mock()
+        server._send_batch_response = mock.Mock()
         with mock.patch.object(envs, "FD_ENABLE_INTERNAL_ADAPTER", True):
             server.send_response("req", [_DummyResponse(1)])
             server._send_response_per_step.assert_called_once()
         with mock.patch.object(envs, "FD_ENABLE_INTERNAL_ADAPTER", False):
             server.send_response("req", [_DummyResponse(1)])
-            server._send_response_per_query.assert_called_once()
+            server._send_batch_response.assert_called_once()
 
     def test_recv_result_handle_paths(self):
         fake_socket = _FakeSocket()

@@ -512,12 +512,9 @@ class AsyncLLM(EngineServiceClient):
                 await self.add_request(child_request_id, prompt, sampling_params, **kwargs)
 
             # 2) Get a shared connection for conn_request_id and handshake all sub-requests
-            dealer, response_queue = await self.connection_manager.get_connection(
+            _, response_queue = await self.connection_manager.get_connection(
                 request_id=conn_request_id, num_choices=num_choices
             )
-
-            for child_request_id in child_request_ids:
-                dealer.write([b"", child_request_id.encode("utf-8")])
 
             # 3) Stream responses from all choices interleaved
             remaining = num_choices
