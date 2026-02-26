@@ -153,6 +153,7 @@ def pre_process(
             cu_seqlens_k,
             None,
             None,
+            None,
         )
     # Remove padding
     if speculative_decoding:
@@ -165,8 +166,6 @@ def pre_process(
             batch_id_per_token_output,
             real_output_token_num
         ) = speculate_pre_process(token_num_cpu, input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, seq_lens_decoder)
-        real_output_token_num_cpu = real_output_token_num.item()
-        batch_id_per_token_output = batch_id_per_token_output[:real_output_token_num_cpu]
     return (
         ids_remove_padding,
         batch_id_per_token,
@@ -174,6 +173,7 @@ def pre_process(
         cu_seqlens_k,
         cu_seqlens_q_output,
         batch_id_per_token_output,
+        real_output_token_num
     )
 
 
