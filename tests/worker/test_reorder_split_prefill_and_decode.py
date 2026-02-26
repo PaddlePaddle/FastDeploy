@@ -46,6 +46,7 @@ def create_mock_config():
         "beta_fast": 32,
         "beta_slow": 1,
     }
+    model_config.think_truncate_prompt_ids = [-1]
 
     # Create other mock configs
     cache_config = Mock(spec=CacheConfig)
