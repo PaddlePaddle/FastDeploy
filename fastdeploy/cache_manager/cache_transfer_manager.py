@@ -230,7 +230,8 @@ class CacheTransferManager:
         self._init_gpu_cache(args)
         if self.num_cpu_blocks > 0:
             self._init_cpu_cache(args)
-        self._init_storage(args)
+        if args.kvcache_storage_backend is not None:
+            self._init_storage(args)
 
         cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
         self.cache_task_broadcast_signal = IPCSignal(
