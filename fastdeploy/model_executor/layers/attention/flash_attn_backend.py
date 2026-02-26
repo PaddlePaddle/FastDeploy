@@ -99,6 +99,9 @@ def init_flash_attn_version():
         logger.info("Only support CUDA version flash attention.")
 
 
+init_flash_attn_version()
+
+
 def flash_attn_func(
     q: paddle.Tensor,
     k: paddle.Tensor,
