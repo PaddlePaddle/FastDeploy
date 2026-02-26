@@ -555,6 +555,15 @@ class LLMEngine:
                     line_break_id = int(line_break_ids)
         if line_break_id >= 0:
             llm_logger.info(f"Get line_break_id {line_break_id} from tokenizer.")
+        try:
+            think_truncate_prompt_ids = self.data_processor.tokenizer.convert_tokens_to_ids(
+                self.data_processor.tokenizer.tokenize(self.data_processor.tokenizer.think_truncate_prompt)
+            )
+        except Exception:
+            think_truncate_prompt_ids = self.data_processor.tokenizer.convert_tokens_to_ids(
+                self.data_processor.tokenizer.tokenize(envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR)
+            )
+        llm_logger.info(f"Get think_truncate_prompt_ids {think_truncate_prompt_ids} from tokenizer.")
 
         ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
@@ -586,6 +595,7 @@ class LLMEngine:
             f" --think_end_id {think_end_id}"
             f" --image_patch_id {image_patch_id}"
             f" --line_break_id {line_break_id}"
+            f" --think_truncate_prompt_ids '{json.dumps(think_truncate_prompt_ids)}'"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.structured_outputs_config.guided_decoding_backend}"
