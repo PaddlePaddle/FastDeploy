@@ -18,6 +18,7 @@ from importlib import import_module
 
 from .base import LogitsProcessor
 from .builtin import LogitBiasLogitsProcessor
+from .thinking_budget import ThinkingBudgetLogitsProcessor
 
 
 def load_class(spec: str):
@@ -67,4 +68,5 @@ __all__ = [
     "build_logits_processors",
     "LogitsProcessor",
     "LogitBiasLogitsProcessor",
+    "ThinkingBudgetLogitsProcessor",
 ]
