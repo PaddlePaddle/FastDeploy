@@ -1,13 +1,14 @@
 # Adapted from https://github.com/thinking-machines-lab/batch_invariant_ops/blob/main/batch_invariant_ops/batch_invariant_ops.py
 
 import contextlib
-import logging
 import os
 from collections import namedtuple
 from collections.abc import Callable
 from typing import Any, Dict
 
-logger = logging.getLogger("fastdeploy.deterministic")
+from fastdeploy.utils import get_logger
+
+logger = get_logger("worker_process", "worker_process.log")
 
 import paddle
 import triton
@@ -156,7 +157,7 @@ def get_compute_units():
 def matmul_persistent(a: paddle.Tensor, b: paddle.Tensor, bias: paddle.Tensor | None = None):
     # Check constraints.
     assert a.shape[1] == b.shape[0], "Incompatible dimensions"
-    assert a.dtype == b.dtype, "Incompatible dtypes"
+    assert a.dtype == b.dtype, f"Incompatible dtypes: a={a.dtype}, b={b.dtype}"
     assert bias is None or bias.dim() == 1, "Currently assuming bias is 1D, let Horace know if you run into this"
 
     NUM_SMS = get_compute_units()

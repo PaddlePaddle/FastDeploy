@@ -24,8 +24,18 @@ import fastdeploy.envs as envs
 from fastdeploy.utils import register_custom_python_op
 
 # Constants
-DEFAULT_CUSTOM_ALL_REDUCE_MAX_BYTES = 8192 * 1024
 SUPPORTED_DTYPES = (paddle.float32, paddle.float16, paddle.bfloat16)
+
+
+def tensor_byte_size(tensor: paddle.Tensor) -> int:
+    """Compute tensor size in bytes from .shape to avoid numel() which
+    triggers cudaErrorStreamCaptureImplicit during CUDA Graph capture."""
+    size = 1
+    for s in tensor.shape:
+        size *= s
+    size *= tensor.element_size()
+    return size
+
 
 # Global custom all-reduce instance
 _TP_AR = None
@@ -43,8 +53,10 @@ def capture_custom_allreduce():
 
 def use_custom_allreduce(
     tp_group: paddle.distributed.communication.group.Group = None,
-    custom_all_reduce_max_bytes: int = DEFAULT_CUSTOM_ALL_REDUCE_MAX_BYTES,
+    custom_all_reduce_max_bytes: int = None,
 ) -> None:
+    if custom_all_reduce_max_bytes is None:
+        custom_all_reduce_max_bytes = envs.FD_CUSTOM_AR_MAX_SIZE_MB * 1024 * 1024
     if tp_group is None:
         hcg = fleet.get_hybrid_communicate_group()
         tp_group = hcg.get_model_parallel_group()
@@ -58,6 +70,60 @@ def custom_ar_clear_ipc_handles():
     global _TP_AR
     if _TP_AR is not None:
         _TP_AR.clear_ipc_handles()
+
+
+def _ensure_deterministic_ready(input_: paddle.Tensor) -> None:
+    """Validate all preconditions for deterministic all-reduce."""
+    global _TP_AR
+    # Lazy initialization of custom all-reduce
+    if _TP_AR is None:
+        try:
+            hcg = fleet.get_hybrid_communicate_group()
+            tp_group = hcg.get_model_parallel_group()
+            if tp_group is not None and tp_group.nranks > 1:
+                use_custom_allreduce(tp_group)
+        except Exception as e:
+            raise RuntimeError(
+                "DETERMINISTIC_MODE is enabled but cannot auto-initialize custom all-reduce. "
+                "TP all-reduce would use NCCL which may produce non-deterministic results "
+                "due to floating-point accumulation order. "
+                "Ensure fleet is initialized before any TP operations, "
+                "or explicitly call use_custom_allreduce() beforehand."
+            ) from e
+
+    if _TP_AR is None:
+        raise RuntimeError(
+            "DETERMINISTIC_MODE is enabled but custom all-reduce is not available. "
+            "Falling back to NCCL would produce non-deterministic results. "
+            "Ensure custom all-reduce is properly initialized via use_custom_allreduce()."
+        )
+
+    if input_.dtype not in SUPPORTED_DTYPES:
+        raise AssertionError(
+            f"DETERMINISTIC_MODE is enabled but input tensor dtype={input_.dtype} is not supported. "
+            f"Custom all-reduce only supports: {', '.join(str(d) for d in SUPPORTED_DTYPES)}. "
+            f"Input tensor shape: {input_.shape}, dtype: {input_.dtype}."
+        )
+
+    # Compute size from .shape to avoid numel() which triggers
+    # cudaErrorStreamCaptureImplicit during CUDA Graph capture
+    inp_size = tensor_byte_size(input_)
+
+    if inp_size % 16 != 0:
+        raise RuntimeError(
+            f"DETERMINISTIC_MODE is enabled but input tensor size ({inp_size} bytes) "
+            f"is not a multiple of 16. Custom all-reduce requires 16-byte aligned tensors. "
+            f"Input tensor shape: {input_.shape}, element_size: {input_.element_size()} bytes, "
+            f"total size: {inp_size} bytes."
+        )
+
+    if inp_size > _TP_AR.max_size:
+        raise RuntimeError(
+            f"DETERMINISTIC_MODE: input tensor ({inp_size} bytes) exceeds "
+            f"custom all-reduce max_size ({_TP_AR.max_size} bytes). "
+            f"Increase buffer size via: export FD_CUSTOM_AR_MAX_SIZE_MB="
+            f"{(inp_size // (1024 * 1024)) + 1}"
+        )
 
 
 try:
@@ -84,54 +150,15 @@ try:
             return input_
 
         if envs.FD_DETERMINISTIC_MODE:
-            # Lazy initialization of custom all-reduce for deterministic mode
-            if _TP_AR is None:
-                try:
-                    hcg = fleet.get_hybrid_communicate_group()
-                    tp_group = hcg.get_model_parallel_group()
-                    if tp_group is not None and tp_group.nranks > 1:
-                        use_custom_allreduce(tp_group)
-                except Exception as e:
-                    raise RuntimeError(
-                        "DETERMINISTIC_MODE is enabled but cannot auto-initialize custom all-reduce. "
-                        "TP all-reduce would use NCCL which may produce non-deterministic results "
-                        "due to floating-point accumulation order. "
-                        "Ensure fleet is initialized before any TP operations, "
-                        "or explicitly call use_custom_allreduce() beforehand."
-                    ) from e
-            if input_.dtype not in SUPPORTED_DTYPES:
-                raise AssertionError(
-                    f"DETERMINISTIC_MODE is enabled but input tensor dtype={input_.dtype} is not supported. "
-                    f"Custom all-reduce only supports: {', '.join(str(d) for d in SUPPORTED_DTYPES)}. "
-                    f"Input tensor shape: {input_.shape}, dtype: {input_.dtype}."
-                )
-            # Compute size from .shape to avoid numel() which triggers
-            # cudaErrorStreamCaptureImplicit during CUDA Graph capture
-            inp_size = 1
-            for s in input_.shape:
-                inp_size *= s
-            inp_size *= input_.element_size()
-            # Check 16-byte alignment requirement for deterministic mode
-            if inp_size % 16 != 0:
-                raise RuntimeError(
-                    f"DETERMINISTIC_MODE is enabled but input tensor size ({inp_size} bytes) "
-                    f"is not a multiple of 16. Custom all-reduce requires 16-byte aligned tensors. "
-                    f"Input tensor shape: {input_.shape}, element_size: {input_.element_size()} bytes, "
-                    f"total size: {inp_size} bytes."
-                )
+            _ensure_deterministic_ready(input_)
+            return _TP_AR.custom_all_reduce(input_)
 
-        # Use custom all-reduce if available and applicable
+        # for performance, use custom all-reduce if possible
         if _TP_AR is not None and _TP_AR.should_custom_ar(input_):
             # TODO: supports different_group custom allreduce
-            input_ = _TP_AR.custom_all_reduce(input_)
-        elif paddle.in_dynamic_mode():
-            if envs.FD_DETERMINISTIC_MODE:
-                raise RuntimeError(
-                    "DETERMINISTIC_MODE is enabled but falling back to NCCL all-reduce in dynamic mode. "
-                    "This may produce non-deterministic results due to floating-point "
-                    "accumulation order. "
-                    "Ensure custom all-reduce is properly initialized via use_custom_allreduce()."
-                )
+            return _TP_AR.custom_all_reduce(input_)
+
+        if paddle.in_dynamic_mode():
             if group_ is not None:
                 dist.all_reduce(input_, group=group_)
             else:
@@ -139,13 +166,6 @@ try:
                 mp_group = hcg.get_model_parallel_group()
                 dist.all_reduce(input_, group=mp_group)
         else:
-            if envs.FD_DETERMINISTIC_MODE:
-                raise RuntimeError(
-                    "DETERMINISTIC_MODE is enabled but using NCCL all-reduce in static mode. "
-                    "This may produce non-deterministic results due to floating-point "
-                    "accumulation order. "
-                    "Use dynamic mode with custom all-reduce enabled for deterministic results."
-                )
             dist.all_reduce(input_)
         return input_
 

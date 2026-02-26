@@ -78,10 +78,57 @@ def test_custom_allreduce_deterministic(rank, world_size, dtype):
         paddle.seed(42 + rank)
         x = _create_tensor(TENSOR_SIZE, dtype, rank)
         result = tensor_model_parallel_all_reduce(x)
-        results.append(result.numpy().copy())
+        results.append(result.astype("float32").numpy().copy())
         dist.barrier()
 
     communication.custom_ar_clear_ipc_handles()
+    return _check_results_identical(results)
+
+
+def _init_large_custom_allreduce(world_size: int):
+    """Initialize custom all-reduce with 128MB buffer for large tensor tests."""
+    _enable_deterministic_mode()
+    large_max_size = 128 * 1024 * 1024  # 128MB
+    mp_group = dist.new_group(ranks=list(range(world_size)))
+    # Properly close old instance to free GPU buffers and IPC handles
+    if communication._TP_AR is not None:
+        communication._TP_AR.close()
+        communication._TP_AR = None
+    communication.use_custom_allreduce(mp_group, large_max_size)
+
+
+def test_large_tensor_correctness(rank, world_size, dtype):
+    """Large tensor (> default 8MB) should produce correct results with increased max_size."""
+    # 2M elements * 2 bytes (bf16) = 4MB; 8M elements * 2 bytes = 16MB (> 8MB default)
+    large_sizes = [2 * 1024 * 1024, 8 * 1024 * 1024]
+    for large_size in large_sizes:
+        expected_val = float(world_size * (world_size + 1) // 2)
+        x = paddle.full([large_size, 1], float(rank + 1), dtype=dtype)
+        result = tensor_model_parallel_all_reduce(x)
+
+        # Cast to float32 before numpy() since bfloat16 has no native numpy support
+        result_np = result.astype("float32").numpy().flatten()
+        max_diff = abs(result_np - expected_val).max()
+        if max_diff > 0.01:
+            raise AssertionError(
+                f"Large tensor AR mismatch for {dtype}, size={large_size}: "
+                f"expected={expected_val}, got_sample={result_np[:5]}, max_diff={max_diff}"
+            )
+        dist.barrier()
+
+
+def test_large_tensor_deterministic(rank, world_size, dtype):
+    """Multiple runs of large tensor all-reduce must produce bitwise-identical results."""
+    # 8M elements * 2 bytes (bf16) = 16MB, exceeds default 8MB
+    large_size = 8 * 1024 * 1024
+    results = []
+    for _ in range(NUM_RUNS):
+        paddle.seed(42 + rank)
+        x = _create_tensor(large_size, dtype, rank)
+        result = tensor_model_parallel_all_reduce(x)
+        results.append(result.astype("float32").numpy().copy())
+        dist.barrier()
+
     return _check_results_identical(results)
 
 
@@ -132,13 +179,31 @@ def main():
     print("PASS: unsupported dtype (int32) raises AssertionError")
     dist.barrier()
 
-    # Determinism tests for supported dtypes
+    # Determinism tests for supported dtypes (small tensors)
     for dtype in SUPPORTED_DTYPES:
         assert test_custom_allreduce_deterministic(
             rank, world_size, dtype
         ), f"Custom all-reduce is NOT deterministic for {dtype}"
         print(f"PASS: custom all-reduce deterministic for {dtype}")
         dist.barrier()
+
+    # Large tensor tests (> default 8MB, using increased max_size)
+    # Create one 128MB instance shared by all dtype tests to avoid IPC buffer leaks
+    _init_large_custom_allreduce(world_size)
+
+    for dtype in SUPPORTED_DTYPES:
+        test_large_tensor_correctness(rank, world_size, dtype)
+        print(f"PASS: large tensor all-reduce correctness for {dtype}")
+        dist.barrier()
+
+    for dtype in SUPPORTED_DTYPES:
+        assert test_large_tensor_deterministic(
+            rank, world_size, dtype
+        ), f"Large tensor all-reduce is NOT deterministic for {dtype}"
+        print(f"PASS: large tensor all-reduce deterministic for {dtype}")
+        dist.barrier()
+
+    communication.custom_ar_clear_ipc_handles()
 
     print("All tests passed.")
 
