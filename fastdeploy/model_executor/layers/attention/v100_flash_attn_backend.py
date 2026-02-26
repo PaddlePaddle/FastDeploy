@@ -128,8 +128,16 @@ class V100FlashAttentionBackend(AttentionBackend):
         # V100 specific: prefer FP16 over BF16
         self._use_fp16 = True
 
-        self._use_triton = _TRITON_KERNELS_AVAILABLE
-        if self._use_triton:
+        import os
+
+        force_python = os.environ.get("FD_V100_USE_PYTHON_ATTN", "0") == "1"
+        self._use_triton = _TRITON_KERNELS_AVAILABLE and not force_python
+        if force_python:
+            logger.info(
+                "V100FlashAttentionBackend: FD_V100_USE_PYTHON_ATTN=1 set, "
+                "forcing Python/Paddle fallback (Triton kernels disabled)."
+            )
+        elif self._use_triton:
             logger.info("V100FlashAttentionBackend initialized for SM70 GPU (using Triton kernels).")
         else:
             logger.info(
@@ -538,7 +546,10 @@ class V100FlashAttentionBackend(AttentionBackend):
         is_dummy_run = getattr(forward_meta, "is_dummy_or_profile_run", False)
 
         if is_dummy_run:
-            return self._simple_attention_forward(q, k, v, num_heads, kv_num_heads, qk_head_dim, v_head_dim)
+            # For V100 with Triton/tiled attention, actual inference uses O(1) extra memory
+            # (flash-decoding), not O(n^2) like naive attention. Avoid OOM in dummy run
+            # by returning zeros instead of computing full attention on all tokens.
+            return paddle.zeros([num_tokens, num_heads * v_head_dim], dtype=q.dtype)
 
         # Get RoPE style from layer
         use_neox_rotary_style = getattr(layer, "use_neox_rotary_style", False)
