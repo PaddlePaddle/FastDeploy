@@ -522,14 +522,16 @@ def v100_decode_attn_stage2(
         lse_idx = pid_batch * (num_heads * num_kv_splits) + pid_head * num_kv_splits + s
         lse_val = tl.load(partial_lse_ptr + lse_idx)
 
-        # Skip if this split had no valid KV (lse = -inf)
-        w = tl.exp(lse_val - max_lse)
+        # Guard against empty splits: lse=-inf means no valid KV tokens were processed.
+        # Even with zeros init, protect against 0*NaN=NaN from potential Triton SM70 edge cases.
+        is_valid = lse_val > float("-inf")
+        w = tl.where(is_valid, tl.exp(lse_val - max_lse), 0.0)
         sum_exp += w
 
         out_base = (
             pid_batch * (num_heads * num_kv_splits * head_dim) + pid_head * (num_kv_splits * head_dim) + s * head_dim
         )
-        partial = tl.load(partial_out_ptr + out_base + offs_d, mask=d_mask, other=0.0)
+        partial = tl.load(partial_out_ptr + out_base + offs_d, mask=d_mask & is_valid, other=0.0)
         acc += w * partial
 
     # Normalize
@@ -572,8 +574,8 @@ def v100_decode_attention(
     # Constexpr upper bound for blocks per split
     MAX_BLOCKS_PER_SPLIT = ceil_div(max_kv_blocks, num_kv_splits) + 1
 
-    # Allocate partial buffers
-    partial_out = paddle.empty([batch_size, num_heads, num_kv_splits, head_dim], dtype="float32")
+    # Allocate partial buffers (use zeros to prevent NaN from uninitialized memory in empty splits)
+    partial_out = paddle.zeros([batch_size, num_heads, num_kv_splits, head_dim], dtype="float32")
     partial_lse = paddle.full([batch_size, num_heads, num_kv_splits], float("-inf"), dtype="float32")
 
     # Stage 1

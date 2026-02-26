@@ -480,6 +480,155 @@ class TestDecodeAttention(unittest.TestCase):
             rtol=5e-2,
         )
 
+    @skip_if_no_gpu
+    @skip_if_no_triton
+    def test_small_kv_len(self):
+        """Test decode attention with small kv_len (e.g. 7), simulating early decode steps.
+
+        This exercises the case where num_kv_splits > actual KV blocks,
+        which previously caused NaN from uninitialized partial_out memory.
+        """
+        from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
+            v100_decode_attention,
+        )
+
+        num_heads = 16
+        kv_num_heads = 4
+        head_dim = 128
+        group_size = num_heads // kv_num_heads
+        block_size = 64
+        kv_len = 7  # very small: only 1 block, but num_kv_splits may be > 1
+        max_num_blocks = 8
+
+        key_cache = paddle.randn([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        value_cache = paddle.randn([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        block_tables = paddle.to_tensor([[0, 1, 2, 3]], dtype="int32")
+
+        q = paddle.randn([1, num_heads, head_dim], dtype="float16")
+
+        # Gather KV from cache for reference (only 7 tokens in block 0)
+        k_seq = key_cache[0, :, :kv_len, :].transpose([1, 0, 2])  # [7, kv_num_heads, head_dim]
+        v_seq = value_cache[0, :, :kv_len, :].transpose([1, 0, 2])
+
+        k_expanded = k_seq.unsqueeze(2).tile([1, 1, group_size, 1]).reshape([kv_len, num_heads, head_dim])
+        v_expanded = v_seq.unsqueeze(2).tile([1, 1, group_size, 1]).reshape([kv_len, num_heads, head_dim])
+
+        ref_out = ref_attention(q, k_expanded, v_expanded, is_causal=True)
+
+        output = paddle.empty([1, num_heads, head_dim], dtype="float16")
+        seq_lens = paddle.to_tensor([kv_len], dtype="int32")
+        q_start_locs = paddle.to_tensor([0], dtype="int32")
+
+        v100_decode_attention(
+            q,
+            key_cache,
+            value_cache,
+            output,
+            block_tables,
+            seq_lens,
+            q_start_locs,
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            head_dim**-0.5,
+        )
+
+        # Verify no NaN
+        self.assertFalse(
+            np.any(np.isnan(output.cast("float32").numpy())),
+            "Decode attention output contains NaN (empty split corruption)",
+        )
+        np.testing.assert_allclose(
+            output.cast("float32").numpy(),
+            ref_out.cast("float32").numpy(),
+            atol=5e-2,
+            rtol=5e-2,
+        )
+
+    @skip_if_no_gpu
+    @skip_if_no_triton
+    def test_multi_sequence_decode(self):
+        """Test decode attention with multiple sequences of varying kv_len."""
+        from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
+            v100_decode_attention,
+        )
+
+        num_heads = 16
+        kv_num_heads = 4
+        head_dim = 128
+        group_size = num_heads // kv_num_heads
+        block_size = 64
+        max_num_blocks = 16
+        batch_size = 3
+        kv_lens = [7, 65, 3]  # varied: 1 block, 2 blocks, < 1 block
+
+        key_cache = paddle.randn([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        value_cache = paddle.randn([max_num_blocks, kv_num_heads, block_size, head_dim], dtype="float16")
+        # Each sequence gets its own blocks
+        block_tables = paddle.to_tensor(
+            [
+                [0, 1, 2, 3],
+                [4, 5, 6, 7],
+                [8, 9, 10, 11],
+            ],
+            dtype="int32",
+        )
+
+        q = paddle.randn([batch_size, num_heads, head_dim], dtype="float16")
+        seq_lens = paddle.to_tensor(kv_lens, dtype="int32")
+        q_start_locs = paddle.to_tensor([0, 1, 2], dtype="int32")
+
+        output = paddle.empty([batch_size, num_heads, head_dim], dtype="float16")
+
+        v100_decode_attention(
+            q,
+            key_cache,
+            value_cache,
+            output,
+            block_tables,
+            seq_lens,
+            q_start_locs,
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            head_dim**-0.5,
+        )
+
+        # Verify no NaN in any sequence
+        self.assertFalse(
+            np.any(np.isnan(output.cast("float32").numpy())),
+            "Multi-sequence decode attention output contains NaN",
+        )
+
+        # Verify each sequence individually against reference
+        for i, kv_len in enumerate(kv_lens):
+            num_blocks = (kv_len + block_size - 1) // block_size
+            k_blocks = []
+            v_blocks = []
+            remaining = kv_len
+            for b in range(num_blocks):
+                phys_block = int(block_tables[i, b].item())
+                tokens_in_block = min(block_size, remaining)
+                k_blocks.append(key_cache[phys_block, :, :tokens_in_block, :].transpose([1, 0, 2]))
+                v_blocks.append(value_cache[phys_block, :, :tokens_in_block, :].transpose([1, 0, 2]))
+                remaining -= tokens_in_block
+            k_seq = paddle.concat(k_blocks, axis=0)
+            v_seq = paddle.concat(v_blocks, axis=0)
+
+            k_expanded = k_seq.unsqueeze(2).tile([1, 1, group_size, 1]).reshape([kv_len, num_heads, head_dim])
+            v_expanded = v_seq.unsqueeze(2).tile([1, 1, group_size, 1]).reshape([kv_len, num_heads, head_dim])
+
+            q_i = q[i : i + 1]
+            ref_out = ref_attention(q_i, k_expanded, v_expanded, is_causal=True)
+
+            np.testing.assert_allclose(
+                output[i : i + 1].cast("float32").numpy(),
+                ref_out.cast("float32").numpy(),
+                atol=5e-2,
+                rtol=5e-2,
+                err_msg=f"Sequence {i} (kv_len={kv_len}) mismatch",
+            )
+
 
 class TestExtendAttention(unittest.TestCase):
     """Test v100_extend_attention (tiled flash attention for prefill)."""
@@ -555,7 +704,6 @@ def run_benchmark():
     try:
         from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
             v100_compute_positions,
-            v100_fused_rope,
             v100_write_kv_cache,
         )
     except ImportError:
@@ -614,56 +762,6 @@ def run_benchmark():
         speedup = python_time / triton_time if triton_time > 0 else float("inf")
         print(
             f"[compute_positions] tokens={num_tokens:>5d}  "
-            f"Triton={triton_time:.3f}ms  Python={python_time:.3f}ms  "
-            f"Speedup={speedup:.1f}x"
-        )
-
-    print()
-
-    # --- Benchmark: Fused RoPE ---
-    for num_tokens in [32, 128, 512]:
-        num_heads = 32
-        kv_num_heads = 8
-        head_dim = 128
-        max_seq_len = 2048
-        rotary_dim = head_dim // 2
-
-        q = paddle.randn([num_tokens, num_heads, head_dim], dtype="float16")
-        k = paddle.randn([num_tokens, kv_num_heads, head_dim], dtype="float16")
-        rotary_embs = paddle.randn([2, 1, max_seq_len, 1, rotary_dim], dtype="float16")
-        positions = paddle.randint(0, max_seq_len, [num_tokens], dtype="int64")
-
-        for _ in range(warmup):
-            q_c, k_c = q.clone(), k.clone()
-            v100_fused_rope(q_c, k_c, rotary_embs, positions, use_neox_style=False)
-        paddle.device.cuda.synchronize()
-
-        start = time.perf_counter()
-        for _ in range(repeat):
-            q_c, k_c = q.clone(), k.clone()
-            v100_fused_rope(q_c, k_c, rotary_embs, positions, use_neox_style=False)
-        paddle.device.cuda.synchronize()
-        triton_time = (time.perf_counter() - start) / repeat * 1000
-
-        cos = rotary_embs[0, 0, :, 0, :]
-        sin = rotary_embs[1, 0, :, 0, :]
-        cos_f32 = cos.cast("float32")
-        sin_f32 = sin.cast("float32")
-        for _ in range(warmup):
-            q_c, k_c = q.clone(), k.clone()
-            ref_apply_rope_interleaved(q_c.cast("float32"), k_c.cast("float32"), cos_f32, sin_f32, positions)
-        paddle.device.cuda.synchronize()
-
-        start = time.perf_counter()
-        for _ in range(repeat):
-            q_c, k_c = q.clone(), k.clone()
-            ref_apply_rope_interleaved(q_c.cast("float32"), k_c.cast("float32"), cos_f32, sin_f32, positions)
-        paddle.device.cuda.synchronize()
-        python_time = (time.perf_counter() - start) / repeat * 1000
-
-        speedup = python_time / triton_time if triton_time > 0 else float("inf")
-        print(
-            f"[fused_rope]        tokens={num_tokens:>5d}  "
             f"Triton={triton_time:.3f}ms  Python={python_time:.3f}ms  "
             f"Speedup={speedup:.1f}x"
         )
