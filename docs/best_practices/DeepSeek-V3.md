@@ -29,15 +29,15 @@ export FD_ATTENTION_BACKEND="MLA_ATTN"
 export FLAGS_flash_attn_version=3
 
 python -m fastdeploy.entrypoints.openai.api_server \
---model "$MODEL_PATH" \
---port 8180 \
---metrics-port 8181 \
---engine-worker-queue-port 8182
---cache-queue-port 8183
---tensor-parallel-size 8
---max-model-len 16384
---max-num-seq 100
---no-enable-prefix-caching
---quantization wint4
+    --model "$MODEL_PATH" \
+    --port 8180 \
+    --metrics-port 8181 \
+    --engine-worker-queue-port 8182 \
+    --cache-queue-port 8183 \
+    --tensor-parallel-size 8 \
+    --max-model-len 16384 \
+    --max-num-seq 100 \
+    --no-enable-prefix-caching \
+    --quantization wint4
 
 ```
