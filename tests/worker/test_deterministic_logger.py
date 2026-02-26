@@ -28,14 +28,18 @@ import numpy as np
 # ``from fastdeploy.worker.deterministic_logger import ...`` does NOT
 # execute fastdeploy/__init__.py (which pulls in paddle, paddleformers, etc.).
 _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-for _pkg, _rel_path in [("fastdeploy", "fastdeploy"), ("fastdeploy.worker", "fastdeploy/worker")]:
+for _pkg, _rel_path in [
+    ("fastdeploy", "fastdeploy"),
+    ("fastdeploy.logger", "fastdeploy/logger"),
+    ("fastdeploy.worker", "fastdeploy/worker"),
+]:
     if _pkg not in sys.modules:
         _mod = types.ModuleType(_pkg)
         _mod.__path__ = [os.path.join(_project_root, _rel_path)]
         _mod.__package__ = _pkg
         sys.modules[_pkg] = _mod
 
-from fastdeploy.worker.deterministic_logger import DeterministicLogger  # noqa: E402
+from fastdeploy.logger.deterministic_logger import DeterministicLogger  # noqa: E402
 
 
 def _make_tensor(array):
@@ -299,6 +303,42 @@ class TestLogBatchStart(unittest.TestCase):
             logger.log_batch_start(None)
         output = "\n".join(cm.output)
         self.assertIn("Batch_1", output)
+
+
+class TestLogPrefillInput(unittest.TestCase):
+    def test_logs_prefill_input(self):
+        logger = DeterministicLogger(share_inputs={})
+        with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
+            logger.log_prefill_input(
+                request_id="req-001",
+                idx=0,
+                prefill_start_index=0,
+                prefill_end_index=5,
+                input_ids=[101, 102, 103, 104, 105],
+            )
+        output = "\n".join(cm.output)
+        self.assertIn("[DETERMINISM] Prefill input", output)
+        self.assertIn("request_id: req-001", output)
+        self.assertIn("idx: 0", output)
+        self.assertIn("prefill_start_index: 0", output)
+        self.assertIn("prefill_end_index: 5", output)
+        self.assertIn("[101, 102, 103, 104, 105]", output)
+
+    def test_logs_with_nonzero_start_index(self):
+        logger = DeterministicLogger(share_inputs={})
+        with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
+            logger.log_prefill_input(
+                request_id="req-002",
+                idx=3,
+                prefill_start_index=10,
+                prefill_end_index=20,
+                input_ids=list(range(20)),
+            )
+        output = "\n".join(cm.output)
+        self.assertIn("request_id: req-002", output)
+        self.assertIn("idx: 3", output)
+        self.assertIn("prefill_start_index: 10", output)
+        self.assertIn("prefill_end_index: 20", output)
 
 
 if __name__ == "__main__":

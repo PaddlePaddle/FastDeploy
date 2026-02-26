@@ -789,12 +789,9 @@ class GPUModelRunner(ModelRunnerBase):
 
                 # Log complete input_ids for input determinism verification
                 # Note: Only current request info is logged here; batch info is logged during forward
-                if envs.FD_DETERMINISTIC_LOG_MODE:
-                    logger.info(
-                        f"[DETERMINISM] Prefill input - request_id: {request.request_id}, "
-                        f"idx: {idx}, prefill_start_index: {prefill_start_index}, "
-                        f"prefill_end_index: {prefill_end_index}, "
-                        f"input_ids: {input_ids}"
+                if self.deterministic_logger is not None:
+                    self.deterministic_logger.log_prefill_input(
+                        request.request_id, idx, prefill_start_index, prefill_end_index, input_ids
                     )
 
                 self.share_inputs["prompt_ids"][idx : idx + 1, :prompt_len] = np.array(prompt_token_ids, dtype="int64")
