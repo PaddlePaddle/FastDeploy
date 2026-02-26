@@ -498,7 +498,10 @@ def mean_batch_invariant(
 ) -> paddle.Tensor:
     assert dtype is None or dtype == paddle.float32, f"unsupported dtype: {dtype}"
     if axis is None:  # Global mean (no axis specified)
-        n_elems = x.numel()
+        # Avoid x.numel() to prevent cudaErrorStreamCaptureImplicit during CUDA Graph capture
+        n_elems = 1
+        for s in x.shape:
+            n_elems *= s
         result = paddle.sum(x, keepdim=keepdim, dtype=paddle.float32) / n_elems
     elif type(axis) is int:
         result = mean_dim(x, axis, keepdim=keepdim)
