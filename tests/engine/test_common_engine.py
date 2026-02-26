@@ -912,13 +912,18 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             eng.start_zmq_service(api_server_pid="test_pid")
 
             # Verify Thread was created with recv_result_handle target (line 1093)
-            mock_thread.assert_called()
-            call_kwargs = mock_thread.call_args[1]
-            self.assertEqual(call_kwargs["target"], mock_send_server.recv_result_handle)
-            self.assertTrue(call_kwargs["daemon"])
+            # Note: start_zmq_service creates 3 threads in total:
+            # 1. recv_result_handle_thread (Internal Adapter mode only)
+            # 2. insert_task_to_scheduler_thread
+            # 3. receive_output_thread
+            # We check the first call for recv_result_handle_thread
+            self.assertTrue(mock_thread.call_count >= 1)
+            first_call_kwargs = mock_thread.call_args_list[0][1]
+            self.assertEqual(first_call_kwargs["target"], mock_send_server.recv_result_handle)
+            self.assertTrue(first_call_kwargs["daemon"])
 
             # Verify thread was started (line 1096)
-            mock_thread_instance.start.assert_called_once()
+            mock_thread_instance.start.assert_called()
 
             # Verify InternalAdapter was created
             mock_internal_adapter.assert_called_once()
@@ -978,11 +983,11 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         ):
             eng._insert_zmq_task_to_scheduler()
 
-            # Verify abort request was processed (line 1157)
-            self.assertIn("abort_req_1", eng.resource_manager.abort_req_ids_set)
+            # When is_paused=True, the abort request is added then immediately removed
+            # (lines 1157, 1162): abort_req_ids_set.add then discard when is_paused
+            self.assertNotIn("abort_req_1", eng.resource_manager.abort_req_ids_set)
 
-            # Since is_paused=True, should discard from abort_req_ids_set (line 1162)
-            # and log info (line 1161)
+            # Verify logger was called for the paused engine case (line 1161)
             mock_logger.info.assert_called()
 
         # Test the else branch: req_id in self.resource_manager.requests (line 1163)
