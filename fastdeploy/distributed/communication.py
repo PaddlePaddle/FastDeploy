@@ -1,3 +1,4 @@
+"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+"""
 
 from contextlib import contextmanager, nullcontext
 
@@ -77,6 +78,7 @@ try:
         input_: paddle.Tensor,
         group_: paddle.distributed.communication.group.Group = None,
     ) -> paddle.Tensor:
+        """All-reduce the input tensor across model parallel group."""
         global _TP_AR
         if input_.shape[0] == 0:
             return input_
@@ -161,7 +163,6 @@ try:
 
 except:
     tensor_model_parallel_all_reduce = None
-
 
 from paddle.distributed.communication import stream
 from paddle.distributed.communication.reduce import ReduceOp
