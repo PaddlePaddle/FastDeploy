@@ -355,17 +355,8 @@ class DataProcessor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
-<<<<<<< HEAD
-=======
-
-        logits_processors_args = request.get("logits_processors_args") or {}
-        logits_processors_args = self._update_thinking_prompt_state(
-            request["prompt_token_ids"], logits_processors_args
-        )
-        request["logits_processors_args"] = logits_processors_args
 
         max_tokens = max_model_len - len(request["prompt_token_ids"])
->>>>>>> 6d3fede24 ([OP][Feature] 统一 limit_thinking_content_length CUDA 算子，支持回复长度限制与注入序列 (#6493))
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_tokens)
         else:

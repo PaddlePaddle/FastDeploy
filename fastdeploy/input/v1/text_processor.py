@@ -350,13 +350,6 @@ class DataProcessor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
             request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
-<<<<<<< HEAD
-        if request.sampling_params.max_tokens is None:
-            request.sampling_params.max_tokens = max(1, max_model_len - len(request.prompt_token_ids))
-=======
-        logits_processors_args = getattr(request.sampling_params, "logits_processors_args", None) or {}
-        logits_processors_args = self._update_thinking_prompt_state(request.prompt_token_ids, logits_processors_args)
-        request.sampling_params.logits_processors_args = logits_processors_args
 
         max_tokens = max_model_len - len(request.prompt_token_ids)
         if getattr(request.sampling_params, "max_tokens", None) is None:
@@ -364,7 +357,6 @@ class DataProcessor(BaseDataProcessor):
         else:
             request.sampling_params.max_tokens = min(max_tokens, request.sampling_params.max_tokens)
 
->>>>>>> 6d3fede24 ([OP][Feature] 统一 limit_thinking_content_length CUDA 算子，支持回复长度限制与注入序列 (#6493))
         if request.sampling_params.temperature < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request.sampling_params.temperature = 1
