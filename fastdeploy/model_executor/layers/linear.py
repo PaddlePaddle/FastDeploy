@@ -258,7 +258,7 @@ class LinearBase(nn.Layer):
         Raises:
             NotImplementedError: If the weight dtype is not float8 or act dtype is not equal to weight dtype.
         """
-        if self.weight_dtype == paddle.float32:
+        if self.weight_dtype == "float32":
             linear_out = self.quant_method.apply(self, x.cast("float32"))
         else:
             linear_out = self.quant_method.apply(self, x)
