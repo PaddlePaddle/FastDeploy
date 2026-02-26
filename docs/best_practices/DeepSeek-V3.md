@@ -19,7 +19,7 @@ Installation process reference document [FastDeploy GPU Installation](../get_sta
 
 ### 2.1 Basics: Starting the Service
 
-**Example 1:** Deploying a Wint4 model 16K context service on an H100 with eight GPUs
+**Example 1:** Deploying a Wint4 model 16K context service on an H800 with eight GPUs
 
 ```shell
 
