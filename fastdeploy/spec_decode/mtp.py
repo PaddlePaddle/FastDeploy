@@ -504,10 +504,6 @@ class MTPProposer(Proposer):
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                     self.model_inputs["recompute_token_num"][idx : idx + 1] = 0
                     self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = length + 1
-                    self.model_inputs["draft_tokens"][idx : idx + 1, 0 : length + 1] = paddle.to_tensor(
-                        request.draft_token_ids[0 : length + 1],
-                        dtype="int64",
-                    )
                     # NOTE(liuzichang):
                     # extra 1 : P-D split need rollback one step
                     self.model_inputs["mask_rollback"][idx : idx + 1] = 1
