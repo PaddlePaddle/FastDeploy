@@ -623,7 +623,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
             mock_connection_manager = AsyncMock()
             mock_queue = AsyncMock()
             mock_queue.get.side_effect = GeneratorExit("Generator closed")
-            mock_connection_manager.get_connection.return_value = (AsyncMock(), mock_queue)
+            mock_connection_manager.get_connection.return_value = mock_queue
             mock_connection_manager.running = True
 
             with patch.object(self.engine, "connection_manager", mock_connection_manager):
@@ -666,9 +666,8 @@ class TestAsyncLLMEngine(unittest.TestCase):
             # Mock connection_manager and response queue
             mock_queue = AsyncMock()
             mock_queue.get.return_value = [ro_dict]
-            mock_dealer = AsyncMock()
             mock_cm = AsyncMock()
-            mock_cm.get_connection.return_value = (mock_dealer, mock_queue)
+            mock_cm.get_connection.return_value = mock_queue
             mock_cm.running = True
             # Force cleanup_request to raise so we hit the except/pass branch
             mock_cm.cleanup_request.side_effect = Exception("cleanup error")

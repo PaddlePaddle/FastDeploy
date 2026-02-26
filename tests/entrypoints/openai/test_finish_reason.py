@@ -247,10 +247,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
         ]
 
         mock_response_queue = AsyncMock()
-        mock_dealer = Mock()
-        self.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
-        )
+        self.engine_client.connection_manager.get_connection = AsyncMock(return_value=mock_response_queue)
 
         mock_processor_instance = Mock()
         mock_processor_instance.enable_multimodal_content.return_value = True
@@ -333,9 +330,6 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             },
         ]
 
-        mock_dealer = Mock()
-        self.engine_client.connection_manager.get_connection = AsyncMock(return_value=(mock_dealer, AsyncMock()))
-
         for case in test_cases:
             with self.subTest(case=case["name"]):
                 request_dict = {
@@ -368,7 +362,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                         "output_token_ids": case["output_token_num"],
                     }
                 ]
-                self.engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+                self.engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
                 result = await self.completion_serving.completion_full_generator(
                     request=case["request"],
@@ -430,9 +424,6 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             },
         ]
 
-        mock_dealer = Mock()
-        self.engine_client.connection_manager.get_connection = AsyncMock(return_value=(mock_dealer, AsyncMock()))
-
         mock_processor_instance = Mock()
         mock_processor_instance.enable_multimodal_content.return_value = False
 
@@ -470,7 +461,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     tool_call=case["tool_call"],
                 )
                 mock_response_queue.get.side_effect = stream_responses
-                self.engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+                self.engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
                 generator = self.chat_serving.chat_completion_stream_generator(
                     request=case["request"],
@@ -533,9 +524,6 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             },
         ]
 
-        mock_dealer = Mock()
-        self.engine_client.connection_manager.get_connection = AsyncMock(return_value=(mock_dealer, AsyncMock()))
-
         for case in test_cases:
             with self.subTest(case=case["name"]):
                 request_dict = {
@@ -557,7 +545,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     request_id="test_completion_stream_0", total_token_num=case["total_token_num"]
                 )
                 mock_response_queue.get.side_effect = stream_responses
-                self.engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+                self.engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
                 generator = self.completion_serving.completion_stream_generator(
                     request=case["request"],

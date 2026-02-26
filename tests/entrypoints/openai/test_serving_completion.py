@@ -447,8 +447,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
         mock_response_queue = AsyncMock()
 
         # Create mock response data with prompt_logprobs
@@ -484,7 +482,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ]
 
         mock_response_queue.get.return_value = mock_response_data
-        mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        mock_engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
         # Create serving completion instance
         serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)
@@ -543,8 +541,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
         mock_response_queue = AsyncMock()
 
         # Create mock response data with logprobs
@@ -577,7 +573,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ]
 
         mock_response_queue.get.return_value = mock_response_data
-        mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        mock_engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
         # Create serving completion instance
         serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)
@@ -638,8 +634,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
         mock_response_queue = AsyncMock()
 
         # Create mock response data with both prompt_logprobs and logprobs
@@ -679,7 +673,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ]
 
         mock_response_queue.get.return_value = mock_response_data
-        mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        mock_engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
         # Create serving completion instance
         serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)
@@ -743,8 +737,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
         mock_response_queue = AsyncMock()
 
         # Create mock response data without logprobs
@@ -776,7 +768,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ]
 
         mock_response_queue.get.return_value = mock_response_data
-        mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        mock_engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
         # Create serving completion instance
         serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)
@@ -879,8 +871,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
         mock_response_queue = AsyncMock()
 
         # Create mock response data with prompt_logprobs
@@ -916,7 +906,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ]
 
         mock_response_queue.get.return_value = mock_response_data
-        mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        mock_engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
         # Create serving completion instance
         serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)
@@ -971,8 +961,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
         mock_response_queue = AsyncMock()
         # Create mock response data with logprobs
         mock_response_data = [
@@ -1004,7 +992,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ]
 
         mock_response_queue.get.return_value = mock_response_data
-        mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        mock_engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
         # Create serving completion instance
         serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)
@@ -1058,8 +1046,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
         mock_response_queue = AsyncMock()
 
         # Create mock response data with both prompt_logprobs and logprobs
@@ -1099,7 +1085,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ]
 
         mock_response_queue.get.return_value = mock_response_data
-        mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        mock_engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
         # Create serving completion instance
         serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)
@@ -1156,8 +1142,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
         mock_response_queue = AsyncMock()
 
         # Create mock response data without logprobs
@@ -1186,7 +1170,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ]
 
         mock_response_queue.get.return_value = mock_response_data
-        mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        mock_engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
         # Create serving completion instance
         serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)
@@ -1289,13 +1273,11 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
-        mock_dealer = Mock()
-        mock_dealer.write = Mock()
         mock_response_queue = AsyncMock()
 
         # Make response_queue.get raise CancelledError
         mock_response_queue.get.side_effect = asyncio.CancelledError("Test cancellation")
-        mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        mock_engine_client.connection_manager.get_connection.return_value = mock_response_queue
 
         # Create serving completion instance
         serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)

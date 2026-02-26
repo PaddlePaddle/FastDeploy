@@ -35,7 +35,6 @@ class TestOpenAIServingReward(unittest.IsolatedAsyncioTestCase):
 
         self.mock_engine_client.check_model_weight_status = AsyncMock(return_value=False)
 
-        mock_dealer = MagicMock()
         mock_response_queue = MagicMock()
         self.response_data: PoolingRequestOutput = PoolingRequestOutput(
             request_id="test_request_id",
@@ -50,9 +49,7 @@ class TestOpenAIServingReward(unittest.IsolatedAsyncioTestCase):
             ]
         )
 
-        self.mock_engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
-        )
+        self.mock_engine_client.connection_manager.get_connection = AsyncMock(return_value=mock_response_queue)
 
         self.mock_engine_client.connection_manager.cleanup_request = AsyncMock()
         self.mock_engine_client.format_and_add_data = AsyncMock(return_value=[[1, 2, 3]])

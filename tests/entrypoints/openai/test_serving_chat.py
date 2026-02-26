@@ -280,7 +280,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         prompt_tokens = "Hello world"
 
         # Mock the connection manager and response queue
-        mock_dealer = MagicMock()
         mock_response_queue = AsyncMock()
 
         # Create mock response with prompt_logprobs data
@@ -316,7 +315,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Mock the connection manager
         self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
+            return_value=mock_response_queue
         )
 
         # Mock the semaphore
@@ -388,7 +387,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         prompt_tokens = "Hello world"
 
         # Mock the connection manager and response queue
-        mock_dealer = MagicMock()
         mock_response_queue = AsyncMock()
 
         # Create mock response with logprobs data
@@ -424,7 +422,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Mock the connection manager
         self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
+            return_value=mock_response_queue
         )
 
         # Mock the semaphore
@@ -499,7 +497,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         prompt_tokens = "Hello world"
 
         # Mock the connection manager and response queue
-        mock_dealer = MagicMock()
         mock_response_queue = AsyncMock()
 
         # Create mock response with both logprobs data
@@ -541,7 +538,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Mock the connection manager
         self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
+            return_value=mock_response_queue
         )
 
         # Mock the semaphore
@@ -619,7 +616,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         prompt_tokens = "Hello world"
 
         # Mock the connection manager and response queue
-        mock_dealer = MagicMock()
         mock_response_queue = AsyncMock()
 
         # Create mock response without logprobs data
@@ -650,7 +646,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Mock the connection manager
         self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
+            return_value=mock_response_queue
         )
 
         # Mock the semaphore
@@ -712,7 +708,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         prompt_tokens = "Hello world"
 
         # Mock the connection manager and response queue
-        mock_dealer = MagicMock()
         mock_response_queue = AsyncMock()
 
         # Create mock response with prompt_logprobs data
@@ -748,7 +743,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Mock the connection manager
         self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
+            return_value=mock_response_queue
         )
 
         # Mock the semaphore
@@ -815,7 +810,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         prompt_tokens = "Hello world"
 
         # Mock the connection manager and response queue
-        mock_dealer = MagicMock()
         mock_response_queue = AsyncMock()
 
         # Create mock response with logprobs data
@@ -851,7 +845,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Mock the connection manager
         self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
+            return_value=mock_response_queue
         )
 
         # Mock the semaphore
@@ -914,7 +908,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         prompt_tokens = "Hello world"
 
         # Mock the connection manager and response queue
-        mock_dealer = MagicMock()
         mock_response_queue = AsyncMock()
 
         # Create mock response with both logprobs data
@@ -954,7 +947,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Mock the connection manager
         self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
+            return_value=mock_response_queue
         )
 
         # Mock the semaphore
@@ -1018,7 +1011,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         prompt_tokens = "Hello world"
 
         # Mock the connection manager and response queue
-        mock_dealer = MagicMock()
         mock_response_queue = AsyncMock()
 
         # Create mock response without logprobs data
@@ -1050,7 +1042,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Mock the connection manager
         self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
+            return_value=mock_response_queue
         )
 
         # Mock the semaphore
@@ -1135,12 +1127,11 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         prompt_tokens = "Hello world"
 
         # Mock the connection manager
-        mock_dealer = MagicMock()
         mock_response_queue = AsyncMock()
 
         # Mock get_connection to return normally
         self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
-            return_value=(mock_dealer, mock_response_queue)
+            return_value=mock_response_queue
         )
 
         # Mock the semaphore
