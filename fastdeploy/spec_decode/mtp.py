@@ -123,8 +123,9 @@ class MTPProposer(Proposer):
         self.model_inputs = ProposerInputBatch(self.fd_config, self.target_model_inputs)
         self.model_inputs.init_share_inputs()
 
-        self._real_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
-        self._d2h_done_event = paddle.device.cuda.Event()
+        if current_platform.is_cuda() or current_platform.is_maca():
+            self._real_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
+            self._d2h_done_event = paddle.device.cuda.Event()
 
         # CUDA Graph
         self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph
