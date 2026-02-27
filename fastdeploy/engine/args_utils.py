@@ -222,6 +222,11 @@ class EngineArgs:
     """
     Maximum number of tokens to batch together.
     """
+    chunked_prefill_size: Optional[int] = None
+    """
+    The maximum number of tokens in a prefill batch. Similar to SGLang's chunked_prefill_size.
+    Will be dynamically calculated based on GPU memory if not specified.
+    """
     kv_cache_ratio: float = 0.75
     """
     Ratio of tokens to process in a block.
@@ -985,6 +990,13 @@ class EngineArgs:
             help="Maximum number of tokens to batch together.",
         )
         parallel_group.add_argument(
+            "--chunked-prefill-size",
+            type=int,
+            default=EngineArgs.chunked_prefill_size,
+            help="The maximum number of tokens in a prefill batch. "
+            "If not specified, will be dynamically calculated based on GPU memory.",
+        )
+        parallel_group.add_argument(
             "--gpu-memory-utilization",
             type=float,
             default=EngineArgs.gpu_memory_utilization,
@@ -1455,6 +1467,33 @@ class EngineArgs:
                     self.max_num_batched_tokens = 2048
                 else:
                     self.max_num_batched_tokens = self.max_model_len
+
+        # SGLang-aligned: dynamically calculate chunked_prefill_size based on GPU memory
+        if self.chunked_prefill_size is None and int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
+            if current_platform.is_cuda():
+                try:
+                    # Use paddle (like other FD code) instead of torch
+                    import paddle
+                    gpu_mem = paddle.device.cuda.get_device_properties(0).total_memory / (1024 ** 3)  # GB
+                    # SGLang's chunked_prefill_size logic:
+                    if gpu_mem < 20:
+                        self.chunked_prefill_size = 2048
+                    elif gpu_mem < 35:
+                        self.chunked_prefill_size = 2048
+                    elif gpu_mem < 60:
+                        self.chunked_prefill_size = 4096
+                    elif gpu_mem < 160:
+                        self.chunked_prefill_size = 8192  # H100, H20, H200, 140GB
+                    else:
+                        self.chunked_prefill_size = 16384  # B200, MI300
+                    console_logger.info(f"Auto-detected GPU memory: {gpu_mem:.1f}GB, chunked_prefill_size: {self.chunked_prefill_size}")
+                except Exception as e:
+                    console_logger.warning(f"Failed to detect GPU memory, using default chunked_prefill_size: {e}")
+                    self.chunked_prefill_size = 8192  # default for 140GB
+            elif current_platform.is_maca():
+                self.chunked_prefill_size = self.max_model_len
+            else:
+                self.chunked_prefill_size = 8192  # default for non-CUDA platforms
 
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg

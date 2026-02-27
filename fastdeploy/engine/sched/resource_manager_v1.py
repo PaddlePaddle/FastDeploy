@@ -690,16 +690,19 @@ class ResourceManagerV1(ResourceManager):
                 break
         return matched_token_num
 
-    def _get_num_new_tokens(self, request, token_budget):
-        # TODO: set condition to new _get_num_new_tokens
+    def _get_num_new_tokens(self, request, chunked_prefill_size, token_budget):
+        # SGLang-aligned: use min(chunked_prefill_size, token_budget) as the limit
+        # chunked_prefill_size is the max tokens for a single request (like SGLang's rem_chunk_tokens)
+        # token_budget (max_num_batched_tokens) is the total batch budget (like SGLang's rem_total_tokens)
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
-        num_new_tokens = min(num_new_tokens, token_budget)
+        # SGLang logic: _rem_tokens = min(rem_chunk_tokens, rem_total_tokens)
+        num_new_tokens = min(num_new_tokens, chunked_prefill_size, token_budget)
         if (
             current_platform.is_intel_hpu()
-            and request.need_prefill_tokens - request.num_computed_tokens > token_budget
-            and token_budget > self.config.cache_config.block_size
+            and request.need_prefill_tokens - request.num_computed_tokens > min(chunked_prefill_size, token_budget)
+            and min(chunked_prefill_size, token_budget) > self.config.cache_config.block_size
         ):
-            num_new_tokens = token_budget // self.config.cache_config.block_size * self.config.cache_config.block_size
+            num_new_tokens = min(chunked_prefill_size, token_budget) // self.config.cache_config.block_size * self.config.cache_config.block_size
         request.with_image = False
 
         if not self.config.model_config.enable_mm:
@@ -905,6 +908,8 @@ class ResourceManagerV1(ResourceManager):
             preempted_reqs: list[Request] = []
             error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.scheduler_config.max_num_batched_tokens
+            # SGLang-aligned: chunked_prefill_size is per-request limit, token_budget is batch limit
+            chunked_prefill_size = self.config.scheduler_config.chunked_prefill_size
 
             # First, schedule the RUNNING requests.
             req_index = 0
@@ -1070,7 +1075,7 @@ class ResourceManagerV1(ResourceManager):
                     if get_enough_request(request, scheduled_reqs):
                         req_index += 1
                         continue
-                    num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                    num_new_tokens = self._get_num_new_tokens(request, chunked_prefill_size, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
@@ -1146,7 +1151,7 @@ class ResourceManagerV1(ResourceManager):
                         ):
                             continue
                         # Allocate blocks for the tokens that does not hit cache
-                        num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                        num_new_tokens = self._get_num_new_tokens(request, chunked_prefill_size, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             request, num_new_block
@@ -1199,7 +1204,7 @@ class ResourceManagerV1(ResourceManager):
                                 break
 
                         # Allocate blocks for the tokens that does not hit cache
-                        num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                        num_new_tokens = self._get_num_new_tokens(request, chunked_prefill_size, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             request, num_new_block
