@@ -503,6 +503,7 @@ class MTPProposer(Proposer):
                 ):  # In PD, we continue to decode after P generates first token
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                     self.model_inputs["recompute_token_num"][idx : idx + 1] = 0
+                    self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = length + 1
                     # NOTE(liuzichang):
                     # extra 1 : P-D split need rollback one step
                     self.model_inputs["mask_rollback"][idx : idx + 1] = 1

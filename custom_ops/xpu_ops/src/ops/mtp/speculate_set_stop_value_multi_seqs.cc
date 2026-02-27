@@ -17,6 +17,10 @@
 #include "paddle/phi/core/enforce.h"
 #include "xpu/plugin.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 namespace api = baidu::xpu::api;
 void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
                                const paddle::Tensor &accept_num,
@@ -26,7 +30,8 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
                                const paddle::Tensor &seq_lens,
                                const paddle::Tensor &stop_seqs,
                                const paddle::Tensor &stop_seqs_len,
-                               const paddle::Tensor &end_ids) {
+                               const paddle::Tensor &end_ids,
+                               const paddle::Tensor &min_tokens) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
   api::Context *ctx =
@@ -56,6 +61,7 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
       stop_seqs_len.data<int>(),
       seq_lens.data<int>(),
       end_ids.data<int64_t>(),
+      min_tokens.data<int64_t>(),
       bs_now,
       accept_tokens_len,
       stop_seqs_bs,
@@ -64,7 +70,7 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
   PD_CHECK(r == 0, "xpu::plugin::speculate_set_stop_value_multi_seqs failed.");
 }
 
-PD_BUILD_OP(speculate_set_stop_value_multi_seqs)
+PD_BUILD_STATIC_OP(speculate_set_stop_value_multi_seqs)
     .Inputs({"accept_tokens",
              "accept_num",
              "pre_ids",
@@ -73,7 +79,8 @@ PD_BUILD_OP(speculate_set_stop_value_multi_seqs)
              "seq_lens",
              "stop_seqs",
              "stop_seqs_len",
-             "end_ids"})
+             "end_ids",
+             "min_tokens"})
     .Outputs({"accept_tokens_out", "stop_flags_out"})
     .SetInplaceMap({{"accept_tokens", "accept_tokens_out"},
                     {"stop_flags", "stop_flags_out"}})
