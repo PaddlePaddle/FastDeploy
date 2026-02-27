@@ -1,0 +1,29 @@
+max_tokens: 32768
+tools:
+  - type: function
+    function:
+      name: local_knowledge_base_retrieval
+      description: Perform a search on a knowledge source. Returns top-5 hits with docid, score, and snippet.
+      parameters:
+        type: object
+        properties:
+          user_query:
+            type: string
+            description: Query to search the local knowledge base for relevant information
+        required:
+          - user_query
+        additionalProperties: false
+  - type: function
+    function:
+      name: get_document
+      description: Retrieve a full document by its docid.
+      parameters:
+        type: object
+        properties:
+          docid:
+            type: string
+            description: Document ID to retrieve
+        required:
+          - docid
+        additionalProperties: false
+tool_choice: auto

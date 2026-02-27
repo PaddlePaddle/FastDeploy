@@ -37,7 +37,7 @@ For SM80/90 architecture GPUs(e.g A30/A100/H100/):
 python -m pip install fastdeploy-gpu==2.4.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # Install latest Nightly build
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 For SM86/89 architecture GPUs(e.g A10/4090/L20/L40):
@@ -46,7 +46,7 @@ For SM86/89 architecture GPUs(e.g A10/4090/L20/L40):
 python -m pip install fastdeploy-gpu==2.4.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # Install latest Nightly build
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 ## 3. Build from Source Using Docker
@@ -124,6 +124,44 @@ After the build completes, the operator binaries can be found in `FastDeploy/fas
 > - Currently supports **GPU, SM80/90, CUDA 12.6** only.
 > - For custom architectures or modified operator logic, please use **source compilation (Section 4)**.
 > - You can check whether the precompiled wheel for a specific commit has been successfully built on the [FastDeploy CI Build Status Page](https://github.com/PaddlePaddle/FastDeploy/actions/workflows/ci_image_update.yml).
+
+## 6. Python-only Quick Install (For Development)
+
+If you have already completed a full build (`bash build.sh 1 ...`) and only modified Python files, you can use the python-only mode to quickly sync changes to `site-packages` **without recompiling C++ Custom Ops or rebuilding the wheel**.
+
+### Prerequisites
+
+A full build must have been completed at least once:
+
+```shell
+bash build.sh 1 python false [80,90]
+```
+
+### Usage
+
+```shell
+# Argument 1: Must be 2 to enable python-only mode
+# Argument 2 (optional): Python interpreter path (default: python)
+
+# Use default python
+bash build.sh 2
+
+# Use a specific python interpreter
+bash build.sh 2 python3
+
+# Use an absolute path to the interpreter
+bash build.sh 2 /path/to/your/python
+```
+
+This command syncs `.py` files from the source tree directly into the installed `site-packages/fastdeploy/` directory via `rsync`. Compiled artifacts (`.so` files) are preserved.
+
+### When to Use
+
+| Scenario | Recommended Command |
+|---|---|
+| Only modified Python files | `bash build.sh 2` |
+| Modified C++/CUDA code | `bash build.sh 1 python false [80,90]` |
+| First-time build | `bash build.sh 1 python false [80,90]` |
 
 ## Environment Verification
 

@@ -27,6 +27,7 @@ from fastdeploy.config import (
     GraphOptimizationConfig,
     ParallelConfig,
     SchedulerConfig,
+    SpeculativeConfig,
 )
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -98,6 +99,7 @@ class TestGraphOptBackend(unittest.TestCase):
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
+        model_config.mm_max_tokens_per_item = None
         self.baseline_fd_config = FDConfig(
             graph_opt_config=baseline_graph_opt_config,
             scheduler_config=baseline_scheduler_config,
@@ -143,9 +145,11 @@ class TestGraphOptBackend(unittest.TestCase):
         # Setup cache config
         cache_config = CacheConfig({})
         parallel_config = ParallelConfig(args={})
+        speculative_config = SpeculativeConfig(args={})
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
+        model_config.mm_max_tokens_per_item = None
 
         # Create FD config
         return FDConfig(
@@ -154,6 +158,7 @@ class TestGraphOptBackend(unittest.TestCase):
             cache_config=cache_config,
             parallel_config=parallel_config,
             model_config=model_config,
+            speculative_config=speculative_config,
             test_mode=True,
         )
 

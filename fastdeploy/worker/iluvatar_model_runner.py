@@ -14,12 +14,32 @@
 # limitations under the License.
 """
 
+from functools import partial
+
 import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention import IluvatarAttnBackend
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
+
+
+def _patch_before_model_runner():
+    paddle.Tensor.pin_memory = paddle.Tensor.cpu
+    paddle.device.cuda.create_event = partial(paddle.device.custom_device.create_event, device_type="iluvatar_gpu")
+
+    def disable_record(self):
+        pass
+
+    paddle.device.custom_device.Event.record = disable_record
+
+    def disable_synchronize(self):
+        pass
+
+    paddle.device.custom_device.Event.synchronize = disable_synchronize
+
+
+_patch_before_model_runner()
 
 
 class IluvatarModelRunner(GPUModelRunner):

@@ -54,15 +54,24 @@ class ExpertService:
         else:
             self.llm_logger = llm_logger
 
-        if cfg.scheduler_config.splitwise_role != "mixed":
-            if envs.FD_ENABLE_INTERNAL_ADAPTER:
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            assert (
+                envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS is not None or envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT is not None
+            ), "Please set FD_ZMQ_RECV_REQUEST_SERVER_PORTS or FD_ZMQ_RECV_REQUEST_SERVER_PORT when enabling internal adapter."
+            assert (
+                envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS is not None or envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT is not None
+            ), "Please set FD_ZMQ_SEND_RESPONSE_SERVER_PORTS or FD_ZMQ_SEND_RESPONSE_SERVER_PORT when enabling internal adapter."
+            if envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS is not None:
                 envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT = envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS.split(",")[
                     local_data_parallel_id
                 ]
+            if envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS is not None:
                 envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[
                     local_data_parallel_id
                 ]
-        self.llm_logger.info(f"local_data_parallel_id: {local_data_parallel_id}")
+        self.llm_logger.info(
+            f"local_data_parallel_id: {local_data_parallel_id},envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT:{envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT},envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT:{envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT}"
+        )
 
         if self.cfg.cache_config.num_gpu_blocks_override is None:
             self.do_profile = True
@@ -188,9 +197,12 @@ class ExpertService:
             for p in self.cache_manager_processes:
                 self.llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
-                    os.killpg(p.pid, signal.SIGTERM)
-                except:
-                    pass
+                    pgid = os.getpgid(p.pid)
+                    os.killpg(pgid, signal.SIGTERM)
+                except Exception as e:
+                    console_logger.error(
+                        f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
+                    )
 
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
             self.zmq_server.close()
@@ -218,3 +230,8 @@ def start_data_parallel_service(
         t_deamon.join()
     except Exception as e:
         llm_logger.exception(f"Expert service failed to start: {e}, {str(traceback.format_exc())}")
+    finally:
+        try:
+            expert_service._exit_sub_services()
+        except Exception:
+            pass

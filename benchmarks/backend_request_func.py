@@ -17,6 +17,7 @@
 # This file is modified from https://github.com/vllm-project/vllm/blob/main/benchmarks/backend_request_func.py
 
 
+import copy
 import io
 import json
 import os
@@ -54,6 +55,7 @@ class RequestFuncInput:
     pd_metrics: bool = False
     response_format: Optional[dict] = None
     random_flag: bool = False
+    json_data: Optional[dict] = None
 
 
 @dataclass
@@ -78,6 +80,18 @@ class RequestFuncOutput:
     res_ttft: int = 0  # 包含思考首token时延
     error: str = ""
     metrics: dict = field(default_factory=dict)
+
+
+@dataclass
+class SessionMetrics:
+    """多轮对话指标"""
+
+    session_no: int
+    session_e2e_time: float
+    pure_llm_time: float
+    input_tokens: int
+    output_tokens: int
+    tool_calls: int
 
 
 def safe_cost(a, b):
@@ -166,171 +180,442 @@ def metrics_summary(metrics, token_timestamps):
 async def async_request_eb_openai_chat_completions(
     request_func_input: RequestFuncInput,
     pbar: Optional[tqdm] = None,
+    session: aiohttp.ClientSession | None = None,
 ) -> RequestFuncOutput:
     """Request an LLM using EB OpenAI"""
     api_url = request_func_input.api_url
     assert api_url.endswith(("completions", "profile")), "OpenAI Chat Completions API URL must end with 'completions'."
 
-    async with aiohttp.ClientSession(
-        trust_env=True, read_bufsize=10 * 1024 * 1024, timeout=AIOHTTP_TIMEOUT
-    ) as session:
-        content = [{"type": "text", "text": request_func_input.prompt}]
-        if request_func_input.multi_modal_content:
-            content.append(request_func_input.multi_modal_content)
-        payload = {
-            "model": request_func_input.model,
-            "messages": request_func_input.history_QA,
-            "stream": True,
-            "stream_options": {
-                "include_usage": True,
-                "continuous_usage_stats": True,
-            },
-            "max_tokens": request_func_input.output_len,
-            "collect_metrics": request_func_input.pd_metrics,
-        }
-        if request_func_input.response_format:
-            payload["response_format"] = request_func_input.response_format
+    own_session = session is None
+    if own_session:
+        session = aiohttp.ClientSession(
+            trust_env=True,
+            read_bufsize=10 * 1024 * 1024,
+            timeout=AIOHTTP_TIMEOUT,
+        )
 
-        # 超参由yaml传入
-        payload.update(request_func_input.hyper_parameters)
+    content = [{"type": "text", "text": request_func_input.prompt}]
+    if request_func_input.multi_modal_content:
+        content.append(request_func_input.multi_modal_content)
+    # print("######json_data:", request_func_input.json_data)
+    payload = {
+        "model": request_func_input.model,
+        "messages": request_func_input.history_QA,
+        "stream": True,
+        "stream_options": {
+            "include_usage": True,
+            "continuous_usage_stats": True,
+        },
+        "max_tokens": request_func_input.output_len,
+        "collect_metrics": request_func_input.pd_metrics,
+    }
+    if request_func_input.json_data:
+        json_data = request_func_input.json_data
 
-        # 随机输入开关
-        if request_func_input.random_flag:
-            payload["max_tokens"] = request_func_input.output_len
-            metadata = payload.get("metadata", {})
-            metadata["min_tokens"] = request_func_input.output_len
-            payload["metadata"] = metadata
+        if json_data.get("max_tokens"):
+            payload["max_tokens"] = json_data["max_tokens"]
 
-        if request_func_input.ignore_eos:
-            payload["ignore_eos"] = request_func_input.ignore_eos
+        if json_data.get("min_tokens"):
+            payload["min_tokens"] = json_data["min_tokens"]
+    if request_func_input.response_format:
+        payload["response_format"] = request_func_input.response_format
 
-        if request_func_input.debug:
-            print(f"payload:{json.dumps(payload, ensure_ascii=False)}")
+    # 超参由yaml传入
+    payload.update(request_func_input.hyper_parameters)
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}",
-        }
+    # tools信息，yaml优先级最高
+    json_data = request_func_input.json_data or {}
+    hyper = request_func_input.hyper_parameters or {}
 
-        output = RequestFuncOutput()
-        output.prompt_len = 0
-        output.no = request_func_input.no
-        metrics_list = []
-        request_id = "None"
+    tools = None
+    tool_choice = None
 
-        ttft = 0.0
-        res_ttft = 0.0
-        st = time.perf_counter()
-        most_recent_timestamp = st
-        token_timestamps = []
-        try:
-            async with session.post(
-                url=api_url, json=payload, headers=headers, read_bufsize=10 * 1024 * 1024
-            ) as response:
-                data = {}
-                if response.status == 200:
-                    async for chunk_bytes in response.content:
-                        chunk_bytes = chunk_bytes.strip()
-                        if not chunk_bytes:
-                            continue
+    if hyper.get("tools"):
+        tools = hyper.get("tools")
+        tool_choice = hyper.get("tool_choice", "auto")
+    elif json_data.get("tools"):
+        tools = json_data.get("tools")
+        tool_choice = json_data.get("tool_choice", "auto")
 
-                        chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
-                        if chunk != "[DONE]":
-                            # print("####chunk:", chunk, type(chunk))
-                            timestamp = time.perf_counter()
-                            data = json.loads(chunk)
-                            # print("####data:", json.dumps(data, indent=2, ensure_ascii=False))
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = tool_choice
 
-                            if "metrics" in data:
-                                metrics_list.append(data["metrics"])
+    # 随机输入开关
+    if request_func_input.random_flag:
+        payload["max_tokens"] = request_func_input.output_len
+        metadata = payload.get("metadata", {})
+        metadata["min_tokens"] = request_func_input.output_len
+        payload["metadata"] = metadata
 
-                            if request_id == "None" and "id" in data:
-                                request_id = data["id"]
+    if request_func_input.ignore_eos:
+        payload["ignore_eos"] = request_func_input.ignore_eos
 
-                            if choices := data.get("choices"):
-                                content = choices[0]["delta"].get("content")
-                                reason_content = choices[0]["delta"].get("reasoning_content")
-                                # First token
-                                if ttft == 0.0:
-                                    ttft = timestamp - st
-                                    output.ttft = ttft
-                                    # cached_tokens
-                                    if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
-                                        output.prompt_len = (
-                                            data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
-                                        )
-                                    else:
-                                        output.prompt_len = 0
+    if request_func_input.debug:
+        print(f"payload:{json.dumps(payload, ensure_ascii=False)}")
 
-                                # Decoding phase
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}",
+    }
+
+    output = RequestFuncOutput()
+    output.prompt_len = 0
+    output.no = request_func_input.no
+    metrics_list = []
+    request_id = "None"
+
+    ttft = 0.0
+    res_ttft = 0.0
+    st = time.perf_counter()
+    most_recent_timestamp = st
+    token_timestamps = []
+    try:
+        async with session.post(url=api_url, json=payload, headers=headers, read_bufsize=10 * 1024 * 1024) as response:
+            data = {}
+            if response.status == 200:
+                async for chunk_bytes in response.content:
+                    chunk_bytes = chunk_bytes.strip()
+                    if not chunk_bytes:
+                        continue
+
+                    chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
+                    if chunk != "[DONE]":
+                        # print("####chunk:", chunk, type(chunk))
+                        timestamp = time.perf_counter()
+                        data = json.loads(chunk)
+                        # print("####data:", json.dumps(data, indent=2, ensure_ascii=False))
+
+                        if "metrics" in data:
+                            metrics_list.append(data["metrics"])
+
+                        if request_id == "None" and "id" in data:
+                            request_id = data["id"]
+
+                        if choices := data.get("choices"):
+                            content = choices[0]["delta"].get("content")
+                            reason_content = choices[0]["delta"].get("reasoning_content")
+                            # First token
+                            if ttft == 0.0:
+                                ttft = timestamp - st
+                                output.ttft = ttft
+                                # cached_tokens
+                                if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
+                                    output.prompt_len = (
+                                        data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                                    )
                                 else:
-                                    output.itl.append(timestamp - most_recent_timestamp)
+                                    output.prompt_len = 0
 
-                                # response首token
-                                if res_ttft == 0.0:
-                                    if content:
-                                        res_ttft = choices[0].get("arrival_time", timestamp)
-                                        output.res_ttft = res_ttft
-                                        usage = data.get("usage") or {}
-                                        output.reasoning_tokens = max(usage.get("completion_tokens", 0) - 1, 0)
+                            # Decoding phase
+                            else:
+                                output.itl.append(timestamp - most_recent_timestamp)
 
-                                output.generated_text += content or ""
-                                output.reasoning_content += reason_content or ""
-                                # print(f"####content:{data}")
-                                output.arrival_time.append(choices[0].get("arrival_time", timestamp))
-                            elif usage := data.get("usage", {}):
-                                output.output_tokens = usage.get("completion_tokens", 0)
-                                output.prompt_tokens = usage.get("prompt_tokens", 0)
-                                if output.prompt_len == 0:
-                                    if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
-                                        output.prompt_len = (
-                                            data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
-                                        )
+                            # response首token
+                            if res_ttft == 0.0:
+                                if content:
+                                    res_ttft = choices[0].get("arrival_time", timestamp)
+                                    output.res_ttft = res_ttft
+                                    usage = data.get("usage") or {}
+                                    output.reasoning_tokens = max(usage.get("completion_tokens", 0) - 1, 0)
 
-                            most_recent_timestamp = timestamp
-                            token_timestamps.append(time.time())
+                            output.generated_text += content or ""
+                            output.reasoning_content += reason_content or ""
+                            # print(f"####content:{data}")
+                            output.arrival_time.append(choices[0].get("arrival_time", timestamp))
+                        elif usage := data.get("usage", {}):
+                            output.output_tokens = usage.get("completion_tokens", 0)
+                            output.prompt_tokens = usage.get("prompt_tokens", 0)
+                            if output.prompt_len == 0:
+                                if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
+                                    output.prompt_len = (
+                                        data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                                    )
 
-                    # output.generated_text = generated_text
-                    # 在流式结束时，记录最后一个 chunk 收到的时间戳
-                    output.end_timestamp = most_recent_timestamp
+                        most_recent_timestamp = timestamp
+                        token_timestamps.append(time.time())
 
-                    # 新增metrics统计，计算首token过滤空包
-                    output.metrics = metrics_summary(metrics_list, token_timestamps[1:])
+                # output.generated_text = generated_text
+                # 在流式结束时，记录最后一个 chunk 收到的时间戳
+                output.end_timestamp = most_recent_timestamp
 
-                    # 兼容思考内容超长截断的情况，此时回复内容为空
-                    if output.generated_text.strip() == "" and output.reasoning_content.strip() == "":
-                        output.success = False
-                        output.reasoning_tokens = output.output_tokens
-                        output.error = "No generated text found!"
-                    else:
-                        output.success = True
-                    output.latency = most_recent_timestamp - st
-                else:
-                    error_text = await response.text()
-                    print(
-                        "####error response:",
-                        error_text,
-                        "####payload:",
-                        payload,
-                    )
-                    output.error = error_text or ""
+                # 新增metrics统计，计算首token过滤空包
+                output.metrics = metrics_summary(metrics_list, token_timestamps[1:])
+
+                # 兼容思考内容超长截断的情况，此时回复内容为空
+                if output.generated_text.strip() == "" and output.reasoning_content.strip() == "":
                     output.success = False
-        except Exception:
-            output.success = False
-            exc_info = sys.exc_info()
-            output.error = "".join(traceback.format_exception(*exc_info))
+                    output.reasoning_tokens = output.output_tokens
+                    output.error = "No generated text found!"
+                else:
+                    output.success = True
+                output.latency = most_recent_timestamp - st
+            else:
+                error_text = await response.text()
+                print(
+                    "####error response:",
+                    error_text,
+                    "####payload:",
+                    payload,
+                )
+                output.error = error_text or ""
+                output.success = False
+    except Exception:
+        output.success = False
+        exc_info = sys.exc_info()
+        output.error = "".join(traceback.format_exception(*exc_info))
+    finally:
+        if own_session:
+            await session.close()
 
-        output.request_id = request_id
+    output.request_id = request_id
 
-        # 保存失败请求结果
-        if not output.success or output.output_tokens == 0:
-            with open("error_output.txt", "a") as f:
-                f.write(str(output) + "\n")
+    # 保存失败请求结果
+    if not output.success or output.output_tokens == 0:
+        with open("error_output.txt", "a") as f:
+            f.write(str(output) + "\n")
     if pbar:
         pbar.update(1)
     if request_func_input.debug:
         print("#####final_output:", output)
     return output
+
+
+async def simple_tool_call(model_text: str, tool_url: str, timeout=60):
+    """调用工具函数"""
+    import re
+
+    import httpx
+
+    match = re.search(r"<tool_call>(.*?)</tool_call>", model_text, re.S)
+    if not match:
+        return "", False, ""
+
+    block = match.group(1).strip()
+    lines = block.splitlines()
+    tool_name = lines[0].strip()
+
+    key = re.search(r"<arg_key>(.*?)</arg_key>", block)
+    val = re.search(r"<arg_value>(.*?)</arg_value>", block)
+
+    args = {key.group(1): val.group(1)} if key and val else {}
+
+    browsecomp_plus_headers = {"Content-Type": "application/json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                tool_url,
+                headers=browsecomp_plus_headers,
+                json={"tool_name": tool_name, "arguments": args},
+            )
+
+        resp.raise_for_status()
+        obj = resp.json()
+
+        return obj.get("result", resp.text), "result" in obj, tool_name
+
+    except Exception as e:
+        print(f"[TOOL ERROR] {tool_name}: {repr(e)}")
+        return str(e), False, tool_name
+
+
+async def async_request_eb_openai_chat_completions_multi_turn(
+    request_func_input: RequestFuncInput,
+    pbar: Optional[tqdm] = None,
+):
+    # yaml中或数据集中带tools才走工具调用逻辑
+    json_data = request_func_input.json_data or {}
+    hyper = request_func_input.hyper_parameters or {}
+    enable_tools = bool(json_data.get("tools") or hyper.get("tools"))
+
+    outputs = []
+
+    tool_call_count = 0
+    llm_time = 0.0
+    tool_time = 0.0
+    input_tokens = 0
+    output_tokens = 0
+
+    ori_history = request_func_input.history_QA
+    user_count = sum(msg.get("role") == "user" for msg in ori_history)
+    print("START", request_func_input.no, "user对话轮数:", user_count, flush=True)
+    history = []
+    prompt_no = 0
+
+    # 只创建一次 session
+    session_start = time.perf_counter()
+    connector = aiohttp.TCPConnector(
+        limit=0,
+        limit_per_host=0,
+        keepalive_timeout=60,
+    )
+
+    async with aiohttp.ClientSession(
+        connector=connector,
+        trust_env=True,
+        read_bufsize=10 * 1024 * 1024,
+        timeout=AIOHTTP_TIMEOUT,
+    ) as session:
+        for i, message in enumerate(ori_history):
+            if message["role"] == "user" or message["role"] == "tool":
+                history.append(message)
+                round_input = copy.deepcopy(request_func_input)
+                round_input.history_QA = history
+                round_input.no = f"{round_input.no}_{prompt_no}"
+                # 复用 session
+                s0 = time.perf_counter()
+                output = await async_request_eb_openai_chat_completions(
+                    round_input,
+                    pbar=None,
+                    session=session,
+                )
+                s1 = time.perf_counter()
+                llm_time += s1 - s0
+
+                outputs.append(output)
+
+                if not output.success:
+                    session_end = time.perf_counter()
+                    metrics = SessionMetrics(
+                        session_no=request_func_input.no,
+                        session_e2e_time=session_end - session_start,
+                        pure_llm_time=llm_time,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        tool_calls=tool_call_count,
+                    )
+                    return outputs, metrics
+
+                # llm_cost = s1 - s0
+                input_tokens += output.prompt_tokens
+                output_tokens += output.output_tokens
+
+                if enable_tools:
+                    # 循环调用工具
+                    max_loop = json_data.get("max_loop", 10)
+                    tool_url = json_data.get("tool_url", "")
+                    if not tool_url:
+                        raise ValueError("tool_url is empty.")
+                    for _ in range(max_loop):
+                        t0 = time.perf_counter()
+                        tool_result, is_tool_result, tool_name = await simple_tool_call(
+                            output.generated_text,
+                            tool_url,
+                        )
+                        t1 = time.perf_counter()
+                        tool_time += t1 - t0
+                        # print(f"#### tool_time: {t1 - t0:.3f}")
+                        # print(f"#### tool_result: {tool_result}")
+                        # print(f"#### is_tool_result: {is_tool_result}")
+
+                        # 工具调用失败
+                        if tool_name and not is_tool_result:
+                            print(f"[SESSION FAIL] tool call failed: {tool_name}")
+
+                            output.success = False
+                            outputs.append(output)
+
+                            session_end = time.perf_counter()
+                            session_e2e_time = session_end - session_start
+                            tool_call_count += 1
+
+                            metrics = SessionMetrics(
+                                session_no=request_func_input.no,
+                                session_e2e_time=session_e2e_time,
+                                pure_llm_time=llm_time,
+                                input_tokens=input_tokens,
+                                output_tokens=output_tokens,
+                                tool_calls=tool_call_count,
+                            )
+
+                            return outputs, metrics
+
+                        if not is_tool_result:
+                            history.append(
+                                {
+                                    "role": "assistant",
+                                    "content": output.generated_text,
+                                }
+                            )
+                            break
+
+                        history.append(
+                            {
+                                "role": "assistant",
+                                "content": output.generated_text,
+                            }
+                        )
+
+                        history.append(
+                            {
+                                "role": "tool",
+                                "content": json.dumps(tool_result, ensure_ascii=False),
+                                "tool_call_id": tool_name,
+                            }
+                        )
+                        tool_call_count += 1
+
+                        round_input.history_QA = history
+
+                        s0 = time.perf_counter()
+                        output = await async_request_eb_openai_chat_completions(
+                            round_input,
+                            pbar=None,
+                            session=session,
+                        )
+                        s1 = time.perf_counter()
+                        llm_time += s1 - s0
+
+                        outputs.append(output)
+
+                        if not output.success:
+                            session_end = time.perf_counter()
+                            metrics = SessionMetrics(
+                                session_no=request_func_input.no,
+                                session_e2e_time=session_end - session_start,
+                                pure_llm_time=llm_time,
+                                input_tokens=input_tokens,
+                                output_tokens=output_tokens,
+                                tool_calls=tool_call_count,
+                            )
+                            return outputs, metrics
+
+                        input_tokens += output.prompt_tokens
+                        output_tokens += output.output_tokens
+                    else:
+                        print(f"Warning exceed max_loop={max_loop}, force stop tool loop")
+
+                    prompt_no += 1
+                else:
+                    # 无tools
+                    history.append(
+                        {
+                            "role": "assistant",
+                            "content": output.generated_text,
+                        }
+                    )
+            elif message["role"] == "assistant":
+                continue
+            else:
+                history.append(message)
+
+    session_end = time.perf_counter()
+    session_e2e_time = session_end - session_start
+
+    if pbar:
+        pbar.update(1)
+
+    metrics = SessionMetrics(
+        session_no=request_func_input.no,
+        session_e2e_time=session_e2e_time,
+        pure_llm_time=llm_time,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        tool_calls=tool_call_count,
+    )
+
+    return outputs, metrics
 
 
 async def async_request_eb_openai_completions(
@@ -834,6 +1119,7 @@ ASYNC_REQUEST_FUNCS = {
     "deepspeed-mii": async_request_deepspeed_mii,
     "openai": async_request_eb_openai_completions,
     "openai-chat": async_request_eb_openai_chat_completions,
+    "openai-chat-multi-turn": async_request_eb_openai_chat_completions_multi_turn,
     "openai-audio": async_request_openai_audio,
     "tensorrt-llm": async_request_trt_llm,
     "scalellm": async_request_openai_completions,

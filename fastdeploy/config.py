@@ -227,6 +227,7 @@ class ModelConfig:
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
+        self.mm_max_tokens_per_item = None
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
@@ -266,9 +267,11 @@ class ModelConfig:
             setattr(self, "freq_allocation", self.rope_scaling["mrope_section"][0])
 
         self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
+        self.think_start_id = args.get("think_start_id", -1)
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
+        self.think_truncate_prompt_ids = args.get("think_truncate_prompt_ids", [-1])
 
         num_max_logprobs = args.get("max_logprobs", None)
         if num_max_logprobs is not None and num_max_logprobs < -1:
@@ -718,7 +721,7 @@ class SpeculativeConfig:
         self,
         args,
     ):
-        self.method_list = ["ngram_match", "mtp"]
+        self.method_list = ["ngram_match", "mtp", "suffix"]
         self.mtp_strategy_list = ["default", "with_ngram"]
 
         # speculative method, choose in [None, "ngram_match", "mtp", "hybrid_mtp_ngram"]
@@ -736,6 +739,15 @@ class SpeculativeConfig:
         # ngram match
         self.max_ngram_size: int = 5
         self.min_ngram_size: int = 2
+        # Suffix Decoding
+        # The maximum length of token sequences cached in suffix trees.
+        self.suffix_decoding_max_tree_depth: int = 64
+        # The limits of requests that can be stored in the cache.
+        self.suffix_decoding_max_cached_requests: int = -1
+        # The factor of matched length, calculated as num_draft_tokens = suffix_max_spec_factor * matched_length
+        self.suffix_decoding_max_spec_factor: float = 1.0
+        # The probability threshold for speculated tokens.
+        self.suffix_decoding_min_token_prob: float = 0.1
         # model for mtp/eagle/draft_model
         self.model: Optional[str] = None
         # quantization of model
@@ -936,6 +948,8 @@ class GraphOptimizationConfig:
         self.max_capture_size: int = None
         """ Record maps mapped from real shape to captured size to reduce runtime overhead """
         self.real_shape_to_captured_size: dict[int, int] = None
+        """ Record maps mapped from real batch size to captured size"""
+        self.real_bsz_to_captured_size: dict[int, int] = {}
         """ Whether to use shared memory pool for multi capture_size """
         self.use_unique_memory_pool: bool = True
         """ Whether to use cudagraph for draft model."""
@@ -1225,6 +1239,7 @@ class LoadConfig:
         args,
     ):
         self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
+        self.is_pre_sharded: bool = False
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot", "meta", "normal", "rsync"]] = "normal"
         self.rsync_config: Optional[Dict[str, Any]] = None
@@ -1391,6 +1406,7 @@ class CacheConfig:
         self.kvcache_storage_backend = None
         self.write_policy = None
         self.num_cpu_blocks = None
+        self.use_mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
 
         for key, value in args.items():
             if hasattr(self, key):
@@ -1405,35 +1421,16 @@ class CacheConfig:
                 self.cache_dtype = self.model_cfg.quantization.get("kv_cache_quant_type", self.cache_dtype)
             if self.model_cfg.quantization_config is not None:
                 self.cache_dtype = self.model_cfg.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
-            if (
-                hasattr(self.model_cfg, "num_key_value_heads")
-                and hasattr(self.model_cfg, "num_key_value_heads")
-                and self.model_cfg.num_key_value_heads is not None
-                and int(self.model_cfg.num_key_value_heads) > 0
-            ):
-                kv_num_head = int(self.model_cfg.num_key_value_heads)
-            else:
-                kv_num_head = self.model_cfg.num_attention_heads
-            self.model_cfg.kv_num_head = kv_num_head
-            # TODO check name
-            if "int4" in self.cache_dtype.lower() or "float4" in self.cache_dtype.lower():
-                byte_size = 0.5
-                self.cache_dtype = "uint8"
-            elif "int8" in self.cache_dtype.lower() or "float8" in self.cache_dtype.lower():
-                self.cache_dtype = "uint8"
-                byte_size = 1
-            else:
-                byte_size = 2
-            self.each_token_cache_space = int(
-                self.model_cfg.num_hidden_layers * kv_num_head * self.model_cfg.head_dim * byte_size
+            self.head_num = getattr(self.model_cfg, "num_key_value_heads", None) or getattr(
+                self.model_cfg, "num_attention_heads", None
             )
-            self.bytes_per_block = int(self.each_token_cache_space * self.block_size)
-            self.bytes_per_layer_per_block = int(
-                self.block_size
-                * self.model_cfg.kv_num_head
-                * self.model_cfg.head_dim
-                // args["tensor_parallel_size"]
-                * byte_size
+            self.head_dim = getattr(self.model_cfg, "head_dim")
+            self.byte_size = self.get_cache_bytes(self.cache_dtype)
+            self.kv_factor = 1 if self.use_mla_cache else 2
+
+            self.bytes_per_token_per_layer = int(self.head_num * self.head_dim * self.byte_size * self.kv_factor)
+            self.bytes_per_block = int(
+                self.bytes_per_token_per_layer * self.block_size * self.model_cfg.num_hidden_layers
             )
 
         if self.num_cpu_blocks is None:
@@ -1443,6 +1440,19 @@ class CacheConfig:
                 self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
 
         self._verify_args()
+
+    @staticmethod
+    def get_cache_bytes(cache_dtype: str):
+        if any(t in cache_dtype.lower() for t in ["float32", "fp32"]):
+            return 4
+        elif any(t in cache_dtype.lower() for t in ["float16", "bf16", "fp16"]):
+            return 2
+        elif any(t in cache_dtype.lower() for t in ["uint8", "int8", "float8", "fp8"]):
+            return 1
+        elif any(t in cache_dtype.lower() for t in ["int4"]):
+            return 0.5
+        else:
+            raise ValueError(f"Unsupported cache dtype: {cache_dtype}")
 
     def metrics_info(self):
         """Convert cache_config to dict(key: str, value: str) for prometheus metrics info."""
@@ -1627,6 +1637,9 @@ class RoutingReplayConfig:
         # Only save last turn
         self.only_last_turn: bool = False
 
+        # Fused routing of all layers
+        self.use_fused_put: bool = False
+
         if args is not None:
             for key, value in args.items():
                 if hasattr(self, key) and value != "None":
@@ -1685,7 +1698,6 @@ class FDConfig:
         self.quant_config: Optional[QuantConfigBase] = quant_config
         self.graph_opt_config: Optional[GraphOptimizationConfig] = graph_opt_config
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
-        self.cache_config: CacheConfig = cache_config  # type: ignore
         self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
@@ -1693,15 +1705,20 @@ class FDConfig:
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
-        if self.speculative_config is not None and self.speculative_config.method == "mtp":
+        if self.speculative_config is not None and self.speculative_config.method in ["mtp", "suffix"]:
             max_capture_shape = self.scheduler_config.max_num_seqs * (
                 self.speculative_config.num_speculative_tokens + 1
             )
             assert max_capture_shape % 2 == 0, "CUDAGraph only supports capturing even token nums in MTP scenarios."
+            self.graph_opt_config.real_bsz_to_captured_size = {
+                k: 0 for k in range(1, self.scheduler_config.max_num_seqs + 1)
+            }
         if self.graph_opt_config.cudagraph_only_prefill:
             max_capture_shape = 512
         else:
-            max_capture_shape = min(512, max_capture_shape)
+            max_capture_shape = (
+                max_capture_shape if self.speculative_config is not None else min(512, max_capture_shape)
+            )
 
         max_capture_shape_prefill = graph_opt_config.max_capture_shape_prefill
 
@@ -1716,6 +1733,31 @@ class FDConfig:
                 max_capture_shape_prefill=max_capture_shape_prefill,
                 dec_token_per_query_per_step=dec_token_per_query_per_step,
             )
+        if self.speculative_config is not None and self.speculative_config.method in ["mtp", "suffix"]:
+            real_bsz_to_captured_size = {}
+            for capture_size in self.graph_opt_config.cudagraph_capture_sizes:
+                dummy_batch_size = int(capture_size / (self.speculative_config.num_speculative_tokens + 1))
+                real_bsz_to_captured_size[dummy_batch_size] = capture_size
+
+            def expand_bsz_map(real_bsz_to_captured_size):
+                """
+                Expand a sparse batch size mapping into a dense one.
+
+                Args:
+                    real_bsz_to_captured_size (dict): Sparse batch size to capture size mapping.
+                Returns:
+                    dict: Dense batch size to capture size mapping.
+                """
+                sorted_items = sorted(real_bsz_to_captured_size.items())
+                result = {}
+                prev_bsz = 0
+                for curr_bsz, cap in sorted_items:
+                    for bsz in range(prev_bsz + 1, curr_bsz + 1):
+                        result[bsz] = cap
+                    prev_bsz = curr_bsz
+                return result
+
+            self.graph_opt_config.real_bsz_to_captured_size = expand_bsz_map(real_bsz_to_captured_size)
         self.graph_opt_config.init_with_cudagrpah_size(
             max_capture_size=max_capture_shape,
             max_capture_shape_prefill=max_capture_shape_prefill,
@@ -1830,7 +1872,7 @@ class FDConfig:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
-        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
+        self.cache_config.postprocess(self.get_max_chunk_tokens(), self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
         if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
@@ -1979,7 +2021,7 @@ class FDConfig:
             self.scheduler_config.max_num_batched_tokens
             <= self.model_config.max_model_len * self.scheduler_config.max_num_seqs
         ), (
-            f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be larger"
+            f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be less "
             f"than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} * max_model_len: {self.model_config.max_model_len}"
         )
         assert (
@@ -2142,6 +2184,31 @@ class FDConfig:
             "return_full_hidden_states",
         )
         reset_value(self.cache_config, "cache_dtype", "infer_model_dtype")
+
+    def get_max_chunk_tokens(self, mm_max_tokens_per_item=None):
+        """
+        get max chunk tokens
+
+        The maximum tokens size of a single inference in a multimodal model is influenced by the logic of chunking
+        """
+        if mm_max_tokens_per_item is None:
+            mm_max_tokens_per_item = self.model_config.mm_max_tokens_per_item
+
+        if self.scheduler_config.splitwise_role == "decode":
+            if paddle.is_compiled_with_xpu():
+                num_tokens = self.scheduler_config.max_num_batched_tokens
+            else:
+                num_tokens = self.scheduler_config.max_num_seqs
+        else:
+            num_tokens = self.scheduler_config.max_num_batched_tokens
+            if mm_max_tokens_per_item is not None:
+                max_mm_tokens = max(
+                    mm_max_tokens_per_item.get("image", 0),
+                    mm_max_tokens_per_item.get("video", 0),
+                    mm_max_tokens_per_item.get("audio", 0),
+                )
+                num_tokens = min(num_tokens + max_mm_tokens, self.model_config.max_model_len)
+        return num_tokens
 
     def _check_master(self):
         return self.is_master

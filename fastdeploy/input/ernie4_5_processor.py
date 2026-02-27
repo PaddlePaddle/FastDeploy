@@ -68,7 +68,10 @@ class Ernie4_5Processor(BaseDataProcessor):
                                    {self.tokenizer.bos_token_id}, \
                                    eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
         )
-        from paddleformers.trl.llm_utils import get_eos_token_id
+        try:
+            from paddleformers.trl.llm_utils import get_eos_token_id
+        except Exception:
+            from paddleformers.cli.utils.llm_utils import get_eos_token_id
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
         self.eos_token_id_len = len(self.eos_token_ids)
@@ -107,21 +110,13 @@ class Ernie4_5Processor(BaseDataProcessor):
         # processing prompt_token_ids
         if request.prompt_token_ids is None or len(request.prompt_token_ids) == 0:
             if request.prompt is not None:
-                # prompt = request.prompt if request.prompt is not None else request.messages[0]
                 prompt = request.prompt
-                assert isinstance(prompt, str) or (
-                    isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
-                ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
-
-                if isinstance(prompt, list):  # if prompt is a token id list
-                    request.prompt_token_ids = prompt
-                else:
-                    tokens = self.tokenizer.tokenize(prompt)
-                    token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-                    request.prompt_token_ids = token_ids
-                    data_processor_logger.debug(
-                        f"request_ids: {request.request_id}, prompt: {prompt}, tokens: {tokens}, token_ids: {token_ids}"
-                    )
+                tokens = self.tokenizer.tokenize(prompt)
+                token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+                request.prompt_token_ids = token_ids
+                data_processor_logger.debug(
+                    f"request_ids: {request.request_id}, prompt: {prompt}, tokens: {tokens}, token_ids: {token_ids}"
+                )
             elif request.messages is not None:
                 task = request.to_dict()
                 chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
@@ -142,8 +137,11 @@ class Ernie4_5Processor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
             request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
+        max_tokens = max_model_len - len(request.prompt_token_ids)
         if request.get("max_tokens") is None:
-            request.set("max_tokens", max(1, max_model_len - len(request.prompt_token_ids)))
+            request.set("max_tokens", max(1, max_tokens))
+        else:
+            request.set("max_tokens", min(max_tokens, request.get("max_tokens")))
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request.set("temperature", 1)
@@ -216,6 +214,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                                 request[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                    request.setdefault("enable_thinking", True)
                 request["prompt_token_ids"] = self.messages2ids(request, **chat_template_kwargs)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
@@ -226,8 +225,11 @@ class Ernie4_5Processor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+        max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
+            request["max_tokens"] = max(1, max_tokens)
+        else:
+            request["max_tokens"] = min(max_tokens, request["max_tokens"])
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request["temperature"] = 1
@@ -246,6 +248,8 @@ class Ernie4_5Processor(BaseDataProcessor):
             else:
                 self.model_status_dict[request["request_id"]] = model_status
             request["enable_thinking"] = model_status == "think_start"
+        if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
+            request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
         data_processor_logger.info(f"Processed request dict: {request}")
         return request
 

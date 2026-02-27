@@ -41,7 +41,7 @@ python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/
 python -m pip install fastdeploy-gpu==2.4.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # 安装Nightly Build的最新版本fastdeploy
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 如你的 GPU 是 SM86/89 架构(4090/L20/L40等)，按如下方式安装
@@ -51,7 +51,7 @@ python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages
 python -m pip install fastdeploy-gpu==2.4.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # 安装Nightly Build的最新版本fastdeploy
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 ## 3. 镜像自行构建
@@ -130,6 +130,40 @@ bash build.sh 1 python false [90] 1 8a9e7b53af4a98583cab65e4b44e3265a93e56d2
 > - 目前仅支持 **GPU， SM80/90 架构， CUDA 12.6**；
 > - 若希望自定义架构或修改算子逻辑，请使用 **源码编译方式（第4节）**。
 > - 您可以在 FastDeploy CI 构建状态页面查看对应 commit 的预编译 whl 是否已构建成功。
+
+## 6. Python-only 快速安装
+
+如果你已经完成过一次完整编译安装，后续仅修改了 Python 代码，可以使用 Python-only 模式将 Python 文件快速同步到 `site-packages`，**跳过 C++ 算子编译和 Wheel 打包**。
+
+### 前提条件
+
+必须先完成过一次完整编译安装（即执行过 `bash build.sh 1 ...`），确保 `site-packages` 中已有编译产物（`.so` 文件）。
+
+### 使用方式
+
+```bash
+# 使用默认 python
+bash build.sh 2
+
+# 指定 Python 解释器
+bash build.sh 2 python3
+
+# 使用完整路径指定 Python 解释器
+bash build.sh 2 /path/to/your/python
+```
+
+- 第 1 个参数 `2`：表示使用 Python-only 模式
+- 第 2 个参数（可选）：Python 解释器路径或命令名，默认为 `python`
+
+### 适用场景
+
+| 场景 | 推荐方式 |
+|------|----------|
+| 仅修改 Python 文件 | `bash build.sh 2` |
+| 修改了 C++/CUDA 代码 | `bash build.sh 1 python false "[80,90]"` |
+| 首次编译 | `bash build.sh 1 python false "[80,90]"` |
+
+> **注意：** 该模式需要系统安装 `rsync`，若未安装请先执行 `apt-get install rsync` 或 `yum install rsync`。
 
 ## 环境检查
 

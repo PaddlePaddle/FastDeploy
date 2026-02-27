@@ -569,7 +569,13 @@ class CompletionRequest(BaseModel):
         if request_id is not None:
             req_dict["request_id"] = request_id
         if prompt is not None:
-            req_dict["prompt"] = prompt
+            if isinstance(prompt, list) and isinstance(prompt[0], int):
+                # List[int]
+                req_dict["prompt_token_ids"] = prompt
+                req_dict["prompt"] = None
+            else:
+                # str
+                req_dict["prompt"] = prompt
 
         # if "prompt_token_ids" in req_dict:
         #     if "prompt" in req_dict:
@@ -708,6 +714,7 @@ class ChatCompletionRequest(BaseModel):
     chat_template_kwargs: Optional[dict] = None
     chat_template: Optional[str] = None
     reasoning_max_tokens: Optional[int] = None
+    response_max_tokens: Optional[int] = None
     structural_tag: Optional[str] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
     guided_regex: Optional[str] = None

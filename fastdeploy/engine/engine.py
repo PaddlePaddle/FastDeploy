@@ -181,9 +181,20 @@ class LLMEngine:
                 device_ids = self.cfg.parallel_config.device_ids.split(",")
                 self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
-        if self.cfg.scheduler_config.splitwise_role != "mixed" and envs.FD_ENABLE_INTERNAL_ADAPTER:
-            envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT = envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS.split(",")[0]
-            envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[0]
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            assert (
+                envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS is not None or envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT is not None
+            ), "Please set FD_ZMQ_RECV_REQUEST_SERVER_PORTS or FD_ZMQ_RECV_REQUEST_SERVER_PORT when enabling internal adapter."
+            assert (
+                envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS is not None or envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT is not None
+            ), "Please set FD_ZMQ_SEND_RESPONSE_SERVER_PORTS or FD_ZMQ_SEND_RESPONSE_SERVER_PORT when enabling internal adapter."
+            if envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS is not None:
+                envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT = envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS.split(",")[0]
+            if envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS is not None:
+                envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[0]
+        llm_logger.info(
+            f"envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT:{envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT},envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT:{envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT}"
+        )
 
         if api_server_pid is not None:
             llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")
@@ -515,13 +526,44 @@ class LLMEngine:
             else len(self.engine.data_processor.tokenizer.vocab)
         )
 
+        think_start_id = self.data_processor.tokenizer.get_vocab().get("<think>", -1)
+        if think_start_id >= 0:
+            llm_logger.info(f"Get think_start_id {think_start_id} from vocab.")
+        else:
+            llm_logger.info("No <think> token found in vocabulary, the model can not do reasoning.")
         think_end_id = self.data_processor.tokenizer.get_vocab().get("</think>", -1)
-        if think_end_id > 0:
+        if think_end_id >= 0:
             llm_logger.info(f"Get think_end_id {think_end_id} from vocab.")
         else:
             llm_logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
+        if line_break_id < 0:
+            line_break_ids = self.data_processor.tokenizer.encode("\n", add_special_tokens=False)
+            if isinstance(line_break_ids, dict):
+                line_break_ids = line_break_ids.get("input_ids")
+            elif hasattr(line_break_ids, "input_ids"):
+                line_break_ids = line_break_ids.input_ids
+            if line_break_ids:
+                if isinstance(line_break_ids, (list, tuple)):
+                    first = line_break_ids[0]
+                    if isinstance(first, (list, tuple)):
+                        line_break_id = int(first[0]) if first else -1
+                    else:
+                        line_break_id = int(first)
+                else:
+                    line_break_id = int(line_break_ids)
+        if line_break_id >= 0:
+            llm_logger.info(f"Get line_break_id {line_break_id} from tokenizer.")
+        try:
+            think_truncate_prompt_ids = self.data_processor.tokenizer.convert_tokens_to_ids(
+                self.data_processor.tokenizer.tokenize(self.data_processor.tokenizer.think_truncate_prompt)
+            )
+        except Exception:
+            think_truncate_prompt_ids = self.data_processor.tokenizer.convert_tokens_to_ids(
+                self.data_processor.tokenizer.tokenize(envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR)
+            )
+        llm_logger.info(f"Get think_truncate_prompt_ids {think_truncate_prompt_ids} from tokenizer.")
 
         ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
@@ -549,9 +591,11 @@ class LLMEngine:
             f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
             f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
             f" --ori_vocab_size {ori_vocab_size}"
+            f" --think_start_id {think_start_id}"
             f" --think_end_id {think_end_id}"
             f" --image_patch_id {image_patch_id}"
             f" --line_break_id {line_break_id}"
+            f" --think_truncate_prompt_ids '{json.dumps(think_truncate_prompt_ids)}'"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.structured_outputs_config.guided_decoding_backend}"
@@ -576,8 +620,10 @@ class LLMEngine:
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
+        if self.engine.mm_max_tokens_per_item is not None:
+            arguments += f" --mm_max_tokens_per_item '{json.dumps(self.engine.mm_max_tokens_per_item)}'"
 
-        # TODO (iluvatar): remove aftet paddle fix launch error
+        # TODO (iluvatar): remove after paddle fix launch error
         if current_platform.is_iluvatar() and "CUDA_VISIBLE_DEVICES" in os.environ:
             arguments = arguments.replace(f"--devices {self.cfg.parallel_config.device_ids}", "")
 
@@ -596,6 +642,7 @@ class LLMEngine:
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
             "shutdown_comm_group_if_worker_idle": self.cfg.parallel_config.shutdown_comm_group_if_worker_idle,
             "enable_entropy": self.cfg.model_config.enable_entropy,
+            "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:
@@ -693,6 +740,9 @@ class LLMEngine:
         """
         self.do_profile = 0
         while self.get_profile_block_num_signal.value[0] == 0:
+            if hasattr(self, "worker_proc") and self.worker_proc is not None:
+                if self.worker_proc.poll() is not None:
+                    raise RuntimeError("Worker process failed to start." "Please check log/workerlog.* for details.")
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)

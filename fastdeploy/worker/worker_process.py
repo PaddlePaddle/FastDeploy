@@ -166,6 +166,10 @@ class PaddleDisWorkerProc:
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.speculative_decoding = fd_config.speculative_config.method is not None
+        self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule and (
+            not self.speculative_decoding
+        )
 
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
@@ -306,7 +310,7 @@ class PaddleDisWorkerProc:
         return int(value)
 
     def _tp_barrier_wait(self):
-        if current_platform.is_xpu():
+        if current_platform.is_xpu() or self.enable_overlap_schedule:
             self.task_queue.worker_process_tp_barrier.wait()
         else:
             paddle.distributed.barrier(self.parallel_config.tp_group)
@@ -551,7 +555,11 @@ class PaddleDisWorkerProc:
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
 
-            if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
+            if (
+                (not self.parallel_config.use_ep)
+                and (not self.worker.model_runner.not_need_stop())
+                and (not self.enable_overlap_schedule)
+            ):
                 self._tp_barrier_wait() if tp_size > 1 else None
 
                 time.sleep(0.001)
@@ -813,9 +821,11 @@ def parse_args():
         help="chunk size of moe input",
     )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
+    parser.add_argument("--think_start_id", type=int, default=-1)
     parser.add_argument("--think_end_id", type=int, default=-1)
     parser.add_argument("--image_patch_id", type=int, default=-1)
     parser.add_argument("--line_break_id", type=int, default=-1)
+    parser.add_argument("--think_truncate_prompt_ids", type=json.loads, default=[])
 
     parser.add_argument(
         "--quantization",
@@ -996,6 +1006,13 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--mm_max_tokens_per_item",
+        type=json.loads,
+        default=None,
+        help="Maximum tokens per item in mm input.",
+    )
+
+    parser.add_argument(
         "--num_cpu_blocks",
         type=int,
         default=0,
@@ -1005,6 +1022,12 @@ def parse_args():
         "--kvcache_storage_backend",
         type=str,
         help="KVCache storage backend.",
+    )
+
+    parser.add_argument(
+        "--enable_overlap_schedule",
+        action="store_true",
+        help="Enable overlap schedule",
     )
 
     args = parser.parse_args()
@@ -1170,6 +1193,21 @@ def run_worker_proc() -> None:
     else:
         worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
         worker_proc.init_control()
+
+    # Enable batch-invariant mode for deterministic inference.
+    # This must happen AFTER worker creation but BEFORE model loading,
+    # because enable_batch_invariant_mode() calls paddle.compat.enable_torch_proxy()
+    # which makes torch appear available via proxy. If called before worker creation,
+    # the gpu_model_runner import chain (ernie4_5_vl_processor → paddleformers →
+    # transformers) will fail when transformers tries to query torch metadata.
+    if envs.FD_DETERMINISTIC_MODE:
+        from fastdeploy.model_executor.layers.batch_invariant_ops import (
+            enable_batch_invariant_mode,
+            is_batch_invariant_mode_enabled,
+        )
+
+        if not is_batch_invariant_mode_enabled():
+            enable_batch_invariant_mode()
 
     # Initialize device and create model runner
     worker_proc.init_device()
