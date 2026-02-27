@@ -232,6 +232,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
             request["prompt_tokens"] = request.get("prompt")
+            request.setdefault("enable_thinking", True)
             outputs = self.ernie4_5_processor.text2ids(request["prompt"], images, videos)
         elif request.get("messages"):
             messages = request["messages"]
@@ -244,6 +245,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
                             request[k] = v
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+            request.setdefault("enable_thinking", True)
             outputs = self.ernie4_5_processor.request2ids(request)
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
@@ -264,13 +266,13 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
 
+        max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
+            request["max_tokens"] = max(1, max_tokens)
         else:
-            request["max_tokens"] = min(max_model_len - len(request["prompt_token_ids"]), request["max_tokens"])
+            request["max_tokens"] = min(max_tokens, request["max_tokens"])
         if request.get("reasoning_max_tokens") is None:
             request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
-        data_processor_logger.info(f"Processed request {request}")
 
         if self.reasoning_parser:
             model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
@@ -286,7 +288,10 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request["enable_thinking"] = model_status == "think_start"
         if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
+        if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
+            request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
 
+        data_processor_logger.info(f"Processed request {request}")
         return request
 
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):

@@ -111,7 +111,7 @@ class TestCacheTransferManager(unittest.TestCase):
         self.addCleanup(patcher2.stop)
 
         # --------------------------
-        # mock threading.Thread 防止守护线程真实启动
+        # mock threading.Thread
         # --------------------------
         patcher_thread = patch("fastdeploy.cache_manager.cache_transfer_manager.threading.Thread")
         patcher_thread.start()
