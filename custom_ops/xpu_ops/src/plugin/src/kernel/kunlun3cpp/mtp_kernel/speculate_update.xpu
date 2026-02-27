@@ -77,16 +77,15 @@ __global__ void speculate_update(int *seq_lens_encoder,
   const int tid = core_id() * cluster_num() + cluster_id();
   const int nthreads = core_num() * cluster_num();
 
-  __shared__ int seq_lens_encoder_sm[THREADBLOCK_SIZE];  // 输入&输出 [B_max] 2K
-  __shared__ int seq_lens_decoder_sm[THREADBLOCK_SIZE];  // 输入&输出 [B_max] 2K
-  __shared__ int
-      actual_draft_token_nums_sm[THREADBLOCK_SIZE];  // 输出 [B_max]  2K
-  __shared__ int accept_num_sm[THREADBLOCK_SIZE];   // 输入&输出 [B_max]  2K
-  __shared__ bool stop_flags_sm[THREADBLOCK_SIZE];  // 输入 [B_max]  512B
-  __shared__ int seq_lens_this_time_sm[THREADBLOCK_SIZE];  // 输入 [B_real] 2K
-  __shared__ bool is_block_step_sm[THREADBLOCK_SIZE];  // 输入 [B_max]  512B
+  __shared__ int seq_lens_encoder_sm[THREADBLOCK_SIZE];         //  [B_max] 2K
+  __shared__ int seq_lens_decoder_sm[THREADBLOCK_SIZE];         // [B_max] 2K
+  __shared__ int actual_draft_token_nums_sm[THREADBLOCK_SIZE];  //  [B_max]  2K
+  __shared__ int accept_num_sm[THREADBLOCK_SIZE];               //  [B_max]  2K
+  __shared__ bool stop_flags_sm[THREADBLOCK_SIZE];         //  [B_max]  512B
+  __shared__ int seq_lens_this_time_sm[THREADBLOCK_SIZE];  //  [B_real] 2K
+  __shared__ bool is_block_step_sm[THREADBLOCK_SIZE];      //  [B_max]  512B
   __shared__ int stop_flag_now_int_sm[64];
-  __shared__ int mask_rollback_sm[THREADBLOCK_SIZE];  // 输入 [B_real] 2K
+  __shared__ int mask_rollback_sm[THREADBLOCK_SIZE];  //  [B_real] 2K
 
   bool not_need_stop_lm;  // 输出[1]
 
@@ -126,8 +125,8 @@ __global__ void speculate_update(int *seq_lens_encoder,
         mask_rollback_sm[bid] = 0;
       }
 
-      // 对于append模式，需要根据接收与否确定是否要降低下次draft
-      // token的数量
+      // For append mode, adjust the number of draft tokens for the next round
+      // based on acceptance
       if (seq_lens_this_time_sm[bid] > 1 && seq_lens_encoder_sm[bid] == 0) {
         auto current_actual_draft_token_num = actual_draft_token_nums_sm[bid];
         if (accept_num_now - 1 == current_actual_draft_token_num) {
@@ -153,7 +152,7 @@ __global__ void speculate_update(int *seq_lens_encoder,
         seq_lens_decoder_sm[bid] += seq_lens_encoder_sm[bid];
         seq_lens_encoder_sm[bid] = 0;
       }
-      // 这里试下编译器的新特性
+
       draft_tokens[bid * max_draft_tokens] =
           accept_tokens[bid * max_draft_tokens + accept_num_now - 1];
 
