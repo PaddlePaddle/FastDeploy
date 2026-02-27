@@ -490,12 +490,7 @@ class GPUModelRunner(ModelRunnerBase):
         for i, mm_hash in enumerate(mm_hashes):
             self.encoder_cache[mm_hash] = image_features_lst[i].cpu()
 
-    def _calc_image_feature_range(
-        self, 
-        mm_inputs: dict, 
-        prefill_start: int, 
-        prefill_end: int
-    ) -> tuple[int, int]:
+    def _calc_image_feature_range(self, mm_inputs: dict, prefill_start: int, prefill_end: int) -> tuple[int, int]:
         """Calculate the image feature index range for the given prefill range.
 
         When prefix cache hits, only part of the tokens need to be recomputed.
@@ -513,42 +508,42 @@ class GPUModelRunner(ModelRunnerBase):
         """
         if mm_inputs is None or "mm_positions" not in mm_inputs:
             return (0, 0)
-        
+
         mm_positions = mm_inputs.get("mm_positions", [])
         if not mm_positions:
             return (0, 0)
-        
+
         # 完整 PREFILL 场景：返回全部图像特征
         if prefill_start == 0:
             total_image_tokens = sum(pos.length for pos in mm_positions)
             return (0, total_image_tokens)
-        
+
         # Prefix Cache 命中场景：计算 prefill 范围内的图像 token 对应的特征范围
         feature_start = -1
         feature_end = 0
         cumulative_tokens = 0
-        
+
         for pos in mm_positions:
             img_token_start = pos.offset
             img_token_end = pos.offset + pos.length
-            
+
             # 计算当前图像与 prefill 范围的重叠部分
             overlap_start = max(img_token_start, prefill_start)
             overlap_end = min(img_token_end, prefill_end)
-            
+
             if overlap_start < overlap_end:
                 # 存在重叠
                 local_start = overlap_start - img_token_start  # 在当前图像特征中的起始位置
-                local_end = overlap_end - img_token_start      # 在当前图像特征中的结束位置
-                
+                local_end = overlap_end - img_token_start  # 在当前图像特征中的结束位置
+
                 if feature_start == -1:
                     feature_start = cumulative_tokens + local_start
                 feature_end = cumulative_tokens + local_end
-            
+
             cumulative_tokens += pos.length
-        
+
         if feature_start == -1:
-            feature_start = 0      
+            feature_start = 0
         return (feature_start, feature_end)
 
     def _apply_mm_inputs(self, request: Request, multi_vision_inputs: dict, rope_3d_position_ids: dict):
@@ -661,12 +656,12 @@ class GPUModelRunner(ModelRunnerBase):
         batch_pooling_params = []
         self.share_inputs["image_features"] = None
         multi_vision_inputs = {
-            "images_lst": [], 
-            "grid_thw_lst": [], 
-            "vit_position_ids_lst": [], 
-            "cu_seqlens": [0], 
-            "feature_slice_info": None, # 记录prefix cache后的切片信息
-            }
+            "images_lst": [],
+            "grid_thw_lst": [],
+            "vit_position_ids_lst": [],
+            "cu_seqlens": [0],
+            "feature_slice_info": None,  # 记录prefix cache后的切片信息
+        }
         rope_3d_position_ids = {
             "position_ids_idx": [],
             "position_ids_lst": [],
@@ -711,9 +706,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self._apply_mm_inputs(request, multi_vision_inputs, rope_3d_position_ids)
                     if request.with_image and prefill_start_index > 0:
                         slice_start, slice_end = self._calc_image_feature_range(
-                            request.multimodal_inputs,
-                            prefill_start_index,
-                            prefill_end_index
+                            request.multimodal_inputs, prefill_start_index, prefill_end_index
                         )
                         multi_vision_inputs["feature_slice_info"] = (slice_start, slice_end)
                         logger.debug(
@@ -867,8 +860,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         if len(multi_vision_inputs["images_lst"]) > 0:
             full_image_features = self.extract_vision_features(multi_vision_inputs)
-        
-            # 根据切片信息进行切片
+
+            # 新增：根据切片信息进行切片
             slice_info = multi_vision_inputs.get("feature_slice_info")
             if slice_info is not None:
                 slice_start, slice_end = slice_info
