@@ -467,6 +467,24 @@ class PrefixCacheManager:
         """
         recycle gpu blocks.
         """
+        if (
+            hasattr(self, "prefix_tree_status_signal")
+            and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL
+        ):
+            # Prefix Tree Clearing, skip recycle gpu blocks
+            logger.warning("Prefix tree is not normal, skip recycle gpu blocks")
+            return
+        if not isinstance(gpu_block_ids, list):
+            gpu_block_ids = [gpu_block_ids]
+        if len(self.gpu_free_block_list) + len(gpu_block_ids) > self.num_gpu_blocks:
+            # The block allocation and recycling are abnormal, and the test results are not convincing
+            logger.error(
+                f"The number of free gpu blocks {len(self.gpu_free_block_list)} plus the number of recycled "
+                f"gpu blocks {len(gpu_block_ids)} exceeds the total number of gpu blocks {self.num_gpu_blocks} \n"
+                f"this indicates a block allocation and deallocation error, recycled blocks will be discarded {gpu_block_ids}"
+            )
+            return
+
         logger.info(
             f"recycle_gpu_blocks: {gpu_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
