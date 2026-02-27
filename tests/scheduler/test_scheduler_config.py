@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import unittest
+from unittest.mock import MagicMock, patch
 
 from fastdeploy.scheduler.config import (
     DPLocalSchedulerConfig,
@@ -88,6 +89,17 @@ class TestGlobalSchedulerConfig(unittest.TestCase):
     def test_auto_threshold(self):
         cfg = GlobalSchedulerConfig(max_model_len=20000, long_prefill_token_threshold=0)
         self.assertEqual(cfg.long_prefill_token_threshold, 800)
+
+    @patch("fastdeploy.scheduler.config.redis")
+    def test_check_redis_connection_failure_raises(self, mock_redis_mod):
+        """Redis ping returning False should raise ConnectionError."""
+        mock_conn = MagicMock()
+        mock_conn.ping.return_value = False
+        mock_redis_mod.Redis.return_value = mock_conn
+
+        cfg = GlobalSchedulerConfig()
+        with self.assertRaises(ConnectionError):
+            cfg.check()
 
 
 class TestSchedulerConfig(unittest.TestCase):

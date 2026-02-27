@@ -27,7 +27,7 @@ Why mock:
 """
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import paddle
 
@@ -45,7 +45,7 @@ class TestCustomAllreduceInitializedGuard(unittest.TestCase):
     @patch("paddle.distributed.get_rank", return_value=0)
     def test_single_gpu_not_initialized(self, _mock_rank, _mock_ws):
         """world_size=1 → constructor returns early → _initialized stays False."""
-        fake_group = paddle.distributed.new_group([0])
+        fake_group = MagicMock()
         ar = CustomAllreduce(group=fake_group, max_size=8192 * 1024)
         self.assertFalse(ar._initialized)
 
@@ -54,7 +54,7 @@ class TestCustomAllreduceInitializedGuard(unittest.TestCase):
     @patch("paddle.distributed.get_rank", return_value=0)
     def test_should_custom_ar_false_when_not_initialized(self, _mock_rank, _mock_ws):
         """should_custom_ar must return False when _initialized is False."""
-        fake_group = paddle.distributed.new_group([0])
+        fake_group = MagicMock()
         ar = CustomAllreduce(group=fake_group, max_size=8192 * 1024)
 
         inp = paddle.zeros([4, 1024], dtype=paddle.float16)
@@ -65,7 +65,7 @@ class TestCustomAllreduceInitializedGuard(unittest.TestCase):
     @patch("paddle.distributed.get_rank", return_value=0)
     def test_unsupported_world_size_not_initialized(self, _mock_rank, _mock_ws):
         """world_size=3 (not in SUPPORTED_WORLD_SIZES) → _initialized stays False."""
-        fake_group = paddle.distributed.new_group([0])
+        fake_group = MagicMock()
         ar = CustomAllreduce(group=fake_group, max_size=8192 * 1024)
         self.assertFalse(ar._initialized)
 

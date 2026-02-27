@@ -31,12 +31,18 @@ class TestEnvsGetattr(unittest.TestCase):
         with _clean_env("FD_MAX_STOP_SEQS_NUM"):
             self.assertEqual(envs.FD_MAX_STOP_SEQS_NUM, 5)
 
+        with _clean_env("FD_QUEUE_TIMEOUT"):
+            self.assertEqual(envs.FD_QUEUE_TIMEOUT, 600)
+
     def test_env_override(self):
         with _set_env("FD_DEBUG", "1"):
             self.assertEqual(envs.FD_DEBUG, 1)
 
         with _set_env("FD_LOG_DIR", "/tmp/mylog"):
             self.assertEqual(envs.FD_LOG_DIR, "/tmp/mylog")
+
+        with _set_env("FD_QUEUE_TIMEOUT", "120"):
+            self.assertEqual(envs.FD_QUEUE_TIMEOUT, 120)
 
     def test_bool_env(self):
         with _set_env("FD_USE_HF_TOKENIZER", "1"):

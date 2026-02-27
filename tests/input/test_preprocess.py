@@ -23,7 +23,7 @@ Why mock:
 
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 def _make_model_config(arch, enable_mm=False):
@@ -37,33 +37,6 @@ def _make_model_config(arch, enable_mm=False):
 
 class TestInputPreprocessorBranching(unittest.TestCase):
     """Test that create_processor picks the right processor class based on architecture and flags."""
-
-    @patch("fastdeploy.input.preprocess.envs")
-    @patch("fastdeploy.input.preprocess.ReasoningParserManager")
-    @patch("fastdeploy.input.preprocess.ToolParserManager")
-    def test_text_non_ernie_selects_data_processor(self, mock_tool, mock_reason, mock_envs):
-        mock_envs.ENABLE_V1_DATA_PROCESSOR = 0
-        mock_reason.get_reasoning_parser.return_value = None
-        mock_tool.get_tool_parser.return_value = None
-
-        # Plugin path raises so we fall through to built-in
-        with patch("fastdeploy.input.preprocess.load_input_processor_plugins", side_effect=ImportError("no plugin")):
-            mock_dp = MagicMock()
-            with patch("fastdeploy.input.preprocess.DataProcessor", mock_dp, create=True):
-                # Patch the import at the point it happens
-                import fastdeploy.input.preprocess as mod
-
-                with patch.dict("sys.modules", {}):
-                    from fastdeploy.input.preprocess import InputPreprocessor
-
-                    config = _make_model_config("LlamaForCausalLM", enable_mm=False)
-                    pp = InputPreprocessor(model_config=config)
-                    # We need to mock the conditional import inside create_processor
-                    with patch.object(mod, "__builtins__", mod.__builtins__):
-                        try:
-                            pp.create_processor()
-                        except Exception:
-                            pass  # Acceptable; we're testing the routing logic
 
     def test_init_stores_params(self):
         from fastdeploy.input.preprocess import InputPreprocessor
@@ -88,12 +61,8 @@ class TestInputPreprocessorBranching(unittest.TestCase):
         pp = InputPreprocessor(model_config=config)
 
         with patch("fastdeploy.input.preprocess.load_input_processor_plugins", side_effect=ImportError("no plugin")):
-            with patch("fastdeploy.input.preprocess.envs") as mock_envs:
-                mock_envs.ENABLE_V1_DATA_PROCESSOR = 0
-                with patch("fastdeploy.input.preprocess.ErnieArchitectures") as mock_ernie:
-                    mock_ernie.contains_ernie_arch.return_value = False
-                    with self.assertRaises(ValueError, msg="Unsupported model processor architecture"):
-                        pp.create_processor()
+            with self.assertRaises(ValueError):
+                pp.create_processor()
 
 
 if __name__ == "__main__":

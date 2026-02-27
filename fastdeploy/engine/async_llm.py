@@ -199,7 +199,9 @@ class EngineServiceClient:
                         suffix=ipc_suffix,
                         create=False,
                     )
-                except Exception:  # IPCSignal may not yet be created by workers; broad except covers platform-specific IPC errors
+                except (
+                    Exception
+                ):  # IPCSignal may not yet be created by workers; broad except covers platform-specific IPC errors
                     # Signal not ready yet
                     time.sleep(wait_interval)
                     elapsed_time += wait_interval
@@ -527,6 +529,8 @@ class AsyncLLM(EngineServiceClient):
                 try:
                     response_list = await asyncio.wait_for(response_queue.get(), timeout=queue_timeout)
                 except asyncio.TimeoutError:
+                    for child_id in child_request_ids:
+                        await self.abort_request(child_id)
                     raise RuntimeError(
                         f"Timed out waiting for response after {queue_timeout}s. "
                         f"remaining={remaining}, request_id={conn_request_id}"

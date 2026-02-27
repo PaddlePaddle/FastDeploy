@@ -19,6 +19,12 @@ The change replaced a bare `await response_queue.get()` (which could block
 forever) with `asyncio.wait_for(response_queue.get(), timeout=queue_timeout)`,
 converting asyncio.TimeoutError into a RuntimeError with request context.
 
+NOTE: This is a *pattern validation* test. It reproduces the timeout→RuntimeError
+conversion pattern from async_llm.py in isolation, rather than importing and
+exercising the real AsyncLLM class (which requires a running engine, model weights,
+and IPC infrastructure). If the pattern in async_llm.py changes, this test must be
+updated manually.
+
 Why test in isolation:
   - AsyncLLM requires a running engine, model weights, and IPC infrastructure.
     We test the timeout pattern directly using an asyncio.Queue to verify
@@ -26,6 +32,7 @@ Why test in isolation:
 """
 
 import asyncio
+import os
 import unittest
 
 
@@ -84,6 +91,35 @@ class TestAsyncLLMQueueTimeout(unittest.TestCase):
 
         result = asyncio.run(run())
         self.assertEqual(result, ["response_data"])
+
+
+class TestFDQueueTimeoutEnvVar(unittest.TestCase):
+    """Test that FD_QUEUE_TIMEOUT env var is correctly read by the envs module."""
+
+    def test_default_value(self):
+        """Default FD_QUEUE_TIMEOUT should be 600."""
+        old = os.environ.pop("FD_QUEUE_TIMEOUT", None)
+        try:
+            from fastdeploy import envs
+
+            self.assertEqual(envs.FD_QUEUE_TIMEOUT, 600)
+        finally:
+            if old is not None:
+                os.environ["FD_QUEUE_TIMEOUT"] = old
+
+    def test_env_override(self):
+        """FD_QUEUE_TIMEOUT should respect environment variable override."""
+        old = os.environ.get("FD_QUEUE_TIMEOUT")
+        os.environ["FD_QUEUE_TIMEOUT"] = "120"
+        try:
+            from fastdeploy import envs
+
+            self.assertEqual(envs.FD_QUEUE_TIMEOUT, 120)
+        finally:
+            if old is not None:
+                os.environ["FD_QUEUE_TIMEOUT"] = old
+            else:
+                os.environ.pop("FD_QUEUE_TIMEOUT", None)
 
 
 if __name__ == "__main__":

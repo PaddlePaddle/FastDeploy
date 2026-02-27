@@ -122,7 +122,7 @@ try:
             return "CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
 
 except Exception as e:
-    logging.error(f"Failed to import cache manager ops: {e}")
+    logging.warning(f"Failed to import cache manager ops: {e}")
     cuda_host_alloc = None
     cuda_host_free = None
     set_data_ipc = None
