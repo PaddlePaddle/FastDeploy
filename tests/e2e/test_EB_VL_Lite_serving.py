@@ -629,8 +629,107 @@ def test_chat_with_reasoning_max_tokens(openai_client):
     except openai.InternalServerError as e:
         error_message = str(e)
         assertion_executed = True
-        assert "reasoning_max_tokens must be greater than 1" in error_message
+        assert "reasoning_max_tokens must be greater than 0" in error_message
     assert assertion_executed, "Assertion was not executed (no exception raised)"
+
+
+def test_chat_with_response_max_tokens(openai_client):
+    """
+    Test response_max_tokens option in streaming chat functionality with the local service
+    """
+    # Test error case: response_max_tokens <= 0 should raise an error
+    assertion_executed = False
+    try:
+        openai_client.chat.completions.create(
+            model="default",
+            messages=[{"role": "user", "content": "Hello"}],
+            extra_body={"response_max_tokens": -1},
+            max_tokens=10,
+            stream=False,
+        )
+    except openai.InternalServerError as e:
+        error_message = str(e)
+        assertion_executed = True
+        assert "response_max_tokens must be greater than 0" in error_message
+    assert assertion_executed, "Assertion was not executed (no exception raised)"
+
+    # Test functional case: response_max_tokens limits response tokens in streaming mode
+    response_max_tokens = 3
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "response_max_tokens": response_max_tokens,
+            "return_token_ids": True,
+        },
+        stream=True,
+        max_tokens=10,
+    )
+    completion_tokens = 1
+    reasoning_tokens = 0
+    total_tokens = 0
+    for chunk_id, chunk in enumerate(response):
+        if chunk_id == 0:  # the first chunk is an extra chunk
+            continue
+        delta_message = chunk.choices[0].delta
+        if delta_message.content != "" and delta_message.reasoning_content == "":
+            completion_tokens += len(delta_message.completion_token_ids)
+        elif delta_message.reasoning_content != "" and delta_message.content == "":
+            reasoning_tokens += len(delta_message.completion_token_ids)
+        total_tokens += len(delta_message.completion_token_ids)
+    assert completion_tokens + reasoning_tokens == total_tokens
+    assert completion_tokens <= response_max_tokens + 1
+
+    # Test disable-thinking case: response_max_tokens limits tokens when thinking is off
+    response_max_tokens = 3
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": False},
+            "response_max_tokens": response_max_tokens,
+        },
+        stream=False,
+        max_tokens=10,
+    )
+    assert response.choices[0].message.reasoning_content is None
+    assert "</think>" not in response.choices[0].message.content
+    assert response.usage.completion_tokens <= response_max_tokens
+
+    # Test enable-thinking case with both reasoning_max_tokens and response_max_tokens limited
+    reasoning_max_tokens = 3
+    response_max_tokens = 3
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_max_tokens": reasoning_max_tokens,
+            "response_max_tokens": response_max_tokens,
+            "return_token_ids": True,
+        },
+        stream=True,
+        max_tokens=20,
+    )
+    completion_tokens = 1
+    reasoning_tokens = 0
+    total_tokens = 0
+    for chunk_id, chunk in enumerate(response):
+        if chunk_id == 0:  # the first chunk is an extra chunk
+            continue
+        delta_message = chunk.choices[0].delta
+        if delta_message.content != "" and delta_message.reasoning_content == "":
+            completion_tokens += len(delta_message.completion_token_ids)
+        elif delta_message.reasoning_content != "" and delta_message.content == "":
+            reasoning_tokens += len(delta_message.completion_token_ids)
+        total_tokens += len(delta_message.completion_token_ids)
+    assert completion_tokens + reasoning_tokens == total_tokens
+    assert reasoning_tokens <= reasoning_max_tokens
+    assert completion_tokens <= response_max_tokens + 1
 
 
 def test_profile_reset_block_num():

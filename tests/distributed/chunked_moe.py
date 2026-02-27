@@ -53,6 +53,7 @@ class MockModelConfig:
     model_type = ["mock"]
     moe_phase = MoEPhase(phase="prefill")
     hidden_size = 1536
+    think_truncate_prompt_ids = [-1]
 
 
 class MockCacheConfig:
