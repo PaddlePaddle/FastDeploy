@@ -99,6 +99,7 @@ from fastdeploy import envs
 from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
+from fastdeploy.logger.deterministic_logger import DeterministicLogger
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
@@ -211,6 +212,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.restore_chunked_prefill_request = dict()
 
+        # Initialize deterministic logger (only when deterministic debugging is enabled)
+        self.deterministic_logger = (
+            DeterministicLogger(self.share_inputs)
+            if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE
+            else None
+        )
+
         # Initialize attention Backend
         # NOTE(gonshaotian): Currently, all attention layers share one attention backend instance.
         # In the future, we will expand it as a list.
@@ -262,6 +270,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.last_sampler_output = None
         self.last_post_process_event = None
         self.last_token_num = -1
+
         self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule and (
             not self.speculative_decoding
         )
@@ -777,6 +786,14 @@ class GPUModelRunner(ModelRunnerBase):
                     prompt_token_ids = request.prompt_token_ids
                 input_ids = prompt_token_ids + request.output_token_ids
                 prompt_len = len(prompt_token_ids)
+
+                # Log complete input_ids for input determinism verification
+                # Note: Only current request info is logged here; batch info is logged during forward
+                if self.deterministic_logger is not None:
+                    self.deterministic_logger.log_prefill_input(
+                        request.request_id, idx, prefill_start_index, prefill_end_index, input_ids
+                    )
+
                 self.share_inputs["prompt_ids"][idx : idx + 1, :prompt_len] = np.array(prompt_token_ids, dtype="int64")
                 logger.debug(
                     f"Handle prefill request {request} at idx {idx}, "
@@ -1653,6 +1670,10 @@ class GPUModelRunner(ModelRunnerBase):
         encoder_block_shape_q = 64
         decoder_block_shape_q = 16
 
+        # Deterministic mode: use deterministic_split_kv_size to ensure batch-invariant attention
+        if envs.FD_DETERMINISTIC_MODE:
+            decoder_block_shape_q = envs.FD_DETERMINISTIC_SPLIT_KV_SIZE
+
         res_buffer = allocate_launch_related_buffer(
             max_batch_size=self.scheduler_config.max_num_seqs,
             max_model_len=self.model_config.max_model_len,
@@ -2299,6 +2320,9 @@ class GPUModelRunner(ModelRunnerBase):
         num_running_requests: int = None,
         last_token_num: int = -1,
     ) -> None:
+        if self.deterministic_logger is not None:
+            self.deterministic_logger.log_batch_start(model_forward_batch)
+
         # 1. Prepare inputs of model and sampler.
         p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
 
@@ -2423,7 +2447,21 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
             # 4. Compute logits, Sample
+            if self.deterministic_logger is not None:
+                # Log MD5 of hidden_states (model output)
+                self.deterministic_logger.log_tensor_md5s(
+                    {"hidden_states": hidden_states},
+                    forward_batch_reqs_list=self.forward_batch_reqs_list,
+                    stage="hidden_states",
+                )
+
             logits = self.model.compute_logits(hidden_states)
+
+            if self.deterministic_logger is not None:
+                # Log MD5 of logits (before sampling)
+                self.deterministic_logger.log_tensor_md5s(
+                    {"logits": logits}, forward_batch_reqs_list=self.forward_batch_reqs_list, stage="logits"
+                )
 
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
@@ -2440,6 +2478,14 @@ class GPUModelRunner(ModelRunnerBase):
                     self.sampling_metadata,
                     p_done_idxs,
                 )
+
+                if self.deterministic_logger is not None:
+                    # Log MD5 of sampling results
+                    self.deterministic_logger.log_tensor_md5s(
+                        {"sampled_token_ids": sampler_output.sampled_token_ids},
+                        forward_batch_reqs_list=self.forward_batch_reqs_list,
+                        stage="sampled_tokens",
+                    )
 
                 if (
                     self.enable_logprob

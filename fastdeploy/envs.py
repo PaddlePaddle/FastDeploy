@@ -18,6 +18,14 @@ Environment variables used by FastDeploy.
 import os
 from typing import Any, Callable
 
+
+def _validate_split_kv_size(value: int) -> int:
+    """Validate FD_DETERMINISTIC_SPLIT_KV_SIZE is a positive power of 2."""
+    if value <= 0 or (value & (value - 1)) != 0:
+        raise ValueError(f"FD_DETERMINISTIC_SPLIT_KV_SIZE must be a positive power of 2, got {value}.")
+    return value
+
+
 environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use BF16 on CPU.
     "FD_CPU_USE_BF16": lambda: os.getenv("FD_CPU_USE_BF16", "False"),
@@ -206,6 +214,18 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
     # File path for file storage backend
     "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
+    # Custom all-reduce max buffer size in MB (default 8MB).
+    # Increase this to avoid NCCL fallback for large tensors in deterministic mode.
+    # E.g. FD_CUSTOM_AR_MAX_SIZE_MB=128 for 128MB.
+    "FD_CUSTOM_AR_MAX_SIZE_MB": lambda: int(os.getenv("FD_CUSTOM_AR_MAX_SIZE_MB", "8")),
+    # Enable deterministic inference mode for chunked prefill alignment
+    "FD_DETERMINISTIC_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_MODE", "0"))),
+    # Split KV block size for deterministic alignment (must be power of 2 and > 0, default 16)
+    "FD_DETERMINISTIC_SPLIT_KV_SIZE": lambda: _validate_split_kv_size(
+        int(os.getenv("FD_DETERMINISTIC_SPLIT_KV_SIZE", "16"))
+    ),
+    # Enable determinism logging (print MD5 hashes and debug info)
+    "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
 }
