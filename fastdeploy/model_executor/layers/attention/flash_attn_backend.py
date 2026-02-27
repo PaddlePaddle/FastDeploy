@@ -70,16 +70,12 @@ import os
 FLASH_ATTN_VERSION = None
 
 
-def init_flash_attn_version(fa_version: int = None):
+def init_flash_attn_version():
     """
     init_flash_attn_version
     """
     if current_platform.is_cuda():
         global FLASH_ATTN_VERSION
-        if fa_version is not None:
-            FLASH_ATTN_VERSION = fa_version
-            logger.info(f"Force use Flash Attention V{fa_version}.")
-            return
         sm_version = get_sm_version()
         if sm_version >= 100:
             try:
@@ -90,7 +86,7 @@ def init_flash_attn_version(fa_version: int = None):
                 FLASH_ATTN_VERSION = 4
                 logger.info("The current platform supports Flash Attention V4.")
             except ImportError:
-                pass
+                logger.info(f"The current platform[sm{get_sm_version()}] can't import Flash Attention V4.")
 
         if FLASH_ATTN_VERSION is None:
             if sm_version >= 89 and any(num >= 89 for num in paddle.version.cuda_archs()):
@@ -261,6 +257,8 @@ class FlashAttentionBackend(AttentionBackend):
         )
         # Note(ZKK): here must be consistent with append_attn_backend.py
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
+        if FLASH_ATTN_VERSION is None:
+            init_flash_attn_version()
 
     def get_attention_meta(self):
         """get_attention_meta"""
@@ -372,7 +370,7 @@ class FlashAttentionBackend(AttentionBackend):
                     forward_meta.max_len_tensor_cpu[2],
                     self.block_size,
                 )
-                if forward_meta.attn_mask_offsets is not None:
+                if FLASH_ATTN_VERSION == 4 or forward_meta.attn_mask_offsets is not None:
                     metadata.attn_mask_q = get_attn_mask_q(
                         cu_seqlens_q=forward_meta.cu_seqlens_q,
                         cu_seqlens_k=metadata.cu_seqlens_k,

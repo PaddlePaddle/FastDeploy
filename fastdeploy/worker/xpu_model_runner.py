@@ -641,6 +641,13 @@ class XPUModelRunner(ModelRunnerBase):
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generate first token
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                    if self.speculative_decoding:
+                        # D speculate decode, seq_lens_this_time = length + 1
+                        self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length + 1
+                        self.share_inputs["draft_tokens"][idx : idx + 1, 0 : length + 1] = paddle.to_tensor(
+                            request.draft_token_ids[0 : length + 1],
+                            dtype="int64",
+                        )
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
@@ -1087,6 +1094,7 @@ class XPUModelRunner(ModelRunnerBase):
                 shape=[max_num_seqs + 1], fill_value=0, dtype="int32"
             )
         self.max_num_seqs = max_num_seqs
+        self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
         self.share_inputs["preempted_idx"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
@@ -1100,7 +1108,11 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_seq_lens_decoder"],
                 self.share_inputs["block_tables"],
                 self.share_inputs["is_block_step"],
+                self.share_inputs["draft_tokens"] if self.speculative_decoding else None,
+                self.share_inputs["step_draft_tokens"] if self.speculative_decoding else None,
+                self.share_inputs["step_seq_lens_this_time"] if self.speculative_decoding else None,
                 self.cache_config.block_size,
+                self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
             )
         self.forward_meta = xpu_pre_process(
             self.share_inputs["input_ids"],
@@ -1568,7 +1580,7 @@ class XPUModelRunner(ModelRunnerBase):
             if not self.speculative_decoding:
                 sampler_output = self.sampler(logits, self.sampling_metadata)
             else:
-                self.sampler(
+                sampler_output = self.sampler(
                     logits,
                     self.sampling_metadata,
                     self.model_config.max_model_len,
@@ -1607,18 +1619,31 @@ class XPUModelRunner(ModelRunnerBase):
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
                 min_tokens=self.share_inputs["min_dec_len"],
+                prompt_lens=self.share_inputs["prompt_lens"],
                 prompt_logprobs_list=prompt_logprobs_list,
+                mask_rollback=self.share_inputs["mask_rollback"],
             )
+
+            skip_save_output = is_dummy_run or (
+                self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill"
+            )
+
             if self.speculative_decoding:
                 # base model post process
-                xpu_post_process_specualate(model_output_data, False, is_dummy_run)
+                xpu_post_process_specualate(
+                    sampler_output,
+                    model_output_data,
+                    self.share_inputs,
+                    self.parallel_config.data_parallel_size > 0,
+                    skip_save_output,
+                )
             else:
                 xpu_post_process_normal(
                     sampler_output=sampler_output,
                     model_output=model_output_data,
                     share_inputs=self.share_inputs,
                     block_size=self.cache_config.block_size,
-                    skip_save_output=is_dummy_run,
+                    skip_save_output=skip_save_output,
                     save_each_rank=self.parallel_config.data_parallel_size > 0,
                     async_output_queue=self.async_output_queue,
                     think_end_id=self.model_config.think_end_id,

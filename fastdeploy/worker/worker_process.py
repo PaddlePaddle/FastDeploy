@@ -821,9 +821,11 @@ def parse_args():
         help="chunk size of moe input",
     )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
+    parser.add_argument("--think_start_id", type=int, default=-1)
     parser.add_argument("--think_end_id", type=int, default=-1)
     parser.add_argument("--image_patch_id", type=int, default=-1)
     parser.add_argument("--line_break_id", type=int, default=-1)
+    parser.add_argument("--think_truncate_prompt_ids", type=json.loads, default=[])
 
     parser.add_argument(
         "--quantization",
@@ -926,6 +928,12 @@ def parse_args():
         "--lm_head_fp32",
         action="store_true",
         help="Flag to specify dtype of lm_head as FP32",
+    )
+
+    parser.add_argument(
+        "--moe_gate_fp32",
+        action="store_true",
+        help="Flag to specify dtype of gate as FP32",
     )
 
     parser.add_argument(
@@ -1191,6 +1199,21 @@ def run_worker_proc() -> None:
     else:
         worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
         worker_proc.init_control()
+
+    # Enable batch-invariant mode for deterministic inference.
+    # This must happen AFTER worker creation but BEFORE model loading,
+    # because enable_batch_invariant_mode() calls paddle.compat.enable_torch_proxy()
+    # which makes torch appear available via proxy. If called before worker creation,
+    # the gpu_model_runner import chain (ernie4_5_vl_processor → paddleformers →
+    # transformers) will fail when transformers tries to query torch metadata.
+    if envs.FD_DETERMINISTIC_MODE:
+        from fastdeploy.model_executor.layers.batch_invariant_ops import (
+            enable_batch_invariant_mode,
+            is_batch_invariant_mode_enabled,
+        )
+
+        if not is_batch_invariant_mode_enabled():
+            enable_batch_invariant_mode()
 
     # Initialize device and create model runner
     worker_proc.init_device()
