@@ -303,8 +303,7 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         """
         Use Wint2 Triton Fusedmoe compute Fused MoE.
         """
-        gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
+        gate_out = gate(x.cast("float32"))
 
         (
             permute_input,
@@ -376,8 +375,7 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         """
         Use Wint2 Triton Fusedmoe compute Fused MoE.
         """
-        gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
+        gate_out = gate(x.cast("float32"))
         from fastdeploy.model_executor.ops.triton_ops import moe_wint2_ffn_kernel
 
         topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
