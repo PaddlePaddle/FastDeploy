@@ -85,9 +85,9 @@ def wrap_unified_op(original_cpp_ext_op, original_custom_op):
                 return res
             return original_custom_op(*args, **kwargs)
 
-    except Exception as e:
-        unified_op = original_cpp_ext_op
-        logger.warning(f"Paddle version not support JIT mode, falling back to cpp ext op: {e}")
+    except:
+        unified_op = None
+        logger.warning("Paddle version not support JIT mode.")
     return unified_op
 
 

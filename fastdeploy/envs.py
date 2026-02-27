@@ -228,6 +228,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
+    # Timeout in seconds for waiting response queue in async engine (default 600s)
+    "FD_QUEUE_TIMEOUT": lambda: int(os.getenv("FD_QUEUE_TIMEOUT", "600")),
 }
 
 

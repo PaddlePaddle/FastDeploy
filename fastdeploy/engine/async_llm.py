@@ -522,7 +522,7 @@ class AsyncLLM(EngineServiceClient):
 
             # 3) Stream responses from all choices interleaved
             remaining = num_choices
-            queue_timeout = 600  # 10 minutes
+            queue_timeout = envs.FD_QUEUE_TIMEOUT
             while remaining > 0:
                 try:
                     response_list = await asyncio.wait_for(response_queue.get(), timeout=queue_timeout)
