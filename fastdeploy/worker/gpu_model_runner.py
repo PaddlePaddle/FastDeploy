@@ -846,6 +846,13 @@ class GPUModelRunner(ModelRunnerBase):
                 ):  # In PD, we continue to decode after P generate first token
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                     self.exist_prefill_flag = False
+                    if self.speculative_decoding:
+                        # D speculate decode, seq_lens_this_time = length + 1
+                        self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length + 1
+                        self.share_inputs["draft_tokens"][idx : idx + 1, 0 : length + 1] = paddle.to_tensor(
+                            request.draft_token_ids[0 : length + 1],
+                            dtype="int64",
+                        )
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
                 encoder_block_num = len(request.block_tables)
