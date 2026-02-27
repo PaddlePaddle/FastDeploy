@@ -22,31 +22,23 @@ from paddleformers.utils.log import logger
 
 import fastdeploy
 from fastdeploy.model_executor.layers.moe.ep import deep_ep
+from fastdeploy.model_executor.layers.quantization.fp8_utils import deep_gemm
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import register_custom_python_op
 from fastdeploy.worker.tbo import let_another_thread_run
 
-from ..utils import get_sm_version
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 
 if current_platform.is_cuda():
-    if get_sm_version() == 100:
-        logger.info("Detected sm100, use PFCC DeepGEMM")
-        paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-        from deep_gemm import (
-            m_grouped_fp8_gemm_nt_contiguous,
-            m_grouped_fp8_gemm_nt_masked,
-        )
-    else:
-        from fastdeploy.model_executor.ops.gpu.deep_gemm import (
-            m_grouped_gemm_fp8_fp8_bf16_nt_contiguous as m_grouped_fp8_gemm_nt_contiguous,
-        )
-        from fastdeploy.model_executor.ops.gpu.deep_gemm import (
-            m_grouped_gemm_fp8_fp8_bf16_nt_masked as m_grouped_fp8_gemm_nt_masked,
-        )
+    try:
+        m_grouped_fp8_gemm_nt_contiguous = deep_gemm.m_grouped_fp8_gemm_nt_contiguous
+        m_grouped_fp8_gemm_nt_masked = deep_gemm.m_grouped_fp8_gemm_nt_masked
+    except:
+        m_grouped_fp8_gemm_nt_contiguous = deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous
+        m_grouped_fp8_gemm_nt_masked = deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_masked
 else:
     m_grouped_fp8_gemm_nt_contiguous = None
     m_grouped_fp8_gemm_nt_masked = None
@@ -259,7 +251,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         Apply the EP prefill method.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
 
         hidden_size = x.shape[1]
 
@@ -422,7 +415,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         Apply the EP decoder method.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
@@ -498,7 +492,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         Paddle Use DeepGemm compute Fused MoE.
         below is TP compute method.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
 
         if layer.topk_method == "noaux_tc":
             _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(
