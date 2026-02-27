@@ -43,6 +43,11 @@ class InputBatch:
         for key, value in values.items():
             setattr(self, key, value)
 
+    def get(self, key, default=None):
+        if hasattr(self, key):
+            return getattr(self, key)
+        return default
+
     def pop(self, key, default=None):
         """
         Pop an attribute, similar to dict's pop method
