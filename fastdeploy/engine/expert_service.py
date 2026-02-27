@@ -155,8 +155,8 @@ class ExpertService:
 
         if self.do_profile:
             get_profile_block_num = np.zeros([1], dtype=np.int32)
-            max_retries = 120
-            for attempt in range(max_retries):
+            attempt = 0
+            while True:
                 try:
                     self.get_profile_block_num_signal = IPCSignal(
                         name="get_profile_block_num",
@@ -167,9 +167,11 @@ class ExpertService:
                     )
                     break
                 except Exception as e:
-                    if attempt >= max_retries - 1:
-                        raise RuntimeError(
-                            f"Failed to create IPC signal 'get_profile_block_num' " f"after {max_retries} retries: {e}"
+                    attempt += 1
+                    if attempt % 30 == 0:
+                        console_logger.warning(
+                            f"Waiting for IPC signal 'get_profile_block_num' to be created, "
+                            f"retried {attempt} times: {e}"
                         )
                     time.sleep(1)
             self.reset_kvcache_blocks()

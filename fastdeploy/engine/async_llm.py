@@ -199,7 +199,7 @@ class EngineServiceClient:
                         suffix=ipc_suffix,
                         create=False,
                     )
-                except Exception:
+                except Exception:  # IPCSignal may not yet be created by workers; broad except covers platform-specific IPC errors
                     # Signal not ready yet
                     time.sleep(wait_interval)
                     elapsed_time += wait_interval
