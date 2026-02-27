@@ -330,11 +330,12 @@ class ResourceManagerV1(ResourceManager):
         # SGLang-aligned sort: prioritize retracting requests with shorter output
         # If output_len is equal, prioritize retracting requests with longer input
         decode_requests.sort(
-            key=lambda r: (len(r.output_token_ids), -len(r.origin_input_ids)),
+            key=lambda r: (len(r.output_token_ids), -r.prompt_token_ids_len),
             reverse=True,  # pop from end: shorter output first
         )
 
         # If only 1 decode request, cannot preempt (need to keep at least 1)
+        # Return False to let scheduler handle this gracefully
         if len(decode_requests) <= 1:
             can_schedule = self.cache_manager.can_allocate_gpu_blocks(num_new_blocks)
             return can_schedule
@@ -380,7 +381,7 @@ class ResourceManagerV1(ResourceManager):
             llm_logger.debug(
                 f"preempt {preempted_req.request_id} in idx {preempted_req.idx} "
                 f"with output_len={len(preempted_req.output_token_ids)}, "
-                f"input_len={len(preempted_req.origin_input_ids)}"
+                f"input_len={preempted_req.prompt_token_ids_len}"
             )
 
         if preempted_count > 0:
@@ -428,9 +429,10 @@ class ResourceManagerV1(ResourceManager):
             )
 
             # Use FD's existing cache eviction API
-            # free_block_ids_async will handle the LRU eviction logic
+            # free_block_ids (sync version) will handle the LRU eviction logic
             # including GPU -> CPU swap and GPU -> Storage persistence
-            self.cache_manager.free_block_ids_async(num_blocks_to_evict)
+            # Use sync version to ensure blocks are freed before checking can_allocate
+            self.cache_manager.free_block_ids(num_blocks_to_evict)
         else:
             llm_logger.warning("cache_manager is None, cannot evict KV cache")
 
@@ -914,6 +916,9 @@ class ResourceManagerV1(ResourceManager):
                     self.need_block_num_map[request.request_id] = SignalConsumer(need_block_num, 1)
                     self.need_block_num_signal.value[request.idx] = 0
 
+                # NOTE: The decode scheduling logic should be OUTSIDE of `if need_block_num != 0:`
+                # The need_block_num signal is only for handling worker-side block requests,
+                # but decode scheduling should always happen regardless of this signal
                 if request.num_computed_tokens >= request.need_prefill_tokens:  # to be decoding
                     if (
                         self.config.scheduler_config.splitwise_role == "prefill"
@@ -922,38 +927,76 @@ class ResourceManagerV1(ResourceManager):
                         continue
                     if request.num_total_tokens > request.need_prefill_tokens:  # has generated tokens
                         request.num_computed_tokens = request.num_total_tokens - 1
-                    if (
-                        self.allocated_slots(request) - request.num_total_tokens
-                        <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
-                    ):
-                        # Allocation for next decoding blocks
-                        if self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
+
+                    # SGLang-aligned: dynamically calculate how many blocks are needed for next decode
+                    # Similar to SGLang's new_page_count_next_decode:
+                    # If (num_total_tokens - 1) % block_size == 0, need 1 more block
+                    block_size = self.config.cache_config.block_size
+                    num_new_blocks_needed = 1 if (request.num_total_tokens - 1) % block_size == 0 else 0
+
+                    # SGLang-aligned: schedule decode task without threshold check
+                    # The pre-allocation is decoupled from scheduling
+                    if num_new_blocks_needed > 0:
+                        # Need to allocate new blocks, check if we can allocate
+                        if self.cache_manager.can_allocate_gpu_blocks(num_new_blocks_needed):
                             llm_logger.debug(
                                 f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                             )
                             request.block_tables.extend(
                                 self.cache_manager.allocate_gpu_blocks(
-                                    self.config.cache_config.enc_dec_block_num, request.request_id
+                                    num_new_blocks_needed, request.request_id
                                 )
                             )
                             # Prepare decoding task
                             scheduled_reqs.append(self._prepare_decode_task(request))
                         else:
-                            # Not enough blocks to allocate, trigger preemption
-                            can_schedule = self._trigger_preempt(
-                                request, self.config.cache_config.enc_dec_block_num, preempted_reqs, scheduled_reqs
-                            )
-                            if not can_schedule:
-                                break
-                            # Allocation for next decoding blocks
-                            request.block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(
-                                    self.config.cache_config.enc_dec_block_num, request.request_id
+                            # Not enough blocks, trigger preemption
+                            # SGLang-aligned: first try to evict decode KV cache
+                            self._evict_decode_kv_cache(len(self.running))
+
+                            # Check again after eviction
+                            if self.cache_manager.can_allocate_gpu_blocks(num_new_blocks_needed):
+                                request.block_tables.extend(
+                                    self.cache_manager.allocate_gpu_blocks(
+                                        num_new_blocks_needed, request.request_id
+                                    )
                                 )
-                            )
-                            # Prepare decoding task
-                            scheduled_reqs.append(self._prepare_decode_task(request))
-                        num_decoding_req_nums += 1
+                                scheduled_reqs.append(self._prepare_decode_task(request))
+                            else:
+                                # Cannot allocate even after preemption, use SGLang-aligned behavior
+                                # Try to preempt other requests
+                                can_schedule = self._trigger_preempt(
+                                    request, num_new_blocks_needed, preempted_reqs, scheduled_reqs
+                                )
+                                if not can_schedule:
+                                    # Cannot preempt (e.g., only 1 decode request left),
+                                    # skip this request and continue to avoid system hang
+                                    llm_logger.warning(
+                                        f"Cannot allocate {num_new_blocks_needed} blocks "
+                                        f"for decode request {request.request_id} (idx={request.idx}) "
+                                        f"even after preemption attempt. Request will wait for more resources."
+                                    )
+                                    # Do NOT schedule this request - it will wait in the queue
+                                    # But still consume token_budget to avoid infinite loop
+                                    req_index += 1
+                                    token_budget -= 1
+                                    continue
+
+                                # Allocation for next decoding blocks after preemption
+                                request.block_tables.extend(
+                                    self.cache_manager.allocate_gpu_blocks(
+                                        num_new_blocks_needed, request.request_id
+                                    )
+                                )
+                                # Prepare decoding task
+                                scheduled_reqs.append(self._prepare_decode_task(request))
+
+                    # No new blocks needed (num_new_blocks_needed == 0), but still schedule decode task
+                    # SGLang-aligned: always schedule decode for each iteration
+                    else:
+                        scheduled_reqs.append(self._prepare_decode_task(request))
+
+                    num_decoding_req_nums += 1
                     token_budget -= 1
                     if (
                         request.use_extend_tables

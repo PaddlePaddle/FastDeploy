@@ -1965,7 +1965,7 @@ class FDConfig:
         """
         check the legality of config
         """
-        assert self.scheduler_config.max_num_seqs <= 256, (
+        assert self.scheduler_config.max_num_seqs <= 512, (
             "The parameter `max_num_seqs` is not allowed to exceed 256, "
             f"but now it's {self.scheduler_config.max_num_seqs}."
         )
