@@ -917,14 +917,14 @@ class RowParallelLinear(LinearBase):
             else:
                 x_padded = paddle.zeros([token_num_pad, x.shape[1]], x.dtype)
                 x_padded[:token_num] = x
-            out = paddle.zeros([token_num_pad // self.tp_size, x.shape[1] * self.tp_size], x.dtype)
+            out = paddle.empty([token_num_pad // self.tp_size, x.shape[1] * self.tp_size], x.dtype)
             decode_alltoall_transpose(x_padded, out)
         else:
             if token_num_pad > token_num:
                 x_new = paddle.zeros([token_num_pad, x.shape[1]], x.dtype)
                 x_new[:token_num, :] = x
                 x = x_new
-            out = paddle.zeros_like(x)
+            out = paddle.empty_like(x)
             paddle.distributed.alltoall(out, x, group=self.tp_group)
             out.reshape_([self.tp_size, -1, x.shape[1]])
             out = paddle.transpose(out, [1, 0, 2])
