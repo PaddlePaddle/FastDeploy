@@ -214,6 +214,7 @@ class ModelConfig:
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
         self.lm_head_fp32: bool = False
+        self.moe_gate_fp32: bool = False
         self.model_format = "auto"
         self.runner = "auto"
         self.convert = "auto"
