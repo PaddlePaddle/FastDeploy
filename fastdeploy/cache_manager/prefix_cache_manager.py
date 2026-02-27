@@ -498,7 +498,10 @@ class PrefixCacheManager:
         """
         recycle gpu blocks.
         """
-        if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
+        if (
+            hasattr(self, "prefix_tree_status_signal")
+            and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL
+        ):
             # Prefix Tree Clearing, skip recycle gpu blocks
             logger.warning("Prefix tree is not normal, skip recycle gpu blocks")
             return
