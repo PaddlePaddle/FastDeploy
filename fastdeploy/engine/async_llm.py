@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import os
 import signal
@@ -198,7 +199,7 @@ class EngineServiceClient:
                         suffix=ipc_suffix,
                         create=False,
                     )
-                except:
+                except Exception:
                     # Signal not ready yet
                     time.sleep(wait_interval)
                     elapsed_time += wait_interval
@@ -521,8 +522,15 @@ class AsyncLLM(EngineServiceClient):
 
             # 3) Stream responses from all choices interleaved
             remaining = num_choices
+            queue_timeout = 600  # 10 minutes
             while remaining > 0:
-                response_list = await response_queue.get()
+                try:
+                    response_list = await asyncio.wait_for(response_queue.get(), timeout=queue_timeout)
+                except asyncio.TimeoutError:
+                    raise RuntimeError(
+                        f"Timed out waiting for response after {queue_timeout}s. "
+                        f"remaining={remaining}, request_id={conn_request_id}"
+                    )
 
                 for response_item in response_list:
                     if (

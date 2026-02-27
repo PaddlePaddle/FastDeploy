@@ -675,7 +675,7 @@ class CacheMessagerV1:
         """
         while True:
             try:
-                batch_engine_signals = self.cache_prefilled_engine_ids_queue.get()
+                batch_engine_signals = self.cache_prefilled_engine_ids_queue.get(timeout=300)
                 self.engine_worker_queue.begin_send_cache_barrier.wait()
                 block_start_end_list = []
                 current_prefilled_token_num_list = []

@@ -12,8 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <stdexcept>
+#include <string>
+
 #include "helper.h"
 #include "paddle/extension.h"
+
+#define CUDACHECK(cmd)                                                  \
+  do {                                                                    \
+    cudaError_t e = cmd;                                                  \
+    if (e != cudaSuccess) {                                               \
+      throw std::runtime_error(                                           \
+          std::string("CUDA error at ") + __FILE__ + ":" +                \
+          std::to_string(__LINE__) + " '" + cudaGetErrorString(e) + "'"); \
+    }                                                                     \
+  } while (0)
 
 template <paddle::DataType D>
 void SwapCacheImpl(const paddle::Tensor& cache_gpu, // gpu
@@ -47,14 +60,12 @@ void SwapCacheImpl(const paddle::Tensor& cache_gpu, // gpu
         auto *cache_gpu_ptr_now = cache_gpu_ptr + gpu_block_id * cache_stride;
         auto *cache_cpu_ptr_now = cache_cpu_ptr + cpu_block_id * cache_stride;
         if (mode == 0) { // copy from device to host
-            cudaMemcpyAsync(cache_cpu_ptr_now, cache_gpu_ptr_now, cache_stride * sizeof(DataType_), cudaMemcpyDeviceToHost, stream);
-            // cudaMemcpy(cache_dst_ptr_now, cache_src_ptr_now, cache_stride * sizeof(DataType_), cudaMemcpyDeviceToHost);
+            CUDACHECK(cudaMemcpyAsync(cache_cpu_ptr_now, cache_gpu_ptr_now, cache_stride * sizeof(DataType_), cudaMemcpyDeviceToHost, stream));
         } else { // copy from host to device
-            cudaMemcpyAsync(cache_gpu_ptr_now, cache_cpu_ptr_now, cache_stride * sizeof(DataType_), cudaMemcpyHostToDevice, stream);
-            // cudaMemcpy(cache_dst_ptr_now, cache_src_ptr_now, cache_stride * sizeof(DataType_), cudaMemcpyHostToDevice);
+            CUDACHECK(cudaMemcpyAsync(cache_gpu_ptr_now, cache_cpu_ptr_now, cache_stride * sizeof(DataType_), cudaMemcpyHostToDevice, stream));
         }
     }
-    cudaStreamSynchronize(stream);
+    CUDACHECK(cudaStreamSynchronize(stream));
 }
 
 void SwapCache(const paddle::Tensor& cache_gpu, // gpu
@@ -64,7 +75,7 @@ void SwapCache(const paddle::Tensor& cache_gpu, // gpu
                const std::vector<int64_t>& swap_block_ids_cpu,
                int rank,
                int mode) {
-    cudaSetDevice(rank); // used for distributed launch
+    CUDACHECK(cudaSetDevice(rank)); // used for distributed launch
     switch (cache_gpu.dtype()) {
         case paddle::DataType::BFLOAT16:
             return SwapCacheImpl<paddle::DataType::BFLOAT16>(

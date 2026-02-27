@@ -1,6 +1,7 @@
 # Adapted from https://github.com/thinking-machines-lab/batch_invariant_ops/blob/main/batch_invariant_ops/batch_invariant_ops.py
 
 import contextlib
+import logging
 import os
 from collections import namedtuple
 from collections.abc import Callable
@@ -136,8 +137,8 @@ def get_compute_units():
             paddle.device.get_device()  # Triton + Paddle may can't get the device
             device_properties = paddle.cuda.get_device_properties(0)
             NUM_SMS = device_properties.multi_processor_count
-        except Exception:
-            print("Could not get CUDA device properties. Falling back to CPU threads.")
+        except Exception as e:
+            logging.warning(f"Could not get CUDA device properties ({e}), falling back to CPU core count")
             # TODO(liujundong): Paddle lacks a torch.get_num_threads() equivalent for the *configured* thread count.
             # Using os.cpu_count() (total logical cores) as a fallback, which may not be correct.
             # Must check downstream logic to determine if this impacts correctness.

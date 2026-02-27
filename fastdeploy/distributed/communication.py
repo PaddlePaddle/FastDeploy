@@ -20,7 +20,9 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 
-from fastdeploy.utils import register_custom_python_op
+from fastdeploy.utils import get_logger, register_custom_python_op
+
+logger = get_logger("communication")
 
 _TP_AR = None
 
@@ -101,8 +103,20 @@ try:
         input_ = _TP_AR.decode_alltoall_transpose(input_, out)
         return input_
 
-except:
-    tensor_model_parallel_all_reduce = None
+except Exception as e:
+    logger.warning(f"Failed to register tensor_model_parallel_all_reduce: {e}")
+
+    def tensor_model_parallel_all_reduce(input_: "paddle.Tensor", group_=None) -> "paddle.Tensor":
+        raise RuntimeError(
+            f"tensor_model_parallel_all_reduce is not available. "
+            f"Registration failed with: {e}"
+        )
+
+    def decode_alltoall_transpose(input_: "paddle.Tensor", out=None) -> "paddle.Tensor":
+        raise RuntimeError(
+            f"decode_alltoall_transpose is not available. "
+            f"Registration failed with: {e}"
+        )
 
 from paddle.distributed.communication import stream
 from paddle.distributed.communication.reduce import ReduceOp
@@ -129,5 +143,11 @@ try:
         else:
             dist.all_reduce(input_)
 
-except:
-    tensor_model_parallel_all_reduce_custom = None
+except Exception as e:
+    logger.warning(f"Failed to register tensor_model_parallel_all_reduce_custom: {e}")
+
+    def tensor_model_parallel_all_reduce_custom(input_: "paddle.Tensor") -> "paddle.Tensor":
+        raise RuntimeError(
+            f"tensor_model_parallel_all_reduce_custom is not available. "
+            f"Registration failed with: {e}"
+        )

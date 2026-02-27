@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import logging
 from typing import Any, Dict, Optional
 
 from fastdeploy.config import ErnieArchitectures, ModelConfig
@@ -78,7 +79,8 @@ class InputPreprocessor:
                 tool_parser_obj=tool_parser_obj,
                 mm_processor_kwargs=self.mm_processor_kwargs,
             )
-        except:
+        except Exception as e:
+            logging.info(f"Plugin input processor not available ({e}), using built-in processor")
             if not self.model_config.enable_mm:
                 if not ErnieArchitectures.contains_ernie_arch(architecture):
                     if not envs.ENABLE_V1_DATA_PROCESSOR:

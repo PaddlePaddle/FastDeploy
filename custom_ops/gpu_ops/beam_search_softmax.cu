@@ -1371,6 +1371,9 @@ std::vector<paddle::Tensor> BeamSearchSoftmax(const paddle::Tensor &logits,
                   cudaMemcpyDeviceToHost,
                   cu_stream);
 
+  // Must synchronize before using host values copied from device
+  cudaStreamSynchronize(cu_stream);
+
   int beam_batch_size = logits_shape[0];
   int batch_size = beam_batch_size / beam_width_scalar;
   int vocab_size = logits_shape[1];

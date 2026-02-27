@@ -131,13 +131,15 @@ class ResourceManager:
         elif required_type == "decoder":
             block_num = self.get_decoder_block_number()
         else:
-            raise ValueError("unknown required type")
+            raise ValueError(f"unknown required type: '{required_type}', expected 'all', 'encoder', or 'decoder'")
 
         block_list = list()
         current_block_num = self.available_block_num()
         if block_num > current_block_num:
             llm_logger.error(f"block_num:{block_num} > free_list len:{current_block_num}")
-            return block_list
+            raise RuntimeError(
+                f"Out of memory: requested {block_num} blocks but only {current_block_num} available"
+            )
         block_list = self.cache_manager.allocate_gpu_blocks(block_num)
         llm_logger.debug(f"dispatch {len(block_list)} blocks.")
         return block_list

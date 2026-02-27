@@ -14,6 +14,7 @@
 """
 quantization module
 """
+import logging
 from typing import List, Type
 
 from fastdeploy import envs
@@ -91,7 +92,8 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
         try:
             quantization_config.update(args.quantization)
             quant_config_name = quantization_config["quantization"]
-        except:
+        except Exception as e:
+            logging.warning(f"Failed to parse quantization config normally ({e}), trying fallback")
             quant_config_name = args.quantization["quantization"]
             quantization_config["quantization"] = quant_config_name
         # Special handling for Ernie models
