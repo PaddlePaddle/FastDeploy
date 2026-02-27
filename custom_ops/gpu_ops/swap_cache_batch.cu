@@ -12,21 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <stdexcept>
-#include <string>
-
+#include "cuda_multiprocess.h"
 #include "helper.h"
 #include "paddle/extension.h"
-
-#define CUDACHECK(cmd)                                                    \
-  do {                                                                    \
-    cudaError_t e = cmd;                                                  \
-    if (e != cudaSuccess) {                                               \
-      throw std::runtime_error(std::string("CUDA error at ") + __FILE__ + \
-                               ":" + std::to_string(__LINE__) + " '" +    \
-                               cudaGetErrorString(e) + "'");              \
-    }                                                                     \
-  } while (0)
 
 template <paddle::DataType D>
 void SwapCacheImplAllLayers(
@@ -87,14 +75,14 @@ void SwapCacheImplAllLayers(
         auto* cache_cpu_ptr_now =
             cache_cpu_ptr + first_cpu_block_id * cache_stride;
         if (mode == 0) {  // copy from device to host
-          CUDACHECK(cudaMemcpyAsync(
+          checkCudaErrors(cudaMemcpyAsync(
               cache_cpu_ptr_now,
               cache_gpu_ptr_now,
               cache_stride * sizeof(DataType_) * consecutive_block_count,
               cudaMemcpyDeviceToHost,
               stream));
         } else {  // copy from host to device
-          CUDACHECK(cudaMemcpyAsync(
+          checkCudaErrors(cudaMemcpyAsync(
               cache_gpu_ptr_now,
               cache_cpu_ptr_now,
               cache_stride * sizeof(DataType_) * consecutive_block_count,
@@ -113,14 +101,14 @@ void SwapCacheImplAllLayers(
     auto* cache_gpu_ptr_now = cache_gpu_ptr + first_gpu_block_id * cache_stride;
     auto* cache_cpu_ptr_now = cache_cpu_ptr + first_cpu_block_id * cache_stride;
     if (mode == 0) {  // copy from device to host
-      CUDACHECK(cudaMemcpyAsync(
+      checkCudaErrors(cudaMemcpyAsync(
           cache_cpu_ptr_now,
           cache_gpu_ptr_now,
           cache_stride * sizeof(DataType_) * consecutive_block_count,
           cudaMemcpyDeviceToHost,
           stream));
     } else {  // copy from host to device
-      CUDACHECK(cudaMemcpyAsync(
+      checkCudaErrors(cudaMemcpyAsync(
           cache_gpu_ptr_now,
           cache_cpu_ptr_now,
           cache_stride * sizeof(DataType_) * consecutive_block_count,
@@ -128,7 +116,7 @@ void SwapCacheImplAllLayers(
           stream));
     }
   }
-  CUDACHECK(cudaStreamSynchronize(stream));
+  checkCudaErrors(cudaStreamSynchronize(stream));
 }
 
 void SwapCacheAllLayers(
@@ -139,7 +127,7 @@ void SwapCacheAllLayers(
     const std::vector<int64_t>& swap_block_ids_cpu,
     int rank,
     int mode) {
-  CUDACHECK(cudaSetDevice(rank));  // used for distributed launch
+  checkCudaErrors(cudaSetDevice(rank));  // used for distributed launch
   assert(cache_gpu_tensors.size() > 0 &&
          cache_gpu_tensors.size() == cache_cpu_ptrs.size());
   switch (cache_gpu_tensors[0].dtype()) {
