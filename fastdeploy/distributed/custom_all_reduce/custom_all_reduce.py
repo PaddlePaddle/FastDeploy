@@ -22,6 +22,7 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed.communication.group import Group
 
+from fastdeploy.distributed.communication import tensor_byte_size
 from fastdeploy.distributed.custom_all_reduce import cuda_wrapper
 from fastdeploy.model_executor.ops.gpu import (
     all_reduce,
@@ -133,16 +134,22 @@ class CustomAllreduce:
         lib.cudaFree(ctypes.c_void_p(pointers[rank]))
 
     def should_custom_ar(self, inp: paddle.Tensor):
-        if self.capturing:
-            return True
-        inp_size = inp.shape[0] * inp.shape[1] * inp.element_size()
+        inp_size = tensor_byte_size(inp)
+        if inp_size > self.max_size:
+            return False
+
         # custom allreduce requires input byte size to be multiples of 16
         if inp_size % 16 != 0:
             return False
+
         # for 4 or more non NVLink-capable GPUs, custom allreduce provides
         # little performance improvement over NCCL.
         if self.world_size == 2 or self.full_nvlink:
-            return inp_size < self.max_size
+            return True
+
+        if self.capturing:
+            return True
+
         return False
 
     def all_reduce(

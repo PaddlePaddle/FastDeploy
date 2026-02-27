@@ -453,7 +453,42 @@ class ResourceManagerV1(ResourceManager):
     def _get_num_new_tokens(self, request, token_budget):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
+        assert num_new_tokens > 0, (
+            f"Request {request.request_id} has no remaining tokens: "
+            f"need_prefill={request.need_prefill_tokens}, computed={request.num_computed_tokens}"
+        )
         num_new_tokens = min(num_new_tokens, token_budget)
+
+        # Deterministic mode: align chunk boundaries to split_kv_size
+        # This ensures batch-invariant attention by making each chunk
+        # a multiple of the split-KV block size (default 16)
+        if envs.FD_DETERMINISTIC_MODE:
+            split_kv_size = envs.FD_DETERMINISTIC_SPLIT_KV_SIZE
+            current_pos = request.num_computed_tokens
+            remaining_tokens = request.need_prefill_tokens - current_pos
+
+            # Case 1: Final chunk - no alignment needed
+            if remaining_tokens < split_kv_size:
+                aligned_end = current_pos + remaining_tokens
+            else:
+                # Case 2: Need to align to split_kv_size boundary
+                # Calculate next boundary position
+                next_boundary = ((current_pos + split_kv_size - 1) // split_kv_size) * split_kv_size
+                tokens_to_boundary = next_boundary - current_pos
+
+                # Not enough budget to reach the next boundary: defer to next iteration
+                if token_budget < tokens_to_boundary:
+                    return 0
+
+                # Align to as many full boundaries as budget allows
+                aligned_end = ((current_pos + token_budget) // split_kv_size) * split_kv_size
+
+            num_new_tokens = aligned_end - current_pos
+            # Don't exceed the original budget or remaining tokens
+            num_new_tokens = min(
+                num_new_tokens, token_budget, request.need_prefill_tokens - request.num_computed_tokens
+            )
+
         if (
             current_platform.is_intel_hpu()
             and request.need_prefill_tokens - request.num_computed_tokens > token_budget
@@ -466,7 +501,11 @@ class ResourceManagerV1(ResourceManager):
             return num_new_tokens
 
         inputs = request.multimodal_inputs
-        if inputs.get("patch_idx", None) is not None and inputs.get("patch_map", None) is not None:
+        if (
+            inputs is not None
+            and inputs.get("patch_idx", None) is not None
+            and inputs.get("patch_map", None) is not None
+        ):
             pre_end_idx = request.num_computed_tokens
             new_end_idx = pre_end_idx + num_new_tokens
 
@@ -541,7 +580,8 @@ class ResourceManagerV1(ResourceManager):
             request.video_end = end_patch_map["video_num"]
             request.audio_end = _compute_audio_prefix_count(new_end_idx, end_patch_idx)
         elif (
-            inputs.get("images", None) is not None
+            inputs is not None
+            and inputs.get("images", None) is not None
             and inputs.get("image_patch_id", None) is not None
             and inputs.get("grid_thw", None) is not None
         ):
@@ -790,6 +830,9 @@ class ResourceManagerV1(ResourceManager):
                         req_index += 1
                         continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                    if num_new_tokens == 0:
+                        req_index += 1
+                        continue
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
@@ -863,6 +906,12 @@ class ResourceManagerV1(ResourceManager):
                             continue
                         # Allocate blocks for the tokens that does not hit cache
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                        if num_new_tokens == 0:
+                            if self.config.cache_config.enable_prefix_caching:
+                                self._free_blocks(request)
+                            skip_requests.append(request)
+                            self.waiting.popleft()
+                            continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             request, num_new_block
@@ -916,6 +965,12 @@ class ResourceManagerV1(ResourceManager):
 
                         # Allocate blocks for the tokens that does not hit cache
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                        if num_new_tokens == 0:
+                            if self.config.cache_config.enable_prefix_caching:
+                                self._free_blocks(request)
+                            skip_requests.append(request)
+                            self.waiting.popleft()
+                            continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             request, num_new_block
