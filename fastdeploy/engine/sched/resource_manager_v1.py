@@ -570,8 +570,8 @@ class ResourceManagerV1(ResourceManager):
             can_schedule_block_num_threshold = num_chunk_new_block
         else:
             can_schedule_block_num_threshold = (
-                request.need_prefill_tokens + self.config.cache_config.block_size - 1
-            ) // self.config.cache_config.block_size + len(self.running) * self.current_reserve_output_block_num
+                num_chunk_new_block + len(self.running) * self.current_reserve_output_block_num
+            )
             if self.config.speculative_config.method is not None:
                 can_schedule_block_num_threshold = min(
                     can_schedule_block_num_threshold + 1, self.config.cache_config.max_block_num_per_seq
