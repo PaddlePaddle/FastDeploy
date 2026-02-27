@@ -1077,6 +1077,7 @@ PoolingChatRequest = EmbeddingChatRequest
 
 class ChatRewardRequest(BaseModel):
     model: Optional[str] = None
+    prompt_token_ids: Optional[List[int]] = None
     messages: Union[List[Any], List[int]]
     user: Optional[str] = None
 

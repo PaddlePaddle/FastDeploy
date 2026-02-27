@@ -54,7 +54,7 @@ class OpenAIServingReward(ZmqOpenAIServing):
                 request_dict["metrics"] = {}
             return request_dict
         else:
-            request_obj = None
+            request_obj: Request = None
             if hasattr(request, "to_pooling_params"):
                 pooling_params: PoolingParams = request.to_pooling_params()
                 pooling_params.verify("reward", self.cfg.model_config)
@@ -90,6 +90,7 @@ class OpenAIServingReward(ZmqOpenAIServing):
         response: ChatRewardResponse = None
         generators: AsyncGenerator[ChatRewardResponse, None] = self.handle(ctx)
         async for r in generators:
+            api_server_logger.info(f"engine pooling result:{r}")
             r.data[0].index = idx
             idx += 1
             if response is None:
