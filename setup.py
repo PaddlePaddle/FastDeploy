@@ -301,6 +301,7 @@ setup(
             "model_executor/models/*",
             "model_executor/layers/*",
             "input/ernie4_5_vl_processor/utils/*",
+            "input/v1/ernie4_5_vl_processor/utils/*",
             "model_executor/ops/gcu/*",
             "model_executor/ops/gcu/fastdeploy_ops/*",
             "cache_manager/transfer_factory/get_rdma_nics.sh",
