@@ -330,8 +330,8 @@ void SentKeyValueByRemotePtr(const paddle::Tensor& local_key_tensor,
           cuda_stream);
     }
     default: {
-      PD_THROW("Unsupported dtype for IPC KV cache transfer: " +
-               paddle::experimental::DataTypeToString(local_key_tensor.type()));
+      PD_THROW("Unsupported dtype for IPC KV cache transfer: ",
+               local_key_tensor.type());
     }
   }
 }

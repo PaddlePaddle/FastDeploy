@@ -276,7 +276,11 @@ class SamplingParams:
 
     def __post_init__(self):
         if self.seed is None:
-            self.seed = random.randint(0, 922337203685477580)
+            # Deterministic mode: use fixed seed
+            if envs.FD_DETERMINISTIC_MODE:
+                self.seed = 42
+            else:
+                self.seed = random.randint(0, 922337203685477580)
         self._verify_args()
 
     def _verify_args(self) -> None:

@@ -85,6 +85,7 @@ def setup_and_run_server():
         "--load-choices",
         "default_v1",
         "--lm_head-fp32",
+        "--moe-gate-fp32",
         "--speculative-config",
         json.dumps(speculative_config),
         "--routing-replay-config",
