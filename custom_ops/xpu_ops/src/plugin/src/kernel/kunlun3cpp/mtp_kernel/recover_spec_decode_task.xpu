@@ -34,7 +34,7 @@ __attribute__((global)) void recover_spec_decode_task(
   int value_zero = 0;
   int step_seq_lens_this_time_lm;
   // max draft token = 6
-  int draft_tokens_lm[6];
+  int64_t draft_tokens_lm[6];
   for (int i = start; i < end; i++) {
     GM2LM(is_block_step + i, &is_block_step_lm, sizeof(bool));
     if (is_block_step_lm == true) {

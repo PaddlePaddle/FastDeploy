@@ -48,7 +48,7 @@ static int cpu_wrapper(Context *ctx,
                        int length,
                        int max_draft_tokens) {
   for (int i = 0; i < bs; i++) {
-    if (stop_flags[i]) {
+    if (!stop_flags[i]) {
       int64_t *pre_ids_all_now = pre_ids_all + i * length;
       const int64_t *accept_tokens_now = accept_tokens + i * max_draft_tokens;
       int accept_num_now = accept_num[i];

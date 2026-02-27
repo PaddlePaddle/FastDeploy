@@ -1624,11 +1624,9 @@ class XPUModelRunner(ModelRunnerBase):
                 mask_rollback=self.share_inputs["mask_rollback"],
             )
 
-            skip_save_output = is_dummy_run
-            if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
-                skip_save_output = True
-            else:
-                skip_save_output = False
+            skip_save_output = is_dummy_run or (
+                self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill"
+            )
 
             if self.speculative_decoding:
                 # base model post process
