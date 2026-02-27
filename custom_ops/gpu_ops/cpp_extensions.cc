@@ -749,11 +749,11 @@ std::vector<paddle::Tensor> SpeculateGetSeqLensOutput(
 
 std::vector<paddle::Tensor> SpeculatePreProcess(
     const int64_t cpu_token_num,
-    const paddle::Tensor &input_ids,
-    const paddle::Tensor &seq_len,
-    const paddle::Tensor &draft_tokens,
-    const paddle::Tensor &seq_lens_encoder,
-    const paddle::Tensor &seq_lens_decoder);
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& seq_len,
+    const paddle::Tensor& draft_tokens,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder);
 
 void SpecTokenPenaltyMultiScores(
     const paddle::Tensor& pre_ids,

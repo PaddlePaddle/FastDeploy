@@ -80,9 +80,7 @@ def speculate_pre_process_ref(
 
     # --- Part 3: cu_seq_lens_q_output, batch_id_per_token_output, real_output_token_num ---
     cu_seq_lens_q_output = np.zeros(real_bsz + 1, dtype=np.int32)
-    batch_id_per_token_output = np.zeros(
-        real_bsz * max_draft_tokens_per_batch, dtype=np.int32
-    )
+    batch_id_per_token_output = np.zeros(real_bsz * max_draft_tokens_per_batch, dtype=np.int32)
 
     cum_output = 0
     for bi in range(real_bsz):
@@ -134,9 +132,7 @@ def build_inputs(
         input_ids = rng.integers(1, 1000, size=(real_bsz, max_seq_len), dtype=np.int64)
 
     if draft_tokens_data is not None:
-        draft_tokens = np.array(draft_tokens_data, dtype=np.int64).reshape(
-            real_bsz, max_draft_tokens
-        )
+        draft_tokens = np.array(draft_tokens_data, dtype=np.int64).reshape(real_bsz, max_draft_tokens)
     else:
         draft_tokens = rng.integers(1, 1000, size=(real_bsz, max_draft_tokens), dtype=np.int64)
 
@@ -278,7 +274,11 @@ class TestSpeculatePreProcess(unittest.TestCase):
 
         gpu_outs = speculate_pre_process(
             int(np.sum(inputs["seq_lens"])),
-            t_input_ids, t_seq_lens, t_draft_tokens, t_seq_lens_encoder, t_seq_lens_decoder,
+            t_input_ids,
+            t_seq_lens,
+            t_draft_tokens,
+            t_seq_lens_encoder,
+            t_seq_lens_decoder,
         )
 
         np.testing.assert_allclose(gpu_outs[0].numpy(), [10, 11, 12, 200, 201])
@@ -291,7 +291,7 @@ class TestSpeculatePreProcess(unittest.TestCase):
     # ----------------------------------------------------------------
     def test_random_configs(self):
         configs = [
-            {"real_bsz": 7,  "max_seq_len": 32,  "max_draft_tokens": 8,  "seed": 200},
+            {"real_bsz": 7, "max_seq_len": 32, "max_draft_tokens": 8, "seed": 200},
             {"real_bsz": 32, "max_seq_len": 128, "max_draft_tokens": 16, "seed": 400},
         ]
         for cfg in configs:
