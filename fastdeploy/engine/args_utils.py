@@ -501,6 +501,11 @@ class EngineArgs:
     Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
+    moe_gate_fp32: bool = False
+    """
+    Flag to specify the dtype of gate as FP32. Default is False (Using model default dtype).
+    """
+
     logits_processors: Optional[List[str]] = None
     """
     A list of FQCNs (Fully Qualified Class Names) of logits processors supported by the service.
@@ -908,6 +913,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.lm_head_fp32,
             help="Specify the dtype of lm_head weight as float32.",
+        )
+        model_group.add_argument(
+            "--moe-gate-fp32",
+            action="store_true",
+            default=EngineArgs.moe_gate_fp32,
+            help="Specify the dtype of gate weight as float32.",
         )
         model_group.add_argument(
             "--logits-processors",

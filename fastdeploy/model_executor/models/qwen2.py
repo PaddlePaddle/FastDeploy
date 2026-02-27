@@ -349,6 +349,7 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
+            logger.debug(f"Loading weight: {loaded_weight_name}")
             loaded_weight_name = (
                 self.process_weights_before_loading_fn(loaded_weight_name)
                 if getattr(self, "process_weights_before_loading_fn", None)

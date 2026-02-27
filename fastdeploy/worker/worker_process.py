@@ -449,6 +449,9 @@ class PaddleDisWorkerProc:
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
+            # run eplb
+            self._run_eplb(tp_rank)
+
             if self.fd_config.load_config.dynamic_load_weight:
                 self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.ranks > 1:
@@ -520,7 +523,10 @@ class PaddleDisWorkerProc:
                             continue
 
             if not envs.FD_ENABLE_BATCH_SCHEDULER:
-                if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
+                if (
+                    self.exist_task_signal.value[0] == ExistTaskStatus.EXIST
+                    or self.task_queue.read_finish_flag.get() == 1
+                ):
                     req_dicts, control_reqs, max_occupied_batch_index = self.get_tasks()
                     # TODO: run control request async
                     if len(control_reqs) > 0:
@@ -529,6 +535,7 @@ class PaddleDisWorkerProc:
                             self.run_control_method(control_req)
                             self._tp_barrier_wait() if tp_size > 1 else None
                 else:
+                    req_dicts, max_occupied_batch_index = None, 0
                     if self.scheduler_config.splitwise_role == "prefill":
                         # Synchronize the signal for other workers
                         self._tp_barrier_wait() if tp_size > 1 else None
@@ -545,31 +552,28 @@ class PaddleDisWorkerProc:
                 and (not self.enable_overlap_schedule)
             ):
                 self._tp_barrier_wait() if tp_size > 1 else None
-                self.infer_finished_signal.value[0] = 0
+                self.infer_finished_signal.value[0] = 1
+
                 time.sleep(0.001)
                 continue
-            
+
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
             self.worker.execute_model(req_dicts, max_occupied_batch_index)
-            if envs.FD_ENABLE_BATCH_SCHEDULER:
-                self._tp_barrier_wait() if tp_size > 1 else None
-                # Notify the engine that forward has finished
-                self.infer_finished_signal.value[0] = 1
-            
+
             # Only v0 use this signal
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
-            # run eplb
-            self._run_eplb(tp_rank)
-            self.infer_finished_signal.value[0] = 0
+
+            self._tp_barrier_wait() if tp_size > 1 else None
+            self.infer_finished_signal.value[0] = 1
 
     def get_tasks(self):
         req_dicts, control_reqs, max_occupied_batch_index = [], [], 0
         logger.info(f"Rank: {self.local_rank} Detected new requests.")
-        self.infer_finished_signal.value[0] = 1
+        self.infer_finished_signal.value[0] = 0
         tasks, read_finish = self.task_queue.get_tasks()
         # Only one of all tp_size client will get read_finish == True.
         if read_finish:
@@ -615,7 +619,7 @@ class PaddleDisWorkerProc:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
                 dist.barrier(self.parallel_config.ep_group)
                 break
-            
+
         for req_dict, bsz in tasks:
             if not req_dict[0].task_type.value == RequestType.IDLE.value:
                 # may be IDLE task only used for synchronization
@@ -882,9 +886,11 @@ def parse_args():
         help="chunk size of moe input",
     )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
+    parser.add_argument("--think_start_id", type=int, default=-1)
     parser.add_argument("--think_end_id", type=int, default=-1)
     parser.add_argument("--image_patch_id", type=int, default=-1)
     parser.add_argument("--line_break_id", type=int, default=-1)
+    parser.add_argument("--think_truncate_prompt_ids", type=json.loads, default=[])
 
     parser.add_argument(
         "--quantization",
@@ -990,6 +996,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--moe_gate_fp32",
+        action="store_true",
+        help="Flag to specify dtype of gate as FP32",
+    )
+
+    parser.add_argument(
         "--max_encoder_cache",
         type=int,
         help="Maximum encoder cache tokens(use 0 to disable).",
@@ -1062,6 +1074,13 @@ def parse_args():
         "--enable_entropy",
         action="store_true",
         help="Enable output of token-level entropy.",
+    )
+
+    parser.add_argument(
+        "--mm_max_tokens_per_item",
+        type=json.loads,
+        default=None,
+        help="Maximum tokens per item in mm input.",
     )
 
     parser.add_argument(
@@ -1245,6 +1264,21 @@ def run_worker_proc() -> None:
     else:
         worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
         worker_proc.init_control()
+
+    # Enable batch-invariant mode for deterministic inference.
+    # This must happen AFTER worker creation but BEFORE model loading,
+    # because enable_batch_invariant_mode() calls paddle.compat.enable_torch_proxy()
+    # which makes torch appear available via proxy. If called before worker creation,
+    # the gpu_model_runner import chain (ernie4_5_vl_processor → paddleformers →
+    # transformers) will fail when transformers tries to query torch metadata.
+    if envs.FD_DETERMINISTIC_MODE:
+        from fastdeploy.model_executor.layers.batch_invariant_ops import (
+            enable_batch_invariant_mode,
+            is_batch_invariant_mode_enabled,
+        )
+
+        if not is_batch_invariant_mode_enabled():
+            enable_batch_invariant_mode()
 
     # Initialize device and create model runner
     worker_proc.init_device()

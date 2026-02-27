@@ -21,16 +21,39 @@ from fastdeploy.platforms import current_platform
 
 from ..utils import get_sm_version
 
-if current_platform.is_cuda():
-    if get_sm_version() == 100:
-        # SM100 should use PFCC DeepGemm
-        logger.info("Detected sm100, use PFCC DeepGEMM")
-        paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-        import deep_gemm
+
+def load_deep_gemm():
+    """
+    Load DeepGemm module according to FastDeploy env switch.
+
+    Returns:
+        Imported deep_gemm module object.
+    """
+
+    if current_platform.is_cuda():
+        if get_sm_version() == 100:
+            # SM100 should use PFCC DeepGemm
+            paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
+            try:
+                import logging
+
+                import paddlefleet.ops.deep_gemm as deep_gemm
+
+                logging.getLogger().handlers.clear()
+                logger.info("Detected sm100, use PaddleFleet DeepGEMM")
+            except:
+                import deep_gemm as deep_gemm
+
+                logger.info("Detected sm100, use PFCC DeepGEMM")
+        else:
+            logger.info("use FastDeploy DeepGEMM")
+            import fastdeploy.model_executor.ops.gpu.deep_gemm as deep_gemm
     else:
-        from fastdeploy.model_executor.ops.gpu import deep_gemm
-else:
-    deep_gemm = None
+        deep_gemm = None
+    return deep_gemm
+
+
+deep_gemm = load_deep_gemm()
 
 
 def ceil_div(x: int, y: int) -> int:
@@ -42,7 +65,8 @@ def _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl(
 ):
     """Convert FP32 tensor to TMA-aligned packed UE8M0 format tensor"""
 
-    from deep_gemm.utils import align, get_tma_aligned_size
+    align = deep_gemm.utils.align
+    get_tma_aligned_size = deep_gemm.utils.get_tma_aligned_size
 
     # Input validation: must be FP32 type 2D or 3D tensor
     assert x.dtype == paddle.float and x.dim() in (2, 3)

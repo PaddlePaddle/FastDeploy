@@ -76,7 +76,9 @@ class Qwen3MoeBlock(nn.Layer):
             output_size=fd_config.model_config.num_experts,
             with_bias=False,
             skip_quant=True,
-            weight_dtype="float32",
+            weight_dtype=(
+                "float32" if fd_config.load_config.dynamic_load_weight or fd_config.model_config.moe_gate_fp32 else ""
+            ),
         )
 
     def forward(self, x, forward_meta):
@@ -365,6 +367,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
+            logger.debug(f"Loading weight: {loaded_weight_name}")
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue
