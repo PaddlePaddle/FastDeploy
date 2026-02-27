@@ -299,7 +299,7 @@ class CacheTransferManager:
 
         try:
             # TODO: support cache scale for other backend
-            if self.has_cache_scale:
+            if self.has_cache_scale and self.storage_backend_type is not None:
                 if self.storage_backend_type not in ["mooncake"]:
                     raise ValueError(
                         f"Unsupported storage backend ({self.storage_backend_type}) "
