@@ -58,6 +58,7 @@ class MockModelConfig:
     rope_theta = 1000
     partial_rotary_factor = 0.5
     architectures = ["mock"]
+    think_truncate_prompt_ids = [-1]
 
 
 class MockCacheConfig:
