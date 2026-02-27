@@ -110,6 +110,44 @@ bash build.sh
 
 The compiled outputs will be located in the ```FastDeploy/dist``` directory.
 
+## 4. Python-only Quick Install (For Development)
+
+If you have already completed a full build (`bash build.sh 1`) and only modified Python files, you can use the python-only mode to quickly sync changes to `site-packages` **without recompiling C++ Custom Ops or rebuilding the wheel**.
+
+### Prerequisites
+
+A full build must have been completed at least once:
+
+```bash
+bash build.sh 1
+```
+
+### Usage
+
+```bash
+# Argument 1: Must be 2 to enable python-only mode
+# Argument 2 (optional): Python interpreter path (default: python)
+
+# Use default python
+bash build.sh 2
+
+# Use a specific python interpreter
+bash build.sh 2 python3
+
+# Use an absolute path to the interpreter
+bash build.sh 2 /path/to/your/python
+```
+
+This command syncs `.py` files from the source tree directly into the installed `site-packages/fastdeploy/` directory via `rsync`. Compiled artifacts (`.so` files) are preserved.
+
+### When to Use
+
+| Scenario | Recommended Command |
+|---|---|
+| Only modified Python files | `bash build.sh 2` |
+| Modified C++/CUDA code | `bash build.sh 1` |
+| First-time build | `bash build.sh 1` |
+
 ## Installation verification
 
 ```bash

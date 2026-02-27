@@ -79,12 +79,14 @@ __global__ void RebuildAppendPaddingKernel(T *output_data,
                      &src_vec);
     Store<T, VecSize>(src_vec, &output_data[i]);
 
-    if (enable_logprob && seq_len_encoder[bi] > 0) {
-      const int first_input_token_id = input_token_id - 1;
-      Load<T, VecSize>(&input_data[first_input_token_id * dim_embed + bias_idx],
-                       &src_vec);
-      Store<T, VecSize>(src_vec, &first_token_out[bi * dim_embed + bias_idx]);
-    }
+    // if (enable_logprob && seq_len_encoder[bi] > 0) {
+    //   const int first_input_token_id = input_token_id - 1;
+    //   Load<T, VecSize>(&input_data[first_input_token_id * dim_embed +
+    //   bias_idx],
+    //                    &src_vec);
+    //   Store<T, VecSize>(src_vec, &first_token_out[bi * dim_embed +
+    //   bias_idx]);
+    // }
   }
 }
 
