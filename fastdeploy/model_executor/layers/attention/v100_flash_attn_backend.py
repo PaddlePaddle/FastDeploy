@@ -19,13 +19,13 @@ This backend is designed for NVIDIA V100 GPUs (SM70) which do not support:
 1. cp.async instructions required by append_attention and gqa_rope_write_cache
 2. flash_attn_unpadded which requires SM80+ (check: is_sm8x || is_sm90_or_larger)
 
-Default mode uses Triton kernels (SM70 compatible) for paged attention only:
-- Decode: 2-stage flash-decoding (v100_decode_attention)
-- Prefill: tiled flash attention with fp16 tl.dot (v100_extend_attention)
+Default mode uses a hybrid approach:
+- Data prep (positions, RoPE, KV cache write): vectorized Paddle ops (no .item() calls)
+- Decode attention (q_len=1): cuBLAS SDPA via gather KV + paddle.matmul (~3 kernels)
+- Prefill attention (q_len>1): Triton paged attention (v100_extend_attention)
 
-All data prep (positions, RoPE, KV cache write) uses Python/Paddle because Triton
-kernels writing to tensors consumed by other ops produce incorrect results through
-the Paddle compat guard.
+This hybrid approach avoids the overhead of Triton kernel wrappers' .item() calls
+and buffer allocations during decode, which dominate inference latency.
 
 Set FD_V100_USE_PYTHON_ATTN=1 to force full Python/Paddle fallback (no Triton at all).
 """
@@ -50,10 +50,12 @@ from fastdeploy.model_executor.layers.attention.utils import init_rank_and_devic
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
-# Try importing Triton kernels
+# Try importing Triton kernels (used in decode optimization path)
 try:
-    from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
+    from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (  # noqa: F401
+        v100_decode_attention,
         v100_paged_attention,
+        v100_write_kv_cache,
     )
 
     _TRITON_KERNELS_AVAILABLE = True
@@ -684,15 +686,13 @@ class V100FlashAttentionBackend(AttentionBackend):
         batch_size,
         use_neox_rotary_style,
     ):
-        """Forward using Python data prep + Triton paged attention.
+        """Hybrid forward: same data prep as _python_forward, cuBLAS SDPA for all.
 
-        Only the attention kernel runs via Triton (decode: flash-decoding,
-        prefill: tiled flash attention with fp16 tl.dot). All other ops
-        (positions, RoPE, KV write) use the proven-correct Python fallbacks.
-
-        Flow: Python(pos, RoPE, write, total_seq_lens) → sync → Triton(attn) → sync
+        Both decode and prefill use _python_* data prep + _python_attention_forward.
+        This avoids Triton JIT compilation memory overhead that causes OOM on V100.
+        The _python_* methods' .item() calls provide implicit memory barriers.
         """
-        # ── Data prep with Python fallbacks (proven correct) ──
+        # Data prep: same as _python_forward
         positions = self._python_compute_positions(
             forward_meta.batch_id_per_token,
             forward_meta.seq_lens_encoder,
@@ -730,35 +730,18 @@ class V100FlashAttentionBackend(AttentionBackend):
             batch_size,
         )
 
-        # Build cu_seqlens_q from seq_lens_this_time
-        cu_seqlens_q = paddle.zeros([batch_size + 1], dtype="int32")
-        cu_seqlens_q[1:] = paddle.cumsum(forward_meta.seq_lens_this_time)
-
-        # ▶ SYNC: Paddle → Triton (ensure all Paddle writes are visible)
-        paddle.device.cuda.synchronize()
-
-        # ── Triton: paged attention only ──
-        output = paddle.empty_like(q_reshaped)
-        v100_paged_attention(
+        # Attention: cuBLAS SDPA for both decode and prefill
+        return self._python_attention_forward(
             q_reshaped,
+            forward_meta,
             key_cache,
             value_cache,
-            output,
-            forward_meta.block_tables,
-            forward_meta.seq_lens_this_time,
             total_seq_lens,
-            cu_seqlens_q,
-            forward_meta.batch_id_per_token,
             num_heads,
             kv_num_heads,
             qk_head_dim,
-            is_causal=self.causal,
+            v_head_dim,
         )
-
-        # ▶ SYNC: Triton → Paddle (output ready for downstream)
-        paddle.device.cuda.synchronize()
-
-        return output.reshape([num_tokens, num_heads * v_head_dim])
 
     def _python_forward(
         self,
