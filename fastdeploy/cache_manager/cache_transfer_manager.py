@@ -741,6 +741,7 @@ class CacheTransferManager:
                             time.sleep(0.1)
                         logger.info("[RL] stop waiting! gpu runner has unlinked cuda ipc")
                         paddle.set_device(f"gpu:{self.device}")
+                        paddle.set_flags({"FLAGS_selected_gpus": f"{self.device}"})
                         self.gpu_cache_kvs.clear()
                         self.gpu_cache_k_tensors.clear()
                         self.gpu_cache_v_tensors.clear()
