@@ -229,7 +229,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
     # Timeout in seconds for waiting response queue in async engine (default 600s)
-    "FD_QUEUE_TIMEOUT": lambda: int(os.getenv("FD_QUEUE_TIMEOUT", "600")),
+    "FD_QUEUE_TIMEOUT": lambda: int(os.getenv("FD_QUEUE_TIMEOUT", "900")),
 }
 
 
