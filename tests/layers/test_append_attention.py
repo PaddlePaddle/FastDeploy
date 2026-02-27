@@ -722,6 +722,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 True,  # causal
                 False,  # speculate_decoder
                 self.sliding_window,
+                self.sink_size,
             )
 
         # Warm up
@@ -785,6 +786,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 True,  # causal
                 False,  # speculate_decoder
                 self.sliding_window,
+                self.sink_size,
             )
 
         # Warm up
