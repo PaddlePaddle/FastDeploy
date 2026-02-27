@@ -35,3 +35,21 @@ class MMBaseDataProcessor(ABC):
         Calculate the number of tokens in the multimodal input.
         """
         raise NotImplementedError
+
+    def get_max_image_tokens(self, *args, **kwargs) -> int:
+        """
+        Get the maximum number of image tokens.
+        """
+        return 0
+
+    def get_max_video_tokens(self, *args, **kwargs) -> int:
+        """
+        Get the maximum number of video tokens.
+        """
+        return 0
+
+    def get_max_audio_tokens(self, *args, **kwargs) -> int:
+        """
+        Get the maximum number of audio tokens.
+        """
+        return 0

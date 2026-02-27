@@ -544,8 +544,6 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
             fd_suffix_map = fp8_suffix_map
         if (is_moe and moe_quant_type == "tensor_wise_fp8") or (not is_moe and dense_quant_type == "tensor_wise_fp8"):
             fd_suffix_map = tensor_wise_fp8_suffix_map
-        else:
-            fd_suffix_map = {}
         for ckpt_suffix, fd_suffix in fd_suffix_map.items():
             if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
                 loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)

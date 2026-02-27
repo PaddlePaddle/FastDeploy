@@ -717,15 +717,30 @@ class MetaxModelRunner(ModelRunnerBase):
                 length = prefill_end_index - prefill_start_index
                 if not self.is_pooling_model:
                     if request.get("enable_thinking") is not None:
-                        self.share_inputs["enable_thinking"][idx : idx + 1, :] = request.get("enable_thinking")
-                    if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
-                        # Enable thinking
-                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
-                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
-                    else:
-                        # Disable thinking
-                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
-                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                        enable_thinking = bool(request.get("enable_thinking"))
+                        logger.debug(f"request {request.request_id} with {enable_thinking=} at idx {idx}")
+                        self.share_inputs["enable_thinking"][idx : idx + 1, :] = enable_thinking
+                        if enable_thinking:
+                            self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                            if request.get("reasoning_max_tokens") is not None:
+                                # Enable thinking
+                                self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get(
+                                    "reasoning_max_tokens"
+                                )
+                            else:
+                                self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                            if request.get("response_max_tokens") is not None:
+                                # Enable thinking
+                                self.share_inputs["max_reply_lens"][idx : idx + 1, :] = request.get(
+                                    "response_max_tokens"
+                                )
+                            else:
+                                self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
+                        else:
+                            # Disable thinking
+                            self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                            self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
+                            self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
                 if isinstance(request.prompt_token_ids, np.ndarray):
                     prompt_token_ids = request.prompt_token_ids.tolist()
@@ -1264,8 +1279,8 @@ class MetaxModelRunner(ModelRunnerBase):
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-            output_cum_offsets,
-            output_padding_offset,
+            cu_seqlens_q_output,
+            batch_id_per_token_output,
         ) = pre_process(
             token_num_cpu,
             self.share_inputs["input_ids"],
@@ -1284,8 +1299,8 @@ class MetaxModelRunner(ModelRunnerBase):
 
         # For speculative decoding
         if self.speculative_decoding:
-            self.share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
-            self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
+            self.share_inputs["cu_seqlens_q_output"].copy_(cu_seqlens_q_output, False)
+            self.share_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
 
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
@@ -1704,7 +1719,7 @@ class MetaxModelRunner(ModelRunnerBase):
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
-            line_break_id=self.model_config.line_break_id,
+            splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
         )
         self.exist_prefill_flag = False
         return pooler_output
@@ -1809,7 +1824,7 @@ class MetaxModelRunner(ModelRunnerBase):
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
-            line_break_id=self.model_config.line_break_id,
+            splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
             enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
         )
         self.exist_prefill_flag = False
@@ -1896,10 +1911,8 @@ class MetaxModelRunner(ModelRunnerBase):
                     self.share_inputs["seq_lens_this_time"],
                     self.share_inputs["seq_lens_decoder"],
                     self.share_inputs["seq_lens_encoder"],
-                    (
-                        self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
-                    ),  # speculative decoding requires
-                    self.model_config.max_model_len,
+                    (self.share_inputs["batch_id_per_token_output"] if self.speculative_decoding else None),
+                    (self.share_inputs["cu_seqlens_q_output"] if self.speculative_decoding else None),
                 )
                 self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
 
@@ -2337,8 +2350,8 @@ class MetaxModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_this_time"],
                 self.share_inputs["seq_lens_decoder"],
                 self.share_inputs["seq_lens_encoder"],
-                (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
-                self.model_config.max_model_len,
+                (self.share_inputs["batch_id_per_token_output"] if self.speculative_decoding else None),
+                (self.share_inputs["cu_seqlens_q_output"] if self.speculative_decoding else None),
             )
 
             # 4. Compute logits, Sample
@@ -2458,7 +2471,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 skip_save_output=skip_save_output,
                 async_output_queue=self.async_output_queue,
                 think_end_id=self.model_config.think_end_id,
-                line_break_id=self.model_config.line_break_id,
+                splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
             )
 

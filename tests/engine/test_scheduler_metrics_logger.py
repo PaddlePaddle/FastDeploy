@@ -57,6 +57,7 @@ def test_log_prefill_batch_logs_expected_message():
 def test_log_decode_batch_computes_throughput(monkeypatch):
     logger = SchedulerMetricsLogger(enabled=True, dp_rank=1)
     logger._logger = mock.Mock()
+    logger._decode_batch_count = logger._decode_log_interval - 1
     logger._decode_tokens_since_last = 10
     logger._last_decode_tic = 1.0
 
@@ -72,3 +73,29 @@ def test_log_decode_batch_computes_throughput(monkeypatch):
     assert "#queue-req: 7" in message
     assert logger._decode_tokens_since_last == 0
     assert logger._last_decode_tic == 3.0
+
+
+def test_log_decode_batch_logs_every_decode_interval():
+    logger = SchedulerMetricsLogger(enabled=True, dp_rank=0)
+    logger._logger = mock.Mock()
+
+    for _ in range(logger._decode_log_interval - 1):
+        logger.log_decode_batch(running_cnt=1, queue_cnt=2, tokens_used=3, token_usage=0.2, use_cudagraph=False)
+
+    logger._logger.info.assert_not_called()
+
+    logger.log_decode_batch(running_cnt=1, queue_cnt=2, tokens_used=3, token_usage=0.2, use_cudagraph=False)
+
+    logger._logger.info.assert_called_once()
+
+
+def test_decode_log_interval_reads_env(monkeypatch):
+    monkeypatch.setenv("FD_CONSOLE_DECODE_LOG_INTERVAL", "2")
+    logger = SchedulerMetricsLogger(enabled=True, dp_rank=0)
+    assert logger._decode_log_interval == 2
+
+
+def test_decode_log_interval_non_positive_falls_back_to_default(monkeypatch):
+    monkeypatch.setenv("FD_CONSOLE_DECODE_LOG_INTERVAL", "0")
+    logger = SchedulerMetricsLogger(enabled=True, dp_rank=0)
+    assert logger._decode_log_interval == SchedulerMetricsLogger.DEFAULT_DECODE_LOG_INTERVAL

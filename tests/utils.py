@@ -62,6 +62,7 @@ class FakeModelConfig:
         self.max_model_len = 512
         self.logprobs_mode = "raw_logprobs"
         self.architectures = ["test_model"]
+        self.mm_max_tokens_per_item = None
 
 
 class FakeLoadConfig:
