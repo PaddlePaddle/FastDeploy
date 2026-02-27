@@ -137,9 +137,7 @@ class ResourceManager:
         current_block_num = self.available_block_num()
         if block_num > current_block_num:
             llm_logger.error(f"block_num:{block_num} > free_list len:{current_block_num}")
-            raise RuntimeError(
-                f"Out of memory: requested {block_num} blocks but only {current_block_num} available"
-            )
+            raise RuntimeError(f"Out of memory: requested {block_num} blocks but only {current_block_num} available")
         block_list = self.cache_manager.allocate_gpu_blocks(block_num)
         llm_logger.debug(f"dispatch {len(block_list)} blocks.")
         return block_list

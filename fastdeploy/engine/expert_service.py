@@ -169,8 +169,7 @@ class ExpertService:
                 except Exception as e:
                     if attempt >= max_retries - 1:
                         raise RuntimeError(
-                            f"Failed to create IPC signal 'get_profile_block_num' "
-                            f"after {max_retries} retries: {e}"
+                            f"Failed to create IPC signal 'get_profile_block_num' " f"after {max_retries} retries: {e}"
                         )
                     time.sleep(1)
             self.reset_kvcache_blocks()

@@ -16,12 +16,11 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import paddle
-
-import logging
 
 try:
     from fastdeploy.model_executor.ops.gpu import get_cur_cu_seq_len_k, moba_attention

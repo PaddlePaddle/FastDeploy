@@ -246,8 +246,7 @@ class ModelRegistry:
 
         if not architectures:
             raise ValueError(
-                "No model architectures are specified. "
-                "Please set 'architectures' in the model's config.json."
+                "No model architectures are specified. " "Please set 'architectures' in the model's config.json."
             )
 
         # First, check if PaddleFormers is explicitly requested

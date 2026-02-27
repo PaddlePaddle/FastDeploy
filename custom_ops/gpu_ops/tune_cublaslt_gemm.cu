@@ -483,7 +483,7 @@ class DevContext {};
 class CPUContext : public DevContext {};
 
 class CUBLASLTContext : public DevContext {
-public:
+ public:
   CUBLASLTContext() { CUDA_CHECK(cublasLtCreate(&handle)); }
 
   cublasLtHandle_t handle;
@@ -735,8 +735,10 @@ void TuneCublasltGemm(const paddle::Tensor& K,
                       const std::string& path) {
   assert(M_end >= M_start && "M_end must be >= M_start");
   assert(M_start >= 1 && "M_start must be >= 1");
-  assert(K.dims().size() == 1 && N.dims().size() == 1 && "K and N must be 1D tensors");
-  assert(is_test != is_read_from_file && "Exactly one of is_test or is_read_from_file must be true");
+  assert(K.dims().size() == 1 && N.dims().size() == 1 &&
+         "K and N must be 1D tensors");
+  assert(is_test != is_read_from_file &&
+         "Exactly one of is_test or is_read_from_file must be true");
 
   auto K_cpu = K.copy_to(paddle::CPUPlace(), false);
   auto N_cpu = N.copy_to(paddle::CPUPlace(), false);

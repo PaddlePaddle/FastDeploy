@@ -118,8 +118,7 @@ class MTPProposer(Proposer):
             self._propose = self._propose_cuda
         else:
             raise RuntimeError(
-                f"Unsupported platform for MTP: {current_platform}. "
-                f"Supported platforms: CUDA, MACA, XPU"
+                f"Unsupported platform for MTP: {current_platform}. " f"Supported platforms: CUDA, MACA, XPU"
             )
 
         self.sampler = MTPSampler(fd_config)

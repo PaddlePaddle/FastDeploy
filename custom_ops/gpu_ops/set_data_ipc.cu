@@ -86,7 +86,8 @@ void set_data_ipc(const paddle::Tensor& tmp_input,
   volatile shmStruct* shm = NULL;
   if (sharedMemoryCreate(shm_name.c_str(), sizeof(*shm), &info) != 0) {
     throw std::runtime_error(
-        "Failed to create shared memory slab in sharedMemoryCreate, shm_name: " +
+        "Failed to create shared memory slab in sharedMemoryCreate, "
+        "shm_name: " +
         shm_name + ", errno: " + std::string(strerror(errno)));
   }
   shm = (volatile shmStruct*)info.addr;

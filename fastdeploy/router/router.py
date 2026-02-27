@@ -161,9 +161,7 @@ class Router:
         """Select one mixed server"""
         async with self.lock:
             if not self.mixed_servers:
-                raise RuntimeError(
-                    f"No mixed servers available. Registered mixed servers: {len(self.mixed_servers)}"
-                )
+                raise RuntimeError(f"No mixed servers available. Registered mixed servers: {len(self.mixed_servers)}")
             idx = random.randint(0, len(self.mixed_servers) - 1)
             return self.mixed_servers[idx]
 

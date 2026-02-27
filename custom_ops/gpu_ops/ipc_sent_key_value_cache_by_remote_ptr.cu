@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <nvml.h>
+#include <iostream>
 #include <stdexcept>
 #include <string>
-#include <iostream>
 #include "fstream"
 #include "helper.h"
 #include "iomanip"
@@ -139,7 +139,8 @@ void sent_key_value_by_remote_ptr(
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
       throw std::runtime_error(
-          std::string("CUDA Error in IPC KV cache transfer: ") + cudaGetErrorString(err));
+          std::string("CUDA Error in IPC KV cache transfer: ") +
+          cudaGetErrorString(err));
     }
 #ifdef DEBUG_IPC_SENT_SYNC_AND_PRINT
     cudaDeviceSynchronize();

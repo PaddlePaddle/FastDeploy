@@ -16,14 +16,13 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
 import paddle
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
 from paddleformers.utils.log import logger
-
-import logging
 
 try:
     from paddle.nn.functional.flash_attention import flash_attention_v3_varlen

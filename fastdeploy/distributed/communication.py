@@ -106,17 +106,14 @@ try:
 except Exception as e:
     logger.warning(f"Failed to register tensor_model_parallel_all_reduce: {e}")
 
+    _reg_err = e
+
     def tensor_model_parallel_all_reduce(input_: "paddle.Tensor", group_=None) -> "paddle.Tensor":
-        raise RuntimeError(
-            f"tensor_model_parallel_all_reduce is not available. "
-            f"Registration failed with: {e}"
-        )
+        raise RuntimeError(f"tensor_model_parallel_all_reduce is not available. Registration failed with: {_reg_err}")
 
     def decode_alltoall_transpose(input_: "paddle.Tensor", out=None) -> "paddle.Tensor":
-        raise RuntimeError(
-            f"decode_alltoall_transpose is not available. "
-            f"Registration failed with: {e}"
-        )
+        raise RuntimeError(f"decode_alltoall_transpose is not available. Registration failed with: {_reg_err}")
+
 
 from paddle.distributed.communication import stream
 from paddle.distributed.communication.reduce import ReduceOp
@@ -146,8 +143,9 @@ try:
 except Exception as e:
     logger.warning(f"Failed to register tensor_model_parallel_all_reduce_custom: {e}")
 
+    _reg_err2 = e
+
     def tensor_model_parallel_all_reduce_custom(input_: "paddle.Tensor") -> "paddle.Tensor":
         raise RuntimeError(
-            f"tensor_model_parallel_all_reduce_custom is not available. "
-            f"Registration failed with: {e}"
+            f"tensor_model_parallel_all_reduce_custom is not available. Registration failed with: {_reg_err2}"
         )

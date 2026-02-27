@@ -15,6 +15,7 @@
 
 import atexit
 import ctypes
+import logging
 from contextlib import contextmanager
 from typing import List, Optional
 
@@ -34,8 +35,6 @@ from fastdeploy.model_executor.ops.gpu import (
     register_buffer,
     register_graph_buffers,
 )
-
-import logging
 
 try:
     meta_size()

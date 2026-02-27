@@ -63,8 +63,7 @@ def cutlass_scaled_mm(
     n = b.shape[0]
     cutlass_compatible_b = b.shape[0] % 16 == 0 and b.shape[1] % 16 == 0
     assert cutlass_compatible_b, (
-        f"Tensor 'b' shape {b.shape} is not compatible with CUTLASS: "
-        f"both dimensions must be multiples of 16"
+        f"Tensor 'b' shape {b.shape} is not compatible with CUTLASS: " f"both dimensions must be multiples of 16"
     )
 
     out = paddle.empty([m, n], dtype=out_dtype)

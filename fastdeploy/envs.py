@@ -228,8 +228,7 @@ def get_unique_name(self, name):
 
 def __setattr__(name: str, value: Any):
     assert name in environment_variables, (
-        f"Unknown environment variable '{name}'. "
-        f"Available variables: {list(environment_variables.keys())}"
+        f"Unknown environment variable '{name}'. " f"Available variables: {list(environment_variables.keys())}"
     )
     environment_variables[name] = lambda: value
 

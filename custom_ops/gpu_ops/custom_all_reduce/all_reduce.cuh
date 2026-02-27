@@ -27,13 +27,13 @@
 #include <unordered_map>
 #include <vector>
 
-#define CUDACHECK(cmd)                                                  \
+#define CUDACHECK(cmd)                                                    \
   do {                                                                    \
     cudaError_t e = cmd;                                                  \
     if (e != cudaSuccess) {                                               \
-      throw std::runtime_error(                                           \
-          std::string("CUDA error at ") + __FILE__ + ":" +                \
-          std::to_string(__LINE__) + " '" + cudaGetErrorString(e) + "'"); \
+      throw std::runtime_error(std::string("CUDA error at ") + __FILE__ + \
+                               ":" + std::to_string(__LINE__) + " '" +    \
+                               cudaGetErrorString(e) + "'");              \
     }                                                                     \
   } while (0)
 
