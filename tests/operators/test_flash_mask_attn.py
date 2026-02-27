@@ -23,32 +23,37 @@ from fastdeploy.model_executor.layers.attention.flash_attn_backend import (
     flash_attn_func,
 )
 from fastdeploy.model_executor.layers.attention.ops import get_attn_mask_q
-from fastdeploy.model_executor.ops.gpu import flash_mask_attention
+from fastdeploy.model_executor.ops.gpu import (
+    flash_mask_attention,
+    swa_encoder_attention,
+)
 
 
 class TestFlashMaskAttention(unittest.TestCase):
     def setUp(self):
         self.bsz = 1
-        self.num_head = 8
-        self.num_kv_head = 1
-        self.q_len = 888
+        self.num_head = 56
+        self.num_kv_head = 4
+        self.q_len = 1024
         self.k_len = 1024
         self.head_dim = 128
         np.random.seed(self.q_len)
+        paddle.seed(self.q_len)
         prop = paddle.device.cuda.get_device_properties()
         self.sm_version = prop.major * 10 + prop.minor
 
     def naive_attn(self, q_input, k_input, v_input, mask):
 
+        gqa_group_size = self.num_head // self.num_kv_head
         new_q = q_input.reshape([self.q_len, self.num_head, self.head_dim])
         new_k = (
             k_input.reshape([self.k_len + self.q_len, self.num_kv_head, self.head_dim])
-            .tile([1, self.num_head, 1])
+            .repeat_interleave(gqa_group_size, axis=1)
             .contiguous()
         )
         new_v = (
             v_input.reshape([self.k_len + self.q_len, self.num_kv_head, self.head_dim])
-            .tile([1, self.num_head, 1])
+            .repeat_interleave(gqa_group_size, axis=1)
             .contiguous()
         )
 
@@ -63,6 +68,39 @@ class TestFlashMaskAttention(unittest.TestCase):
         mask = paddle.to_tensor(mask, dtype=q_input.dtype)
         p = p + mask[None, :]
         p = paddle.nn.functional.softmax(p, -1)
+
+        out = paddle.einsum("lij, jlk->ilk", p, new_v).reshape([self.q_len, self.num_head * self.head_dim])
+        return out
+
+    def naive_attn_swa(self, q_input, k_input, v_input, head_use_swa, swa_window_len):
+        gqa_group_size = self.num_head // self.num_kv_head
+        new_q = q_input.reshape([self.q_len, self.num_head, self.head_dim])
+        new_k = (
+            k_input.reshape([self.k_len + self.q_len, self.num_kv_head, self.head_dim])
+            .repeat_interleave(gqa_group_size, axis=1)
+            .contiguous()
+        )
+        new_v = (
+            v_input.reshape([self.k_len + self.q_len, self.num_kv_head, self.head_dim])
+            .repeat_interleave(gqa_group_size, axis=1)
+            .contiguous()
+        )
+
+        p = paddle.einsum("ilk, jlk->lij", new_q, new_k)
+        p = p / (np.sqrt(self.head_dim))
+
+        mask_value = -1000000
+
+        condition = paddle.tril(paddle.ones(p.shape), p.shape[2] - p.shape[1])
+        mask = paddle.ones(condition.shape).astype("float32") * mask_value
+        p = paddle.where(condition > 0, p, mask)
+        for h in range(self.num_kv_head):
+            if head_use_swa[h]:
+                for t in range(self.q_len):
+                    end = (t + self.k_len + 128) // 128 * 128 - swa_window_len
+                    end = max(end, 0)
+                    p[h * gqa_group_size : h * gqa_group_size + gqa_group_size, t, 0:end] = mask_value
+        p = paddle.nn.functional.softmax(p, -1).astype("bfloat16")
 
         out = paddle.einsum("lij, jlk->ilk", p, new_v).reshape([self.q_len, self.num_head * self.head_dim])
         return out
@@ -233,6 +271,41 @@ class TestFlashMaskAttention(unittest.TestCase):
         )[0].reshape([self.q_len, self.num_head * self.head_dim])
 
         max_diff = (paddle_attn_out - naive_attn_out).abs().max().item()
+        self.assertLessEqual(max_diff, 0.05)
+
+    def test_swa_attention(self):
+        bsz = self.bsz
+        q_input = paddle.randn([self.q_len * bsz, self.num_head * self.head_dim], dtype="bfloat16")
+        k_input = paddle.randn([(self.q_len + self.k_len) * bsz, self.num_kv_head, self.head_dim], dtype="bfloat16")
+        v_input = paddle.randn(k_input.shape, dtype="bfloat16")
+
+        cu_seq_q = paddle.arange(bsz + 1) * self.q_len
+        cu_seq_k = paddle.arange(bsz + 1) * (self.q_len + self.k_len)
+        cu_seq_q = cu_seq_q.astype("int32")
+        cu_seq_k = cu_seq_k.astype("int32")
+        seq_len_encoder = paddle.ones(bsz) * self.q_len
+        seq_len_encoder = seq_len_encoder.astype("int32")
+        head_use_swa = paddle.randn([self.num_kv_head]) > 0
+        attn_out = paddle.empty(q_input.shape, dtype="bfloat16")
+        swa_window_len = int(128)
+        swa_encoder_attention(
+            q_input,
+            k_input,
+            v_input,
+            cu_seq_q,
+            cu_seq_k,
+            seq_len_encoder,
+            head_use_swa,
+            attn_out,
+            None,
+            self.num_head,
+            self.num_kv_head,
+            self.head_dim,
+            swa_window_len,
+        )
+
+        naive_attn_out = self.naive_attn_swa(q_input, k_input, v_input, head_use_swa, swa_window_len)
+        max_diff = (attn_out - naive_attn_out).abs().max().item()
         self.assertLessEqual(max_diff, 0.05)
 
 

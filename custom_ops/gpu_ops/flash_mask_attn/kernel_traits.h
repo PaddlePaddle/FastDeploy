@@ -32,6 +32,7 @@ struct Flash_mask_params {
   int *__restrict__ cu_seq_q;
   int *__restrict__ cu_seq_k;
   int *__restrict__ mask;
+  bool *__restrict__ head_use_swa;
   int *seq_len_encoder;
   int head_num;
   int kv_head_num;
@@ -40,6 +41,7 @@ struct Flash_mask_params {
   int batch_size;
   int gqa_group_size;
   float scale_softmax_log2;
+  int swa_window_blocks;
 };
 
 template <int kStages,
@@ -70,6 +72,7 @@ template <int kHeadDim_,
           int kNWarps_,
           int kStages_,
           bool NeedMask_,
+          bool UseSWA_ = false,
           typename elem_type = cutlass::half_t,
           typename out_type = cutlass::half_t>
 struct Flash_mask_kernel_traits {
@@ -89,6 +92,7 @@ struct Flash_mask_kernel_traits {
   using ClusterShape_MNK = Shape<Int<1>, Int<1>, Int<1>>;
   static constexpr int kStages = kStages_;
   static constexpr int NeedMask = NeedMask_;
+  static constexpr bool UseSWA = UseSWA_;
 
   using AtomLayoutMNK = Layout<Shape<Int<kBlockM / 64>, _1, _1>>;
   using TiledMma0 = decltype(cute::make_tiled_mma(
@@ -177,3 +181,20 @@ struct Flash_mask_kernel_traits {
   using MainloopPipeline = typename cutlass::PipelineTmaAsync<kStages>;
   using PipelineState = typename cutlass::PipelineState<kStages>;
 };
+
+template <typename paddle_type>
+struct cuteType;
+
+template <>
+struct cuteType<phi::dtype::float16> {
+  using type = cutlass::half_t;
+};
+
+template <>
+struct cuteType<phi::dtype::bfloat16> {
+  using type = cutlass::bfloat16_t;
+};
+
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif

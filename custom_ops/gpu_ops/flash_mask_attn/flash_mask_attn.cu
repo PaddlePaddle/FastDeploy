@@ -18,23 +18,6 @@
 #include "kernel_traits.h"
 #include "paddle/extension.h"
 
-#ifndef PD_BUILD_STATIC_OP
-#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
-#endif
-
-template <typename paddle_type>
-struct cuteType;
-
-template <>
-struct cuteType<phi::dtype::float16> {
-  using type = cutlass::half_t;
-};
-
-template <>
-struct cuteType<phi::dtype::bfloat16> {
-  using type = cutlass::bfloat16_t;
-};
-
 template <typename T>
 void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
                                 const paddle::Tensor& k_input,
@@ -79,6 +62,7 @@ void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
   params.scale_softmax_log2 = 1.0f / std::sqrt(head_dim) * kLog2e;
 
   using cute_type = typename cuteType<T>::type;
+  constexpr bool UseSWA = false;
 
   if (mask) {
     PADDLE_ENFORCE(mask.get().dims()[0] == 2 * q_token_num, "Unmatched shape");
@@ -89,6 +73,7 @@ void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
       flash_attn_headdim128<kBlockM,
                             kBlockN,
                             true,
+                            UseSWA,
                             cute_type,
                             typename cuteType<out_type>::type>(
           params, q_input.stream());
@@ -98,6 +83,7 @@ void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
       flash_attn_headdim128<kBlockM,
                             kBlockN,
                             true,
+                            UseSWA,
                             cute_type,
                             typename cuteType<out_type>::type>(
           params, q_input.stream());
@@ -109,6 +95,7 @@ void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
       flash_attn_headdim128<kBlockM,
                             kBlockN,
                             false,
+                            UseSWA,
                             cute_type,
                             typename cuteType<out_type>::type>(
           params, q_input.stream());
@@ -118,6 +105,7 @@ void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
       flash_attn_headdim128<kBlockM,
                             kBlockN,
                             false,
+                            UseSWA,
                             cute_type,
                             typename cuteType<out_type>::type>(
           params, q_input.stream());

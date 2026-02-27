@@ -1,0 +1,147 @@
+// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "flash_mask_attn_kernel.hpp"
+#include "helper.h"  // NOLINT
+#include "kernel_traits.h"
+#include "paddle/extension.h"
+
+template <typename T>
+void DispatchSwaAttention(const paddle::Tensor& q_input,
+                          const paddle::Tensor& k_input,
+                          const paddle::Tensor& v_input,
+                          const paddle::Tensor& cu_seq_q,
+                          const paddle::Tensor& cu_seq_k,
+                          const paddle::Tensor& seq_len_encoder,
+                          const paddle::Tensor& head_use_swa,
+                          const paddle::Tensor& attn_out,
+                          const paddle::optional<paddle::Tensor>& mask,
+                          const int head_num,
+                          const int kv_head_num,
+                          const int head_dim,
+                          const int swa_window_len) {
+  const int q_token_num = q_input.dims()[0];
+  const int k_token_num = k_input.dims()[0];
+  const int batch_size = cu_seq_q.dims()[0] - 1;
+
+  PADDLE_ENFORCE(k_token_num == v_input.dims()[0], "Unmatched shape");
+  PADDLE_ENFORCE(head_dim == 128, "Unmatched shape");
+  PADDLE_ENFORCE(batch_size > 0, "Unmatched shape");
+  PADDLE_ENFORCE(batch_size == seq_len_encoder.dims()[0], "Unmatched shape");
+  PADDLE_ENFORCE(batch_size == cu_seq_k.dims()[0] - 1, "Unmatched shape");
+
+  constexpr int kBlockM = 128;
+  constexpr int kBlockN = 128;
+
+  PADDLE_ENFORCE(swa_window_len % kBlockN == 0,
+                 "swa_window_len must multiple of kBlockN");
+  PADDLE_ENFORCE(swa_window_len > 0, "swa_window_len must be greater than 0");
+
+  Flash_mask_params params;
+  memset(&params, 0, sizeof(Flash_mask_params));
+
+  params.q_ptr = const_cast<T*>(q_input.data<T>());
+  params.k_ptr = const_cast<T*>(k_input.data<T>());
+  params.v_ptr = const_cast<T*>(v_input.data<T>());
+  params.cu_seq_q = const_cast<int*>(cu_seq_q.data<int>());
+  params.cu_seq_k = const_cast<int*>(cu_seq_k.data<int>());
+  params.seq_len_encoder = const_cast<int*>(seq_len_encoder.data<int>());
+  params.head_num = head_num;
+  params.kv_head_num = kv_head_num;
+  params.q_token_num = q_token_num;
+  params.k_token_num = k_token_num;
+  params.batch_size = batch_size;
+  params.gqa_group_size = head_num / kv_head_num;
+  constexpr float kLog2e = 1.4426950408889634074;
+  params.scale_softmax_log2 = 1.0f / std::sqrt(head_dim) * kLog2e;
+  params.head_use_swa = const_cast<bool*>(head_use_swa.data<bool>());
+  params.swa_window_blocks = swa_window_len / kBlockN;
+  params.o_ptr = const_cast<T*>(attn_out.data<T>());
+
+  using cute_type = typename cuteType<T>::type;
+
+  if (mask) {
+    PADDLE_ENFORCE(mask.get().dims()[0] == 2 * q_token_num, "Unmatched shape");
+    params.mask = const_cast<int*>(mask.get().data<int>());
+    flash_attn_headdim128<kBlockM, kBlockN, true, true, cute_type, cute_type>(
+        params, q_input.stream());
+  } else {
+    flash_attn_headdim128<kBlockM, kBlockN, false, true, cute_type, cute_type>(
+        params, q_input.stream());
+  }
+}
+
+void SwaAttention(const paddle::Tensor& q_input,
+                  const paddle::Tensor& k_input,
+                  const paddle::Tensor& v_input,
+                  const paddle::Tensor& cu_seq_q,
+                  const paddle::Tensor& cu_seq_k,
+                  const paddle::Tensor& seq_len_encoder,
+                  const paddle::Tensor& head_use_swa,
+                  const paddle::Tensor& attn_out,
+                  const paddle::optional<paddle::Tensor>& mask,
+                  const int head_num,
+                  const int kv_head_num,
+                  const int head_dim,
+                  const int swa_window_len) {
+  if (q_input.dtype() == paddle::DataType::FLOAT16) {
+    using T = phi::dtype::float16;
+    DispatchSwaAttention<T>(q_input,
+                            k_input,
+                            v_input,
+                            cu_seq_q,
+                            cu_seq_k,
+                            seq_len_encoder,
+                            head_use_swa,
+                            attn_out,
+                            mask,
+                            head_num,
+                            kv_head_num,
+                            head_dim,
+                            swa_window_len);
+  } else if (q_input.dtype() == paddle::DataType::BFLOAT16) {
+    using T = phi::dtype::bfloat16;
+    DispatchSwaAttention<T>(q_input,
+                            k_input,
+                            v_input,
+                            cu_seq_q,
+                            cu_seq_k,
+                            seq_len_encoder,
+                            head_use_swa,
+                            attn_out,
+                            mask,
+                            head_num,
+                            kv_head_num,
+                            head_dim,
+                            swa_window_len);
+  }
+}
+
+PD_BUILD_STATIC_OP(swa_encoder_attention)
+    .Inputs({"q_input",
+             "k_input",
+             "v_input",
+             "cu_seq_q",
+             "cu_seq_k",
+             "seq_len_encoder",
+             "head_use_swa",
+             "attn_out",
+             paddle::Optional("mask")})
+    .Attrs({"head_num: int",
+            "kv_head_num: int",
+            "head_dim: int",
+            "swa_window_len: int"})
+    .Outputs({"out"})
+    .SetInplaceMap({{"attn_out", "out"}})
+    .SetKernelFn(PD_KERNEL(SwaAttention));

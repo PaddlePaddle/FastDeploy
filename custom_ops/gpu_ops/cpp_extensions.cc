@@ -1105,6 +1105,20 @@ std::vector<paddle::Tensor> get_attn_mask_q(
     const paddle::optional<paddle::Tensor>& attn_mask_kv,
     const int kv_token_num);
 
+void SwaAttention(const paddle::Tensor& q_input,
+                  const paddle::Tensor& k_input,
+                  const paddle::Tensor& v_input,
+                  const paddle::Tensor& cu_seq_q,
+                  const paddle::Tensor& cu_seq_k,
+                  const paddle::Tensor& seq_len_encoder,
+                  const paddle::Tensor& head_use_swa,
+                  const paddle::Tensor& attn_out,
+                  const paddle::optional<paddle::Tensor>& mask,
+                  const int head_num,
+                  const int kv_head_num,
+                  const int head_dim,
+                  const int swa_window_len);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
         &GetExpertTokenNum,
@@ -1704,4 +1718,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_stop", &GetStop, "get_stop function");
 
   m.def("set_stop", &SetStop, "set_stop function");
+
+  m.def("swa_attention", &SwaAttention, "swa_attention function");
 }
