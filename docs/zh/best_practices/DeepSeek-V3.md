@@ -49,6 +49,7 @@ export FLAGS_flash_attn_version=3
 
 # 暂时只支持 tp_size为8，ep_size 为 16的 配置
 
+
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 export FD_ENABLE_MULTI_API_SERVER=1
 python -m fastdeploy.entrypoints.openai.multi_api_server \
@@ -68,6 +69,3 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
        --graph-optimization-config '{"use_cudagraph":true}' \
 
 ```
-
-
-
