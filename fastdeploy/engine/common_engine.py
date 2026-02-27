@@ -163,6 +163,7 @@ class EngineService:
             )
 
         self.bos_client = None
+        self.mm_max_tokens_per_item = None
         self.guided_decoding_checker = None
         if self.cfg.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(
@@ -273,6 +274,12 @@ class EngineService:
             self.cfg.tool_parser,
         )
         self.data_processor = self.input_processor.create_processor()
+        self.mm_max_tokens_per_item = self.data_processor.get_mm_max_tokens_per_item(
+            self.cfg.model_config.max_model_len
+        )
+        if self.mm_max_tokens_per_item is not None:
+            max_chunk_tokens = self.cfg.get_max_chunk_tokens(self.mm_max_tokens_per_item)
+            self.cfg.cache_config.postprocess(max_chunk_tokens, self.cfg.scheduler_config.max_num_seqs)
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
         current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
@@ -301,15 +308,6 @@ class EngineService:
         self.exist_prefill_task_signal = IPCSignal(
             name="exist_prefill_task_signal",
             array=exist_prefill_task_signal_data,
-            dtype=np.int32,
-            suffix=current_suffix,
-            create=True,
-        )
-
-        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
-        self.engine_forward_signal = IPCSignal(
-            name="engine_forward_signal",
-            array=engine_forward_signal_data,
             dtype=np.int32,
             suffix=current_suffix,
             create=True,
@@ -977,24 +975,29 @@ class EngineService:
             with self._pause_cond:
                 self._pause_cond.wait_for(lambda: not self.is_paused)
             try:
-                if not is_fetching:
-                    # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
-                    try:
-                        is_fetching = True
-                        get_request_pool.submit(_fetch_request)
-                    except RuntimeError as e:
-                        if "shutdown" in str(e):
-                            self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
-                            break
-                        else:
-                            raise
-                # Continue preprocessing incoming requests and accumulating them in the queue when forward pass not finished.
-                # Once the forward pass finishes, these accumulated requests can be scheduled in larger,
-                # more efficient batches.
-                if not (self.engine_worker_queue.num_tasks() == 0 and self.engine_forward_signal.value[0] == 0):
+                if self.engine_worker_queue.exist_tasks():
                     time.sleep(0.001)
                     continue
+                if self.cfg.scheduler_config.splitwise_role != "mixed":
+                    if not is_fetching:
+                        is_fetching = True
+                        get_request_pool.submit(_fetch_request)
 
+                else:
+                    if len(self.resource_manager.waiting) == 0 and (not is_fetching):
+                        # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
+                        try:
+                            is_fetching = True
+                            get_request_pool.submit(_fetch_request)
+                        except RuntimeError as e:
+                            if "shutdown" in str(e):
+                                self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
+                                break
+                            else:
+                                raise
+
+                if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
+                    self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
 
@@ -1043,13 +1046,6 @@ class EngineService:
                             else:
                                 task.metrics.inference_start_time = time.time()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
-                else:
-                    # When there are no actual tasks to schedule, send an empty task batch to EP workers.
-                    # This helps EP workers barrier for syncing tasks not hang.
-                    if self.cfg.parallel_config.enable_expert_parallel:
-                        self.engine_worker_queue.put_tasks(
-                            ([], self.resource_manager.real_bsz)
-                        )  # Empty (as idle tasks for ep)
 
                 # 4. Response error tasks
                 if error_tasks:
@@ -1068,6 +1064,20 @@ class EngineService:
             except Exception as e:
                 err_msg = "Error happend while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
+
+    def _get_scheduler_unhandled_request_num(self) -> int:
+        """
+        Get scheduler-level pending request count when supported.
+        """
+        get_unhandled = getattr(self.scheduler, "get_unhandled_request_num", None)
+        if not callable(get_unhandled):
+            return 0
+        try:
+            unhandled = int(get_unhandled())
+        except Exception as e:
+            self.llm_logger.debug(f"Failed to get scheduler unhandled request num: {e}")
+            return 0
+        return max(unhandled, 0)
 
     def start_zmq_service(self, api_server_pid=None):
         if api_server_pid is None:
@@ -1661,6 +1671,8 @@ class EngineService:
             self.llm_logger.info("Clear Data: Start")
             self.token_processor.clear_data()
             self.engine_worker_queue.clear_data()
+            if hasattr(self, "cache_task_queue"):
+                self.cache_task_queue.clear_transfer_task()
             self.send_response_server.req_dict.clear()
             self.recv_request_server.req_dict.clear()
             self.llm_logger.info("Clear Data: Successfully")
@@ -1938,13 +1950,35 @@ class EngineService:
             else len(self.data_processor.tokenizer.vocab)
         )
 
+        think_start_id = self.data_processor.tokenizer.get_vocab().get("<think>", -1)
+        if think_start_id >= 0:
+            self.llm_logger.info(f"Get think_start_id {think_start_id} from vocab.")
+        else:
+            self.llm_logger.info("No <think> token found in vocabulary, the model can not do reasoning.")
         think_end_id = self.data_processor.tokenizer.get_vocab().get("</think>", -1)
-        if think_end_id > 0:
+        if think_end_id >= 0:
             self.llm_logger.info(f"Get think_end_id {think_end_id} from vocab.")
         else:
             self.llm_logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
+        if line_break_id < 0:
+            line_break_ids = self.data_processor.tokenizer.encode("\n", add_special_tokens=False)
+            if isinstance(line_break_ids, dict):
+                line_break_ids = line_break_ids.get("input_ids")
+            elif hasattr(line_break_ids, "input_ids"):
+                line_break_ids = line_break_ids.input_ids
+            if line_break_ids:
+                if isinstance(line_break_ids, (list, tuple)):
+                    first = line_break_ids[0]
+                    if isinstance(first, (list, tuple)):
+                        line_break_id = int(first[0]) if first else -1
+                    else:
+                        line_break_id = int(first)
+                else:
+                    line_break_id = int(line_break_ids)
+        if line_break_id >= 0:
+            self.llm_logger.info(f"Get line_break_id {line_break_id} from tokenizer.")
 
         ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
@@ -1972,6 +2006,7 @@ class EngineService:
             f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
             f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
             f" --ori_vocab_size {ori_vocab_size}"
+            f" --think_start_id {think_start_id}"
             f" --think_end_id {think_end_id}"
             f" --image_patch_id {image_patch_id}"
             f" --line_break_id {line_break_id}"
@@ -1996,6 +2031,8 @@ class EngineService:
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
+        if self.mm_max_tokens_per_item is not None:
+            arguments += f" --mm_max_tokens_per_item '{json.dumps(self.mm_max_tokens_per_item)}'"
 
         worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
@@ -2042,6 +2079,9 @@ class EngineService:
         """
         self.do_profile = 0
         while self.get_profile_block_num_signal.value[0] == 0:
+            if hasattr(self, "worker_proc") and self.worker_proc is not None:
+                if self.worker_proc.poll() is not None:
+                    raise RuntimeError("Worker process failed to start." "Please check log/workerlog.* for details.")
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)

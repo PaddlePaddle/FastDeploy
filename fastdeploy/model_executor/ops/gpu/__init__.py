@@ -21,13 +21,15 @@ PACKAGE = "fastdeploy.model_executor.ops.gpu"
 
 
 def decide_module():
+    import os
+
     import paddle
 
-    prop = paddle.device.cuda.get_device_properties()
+    # Use paddle.device.get_device_properties() instead of paddle.device.cuda.get_device_properties()
+    # to support all hardware platforms (NVIDIA, ILUVATAR, HPU, etc.)
+    prop = paddle.device.get_device_properties()
     sm_version = prop.major * 10 + prop.minor
     print(f"current sm_version={sm_version}")
-
-    import os
 
     curdir = os.path.dirname(os.path.abspath(__file__))
     sm_version_path = os.path.join(curdir, f"fastdeploy_ops_{sm_version}")

@@ -6,6 +6,10 @@ from collections import namedtuple
 from collections.abc import Callable
 from typing import Any, Dict
 
+from fastdeploy.utils import get_logger
+
+logger = get_logger("worker_process", "worker_process.log")
+
 import paddle
 import triton
 import triton.language as tl
@@ -137,13 +141,13 @@ def get_compute_units():
             device_properties = paddle.cuda.get_device_properties(0)
             NUM_SMS = device_properties.multi_processor_count
         except Exception:
-            print("Could not get CUDA device properties. Falling back to CPU threads.")
+            logger.warning("Could not get CUDA device properties. Falling back to CPU threads.")
             # TODO(liujundong): Paddle lacks a torch.get_num_threads() equivalent for the *configured* thread count.
             # Using os.cpu_count() (total logical cores) as a fallback, which may not be correct.
             # Must check downstream logic to determine if this impacts correctness.
             NUM_SMS = os.cpu_count()
     else:
-        print("No CUDA device available. Using CPU.")
+        logger.warning("No CUDA device available. Using CPU.")
         # For CPU, use the number of CPU cores
         NUM_SMS = os.cpu_count()
 
@@ -153,7 +157,7 @@ def get_compute_units():
 def matmul_persistent(a: paddle.Tensor, b: paddle.Tensor, bias: paddle.Tensor | None = None):
     # Check constraints.
     assert a.shape[1] == b.shape[0], "Incompatible dimensions"
-    assert a.dtype == b.dtype, "Incompatible dtypes"
+    assert a.dtype == b.dtype, f"Incompatible dtypes: a={a.dtype}, b={b.dtype}"
     assert bias is None or bias.dim() == 1, "Currently assuming bias is 1D, let Horace know if you run into this"
 
     NUM_SMS = get_compute_units()
@@ -210,9 +214,11 @@ def matmul_persistent(a: paddle.Tensor, b: paddle.Tensor, bias: paddle.Tensor | 
         c.stride(0),
         c.stride(1),  #
         NUM_SMS=NUM_SMS,  #
-        A_LARGE=int(a.numel() > 2**31),
-        B_LARGE=int(b.numel() > 2**31),
-        C_LARGE=int(c.numel() > 2**31),
+        # Use M*K, K*N, M*N instead of numel() to avoid cudaErrorStreamCaptureImplicit
+        # during CUDA Graph capture
+        A_LARGE=int(M * K > 2**31),
+        B_LARGE=int(K * N > 2**31),
+        C_LARGE=int(M * N > 2**31),
         HAS_BIAS=int(bias is not None),
         # The Triton compiler (when used with Paddle) cannot handle these variables as booleans. Explicitly cast to int so the compiler can process them.
         **configs[dtype],
@@ -477,6 +483,8 @@ def addmm_batch_invariant(
     So we use `alpha * (x @ y) + beta * input  =  alpha * [ (x @ y) + (beta / alpha) * input ]`
     to minimize the effection on performance
     """
+    if alpha == 0:
+        return paddle.broadcast_to(beta * input, [x.shape[0], y.shape[1]])
     matmul_result = matmul_persistent(a=x, b=y, bias=input * beta / alpha)
     result = alpha * matmul_result
     return result
@@ -490,7 +498,13 @@ def mean_batch_invariant(
     x: paddle.Tensor, axis: list[int] = [], keepdim: bool = False, dtype: paddle.dtype | None = None, out=None
 ) -> paddle.Tensor:
     assert dtype is None or dtype == paddle.float32, f"unsupported dtype: {dtype}"
-    if type(axis) is int:
+    if axis is None:  # Global mean (no axis specified)
+        # Avoid x.numel() to prevent cudaErrorStreamCaptureImplicit during CUDA Graph capture
+        n_elems = 1
+        for s in x.shape:
+            n_elems *= s
+        result = paddle.sum(x, keepdim=keepdim, dtype=paddle.float32) / n_elems
+    elif type(axis) is int:
         result = mean_dim(x, axis, keepdim=keepdim)
     elif len(axis) == 1:  # axis: int | Sequence[int]
         result = mean_dim(x, axis[0], keepdim=keepdim)
