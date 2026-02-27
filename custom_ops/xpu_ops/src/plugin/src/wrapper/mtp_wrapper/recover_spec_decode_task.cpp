@@ -120,7 +120,6 @@ int recover_spec_decode_task(Context *ctx,
   WRAPPER_CHECK_PTR(ctx, bool, bsz, stop_flags);
   WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_this_time);
   WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_encoder);
-  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_encoder);
   WRAPPER_CHECK_PTR(ctx, int, bsz, step_seq_lens_decoder);
   WRAPPER_CHECK_PTR(ctx, int, bsz *block_num_per_seq, block_tables);
   WRAPPER_CHECK_PTR(ctx, bool, bsz, is_block_step);
