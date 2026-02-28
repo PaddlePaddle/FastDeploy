@@ -38,9 +38,9 @@ __global__ void quant_per_token_per_block(
   AlignedVector<float, NUM_PER_THREADS> load_vec_float;
   AlignedVector<phi::dtype::float8_e4m3fn, NUM_PER_THREADS> res_vec;
   for (int token_idx = bid; token_idx < token_num; token_idx += gridDim.x) {
-    const T *input_now = input + token_idx * hidden_size;
+    const T *input_now = input + static_cast<int64_t>(token_idx) * hidden_size;
     phi::dtype::float8_e4m3fn *quanted_res_now =
-        quanted_res + token_idx * hidden_size;
+        quanted_res + static_cast<int64_t>(token_idx) * hidden_size;
     float *quanted_scale_now = quanted_scale + token_idx * hidden_size_scale;
     // deal a block per warp
     for (int iter = warp_id; iter < end_iter; iter += num_warp) {
@@ -185,9 +185,9 @@ __global__ void quant_per_token_per_block_padding(
   AlignedVector<float, NUM_PER_THREADS> load_vec_float;
   AlignedVector<phi::dtype::float8_e4m3fn, NUM_PER_THREADS> res_vec;
   for (int token_idx = bid; token_idx < token_num; token_idx += gridDim.x) {
-    const T *input_now = input + token_idx * hidden_size;
+    const T *input_now = input + static_cast<int64_t>(token_idx) * hidden_size;
     phi::dtype::float8_e4m3fn *quanted_res_now =
-        quanted_res + token_idx * hidden_size;
+        quanted_res + static_cast<int64_t>(token_idx) * hidden_size;
     // deal a block per warp
     for (int iter = warp_id; iter < end_iter; iter += num_warp) {
       float *quanted_scale_now =
