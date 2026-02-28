@@ -17,23 +17,54 @@
 # Configure root logger first to unify log formats
 # This must be done before importing any modules that may use the logger
 import logging
+from contextlib import contextmanager
 
 # Create standard format (without color)
 _root_formatter = logging.Formatter(
     "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
 )
 
+# Save original getLogger before any patching
+_original_getLogger = logging.getLogger
+
+
+@contextmanager
+def _intercept_paddle_loggers():
+    """Intercept and configure paddle loggers during import."""
+
+    def _patched(name=None):
+        if name and str(name).startswith("paddle"):
+            # Configure paddle logger immediately on first access
+            return _configure_logger(name)
+        return _original_getLogger(name)
+
+    logging.getLogger = _patched
+    try:
+        yield
+    finally:
+        logging.getLogger = _original_getLogger
+
+
+def _configure_logger(name=None):
+    """Configure logger with unified format.
+
+    Args:
+        name: Logger name. If None, configures root logger.
+    """
+    # Use original getLogger to avoid recursion when interceptor is active
+    logger = _original_getLogger(name)
+    logger.setLevel(logging.INFO)
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+    handler = logging.StreamHandler()
+    handler.setFormatter(_root_formatter)
+    logger.addHandler(handler)
+    logger.propagate = False
+    return logger
+
+
 # Configure root logger
-_root_logger = logging.getLogger()
-_root_logger.setLevel(logging.INFO)
-
-# Clear existing handlers and add new ones
-for handler in _root_logger.handlers[:]:
-    _root_logger.removeHandler(handler)
-
-_root_handler = logging.StreamHandler()
-_root_handler.setFormatter(_root_formatter)
-_root_logger.addHandler(_root_handler)
+_configure_logger()
 
 import os
 import uuid
@@ -52,7 +83,8 @@ if os.getenv("PROMETHEUS_MULTIPROC_DIR", "") == "":
 
 import typing
 
-import paddle
+with _intercept_paddle_loggers():
+    import paddle
 
 # first import prometheus setup to set PROMETHEUS_MULTIPROC_DIR
 # otherwise, the Prometheus package will be imported first,
@@ -66,33 +98,12 @@ setup_multiprocess_prometheus()
 
 from paddleformers.utils.log import logger as pf_logger
 
-# Additional configuration for paddleformers logger (it has a special logger structure)
-# Get paddleformers logger
-_paddleformers_logger = logging.getLogger("paddleformers")
-_paddleformers_logger.setLevel(logging.INFO)
-
-# Clear all existing handlers
-for handler in _paddleformers_logger.handlers[:]:
-    _paddleformers_logger.removeHandler(handler)
-
-# Create standard format (without color)
-_formatter = logging.Formatter("%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s")
-
-# Add new StreamHandler
-_stream_handler = logging.StreamHandler()
-_stream_handler.setFormatter(_formatter)
-_paddleformers_logger.addHandler(_stream_handler)
-_paddleformers_logger.propagate = False
+# Configure paddleformers loggers with unified format
+_configure_logger("paddleformers")
 
 # Also configure pf_logger.logger (if it is a Logger object)
 if hasattr(pf_logger, "logger") and isinstance(pf_logger.logger, logging.Logger):
-    pf_logger.logger.setLevel(logging.INFO)
-    for handler in pf_logger.logger.handlers[:]:
-        pf_logger.logger.removeHandler(handler)
-    _stream_handler2 = logging.StreamHandler()
-    _stream_handler2.setFormatter(_formatter)
-    pf_logger.logger.addHandler(_stream_handler2)
-    pf_logger.logger.propagate = False
+    _configure_logger(pf_logger.logger.name)
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM

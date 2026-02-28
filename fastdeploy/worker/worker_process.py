@@ -24,7 +24,7 @@ from typing import Tuple
 
 import numpy as np
 
-from tools.logger_patch import intercept_paddle_loggers
+from fastdeploy.logger.logger import intercept_paddle_loggers
 
 with intercept_paddle_loggers():
     import paddle

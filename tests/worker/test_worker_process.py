@@ -21,7 +21,7 @@ class TestInterceptPaddleLoggers(unittest.TestCase):
 
     def test_intercept_paddle_loggers_with_paddle_prefix(self):
         """Test intercept_paddle_loggers configures paddle loggers correctly (line 28-30)"""
-        from tools.logger_patch import intercept_paddle_loggers
+        from fastdeploy.logger.logger import intercept_paddle_loggers
 
         # Create a logger with existing handlers before interception
         test_logger_name = "paddle.test.logger"
@@ -50,7 +50,7 @@ class TestInterceptPaddleLoggers(unittest.TestCase):
 
     def test_intercept_paddle_loggers_restores_original(self):
         """Test intercept_paddle_loggers restores original getLogger after exit (line 46)"""
-        from tools.logger_patch import intercept_paddle_loggers
+        from fastdeploy.logger.logger import intercept_paddle_loggers
 
         # Store original getLogger before context
         original_getLogger = logging.getLogger
@@ -65,7 +65,7 @@ class TestInterceptPaddleLoggers(unittest.TestCase):
 
     def test_intercept_paddle_loggers_non_paddle_logger_unchanged(self):
         """Test non-paddle loggers are not affected by intercept_paddle_loggers"""
-        from tools.logger_patch import intercept_paddle_loggers
+        from fastdeploy.logger.logger import intercept_paddle_loggers
 
         # Create a non-paddle logger
         test_logger_name = "other.test.logger"
@@ -89,7 +89,7 @@ class TestInterceptPaddleLoggers(unittest.TestCase):
 
     def test_intercept_paddle_loggers_exception_safety(self):
         """Test intercept_paddle_loggers restores getLogger even if exception occurs"""
-        from tools.logger_patch import intercept_paddle_loggers
+        from fastdeploy.logger.logger import intercept_paddle_loggers
 
         original_getLogger = logging.getLogger
 

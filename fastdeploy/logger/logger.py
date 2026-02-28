@@ -21,6 +21,7 @@ This module provides the get_logger method to uniformly manage logging behavior 
 import logging
 import os
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 from fastdeploy import envs
@@ -224,3 +225,30 @@ class FastDeployLogger:
         # logger.propagate = False
 
         return logger
+
+
+@contextmanager
+def intercept_paddle_loggers():
+    """Intercept and configure paddle loggers during import."""
+    _original = logging.getLogger
+
+    def _patched(name=None):
+        logger = _original(name)
+        if name and str(name).startswith("paddle"):
+            formatter = logging.Formatter(
+                "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
+            )
+            logger.setLevel(logging.INFO)
+            for handler in logger.handlers[:]:
+                logger.removeHandler(handler)
+            stream_handler = logging.StreamHandler()
+            stream_handler.setFormatter(formatter)
+            logger.addHandler(stream_handler)
+            logger.propagate = False
+        return logger
+
+    logging.getLogger = _patched
+    try:
+        yield
+    finally:
+        logging.getLogger = _original
