@@ -14,11 +14,7 @@
 # limitations under the License.
 """
 
-from .append_attention import (
-    append_attention,
-    append_attention_with_output,
-    head_swa_append_attention,
-)
+from .append_attention import append_attention, append_attention_with_output
 from .flash_mask_attention import flash_mask_attention
 from .get_attn_mask_q import get_attn_mask_q
 from .get_block_shape_and_split_kv_block import get_block_shape_and_split_kv_block
@@ -31,7 +27,6 @@ from .pre_cache_len_concat import pre_cache_len_concat
 __all__ = [
     "get_block_shape_and_split_kv_block",
     "append_attention",
-    "head_swa_append_attention",
     "append_attention_with_output",
     "open_shm_and_get_meta_signal",
     "init_signal_layerwise",
