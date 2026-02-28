@@ -1869,6 +1869,7 @@ class PrefixCacheManager:
                 prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARED
                 logger.info("Prefix cache tree is cleared.")
             if prefix_tree_status_signal.value[0] == PrefixTreeStatus.UPDATING:
+                self.reset()
                 prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
                 logger.info("Prefix cache tree is updated.")
             time.sleep(0.01)
