@@ -34,6 +34,7 @@ from fastdeploy.config import (
     ParallelConfig,
     RoutingReplayConfig,
 )
+from fastdeploy.model_executor.layers.linear import ReplicatedLinear
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
     BlockWiseFP8Config,
@@ -496,6 +497,16 @@ class FuseMoEWrapper(paddle.nn.Layer):
             "down_proj_expert_weight_key": f"{self.prefix}.experts.{{}}.down_proj.weight",
         }
 
+        self.gating = ReplicatedLinear(
+            fd_config=self.fd_config,
+            prefix=f"{self.prefix}.gate",
+            input_size=self.fd_config.model_config.hidden_size,
+            output_size=self.fd_config.model_config.moe_num_experts,
+            with_bias=False,
+            skip_quant=True,
+            weight_dtype="float32",
+        )
+
         self.fused_moe = FusedMoE(
             fd_config=self.fd_config,
             moe_intermediate_size=self.fd_config.model_config.moe_intermediate_size,
@@ -584,10 +595,6 @@ class TestFusedMoE(unittest.TestCase):
     def test_fused_moe(self):
         init_distributed_environment()
 
-        gating = paddle.nn.Linear(self.model_config.hidden_size, self.model_config.moe_num_experts)
-        gating.to(dtype=paddle.float32)  # it's dtype is bfloat16 default, but the forward input is float32
-        gating.weight.set_value(paddle.rand(gating.weight.shape, dtype=paddle.float32))
-
         os.environ["FD_USE_DEEP_GEMM"] = "0"
         if int(os.getenv("USE_FUSEDMOE_TP", "0")) == 1:
             ep_size = 1
@@ -626,6 +633,8 @@ class TestFusedMoE(unittest.TestCase):
                     if int(os.getenv("DISABLE_CI_FUSEDMOE_EP", "0")) == 1:
                         out = cache_hidden_states + cache_hidden_states
                     else:
+                        gating = fused_moe[j % real_weight_layers].gating
+                        gating.weight.set_value(paddle.rand(gating.weight.shape, dtype=paddle.float32))
                         out = fused_moe[j % real_weight_layers].fused_moe(
                             cache_hidden_states[idx], gating, forward_meta=MockForwardMeta()
                         )
