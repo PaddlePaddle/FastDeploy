@@ -322,12 +322,9 @@ def head_swa_append_attention(
             0,  # sliding_window
             0,  # sink_size
         )
-        # breakpoint()
-        # out_swa1 = out_swa.clone()
+
         out_swa[:, :full_hidden_size] = out_full[:, :full_hidden_size]
-        # (out_full[:1025,:128]-out_swa[:1025,:128]).max()
-        # paddle.max(out_full - out_swa)
-        # breakpoint()
+
         return out_swa
     else:
         raise NotImplementedError
