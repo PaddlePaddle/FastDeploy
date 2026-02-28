@@ -33,9 +33,9 @@ def _make_args(**kwargs):
     return SimpleNamespace(**defaults)
 
 
-def _make_instance_dict(host="10.0.0.1", port=8080, role="mixed", **kwargs):
+def _make_instance_dict(host_ip="10.0.0.1", port=8080, role="mixed", **kwargs):
     d = {
-        "host": host,
+        "host_ip": host_ip,
         "port": port,
         "role": role,
     }
@@ -76,8 +76,8 @@ class TestRouterRegistration(unittest.IsolatedAsyncioTestCase):
     async def test_register_splitwise_instances(self, mock_health):
         router = Router(_make_args(splitwise=True))
 
-        await router.register_instance(_make_instance_dict(host="10.0.0.1", role="prefill"))
-        await router.register_instance(_make_instance_dict(host="10.0.0.2", role="decode"))
+        await router.register_instance(_make_instance_dict(host_ip="10.0.0.1", role="prefill"))
+        await router.register_instance(_make_instance_dict(host_ip="10.0.0.2", role="decode"))
 
         self.assertEqual(len(router.prefill_servers), 1)
         self.assertEqual(len(router.decode_servers), 1)
@@ -117,8 +117,8 @@ class TestRouterSelection(unittest.IsolatedAsyncioTestCase):
     @patch("fastdeploy.router.router.check_service_health_async", new_callable=AsyncMock, return_value=True)
     async def test_select_pd_returns_pair(self, mock_health):
         router = Router(_make_args(splitwise=True))
-        await router.register_instance(_make_instance_dict(host="10.0.0.1", role="prefill"))
-        await router.register_instance(_make_instance_dict(host="10.0.0.2", role="decode"))
+        await router.register_instance(_make_instance_dict(host_ip="10.0.0.1", role="prefill"))
+        await router.register_instance(_make_instance_dict(host_ip="10.0.0.2", role="decode"))
         prefill, decode = await router.select_pd()
         self.assertIsNotNone(prefill)
         self.assertIsNotNone(decode)

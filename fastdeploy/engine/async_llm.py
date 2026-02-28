@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import inspect
 import os
 import signal
@@ -524,18 +523,8 @@ class AsyncLLM(EngineServiceClient):
 
             # 3) Stream responses from all choices interleaved
             remaining = num_choices
-            queue_timeout = envs.FD_QUEUE_TIMEOUT
             while remaining > 0:
-                try:
-                    response_list = await asyncio.wait_for(response_queue.get(), timeout=queue_timeout)
-                except asyncio.TimeoutError:
-                    for child_id in child_request_ids:
-                        await self.abort_request(child_id)
-                    raise RuntimeError(
-                        f"Timed out waiting for response after {queue_timeout}s. "
-                        f"remaining={remaining}, request_id={conn_request_id}"
-                    )
-
+                response_list = await response_queue.get()
                 for response_item in response_list:
                     if (
                         isinstance(response_item, dict) or isinstance(response_item, Request)

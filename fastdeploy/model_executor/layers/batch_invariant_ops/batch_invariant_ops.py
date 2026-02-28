@@ -466,12 +466,16 @@ def mean_dim(
     return output
 
 
-def mm_batch_invariant(a, b, transpose_x=False, transpose_y=False):
+def mm_batch_invariant(a, b, transpose_x=False, transpose_y=False, out=None):
     if transpose_x:
         a = a.T
     if transpose_y:
         b = b.T
-    return matmul_persistent(a, b)
+    result = matmul_persistent(a, b)
+    if out is not None:
+        out.copy_(result, False)
+        return out
+    return result
 
 
 def addmm_batch_invariant(

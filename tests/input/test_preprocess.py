@@ -60,7 +60,7 @@ class TestInputPreprocessorBranching(unittest.TestCase):
         config = _make_model_config("UnknownMMArch", enable_mm=True)
         pp = InputPreprocessor(model_config=config)
 
-        with patch("fastdeploy.input.preprocess.load_input_processor_plugins", side_effect=ImportError("no plugin")):
+        with patch.dict("sys.modules", {"fastdeploy.plugins": None, "fastdeploy.plugins.input_processor": None}):
             with self.assertRaises(ValueError):
                 pp.create_processor()
 
