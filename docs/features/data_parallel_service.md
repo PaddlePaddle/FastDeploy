@@ -75,7 +75,6 @@ Start the Router service. Logs are written to `log_router/router.log`. `fd-route
 ```shell
 export FD_LOG_DIR="log_router"
 /usr/local/bin/fd-router \
-    --host 0.0.0.0 \
     --port 30000
 ```
 

@@ -543,7 +543,7 @@ class DataProcessorTestCase(unittest.TestCase):
         request = Request.from_dict(request)
         processed = self.processor.process_request_dict(request, max_model_len=6)
         self.assertEqual(processed.prompt_token_ids, [1, 2, 3])
-        self.assertEqual(processed.sampling_params.max_tokens, 5)
+        self.assertEqual(processed.sampling_params.max_tokens, 3)
 
     def test_process_request_dict_requires_chat_template(self):
         original_template = self.processor.tokenizer.chat_template

@@ -673,6 +673,12 @@ class DummyTokenizerForTextProcessor:
     def encode(self, text, add_special_tokens=False):
         return {"input_ids": [23]}
 
+    def convert_tokens_to_ids(self, tokens):
+        return [-1]
+
+    def tokenize(self, text):
+        return ["<think>"]
+
 
 class DummyCfgRaiseParallel:
     @property
@@ -742,6 +748,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
             prompt_token_ids=[1],
             prompt=None,
             messages=None,
+            max_tokens=1,
             chat_template_kwargs=None,
             sampling_params=SimpleNamespace(
                 bad_words=None,
