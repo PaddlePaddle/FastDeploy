@@ -812,6 +812,9 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
                 self.share_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = length
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
+                # Set prefix_lens for deterministic mode with prefix caching
+                # prefill_start_index is the number of cached tokens from prefix cache
+                self.share_inputs["prefix_lens"][idx : idx + 1] = prefill_start_index
                 self.exist_prefill_flag = True
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
@@ -1257,6 +1260,7 @@ class GPUModelRunner(ModelRunnerBase):
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             routing_replay_table=routing_replay_table,
+            prefix_lens=self.share_inputs["prefix_lens"],
         )
 
         dist_status = self.collect_distributed_status()

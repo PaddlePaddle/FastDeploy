@@ -46,6 +46,16 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 from fastdeploy.platforms import current_platform
 
+# Import unified extend attention for deterministic mode with prefix caching
+try:
+    from fastdeploy.model_executor.layers.attention.triton_ops import (
+        extend_attention_fwd_unified,
+    )
+
+    TRITON_UNIFIED_ATTENTION_AVAILABLE = True
+except ImportError:
+    TRITON_UNIFIED_ATTENTION_AVAILABLE = False
+
 
 @dataclass
 class AppendAttentionMetadata(AttentionMetadata):
@@ -275,6 +285,21 @@ class AppendAttentionBackend(AttentionBackend):
         """
         metadata = self.attention_metadata
 
+        # Check if we should use unified Triton kernel for deterministic mode
+        # with prefix caching
+        has_prefix_cache_hit = self._has_prefix_cache_hit(forward_meta)
+
+        if envs.FD_DETERMINISTIC_MODE and has_prefix_cache_hit:
+            # Defensive check: Triton kernel must be available for deterministic mode
+            if not TRITON_UNIFIED_ATTENTION_AVAILABLE:
+                raise RuntimeError(
+                    "FD_DETERMINISTIC_MODE is enabled with prefix cache hit, "
+                    "but the unified Triton kernel is not available. "
+                    "This may be due to import failure or missing dependencies. "
+                    "Please ensure Triton is properly installed and the kernel can be imported."
+                )
+            return self._forward_extend_unified_triton(q, k, v, qkv, layer, forward_meta, metadata)
+
         # - PaddleFormers fallback: rope_already_applied=True -> use identity RoPE (cos=1, sin=0)
         rope_already_applied = getattr(forward_meta, "rope_already_applied", False)
         if rope_already_applied and forward_meta.rotary_embs is not None:
@@ -486,3 +511,228 @@ class AppendAttentionBackend(AttentionBackend):
                 sliding_window,
             )
         return res
+
+    def _has_prefix_cache_hit(self, forward_meta: ForwardMeta) -> bool:
+        """
+        Check if any request has prefix cache hit.
+
+        Args:
+            forward_meta: Forward metadata containing prefix_lens
+
+        Returns:
+            True if any request has prefix cache hit (prefix_lens > 0)
+        """
+        prefix_lens = getattr(forward_meta, "prefix_lens", None)
+        if prefix_lens is None:
+            return False
+        # Check if any prefix_lens > 0
+        return (prefix_lens > 0).any().item()
+
+    def _forward_extend_unified_triton(
+        self,
+        q: paddle.Tensor,
+        k: paddle.Tensor,
+        v: paddle.Tensor,
+        qkv: paddle.Tensor,
+        layer: Attention,
+        forward_meta: ForwardMeta,
+        metadata: AppendAttentionMetadata,
+    ) -> paddle.Tensor:
+        """
+        Forward using unified Triton kernel for deterministic mode with prefix caching.
+
+        This method is called when:
+        1. FD_DETERMINISTIC_MODE is enabled
+        2. There is prefix cache hit (prefix_lens > 0)
+
+        The unified kernel processes both prefix KV and extend KV in a single pass,
+        ensuring deterministic behavior regardless of cache hit/miss status.
+
+        Implementation steps:
+        1. Check RoPE status (defensive programming)
+        2. Extract Q from qkv tensor (after RoPE application)
+        3. Build unified KV indices from block_tables and prefix_lens
+        4. Call extend_attention_fwd_unified Triton kernel
+        """
+        # Step 1: Defensive check for RoPE status
+        # The unified Triton kernel assumes RoPE is already applied to Q and cache K.
+        # - If rope_already_applied=True: PaddleFormers mode, RoPE applied externally -> OK
+        # - If rope_already_applied=False: RoPE needs to be applied inside kernel -> NOT SUPPORTED
+        rope_already_applied = getattr(forward_meta, "rope_already_applied", False)
+        if not rope_already_applied:
+            raise NotImplementedError(
+                "Unified Triton kernel for deterministic mode currently only supports "
+                "PaddleFormers mode (rope_already_applied=True). "
+                "For non-PaddleFormers mode, the kernel needs RoPE support which is not implemented yet. "
+                "Please use PaddleFormers model or disable prefix caching in deterministic mode."
+            )
+
+        # Step 2: Get cache tensors
+        cache_quant_type_str = getattr(layer, "cache_quant_type_str", "none")
+        if cache_quant_type_str == "block_wise_fp8":
+            cache_k = forward_meta.caches[4 * layer.layer_id]
+            cache_v = forward_meta.caches[4 * layer.layer_id + 1]
+            # FP8 quantization not supported in unified kernel yet
+            raise NotImplementedError(
+                "Unified Triton kernel does not support FP8 quantization yet. "
+                "Please disable prefix caching or deterministic mode."
+            )
+        else:
+            cache_k = forward_meta.caches[2 * layer.layer_id]
+            cache_v = forward_meta.caches[2 * layer.layer_id + 1]
+
+        # Step 3: Get metadata
+        prefix_lens = forward_meta.prefix_lens  # [batch_size], number of cached tokens per sequence
+        seq_lens_this_time = forward_meta.seq_lens_this_time  # [batch_size, 1]
+        cu_seqlens_q = forward_meta.cu_seqlens_q  # [batch_size + 1, 1]
+        block_tables = forward_meta.block_tables  # [max_num_seqs, max_blocks_per_seq]
+
+        # Determine batch size (number of active sequences)
+        # cu_seqlens_q shape is [batch_size + 1, 1], get batch_size from it
+        batch_size = cu_seqlens_q.shape[0] - 1
+
+        # Step 4: Extract Q from qkv tensor
+        # qkv shape: [token_num, num_heads + 2 * kv_num_heads, head_dim]
+        # We need Q which is the first num_heads columns
+        token_num = qkv.shape[0]
+        q_num_heads = self.num_heads
+        head_dim = self.head_dim
+
+        # Extract Q: [token_num, num_heads, head_dim]
+        # qkv is either [token_num, num_heads + 2*kv_num_heads, head_dim] or
+        # [token_num, (num_heads + 2*kv_num_heads) * head_dim]
+        if len(qkv.shape) == 3:
+            # Shape: [token_num, num_heads + 2*kv_num_heads, head_dim]
+            q_tensor = qkv[:, :q_num_heads, :]
+        else:
+            # Shape: [token_num, (num_heads + 2*kv_num_heads) * head_dim]
+            q_tensor = qkv[:, : q_num_heads * head_dim].reshape([token_num, q_num_heads, head_dim])
+
+        # Step 5: Prepare output tensor
+        # Output shape: [token_num, num_heads, head_dim]
+        o_tensor = paddle.zeros([token_num, q_num_heads, head_dim], dtype=q_tensor.dtype, place=q_tensor.place)
+
+        # Step 6: Build unified KV indices
+        # We need to construct:
+        # - prefix_kv_indptr: [batch_size + 1] - prefix KV indptr
+        # - prefix_kv_indices: prefix KV block indices
+        # - extend_kv_indices: extend KV block indices
+        # - extend_start_loc: [batch_size] - extend start location
+        # - extend_seq_lens: [batch_size] - extend sequence lengths
+
+        unified_kv_indptr, unified_kv_indices, computed_prefix_lens = self._build_unified_kv_indices_impl(
+            block_tables=block_tables,
+            prefix_lens=prefix_lens,
+            seq_lens_this_time=seq_lens_this_time,
+            cu_seqlens_q=cu_seqlens_q,
+            batch_size=batch_size,
+            block_size=self.block_size,
+        )
+
+        # Step 7: Compute max extend length for grid configuration
+        # extend_seq_lens = seq_lens_this_time for each sequence
+        extend_seq_lens = seq_lens_this_time[:batch_size].flatten()
+        max_len_extend = int(extend_seq_lens.max().item()) if batch_size > 0 else 0
+
+        if max_len_extend == 0:
+            # No extend tokens, return zeros
+            return o_tensor.reshape([token_num, q_num_heads * head_dim])
+
+        # Step 8: Prepare qo_indptr (query offsets)
+        # cu_seqlens_q is [batch_size + 1, 1], we need [batch_size + 1]
+        qo_indptr = cu_seqlens_q.flatten().astype("int32")
+
+        # Step 9: Compute sm_scale
+        sm_scale = 1.0 / (head_dim**0.5)
+
+        # Step 10: Get logit cap if applicable
+        logit_cap = getattr(layer, "logit_cap", 0.0) if hasattr(layer, "logit_cap") else 0.0
+
+        # Step 11: Call the unified Triton kernel
+        extend_attention_fwd_unified(
+            q=q_tensor,
+            o=o_tensor,
+            k_buffer=cache_k,
+            v_buffer=cache_v,
+            qo_indptr=qo_indptr,
+            kv_indptr=unified_kv_indptr,
+            kv_indices=unified_kv_indices,
+            prefix_lens=computed_prefix_lens.astype("int32"),
+            max_len_extend=max_len_extend,
+            sm_scale=sm_scale,
+            logit_cap=logit_cap,
+            is_causal=self.causal,
+        )
+
+        # Return output in the expected format: [token_num, num_heads * head_dim]
+        return o_tensor.reshape([token_num, q_num_heads * head_dim])
+
+    def _build_unified_kv_indices_impl(
+        self,
+        block_tables: paddle.Tensor,
+        prefix_lens: paddle.Tensor,
+        seq_lens_this_time: paddle.Tensor,
+        cu_seqlens_q: paddle.Tensor,
+        batch_size: int,
+        block_size: int,
+    ) -> tuple:
+        """
+        Build unified KV indices from block_tables and prefix_lens.
+
+        This method constructs the data structures needed for the unified Triton kernel:
+        - unified_kv_indptr: [batch_size + 1] - cumulative count of KV blocks per sequence
+        - unified_kv_indices: flattened block indices for all sequences
+        - prefix_lens: [batch_size] - number of prefix blocks per sequence
+
+        Args:
+            block_tables: [max_num_seqs, max_blocks_per_seq] - block IDs for each sequence
+            prefix_lens: [batch_size] - number of cached tokens per sequence
+            seq_lens_this_time: [batch_size, 1] - current sequence lengths
+            cu_seqlens_q: [batch_size + 1, 1] - cumulative query sequence lengths
+            batch_size: number of active sequences
+            block_size: number of tokens per block
+
+        Returns:
+            (unified_kv_indptr, unified_kv_indices, prefix_block_lens)
+        """
+        place = block_tables.place
+
+        # Convert prefix_lens from tokens to blocks
+        # prefix_block_lens[i] = number of blocks that contain prefix tokens
+        prefix_block_lens = (prefix_lens[:batch_size] + block_size - 1) // block_size
+
+        # Convert seq_lens_this_time from tokens to blocks
+        seq_lens_flat = seq_lens_this_time[:batch_size].flatten()
+        total_block_lens = (seq_lens_flat + block_size - 1) // block_size
+
+        # Build unified_kv_indptr
+        unified_lens = total_block_lens.astype("int32")
+        # Use existing tensor to create zeros on the same device
+        zeros_tensor = unified_lens[:1] * 0
+        unified_kv_indptr = paddle.concat(
+            [
+                zeros_tensor,
+                paddle.cumsum(unified_lens, axis=0).astype("int32"),
+            ]
+        )
+
+        # Build unified_kv_indices by extracting blocks from block_tables
+        # For each sequence, we need to copy its blocks (prefix + extend)
+        total_blocks = int(unified_kv_indptr[-1].item())
+        unified_kv_indices = paddle.empty([total_blocks], dtype="int64")
+        # Ensure it's on the same device
+        unified_kv_indices = unified_kv_indices._copy_to(place, False)
+
+        # Use a simple loop to copy block indices
+        # TODO: Optimize with a Triton kernel for large batch sizes
+        offset = 0
+        for i in range(batch_size):
+            # Get the number of blocks for this sequence
+            num_blocks = int(total_block_lens[i].item())
+            if num_blocks > 0:
+                # Extract blocks from block_tables[i, :num_blocks]
+                blocks = block_tables[i, :num_blocks]
+                unified_kv_indices[offset : offset + num_blocks] = blocks.astype("int64")
+                offset += num_blocks
+
+        return unified_kv_indptr, unified_kv_indices, prefix_block_lens.astype("int32")

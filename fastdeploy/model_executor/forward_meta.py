@@ -158,6 +158,11 @@ class ForwardMeta:
     # for prefill
     exist_prefill: bool = False
 
+    # Prefix lens for deterministic mode with prefix caching
+    # Stores the number of cached tokens (prefix length) for each request
+    # Used by unified Triton extend attention kernel to ensure deterministic behavior
+    prefix_lens: Optional[paddle.Tensor] = None
+
     def clear_caches(self):
         """Safely clean up the caches"""
         if self.caches:

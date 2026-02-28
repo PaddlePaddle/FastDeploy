@@ -144,6 +144,9 @@ class InputBatch:
         self.seq_lens_decoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.step_seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.step_seq_lens_decoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        # Prefix lens for deterministic mode with prefix caching
+        # Stores the number of cached tokens (prefix length) for each request
+        self.prefix_lens = paddle.full([max_num_seqs], 0, dtype="int32")
         self.prompt_lens = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.step_idx = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         if current_platform.is_maca():
