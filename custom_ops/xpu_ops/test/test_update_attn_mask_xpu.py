@@ -138,10 +138,10 @@ def generate_test_data(
     seq_lens_encoder = np.array(seq_lens_encoder, dtype=np.int32).reshape(-1)
     seq_lens_decoder = np.array(seq_lens_decoder, dtype=np.int32).reshape(-1)
     is_block_step = np.array(is_block_step, dtype=bool).reshape(-1)
-    
+
     bsz = seq_lens_this_time.shape[0]
     total_seq = int(np.sum(seq_lens_this_time))
-    
+
     # cu_seqlens_q: prefix sum
     cu_seqlens_q = np.zeros((bsz,), dtype=np.int32)
     if bsz > 1:
@@ -236,26 +236,20 @@ class TestUpdateAttnMaskOffsetsXPU(unittest.TestCase):
 
         # Compare attn_mask_offsets
         np.testing.assert_array_equal(
-            attn_mask_offsets_cpu,
-            attn_mask_offsets_xpu,
-            err_msg="attn_mask_offsets mismatch between CPU and XPU!"
+            attn_mask_offsets_cpu, attn_mask_offsets_xpu, err_msg="attn_mask_offsets mismatch between CPU and XPU!"
         )
 
         # Compare inplace tensors
         decode_states_cpu = tensors_cpu["decode_states"].numpy()
         decode_states_xpu = tensors_xpu["decode_states"].numpy()
         np.testing.assert_array_equal(
-            decode_states_cpu,
-            decode_states_xpu,
-            err_msg="decode_states mismatch between CPU and XPU!"
+            decode_states_cpu, decode_states_xpu, err_msg="decode_states mismatch between CPU and XPU!"
         )
 
         mask_rollback_cpu = tensors_cpu["mask_rollback"].numpy()
         mask_rollback_xpu = tensors_xpu["mask_rollback"].numpy()
         np.testing.assert_array_equal(
-            mask_rollback_cpu,
-            mask_rollback_xpu,
-            err_msg="mask_rollback mismatch between CPU and XPU!"
+            mask_rollback_cpu, mask_rollback_xpu, err_msg="mask_rollback mismatch between CPU and XPU!"
         )
 
         print("✅ CPU and XPU results are identical!")
@@ -320,7 +314,7 @@ class TestUpdateAttnMaskOffsetsXPU(unittest.TestCase):
 
         decode_states_cpu = tensors_cpu["decode_states"].numpy()
         decode_states_xpu = tensors_xpu["decode_states"].numpy()
-        
+
         attn_mask_offsets_decoder_cpu = tensors_cpu["attn_mask_offsets_decoder"].numpy()
         attn_mask_offsets_decoder_xpu = tensors_xpu["attn_mask_offsets_decoder"].numpy()
 
@@ -343,26 +337,18 @@ class TestUpdateAttnMaskOffsetsXPU(unittest.TestCase):
 
         # Compare Python reference with CPU
         np.testing.assert_array_equal(
-            ref_attn_mask_offsets,
-            attn_mask_offsets_cpu,
-            err_msg="Python reference vs CPU mismatch!"
+            ref_attn_mask_offsets, attn_mask_offsets_cpu, err_msg="Python reference vs CPU mismatch!"
         )
         np.testing.assert_array_equal(
-            ref_decode_states,
-            decode_states_cpu,
-            err_msg="Python reference decode_states vs CPU mismatch!"
+            ref_decode_states, decode_states_cpu, err_msg="Python reference decode_states vs CPU mismatch!"
         )
 
         # Compare Python reference with XPU
         np.testing.assert_array_equal(
-            ref_attn_mask_offsets,
-            attn_mask_offsets_xpu,
-            err_msg="Python reference vs XPU mismatch!"
+            ref_attn_mask_offsets, attn_mask_offsets_xpu, err_msg="Python reference vs XPU mismatch!"
         )
         np.testing.assert_array_equal(
-            ref_decode_states,
-            decode_states_xpu,
-            err_msg="Python reference decode_states vs XPU mismatch!"
+            ref_decode_states, decode_states_xpu, err_msg="Python reference decode_states vs XPU mismatch!"
         )
 
         # Compare CPU and XPU results

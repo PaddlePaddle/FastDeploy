@@ -70,7 +70,7 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
       real_bsz,
       max_model_len,
       decode_states_len);
-  
+
   if (ids_remove_padding.is_cpu()) {
     delete ctx;
   }

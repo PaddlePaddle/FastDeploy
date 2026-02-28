@@ -161,9 +161,9 @@ int update_attn_mask_offsets(Context* ctx,
                       is_block_step,
                       decode_states,
                       mask_rollback);
-  WRAPPER_DUMP_PARAM3(ctx, 
-                      real_bsz, 
-                      max_model_len, 
+  WRAPPER_DUMP_PARAM3(ctx,
+                      real_bsz,
+                      max_model_len,
                       decode_states_len);
   WRAPPER_DUMP(ctx);
 
