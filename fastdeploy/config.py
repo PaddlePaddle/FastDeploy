@@ -214,6 +214,7 @@ class ModelConfig:
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
         self.lm_head_fp32: bool = False
+        self.moe_gate_fp32: bool = False
         self.model_format = "auto"
         self.runner = "auto"
         self.convert = "auto"
@@ -1858,10 +1859,7 @@ class FDConfig:
 
         if self.scheduler_config.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                if paddle.is_compiled_with_xpu():
-                    self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
-                else:
-                    self.scheduler_config.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                self.scheduler_config.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.cache_config.enable_chunked_prefill:
                     self.scheduler_config.max_num_batched_tokens = 2048
@@ -2002,8 +2000,8 @@ class FDConfig:
         """
         check the legality of config
         """
-        assert self.scheduler_config.max_num_seqs <= 256, (
-            "The parameter `max_num_seqs` is not allowed to exceed 256, "
+        assert self.scheduler_config.max_num_seqs <= 512, (
+            "The parameter `max_num_seqs` is not allowed to exceed 512, "
             f"but now it's {self.scheduler_config.max_num_seqs}."
         )
         assert self.nnode >= 1, f"nnode: {self.nnode} should no less than 1"

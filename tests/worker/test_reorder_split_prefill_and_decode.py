@@ -46,6 +46,7 @@ def create_mock_config():
         "beta_fast": 32,
         "beta_slow": 1,
     }
+    model_config.mm_max_tokens_per_item = None
     model_config.think_truncate_prompt_ids = [-1]
 
     # Create other mock configs
@@ -82,6 +83,11 @@ def create_mock_config():
     fd_config.parallel_config = parallel_config
     fd_config.structured_outputs_config = structured_outputs_config
     fd_config.pad_to = 8
+
+    def get_max_chunk_tokens(mm_max_tokens_per_item=None):
+        return 100
+
+    fd_config.get_max_chunk_tokens = get_max_chunk_tokens
 
     return fd_config
 

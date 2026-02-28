@@ -425,11 +425,12 @@ std::vector<paddle::Tensor> GetPaddingOffset(
     const paddle::optional<paddle::Tensor>& seq_lens_encoder,
     const int64_t token_num_cpu);
 
-void SetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
+void SetValueByFlagsAndIdx(const paddle::Tensor& token_ids_all,
                            const paddle::Tensor& input_ids,
                            const paddle::Tensor& seq_lens_this_time,
                            const paddle::Tensor& seq_lens_encoder,
                            const paddle::Tensor& seq_lens_decoder,
+                           const paddle::Tensor& prompt_lens,
                            const paddle::Tensor& step_idx,
                            const paddle::Tensor& stop_flags);
 
@@ -449,7 +450,8 @@ void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const paddle::Tensor& seq_lens,
                        const paddle::Tensor& end_ids,
                        const paddle::Tensor& next_tokens,
-                       const paddle::Tensor& pre_ids,
+                       const paddle::Tensor& token_ids_all,
+                       const paddle::Tensor& prompt_lens,
                        const paddle::Tensor& step_idx,
                        const paddle::Tensor& stop_seqs,
                        const paddle::Tensor& stop_seqs_len,
@@ -759,7 +761,8 @@ std::vector<paddle::Tensor> SpeculateGetSeqLensOutput(
     const paddle::Tensor& seq_lens_decoder);
 
 void SpecTokenPenaltyMultiScores(
-    const paddle::Tensor& pre_ids,
+    const paddle::Tensor& token_ids_all,
+    const paddle::Tensor& prompt_lens,
     const paddle::Tensor& logits,
     const paddle::Tensor& penalty_scores,
     const paddle::Tensor& frequency_scores,
@@ -777,7 +780,8 @@ void SpecTokenPenaltyMultiScores(
 
 void SpecGetStopFlagsMultiSeqs(const paddle::Tensor& accept_tokens,
                                const paddle::Tensor& accept_num,
-                               const paddle::Tensor& pre_ids,
+                               const paddle::Tensor& token_ids_all,
+                               const paddle::Tensor& prompt_lens,
                                const paddle::Tensor& step_idx,
                                const paddle::Tensor& stop_flags,
                                const paddle::Tensor& seq_lens,
@@ -823,7 +827,8 @@ void SpeculateUpdate(const paddle::Tensor& seq_lens_encoder,
                      const paddle::Tensor& is_block_step,
                      const paddle::Tensor& mask_rollback);
 
-void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
+void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& token_ids_all,
+                                    const paddle::Tensor& prompt_lens,
                                     const paddle::Tensor& accept_tokens,
                                     const paddle::Tensor& accept_num,
                                     const paddle::Tensor& stop_flags,
@@ -864,7 +869,8 @@ void SpeculateScheduleCache(const paddle::Tensor& draft_tokens,
 
 void NgramMatch(const paddle::Tensor& input_ids,
                 const paddle::Tensor& input_ids_len,
-                const paddle::Tensor& pre_ids,
+                const paddle::Tensor& token_ids_all,
+                const paddle::Tensor& prompt_lens,
                 const paddle::Tensor& step_idx,
                 const paddle::Tensor& draft_token_num,
                 const paddle::Tensor& draft_tokens,
@@ -1097,7 +1103,8 @@ std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input);
 
 void ReasoningPhaseTokenConstraint(
     const paddle::Tensor& logits,
-    const paddle::Tensor& pre_ids,
+    const paddle::Tensor& token_ids_all,
+    const paddle::Tensor& prompt_lens,
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_encoder,

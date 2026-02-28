@@ -906,7 +906,7 @@ class CacheTransferManager:
                 v_scale_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value_scale" for key in task.keys]
 
             match_block_num = 0
-            if self.storage_backend_type == ("mooncake", "file"):
+            if self.storage_backend_type in ("mooncake", "file"):
                 match_block_num = self.storage_backend.query(
                     k_cache_keys, v_cache_keys, k_scale_keys, v_scale_keys, task.timeout
                 )
