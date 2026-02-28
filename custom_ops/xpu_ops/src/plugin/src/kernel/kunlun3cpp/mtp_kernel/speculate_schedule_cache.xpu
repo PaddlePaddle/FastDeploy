@@ -103,7 +103,7 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
     GM2LM_ASYNC(seq_lens_decoder + bid, &seq_lens_decoder_lm, sizeof(int));
     GM2LM_ASYNC(prompt_lens + bid, &prompt_len_lm, sizeof(int64_t));
     GM2LM_ASYNC(seq_lens_this_time + bid, &seq_lens_this_time_lm, sizeof(int));
-    GM2LM_ASYNC(stop_flags + bid, &stop_flag_lm, sizeof(int));
+    GM2LM_ASYNC(stop_flags + bid, &stop_flag_lm, sizeof(bool));
     mfence();
 
     if (!stop_flag_lm) {
@@ -144,6 +144,7 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
           LM2GM_ASYNC(step_draft_tokens_lm,
                       step_draft_tokens + bid * draft_tokens_len,
                       draft_tokens_len * sizeof(int64_t));
+          mfence();
         }
       } else {
         // prefill

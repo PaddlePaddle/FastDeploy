@@ -35,16 +35,19 @@ def load_deep_gemm():
             # SM100 should use PFCC DeepGemm
             paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
             try:
-                from paddlefleet.ops import deep_gemm
+                import logging
 
+                import paddlefleet.ops.deep_gemm as deep_gemm
+
+                logging.getLogger().handlers.clear()
                 logger.info("Detected sm100, use PaddleFleet DeepGEMM")
             except:
-                import deep_gemm
+                import deep_gemm as deep_gemm
 
                 logger.info("Detected sm100, use PFCC DeepGEMM")
         else:
             logger.info("use FastDeploy DeepGEMM")
-            from fastdeploy.model_executor.ops.gpu import deep_gemm
+            import fastdeploy.model_executor.ops.gpu.deep_gemm as deep_gemm
     else:
         deep_gemm = None
     return deep_gemm
@@ -62,10 +65,11 @@ def _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl(
 ):
     """Convert FP32 tensor to TMA-aligned packed UE8M0 format tensor"""
 
-    from deep_gemm.utils import align, get_tma_aligned_size
+    align = deep_gemm.utils.align
+    get_tma_aligned_size = deep_gemm.utils.get_tma_aligned_size
 
     # Input validation: must be FP32 type 2D or 3D tensor
-    assert x.dtype == paddle.float and x.dim() in (2, 3)
+    assert x.dtype == paddle.float32 and x.dim() in (2, 3)
 
     # Step 1: Convert FP32 to UE8M0 format uint8 tensor
     # Extract FP32 exponent part through bit shift operation, convert to unsigned 8-bit integer

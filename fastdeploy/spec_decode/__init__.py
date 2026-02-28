@@ -23,3 +23,17 @@ from .mtp import MTPProposer
 if not current_platform.is_xpu():
     from .ngram import NgramProposer
 __all__ = ["Proposer", "MTPProposer", "NgramProposer"]
+
+# Suffix proposer requires arctic_inference
+try:
+    from .suffix import SuffixProposer
+
+    _suffix_proposer_available = True
+except ImportError:
+    _suffix_proposer_available = False
+    SuffixProposer = None
+
+if _suffix_proposer_available:
+    __all__ = ["Proposer", "MTPProposer", "NgramProposer", "SuffixProposer"]
+else:
+    __all__ = ["Proposer", "MTPProposer", "NgramProposer"]

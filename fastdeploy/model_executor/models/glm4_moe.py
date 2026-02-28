@@ -149,7 +149,9 @@ class Glm4Moe(nn.Layer):
             output_size=fd_config.model_config.n_routed_experts,
             with_bias=False,
             skip_quant=True,
-            weight_dtype="float32",
+            weight_dtype=(
+                "float32" if fd_config.load_config.dynamic_load_weight or fd_config.model_config.moe_gate_fp32 else ""
+            ),
         )
         self.gate.e_score_correction_bias = self.create_parameter(
             shape=[1, fd_config.model_config.n_routed_experts],

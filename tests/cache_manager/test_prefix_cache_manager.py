@@ -185,6 +185,7 @@ def _create_manager(
         local_rdma_comm_ports=None,
         kvcache_storage_backend=None,
         write_policy="write_through",
+        bytes_per_token_per_layer=2048,
         swap_space=4,
     )
     model_config = SimpleNamespace(
