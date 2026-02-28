@@ -651,6 +651,7 @@ class EPPrefillRunner(EPRunner):
             "allocate_on_comm_stream": EPPrefillRunner.allocate_on_comm_stream,
             "previous_event": event,
             "num_worst_tokens": self.num_worst_tokens,
+            "skip_x_record_stream": self.num_worst_tokens > 0,
         }
         return buffer.dispatch(**dispatch_args)
 
@@ -673,6 +674,7 @@ class EPPrefillRunner(EPRunner):
             "topk_weights": recv_topk_weights,
             "previous_event": event,
             "allocate_on_comm_stream": EPPrefillRunner.allocate_on_comm_stream,
+            "skip_x_record_stream": self.num_worst_tokens > 0,
         }
         fused_moe_out, _, event = buffer.combine(**combine_args)
         return fused_moe_out, event
