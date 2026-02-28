@@ -179,6 +179,10 @@ class CacheTransferManager:
         if self.has_cache_scale:
             self.cache_scale_shape = [self.num_gpu_blocks, self.head_num, self.block_size]
 
+        # kv cache storage
+        self.storage_backend_type = args.kvcache_storage_backend
+        self.key_prefix = ""
+
         # extract other arg values
         self.model_id = os.path.basename(args.model_path.rstrip("/"))
         self.n_ranks = args.mp_num
@@ -230,7 +234,7 @@ class CacheTransferManager:
         self._init_gpu_cache(args)
         if self.num_cpu_blocks > 0:
             self._init_cpu_cache(args)
-        if args.kvcache_storage_backend is not None:
+        if self.kvcache_storage_backend is not None:
             self._init_storage(args)
 
         cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
