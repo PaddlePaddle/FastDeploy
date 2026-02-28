@@ -121,6 +121,10 @@ class DeepSeekV3MoE(nn.Layer):
         super().__init__()
 
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.ep_size = fd_config.parallel_config.expert_parallel_size
+        self.attn_tp_size = fd_config.parallel_config.tensor_parallel_size
+        if self.ep_size > 1:
+            self.tp_size = 1
         self.norm_topk_prob = fd_config.model_config.norm_topk_prob
 
         weight_key_map = {
@@ -190,6 +194,10 @@ class DeepSeekV3MoE(nn.Layer):
     def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
         """ """
         shared_experts_out = self.shared_experts(hidden_states)
+
+        if self.attn_tp_size > 1 and self.ep_size > 1:
+            shared_experts_out = tensor_model_parallel_all_reduce(shared_experts_out)
+
         moe_out = self.experts(hidden_states, self.gate, forward_meta)
         moe_out = moe_out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
@@ -508,13 +516,16 @@ class DeepSeekV3DecoderLayer(nn.Layer):
         mask_encoder_batch: paddle.Tensor,
     ):
         """ """
-        hidden_states, residual = self.input_layernorm(
-            hidden_states, residual_input=residual, forward_meta=forward_meta
-        )
+        if hidden_states.shape[0] > 0:
+            hidden_states, residual = self.input_layernorm(
+                hidden_states, residual_input=residual, forward_meta=forward_meta
+            )
 
-        hidden_states = self.self_attn(forward_meta, hidden_states, position_ids, mask_encoder_batch)
+            hidden_states = self.self_attn(forward_meta, hidden_states, position_ids, mask_encoder_batch)
 
-        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+            hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+        else:
+            residual = hidden_states
         hidden_states = self.mlp(hidden_states, forward_meta)
         return hidden_states, residual
 
