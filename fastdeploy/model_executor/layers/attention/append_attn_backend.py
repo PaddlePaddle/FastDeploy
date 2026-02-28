@@ -161,7 +161,7 @@ class AppendAttentionBackend(AttentionBackend):
         self.window_attn_skip_freq: int = getattr(fd_config.model_config, "window_attn_skip_freq", 0)
         self.head_wise_swa_ratio: float = getattr(fd_config.model_config, "head_wise_swa_ratio", 0.0)
         if self.head_wise_swa_ratio > 0.0:
-            self.full_hidden_size = int((1 - self.head_wise_swa_ratio) * self.num_heads)
+            self.full_hidden_size = int((1 - self.head_wise_swa_ratio) * self.num_heads * self.head_dim)
 
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
         self.encoder_block_shape_q: int = encoder_block_shape_q

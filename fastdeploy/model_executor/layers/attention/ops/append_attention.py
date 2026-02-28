@@ -142,6 +142,7 @@ def append_attention(
             causal,
             speculate_decoder,
             sliding_window,
+            0,  # sink_size
         )
         return out
     else:
@@ -318,13 +319,14 @@ def head_swa_append_attention(
             speculate_max_draft_token_num,
             causal,
             speculate_decoder,
-            0,
-            0,
+            0,  # sliding_window
+            0,  # sink_size
         )
         # breakpoint()
         # out_swa1 = out_swa.clone()
         out_swa[:, :full_hidden_size] = out_full[:, :full_hidden_size]
         # (out_full[:1025,:128]-out_swa[:1025,:128]).max()
+        # paddle.max(out_full - out_swa)
         # breakpoint()
         return out_swa
     else:
@@ -449,6 +451,7 @@ def append_attention_with_output(
             causal,
             speculate_decoder,
             sliding_window,
+            0,
         )
     else:
         raise NotImplementedError
