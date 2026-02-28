@@ -219,17 +219,28 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const int max_seq_len,
                       const int substep);
 
-void SpeculateUpdateV3(const paddle::Tensor& seq_lens_encoder,
-                       const paddle::Tensor& seq_lens_decoder,
-                       const paddle::Tensor& not_need_stop,
-                       const paddle::Tensor& draft_tokens,
-                       const paddle::Tensor& actual_draft_token_nums,
-                       const paddle::Tensor& accept_tokens,
-                       const paddle::Tensor& accept_num,
-                       const paddle::Tensor& stop_flags,
-                       const paddle::Tensor& seq_lens_this_time,
-                       const paddle::Tensor& is_block_step,
-                       const paddle::Tensor& stop_nums);
+void SpeculateUpdate(const paddle::Tensor& seq_lens_encoder,
+                     const paddle::Tensor& seq_lens_decoder,
+                     const paddle::Tensor& not_need_stop,
+                     const paddle::Tensor& draft_tokens,
+                     const paddle::Tensor& actual_draft_token_nums,
+                     const paddle::Tensor& accept_tokens,
+                     const paddle::Tensor& accept_num,
+                     const paddle::Tensor& stop_flags,
+                     const paddle::Tensor& seq_lens_this_time,
+                     const paddle::Tensor& is_block_step,
+                     const paddle::Tensor& mask_rollback);
+
+void SpecGetStopFlagsMultiSeqs(const paddle::Tensor& accept_tokens,
+                               const paddle::Tensor& accept_num,
+                               const paddle::Tensor& pre_ids,
+                               const paddle::Tensor& step_idx,
+                               const paddle::Tensor& stop_flags,
+                               const paddle::Tensor& seq_lens,
+                               const paddle::Tensor& stop_seqs,
+                               const paddle::Tensor& stop_seqs_len,
+                               const paddle::Tensor& end_ids,
+                               const paddle::Tensor& min_tokens);
 
 void SpeculateTokenPenaltyMultiScores(
     const paddle::Tensor& pre_ids,
@@ -301,6 +312,27 @@ void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
                                     const paddle::Tensor& seq_lens_encoder,
                                     const paddle::Tensor& seq_lens_decoder,
                                     const paddle::Tensor& step_idx);
+
+void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
+                                      const paddle::Tensor& accept_num,
+                                      const paddle::Tensor& not_need_stop,
+                                      const paddle::Tensor& seq_lens_decoder,
+                                      const paddle::Tensor& prompt_lens,
+                                      const paddle::Tensor& preempted_idx,
+                                      int64_t rank_id,
+                                      bool save_each_rank,
+                                      bool skip_prefill);
+
+void SpeculateSaveWithOutputMsgDynamic(const paddle::Tensor& accept_tokens,
+                                       const paddle::Tensor& accept_num,
+                                       const paddle::Tensor& not_need_stop,
+                                       const paddle::Tensor& seq_lens_decoder,
+                                       const paddle::Tensor& prompt_lens,
+                                       const paddle::Tensor& preempted_idx,
+                                       int64_t rank_id,
+                                       int msg_queue_id,
+                                       bool save_each_rank,
+                                       bool skip_prefill);
 
 void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& input_ids,
@@ -406,14 +438,19 @@ void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const paddle::Tensor& next_tokens,
                        const bool beam_search);
 
-void RecoverDecodeTask(const paddle::Tensor& stop_flags,
-                       const paddle::Tensor& seq_lens_this_time,
-                       const paddle::Tensor& seq_lens_encoder,
-                       const paddle::Tensor& seq_lens_decoder,
-                       const paddle::Tensor& step_seq_lens_decoder,
-                       const paddle::Tensor& block_tables,
-                       const paddle::Tensor& is_block_step,
-                       const int block_size);
+void RecoverDecodeTask(
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& step_seq_lens_decoder,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& is_block_step,
+    const paddle::optional<paddle::Tensor>& draft_tokens,
+    const paddle::optional<paddle::Tensor>& step_draft_tokens,
+    const paddle::optional<paddle::Tensor>& step_seq_lens_this_time,
+    const int block_size,
+    const int max_draft_tokens);
 
 std::vector<paddle::Tensor> ShareExternalData(const paddle::Tensor& input,
                                               const std::string shm_name,
@@ -1006,7 +1043,11 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("step_seq_lens_decoder"),
         py::arg("block_tables"),
         py::arg("is_block_step"),
+        py::arg("draft_tokens"),
+        py::arg("step_draft_tokens"),
+        py::arg("step_seq_lens_this_time"),
         py::arg("block_size"),
+        py::arg("max_draft_tokens"),
         "Recover decode task function");
 
   m.def("save_output",
@@ -1069,6 +1110,21 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("stop_nums"),
         "Update speculative decoding states (V3)");
 
+  m.def("speculate_update",
+        &SpeculateUpdate,
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_decoder"),
+        py::arg("not_need_stop"),
+        py::arg("draft_tokens"),
+        py::arg("actual_draft_token_nums"),
+        py::arg("accept_tokens"),
+        py::arg("accept_num"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens_this_time"),
+        py::arg("is_block_step"),
+        py::arg("mask_rollback"),
+        "Update speculative decoding states");
+
   m.def("speculate_verify",
         &SpeculateVerify,
         py::arg("sampled_token_ids"),
@@ -1095,6 +1151,33 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("benchmark_mode"),
         py::arg("accept_all_drafts"),
         "Perform speculative verification for decoding");
+
+  m.def("speculate_save_output",
+        &SpeculateSaveWithOutputMsgStatic,
+        py::arg("accept_tokens"),
+        py::arg("accept_num"),
+        py::arg("not_need_stop"),
+        py::arg("seq_lens_decoder"),
+        py::arg("prompt_lens"),
+        py::arg("preempted_idx"),
+        py::arg("rank_id"),
+        py::arg("save_each_rank"),
+        py::arg("skip_prefill"),
+        "speculate save output function");
+
+  m.def("speculate_save_output_dynamic",
+        &SpeculateSaveWithOutputMsgDynamic,
+        py::arg("accept_tokens"),
+        py::arg("accept_num"),
+        py::arg("not_need_stop"),
+        py::arg("seq_lens_decoder"),
+        py::arg("prompt_lens"),
+        py::arg("preempted_idx"),
+        py::arg("rank_id"),
+        py::arg("msg_queue_id"),
+        py::arg("save_each_rank"),
+        py::arg("skip_prefill"),
+        "speculate save output function dynamic");
 
   m.def("speculate_clear_accept_nums",
         &SpeculateClearAcceptNums,
@@ -1186,6 +1269,20 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("next_tokens"),
         py::arg("beam_search"),
         "Set stop value multi ends function");
+
+  m.def("speculate_set_stop_value_multi_seqs",
+        &SpecGetStopFlagsMultiSeqs,
+        py::arg("accept_tokens"),
+        py::arg("accept_num"),
+        py::arg("pre_ids"),
+        py::arg("step_idx"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens"),
+        py::arg("stop_seqs"),
+        py::arg("stop_seqs_len"),
+        py::arg("end_ids"),
+        py::arg("min_tokens"),
+        "Speculate set stop value multi seqs");
 
   m.def("step_paddle",
         &StepPaddle,

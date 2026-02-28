@@ -1162,6 +1162,7 @@ zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
 trace_logger = FastDeployLogger().get_trace_logger("trace", "trace.log")
 router_logger = get_logger("router", "router.log")
 fmq_logger = get_logger("fmq", "fmq.log")
+obj_logger = get_logger("obj", "obj.log")  # debug内存问题
 
 
 def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:

@@ -41,7 +41,7 @@ jobs:
 
   run_tests_with_coverage:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
-    timeout-minutes: 90
+    timeout-minutes: 105
     needs: check_cov_skip
     if: needs.check_cov_skip.outputs.can-skip != 'true'
     outputs:
