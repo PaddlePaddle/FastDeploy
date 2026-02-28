@@ -12,6 +12,8 @@ This project implements an efficient **Speculative Decoding** inference framewor
 
 - **Ngram**
 
+- **Suffix Decoding**
+
 - **MTP (Multi-Token Prediction)**
   - ✅ Supported: TP Sharding
   - ✅ Supported: Shared Prefix
@@ -52,7 +54,7 @@ This project implements an efficient **Speculative Decoding** inference framewor
 
 ## 🔧 Configuration Parameters
 
-- `method`: The speculative decoding strategy, currently supports `["mtp", "ngram"]`.
+- `method`: The speculative decoding strategy, currently supports `["mtp", "ngram", "suffix"]`.
 - `num_speculative_tokens`: Number of speculative tokens to generate; max is 5, currently MTP supports only 1.
 - `model`: Path to the MTP draft model when using the `"mtp"` method.
 - `quantization`: Quantization method of the MTP model (e.g., WINT4).
@@ -161,4 +163,36 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --config ${path_to_FastDeploy}benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml \
     --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${mtp_model_path}"}'
 
+```
+
+## 🌲 Using Suffix Decoding
+
+Suffix Decoding is a model-free speculative decoding method that accelerates repetitive inference tasks (e.g., agent workflows, coding) using efficient CPU-based suffix trees for rapid draft token prediction, eliminating GPU overhead.
+
+Run on 4 × H100 GPUs with WINT4 quantization:
+
+> Config file: benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml
+
+```
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model ${path_to_main_model} \
+    --tensor-parallel-size 4 \
+    --config ${path_to_FastDeploy}benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml \
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 4, "suffix_decoding_max_tree_depth": 64, "suffix_decoding_max_cached_requests": 10000, "suffix_decoding_max_spec_factor": 1.0, "suffix_decoding_min_token_prob": 0.1}'
+```
+
+Parameter Descriptions
+
+```
+# The maximum length of token sequences cached in suffix trees.
+self.suffix_decoding_max_tree_depth: int = 64
+
+# The limits of requests that can be stored in the cache.
+self.suffix_decoding_max_cached_requests: int = -1
+
+# The factor of matched length, calculated as num_draft_tokens = suffix_max_spec_factor * matched_length
+self.suffix_decoding_max_spec_factor: float = 1.0
+
+# The probability threshold for speculated tokens.
+self.suffix_decoding_min_token_prob: float = 0.1
 ```

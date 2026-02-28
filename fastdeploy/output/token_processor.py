@@ -787,6 +787,8 @@ class TokenProcessor:
                         + i * MAX_DRAFT_TOKENS
                         + accept_num[i]
                     ].tolist()
+                if accept_num[i] == 0:
+                    continue
             else:
                 token_id = int(tokens[i, 0])
                 token_ids = [token_id]
