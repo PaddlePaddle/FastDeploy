@@ -21,7 +21,12 @@ from typing_extensions import override
 
 import fastdeploy.envs as envs
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.engine.request import PoolingRequestOutput, Request, RewardRequestOutput
+from fastdeploy.engine.request import (
+    ErrorResponse,
+    PoolingRequestOutput,
+    Request,
+    RewardRequestOutput,
+)
 from fastdeploy.entrypoints.openai.protocol import (
     ChatRewardData,
     ChatRewardRequest,
@@ -93,8 +98,9 @@ class OpenAIServingReward(ZmqOpenAIServing):
             api_server_logger.info(f"engine pooling result:{r}")
             r.data[0].index = idx
             idx += 1
-            if response is None:
+            if response is None or isinstance(r, ErrorResponse):
                 response = r
+                break
             else:
                 response.data.append(r.data[0])
                 response.usage.prompt_tokens += r.usage.prompt_tokens
@@ -110,8 +116,16 @@ class OpenAIServingReward(ZmqOpenAIServing):
         base = PoolingRequestOutput.from_dict(request_output)
         reward_res = RewardRequestOutput.from_base(base)
 
+        prompt_token_ids = None
+        prompt_tokens = None
+        if ctx.request.return_token_ids:
+            prompt_token_ids = request_output.get("prompt_token_ids", None)
+            prompt_tokens = ctx.preprocess_requests[0].get("prompt_tokens", None)
+
         data = ChatRewardData(
             index=0,
+            prompt_token_ids=prompt_token_ids,
+            prompt_tokens=prompt_tokens,
             score=reward_res.outputs.score,
         )
 
