@@ -60,11 +60,8 @@ except Exception:
 
 # Try importing Triton kernels (fallback: ~1.5ms launch overhead via torch_proxy)
 try:
-    from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (  # noqa: F401
-        v100_decode_attention,
+    from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
         v100_decode_fused,
-        v100_paged_attention,
-        v100_write_kv_cache,
     )
 
     _TRITON_KERNELS_AVAILABLE = True
