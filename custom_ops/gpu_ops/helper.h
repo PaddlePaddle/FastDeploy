@@ -662,7 +662,8 @@ inline const char *getEnvVar(const char *varName) {
 
 inline bool checkAttentionBackend() {
   const char *backend = getEnvVar("FD_ATTENTION_BACKEND");
-  if (backend && std::strcmp(backend, "MLA_ATTN") == 0) {
+  if (backend && (std::strcmp(backend, "MLA_ATTN") == 0 ||
+                  std::strcmp(backend, "DSA_ATTN") == 0)) {
     return true;
   }
   return false;
