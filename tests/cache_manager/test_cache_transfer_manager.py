@@ -720,8 +720,12 @@ class TestCacheTransferManager(unittest.TestCase):
             write_policy = "invalid"
             kvcache_storage_backend = "mooncake"
 
-        with self.assertRaises(ValueError):
-            CacheTransferManager(LocalArgs())
+        with (
+            patch("fastdeploy.cache_manager.cache_transfer_manager.MooncakeStore"),
+            patch("fastdeploy.cache_manager.cache_transfer_manager.CacheTransferManager._init_storage_buffer"),
+        ):
+            with self.assertRaises(ValueError):
+                CacheTransferManager(LocalArgs())
 
     def test_write_back_storage_task_nonzero_rank_no_signal(self):
         self.manager.cache_task_queue.swap_to_storage_barrier = MagicMock()
