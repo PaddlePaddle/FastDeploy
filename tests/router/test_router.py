@@ -107,6 +107,15 @@ class TestRouterSelection(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(RuntimeError):
             await router.select_pd()
 
+    async def test_select_pd_no_decode_raises(self):
+        """Test select_pd raises when no decode servers available (line 152)."""
+        router = Router(_make_args(splitwise=True))
+        # Manually add a prefill server without going through health check
+        router.prefill_servers.append(_make_instance_dict(role="prefill"))
+        with self.assertRaises(RuntimeError) as ctx:
+            await router.select_pd()
+        self.assertIn("No decode servers available", str(ctx.exception))
+
     @patch("fastdeploy.router.router.check_service_health_async", new_callable=AsyncMock, return_value=True)
     async def test_select_mixed_returns_instance(self, mock_health):
         router = Router(_make_args(splitwise=False))
