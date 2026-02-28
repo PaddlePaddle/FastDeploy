@@ -567,21 +567,33 @@ class ResourceManagerV1(ResourceManager):
 
         Total tokens includes:
         1. Tokens needed for current prefill
-        2. Tokens reserved for this request's future decode (max_new_tokens)
+        2. Tokens reserved for this request's future decode (max_new_tokens only for last chunk)
         3. Tokens reserved for all existing decode requests (ratio-based)
+
+        SGLang-aligned behavior:
+        - Only reserve max_new_tokens when this is the LAST chunk of prefill
+        - For non-last chunks, reserve 0 (they will reserve on final chunk)
 
         Returns:
             int: Total blocks needed (ceiled once at the end) to safely admit this request
         """
-        # 1. Tokens needed for current prefill
-        required_tokens_for_prefill = request.need_prefill_tokens
+        # 1. SGLang-aligned: Use current chunk's token count, not the full prefill
+        # This is the key difference - only reserve for what we're actually processing NOW
+        required_tokens_for_prefill = num_chunk_new_block * self.config.cache_config.block_size
 
-        # 2. Tokens reserved for this request's future decode (full max_new_tokens)
-        if hasattr(request, 'sampling_params') and request.sampling_params and request.sampling_params.max_tokens:
-            max_new_tokens_for_request = request.sampling_params.max_tokens
-        else:
-            max_new_tokens_for_request = self.config.model_config.max_model_len - request.need_prefill_tokens
-        max_new_tokens_for_request = min(max_new_tokens_for_request, self.clip_max_new_tokens_estimation)
+        # 2. SGLang-aligned: Only reserve max_new_tokens for the LAST chunk
+        # Calculate remaining tokens to prefill after this chunk
+        remaining_tokens_to_prefill = request.need_prefill_tokens - request.num_computed_tokens
+        is_last_chunk = remaining_tokens_to_prefill <= num_chunk_new_block
+
+        max_new_tokens_for_request = 0
+        if is_last_chunk:
+            # This is the last chunk - reserve full max_new_tokens (SGLang behavior)
+            if hasattr(request, 'sampling_params') and request.sampling_params and request.sampling_params.max_tokens:
+                max_new_tokens_for_request = request.sampling_params.max_tokens
+            else:
+                max_new_tokens_for_request = self.config.model_config.max_model_len - request.need_prefill_tokens
+            max_new_tokens_for_request = min(max_new_tokens_for_request, self.clip_max_new_tokens_estimation)
 
         # 3. Tokens reserved for all existing decode requests (ratio-based)
         decode_reserved_tokens = self._calculate_decode_reserved_tokens_by_ratio()
@@ -600,7 +612,7 @@ class ResourceManagerV1(ResourceManager):
         llm_logger.debug(
             f"Prefill threshold: tokens={total_tokens:.1f} -> blocks={can_schedule_block_num_threshold} "
             f"(prefill={required_tokens_for_prefill}, future_decode={max_new_tokens_for_request:.1f}, "
-            f"decode_reserved={decode_reserved_tokens:.1f})"
+            f"decode_reserved={decode_reserved_tokens:.1f}, is_last_chunk={is_last_chunk})"
         )
 
         return can_schedule_block_num_threshold
