@@ -21,16 +21,12 @@ from typing_extensions import override
 
 import fastdeploy.envs as envs
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.engine.request import (
-    ErrorResponse,
-    PoolingRequestOutput,
-    Request,
-    RewardRequestOutput,
-)
+from fastdeploy.engine.request import PoolingRequestOutput, Request, RewardRequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatRewardData,
     ChatRewardRequest,
     ChatRewardResponse,
+    ErrorResponse,
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.serving_engine import ServeContext, ZmqOpenAIServing
