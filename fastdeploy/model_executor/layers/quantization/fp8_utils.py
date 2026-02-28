@@ -69,7 +69,7 @@ def _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl(
     get_tma_aligned_size = deep_gemm.utils.get_tma_aligned_size
 
     # Input validation: must be FP32 type 2D or 3D tensor
-    assert x.dtype == paddle.float and x.dim() in (2, 3)
+    assert x.dtype == paddle.float32 and x.dim() in (2, 3)
 
     # Step 1: Convert FP32 to UE8M0 format uint8 tensor
     # Extract FP32 exponent part through bit shift operation, convert to unsigned 8-bit integer
