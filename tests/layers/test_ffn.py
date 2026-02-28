@@ -42,19 +42,16 @@ from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.worker_process import init_distributed_environment
 
 _sm_version = cuda_device.get_device_capability()[0]
-print(f"[DEBUG] Detected SM version: {_sm_version}")
 if _sm_version >= 8:
     paddle.set_default_dtype("bfloat16")
     _default_dtype = paddle.bfloat16
     # BlockWiseFP8Config requires bfloat16, only available on SM80+
     _quant_config = BlockWiseFP8Config(weight_block_size=[128, 128])
-    print(f"[DEBUG] Using BlockWiseFP8Config for SM{_sm_version}0")
 else:
     paddle.set_default_dtype("float16")
     _default_dtype = paddle.float16
     # V100 (SM70) doesn't support FP8 quantization, use None
     _quant_config = None
-    print(f"[DEBUG] Disabling quantization for V100 (SM{_sm_version}0), _quant_config = None")
 if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
     # (ZKK): CI machine.
     os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
@@ -75,7 +72,6 @@ class FFNWrapper(paddle.nn.Layer):
         self.intermediate_size = self.model_config.intermediate_size
         self.hidden_size = self.model_config.hidden_size
         self.prefix = "hahahha"
-        print(f"[DEBUG] Creating FDConfig with quant_config={_quant_config}")
         self.fd_config = FDConfig(
             model_config=self.model_config,
             parallel_config=ParallelConfig(

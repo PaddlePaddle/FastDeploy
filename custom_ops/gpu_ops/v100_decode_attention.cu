@@ -434,6 +434,12 @@ void V100DecodeAttention(
 
   const int THREADS = 128;
 
+  PD_CHECK(head_dim <= THREADS * 4,
+           "V100 decode attention supports head_dim up to ",
+           THREADS * 4,
+           " but got ",
+           head_dim);
+
   // ---- Kernel 1: Write KV to cache ----
   {
     const int grid_size = num_tokens * kv_num_heads;

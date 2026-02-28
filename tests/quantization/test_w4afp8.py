@@ -17,24 +17,13 @@
 import unittest
 from unittest import mock
 
-import paddle
-
 from fastdeploy.model_executor.layers.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.w4afp8 import (
     QUANT_SCALING_FACTOR,
     W4AFP8Config,
     W4AFP8LinearMethod,
 )
-
-
-def _check_fp8_support():
-    """Check if current GPU supports FP8 (SM89+)."""
-    try:
-        prop = paddle.device.cuda.get_device_properties()
-        sm_version = prop.major * 10 + prop.minor
-        return sm_version >= 89
-    except Exception:
-        return False
+from tests.utils import check_fp8_support
 
 
 class TestW4AFP8(unittest.TestCase):
@@ -102,7 +91,7 @@ class TestW4AFP8(unittest.TestCase):
         self.assertEqual(self.layer.weight, "created_weight")
         self.assertEqual(self.layer.weight_shape, [2, 8])
 
-    @unittest.skipIf(not _check_fp8_support(), "FP8 ops require SM89+")
+    @unittest.skipIf(not check_fp8_support(), "FP8 ops require SM89+")
     @mock.patch("fastdeploy.model_executor.ops.gpu.scaled_gemm_f8_i4_f16_weight_quantize")
     @mock.patch("paddle.view")
     @mock.patch("paddle.cast")
@@ -122,7 +111,7 @@ class TestW4AFP8(unittest.TestCase):
         self.layer.weight.set_value.assert_called_once_with("quanted_weight")
         self.layer.weight_scale.set_value.assert_called_once_with("reshaped_scale")
 
-    @unittest.skipIf(not _check_fp8_support(), "FP8 ops require SM89+")
+    @unittest.skipIf(not check_fp8_support(), "FP8 ops require SM89+")
     @mock.patch("fastdeploy.model_executor.ops.gpu.scaled_gemm_f8_i4_f16_weight_quantize")
     @mock.patch("paddle.view")
     @mock.patch("paddle.cast")
@@ -134,7 +123,7 @@ class TestW4AFP8(unittest.TestCase):
 
         self.method.process_loaded_weights(self.layer, "weights")
 
-    @unittest.skipIf(not _check_fp8_support(), "FP8 ops require SM89+")
+    @unittest.skipIf(not check_fp8_support(), "FP8 ops require SM89+")
     @mock.patch("fastdeploy.model_executor.ops.gpu.scaled_gemm_f8_i4_f16")
     def test_apply_with_bias(self, mock_gemm):
         mock_gemm.return_value = "output"
@@ -151,7 +140,7 @@ class TestW4AFP8(unittest.TestCase):
         expected_out_scale = 1.0 / (1.0 * QUANT_SCALING_FACTOR * QUANT_SCALING_FACTOR)
         self.assertAlmostEqual(call_args["out_scale"], expected_out_scale)
 
-    @unittest.skipIf(not _check_fp8_support(), "FP8 ops require SM89+")
+    @unittest.skipIf(not check_fp8_support(), "FP8 ops require SM89+")
     @mock.patch("fastdeploy.model_executor.ops.gpu.scaled_gemm_f8_i4_f16")
     def test_apply_without_bias(self, mock_gemm):
         self.layer.with_bias = False
@@ -163,7 +152,7 @@ class TestW4AFP8(unittest.TestCase):
         args = mock_gemm.call_args.kwargs
         self.assertIsNone(args["bias"])
 
-    @unittest.skipIf(not _check_fp8_support(), "FP8 ops require SM89+")
+    @unittest.skipIf(not check_fp8_support(), "FP8 ops require SM89+")
     @mock.patch("fastdeploy.model_executor.ops.gpu.scaled_gemm_f8_i4_f16")
     def test_apply_prefix_missing_key(self, mock_gemm):
         self.layer.prefix = "unknown"

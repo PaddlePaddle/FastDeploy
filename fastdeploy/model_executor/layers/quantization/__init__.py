@@ -94,14 +94,16 @@ def _check_and_adjust_fp8_quantization(quant_config_name, quantization_config):
     # FP8 not supported - provide fallback or warning
     sm_version = CUDAPlatform.get_sm_version()
 
-    # For block_wise_fp8, fall back to no quantization (use FP16)
+    # For block_wise_fp8, fall back to wint8 (consistent with mix_quant.py)
     if quant_config_name == "block_wise_fp8":
         logger.warning(
             f"FP8 quantization (block_wise_fp8) is not supported on SM{sm_version} "
             f"(requires SM{CUDAPlatform.SM_FP8_MIN}+). "
-            f"Disabling quantization and using FP16 inference instead."
+            f"Falling back to WINT8 quantization."
         )
-        return None, None, "FP8 quantization disabled due to hardware limitation"
+        if quantization_config:
+            quantization_config["quantization"] = "wint8"
+        return "wint8", quantization_config, "Fallback from block_wise_fp8 to WINT8"
 
     # For w4afp8, fall back to wint4
     if quant_config_name == "w4afp8":

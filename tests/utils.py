@@ -93,6 +93,16 @@ def get_default_test_fd_config():
     return fd_config
 
 
+def check_fp8_support():
+    """Check if current GPU supports FP8 (SM89+)."""
+    try:
+        prop = paddle.device.cuda.get_device_properties()
+        sm_version = prop.major * 10 + prop.minor
+        return sm_version >= 89
+    except Exception:
+        return False
+
+
 class OpPerformanceTester:
     def __init__(self, op_name, op_fn, num_layers=20, weight_size=None, gate=None):
         self.op_name = op_name
