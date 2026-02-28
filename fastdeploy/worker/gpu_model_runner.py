@@ -255,13 +255,16 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # for overlap
-        self.last_model_output_data = None
-        self.last_sampler_output = None
-        self.last_post_process_event = None
-        self.launch_token_num = -1
+        self._cached_model_output_data = None
+        self._cached_sampler_output = None
+        self._cached_post_process_event = None
+        # Cached token count for next batch prediction in overlap scheduling.
+        # Used to avoid synchronization overhead when preparing inputs for the next batch.
+        self._cached_next_batch_token_num = -1
         self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule and (
             not self.speculative_decoding
         )
+        self.current_batch_token_num = 0
 
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
@@ -285,6 +288,56 @@ class GPUModelRunner(ModelRunnerBase):
         check whether decode stage exist
         """
         return (self.share_inputs["seq_lens_decoder"] > 0).any().cpu().numpy().item()
+
+    def _should_compute_token_num_fresh(self, cached_token_num: int, is_dummy_or_profile_run: bool) -> bool:
+        """
+        Determine whether to compute token_num from scratch.
+
+        In overlap scheduling, we can use cached token count from previous batch
+        to avoid synchronization overhead. However, in certain conditions we must
+        compute fresh:
+        - dummy/profile runs need accurate counts
+        - non-overlap mode doesn't support caching
+        - prefill stage changes batch composition
+        - invalid cached value
+        """
+        return (
+            is_dummy_or_profile_run
+            or (not self.enable_overlap_schedule)
+            or self.exist_prefill()
+            or cached_token_num <= 0
+        )
+
+    def _resolve_current_batch_token_num(
+        self, cached_token_num: int, token_num_event, is_dummy_or_profile_run: bool
+    ) -> int:
+        """
+        Resolve token count for current batch.
+
+        In overlap mode, uses cached value from previous batch prediction
+        to avoid GPU-CPU sync. Falls back to fresh computation when needed.
+        """
+        if self._should_compute_token_num_fresh(cached_token_num, is_dummy_or_profile_run):
+            token_num_event.synchronize()
+            return self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
+        return cached_token_num
+
+    def _predict_next_batch_token_num(self) -> int:
+        """
+        Predict token count for next batch.
+
+        In overlap scheduling, while current batch executes model forward,
+        the scheduler may have prepared decode requests for next batch.
+        This prediction allows next batch to skip synchronization.
+
+        Returns -1 if prediction is not applicable (non-overlap or prefill exists).
+        """
+        if (not self.enable_overlap_schedule) or self.exist_prefill():
+            return -1
+        return (
+            self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
+            + self.share_inputs["is_block_step_cpu"].numpy().sum().item()
+        )
 
     def only_prefill(self):
         """
@@ -1266,8 +1319,15 @@ class GPUModelRunner(ModelRunnerBase):
             )
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
 
-    def _prepare_inputs(self, launch_token_num=-1, is_dummy_or_profile_run=False) -> None:
-        """Prepare the model inputs"""
+    def _prepare_inputs(self, cached_token_num=-1, is_dummy_or_profile_run=False) -> None:
+        """Prepare the model inputs.
+
+        Args:
+            cached_token_num: Token count cached from previous batch prediction.
+                In overlap scheduling, this avoids GPU-CPU synchronization.
+                Use -1 to force fresh computation.
+            is_dummy_or_profile_run: Whether this is a dummy or profiling run.
+        """
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             if self.enable_mm and self.share_inputs["image_features_list"] is not None:
                 tensor_feats = [t for t in self.share_inputs["image_features_list"] if isinstance(t, paddle.Tensor)]
@@ -1315,16 +1375,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["is_block_step_cpu"].copy_(self.share_inputs["is_block_step"], False)
         token_num_event = paddle.device.cuda.create_event()
         token_num_event.record()
-        if (
-            is_dummy_or_profile_run
-            or (not self.enable_overlap_schedule)
-            or self.exist_prefill()
-            or launch_token_num <= 0
-        ):
-            token_num_event.synchronize()
-            token_num = self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
-        else:
-            token_num = launch_token_num
+        token_num = self._resolve_current_batch_token_num(cached_token_num, token_num_event, is_dummy_or_profile_run)
         (
             ids_remove_padding,
             batch_id_per_token,
@@ -2268,46 +2319,53 @@ class GPUModelRunner(ModelRunnerBase):
     ) -> None:
         # preprocess and execute model (current batch)
         model_output, p_done_idxs, token_num_event = self._preprocess_and_execute_model(
-            model_forward_batch, num_running_requests, self.launch_token_num
+            model_forward_batch, num_running_requests, self._cached_next_batch_token_num
         )
 
         # save output (last batch)
         skip_save_output = (
-            self.launch_token_num == 0 or self.last_model_output_data is None or self.speculative_decoding
+            self._cached_next_batch_token_num == 0
+            or self._cached_model_output_data is None
+            or self.speculative_decoding
         )
         self._save_model_output(
-            self.last_model_output_data, self.last_sampler_output, self.last_post_process_event, skip_save_output
+            self._cached_model_output_data,
+            self._cached_sampler_output,
+            self._cached_post_process_event,
+            skip_save_output,
         )
 
         # postprocess (current batch)
-        model_output_data, sampler_output, post_process_event, token_num = self._postprocess(
+        model_output_data, sampler_output, post_process_event, next_batch_token_num = self._postprocess(
             model_output, p_done_idxs, token_num_event, model_forward_batch, num_running_requests
         )
-        self.last_model_output_data = model_output_data
-        self.last_sampler_output = sampler_output
-        self.last_post_process_event = post_process_event
-        self.launch_token_num = token_num
+        self._cached_model_output_data = model_output_data
+        self._cached_sampler_output = sampler_output
+        self._cached_post_process_event = post_process_event
+        self._cached_next_batch_token_num = next_batch_token_num
 
     def _preprocess_and_execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
         num_running_requests: int = None,
-        launch_token_num: int = -1,
+        cached_token_num: int = -1,
     ) -> None:
-        # 1. Prepare inputs of model and sampler.
-        p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
-
         # Reorder inputs to split prefill and decode tokens
         self._process_reorder()
 
-        launch_token_num, token_num_event = self._prepare_inputs(launch_token_num)
+        # 1. Prepare inputs of model and sampler.
+        current_batch_token_num, token_num_event = self._prepare_inputs(cached_token_num)
+        self.current_batch_token_num = current_batch_token_num
 
         # NOTE(sunxin):
-        # If launch_token_num is 0, it means the current worker is in an idle state, and no further processing is required in TP mode.
-        # However, in EP (Expert Parallelism) mode, there is data on other runner, the current runner is required to execute part of the model.
-        if launch_token_num == 0 and not self.parallel_config.use_ep:
+        # If current_batch_token_num is 0, it means the current worker is in an idle state,
+        # and no further processing is required in TP mode.
+        # However, in EP (Expert Parallelism) mode, there is data on other runner,
+        # the current runner is required to execute part of the model.
+        if current_batch_token_num == 0 and not self.parallel_config.use_ep:
             return None, None, token_num_event
 
+        p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
         self.sampler.pre_process(p_done_idxs)
 
         # 1.1 Update state of logits processor
@@ -2344,16 +2402,10 @@ class GPUModelRunner(ModelRunnerBase):
         # token_num_event synchronizes the async DtoH copies of seq_lens_this_time_cpu and is_block_step_cpu,
         # ensuring that the token count for the current batch is ready to be computed and reused in the subsequent batch.
         token_num_event.synchronize()
-        if (not self.enable_overlap_schedule) or self.exist_prefill():
-            token_num = -1
-        else:
-            token_num = (
-                self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
-                + self.share_inputs["is_block_step_cpu"].numpy().sum().item()
-            )
+        next_batch_token_num = self._predict_next_batch_token_num()
 
-        if token_num == 0 or model_output is None:
-            return None, None, None, -1
+        if next_batch_token_num == 0 or model_output is None:
+            return None, None, None, 0
 
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
@@ -2602,7 +2654,7 @@ class GPUModelRunner(ModelRunnerBase):
                 and self.share_inputs["is_chunk_step"].sum() == 0
             ):
                 self.routing_replay_manager.put_table_to_store()
-        return model_output_data, sampler_output, post_process_event, token_num
+        return model_output_data, sampler_output, post_process_event, next_batch_token_num
 
     def _save_model_output(
         self,

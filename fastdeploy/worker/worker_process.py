@@ -557,15 +557,16 @@ class PaddleDisWorkerProc:
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
 
-            if (
-                (not self.parallel_config.use_ep)
-                and (not current_platform.is_cuda())
-                and (not self.worker.model_runner.not_need_stop())
-            ):
-                self._tp_barrier_wait() if tp_size > 1 else None
-
-                time.sleep(0.001)
-                continue
+            # Handle idle state for non-EP mode
+            if not self.parallel_config.use_ep:
+                is_idle = (current_platform.is_cuda() and self.worker.model_runner.current_batch_token_num == 0) or (
+                    not current_platform.is_cuda() and not self.worker.model_runner.not_need_stop()
+                )
+                if is_idle:
+                    self._tp_barrier_wait() if tp_size > 1 else None
+                    time.sleep(0.001)
+                    if not current_platform.is_cuda():
+                        continue
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
