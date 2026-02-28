@@ -34,7 +34,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import paddle
-from paddle.nn.functional import scaled_dot_product_attention
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
@@ -76,22 +75,16 @@ class V100FlashAttentionMetadata(AttentionMetadata):
     Simplified compared to FlashAttentionMetadata since we don't use SM80+ features.
     """
 
-    cu_seqlens_k: paddle.Tensor = None
     _fuse_kernel_compute_dtype: str = "fp16"  # V100 prefers FP16 over BF16
     _dtype: paddle.dtype = paddle.float16
-
-    # Cached tensors for decode phase
-    max_len_tensor_cpu_decoder: paddle.Tensor = None
 
 
 class V100FlashAttentionBackend(AttentionBackend):
     """
     V100 (SM70) compatible attention backend.
 
-    Uses Triton kernels for GPU-side position computation, fused RoPE,
-    KV cache writes, and paged attention (decode: 2-stage flash-decoding,
-    prefill: tiled flash attention). Falls back to Python implementations
-    when Triton is not available.
+    Uses CUDA C++ kernel (preferred) or Triton kernels for decode attention,
+    with Python/Paddle fallback for prefill and when kernels are unavailable.
     """
 
     __infer_dynamic_dims_fields__ = ["attention_metadata"]
@@ -122,17 +115,8 @@ class V100FlashAttentionBackend(AttentionBackend):
         self.num_layers: int = fd_config.model_config.num_hidden_layers
 
         self.speculative_method = fd_config.speculative_config.method
-        self.use_speculate = self.speculative_method is not None
-        self.speculate_max_draft_token_num = fd_config.speculative_config.num_speculative_tokens
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
-
-        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
-            fd_config.model_config, "use_3d_rope", False
-        )
-
-        # V100 specific: prefer FP16 over BF16
-        self._use_fp16 = True
 
         import os
 
@@ -225,83 +209,6 @@ class V100FlashAttentionBackend(AttentionBackend):
         v = qkv[:, q_size + kv_size :]
 
         return q, k, v
-
-    # ------------------------------------------------------------------
-    # Vectorized Paddle implementations (no for-loops, no .item() calls)
-    # ------------------------------------------------------------------
-
-    def _paddle_compute_positions(
-        self,
-        batch_id_per_token,
-        seq_lens_encoder,
-        seq_lens_decoder,
-        seq_lens_this_time,
-        num_tokens,
-        batch_size,
-    ):
-        """Vectorized position computation using Paddle ops. No for-loops."""
-        # Base position per batch: 0 for prefill, enc+dec for decode
-        is_prefill = (seq_lens_this_time == seq_lens_encoder) & (seq_lens_decoder == 0)
-        base_pos = paddle.where(
-            is_prefill,
-            paddle.zeros_like(seq_lens_encoder),
-            seq_lens_encoder + seq_lens_decoder,
-        ).cast("int64")
-
-        # cu_seqlens_q for computing per-token offset within each sequence
-        cu_seqlens_q = paddle.zeros([batch_size + 1], dtype="int32")
-        cu_seqlens_q[1:] = paddle.cumsum(seq_lens_this_time)
-
-        # Per-token: base + (token_global_idx - seq_start_idx)
-        batch_ids_i64 = batch_id_per_token.reshape([-1]).cast("int64")
-        base_per_token = paddle.gather(base_pos.reshape([-1]), batch_ids_i64).reshape([-1])
-        seq_start = paddle.gather(cu_seqlens_q[:batch_size].reshape([-1]), batch_ids_i64).reshape([-1])
-        offset = (paddle.arange(num_tokens, dtype="int32") - seq_start).cast("int64")
-
-        positions = (base_per_token + offset).reshape([-1])  # ensure 1D [num_tokens]
-        return positions, cu_seqlens_q
-
-    def _paddle_compute_total_seq_lens(
-        self,
-        seq_lens_encoder,
-        seq_lens_decoder,
-        seq_lens_this_time,
-    ):
-        """Vectorized total_seq_lens computation. No for-loops."""
-        is_prefill = (seq_lens_this_time == seq_lens_encoder) & (seq_lens_decoder == 0)
-        return paddle.where(
-            is_prefill,
-            seq_lens_encoder,
-            seq_lens_encoder + seq_lens_decoder + seq_lens_this_time,
-        )
-
-    def _paddle_write_kv_to_block_cache(
-        self,
-        k,
-        v,
-        key_cache,
-        value_cache,
-        block_tables,
-        positions,
-        batch_id_per_token,
-    ):
-        """Vectorized KV cache write using Paddle ops. No .item() calls."""
-        # k, v: [num_tokens, kv_num_heads, head_dim]
-        num_tokens = k.shape[0]
-
-        # Compute block indices on GPU
-        block_idx = (positions // self.block_size).cast("int64")
-        block_offset = (positions % self.block_size).cast("int64")
-
-        # 2D fancy index: block_tables[batch_id, block_idx] → physical_block
-        max_bps = block_tables.shape[1]
-        flat_bt_idx = batch_id_per_token.cast("int64") * max_bps + block_idx
-        physical_blocks = block_tables.reshape([-1])[flat_bt_idx]
-
-        # Scatter write — loop over tokens but NO .item() calls (GPU tensor indexing)
-        for i in range(num_tokens):
-            key_cache[physical_blocks[i], :, block_offset[i], :] = k[i]
-            value_cache[physical_blocks[i], :, block_offset[i], :] = v[i]
 
     # ------------------------------------------------------------------
     # Python fallback implementations (kept as _python_* methods)
@@ -946,56 +853,6 @@ class V100FlashAttentionBackend(AttentionBackend):
             qk_head_dim,
             v_head_dim,
         )
-
-    def _simple_attention_forward(
-        self,
-        q: paddle.Tensor,
-        k: paddle.Tensor,
-        v: paddle.Tensor,
-        num_heads: int,
-        kv_num_heads: int,
-        qk_head_dim: int,
-        v_head_dim: int,
-    ) -> paddle.Tensor:
-        """
-        Simple attention forward without KV cache.
-        Used for dummy/profile runs where block_tables may not be properly sized.
-        """
-        num_tokens = q.shape[0]
-
-        # Reshape tensors
-        q_reshaped = q.reshape([num_tokens, num_heads, qk_head_dim])
-        k_reshaped = k.reshape([num_tokens, kv_num_heads, qk_head_dim])
-        v_reshaped = v.reshape([num_tokens, kv_num_heads, qk_head_dim])
-
-        # Expand K and V for GQA if needed
-        if self.group_size > 1:
-            k_reshaped = (
-                k_reshaped.unsqueeze(2).tile([1, 1, self.group_size, 1]).reshape([num_tokens, num_heads, qk_head_dim])
-            )
-            v_reshaped = (
-                v_reshaped.unsqueeze(2).tile([1, 1, self.group_size, 1]).reshape([num_tokens, num_heads, qk_head_dim])
-            )
-
-        # Simple self-attention (treat all tokens as one sequence)
-        # Transpose to [num_heads, num_tokens, head_dim]
-        q_t = q_reshaped.transpose([1, 0, 2])
-        k_t = k_reshaped.transpose([1, 0, 2])
-        v_t = v_reshaped.transpose([1, 0, 2])
-
-        # Add batch dimension
-        q_t = q_t.unsqueeze(0)
-        k_t = k_t.unsqueeze(0)
-        v_t = v_t.unsqueeze(0)
-
-        # Run attention
-        output = scaled_dot_product_attention(q_t, k_t, v_t, is_causal=self.causal)
-
-        # Reshape output
-        output = output.squeeze(0).transpose([1, 0, 2])
-        output = output.reshape([num_tokens, num_heads * v_head_dim])
-
-        return output
 
     def forward_decode(
         self,
