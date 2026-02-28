@@ -309,11 +309,8 @@ class PaddleDisWorkerProc:
         value = model_weights_signal_tensor.numpy()[0]
         return int(value)
 
-    def _tp_barrier_wait(self):
-        if current_platform.is_xpu() or self.enable_overlap_schedule:
-            self.task_queue.worker_process_tp_barrier.wait()
-        else:
-            paddle.distributed.barrier(self.parallel_config.tp_group)
+    def _tp_cpu_barrier(self):
+        self.task_queue.worker_process_tp_barrier.wait()
 
     def _init_eplb_signal(self):
         if not self.eplb_config.enable_eplb:
@@ -463,7 +460,7 @@ class PaddleDisWorkerProc:
                             self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
 
             # Synchronize the signal set by tp_rank0 visiable to other workers
-            self._tp_barrier_wait() if tp_size > 1 else None
+            self._tp_cpu_barrier() if tp_size > 1 else None
 
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.ranks > 1:
@@ -539,7 +536,7 @@ class PaddleDisWorkerProc:
                     logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
                     for control_req in control_reqs:
                         self.run_control_method(control_req)
-                        self._tp_barrier_wait() if tp_size > 1 else None
+                        self._tp_cpu_barrier() if tp_size > 1 else None
 
                 # Count prefill requests in current batch
                 num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
@@ -560,7 +557,7 @@ class PaddleDisWorkerProc:
                 and (not self.worker.model_runner.not_need_stop())
                 and (not self.enable_overlap_schedule)
             ):
-                self._tp_barrier_wait() if tp_size > 1 else None
+                self._tp_cpu_barrier() if tp_size > 1 else None
 
                 time.sleep(0.001)
                 continue
