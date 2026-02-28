@@ -718,6 +718,7 @@ class TestCacheTransferManager(unittest.TestCase):
     def test_invalid_write_policy_raises(self):
         class LocalArgs(Args):
             write_policy = "invalid"
+            kvcache_storage_backend = "mooncake"
 
         with self.assertRaises(ValueError):
             CacheTransferManager(LocalArgs())
