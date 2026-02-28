@@ -117,7 +117,7 @@ __global__ void SpeculatePreProcessKernel(int64_t *ids_remove_padding,
   }
 
   // get real output token num
-  if (bi == real_bsz - 1) {
+  if (bi == real_bsz - 1 && tid == 0) {
     real_output_token_num[0] = cum_seq_len_output;
   }
 

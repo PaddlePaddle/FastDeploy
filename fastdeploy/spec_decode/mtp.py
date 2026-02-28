@@ -125,7 +125,7 @@ class MTPProposer(Proposer):
 
         if current_platform.is_cuda() or current_platform.is_maca():
             self._real_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
-            self._d2h_done_event = paddle.device.cuda.Event()
+            self.output_token_num_event = paddle.device.cuda.Event()
 
         # CUDA Graph
         self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph
@@ -857,7 +857,7 @@ class MTPProposer(Proposer):
                 self.model_inputs["cu_seqlens_q_output"].copy_(cu_seqlens_q_output, False)
                 self.model_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
                 self._real_output_token_num_host.copy_(real_output_token_num, False)
-                self._d2h_done_event.record()
+                self.output_token_num_event.record()
 
                 # Initialize forward meta data
                 self._initialize_forward_meta(
@@ -901,7 +901,7 @@ class MTPProposer(Proposer):
                 if self.forward_meta.step_use_cudagraph:
                     model_output = model_output[: self.real_token_num]
 
-                self._d2h_done_event.synchronize()
+                self.output_token_num_event.synchronize()
                 real_num = int(self._real_output_token_num_host)
                 real_batch_id_per_token_output = self.model_inputs["batch_id_per_token_output"][:real_num]
                 hidden_states = rebuild_padding(

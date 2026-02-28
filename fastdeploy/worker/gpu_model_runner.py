@@ -151,7 +151,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if self.speculative_decoding:
             self._real_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
-            self._d2h_done_event = paddle.device.cuda.Event()
+            self.output_token_num_event = paddle.device.cuda.Event()
 
         # VL model config:
         if self.enable_mm:
@@ -1390,7 +1390,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
 
             self._real_output_token_num_host.copy_(real_output_token_num, False)
-            self._d2h_done_event.record()
+            self.output_token_num_event.record()
 
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
@@ -2000,7 +2000,7 @@ class GPUModelRunner(ModelRunnerBase):
                 break
             else:
                 if self.speculative_decoding:
-                    self._d2h_done_event.synchronize()
+                    self.output_token_num_event.synchronize()
                     real_num = int(self._real_output_token_num_host)
                     real_batch_id_per_token_output = self.share_inputs["batch_id_per_token_output"][:real_num]
                 else:
@@ -2406,7 +2406,7 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
         if self.speculative_decoding:
-            self._d2h_done_event.synchronize()
+            self.output_token_num_event.synchronize()
             real_num = int(self._real_output_token_num_host)
             real_batch_id_per_token_output = self.share_inputs["batch_id_per_token_output"][:real_num]
 
