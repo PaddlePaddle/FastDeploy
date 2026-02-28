@@ -339,6 +339,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/gelu_tanh.cu",
         "gpu_ops/reasoning_phase_token_constraint.cu",
         "gpu_ops/get_attn_mask_q.cu",
+        "gpu_ops/v100_decode_attention.cu",
     ]
     sm_versions = get_sm_version(archs)
     # Some kernels in this file require SM75+ instructions. Exclude them when building SM70 (V100).

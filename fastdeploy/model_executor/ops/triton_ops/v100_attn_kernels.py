@@ -370,6 +370,212 @@ def v100_write_kv_cache(
 
 @enable_compat_on_triton_kernel
 @triton.jit
+def v100_decode_fused_kernel(
+    q_ptr,  # [num_tokens, num_heads, head_dim]
+    key_cache_ptr,  # [max_num_blocks, kv_num_heads, block_size, head_dim]
+    value_cache_ptr,  # [max_num_blocks, kv_num_heads, block_size, head_dim]
+    output_ptr,  # [num_tokens, num_heads, head_dim]
+    block_tables_ptr,  # [batch_size, max_blocks_per_seq]
+    seq_lens_ptr,  # [batch_size] int32 - total kv length (including new token)
+    q_start_loc_ptr,  # [batch_size] int32
+    partial_out_ptr,  # [batch_size, num_heads, num_kv_splits, head_dim] float32 (unused if SINGLE_SPLIT)
+    partial_lse_ptr,  # [batch_size, num_heads, num_kv_splits] float32 (unused if SINGLE_SPLIT)
+    sm_scale,
+    max_blocks_per_seq,
+    num_heads: tl.constexpr,
+    kv_num_heads: tl.constexpr,
+    group_size: tl.constexpr,
+    head_dim: tl.constexpr,
+    block_size: tl.constexpr,
+    num_kv_splits: tl.constexpr,
+    MAX_BLOCKS_PER_SPLIT: tl.constexpr,
+    BLOCK_D: tl.constexpr,
+    SINGLE_SPLIT: tl.constexpr,  # True: write directly to output (skip stage2)
+):
+    """
+    Stage1 kernel that writes directly to output when SINGLE_SPLIT=True.
+    Grid: (batch_size, num_heads, num_kv_splits)
+    """
+    pid_batch = tl.program_id(0)
+    pid_head = tl.program_id(1)
+    pid_split = tl.program_id(2)
+
+    total_kv_len = tl.load(seq_lens_ptr + pid_batch)
+    if total_kv_len <= 0:
+        return
+
+    kv_head_id = pid_head // group_size
+
+    # Determine KV range for this split
+    total_kv_blocks = tl.cdiv(total_kv_len, block_size)
+    blocks_per_split = tl.cdiv(total_kv_blocks, num_kv_splits)
+    split_start_block = pid_split * blocks_per_split
+    split_end_block = tl.minimum((pid_split + 1) * blocks_per_split, total_kv_blocks)
+
+    if split_start_block >= total_kv_blocks:
+        return
+
+    # Load Q
+    q_start = tl.load(q_start_loc_ptr + pid_batch)
+    offs_d = tl.arange(0, BLOCK_D)
+    d_mask = offs_d < head_dim
+    q_base = q_start * num_heads * head_dim + pid_head * head_dim
+    q_vec = tl.load(q_ptr + q_base + offs_d, mask=d_mask, other=0.0).to(tl.float32)
+
+    # Online softmax state
+    m_i = float("-inf")
+    l_i = 0.0
+    acc = tl.zeros([BLOCK_D], dtype=tl.float32)
+
+    for bi in range(MAX_BLOCKS_PER_SPLIT):
+        block_idx = split_start_block + bi
+        if block_idx < split_end_block:
+            physical_block = tl.load(block_tables_ptr + pid_batch * max_blocks_per_seq + block_idx)
+            block_start_pos = block_idx * block_size
+            valid_tokens = tl.minimum(block_size, total_kv_len - block_start_pos)
+
+            kv_range = tl.arange(0, block_size)
+            kv_mask = kv_range < valid_tokens
+
+            k_base = physical_block * (kv_num_heads * block_size * head_dim) + kv_head_id * (block_size * head_dim)
+            k_ptrs = k_base + kv_range[:, None] * head_dim + offs_d[None, :]
+            k_vals = tl.load(key_cache_ptr + k_ptrs, mask=kv_mask[:, None] & d_mask[None, :], other=0.0).to(tl.float32)
+
+            qk = tl.sum(q_vec[None, :] * k_vals, axis=1) * sm_scale
+            qk = tl.where(kv_mask, qk, float("-inf"))
+
+            m_new = tl.maximum(m_i, tl.max(qk, axis=0))
+            alpha = tl.exp(m_i - m_new)
+            p = tl.exp(qk - m_new)
+            l_i = l_i * alpha + tl.sum(p, axis=0)
+
+            v_base = physical_block * (kv_num_heads * block_size * head_dim) + kv_head_id * (block_size * head_dim)
+            v_ptrs = v_base + kv_range[:, None] * head_dim + offs_d[None, :]
+            v_vals = tl.load(value_cache_ptr + v_ptrs, mask=kv_mask[:, None] & d_mask[None, :], other=0.0).to(
+                tl.float32
+            )
+
+            acc = acc * alpha + tl.sum(p[:, None] * v_vals, axis=0)
+            m_i = m_new
+
+    if SINGLE_SPLIT:
+        # Write final output directly (no stage2 needed)
+        out_base = q_start * num_heads * head_dim + pid_head * head_dim
+        tl.store(output_ptr + out_base + offs_d, acc / l_i, mask=d_mask)
+    else:
+        # Write partial output + LSE for stage2 merging
+        out_base = (
+            pid_batch * (num_heads * num_kv_splits * head_dim)
+            + pid_head * (num_kv_splits * head_dim)
+            + pid_split * head_dim
+        )
+        tl.store(partial_out_ptr + out_base + offs_d, acc / l_i, mask=d_mask)
+
+        lse = m_i + tl.log(l_i)
+        lse_base = pid_batch * (num_heads * num_kv_splits) + pid_head * num_kv_splits + pid_split
+        tl.store(partial_lse_ptr + lse_base, lse)
+
+
+def v100_decode_fused(
+    q,  # paddle.Tensor [num_tokens, num_heads, head_dim]
+    k_new,  # paddle.Tensor [num_tokens, kv_num_heads, head_dim] - new K after RoPE
+    v_new,  # paddle.Tensor [num_tokens, kv_num_heads, head_dim] - new V
+    key_cache,  # paddle.Tensor [max_num_blocks, kv_num_heads, block_size, head_dim]
+    value_cache,  # paddle.Tensor [max_num_blocks, kv_num_heads, block_size, head_dim]
+    output,  # paddle.Tensor [num_tokens, num_heads, head_dim]
+    block_tables,  # paddle.Tensor [batch_size, max_blocks_per_seq]
+    seq_lens,  # paddle.Tensor [batch_size] int32 - total kv lengths
+    positions,  # paddle.Tensor [num_tokens] int64
+    batch_id_per_token,  # paddle.Tensor [num_tokens] int32
+    q_start_locs,  # paddle.Tensor [batch_size] int32
+    num_heads,
+    kv_num_heads,
+    head_dim,
+    sm_scale,
+    max_kv_len,
+    partial_out=None,  # Optional pre-allocated buffer
+    partial_lse=None,  # Optional pre-allocated buffer
+):
+    """KV write + decode attention. Write KV first, then fused stage1+stage2.
+
+    When num_kv_splits=1: 2 kernels (write_kv + fused_stage1 that writes output directly).
+    When num_kv_splits>1: 3 kernels (write_kv + fused_stage1 + stage2).
+    """
+    import paddle
+
+    batch_size = seq_lens.shape[0]
+    block_size = key_cache.shape[2]
+    max_blocks_per_seq = block_tables.shape[1]
+    group_size = num_heads // kv_num_heads
+
+    BLOCK_D = triton.next_power_of_2(head_dim)
+
+    max_kv_blocks = ceil_div(max_kv_len, block_size) if max_kv_len > 0 else 1
+    num_kv_splits = min(max(1, ceil_div(max_kv_blocks, 8)), 32)
+    MAX_BLOCKS_PER_SPLIT = ceil_div(max_kv_blocks, num_kv_splits) + 1
+    single_split = num_kv_splits == 1
+
+    # Step 1: Write KV to cache (must complete before attention reads)
+    v100_write_kv_cache(
+        k_new,
+        v_new,
+        key_cache,
+        value_cache,
+        block_tables,
+        positions,
+        batch_id_per_token,
+    )
+
+    # Step 2: Fused attention (writes output directly when single_split)
+    if not single_split:
+        if partial_out is None or partial_lse is None:
+            partial_out = paddle.zeros([batch_size, num_heads, num_kv_splits, head_dim], dtype="float32")
+            partial_lse = paddle.full([batch_size, num_heads, num_kv_splits], float("-inf"), dtype="float32")
+
+    grid = (batch_size, num_heads, num_kv_splits)
+    v100_decode_fused_kernel[grid](
+        q_ptr=q,
+        key_cache_ptr=key_cache,
+        value_cache_ptr=value_cache,
+        output_ptr=output,
+        block_tables_ptr=block_tables,
+        seq_lens_ptr=seq_lens,
+        q_start_loc_ptr=q_start_locs,
+        partial_out_ptr=partial_out if not single_split else output,  # dummy, unused
+        partial_lse_ptr=partial_lse if not single_split else seq_lens,  # dummy, unused
+        sm_scale=sm_scale,
+        max_blocks_per_seq=max_blocks_per_seq,
+        num_heads=num_heads,
+        kv_num_heads=kv_num_heads,
+        group_size=group_size,
+        head_dim=head_dim,
+        block_size=block_size,
+        num_kv_splits=num_kv_splits,
+        MAX_BLOCKS_PER_SPLIT=MAX_BLOCKS_PER_SPLIT,
+        BLOCK_D=BLOCK_D,
+        SINGLE_SPLIT=single_split,
+        num_warps=4,
+    )
+
+    if not single_split:
+        # Stage 2: merge partials
+        grid_s2 = (batch_size, num_heads)
+        v100_decode_attn_stage2[grid_s2](
+            partial_out_ptr=partial_out,
+            partial_lse_ptr=partial_lse,
+            output_ptr=output,
+            q_start_loc_ptr=q_start_locs,
+            seq_lens_ptr=seq_lens,
+            num_heads=num_heads,
+            head_dim=head_dim,
+            num_kv_splits=num_kv_splits,
+            BLOCK_D=BLOCK_D,
+            num_warps=2,
+        )
+
+
+@enable_compat_on_triton_kernel
+@triton.jit
 def v100_decode_attn_stage1(
     q_ptr,  # [num_tokens, num_heads, head_dim]
     key_cache_ptr,  # [max_num_blocks, kv_num_heads, block_size, head_dim]
@@ -555,6 +761,9 @@ def v100_decode_attention(
     kv_num_heads,
     head_dim,
     sm_scale,
+    max_kv_len=None,  # Optional: pass pre-computed max to avoid .item() call
+    partial_out=None,  # Optional: pre-allocated [batch, heads, splits, head_dim] float32
+    partial_lse=None,  # Optional: pre-allocated [batch, heads, splits] float32
 ):
     """2-stage flash-decoding for decode tokens."""
     import paddle
@@ -567,16 +776,18 @@ def v100_decode_attention(
     BLOCK_D = triton.next_power_of_2(head_dim)
 
     # Determine number of KV splits based on max seq len
-    max_kv_len = int(seq_lens.max().item()) if batch_size > 0 else 0
+    if max_kv_len is None:
+        max_kv_len = int(seq_lens.max().item()) if batch_size > 0 else 0
     max_kv_blocks = ceil_div(max_kv_len, block_size) if max_kv_len > 0 else 1
     # Heuristic: aim for ~8 blocks per split
     num_kv_splits = min(max(1, ceil_div(max_kv_blocks, 8)), 32)
     # Constexpr upper bound for blocks per split
     MAX_BLOCKS_PER_SPLIT = ceil_div(max_kv_blocks, num_kv_splits) + 1
 
-    # Allocate partial buffers (use zeros to prevent NaN from uninitialized memory in empty splits)
-    partial_out = paddle.zeros([batch_size, num_heads, num_kv_splits, head_dim], dtype="float32")
-    partial_lse = paddle.full([batch_size, num_heads, num_kv_splits], float("-inf"), dtype="float32")
+    # Use pre-allocated buffers if provided, otherwise allocate new ones
+    if partial_out is None or partial_lse is None:
+        partial_out = paddle.zeros([batch_size, num_heads, num_kv_splits, head_dim], dtype="float32")
+        partial_lse = paddle.full([batch_size, num_heads, num_kv_splits], float("-inf"), dtype="float32")
 
     # Stage 1
     grid_s1 = (batch_size, num_heads, num_kv_splits)

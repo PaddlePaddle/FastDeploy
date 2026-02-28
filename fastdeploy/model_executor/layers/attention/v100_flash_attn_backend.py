@@ -20,12 +20,10 @@ This backend is designed for NVIDIA V100 GPUs (SM70) which do not support:
 2. flash_attn_unpadded which requires SM80+ (check: is_sm8x || is_sm90_or_larger)
 
 Default mode uses a hybrid approach:
-- Data prep (positions, RoPE, KV cache write): vectorized Paddle ops (no .item() calls)
-- Decode attention (q_len=1): cuBLAS SDPA via gather KV + paddle.matmul (~3 kernels)
-- Prefill attention (q_len>1): Triton paged attention (v100_extend_attention)
-
-This hybrid approach avoids the overhead of Triton kernel wrappers' .item() calls
-and buffer allocations during decode, which dominate inference latency.
+- Decode with small KV (≤128 tokens): Python data prep + cuBLAS SDPA (0 syncs, low overhead)
+- Decode with large KV (>128 tokens): Python data prep + Triton flash-decoding
+  (same CUDA stream via torch_proxy, no explicit sync needed)
+- Prefill (q_len>1): Python data prep + cuBLAS SDPA (safe from Triton JIT OOM)
 
 Set FD_V100_USE_PYTHON_ATTN=1 to force full Python/Paddle fallback (no Triton at all).
 """
@@ -50,10 +48,21 @@ from fastdeploy.model_executor.layers.attention.utils import init_rank_and_devic
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
-# Try importing Triton kernels (used in decode optimization path)
+# Try importing CUDA C++ custom op (preferred: ~0.01ms launch overhead)
+try:
+    from fastdeploy.model_executor.ops.gpu import (
+        v100_decode_attention as v100_decode_attention_cuda,
+    )
+
+    _CUDA_KERNEL_AVAILABLE = True
+except Exception:
+    _CUDA_KERNEL_AVAILABLE = False
+
+# Try importing Triton kernels (fallback: ~1.5ms launch overhead via torch_proxy)
 try:
     from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (  # noqa: F401
         v100_decode_attention,
+        v100_decode_fused,
         v100_paged_attention,
         v100_write_kv_cache,
     )
@@ -130,15 +139,19 @@ class V100FlashAttentionBackend(AttentionBackend):
 
         import os
 
-        # Use Triton kernels by default when available.
-        # Set FD_V100_USE_PYTHON_ATTN=1 to force Python/Paddle fallback.
+        # Use CUDA C++ kernel > Triton > Python fallback
         force_python = os.environ.get("FD_V100_USE_PYTHON_ATTN", "0") == "1"
+        self._use_cuda_kernel = _CUDA_KERNEL_AVAILABLE and not force_python
         self._use_triton = _TRITON_KERNELS_AVAILABLE and not force_python
 
         if force_python:
             logger.info(
                 "V100FlashAttentionBackend: FD_V100_USE_PYTHON_ATTN=1 set, "
                 "forcing Python/Paddle fallback (Triton kernels disabled)."
+            )
+        elif self._use_cuda_kernel:
+            logger.info(
+                "V100FlashAttentionBackend initialized for SM70 GPU " "(CUDA C++ decode attention + Paddle data prep)."
             )
         elif self._use_triton:
             logger.info("V100FlashAttentionBackend initialized for SM70 GPU (Triton attention, Paddle data prep).")
@@ -637,7 +650,7 @@ class V100FlashAttentionBackend(AttentionBackend):
 
         batch_size = forward_meta.seq_lens_this_time.shape[0]
 
-        if self._use_triton:
+        if self._use_cuda_kernel or self._use_triton:
             return self._triton_forward(
                 q_reshaped,
                 k_reshaped,
@@ -686,21 +699,91 @@ class V100FlashAttentionBackend(AttentionBackend):
         batch_size,
         use_neox_rotary_style,
     ):
-        """Hybrid forward: same data prep as _python_forward, cuBLAS SDPA for all.
+        """Hybrid forward: adaptive Triton/Python decode + Python prefill.
 
-        Both decode and prefill use _python_* data prep + _python_attention_forward.
-        This avoids Triton JIT compilation memory overhead that causes OOM on V100.
-        The _python_* methods' .item() calls provide implicit memory barriers.
+        Decode (num_tokens == batch_size, all q_len=1):
+          Small KV (≤2 blocks): Python data prep + SDPA (no Triton overhead)
+          Large KV (>2 blocks): Python data prep + Triton KV write +
+            Triton decode (max_kv_len passed to kernel, avoids 1 .item()/layer)
+
+        Cross-layer caching: positions, total_seq_lens, max_kv_len, q_start_locs,
+        and partial buffers are computed once at layer 0 and reused across all layers.
+        This eliminates (num_layers-1)/num_layers of .item() calls, argsort, and
+        buffer allocations per decode step.
+
+        Prefill/mixed:
+          Delegates to _python_forward (safe, no Triton JIT OOM risk).
         """
-        # Data prep: same as _python_forward
-        positions = self._python_compute_positions(
-            forward_meta.batch_id_per_token,
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.seq_lens_this_time,
-            num_tokens,
-        )
+        is_all_decode = num_tokens == batch_size
 
+        if not is_all_decode or v_head_dim != qk_head_dim:
+            # Prefill/mixed/MLA: safe Python path (no Triton JIT OOM risk)
+            return self._python_forward(
+                q_reshaped,
+                k_reshaped,
+                v,
+                forward_meta,
+                key_cache,
+                value_cache,
+                num_tokens,
+                num_heads,
+                kv_num_heads,
+                qk_head_dim,
+                v_head_dim,
+                batch_size,
+                use_neox_rotary_style,
+            )
+
+        # ── Decode: cross-layer cached data prep ──
+        # positions, total_seq_lens, max_kv_len, q_start_locs are identical
+        # across all layers within one decode step. Compute once at layer 0.
+
+        cache = getattr(forward_meta, "_v100_decode_cache", None)
+        if cache is None:
+            # Layer 0: compute and cache
+            positions = self._python_compute_positions(
+                forward_meta.batch_id_per_token,
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                num_tokens,
+            )
+            total_seq_lens = self._python_compute_total_seq_lens(
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                batch_size,
+            )
+            max_kv_len = int(total_seq_lens.max().item())
+            q_start_locs = paddle.argsort(forward_meta.batch_id_per_token).cast("int32")
+            total_seq_lens_1d = total_seq_lens.reshape([-1]).cast("int32")
+
+            # Pre-allocate partial buffers for Triton decode attention (reused every layer)
+            block_size = key_cache.shape[2]
+            max_kv_blocks = (max_kv_len + block_size - 1) // block_size if max_kv_len > 0 else 1
+            num_kv_splits = min(max(1, (max_kv_blocks + 7) // 8), 32)
+            partial_out = paddle.zeros([batch_size, num_heads, num_kv_splits, qk_head_dim], dtype="float32")
+            partial_lse = paddle.full([batch_size, num_heads, num_kv_splits], float("-inf"), dtype="float32")
+
+            cache = {
+                "positions": positions,
+                "total_seq_lens": total_seq_lens,
+                "total_seq_lens_1d": total_seq_lens_1d,
+                "max_kv_len": max_kv_len,
+                "q_start_locs": q_start_locs,
+                "partial_out": partial_out,
+                "partial_lse": partial_lse,
+            }
+            forward_meta._v100_decode_cache = cache
+        else:
+            # Layer 1+: reuse cached values (0 .item(), 0 argsort, 0 alloc)
+            positions = cache["positions"]
+            total_seq_lens = cache["total_seq_lens"]
+            total_seq_lens_1d = cache["total_seq_lens_1d"]
+            max_kv_len = cache["max_kv_len"]
+            q_start_locs = cache["q_start_locs"]
+
+        # Apply RoPE (per-layer, Q/K differ each layer)
         if forward_meta.rotary_embs is not None:
             q_reshaped, k_reshaped = self._python_apply_rope_to_qk(
                 q_reshaped,
@@ -710,38 +793,91 @@ class V100FlashAttentionBackend(AttentionBackend):
                 use_neox_rotary_style,
             )
 
-        k_flat = k_reshaped.reshape([num_tokens, kv_num_heads * qk_head_dim])
-        self._python_write_kv_to_block_cache(
-            k_flat,
-            v,
-            key_cache,
-            value_cache,
-            forward_meta.block_tables,
-            positions,
-            forward_meta.batch_id_per_token,
-            kv_num_heads,
-            qk_head_dim,
-        )
+        # Decide: Triton flash-decoding vs Python SDPA
+        if max_kv_len <= self.block_size * 2:
+            # Small KV: full Python path (0 syncs, no Triton overhead)
+            k_flat = k_reshaped.reshape([num_tokens, kv_num_heads * qk_head_dim])
+            self._python_write_kv_to_block_cache(
+                k_flat,
+                v,
+                key_cache,
+                value_cache,
+                forward_meta.block_tables,
+                positions,
+                forward_meta.batch_id_per_token,
+                kv_num_heads,
+                qk_head_dim,
+            )
+            return self._python_attention_forward(
+                q_reshaped,
+                forward_meta,
+                key_cache,
+                value_cache,
+                total_seq_lens,
+                num_heads,
+                kv_num_heads,
+                qk_head_dim,
+                v_head_dim,
+            )
 
-        total_seq_lens = self._python_compute_total_seq_lens(
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.seq_lens_this_time,
-            batch_size,
-        )
+        # Fused: KV write + decode attention
+        v_reshaped = v.reshape([num_tokens, kv_num_heads, qk_head_dim])
+        sm_scale = qk_head_dim**-0.5
+        output = paddle.empty_like(q_reshaped)
 
-        # Attention: cuBLAS SDPA for both decode and prefill
-        return self._python_attention_forward(
-            q_reshaped,
-            forward_meta,
-            key_cache,
-            value_cache,
-            total_seq_lens,
-            num_heads,
-            kv_num_heads,
-            qk_head_dim,
-            v_head_dim,
-        )
+        block_size = key_cache.shape[2]
+        max_kv_blocks = (max_kv_len + block_size - 1) // block_size if max_kv_len > 0 else 1
+        num_kv_splits = min(max(1, (max_kv_blocks + 7) // 8), 32)
+        max_blocks_per_split = (max_kv_blocks + num_kv_splits - 1) // num_kv_splits + 1
+
+        if self._use_cuda_kernel:
+            # CUDA C++ path: ~0.01ms per launch (vs ~1.5ms Triton torch_proxy)
+            v100_decode_attention_cuda(
+                output,
+                q_reshaped,
+                k_reshaped,
+                v_reshaped,
+                key_cache,
+                value_cache,
+                forward_meta.block_tables,
+                total_seq_lens_1d,
+                positions,
+                forward_meta.batch_id_per_token,
+                q_start_locs,
+                sm_scale,
+                num_kv_splits,
+                max_blocks_per_split,
+            )
+        else:
+            # Triton fallback path
+            partial_out = cache["partial_out"]
+            partial_lse = cache["partial_lse"]
+            if partial_out.shape[2] > 1:
+                partial_out.zero_()
+                partial_lse.fill_(float("-inf"))
+
+            v100_decode_fused(
+                q_reshaped,
+                k_reshaped,
+                v_reshaped,
+                key_cache,
+                value_cache,
+                output,
+                forward_meta.block_tables,
+                total_seq_lens_1d,
+                positions,
+                forward_meta.batch_id_per_token,
+                q_start_locs,
+                num_heads,
+                kv_num_heads,
+                qk_head_dim,
+                sm_scale,
+                max_kv_len=max_kv_len,
+                partial_out=partial_out,
+                partial_lse=partial_lse,
+            )
+
+        return output.reshape([num_tokens, num_heads * v_head_dim])
 
     def _python_forward(
         self,
