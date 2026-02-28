@@ -29,7 +29,7 @@ Test scenarios:
 11. Non-deterministic validation (proves tests are effective)
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0 pytest tests/deterministic/test_determinism_offline.py -v
+    CUDA_VISIBLE_DEVICES=0,1,2,3 pytest tests/deterministic/test_determinism_offline.py -v
 """
 
 import os
@@ -56,7 +56,7 @@ def _module_env():
     old_cuda = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES)
     old_det = os.environ.get(_ENV_FD_DETERMINISTIC_MODE)
 
-    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0")
+    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0,1,2,3")
     os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
 
     global LLM, SamplingParams  # noqa: PLW0603
@@ -92,9 +92,9 @@ def model_path():
 def llm(model_path, _module_env):
     return LLM(
         model=model_path,
-        tensor_parallel_size=1,
+        tensor_parallel_size=4,
         max_model_len=8192,
-        enable_prefix_caching=False,
+        enable_prefix_caching=True,
     )
 
 

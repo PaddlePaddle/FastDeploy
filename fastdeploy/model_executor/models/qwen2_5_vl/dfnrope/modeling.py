@@ -29,6 +29,7 @@ from paddle.nn.functional.flash_attention import (
 )
 from paddleformers.transformers.model_utils import PretrainedModel
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.activation import SiluAndMul
 from fastdeploy.model_executor.layers.linear import MergedColumnParallelLinear
@@ -214,7 +215,7 @@ class VisionFlashAttention2(nn.Layer):
             .reshape([seq_length, -1])
         )
 
-        attn_output = attn_output.astype(paddle.float32)
+        attn_output = attn_output.astype(paddle.float32) if not envs.FD_DETERMINISTIC_MODE else attn_output
         attn_output = self.proj(attn_output)
         return attn_output
 

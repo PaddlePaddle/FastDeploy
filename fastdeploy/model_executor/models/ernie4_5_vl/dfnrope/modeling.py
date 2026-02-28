@@ -32,6 +32,7 @@ from paddle.nn.functional.flash_attention import (
 )
 from paddleformers.transformers.model_utils import PretrainedModel
 
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import divide, get_tensor
 from fastdeploy.model_executor.utils import fd_cast, h2d_copy, set_weight_attrs
 from fastdeploy.platforms import current_platform
@@ -284,7 +285,7 @@ class VisionFlashAttention2(nn.Layer):
             .squeeze(0)
             .reshape([seq_length, -1])
         )
-        attn_output = attn_output.astype(paddle.float32)
+        attn_output = attn_output.astype(paddle.float32) if not envs.FD_DETERMINISTIC_MODE else attn_output
         attn_output = self.proj(attn_output)
         return attn_output
 
