@@ -505,6 +505,7 @@ class MTPProposer(Proposer):
                 ):  # In PD, we continue to decode after P generates first token
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                     self.model_inputs["recompute_token_num"][idx : idx + 1] = 0
+                    self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = length + 1
                     # NOTE(liuzichang):
                     # extra 1 : P-D split need rollback one step
                     self.model_inputs["mask_rollback"][idx : idx + 1] = 1
@@ -869,7 +870,9 @@ class MTPProposer(Proposer):
                     top_k=self.model_inputs["top_k"],
                     seed=self.model_inputs["infer_seed"],
                     step_idx=self.model_inputs["step_idx"],
+                    token_ids_all=self.model_inputs["token_ids_all"],
                     pre_token_ids=self.model_inputs["pre_ids"],
+                    prompt_lens=self.model_inputs["prompt_lens"],
                     frequency_penalties=self.model_inputs["frequency_score"],
                     presence_penalties=self.model_inputs["presence_score"],
                     repetition_penalties=self.model_inputs["penalty_score"],

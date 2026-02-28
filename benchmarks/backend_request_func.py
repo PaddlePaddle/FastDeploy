@@ -80,6 +80,7 @@ class RequestFuncOutput:
     res_ttft: int = 0  # 包含思考首token时延
     error: str = ""
     metrics: dict = field(default_factory=dict)
+    tool_calls: list = field(default_factory=list)
 
 
 @dataclass
@@ -270,6 +271,7 @@ async def async_request_eb_openai_chat_completions(
     st = time.perf_counter()
     most_recent_timestamp = st
     token_timestamps = []
+    tool_call_buffer = {}
     try:
         async with session.post(url=api_url, json=payload, headers=headers, read_bufsize=10 * 1024 * 1024) as response:
             data = {}
@@ -295,6 +297,26 @@ async def async_request_eb_openai_chat_completions(
                         if choices := data.get("choices"):
                             content = choices[0]["delta"].get("content")
                             reason_content = choices[0]["delta"].get("reasoning_content")
+                            tool_calls = choices[0]["delta"].get("tool_calls")
+                            if tool_calls:
+                                for tc in tool_calls:
+                                    idx = tc.get("index", 0)
+
+                                    if idx not in tool_call_buffer:
+                                        tool_call_buffer[idx] = {
+                                            "id": tc.get("id"),
+                                            "name": "",
+                                            "arguments": "",
+                                        }
+
+                                    func = tc.get("function", {})
+
+                                    if "name" in func:
+                                        tool_call_buffer[idx]["name"] = func["name"]
+
+                                    if "arguments" in func:
+                                        tool_call_buffer[idx]["arguments"] += func["arguments"]
+
                             # First token
                             if ttft == 0.0:
                                 ttft = timestamp - st
@@ -339,11 +361,23 @@ async def async_request_eb_openai_chat_completions(
                 # 在流式结束时，记录最后一个 chunk 收到的时间戳
                 output.end_timestamp = most_recent_timestamp
 
+                if tool_call_buffer:
+                    for _, tc in tool_call_buffer.items():
+                        try:
+                            args = json.loads(tc["arguments"]) if tc["arguments"] else {}
+                        except:
+                            args = {}
+
+                        output.tool_calls.append({"id": tc["id"], "name": tc["name"], "arguments": args})
+
                 # 新增metrics统计，计算首token过滤空包
                 output.metrics = metrics_summary(metrics_list, token_timestamps[1:])
 
+                has_text = output.generated_text.strip() or output.reasoning_content.strip()
+                has_tool = getattr(output, "tool_calls", None)
+
                 # 兼容思考内容超长截断的情况，此时回复内容为空
-                if output.generated_text.strip() == "" and output.reasoning_content.strip() == "":
+                if not has_text and not has_tool:
                     output.success = False
                     output.reasoning_tokens = output.output_tokens
                     output.error = "No generated text found!"
@@ -381,43 +415,54 @@ async def async_request_eb_openai_chat_completions(
     return output
 
 
-async def simple_tool_call(model_text: str, tool_url: str, timeout=60):
+async def simple_tool_call(model_output, tool_url: str, timeout=60):
     """调用工具函数"""
     import re
 
     import httpx
 
-    match = re.search(r"<tool_call>(.*?)</tool_call>", model_text, re.S)
-    if not match:
-        return "", False, ""
+    tool_id = None
 
-    block = match.group(1).strip()
-    lines = block.splitlines()
-    tool_name = lines[0].strip()
+    if getattr(model_output, "tool_calls", None):
+        tc = model_output.tool_calls[0]
+        tool_name = tc["name"]
+        args = tc.get("arguments", {})
+        tool_id = tc.get("id")
+    else:
+        match = re.search(r"<tool_call>(.*?)</tool_call>", model_output.generated_text, re.S)
+        if not match:
+            return "", False, "", tool_id
 
-    key = re.search(r"<arg_key>(.*?)</arg_key>", block)
-    val = re.search(r"<arg_value>(.*?)</arg_value>", block)
+        block = match.group(1).strip()
+        lines = block.splitlines()
+        tool_name = lines[0].strip()
 
-    args = {key.group(1): val.group(1)} if key and val else {}
+        key = re.search(r"<arg_key>(.*?)</arg_key>", block)
+        val = re.search(r"<arg_value>(.*?)</arg_value>", block)
 
-    browsecomp_plus_headers = {"Content-Type": "application/json"}
+        args = {key.group(1): val.group(1)} if key and val else {}
+
+    if not tool_name:
+        return "", False, "", tool_id
+
+    headers = {"Content-Type": "application/json"}
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
                 tool_url,
-                headers=browsecomp_plus_headers,
+                headers=headers,
                 json={"tool_name": tool_name, "arguments": args},
             )
 
         resp.raise_for_status()
         obj = resp.json()
 
-        return obj.get("result", resp.text), "result" in obj, tool_name
+        return obj.get("result", resp.text), "result" in obj, tool_name, tool_id
 
     except Exception as e:
         print(f"[TOOL ERROR] {tool_name}: {repr(e)}")
-        return str(e), False, tool_name
+        return str(e), False, tool_name, tool_id
 
 
 async def async_request_eb_openai_chat_completions_multi_turn(
@@ -499,8 +544,8 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                         raise ValueError("tool_url is empty.")
                     for _ in range(max_loop):
                         t0 = time.perf_counter()
-                        tool_result, is_tool_result, tool_name = await simple_tool_call(
-                            output.generated_text,
+                        tool_result, is_tool_result, tool_name, tool_id = await simple_tool_call(
+                            output,
                             tool_url,
                         )
                         t1 = time.perf_counter()
@@ -540,18 +585,31 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                             )
                             break
 
-                        history.append(
-                            {
-                                "role": "assistant",
-                                "content": output.generated_text,
-                            }
-                        )
+                        assistant_msg = {
+                            "role": "assistant",
+                            "content": output.generated_text,
+                        }
+
+                        if getattr(output, "tool_calls", None):
+                            assistant_msg["tool_calls"] = [
+                                {
+                                    "id": tc["id"],
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc["name"],
+                                        "arguments": json.dumps(tc["arguments"], ensure_ascii=False),
+                                    },
+                                }
+                                for tc in output.tool_calls
+                            ]
+
+                        history.append(assistant_msg)
 
                         history.append(
                             {
                                 "role": "tool",
                                 "content": json.dumps(tool_result, ensure_ascii=False),
-                                "tool_call_id": tool_name,
+                                "tool_call_id": tool_id or tool_name,
                             }
                         )
                         tool_call_count += 1

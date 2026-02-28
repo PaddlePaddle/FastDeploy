@@ -60,10 +60,9 @@ def _create_default_sampling_metadata(
     fake_sampling_metadata = SamplingMetadata(
         temperature=paddle.full(shape=[batch_size, 1], fill_value=0.9, dtype="float32"),
         top_p=paddle.full(shape=[batch_size, 1], fill_value=0.7, dtype="float32"),
-        prompt_ids=paddle.full(shape=[batch_size, max_seq_len], fill_value=0, dtype="int64"),
-        prompt_lens=paddle.full(shape=[batch_size, 1], fill_value=5, dtype="int64"),
+        prompt_lens=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64"),
         step_idx=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64"),
-        pre_token_ids=_create_tokens_tensor(batch_size, max_seq_len),
+        token_ids_all=_create_tokens_tensor(batch_size, max_seq_len),
         frequency_penalties=_create_penalty_tensor(batch_size, 0.0),
         presence_penalties=_create_penalty_tensor(batch_size, 0.0),
         repetition_penalties=_create_penalty_tensor(batch_size, 1.0),
@@ -154,9 +153,7 @@ def get_baseline_logprobs(logits, sampling_metadata, logprobs_mode, token_ids):
             logits = proc.apply(logits)
 
         logits = apply_penalty_multi_scores(
-            sampling_metadata.pre_token_ids,
-            sampling_metadata.prompt_ids,
-            sampling_metadata.prompt_lens,
+            sampling_metadata.token_ids_all,
             logits,
             sampling_metadata.repetition_penalties,
             sampling_metadata.frequency_penalties,
@@ -164,6 +161,7 @@ def get_baseline_logprobs(logits, sampling_metadata, logprobs_mode, token_ids):
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
             sampling_metadata.bad_words_token_len,
+            sampling_metadata.prompt_lens,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
@@ -178,9 +176,7 @@ def get_baseline_logprobs(logits, sampling_metadata, logprobs_mode, token_ids):
             logits = proc.apply(logits)
 
         logits = apply_penalty_multi_scores(
-            sampling_metadata.pre_token_ids,
-            sampling_metadata.prompt_ids,
-            sampling_metadata.prompt_lens,
+            sampling_metadata.token_ids_all,
             logits,
             sampling_metadata.repetition_penalties,
             sampling_metadata.frequency_penalties,
@@ -188,6 +184,7 @@ def get_baseline_logprobs(logits, sampling_metadata, logprobs_mode, token_ids):
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
             sampling_metadata.bad_words_token_len,
+            sampling_metadata.prompt_lens,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,

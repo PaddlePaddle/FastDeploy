@@ -1627,7 +1627,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             else:
                 getattr(layer, weight_name).copy_(weight, False)
                 scale_param = getattr(layer, scale_name)
-                scale_param.data = scale.transpose([0, 2, 1]).contiguous().mT()
+                scale_param.data = scale.transpose([0, 2, 1]).contiguous().transpose([0, 2, 1])
 
         if self.quant_config.is_checkpoint_bf16:
             # dynamic quantize

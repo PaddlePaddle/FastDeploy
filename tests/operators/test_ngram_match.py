@@ -26,7 +26,7 @@ class TestNgramMatchOp(unittest.TestCase):
 
     def test_basic_match(self):
         """
-        Case 1: input_ids overlaps with pre_ids, and can extract draft tokens.
+        Case 1: input_ids overlaps with token_ids_all, and can extract draft tokens.
         """
         batch_size = 1
         seq_len = 6
@@ -36,7 +36,8 @@ class TestNgramMatchOp(unittest.TestCase):
         # Length of input IDs
         input_ids_len = paddle.to_tensor([6], dtype="int64")
         # Previous IDs
-        pre_ids = paddle.to_tensor([[10, 20, 30, 40, 0, 0]], dtype="int64")
+        token_ids_all = paddle.to_tensor([[10, 20, 30, 40, 0, 0]], dtype="int64")
+        prompt_lens = paddle.zeros([4, 1], dtype="int64")
         # Current step index
         step_idx = paddle.to_tensor([3], dtype="int64")
         # Number of draft tokens
@@ -56,7 +57,8 @@ class TestNgramMatchOp(unittest.TestCase):
         ngram_match(
             input_ids,
             input_ids_len,
-            pre_ids,
+            token_ids_all,
+            prompt_lens,
             step_idx,
             draft_token_num,
             draft_tokens,
@@ -78,12 +80,13 @@ class TestNgramMatchOp(unittest.TestCase):
 
     def test_no_match(self):
         """
-        Case 2: pre_ids does not match input_ids, should only keep the current token.
+        Case 2: token_ids_all does not match input_ids, should only keep the current token.
         """
         batch_size = 1
         input_ids = paddle.to_tensor([[100, 200, 300, 400]], dtype="int64")
         input_ids_len = paddle.to_tensor([4], dtype="int64")
-        pre_ids = paddle.to_tensor([[1, 2, 3, 4]], dtype="int64")
+        token_ids_all = paddle.to_tensor([[1, 2, 3, 4]], dtype="int64")
+        prompt_lens = paddle.zeros([4, 1], dtype="int64")
         step_idx = paddle.to_tensor([3], dtype="int64")
         draft_token_num = paddle.to_tensor([2], dtype="int32")
         draft_tokens = paddle.zeros([batch_size, 4], dtype="int64")
@@ -96,7 +99,8 @@ class TestNgramMatchOp(unittest.TestCase):
         ngram_match(
             input_ids,
             input_ids_len,
-            pre_ids,
+            token_ids_all,
+            prompt_lens,
             step_idx,
             draft_token_num,
             draft_tokens,
