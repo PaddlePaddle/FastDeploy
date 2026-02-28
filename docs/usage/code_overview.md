@@ -26,7 +26,8 @@ FastDeploy/
 
 ## I. Core Code Directory (fastdeploy/)
 
-The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports core classes:
+The main entry file `fastdeploy/__init__.py` exports core classes:
+
 - `LLM` - Main entry class, offline inference interface
 - `SamplingParams` - Sampling parameter configuration
 - `ModelRegistry` - Model registry
@@ -38,15 +39,16 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 
 | File | Function | Development Guide |
 |------|----------|-------------------|
-| [engine.py](fastdeploy/engine/engine.py) | `LLMEngine` core engine class, manages scheduler, preprocessor, resource manager | Entry point for modifying engine behavior, adding new components |
-| [async_llm.py](fastdeploy/engine/async_llm.py) | Async LLM interface, `AsyncRequestQueue` request queue management | Async inference, streaming output development |
-| [request.py](fastdeploy/engine/request.py) | Core request data structures: `Request`, `RequestOutput`, `RequestStatus` | Adding request fields, modifying request processing logic |
-| [sampling_params.py](fastdeploy/engine/sampling_params.py) | `SamplingParams` sampling parameter configuration | Adding new sampling strategy parameters |
-| [args_utils.py](fastdeploy/engine/args_utils.py) | `EngineArgs` engine argument parsing | Adding new engine configuration parameters |
-| [resource_manager.py](fastdeploy/engine/resource_manager.py) | GPU/CPU resource management | Resource allocation optimization |
+| `engine.py` | `LLMEngine` core engine class, manages scheduler, preprocessor, resource manager | Entry point for modifying engine behavior, adding new components |
+| `async_llm.py` | Async LLM interface, `AsyncRequestQueue` request queue management | Async inference, streaming output development |
+| `request.py` | Core request data structures: `Request`, `RequestOutput`, `RequestStatus` | Adding request fields, modifying request processing logic |
+| `sampling_params.py` | `SamplingParams` sampling parameter configuration | Adding new sampling strategy parameters |
+| `args_utils.py` | `EngineArgs` engine argument parsing | Adding new engine configuration parameters |
+| `resource_manager.py` | GPU/CPU resource management | Resource allocation optimization |
 
 **Subdirectory**:
-- `sched/` - Core scheduling implementation, contains [resource_manager_v1.py](fastdeploy/engine/sched/resource_manager_v1.py) (**core scheduling logic**)
+
+- `sched/` - Core scheduling implementation, contains `resource_manager_v1.py` (**core scheduling logic**)
 
 ---
 
@@ -58,12 +60,12 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 
 | File/Directory | Function | Development Guide |
 |----------------|----------|-------------------|
-| [model_base.py](fastdeploy/model_executor/models/model_base.py) | `ModelRegistry` model registration base class | **Must read for adding new models** |
-| [deepseek_v3.py](fastdeploy/model_executor/models/deepseek_v3.py) | DeepSeek V3 model | MoE large model reference |
-| [ernie4_5_moe.py](fastdeploy/model_executor/models/ernie4_5_moe.py) | ERNIE 4.5 MoE model | Baidu's flagship model |
-| [ernie4_5_mtp.py](fastdeploy/model_executor/models/ernie4_5_mtp.py) | ERNIE 4.5 MTP multi-token prediction | Speculative decoding model |
-| [qwen2.py](fastdeploy/model_executor/models/qwen2.py) | Qwen2 model | General model reference |
-| [qwen3.py](fastdeploy/model_executor/models/qwen3.py) | Qwen3 model | Latest model reference |
+| `model_base.py` | `ModelRegistry` model registration base class | **Must read for adding new models** |
+| `deepseek_v3.py` | DeepSeek V3 model | MoE large model reference |
+| `ernie4_5_moe.py` | ERNIE 4.5 MoE model | Baidu's flagship model |
+| `ernie4_5_mtp.py` | ERNIE 4.5 MTP multi-token prediction | Speculative decoding model |
+| `qwen2.py` | Qwen2 model | General model reference |
+| `qwen3.py` | Qwen3 model | Latest model reference |
 | `ernie4_5_vl/` | ERNIE 4.5 vision-language model | Multimodal model development reference |
 | `qwen2_5_vl/` | Qwen2.5 VL multimodal model | VL model reference |
 | `paddleocr_vl/` | PaddleOCR VL model | OCR multimodal reference |
@@ -75,10 +77,10 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 | `attention/` | Attention mechanism implementations (flash_attn, append_attn, mla_attn) | **First choice for attention performance optimization** |
 | `moe/` | MoE layer implementations (Cutlass, Triton, DeepGEMM backends) | MoE performance optimization |
 | `quantization/` | Quantization layers (FP8, W4A8, WINT2, Weight-only) | Quantization scheme development |
-| [linear.py](fastdeploy/model_executor/layers/linear.py) | Linear layer implementation | Matrix multiplication optimization |
-| [embeddings.py](fastdeploy/model_executor/layers/embeddings.py) | Embedding layer implementation | Word embedding modification |
-| [normalization.py](fastdeploy/model_executor/layers/normalization.py) | Normalization layers (RMSNorm, LayerNorm) | Normalization optimization |
-| [rotary_embedding.py](fastdeploy/model_executor/layers/rotary_embedding.py) | Rotary Position Encoding ROPE | Position encoding modification |
+| `linear.py` | Linear layer implementation | Matrix multiplication optimization |
+| `embeddings.py` | Embedding layer implementation | Word embedding modification |
+| `normalization.py` | Normalization layers (RMSNorm, LayerNorm) | Normalization optimization |
+| `rotary_embedding.py` | Rotary Position Encoding ROPE | Position encoding modification |
 | `sample/` | Sampler implementation | Sampling strategy development |
 | `backends/` | Hardware backend implementations (cuda, xpu, dcu, hpu, metax, gcu, npu) | **Entry point for new hardware adaptation** |
 
@@ -93,8 +95,9 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 | `ops/` | Python-callable operators (organized by hardware platform) | Operator call entry point |
 
 **Key Files**:
-- [model_base.py](fastdeploy/model_executor/model_base.py) - Model base class, registry definition
-- [pre_and_post_process.py](fastdeploy/model_executor/pre_and_post_process.py) - Pre/post processing utilities
+
+- `model_base.py` - Model base class, registry definition
+- `pre_and_post_process.py` - Pre/post processing utilities
 
 ---
 
@@ -108,18 +111,18 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 
 | File | Function | Development Guide |
 |------|----------|-------------------|
-| [global_scheduler.py](fastdeploy/scheduler/global_scheduler.py) | `GlobalScheduler` distributed scheduler (Redis) | (Being deprecated) |
-| [local_scheduler.py](fastdeploy/scheduler/local_scheduler.py) | `LocalScheduler` local scheduler | (Being deprecated) |
-| [splitwise_scheduler.py](fastdeploy/scheduler/splitwise_scheduler.py) | `SplitwiseScheduler` PD disaggregation scheduling | (Being deprecated, use router) |
-| [dp_scheduler.py](fastdeploy/scheduler/dp_scheduler.py) | Data parallel scheduler | (Being deprecated) |
-| [config.py](fastdeploy/scheduler/config.py) | `SchedulerConfig` scheduling configuration | Scheduling parameter adjustment |
-| [storage.py](fastdeploy/scheduler/storage.py) | Storage adapter, wraps Redis connection | Storage layer modification |
+| `global_scheduler.py` | `GlobalScheduler` distributed scheduler (Redis) | (Being deprecated) |
+| `local_scheduler.py` | `LocalScheduler` local scheduler | (Being deprecated) |
+| `splitwise_scheduler.py` | `SplitwiseScheduler` PD disaggregation scheduling | (Being deprecated, use router) |
+| `dp_scheduler.py` | Data parallel scheduler | (Being deprecated) |
+| `config.py` | `SchedulerConfig` scheduling configuration | Scheduling parameter adjustment |
+| `storage.py` | Storage adapter, wraps Redis connection | Storage layer modification |
 
 **Core Scheduling Implementation** (`engine/sched/`):
 
 | File | Function | Development Guide |
 |------|----------|-------------------|
-| [resource_manager_v1.py](fastdeploy/engine/sched/resource_manager_v1.py) | Core scheduling logic, contains `ScheduledDecodeTask`, `ScheduledPreemptTask` task classes | **First choice for scheduling strategy modification** |
+| `resource_manager_v1.py` | Core scheduling logic, contains `ScheduledDecodeTask`, `ScheduledPreemptTask` task classes | **First choice for scheduling strategy modification** |
 
 ---
 
@@ -129,18 +132,18 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 
 | File | Function | Development Guide |
 |------|----------|-------------------|
-| [llm.py](fastdeploy/entrypoints/llm.py) | `LLM` main entry class, offline inference interface | **Entry point for using FastDeploy** |
-| [engine_client.py](fastdeploy/entrypoints/engine_client.py) | Engine client | Request forwarding logic modification |
+| `llm.py` | `LLM` main entry class, offline inference interface | **Entry point for using FastDeploy** |
+| `engine_client.py` | Engine client | Request forwarding logic modification |
 
 #### 4.1 openai/ - OpenAI Compatible API
 
 | File | Function | Development Guide |
 |------|----------|-------------------|
-| [api_server.py](fastdeploy/entrypoints/openai/api_server.py) | FastAPI server | **Deployment service entry point** |
-| [protocol.py](fastdeploy/entrypoints/openai/protocol.py) | OpenAI protocol definition | API format modification |
-| [serving_chat.py](fastdeploy/entrypoints/openai/serving_chat.py) | Chat Completion API | Chat interface development |
-| [serving_completion.py](fastdeploy/entrypoints/openai/serving_completion.py) | Completion API | Completion interface development |
-| [serving_embedding.py](fastdeploy/entrypoints/openai/serving_embedding.py) | Embedding API | Vectorization interface |
+| `api_server.py` | FastAPI server | **Deployment service entry point** |
+| `protocol.py` | OpenAI protocol definition | API format modification |
+| `serving_chat.py` | Chat Completion API | Chat interface development |
+| `serving_completion.py` | Completion API | Completion interface development |
+| `serving_embedding.py` | Embedding API | Vectorization interface |
 | `tool_parsers/` | Tool call parsers | Function Calling development |
 
 ---
@@ -151,11 +154,11 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 
 | File | Function | Development Guide |
 |------|----------|-------------------|
-| [gpu_model_runner.py](fastdeploy/worker/gpu_model_runner.py) | **GPU model runner** (core inference loop) | **First choice for inference flow modification** |
-| [gpu_worker.py](fastdeploy/worker/gpu_worker.py) | GPU Worker process management | Worker lifecycle management |
-| [xpu_model_runner.py](fastdeploy/worker/xpu_model_runner.py) | XPU model runner | Kunlun chip adaptation |
-| [hpu_model_runner.py](fastdeploy/worker/hpu_model_runner.py) | HPU model runner | Intel HPU adaptation |
-| [worker_process.py](fastdeploy/worker/worker_process.py) | Worker process base class | Process management logic |
+| `gpu_model_runner.py` | **GPU model runner** (core inference loop) | **First choice for inference flow modification** |
+| `gpu_worker.py` | GPU Worker process management | Worker lifecycle management |
+| `xpu_model_runner.py` | XPU model runner | Kunlun chip adaptation |
+| `hpu_model_runner.py` | HPU model runner | Intel HPU adaptation |
+| `worker_process.py` | Worker process base class | Process management logic |
 
 ---
 
@@ -165,12 +168,13 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 
 | File | Function | Development Guide |
 |------|----------|-------------------|
-| [text_processor.py](fastdeploy/input/text_processor.py) | `BaseDataProcessor` text processor base class | Input processing extension |
-| [ernie4_5_processor.py](fastdeploy/input/ernie4_5_processor.py) | ERNIE 4.5 input processor | Baidu model input processing |
-| [ernie4_5_tokenizer.py](fastdeploy/input/ernie4_5_tokenizer.py) | ERNIE 4.5 tokenizer | Tokenization logic modification |
-| [preprocess.py](fastdeploy/input/preprocess.py) | Input preprocessing utilities | Preprocessing flow |
+| `text_processor.py` | `BaseDataProcessor` text processor base class | Input processing extension |
+| `ernie4_5_processor.py` | ERNIE 4.5 input processor | Baidu model input processing |
+| `ernie4_5_tokenizer.py` | ERNIE 4.5 tokenizer | Tokenization logic modification |
+| `preprocess.py` | Input preprocessing utilities | Preprocessing flow |
 
 **Multimodal Processing Subdirectories**:
+
 | Directory | Function |
 |-----------|----------|
 | `ernie4_5_vl_processor/` | ERNIE 4.5 VL image/video processing |
@@ -185,9 +189,9 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 
 | File | Function | Development Guide |
 |------|----------|-------------------|
-| [token_processor.py](fastdeploy/output/token_processor.py) | `TokenProcessor` token output processing | Streaming output, speculative decoding |
-| [pooler.py](fastdeploy/output/pooler.py) | Pooling output processing | Embedding output |
-| [stream_transfer_data.py](fastdeploy/output/stream_transfer_data.py) | Streaming transfer data structure | Data transfer format |
+| `token_processor.py` | `TokenProcessor` token output processing | Streaming output, speculative decoding |
+| `pooler.py` | Pooling output processing | Embedding output |
+| `stream_transfer_data.py` | Streaming transfer data structure | Data transfer format |
 
 ---
 
@@ -197,12 +201,13 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 
 | File | Function | Development Guide |
 |------|----------|-------------------|
-| [prefix_cache_manager.py](fastdeploy/cache_manager/prefix_cache_manager.py) | `PrefixCacheManager` prefix tree cache | **First choice for KV Cache optimization** |
-| [cache_transfer_manager.py](fastdeploy/cache_manager/cache_transfer_manager.py) | KV Cache cross-device transfer | PD disaggregation cache transfer |
-| [cache_data.py](fastdeploy/cache_manager/cache_data.py) | `BlockNode`, `CacheStatus` data structures | Cache data definition |
-| [multimodal_cache_manager.py](fastdeploy/cache_manager/multimodal_cache_manager.py) | Multimodal cache management | Multimodal caching |
+| `prefix_cache_manager.py` | `PrefixCacheManager` prefix tree cache | **First choice for KV Cache optimization** |
+| `cache_transfer_manager.py` | KV Cache cross-device transfer | PD disaggregation cache transfer |
+| `cache_data.py` | `BlockNode`, `CacheStatus` data structures | Cache data definition |
+| `multimodal_cache_manager.py` | Multimodal cache management | Multimodal caching |
 
 **Subdirectory**:
+
 - `transfer_factory/` - Cache transfer factory (IPC, RDMA)
 
 ---
@@ -213,13 +218,13 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 
 | File | Function | Development Guide |
 |------|----------|-------------------|
-| [base.py](fastdeploy/platforms/base.py) | `Platform` base class, `_Backend` enum | **Entry point for new hardware adaptation** |
-| [cuda.py](fastdeploy/platforms/cuda.py) | NVIDIA CUDA platform | GPU optimization |
-| [xpu.py](fastdeploy/platforms/xpu.py) | Baidu Kunlun XPU platform | Kunlun chip adaptation |
-| [dcu.py](fastdeploy/platforms/dcu.py) | AMD DCU (ROCm) platform | AMD GPU adaptation |
-| [maca.py](fastdeploy/platforms/maca.py) | MetaX GPU (MACA) platform | Biren GPU adaptation |
-| [intel_hpu.py](fastdeploy/platforms/intel_hpu.py) | Intel HPU platform | Intel Gaudi adaptation |
-| [iluvatar.py](fastdeploy/platforms/iluvatar.py) | Iluvatar GPU platform | Iluvatar adaptation |
+| `base.py` | `Platform` base class, `_Backend` enum | **Entry point for new hardware adaptation** |
+| `cuda.py` | NVIDIA CUDA platform | GPU optimization |
+| `xpu.py` | Baidu Kunlun XPU platform | Kunlun chip adaptation |
+| `dcu.py` | AMD DCU (ROCm) platform | AMD GPU adaptation |
+| `maca.py` | MetaX GPU (MACA) platform | Biren GPU adaptation |
+| `intel_hpu.py` | Intel HPU platform | Intel Gaudi adaptation |
+| `iluvatar.py` | Iluvatar GPU platform | Iluvatar adaptation |
 
 ---
 
@@ -229,9 +234,9 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 
 | File | Function | Development Guide |
 |------|----------|-------------------|
-| [metrics.py](fastdeploy/metrics/metrics.py) | Prometheus metric definition | Adding new monitoring metrics |
-| [stats.py](fastdeploy/metrics/stats.py) | ZMQ metric statistics | Distributed monitoring |
-| [trace_util.py](fastdeploy/metrics/trace_util.py) | OpenTelemetry distributed tracing | Link tracing |
+| `metrics.py` | Prometheus metric definition | Adding new monitoring metrics |
+| `stats.py` | ZMQ metric statistics | Distributed monitoring |
+| `trace_util.py` | OpenTelemetry distributed tracing | Link tracing |
 
 ---
 
@@ -258,9 +263,9 @@ The main entry file [fastdeploy/__init__.py](fastdeploy/__init__.py) exports cor
 
 | File | Function | Development Guide |
 |------|----------|-------------------|
-| [config.py](fastdeploy/config.py) | `FDConfig` main configuration class | **Entry point for configuration parameter modification** |
-| [envs.py](fastdeploy/envs.py) | Environment variable configuration | Adding new environment variables |
-| [utils.py](fastdeploy/utils.py) | General utility functions | Utility function reuse |
+| `config.py` | `FDConfig` main configuration class | **Entry point for configuration parameter modification** |
+| `envs.py` | Environment variable configuration | Adding new environment variables |
+| `utils.py` | General utility functions | Utility function reuse |
 
 ---
 
@@ -292,10 +297,11 @@ custom_ops/
 | `sample_kernels/` | Sampling operators | Sampling performance optimization |
 | `speculate_decoding/` | Speculative decoding operators | Speculative decoding optimization |
 | `cutlass_kernels/` | CUTLASS kernels | High-performance GEMM |
-| [cpp_extensions.cc](custom_ops/gpu_ops/cpp_extensions.cc) | C++ extension entry | **Entry point for new operator registration** |
-| [append_attention.cu](custom_ops/gpu_ops/append_attention.cu) | Append Attention core | Attention core implementation |
+| `cpp_extensions.cc` | C++ extension entry | **Entry point for new operator registration** |
+| `append_attention.cu` | Append Attention core | Attention core implementation |
 
 **Key Operator Files**:
+
 - `fused_rotary_position_encoding.cu` - Fused rotary position encoding
 - `multi_head_latent_attention.cu` - MLA attention
 - `per_token_quant_fp8.cu` - FP8 quantization
@@ -363,19 +369,24 @@ tests/
 ## V. Other Directories
 
 ### docs/ - Documentation
+
 - Usage documentation, API documentation, architecture design documents
 
 ### examples/ - Example Code
+
 - Model usage examples, deployment examples
 
 ### benchmarks/ - Performance Benchmarks
+
 - Performance test scripts, benchmark data
 
 ### tools/ - Development Tools
+
 - `codestyle/` - Code style checking tools
 - `dockerfile/` - Docker build tools
 
 ### dockerfiles/ - Docker Images
+
 - Dockerfiles for each platform runtime environment
 
 ---
@@ -383,32 +394,37 @@ tests/
 ## VI. Quick Development Guide
 
 ### Adding a New Model
-1. Reference [models/model_base.py](fastdeploy/model_executor/models/model_base.py) to understand model registration mechanism
+
+1. Reference `models/model_base.py` to understand model registration mechanism
 2. Create new model file under `models/`
 3. Add corresponding input processor under `input/`
 4. Add tests under `tests/model_executor/`
 
 ### Adding a New Operator
+
 1. Implement CUDA operator under `custom_ops/gpu_ops/`
 2. Register operator in `cpp_extensions.cc`
 3. Add Python wrapper under `model_executor/ops/gpu/`
 4. Add tests under `tests/operators/`
 
 ### New Hardware Platform Adaptation
-1. Reference [platforms/base.py](fastdeploy/platforms/base.py) to create new platform class
+
+1. Reference `platforms/base.py` to create new platform class
 2. Create hardware operator directory under `custom_ops/`
 3. Create backend implementation under `model_executor/layers/backends/`
 4. Create model runner under `worker/`
 
 ### Optimizing Inference Performance
+
 1. Attention optimization: `custom_ops/gpu_ops/append_attn/`
 2. MoE optimization: `custom_ops/gpu_ops/moe/`
 3. Graph optimization: `fastdeploy/model_executor/graph_optimization/`
 
 ### PD Disaggregation Deployment
-1. Router: [router/router.py](fastdeploy/router/router.py) (Python implementation, recommended)
+
+1. Router: `router/router.py` (Python implementation, recommended)
 2. High-performance router: `golang_router/` (Go implementation, better PD inter-scheduling performance)
-3. Cache transfer: [cache_manager/cache_transfer_manager.py](fastdeploy/cache_manager/cache_transfer_manager.py)
+3. Cache transfer: `cache_manager/cache_transfer_manager.py`
 
 ---
 

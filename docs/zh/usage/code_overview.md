@@ -26,7 +26,8 @@ FastDeploy/
 
 ## 一、核心代码目录 (fastdeploy/)
 
-主入口文件 [fastdeploy/__init__.py](fastdeploy/__init__.py) 导出核心类：
+主入口文件 `fastdeploy/__init__.py` 导出核心类：
+
 - `LLM` - 主入口类，离线推理接口
 - `SamplingParams` - 采样参数配置
 - `ModelRegistry` - 模型注册器
@@ -38,15 +39,16 @@ FastDeploy/
 
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
-| [engine.py](fastdeploy/engine/engine.py) | `LLMEngine` 核心引擎类，管理调度器、预处理器、资源管理器 | 修改引擎行为、添加新组件的入口 |
-| [async_llm.py](fastdeploy/engine/async_llm.py) | 异步 LLM 接口，`AsyncRequestQueue` 请求队列管理 | 异步推理、流式输出相关开发 |
-| [request.py](fastdeploy/engine/request.py) | 请求核心数据结构：`Request`, `RequestOutput`, `RequestStatus` | 新增请求字段、修改请求处理逻辑 |
-| [sampling_params.py](fastdeploy/engine/sampling_params.py) | `SamplingParams` 采样参数配置 | 添加新采样策略参数 |
-| [args_utils.py](fastdeploy/engine/args_utils.py) | `EngineArgs` 引擎参数解析 | 新增引擎配置参数 |
-| [resource_manager.py](fastdeploy/engine/resource_manager.py) | GPU/CPU 资源管理 | 资源分配优化 |
+| `engine.py` | `LLMEngine` 核心引擎类，管理调度器、预处理器、资源管理器 | 修改引擎行为、添加新组件的入口 |
+| `async_llm.py` | 异步 LLM 接口，`AsyncRequestQueue` 请求队列管理 | 异步推理、流式输出相关开发 |
+| `request.py` | 请求核心数据结构：`Request`, `RequestOutput`, `RequestStatus` | 新增请求字段、修改请求处理逻辑 |
+| `sampling_params.py` | `SamplingParams` 采样参数配置 | 添加新采样策略参数 |
+| `args_utils.py` | `EngineArgs` 引擎参数解析 | 新增引擎配置参数 |
+| `resource_manager.py` | GPU/CPU 资源管理 | 资源分配优化 |
 
 **子目录**:
-- `sched/` - 调度核心实现，包含 [resource_manager_v1.py](fastdeploy/engine/sched/resource_manager_v1.py) (**核心调度逻辑所在**)
+
+- `sched/` - 调度核心实现，包含 `resource_manager_v1.py` (**核心调度逻辑所在**)
 
 ---
 
@@ -58,12 +60,12 @@ FastDeploy/
 
 | 文件/目录 | 功能 | 开发指引 |
 |-----------|------|----------|
-| [model_base.py](fastdeploy/model_executor/models/model_base.py) | `ModelRegistry` 模型注册基类 | **添加新模型必看** |
-| [deepseek_v3.py](fastdeploy/model_executor/models/deepseek_v3.py) | DeepSeek V3 模型 | MoE 大模型参考 |
-| [ernie4_5_moe.py](fastdeploy/model_executor/models/ernie4_5_moe.py) | ERNIE 4.5 MoE 模型 | 百度主力模型 |
-| [ernie4_5_mtp.py](fastdeploy/model_executor/models/ernie4_5_mtp.py) | ERNIE 4.5 MTP 多token预测 | 推测解码模型 |
-| [qwen2.py](fastdeploy/model_executor/models/qwen2.py) | Qwen2 模型 | 通用模型参考 |
-| [qwen3.py](fastdeploy/model_executor/models/qwen3.py) | Qwen3 模型 | 最新模型参考 |
+| `model_base.py` | `ModelRegistry` 模型注册基类 | **添加新模型必看** |
+| `deepseek_v3.py` | DeepSeek V3 模型 | MoE 大模型参考 |
+| `ernie4_5_moe.py` | ERNIE 4.5 MoE 模型 | 百度主力模型 |
+| `ernie4_5_mtp.py` | ERNIE 4.5 MTP 多token预测 | 推测解码模型 |
+| `qwen2.py` | Qwen2 模型 | 通用模型参考 |
+| `qwen3.py` | Qwen3 模型 | 最新模型参考 |
 | `ernie4_5_vl/` | ERNIE 4.5 视觉语言模型 | 多模态模型开发参考 |
 | `qwen2_5_vl/` | Qwen2.5 VL 多模态模型 | VL 模型参考 |
 | `paddleocr_vl/` | PaddleOCR VL 模型 | OCR 多模态参考 |
@@ -75,10 +77,10 @@ FastDeploy/
 | `attention/` | 注意力机制实现 (flash_attn, append_attn, mla_attn) | **优化注意力性能首选** |
 | `moe/` | MoE 层实现 (Cutlass, Triton, DeepGEMM 后端) | MoE 性能优化 |
 | `quantization/` | 量化层 (FP8, W4A8, WINT2, Weight-only) | 量化方案开发 |
-| [linear.py](fastdeploy/model_executor/layers/linear.py) | 线性层实现 | 矩阵乘法优化 |
-| [embeddings.py](fastdeploy/model_executor/layers/embeddings.py) | 嵌入层实现 | 词嵌入修改 |
-| [normalization.py](fastdeploy/model_executor/layers/normalization.py) | 归一化层 (RMSNorm, LayerNorm) | 归一化优化 |
-| [rotary_embedding.py](fastdeploy/model_executor/layers/rotary_embedding.py) | 旋转位置编码 ROPE | 位置编码修改 |
+| `linear.py` | 线性层实现 | 矩阵乘法优化 |
+| `embeddings.py` | 嵌入层实现 | 词嵌入修改 |
+| `normalization.py` | 归一化层 (RMSNorm, LayerNorm) | 归一化优化 |
+| `rotary_embedding.py` | 旋转位置编码 ROPE | 位置编码修改 |
 | `sample/` | 采样器实现 | 采样策略开发 |
 | `backends/` | 硬件后端实现 (cuda, xpu, dcu, hpu, metax, gcu, npu) | **新硬件适配入口** |
 
@@ -93,8 +95,9 @@ FastDeploy/
 | `ops/` | Python 可调用算子 (按硬件平台组织) | 算子调用入口 |
 
 **关键文件**:
-- [model_base.py](fastdeploy/model_executor/model_base.py) - 模型基类、注册器定义
-- [pre_and_post_process.py](fastdeploy/model_executor/pre_and_post_process.py) - 前后处理工具
+
+- `model_base.py` - 模型基类、注册器定义
+- `pre_and_post_process.py` - 前后处理工具
 
 ---
 
@@ -108,18 +111,18 @@ FastDeploy/
 
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
-| [global_scheduler.py](fastdeploy/scheduler/global_scheduler.py) | `GlobalScheduler` 分布式调度器 (Redis) | (逐步废弃) |
-| [local_scheduler.py](fastdeploy/scheduler/local_scheduler.py) | `LocalScheduler` 本地调度器 | (逐步废弃) |
-| [splitwise_scheduler.py](fastdeploy/scheduler/splitwise_scheduler.py) | `SplitwiseScheduler` PD 分离调度 | (逐步废弃，请使用 router) |
-| [dp_scheduler.py](fastdeploy/scheduler/dp_scheduler.py) | 数据并行调度器 | (逐步废弃) |
-| [config.py](fastdeploy/scheduler/config.py) | `SchedulerConfig` 调度配置 | 调度参数调整 |
-| [storage.py](fastdeploy/scheduler/storage.py) | 存储适配器，封装 Redis 连接 | 存储层修改 |
+| `global_scheduler.py` | `GlobalScheduler` 分布式调度器 (Redis) | (逐步废弃) |
+| `local_scheduler.py` | `LocalScheduler` 本地调度器 | (逐步废弃) |
+| `splitwise_scheduler.py` | `SplitwiseScheduler` PD 分离调度 | (逐步废弃，请使用 router) |
+| `dp_scheduler.py` | 数据并行调度器 | (逐步废弃) |
+| `config.py` | `SchedulerConfig` 调度配置 | 调度参数调整 |
+| `storage.py` | 存储适配器，封装 Redis 连接 | 存储层修改 |
 
 **调度核心实现** (`engine/sched/`):
 
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
-| [resource_manager_v1.py](fastdeploy/engine/sched/resource_manager_v1.py) | 核心调度逻辑，包含 `ScheduledDecodeTask`、`ScheduledPreemptTask` 等任务类 | **调度策略修改首选** |
+| `resource_manager_v1.py` | 核心调度逻辑，包含 `ScheduledDecodeTask`、`ScheduledPreemptTask` 等任务类 | **调度策略修改首选** |
 
 ---
 
@@ -129,18 +132,18 @@ FastDeploy/
 
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
-| [llm.py](fastdeploy/entrypoints/llm.py) | `LLM` 主入口类，离线推理接口 | **使用 FastDeploy 入口** |
-| [engine_client.py](fastdeploy/entrypoints/engine_client.py) | 引擎客户端 | 请求转发逻辑修改 |
+| `llm.py` | `LLM` 主入口类，离线推理接口 | **使用 FastDeploy 入口** |
+| `engine_client.py` | 引擎客户端 | 请求转发逻辑修改 |
 
 #### 4.1 openai/ - OpenAI 兼容 API
 
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
-| [api_server.py](fastdeploy/entrypoints/openai/api_server.py) | FastAPI 服务器 | **部署服务入口** |
-| [protocol.py](fastdeploy/entrypoints/openai/protocol.py) | OpenAI 协议定义 | API 格式修改 |
-| [serving_chat.py](fastdeploy/entrypoints/openai/serving_chat.py) | Chat Completion API | 聊天接口开发 |
-| [serving_completion.py](fastdeploy/entrypoints/openai/serving_completion.py) | Completion API | 补全接口开发 |
-| [serving_embedding.py](fastdeploy/entrypoints/openai/serving_embedding.py) | Embedding API | 向量化接口 |
+| `api_server.py` | FastAPI 服务器 | **部署服务入口** |
+| `protocol.py` | OpenAI 协议定义 | API 格式修改 |
+| `serving_chat.py` | Chat Completion API | 聊天接口开发 |
+| `serving_completion.py` | Completion API | 补全接口开发 |
+| `serving_embedding.py` | Embedding API | 向量化接口 |
 | `tool_parsers/` | 工具调用解析器 | Function Calling 开发 |
 
 ---
@@ -151,11 +154,11 @@ FastDeploy/
 
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
-| [gpu_model_runner.py](fastdeploy/worker/gpu_model_runner.py) | **GPU 模型运行器** (核心推理循环) | **推理流程修改首选** |
-| [gpu_worker.py](fastdeploy/worker/gpu_worker.py) | GPU Worker 进程管理 | Worker 生命周期管理 |
-| [xpu_model_runner.py](fastdeploy/worker/xpu_model_runner.py) | XPU 模型运行器 | 昆仑芯片适配 |
-| [hpu_model_runner.py](fastdeploy/worker/hpu_model_runner.py) | HPU 模型运行器 | Intel HPU 适配 |
-| [worker_process.py](fastdeploy/worker/worker_process.py) | Worker 进程基类 | 进程管理逻辑 |
+| `gpu_model_runner.py` | **GPU 模型运行器** (核心推理循环) | **推理流程修改首选** |
+| `gpu_worker.py` | GPU Worker 进程管理 | Worker 生命周期管理 |
+| `xpu_model_runner.py` | XPU 模型运行器 | 昆仑芯片适配 |
+| `hpu_model_runner.py` | HPU 模型运行器 | Intel HPU 适配 |
+| `worker_process.py` | Worker 进程基类 | 进程管理逻辑 |
 
 ---
 
@@ -165,12 +168,13 @@ FastDeploy/
 
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
-| [text_processor.py](fastdeploy/input/text_processor.py) | `BaseDataProcessor` 文本处理器基类 | 输入处理扩展 |
-| [ernie4_5_processor.py](fastdeploy/input/ernie4_5_processor.py) | ERNIE 4.5 输入处理器 | 百度模型输入处理 |
-| [ernie4_5_tokenizer.py](fastdeploy/input/ernie4_5_tokenizer.py) | ERNIE 4.5 分词器 | 分词逻辑修改 |
-| [preprocess.py](fastdeploy/input/preprocess.py) | 输入预处理工具 | 预处理流程 |
+| `text_processor.py` | `BaseDataProcessor` 文本处理器基类 | 输入处理扩展 |
+| `ernie4_5_processor.py` | ERNIE 4.5 输入处理器 | 百度模型输入处理 |
+| `ernie4_5_tokenizer.py` | ERNIE 4.5 分词器 | 分词逻辑修改 |
+| `preprocess.py` | 输入预处理工具 | 预处理流程 |
 
 **多模态处理子目录**:
+
 | 目录 | 功能 |
 |------|------|
 | `ernie4_5_vl_processor/` | ERNIE 4.5 VL 图像/视频处理 |
@@ -185,9 +189,9 @@ FastDeploy/
 
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
-| [token_processor.py](fastdeploy/output/token_processor.py) | `TokenProcessor` Token 输出处理 | 流式输出、推测解码 |
-| [pooler.py](fastdeploy/output/pooler.py) | 池化输出处理 | Embedding 输出 |
-| [stream_transfer_data.py](fastdeploy/output/stream_transfer_data.py) | 流式传输数据结构 | 数据传输格式 |
+| `token_processor.py` | `TokenProcessor` Token 输出处理 | 流式输出、推测解码 |
+| `pooler.py` | 池化输出处理 | Embedding 输出 |
+| `stream_transfer_data.py` | 流式传输数据结构 | 数据传输格式 |
 
 ---
 
@@ -197,12 +201,13 @@ FastDeploy/
 
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
-| [prefix_cache_manager.py](fastdeploy/cache_manager/prefix_cache_manager.py) | `PrefixCacheManager` 前缀树缓存 | **KV Cache 优化首选** |
-| [cache_transfer_manager.py](fastdeploy/cache_manager/cache_transfer_manager.py) | KV Cache 跨设备传输 | PD 分离缓存传输 |
-| [cache_data.py](fastdeploy/cache_manager/cache_data.py) | `BlockNode`, `CacheStatus` 数据结构 | 缓存数据定义 |
-| [multimodal_cache_manager.py](fastdeploy/cache_manager/multimodal_cache_manager.py) | 多模态缓存管理 | 多模态缓存 |
+| `prefix_cache_manager.py` | `PrefixCacheManager` 前缀树缓存 | **KV Cache 优化首选** |
+| `cache_transfer_manager.py` | KV Cache 跨设备传输 | PD 分离缓存传输 |
+| `cache_data.py` | `BlockNode`, `CacheStatus` 数据结构 | 缓存数据定义 |
+| `multimodal_cache_manager.py` | 多模态缓存管理 | 多模态缓存 |
 
 **子目录**:
+
 - `transfer_factory/` - 缓存传输工厂 (IPC, RDMA)
 
 ---
@@ -213,13 +218,13 @@ FastDeploy/
 
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
-| [base.py](fastdeploy/platforms/base.py) | `Platform` 基类，`_Backend` 枚举 | **新硬件适配入口** |
-| [cuda.py](fastdeploy/platforms/cuda.py) | NVIDIA CUDA 平台 | GPU 优化 |
-| [xpu.py](fastdeploy/platforms/xpu.py) | 百度昆仑 XPU 平台 | 昆仑芯片适配 |
-| [dcu.py](fastdeploy/platforms/dcu.py) | AMD DCU (ROCm) 平台 | AMD GPU 适配 |
-| [maca.py](fastdeploy/platforms/maca.py) | MetaX GPU (MACA) 平台 | 壁仞 GPU 适配 |
-| [intel_hpu.py](fastdeploy/platforms/intel_hpu.py) | Intel HPU 平台 | Intel Gaudi 适配 |
-| [iluvatar.py](fastdeploy/platforms/iluvatar.py) | 天数智芯 GPU 平台 | 天数智芯适配 |
+| `base.py` | `Platform` 基类，`_Backend` 枚举 | **新硬件适配入口** |
+| `cuda.py` | NVIDIA CUDA 平台 | GPU 优化 |
+| `xpu.py` | 百度昆仑 XPU 平台 | 昆仑芯片适配 |
+| `dcu.py` | AMD DCU (ROCm) 平台 | AMD GPU 适配 |
+| `maca.py` | MetaX GPU (MACA) 平台 | 壁仞 GPU 适配 |
+| `intel_hpu.py` | Intel HPU 平台 | Intel Gaudi 适配 |
+| `iluvatar.py` | 天数智芯 GPU 平台 | 天数智芯适配 |
 
 ---
 
@@ -229,9 +234,9 @@ FastDeploy/
 
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
-| [metrics.py](fastdeploy/metrics/metrics.py) | Prometheus 指标定义 | 新增监控指标 |
-| [stats.py](fastdeploy/metrics/stats.py) | ZMQ 指标统计 | 分布式监控 |
-| [trace_util.py](fastdeploy/metrics/trace_util.py) | OpenTelemetry 分布式追踪 | 链路追踪 |
+| `metrics.py` | Prometheus 指标定义 | 新增监控指标 |
+| `stats.py` | ZMQ 指标统计 | 分布式监控 |
+| `trace_util.py` | OpenTelemetry 分布式追踪 | 链路追踪 |
 
 ---
 
@@ -258,9 +263,9 @@ FastDeploy/
 
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
-| [config.py](fastdeploy/config.py) | `FDConfig` 总配置类 | **配置参数修改入口** |
-| [envs.py](fastdeploy/envs.py) | 环境变量配置 | 新增环境变量 |
-| [utils.py](fastdeploy/utils.py) | 通用工具函数 | 工具函数复用 |
+| `config.py` | `FDConfig` 总配置类 | **配置参数修改入口** |
+| `envs.py` | 环境变量配置 | 新增环境变量 |
+| `utils.py` | 通用工具函数 | 工具函数复用 |
 
 ---
 
@@ -292,10 +297,11 @@ custom_ops/
 | `sample_kernels/` | 采样算子 | 采样性能优化 |
 | `speculate_decoding/` | 推测解码算子 | 推测解码优化 |
 | `cutlass_kernels/` | CUTLASS 内核 | 高性能 GEMM |
-| [cpp_extensions.cc](custom_ops/gpu_ops/cpp_extensions.cc) | C++ 扩展入口 | **新增算子注册入口** |
-| [append_attention.cu](custom_ops/gpu_ops/append_attention.cu) | Append Attention 核心 | 注意力核心实现 |
+| `cpp_extensions.cc` | C++ 扩展入口 | **新增算子注册入口** |
+| `append_attention.cu` | Append Attention 核心 | 注意力核心实现 |
 
 **关键算子文件**:
+
 - `fused_rotary_position_encoding.cu` - 融合旋转位置编码
 - `multi_head_latent_attention.cu` - MLA 注意力
 - `per_token_quant_fp8.cu` - FP8 量化
@@ -363,19 +369,24 @@ tests/
 ## 五、其他目录
 
 ### docs/ - 文档
+
 - 使用文档、API 文档、架构设计文档
 
 ### examples/ - 示例代码
+
 - 各模型使用示例、部署示例
 
 ### benchmarks/ - 性能基准
+
 - 性能测试脚本、基准数据
 
 ### tools/ - 开发工具
+
 - `codestyle/` - 代码风格检查工具
 - `dockerfile/` - Docker 构建工具
 
 ### dockerfiles/ - Docker 镜像
+
 - 各平台运行环境 Dockerfile
 
 ---
@@ -383,32 +394,37 @@ tests/
 ## 六、开发指引速查
 
 ### 添加新模型
-1. 参考 [models/model_base.py](fastdeploy/model_executor/models/model_base.py) 了解模型注册机制
+
+1. 参考 `models/model_base.py` 了解模型注册机制
 2. 在 `models/` 下创建新模型文件
 3. 在 `input/` 下添加对应的输入处理器
 4. 在 `tests/model_executor/` 下添加测试
 
 ### 添加新算子
+
 1. 在 `custom_ops/gpu_ops/` 下实现 CUDA 算子
 2. 在 `cpp_extensions.cc` 中注册算子
 3. 在 `model_executor/ops/gpu/` 下添加 Python 封装
 4. 在 `tests/operators/` 下添加测试
 
 ### 新硬件平台适配
-1. 参考 [platforms/base.py](fastdeploy/platforms/base.py) 创建新平台类
+
+1. 参考 `platforms/base.py` 创建新平台类
 2. 在 `custom_ops/` 下创建硬件算子目录
 3. 在 `model_executor/layers/backends/` 下创建后端实现
 4. 在 `worker/` 下创建模型运行器
 
 ### 优化推理性能
+
 1. 注意力优化：`custom_ops/gpu_ops/append_attn/`
 2. MoE 优化：`custom_ops/gpu_ops/moe/`
 3. 图优化：`fastdeploy/model_executor/graph_optimization/`
 
 ### PD 分离部署
-1. 路由器：[router/router.py](fastdeploy/router/router.py) (Python 实现，推荐)
+
+1. 路由器：`router/router.py` (Python 实现，推荐)
 2. 高性能路由：`golang_router/` (Go 实现，PD 间调度性能更优)
-3. 缓存传输：[cache_manager/cache_transfer_manager.py](fastdeploy/cache_manager/cache_transfer_manager.py)
+3. 缓存传输：`cache_manager/cache_transfer_manager.py`
 
 ---
 
