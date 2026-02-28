@@ -32,12 +32,14 @@ def offline_infer_check():
         "Hello, my name is",
     ]
     sampling_params = SamplingParams(temperature=0.8, top_p=0.00001, max_tokens=16)
+    graph_optimization_config = {"use_cudagraph": False}
     llm = LLM(
         model="/model_data/ERNIE_300B_4L",
         tensor_parallel_size=2,
         max_model_len=8192,
         quantization="wint8",
         block_size=16,
+        graph_optimization_config=graph_optimization_config,
     )
     outputs = llm.generate(prompts, sampling_params)
 
