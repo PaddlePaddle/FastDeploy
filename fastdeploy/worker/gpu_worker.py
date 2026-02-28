@@ -73,6 +73,7 @@ class GpuWorker(WorkerBase):
                 not self.parallel_config.disable_custom_all_reduce
                 and self.parallel_config.tensor_parallel_size > 1
                 and paddle.is_compiled_with_cuda()
+                and not ((self.model_config.architectures or [""])[0].startswith("PaddleFormers"))
             ):
                 from fastdeploy.distributed.communication import use_custom_allreduce
 

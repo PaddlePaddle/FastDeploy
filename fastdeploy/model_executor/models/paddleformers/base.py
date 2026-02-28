@@ -109,7 +109,11 @@ def fastdeploy_append_attention_forward(
     if scaling is not None:
         self_attn.scale = float(scaling)
 
-    # 统一获取 heads 信息
+    tp_size = 1
+    if hasattr(self_attn, "fd_config") and hasattr(self_attn.fd_config, "parallel_config"):
+        tp_size = int(getattr(self_attn.fd_config.parallel_config, "tensor_parallel_size", 1) or 1)
+
+    # Resolve head-related metadata.
     num_heads = (
         getattr(module, "num_heads", None)
         or getattr(config, "num_attention_heads", None)
@@ -125,7 +129,7 @@ def fastdeploy_append_attention_forward(
     num_heads = int(num_heads) if num_heads is not None else None
     num_kv_heads = int(num_kv_heads) if num_kv_heads is not None else None
 
-    # 仅支持 3D(HSD/SHD) 或 4D(BHSD/BSHD, 且 B=1) 输入
+    # Support only 3D (HSD/SHD) or 4D (BHSD/BSHD with B=1) inputs.
     def squeeze_to_3d(t: paddle.Tensor, name: str) -> paddle.Tensor:
         if t.ndim == 4:
             if int(t.shape[0]) != 1:
@@ -144,9 +148,11 @@ def fastdeploy_append_attention_forward(
             return False
         if actual_heads == expected_heads:
             return True
-        return actual_heads > 0 and expected_heads % actual_heads == 0
+        if tp_size > 1 and expected_heads % tp_size == 0:
+            expected_heads //= tp_size
+        return actual_heads == expected_heads
 
-    # 使用 Q/K 共同判断布局；歧义时默认 hsd（兼容 Paddle 常见路径）
+    # Determine layout from Q/K/V head axes; keep default behavior on ambiguity.
     is_hsd = (
         heads_match(int(q.shape[0]), num_heads)
         and heads_match(int(k.shape[0]), num_kv_heads)
@@ -172,7 +178,7 @@ def fastdeploy_append_attention_forward(
             f"heads={num_heads}/{num_kv_heads}"
         )
 
-    # Q/K/V flatten 后序列长度必须一致
+    # Sequence lengths must match after flattening Q/K/V.
     q_seq, k_seq, v_seq = int(q_flat.shape[0]), int(k_flat.shape[0]), int(v_flat.shape[0])
     if not (q_seq == k_seq == v_seq):
         raise ValueError(
@@ -180,7 +186,7 @@ def fastdeploy_append_attention_forward(
             f"raw query={list(query.shape)}, key={list(key.shape)}, value={list(value.shape)}."
         )
 
-    # 若 forward_meta 带了 ids_remove_padding，则强校验 Q 序列长度
+    # If forward_meta provides ids_remove_padding, strictly validate Q sequence length.
     ids_remove_padding = getattr(forward_meta, "ids_remove_padding", None)
     if ids_remove_padding is not None:
         expected_seq = int(ids_remove_padding.shape[0])
@@ -658,19 +664,19 @@ class PaddleFormersModelBase(nn.Layer):
         process_fn = process_weights_after_loading(sublayers_dict, self.fd_config)
         params_dict = dict(self.named_parameters())
 
-        # === 前缀别名处理 ===
+        # === Checkpoint prefix alias handling ===
         model_type = str(getattr(self.paddleformers_config, "model_type", "") or "").lower()
         ckpt_prefix_aliases = {model_type, model_type.replace("-", "_"), model_type.replace("_", "")} - {""}
         ckpt_alias_markers = (".layers.", ".embed_tokens.", ".lm_head.", ".norm.", ".final_layernorm.", ".rotary_emb.")
 
         def resolve_param_name(weight_name: str) -> str | None:
-            # 动态收集前缀别名
+            # Collect prefix aliases dynamically.
             if "." in weight_name:
                 prefix = weight_name.split(".", 1)[0]
                 if prefix not in {"model", "lm_head"} and any(m in weight_name for m in ckpt_alias_markers):
                     ckpt_prefix_aliases.add(prefix)
 
-            # 生成候选名称
+            # Generate candidate parameter names.
             candidates = [weight_name]
             candidates.append(weight_name[6:] if weight_name.startswith("model.") else "model." + weight_name)
             if "." in weight_name:
@@ -680,7 +686,7 @@ class PaddleFormersModelBase(nn.Layer):
 
             return next((c for c in candidates if c in params_dict), None)
 
-        # === 权重映射配置 ===
+        # === Stacked parameter mapping config ===
         stacked_params_mapping = [
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
@@ -688,7 +694,7 @@ class PaddleFormersModelBase(nn.Layer):
         if self._use_fused_ffn:
             stacked_params_mapping += [("up_gate_proj", "gate_proj", "gate"), ("up_gate_proj", "up_proj", "up")]
 
-        # === QKV 融合相关 ===
+        # === QKV fusion helpers ===
         mc = self.fd_config.model_config
         model_format = str(getattr(mc, "model_format", "") or "").lower()
         qkv_buffer, qkv_bias_buffer = {}, {}
@@ -706,7 +712,7 @@ class PaddleFormersModelBase(nn.Layer):
             q_out, kv_out = num_heads * head_dim, num_kv_heads * head_dim
 
             if is_bias:
-                # 校验 bias 维度和形状
+                # Validate bias rank and shape.
                 if q.ndim != 1 or k.ndim != 1 or v.ndim != 1:
                     raise ValueError(f"Unexpected qkv bias dims: q={q.shape}, k={k.shape}, v={v.shape}; expected 1D.")
                 if q.shape[0] != q_out or k.shape[0] != kv_out or v.shape[0] != kv_out:
@@ -723,7 +729,7 @@ class PaddleFormersModelBase(nn.Layer):
                     axis=1,
                 ).reshape([-1])
 
-            # 校验 weight 形状和 model_format
+            # Validate weight shape and model_format.
             q_shape, k_shape, v_shape = [int(x) for x in q.shape], [int(x) for x in k.shape], [int(x) for x in v.shape]
             torch_layout = (
                 q_shape == [q_out, hidden_size]
@@ -750,7 +756,7 @@ class PaddleFormersModelBase(nn.Layer):
             else:
                 raise ValueError(f"Unsupported model_format: {model_format}. Expect 'torch' or 'paddle'.")
 
-            # 转置后校验
+            # Validate normalized shapes after transpose.
             if q.shape[0] != hidden_size or k.shape[0] != hidden_size or v.shape[0] != hidden_size:
                 raise ValueError(
                     f"QKV shape mismatch after normalization: q={list(q.shape)}, k={list(k.shape)}, v={list(v.shape)}."
@@ -767,7 +773,7 @@ class PaddleFormersModelBase(nn.Layer):
 
             return fused.T if model_format == "torch" else fused
 
-        # === 辅助函数 ===
+        # === Helper functions ===
         def load_param(name: str, tensor: paddle.Tensor, shard_id=None, no_transpose: bool = False):
             param = params_dict[name]
             if no_transpose and hasattr(param, "weight_need_transpose"):
@@ -776,11 +782,11 @@ class PaddleFormersModelBase(nn.Layer):
             weight_loader(param, tensor, shard_id)
             process_fn(re.sub(r"\.(weight|bias)$", "", name), param)
 
-        # === 主循环 ===
+        # === Main loading loop ===
         loaded_count = skipped_count = 0
 
         for weight_name, weight in weights:
-            # 1. QKV 融合处理
+            # 1. Handle QKV fusion.
             if self._use_fused_qkv and (qkv_info := parse_qkv_name(weight_name)):
                 layer_key, proj_type, qkv_param_name = qkv_info
                 is_bias = ".bias" in weight_name
@@ -810,7 +816,7 @@ class PaddleFormersModelBase(nn.Layer):
                         logger.warning(f"Stacked mapping: {weight_name} -> NOT FOUND")
                     break
             else:
-                # 3. 直接加载
+                # 3. Direct load.
                 resolved = resolve_param_name(weight_name)
                 if resolved:
                     try:
@@ -824,7 +830,7 @@ class PaddleFormersModelBase(nn.Layer):
 
         logger.info(f"Weight loading: {loaded_count} loaded, {skipped_count} skipped")
 
-        # === tie_word_embeddings 处理 ===
+        # === tie_word_embeddings handling ===
         if hasattr(self, "lm_head") and getattr(self, "tie_word_embeddings", False):
             embed = self.model.get_input_embeddings()
             if hasattr(embed, "embeddings") and hasattr(embed.embeddings, "weight"):
