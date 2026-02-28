@@ -176,12 +176,23 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             )
         else:
             layer.weight_shape.reverse()
-            weight_scale_inv_shape = [
-                (layer.weight_shape[0] + self.quant_config.weight_block_size[0] - 1)
-                // self.quant_config.weight_block_size[0],
-                (layer.weight_shape[1] + self.quant_config.weight_block_size[1] - 1)
-                // self.quant_config.weight_block_size[1],
-            ]
+            if not self.quant_config.deepgemm_scale_ue8m0:
+                weight_scale_inv_shape = [
+                    (layer.weight_shape[0] + self.quant_config.weight_block_size[0] - 1)
+                    // self.quant_config.weight_block_size[0],
+                    (layer.weight_shape[1] + self.quant_config.weight_block_size[1] - 1)
+                    // self.quant_config.weight_block_size[1],
+                ]
+            else:
+                weight_scale_inv_shape = [
+                    layer.weight_shape[0],
+                    deep_gemm.utils.align(
+                        (layer.weight_shape[1] + self.quant_config.weight_block_size[1] - 1)
+                        // self.quant_config.weight_block_size[1],
+                        4,
+                    )
+                    // 4,
+                ]
 
             if self.model_format != "torch" and layer.fd_config.load_config.load_choices == "default_v1":
                 weight_shape = layer.weight_shape[::-1]
@@ -206,8 +217,9 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
 
             layer.weight_scale_inv = layer.create_parameter(
                 shape=weight_scale_inv_shape,
-                dtype="float32",
+                dtype="float32" if not self.quant_config.deepgemm_scale_ue8m0 else "int32",
                 is_bias=False,
+                default_initializer=paddle.nn.initializer.Constant(0),
             )
 
             set_weight_attrs(
