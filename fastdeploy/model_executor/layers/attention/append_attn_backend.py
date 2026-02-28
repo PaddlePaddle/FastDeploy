@@ -522,6 +522,12 @@ class AppendAttentionBackend(AttentionBackend):
         Returns:
             True if any request has prefix cache hit (prefix_lens > 0)
         """
+        # During CUDA graph capture, we cannot use .item() as it causes
+        # CUDA synchronization which is not allowed during capture.
+        # Return False early to avoid the synchronization.
+        if getattr(forward_meta, "step_use_cudagraph", False):
+            return False
+
         prefix_lens = getattr(forward_meta, "prefix_lens", None)
         if prefix_lens is None:
             return False

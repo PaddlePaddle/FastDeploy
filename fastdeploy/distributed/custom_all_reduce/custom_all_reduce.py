@@ -214,7 +214,16 @@ class CustomAllreduce:
             yield
         finally:
             self.capturing = False
-            self.register_graph_buffers()
+            # Only register graph buffers if the stream is not capturing.
+            # If an exception occurred during capture, the stream may still
+            # be in capturing mode, and we cannot call all_gather_object
+            # which would trigger CUDA operations not allowed during capture.
+            lib = cuda_wrapper.CudaRTLibrary()
+            stream = paddle.device.current_stream()
+            stream_capturing = lib.cudaStreamIsCapturing(stream)
+            if stream_capturing.value == 0:
+                # 0 is cudaStreamCaptureStatusNone: The stream is not capturing.
+                self.register_graph_buffers()
 
     def register_graph_buffers(self):
         """
