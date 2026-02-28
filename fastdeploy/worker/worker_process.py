@@ -931,6 +931,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--moe_gate_fp32",
+        action="store_true",
+        help="Flag to specify dtype of gate as FP32",
+    )
+
+    parser.add_argument(
         "--max_encoder_cache",
         type=int,
         help="Maximum encoder cache tokens(use 0 to disable).",
