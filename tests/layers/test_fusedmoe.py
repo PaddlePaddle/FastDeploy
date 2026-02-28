@@ -41,7 +41,16 @@ from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
 )
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.worker_process import init_distributed_environment
-from tests.utils import check_fp8_support
+
+
+def _check_fp8_support():
+    """Check if current GPU supports FP8 (SM89+)."""
+    try:
+        prop = paddle.device.cuda.get_device_properties()
+        return prop.major * 10 + prop.minor >= 89
+    except Exception:
+        return False
+
 
 paddle.set_default_dtype("bfloat16")
 
@@ -556,7 +565,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
         moe_layer.load_state_dict(state_dict)
 
 
-@unittest.skipIf(not check_fp8_support(), "FP8 quantization (block_wise_fp8) requires SM89+ (Ada Lovelace or newer)")
+@unittest.skipIf(not _check_fp8_support(), "FP8 quantization (block_wise_fp8) requires SM89+ (Ada Lovelace or newer)")
 class TestFusedMoE(unittest.TestCase):
     def setUp(self) -> None:
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
