@@ -91,7 +91,7 @@ from fastdeploy.model_executor.pre_and_post_process import (
 )
 
 if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
-    from fastdeploy.spec_decode import MTPProposer, NgramProposer
+    from fastdeploy.spec_decode import MTPProposer, NgramProposer, SuffixProposer
 
 import zmq
 
@@ -99,6 +99,7 @@ from fastdeploy import envs
 from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
+from fastdeploy.logger.deterministic_logger import DeterministicLogger
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
@@ -211,6 +212,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.restore_chunked_prefill_request = dict()
 
+        # Initialize deterministic logger (only when deterministic debugging is enabled)
+        self.deterministic_logger = (
+            DeterministicLogger(self.share_inputs)
+            if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE
+            else None
+        )
+
         # Initialize attention Backend
         # NOTE(gonshaotian): Currently, all attention layers share one attention backend instance.
         # In the future, we will expand it as a list.
@@ -262,6 +270,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.last_sampler_output = None
         self.last_post_process_event = None
         self.last_token_num = -1
+
         self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule and (
             not self.speculative_decoding
         )
@@ -390,6 +399,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.device_id,
                 self.share_inputs,
             )
+        elif self.speculative_method == "suffix":
+            self.proposer = SuffixProposer(self.fd_config)
         else:
             self.proposer = None
 
@@ -775,6 +786,14 @@ class GPUModelRunner(ModelRunnerBase):
                     prompt_token_ids = request.prompt_token_ids
                 input_ids = prompt_token_ids + request.output_token_ids
                 prompt_len = len(prompt_token_ids)
+
+                # Log complete input_ids for input determinism verification
+                # Note: Only current request info is logged here; batch info is logged during forward
+                if self.deterministic_logger is not None:
+                    self.deterministic_logger.log_prefill_input(
+                        request.request_id, idx, prefill_start_index, prefill_end_index, input_ids
+                    )
+
                 self.share_inputs["prompt_ids"][idx : idx + 1, :prompt_len] = np.array(prompt_token_ids, dtype="int64")
                 logger.debug(
                     f"Handle prefill request {request} at idx {idx}, "
@@ -810,6 +829,13 @@ class GPUModelRunner(ModelRunnerBase):
                 self.forward_batch_reqs_list[idx] = request
                 has_prefill_task = True
 
+                if self.speculative_decoding and self.speculative_method == "suffix" and self.proposer is not None:
+                    if isinstance(request.prompt_token_ids, np.ndarray):
+                        prompt_token_ids = request.prompt_token_ids.tolist()
+                    else:
+                        prompt_token_ids = request.prompt_token_ids
+                    self.proposer.start_request(idx, request.request_id, prompt_token_ids)
+
                 # Routing Replay
                 if self.fd_config.routing_replay_config.enable_routing_replay:
                     if prefill_start_index == 0:
@@ -820,6 +846,13 @@ class GPUModelRunner(ModelRunnerBase):
                 ):  # In PD, we continue to decode after P generate first token
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                     self.exist_prefill_flag = False
+                    if self.speculative_decoding:
+                        # D speculate decode, seq_lens_this_time = length + 1
+                        self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length + 1
+                        self.share_inputs["draft_tokens"][idx : idx + 1, 0 : length + 1] = paddle.to_tensor(
+                            request.draft_token_ids[0 : length + 1],
+                            dtype="int64",
+                        )
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
                 encoder_block_num = len(request.block_tables)
@@ -1062,6 +1095,15 @@ class GPUModelRunner(ModelRunnerBase):
                     return res
                 else:
                     return default_value
+
+            # Start suffix decoding request if using suffix proposer
+            if self.speculative_decoding and self.speculative_method == "suffix" and self.proposer is not None:
+                if isinstance(request.prompt_token_ids, np.ndarray):
+                    prompt_token_ids = request.prompt_token_ids.tolist()
+                else:
+                    prompt_token_ids = request.prompt_token_ids
+                self.proposer.start_request(request.request_id, prompt_token_ids)
+                self.proposer.update_request_mapping(request.request_id, idx)
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
@@ -1635,6 +1677,10 @@ class GPUModelRunner(ModelRunnerBase):
         encoder_block_shape_q = 64
         decoder_block_shape_q = 16
 
+        # Deterministic mode: use deterministic_split_kv_size to ensure batch-invariant attention
+        if envs.FD_DETERMINISTIC_MODE:
+            decoder_block_shape_q = envs.FD_DETERMINISTIC_SPLIT_KV_SIZE
+
         res_buffer = allocate_launch_related_buffer(
             max_batch_size=self.scheduler_config.max_num_seqs,
             max_model_len=self.model_config.max_model_len,
@@ -1768,6 +1814,7 @@ class GPUModelRunner(ModelRunnerBase):
         self,
         hidden_states: paddle.Tensor,
         model_output: paddle.Tensor,
+        batch_size: int,
         accept_all_drafts=False,
         reject_all_drafts=False,
     ) -> paddle.Tensor:
@@ -1876,8 +1923,7 @@ class GPUModelRunner(ModelRunnerBase):
                     is_dummy_run=True,
                 )
             else:
-                self.proposer.run(share_inputs=self.share_inputs)
-
+                self.proposer.prepare_dummy_speculative_drafts(share_inputs=self.share_inputs, batch_size=batch_size)
         return sampler_output
 
     def _dummy_run(
@@ -1954,7 +2000,7 @@ class GPUModelRunner(ModelRunnerBase):
                     (self.share_inputs["batch_id_per_token_output"] if self.speculative_decoding else None),
                     (self.share_inputs["cu_seqlens_q_output"] if self.speculative_decoding else None),
                 )
-                self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
+                self._dummy_sampler_run(hidden_states, model_output, batch_size, accept_all_drafts, reject_all_drafts)
 
             # 7. Updata 'infer_seed' and step_cuda()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
@@ -2064,22 +2110,19 @@ class GPUModelRunner(ModelRunnerBase):
                     logger.info(
                         f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
                     )
-            elif self.speculative_decoding and self.speculative_method == "mtp":
+            elif self.speculative_decoding:
                 # Capture Target Model without bsz 1
                 for capture_size in sorted(capture_sizes, reverse=True):
+                    expected_decode_len = self.speculative_config.num_speculative_tokens * 2 + 1
                     self._dummy_run(
-                        num_tokens=(
-                            self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
-                            if self.scheduler_config.splitwise_role == "decode"
-                            else self.fd_config.get_max_chunk_tokens()
-                        ),
+                        num_tokens=self.fd_config.get_max_chunk_tokens(),
                         batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
                         in_capturing=True,
-                        expected_decode_len=self.speculative_config.num_speculative_tokens * 2 + 1,
+                        expected_decode_len=expected_decode_len,
                         accept_all_drafts=True,
                     )
                     logger.info(
-                        f"Warm up the model with the num_tokens:{capture_size}, expected_decode_len:{self.speculative_config.num_speculative_tokens}"
+                        f"Warm up the model with the num_tokens:{capture_size}, expected_decode_len:{expected_decode_len}"
                     )
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
@@ -2284,6 +2327,9 @@ class GPUModelRunner(ModelRunnerBase):
         num_running_requests: int = None,
         last_token_num: int = -1,
     ) -> None:
+        if self.deterministic_logger is not None:
+            self.deterministic_logger.log_batch_start(model_forward_batch)
+
         # 1. Prepare inputs of model and sampler.
         p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
 
@@ -2408,7 +2454,21 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
             # 4. Compute logits, Sample
+            if self.deterministic_logger is not None:
+                # Log MD5 of hidden_states (model output)
+                self.deterministic_logger.log_tensor_md5s(
+                    {"hidden_states": hidden_states},
+                    forward_batch_reqs_list=self.forward_batch_reqs_list,
+                    stage="hidden_states",
+                )
+
             logits = self.model.compute_logits(hidden_states)
+
+            if self.deterministic_logger is not None:
+                # Log MD5 of logits (before sampling)
+                self.deterministic_logger.log_tensor_md5s(
+                    {"logits": logits}, forward_batch_reqs_list=self.forward_batch_reqs_list, stage="logits"
+                )
 
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
@@ -2425,6 +2485,14 @@ class GPUModelRunner(ModelRunnerBase):
                     self.sampling_metadata,
                     p_done_idxs,
                 )
+
+                if self.deterministic_logger is not None:
+                    # Log MD5 of sampling results
+                    self.deterministic_logger.log_tensor_md5s(
+                        {"sampled_token_ids": sampler_output.sampled_token_ids},
+                        forward_batch_reqs_list=self.forward_batch_reqs_list,
+                        stage="sampled_tokens",
+                    )
 
                 if (
                     self.enable_logprob
@@ -2536,6 +2604,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self.proposer.run(
                         full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
                     )
+                elif self.speculative_method == "suffix":
+                    self.proposer.run(share_inputs=self.share_inputs)
                 else:
                     self.proposer.run(share_inputs=self.share_inputs)
 

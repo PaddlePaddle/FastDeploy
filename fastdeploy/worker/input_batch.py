@@ -43,6 +43,11 @@ class InputBatch:
         for key, value in values.items():
             setattr(self, key, value)
 
+    def get(self, key, default=None):
+        if hasattr(self, key):
+            return getattr(self, key)
+        return default
+
     def pop(self, key, default=None):
         """
         Pop an attribute, similar to dict's pop method
@@ -267,7 +272,7 @@ class InputBatch:
             self.accept_num = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
             self.draft_tokens = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
-                fill_value=-1,
+                fill_value=0,
                 dtype="int64",
             )
 
@@ -293,7 +298,7 @@ class InputBatch:
             # For V1_KVCACHE_SCHEDULER
             self.step_draft_tokens = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
-                fill_value=0,
+                fill_value=-1,
                 dtype="int64",
             )
             self.step_seq_lens_this_time = paddle.full([max_num_seqs, 1], 0, dtype="int32")

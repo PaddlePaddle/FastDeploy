@@ -246,7 +246,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         """
         Marlin compute Fused MoE.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
         token_num = x.shape[0]
         top_k = layer.top_k
         top_k = layer.top_k
