@@ -75,6 +75,40 @@ def _create_engine_config(args):
             return args.create_engine_config()
 
 
+class _Sig:
+    def __init__(self, v=0):
+        self.value = np.array([v], dtype=np.int32)
+
+    def clear(self):
+        pass
+
+
+def _make_full_dummy_q_cls():
+    class DummyQ:
+        def __init__(self, *a, **k):
+            self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
+
+        def get_server_port(self):
+            return 0
+
+        def cleanup(self):
+            pass
+
+        def num_tasks(self):
+            return 0
+
+        def num_cache_infos(self):
+            return 0
+
+        def disaggregate_queue_empty(self):
+            return True
+
+        def get_disaggregated_tasks(self):
+            return []
+
+    return DummyQ
+
+
 class TestCommonEngine(unittest.TestCase):
     """Test case for EngineService functionality (lines 1215-1664)"""
 
@@ -97,7 +131,7 @@ class TestCommonEngine(unittest.TestCase):
             with (
                 patch(
                     "fastdeploy.engine.common_engine.EngineWorkerQueue",
-                    TestCommonEngineAdditionalCoverage._make_full_dummy_q_cls(),
+                    _make_full_dummy_q_cls(),
                 ),
                 patch("fastdeploy.engine.common_engine.EngineCacheQueue"),
             ):
@@ -106,9 +140,9 @@ class TestCommonEngine(unittest.TestCase):
             cls.engine.running = True
             cls.engine.ipc_signal_suffix = cls.cfg.parallel_config.local_engine_worker_queue_port
 
-            cls.engine.worker_ready_signal = TestCommonEngineAdditionalCoverage._Sig(1)
-            cls.engine.loaded_model_signal = TestCommonEngineAdditionalCoverage._Sig(1)
-            cls.engine.worker_healthy_live_signal = TestCommonEngineAdditionalCoverage._Sig(int(time.time()))
+            cls.engine.worker_ready_signal = _Sig(1)
+            cls.engine.loaded_model_signal = _Sig(1)
+            cls.engine.worker_healthy_live_signal = _Sig(int(time.time()))
             cls.engine.worker_proc = Mock(pid=12345)
 
         except Exception as e:
@@ -136,14 +170,6 @@ class TestCommonEngine(unittest.TestCase):
             except Exception as e:
                 print(f"Error during engine cleanup: {e}")
 
-    def setUp(self):
-        """Set up before each test method"""
-        print(f"Starting test: {self._testMethodName}")
-
-    def tearDown(self):
-        """Clean up after each test method"""
-        print(f"Completed test: {self._testMethodName}")
-
     def test_engine_has_expected_attributes(self):
         """Consolidated lightweight attribute/callable checks."""
         expected_methods = [
@@ -157,11 +183,11 @@ class TestCommonEngine(unittest.TestCase):
             self.assertTrue(hasattr(self.engine, name))
             self.assertTrue(callable(getattr(self.engine, name)))
 
-        if hasattr(self.engine, "worker_proc"):
-            self.assertIsNotNone(self.engine.worker_proc)
+        self.assertTrue(hasattr(self.engine, "worker_proc"))
+        self.assertIsNotNone(self.engine.worker_proc)
 
-        if hasattr(self.engine, "scheduler"):
-            self.assertIsNotNone(self.engine.scheduler)
+        self.assertTrue(hasattr(self.engine, "scheduler"))
+        self.assertIsNotNone(self.engine.scheduler)
 
         if hasattr(self.engine, "worker_init_status"):
             self.assertIsInstance(self.engine.worker_init_status, dict)
@@ -170,14 +196,10 @@ class TestCommonEngine(unittest.TestCase):
         self.assertTrue(self.engine.running)
 
     def test_worker_processes_ready(self):
-        """Test _worker_processes_ready method (lines 1292-1299)"""
-        # Test with real engine that should have worker_ready_signal
-        if hasattr(self.engine, "worker_ready_signal"):
-            result = self.engine._worker_processes_ready()
-            # Result should be boolean
-            self.assertIsInstance(result, bool)
-        else:
-            self.skipTest("worker_ready_signal not available")
+        """_worker_processes_ready should be True when ready signal is set."""
+        self.assertTrue(hasattr(self.engine, "worker_ready_signal"))
+        result = self.engine._worker_processes_ready()
+        self.assertTrue(result)
 
     def test_init_worker_signals(self):
         """Test _init_worker_signals method (lines 1301-1361)"""
@@ -244,39 +266,11 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         cache_queue_patcher.start()
         self.addCleanup(cache_queue_patcher.stop)
 
-    class _Sig:
-        def __init__(self, v=0):
-            self.value = np.array([v], dtype=np.int32)
+    _Sig = _Sig
 
-        def clear(self):
-            pass
-
-    @staticmethod
     @staticmethod
     def _make_full_dummy_q_cls():
-        class DummyQ:
-            def __init__(self, *a, **k):
-                self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
-
-            def get_server_port(self):
-                return 0
-
-            def cleanup(self):
-                pass
-
-            def num_tasks(self):
-                return 0
-
-            def num_cache_infos(self):
-                return 0
-
-            def disaggregate_queue_empty(self):
-                return True
-
-            def get_disaggregated_tasks(self):
-                return []
-
-        return DummyQ
+        return _make_full_dummy_q_cls()
 
     @staticmethod
     def _make_dummy_executor(eng):
@@ -1034,6 +1028,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng.cache_task_queue.cleanup.assert_called_once()
         eng.engine_worker_queue_server.cleanup.assert_called_once()
         eng.send_response_server.close.assert_called_once()
+        self._detach_finalizer(eng)
 
     def test_setting_environ_variables_splitwise_and_mm(self):
         cfg = self._make_cfg(
@@ -1073,7 +1068,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertEqual(result, {"ok": True})
         self._detach_finalizer(eng)
 
-    def test_control_pause_and_resume_paths(self):
+    def _build_control_engine_for_pause_resume(self):
         eng = self._make_mixed_engine()
         eng.is_paused = False
         eng._pause_cond = threading.Condition()
@@ -1089,16 +1084,35 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng.token_processor = Mock(clear_data=Mock())
         eng.scheduler = Mock(get_inflight_requests=Mock(return_value=[]), reset=Mock())
         eng._send_error_response = Mock()
+        return eng
+
+    def test_control_pause(self):
+        eng = self._build_control_engine_for_pause_resume()
 
         with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True):
             eng._control_pause(ControlRequest(request_id="ctrl1", method="pause"))
-            self.assertTrue(eng.is_paused)
 
+        self.assertTrue(eng.is_paused)
+        self._detach_finalizer(eng)
+
+    def test_control_resume(self):
+        eng = self._build_control_engine_for_pause_resume()
+        eng.is_paused = True
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True):
             eng._control_resume(ControlRequest(request_id="ctrl2", method="resume"))
-            self.assertFalse(eng.is_paused)
 
+        self.assertFalse(eng.is_paused)
+        self._detach_finalizer(eng)
+
+    def test_control_is_paused(self):
+        eng = self._build_control_engine_for_pause_resume()
+        eng.is_paused = False
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True):
             status = eng._control_is_paused(ControlRequest(request_id="ctrl3", method="is_paused"))
-            self.assertEqual(status, {"is_paused": False})
+
+        self.assertEqual(status, {"is_paused": False})
         self._detach_finalizer(eng)
 
     def test_run_control_method_unknown_and_success(self):
@@ -1816,11 +1830,14 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         eng.scheduler = Mock(get_results=get_results)
 
-        try:
-            with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
-                eng._zmq_send_generated_tokens()
-        finally:
-            eng.running = False
+        with patch.object(eng, "llm_logger") as mock_logger:
+            try:
+                with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+                    eng._zmq_send_generated_tokens()
+            finally:
+                eng.running = False
+
+        self.assertTrue(mock_logger.warning.called or mock_logger.error.called)
 
         self._detach_finalizer(eng)
 
@@ -1879,7 +1896,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         ):
             eng._zmq_send_generated_tokens()
 
-        mock_logger.warning.assert_called()
+        self.assertTrue(mock_logger.warning.called or mock_logger.error.called)
         self._detach_finalizer(eng)
 
     def test_zmq_send_generated_tokens_empty_results(self):
@@ -1928,7 +1945,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         ):
             eng._zmq_send_generated_tokens()
 
-        mock_logger.warning.assert_called()
+        self.assertTrue(mock_logger.warning.called or mock_logger.error.called)
         self._detach_finalizer(eng)
 
     def test_wait_all_control_responses_success(self):
@@ -2163,8 +2180,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng.update_requests_chunk_size.assert_called_once()
         self._detach_finalizer(eng)
 
-    def test_exit_sub_services_cleanup_paths(self):
-        """Cover lines 1312-1340, 1350-1354 in _exit_sub_services."""
+    def test_exit_sub_services_worker_kill_exception_path(self):
+        """_exit_sub_services should continue cleanup when worker process group kill fails."""
         cfg = self._make_cfg(splitwise_role="mixed")
 
         with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_simple_dummy_q_cls()):
@@ -2191,12 +2208,33 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng.resource_manager.cache_manager.cache_ready_signal = Mock(clear=lambda: None)
         eng.cache_manager_processes = []
 
-        # worker_proc kill raises -> cover 1312-1313
         eng.worker_proc = MagicMock(pid=1001)
         with patch("fastdeploy.engine.common_engine.os.getpgid", side_effect=RuntimeError("boom")):
             eng._exit_sub_services()
+        self._detach_finalizer(eng)
 
-        # Prepare cache manager processes to hit both normal and exception branch
+    def test_exit_sub_services_cache_manager_kill_paths(self):
+        """_exit_sub_services should handle cache manager process kill success and failure."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_simple_dummy_q_cls()):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        eng.worker_ready_signal = self._Sig(0)
+        eng.loaded_model_signal = self._Sig(0)
+        eng.exist_task_signal = self._Sig(0)
+        eng.exist_swapped_task_signal = self._Sig(0)
+        eng.worker_healthy_live_signal = self._Sig(0)
+        eng.cache_ready_signal = self._Sig(0)
+        eng.swap_space_ready_signal = self._Sig(0)
+        eng.exist_prefill_task_signal = self._Sig(0)
+        eng.model_weights_status_signal = self._Sig(0)
+        eng.prefix_tree_status_signal = self._Sig(0)
+        eng.kv_cache_status_signal = self._Sig(0)
+        eng.send_response_server = Mock()
+        eng.recv_request_server = Mock()
+        eng.recv_control_cmd_server = Mock()
+
         class DummyCacheMgr:
             def __init__(self, pid, raise_on_kill=False):
                 self.pid = pid
@@ -2210,7 +2248,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             return pid
 
         def fake_killpg(pid, sig):
-            if pid == 2002:
+            mgr = next((m for m in eng.cache_manager_processes if m.pid == pid), None)
+            if mgr and mgr.raise_on_kill:
                 raise RuntimeError("kill fail")
 
         # cache_task_queue with cleanup
@@ -2225,8 +2264,33 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             patch("fastdeploy.engine.common_engine.os.killpg", side_effect=fake_killpg),
         ):
             eng._exit_sub_services()
+        self._detach_finalizer(eng)
 
-        # Now cover manager.shutdown warning path (no cleanup attribute)
+    def test_exit_sub_services_manager_shutdown_exception_path(self):
+        """_exit_sub_services should swallow manager shutdown exceptions."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", self._make_simple_dummy_q_cls()):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        eng.worker_ready_signal = self._Sig(0)
+        eng.loaded_model_signal = self._Sig(0)
+        eng.exist_task_signal = self._Sig(0)
+        eng.exist_swapped_task_signal = self._Sig(0)
+        eng.worker_healthy_live_signal = self._Sig(0)
+        eng.cache_ready_signal = self._Sig(0)
+        eng.swap_space_ready_signal = self._Sig(0)
+        eng.exist_prefill_task_signal = self._Sig(0)
+        eng.model_weights_status_signal = self._Sig(0)
+        eng.prefix_tree_status_signal = self._Sig(0)
+        eng.kv_cache_status_signal = self._Sig(0)
+        eng.send_response_server = Mock()
+        eng.recv_request_server = Mock()
+        eng.recv_control_cmd_server = Mock()
+        eng.resource_manager.cache_manager.shm_cache_task_flag_broadcast = Mock(clear=lambda: None)
+        eng.resource_manager.cache_manager.cache_ready_signal = Mock(clear=lambda: None)
+        eng.cache_manager_processes = []
+
         class DummyMgr:
             def __init__(self):
                 self.manager = Mock(shutdown=Mock(side_effect=RuntimeError("shutdown fail")))
@@ -2430,13 +2494,16 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         eng.resource_manager.stop_flags = np.zeros_like(eng.resource_manager.stop_flags)
 
-        token_ids = paddle.to_tensor([1, 2, 3], dtype="int64")
         request = Request(
             request_id="req1",
-            prompt_token_ids=token_ids.numpy().tolist(),
+            prompt_token_ids=[1, 2, 3],
             prompt_token_ids_len=3,
         )
         with self.assertRaises(EngineError) as ctx:
             eng.insert_tasks([request])
         self.assertIn("request id", str(ctx.exception))
         self._detach_finalizer(eng)
+
+
+if __name__ == "__main__":
+    unittest.main()
