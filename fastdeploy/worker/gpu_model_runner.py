@@ -488,6 +488,62 @@ class GPUModelRunner(ModelRunnerBase):
         for i, mm_hash in enumerate(mm_hashes):
             self.encoder_cache[mm_hash] = image_features_lst[i].cpu()
 
+    def _calc_image_feature_range(self, mm_inputs: dict, prefill_start: int, prefill_end: int) -> tuple[int, int]:
+        """Calculate the image feature index range for the given prefill range.
+
+        When prefix cache hits, only part of the tokens need to be recomputed.
+        The image features must be sliced to match the prefill token range
+        [prefill_start, prefill_end).
+
+        Args:
+            mm_inputs (dict): Multimodal inputs containing mm_positions.
+            prefill_start (int): Start token index of the PREFILL range.
+            prefill_end (int): End token index of the PREFILL range.
+
+        Returns:
+            tuple: (feature_start, feature_end) index range into the full
+                image feature tensor.
+        """
+        if mm_inputs is None or "mm_positions" not in mm_inputs:
+            return (0, 0)
+
+        mm_positions = mm_inputs.get("mm_positions", [])
+        if not mm_positions:
+            return (0, 0)
+
+        # 完整 PREFILL 场景：返回全部图像特征
+        if prefill_start == 0:
+            total_image_tokens = sum(pos.length for pos in mm_positions)
+            return (0, total_image_tokens)
+
+        # Prefix Cache 命中场景：计算 prefill 范围内的图像 token 对应的特征范围
+        feature_start = -1
+        feature_end = 0
+        cumulative_tokens = 0
+
+        for pos in mm_positions:
+            img_token_start = pos.offset
+            img_token_end = pos.offset + pos.length
+
+            # 计算当前图像与 prefill 范围的重叠部分
+            overlap_start = max(img_token_start, prefill_start)
+            overlap_end = min(img_token_end, prefill_end)
+
+            if overlap_start < overlap_end:
+                # 存在重叠
+                local_start = overlap_start - img_token_start  # 在当前图像特征中的起始位置
+                local_end = overlap_end - img_token_start  # 在当前图像特征中的结束位置
+
+                if feature_start == -1:
+                    feature_start = cumulative_tokens + local_start
+                feature_end = cumulative_tokens + local_end
+
+            cumulative_tokens += pos.length
+
+        if feature_start == -1:
+            feature_start = 0
+        return (feature_start, feature_end)
+
     def _apply_mm_inputs(self, request: Request, multi_vision_inputs: dict, rope_3d_position_ids: dict):
         """
         Apply multimodal inputs to share_inputs
@@ -593,7 +649,14 @@ class GPUModelRunner(ModelRunnerBase):
 
         batch_pooling_params = []
         self.share_inputs["image_features"] = None
-        multi_vision_inputs = {"images_lst": [], "grid_thw_lst": [], "vit_position_ids_lst": [], "cu_seqlens": [0]}
+        multi_vision_inputs = {
+            "images_lst": [],
+            "grid_thw_lst": [],
+            "vit_position_ids_lst": [],
+            "cu_seqlens": [0],
+            "feature_slice_infos": [],  # per-request (global_start, global_end) 切片信息
+            "_feature_offset": 0,  # 当前 request 在 batch feature tensor 中的累积偏移
+        }
         rope_3d_position_ids = {
             "position_ids_idx": [],
             "position_ids_lst": [],
@@ -636,6 +699,28 @@ class GPUModelRunner(ModelRunnerBase):
                 length = prefill_end_index - prefill_start_index
                 if self.enable_mm:
                     self._apply_mm_inputs(request, multi_vision_inputs, rope_3d_position_ids)
+                    if request.with_image:
+                        global_offset = multi_vision_inputs["_feature_offset"]
+                        req_feature_count = sum(
+                            pos.length
+                            for pos in request.multimodal_inputs.get("mm_positions", [])
+                        )
+                        if prefill_start_index > 0:
+                            slice_start, slice_end = self._calc_image_feature_range(
+                                request.multimodal_inputs, prefill_start_index, prefill_end_index
+                            )
+                            multi_vision_inputs["feature_slice_infos"].append(
+                                (global_offset + slice_start, global_offset + slice_end)
+                            )
+                            logger.debug(
+                                f"Prefix Cache hit: prefill_range=[{prefill_start_index}, {prefill_end_index}), "
+                                f"image_feature_range=[{global_offset + slice_start}, {global_offset + slice_end})"
+                            )
+                        else:
+                            multi_vision_inputs["feature_slice_infos"].append(
+                                (global_offset, global_offset + req_feature_count)
+                            )
+                        multi_vision_inputs["_feature_offset"] = global_offset + req_feature_count
 
                 if not self.is_pooling_model:
                     if request.get("enable_thinking") is not None:
@@ -799,9 +884,26 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["logits_processors_args"][idx] = request.get("logits_processors_args") or {}
 
             self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
-
         if len(multi_vision_inputs["images_lst"]) > 0:
-            self.share_inputs["image_features"] = self.extract_vision_features(multi_vision_inputs)
+            full_image_features = self.extract_vision_features(multi_vision_inputs)
+
+            slice_infos = multi_vision_inputs.get("feature_slice_infos", [])
+            if slice_infos:
+                sliced_parts = []
+                for s, e in slice_infos:
+                    if e > s:
+                        sliced_parts.append(full_image_features[s:e])
+                if sliced_parts:
+                    self.share_inputs["image_features"] = paddle.concat(sliced_parts, axis=0)
+                    logger.debug(
+                        f"Sliced image features: full_shape={full_image_features.shape}, "
+                        f"sliced_shape={self.share_inputs['image_features'].shape}, "
+                        f"num_requests={len(slice_infos)}"
+                    )
+                else:
+                    self.share_inputs["image_features"] = full_image_features[0:0]
+            else:
+                self.share_inputs["image_features"] = full_image_features
 
         if len(rope_3d_position_ids["position_ids_idx"]) > 0:
             packed_position_ids = paddle.to_tensor(
