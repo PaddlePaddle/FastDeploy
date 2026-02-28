@@ -296,7 +296,8 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         token_num = x.shape[0]
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         top_k = layer.top_k
@@ -683,7 +684,8 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         token_num = x.shape[0]
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         moe_intermediate_size = layer.moe_intermediate_size
@@ -976,7 +978,8 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         token_num = x.shape[0]
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         moe_intermediate_size = layer.moe_intermediate_size
@@ -1656,7 +1659,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             else:
                 getattr(layer, weight_name).copy_(weight, False)
                 scale_param = getattr(layer, scale_name)
-                scale_param.data = scale.transpose([0, 2, 1]).contiguous().mT()
+                scale_param.data = scale.transpose([0, 2, 1]).contiguous().transpose([0, 2, 1])
 
         if self.quant_config.is_checkpoint_bf16:
             # dynamic quantize
@@ -1737,7 +1740,8 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         Triton compute Fused MoE.
         """
 
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         moe_intermediate_size = layer.moe_intermediate_size

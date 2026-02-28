@@ -23,10 +23,12 @@ from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     MergedReplicatedLinear,
+    QKVGateParallelLinear,
     QKVParallelLinear,
 )
 from fastdeploy.model_executor.layers.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    deep_gemm,
     quant_weight_ue8m0,
     transform_scale_ue8m0,
 )
@@ -43,9 +45,9 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 
 if current_platform.is_cuda():
     try:
-        fp8_gemm_nt = fastdeploy.model_executor.layers.quantization.fp8_utils.deep_gemm.fp8_gemm_nt
+        fp8_gemm_nt = deep_gemm.fp8_gemm_nt
     except:
-        fp8_gemm_nt = fastdeploy.model_executor.layers.quantization.fp8_utils.deep_gemm.gemm_fp8_fp8_bf16_nt
+        fp8_gemm_nt = deep_gemm.gemm_fp8_fp8_bf16_nt
 else:
     fp8_gemm_nt = None
 
@@ -159,6 +161,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
                 isinstance(layer, MergedColumnParallelLinear)
                 or isinstance(layer, QKVParallelLinear)
                 or isinstance(layer, MergedReplicatedLinear)
+                or isinstance(layer, QKVGateParallelLinear)
             ):
                 tensor_output_dim = (self.model_format == "torch") ^ quant_attrs.get("output_dim", True)
                 quant_attrs = {
