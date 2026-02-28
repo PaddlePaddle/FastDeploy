@@ -59,7 +59,6 @@ FastDeploy提供[Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop
 ```
 export FD_LOG_DIR="log_router"
 /usr/local/bin/fd-router \
-    --host 0.0.0.0 \
     --port 30000 \
 ```
 

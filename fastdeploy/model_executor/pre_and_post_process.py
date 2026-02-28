@@ -281,7 +281,8 @@ def post_process_normal(
             model_output.seq_lens_this_time,
             model_output.eos_token_id,
             model_output.next_tokens,
-            model_output.pre_ids,
+            model_output.token_ids_all,
+            model_output.prompt_lens,
             model_output.step_idx,
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
@@ -417,7 +418,8 @@ def post_process_specualate(
     speculate_set_stop_value_multi_seqs(
         model_output.accept_tokens,
         model_output.accept_num,
-        model_output.pre_ids,
+        model_output.token_ids_all,
+        model_output.prompt_lens,
         model_output.step_idx,
         model_output.stop_flags,
         model_output.seq_lens_this_time,
@@ -495,10 +497,11 @@ def post_process_specualate(
                 save_each_rank,
             )
 
-    # Update pre_ids through accept tokens
+    # Update token_ids_all through accept tokens
 
     speculate_set_value_by_flags_and_idx(
-        model_output.pre_ids,
+        model_output.token_ids_all,
+        model_output.prompt_lens,
         model_output.accept_tokens,
         model_output.accept_num,
         model_output.stop_flags,

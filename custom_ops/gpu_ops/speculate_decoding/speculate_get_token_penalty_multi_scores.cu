@@ -72,7 +72,8 @@ __global__ inline void min_length_logits_process<half>(
   }
 }
 
-__global__ void update_repeat_times(const int64_t *pre_ids,
+__global__ void update_repeat_times(const int64_t *token_ids_all,
+                                    const int64_t *prompt_lens,
                                     const int64_t *cur_len,
                                     int *repeat_times,
                                     const int *batch_id_per_token_output,
@@ -89,7 +90,7 @@ __global__ void update_repeat_times(const int64_t *pre_ids,
     return;
   }
   int tid = threadIdx.x;
-  const int64_t *pre_ids_now = pre_ids + bi * length_id;
+  const int64_t *pre_ids_now = token_ids_all + bi * length_id + prompt_lens[bi];
   int *repeat_times_now = repeat_times + token_idx * length;
   for (int i = tid; i < length_id; i += blockDim.x) {
     int64_t id = pre_ids_now[i];
@@ -161,7 +162,8 @@ __global__ void ban_bad_words(T *logits,
 
 template <paddle::DataType D>
 void token_penalty_multi_scores_kernel(
-    const paddle::Tensor &pre_ids,
+    const paddle::Tensor &token_ids_all,
+    const paddle::Tensor &prompt_lens,
     const paddle::Tensor &logits,
     const paddle::Tensor &penalty_scores,
     const paddle::Tensor &frequency_score,
@@ -182,11 +184,11 @@ void token_penalty_multi_scores_kernel(
   auto cu_stream = logits.stream();
   std::vector<int64_t> shape = logits.shape();
   auto repeat_times =
-      paddle::full(shape, 0, paddle::DataType::INT32, pre_ids.place());
+      paddle::full(shape, 0, paddle::DataType::INT32, token_ids_all.place());
   int64_t bs = seq_lens_this_time.shape()[0];
   int64_t token_num = shape[0];
   int64_t length = shape[1];
-  int64_t length_id = pre_ids.shape()[1];
+  int64_t length_id = token_ids_all.shape()[1];
   int64_t length_bad_words = bad_tokens.shape()[1];
 
   int64_t end_length = eos_token_id.shape()[0];
@@ -208,7 +210,8 @@ void token_penalty_multi_scores_kernel(
   block_size = (length_id + 32 - 1) / 32 * 32;
   block_size = min(block_size, 512);
   update_repeat_times<<<token_num, block_size, 0, cu_stream>>>(
-      pre_ids.data<int64_t>(),
+      token_ids_all.data<int64_t>(),
+      prompt_lens.data<int64_t>(),
       cur_len.data<int64_t>(),
       repeat_times.data<int>(),
       batch_id_per_token_output.data<int>(),
@@ -253,7 +256,8 @@ void token_penalty_multi_scores_kernel(
 }
 
 void SpecTokenPenaltyMultiScores(
-    const paddle::Tensor &pre_ids,
+    const paddle::Tensor &token_ids_all,
+    const paddle::Tensor &prompt_lens,
     const paddle::Tensor &logits,
     const paddle::Tensor &penalty_scores,
     const paddle::Tensor &frequency_scores,
@@ -271,7 +275,8 @@ void SpecTokenPenaltyMultiScores(
   switch (logits.type()) {
     case paddle::DataType::BFLOAT16: {
       return token_penalty_multi_scores_kernel<paddle::DataType::BFLOAT16>(
-          pre_ids,
+          token_ids_all,
+          prompt_lens,
           logits,
           penalty_scores,
           frequency_scores,
@@ -289,7 +294,8 @@ void SpecTokenPenaltyMultiScores(
     }
     case paddle::DataType::FLOAT16: {
       return token_penalty_multi_scores_kernel<paddle::DataType::FLOAT16>(
-          pre_ids,
+          token_ids_all,
+          prompt_lens,
           logits,
           penalty_scores,
           frequency_scores,
@@ -307,7 +313,8 @@ void SpecTokenPenaltyMultiScores(
     }
     case paddle::DataType::FLOAT32: {
       return token_penalty_multi_scores_kernel<paddle::DataType::FLOAT32>(
-          pre_ids,
+          token_ids_all,
+          prompt_lens,
           logits,
           penalty_scores,
           frequency_scores,
@@ -333,7 +340,8 @@ void SpecTokenPenaltyMultiScores(
 }
 
 PD_BUILD_STATIC_OP(speculate_get_token_penalty_multi_scores)
-    .Inputs({"pre_ids",
+    .Inputs({"token_ids_all",
+             "prompt_lens",
              "logits",
              "penalty_scores",
              "frequency_scores",

@@ -30,7 +30,6 @@ class SamplingMetadata:
 
     temperature: paddle.Tensor
 
-    pre_token_ids: paddle.Tensor
     eos_token_ids: paddle.Tensor
     frequency_penalties: paddle.Tensor
     presence_penalties: paddle.Tensor
@@ -53,6 +52,8 @@ class SamplingMetadata:
     max_num_logprobs: Optional[int] = None
     enable_early_stop: Optional[int] = False
     stop_flags: Optional[paddle.Tensor] = None
+    pre_token_ids: Optional[paddle.Tensor] = None  # generated tokens
+    token_ids_all: Optional[paddle.Tensor] = None  # prompt + generated tokens
     prompt_ids: Optional[paddle.Tensor] = None
     prompt_lens: Optional[paddle.Tensor] = None
     temp_scaled_logprobs_flag: Optional[bool] = None
