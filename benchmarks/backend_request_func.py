@@ -540,6 +540,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                     # 循环调用工具
                     max_loop = json_data.get("max_loop", 10)
                     tool_url = json_data.get("tool_url", "")
+                    max_prompt_len = json_data.get("max_prompt_len")
                     if not tool_url:
                         raise ValueError("tool_url is empty.")
                     for _ in range(max_loop):
@@ -641,6 +642,19 @@ async def async_request_eb_openai_chat_completions_multi_turn(
 
                         input_tokens += output.prompt_tokens
                         output_tokens += output.output_tokens
+                        # 若session输入长度超过max_prompt_len，则停止session
+                        if max_prompt_len and input_tokens >= max_prompt_len:
+                            print(f"[SESSION STOP] reach max_prompt_len={max_prompt_len}, stop session")
+                            session_end = time.perf_counter()
+                            metrics = SessionMetrics(
+                                session_no=request_func_input.no,
+                                session_e2e_time=session_end - session_start,
+                                pure_llm_time=llm_time,
+                                input_tokens=input_tokens,
+                                output_tokens=output_tokens,
+                                tool_calls=tool_call_count,
+                            )
+                            return outputs, metrics
                     else:
                         print(f"Warning exceed max_loop={max_loop}, force stop tool loop")
 
