@@ -86,6 +86,7 @@ class LazyRegisteredModel(BaseRegisteredModel):
     category: ModelCategory
 
     def load_model_cls(self) -> Type[nn.Layer]:
+        # breakpoint()
         try:
             full_module = f"{self.module_path}.{self.module_name}"
             module = importlib.import_module(full_module)
@@ -122,7 +123,10 @@ class ModelRegistry:
         self._register_enhanced_models()
 
     def _register_enhanced_models(self):
+        # breakpoint()
         for arch, model_info in self._enhanced_models.items():
+            if arch == "DeepseekV32ForCausalLM":
+                model_info["module_name"] = "deepseek_v3"
             model = LazyRegisteredModel(
                 module_name=model_info["module_name"],
                 module_path=model_info["module_path"],
@@ -144,6 +148,7 @@ class ModelRegistry:
 
     @lru_cache(maxsize=128)
     def _try_inspect_model_cls(self, model_arch: str) -> Optional[ModelInfo]:
+        # breakpoint()
         if model_arch not in self.models:
             return None
         try:

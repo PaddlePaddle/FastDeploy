@@ -53,7 +53,7 @@ def setup_and_run_server():
     if base_path:
         model_path = os.path.join(base_path, "DeepSeek-V3-0324")
     else:
-        model_path = "/model/DeepSeekV3-0324-5layers"
+        model_path = "/root/paddlejob/workspace/models/DeepSeek-V3.1-Terminus-BF16-5layers"
 
     log_path = "server.log"
     cmd = [
