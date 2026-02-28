@@ -287,16 +287,6 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
-        # init engine forward signal
-        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
-        self.engine_forward_signal = IPCSignal(
-            name="engine_forward_signal",
-            array=engine_forward_signal_data,
-            dtype=np.int32,
-            suffix=self.parallel_config.local_engine_worker_queue_port,
-            create=False,
-        )
-
     def update_weights_from_tensor(self, mmap_infos):
         """
         update_weights_from_tensor
@@ -454,6 +444,9 @@ class PaddleDisWorkerProc:
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
+            # run eplb
+            self._run_eplb(tp_rank)
+
             if self.fd_config.load_config.dynamic_load_weight:
                 self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.ranks > 1:
@@ -527,7 +520,7 @@ class PaddleDisWorkerProc:
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
-                self.engine_forward_signal.value[0] = 1
+
                 tasks, read_finish = self.task_queue.get_tasks()
                 # Only one of all tp_size client will get read_finish == True.
                 if read_finish:
@@ -536,48 +529,35 @@ class PaddleDisWorkerProc:
                         self.task_queue.read_finish_flag.set(0)
                     else:
                         self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
-                # In EP parallel(corresponing to dp attention), we need to barrier for prefill to prevent data imbalance due to inconsistent data arrival.
-                # Only EP + DP prefill should barrier for data arrival.
-                # In mixed mode and decoder in D, we should not barrier to influence decoding.
-                if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
-                    paddle.distributed.barrier(self.parallel_config.ep_group)
 
                 req_dicts, control_reqs = [], []
-                # In EP + DP prefill, empty task ([]) is delived in worker to barrier. For empty task, just skip and continue.
-                if tasks[0][0]:
-                    for req_dict, bsz in tasks:
-                        if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
-                            control_reqs.append(req_dict[0])
-                        else:
-                            max_occupied_batch_index = int(bsz)
-                            req_dicts.extend(req_dict)
+                for req_dict, bsz in tasks:
+                    if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
+                        control_reqs.append(req_dict[0])
+                    else:
+                        max_occupied_batch_index = int(bsz)
+                        req_dicts.extend(req_dict)
 
-                    # todo: run control request async
-                    if len(control_reqs) > 0:
-                        logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
-                        for control_req in control_reqs:
-                            self.run_control_method(control_req)
-                            self._tp_barrier_wait() if tp_size > 1 else None
+                # todo: run control request async
+                if len(control_reqs) > 0:
+                    logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
+                    for control_req in control_reqs:
+                        self.run_control_method(control_req)
+                        self._tp_barrier_wait() if tp_size > 1 else None
 
-                    # Count prefill requests in current batch
-                    num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
-                    num_scheduled_requests = len(req_dicts)
-                    scheduled_request_ids = [req.request_id for req in req_dicts]
-                    logger.info(
-                        f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
-                        f"max_occupied_batch_index: {max_occupied_batch_index}, "
-                        f"num_scheduled_requests: {num_scheduled_requests}, "
-                        f"scheduled_request_ids: {scheduled_request_ids}"
-                    )
+                # Count prefill requests in current batch
+                num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
+                num_scheduled_requests = len(req_dicts)
+                scheduled_request_ids = [req.request_id for req in req_dicts]
+                logger.info(
+                    f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
+                    f"max_occupied_batch_index: {max_occupied_batch_index}, "
+                    f"num_scheduled_requests: {num_scheduled_requests}, "
+                    f"scheduled_request_ids: {scheduled_request_ids}"
+                )
 
-                    # Process prefill inputs
-                    self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
-            else:
-                if self.scheduler_config.splitwise_role == "prefill":
-                    if tp_size > 1:
-                        # Synchronize the signal for other workers
-                        self._tp_barrier_wait()
-                    continue
+                # Process prefill inputs
+                self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
 
             if (
                 (not self.parallel_config.use_ep)
@@ -585,7 +565,7 @@ class PaddleDisWorkerProc:
                 and (not self.enable_overlap_schedule)
             ):
                 self._tp_barrier_wait() if tp_size > 1 else None
-                self.engine_forward_signal.value[0] = 0
+
                 time.sleep(0.001)
                 continue
 
@@ -597,9 +577,6 @@ class PaddleDisWorkerProc:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
-            # run eplb
-            self._run_eplb(tp_rank)
-            self.engine_forward_signal.value[0] = 0
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -848,9 +825,11 @@ def parse_args():
         help="chunk size of moe input",
     )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
+    parser.add_argument("--think_start_id", type=int, default=-1)
     parser.add_argument("--think_end_id", type=int, default=-1)
     parser.add_argument("--image_patch_id", type=int, default=-1)
     parser.add_argument("--line_break_id", type=int, default=-1)
+    parser.add_argument("--think_truncate_prompt_ids", type=json.loads, default=[])
 
     parser.add_argument(
         "--quantization",
@@ -956,6 +935,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--moe_gate_fp32",
+        action="store_true",
+        help="Flag to specify dtype of gate as FP32",
+    )
+
+    parser.add_argument(
         "--max_encoder_cache",
         type=int,
         help="Maximum encoder cache tokens(use 0 to disable).",
@@ -1028,6 +1013,13 @@ def parse_args():
         "--enable_entropy",
         action="store_true",
         help="Enable output of token-level entropy.",
+    )
+
+    parser.add_argument(
+        "--mm_max_tokens_per_item",
+        type=json.loads,
+        default=None,
+        help="Maximum tokens per item in mm input.",
     )
 
     parser.add_argument(
@@ -1211,6 +1203,21 @@ def run_worker_proc() -> None:
     else:
         worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
         worker_proc.init_control()
+
+    # Enable batch-invariant mode for deterministic inference.
+    # This must happen AFTER worker creation but BEFORE model loading,
+    # because enable_batch_invariant_mode() calls paddle.compat.enable_torch_proxy()
+    # which makes torch appear available via proxy. If called before worker creation,
+    # the gpu_model_runner import chain (ernie4_5_vl_processor → paddleformers →
+    # transformers) will fail when transformers tries to query torch metadata.
+    if envs.FD_DETERMINISTIC_MODE:
+        from fastdeploy.model_executor.layers.batch_invariant_ops import (
+            enable_batch_invariant_mode,
+            is_batch_invariant_mode_enabled,
+        )
+
+        if not is_batch_invariant_mode_enabled():
+            enable_batch_invariant_mode()
 
     # Initialize device and create model runner
     worker_proc.init_device()
