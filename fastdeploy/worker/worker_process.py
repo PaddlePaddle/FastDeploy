@@ -581,7 +581,7 @@ class PaddleDisWorkerProc:
 
             if num_blocks_local <= 0:
                 raise ValueError(
-                    "The total number of blocks cannot be less than zero. "
+                    f"The total number of blocks cannot be less than zero bug got {num_blocks_local}. "
                     "Please increase gpu_memory_utilization "
                     "Or decrease max_num_batched_tokens(max model length)."
                 )
@@ -775,6 +775,7 @@ def parse_args():
     parser.add_argument("--think_end_id", type=int, default=-1)
     parser.add_argument("--image_patch_id", type=int, default=-1)
     parser.add_argument("--line_break_id", type=int, default=-1)
+    parser.add_argument("--think_truncate_prompt_ids", type=json.loads, default=[])
 
     parser.add_argument(
         "--quantization",
@@ -945,6 +946,13 @@ def parse_args():
         type=int,
         default=0,
         help="Number of cpu blocks.",
+    )
+
+    parser.add_argument(
+        "--mm_max_tokens_per_item",
+        type=json.loads,
+        default=None,
+        help="Maximum tokens per item in mm input.",
     )
 
     args = parser.parse_args()

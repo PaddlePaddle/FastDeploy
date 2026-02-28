@@ -139,6 +139,7 @@ class TestAttentionPerformance(unittest.TestCase):
         model_args = {"model": model_path, "dtype": "bfloat16"}
         model_config = ModelConfig(model_args)
         model_config.tensor_parallel_size = tensor_parallel_size
+        model_config.mm_max_tokens_per_item = None
         parallel_config = ParallelConfig({"tensor_parallel_size": tensor_parallel_size, "data_parallel_size": 1})
         cache_config = CacheConfig(
             {

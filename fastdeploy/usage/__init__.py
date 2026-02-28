@@ -13,13 +13,3 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-
-__all__ = [
-    "IDS_TYPE_FLAG",
-    "MAX_IMAGE_DIMENSION",
-]
-
-IDS_TYPE_FLAG = {"text": 0, "image": 1, "video": 2, "audio": 3}
-
-
-MAX_IMAGE_DIMENSION = 9999999

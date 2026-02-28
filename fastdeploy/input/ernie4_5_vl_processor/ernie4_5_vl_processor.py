@@ -15,6 +15,7 @@
 """
 
 import traceback
+from collections.abc import Mapping
 
 import numpy as np
 from paddleformers.generation import GenerationConfig
@@ -233,6 +234,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
             request["prompt_tokens"] = request.get("prompt")
+            request.setdefault("enable_thinking", True)
             outputs = self.ernie4_5_processor.text2ids(request["prompt"], images, videos)
         elif request.get("messages"):
             messages = request["messages"]
@@ -274,16 +276,20 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
 
+        max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
+            request["max_tokens"] = max(1, max_tokens)
         else:
-            request["max_tokens"] = min(max_model_len - len(request["prompt_token_ids"]), request["max_tokens"])
+            request["max_tokens"] = min(max_tokens, request["max_tokens"])
         if request.get("reasoning_max_tokens") is None:
             request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
-        data_processor_logger.info(f"Processed request {request}")
 
         if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
+        if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
+            request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
+
+        data_processor_logger.info(f"Processed request {request}")
 
         return request
 
@@ -335,3 +341,16 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)
         else:
             return self.process_response_dict_normal(response_dict, enable_thinking=enable_thinking, **kwargs)
+
+    def get_mm_max_tokens_per_item(
+        self,
+        seq_len: int,
+    ) -> Mapping[str, int]:
+        """
+        Get maximum number of tokens per multimodal item.
+        Args:
+            seq_len: Maximum model length
+            Returns:
+                A mapping from modalities to their respective maximum token counts.
+        """
+        return self.ernie4_5_processor.get_mm_max_tokens_per_item(seq_len)

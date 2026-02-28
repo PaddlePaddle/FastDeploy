@@ -181,6 +181,10 @@ class FlashMaskAttentionBackend(AttentionBackend):
     ):
         metadata = forward_meta.attention_metadata
 
+        norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
+        q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
+        k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
+
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
                 metadata.kv_signal_metadata,
@@ -252,8 +256,8 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 forward_meta.pre_cache_batch_ids,
                 forward_meta.pre_cache_tile_ids_per_batch,
                 forward_meta.pre_cache_num_blocks_cpu,
-                getattr(layer, "q_norm_weight", None),
-                getattr(layer, "k_norm_weight", None),
+                q_norm_weight,
+                k_norm_weight,
                 getattr(layer, "cache_k_scale", None),
                 getattr(layer, "cache_v_scale", None),
                 getattr(layer, "cache_k_out_scale", None),
@@ -320,8 +324,8 @@ class FlashMaskAttentionBackend(AttentionBackend):
             layer.linear_smooth,
             forward_meta.attn_mask_offsets,
             metadata.kv_signal_data_list[layer.layer_id],
-            getattr(layer, "q_norm_weight", None),
-            getattr(layer, "k_norm_weight", None),
+            q_norm_weight,
+            k_norm_weight,
             getattr(layer, "sinks", None),
             getattr(layer, "rms_norm_eps", 1e-6),
             metadata._fuse_kernel_compute_dtype,

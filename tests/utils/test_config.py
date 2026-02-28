@@ -39,6 +39,7 @@ class TestConfig(unittest.TestCase):
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
+        model_config.mm_max_tokens_per_item = None
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -61,6 +62,7 @@ class TestConfig(unittest.TestCase):
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
+        model_config.mm_max_tokens_per_item = None
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -83,6 +85,7 @@ class TestConfig(unittest.TestCase):
         model_config: Mock = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
+        model_config.mm_max_tokens_per_item = None
 
         fd_config = FDConfig(
             parallel_config=parallel_config,
@@ -123,6 +126,7 @@ class TestConfig(unittest.TestCase):
         model_config: Mock = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
+        model_config.mm_max_tokens_per_item = None
 
         fd_config = FDConfig(
             parallel_config=parallel_config,

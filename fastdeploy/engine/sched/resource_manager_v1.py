@@ -570,8 +570,8 @@ class ResourceManagerV1(ResourceManager):
             can_schedule_block_num_threshold = num_chunk_new_block
         else:
             can_schedule_block_num_threshold = (
-                request.need_prefill_tokens + self.config.cache_config.block_size - 1
-            ) // self.config.cache_config.block_size + len(self.running) * self.current_reserve_output_block_num
+                num_chunk_new_block + len(self.running) * self.current_reserve_output_block_num
+            )
             if self.config.speculative_config.method is not None:
                 can_schedule_block_num_threshold = min(
                     can_schedule_block_num_threshold + 1, self.config.cache_config.max_block_num_per_seq
@@ -1104,8 +1104,6 @@ class ResourceManagerV1(ResourceManager):
         If can not, return False
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
-        if request.reasoning_max_tokens is not None:
-            request.reasoning_max_tokens -= 1
         request.need_prefill_tokens = len(request.prompt_token_ids)
         need_prealloc_prefill_blocks = (
             request.need_prefill_tokens + self.config.cache_config.block_size - 1
@@ -1189,8 +1187,10 @@ class ResourceManagerV1(ResourceManager):
 
     def finish_requests(self, request_ids: Union[str, Iterable[str]]):
         llm_logger.info(f"recycle resources for requests: {request_ids}")
+        self.update_metrics(verbose=True)
         try:
             with self.lock:
+                llm_logger.info(f"[lock] recycle resources for requests: {request_ids}")
                 if isinstance(request_ids, str):
                     request_ids = (request_ids,)
                 else:
@@ -1198,9 +1198,11 @@ class ResourceManagerV1(ResourceManager):
                 for req_id in request_ids:
                     request = self.requests.get(req_id)
                     if request is None:
+                        llm_logger.warning(f"invalid request id: {req_id} self.requests: {self.requests}")
                         # Invalid request ID.
                         continue
                     if request in self.running:  # normally run and finished
+                        llm_logger.info(f"finish running request: {req_id}")
                         self.running.remove(request)
                         request.status = RequestStatus.FINISHED
                         try:
@@ -1210,6 +1212,7 @@ class ResourceManagerV1(ResourceManager):
                     if (
                         request.request_id in self.to_be_rescheduled_request_id_set
                     ):  # finished after preempted, blocks have been recycled.
+                        llm_logger.info(f"finish preempeted request: {req_id}")
                         self.to_be_rescheduled_request_id_set.remove(
                             request.request_id
                         )  # just remove from to_be_rescheduled_request_id_set
@@ -1226,13 +1229,14 @@ class ResourceManagerV1(ResourceManager):
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
         finally:
-            self.update_metrics()
+            self.update_metrics(verbose=True)
 
     def clear_data(self):
         self.waiting: deque[Request] = deque()
         self.to_be_rescheduled_request_id_set = set()
+        self.update_metrics(verbose=True)
 
-    def update_metrics(self):
+    def update_metrics(self, verbose=False):
         # Update metrics
         num_tasks = sum([1 if task else 0 for task in self.tasks_list])
         num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
@@ -1241,3 +1245,5 @@ class ResourceManagerV1(ResourceManager):
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
         main_process_metrics.num_requests_running.set(len(self.running))
         main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
+        if verbose:
+            llm_logger.info(f"update metrics: running={len(self.running)}, waiting={num_tasks - len(self.running)}")

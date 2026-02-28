@@ -27,6 +27,7 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.platforms import current_platform
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
+from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelRunnerOutput
@@ -78,6 +79,9 @@ class GpuWorker(WorkerBase):
                 use_custom_allreduce()
         else:
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
+
+        if self.local_rank == 0:
+            report_usage_stats(self.fd_config)
 
         set_random_seed(self.fd_config.model_config.seed)
         # Construct model runner
@@ -183,6 +187,10 @@ class GpuWorker(WorkerBase):
         """Initizlize the KV Cache with accurate num_gpu_blocks"""
         # accurate cache size
         self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
+
+        # Initialize routing replay manager
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.model_runner.initialize_routing_replay_manager()
 
     def execute_model(
         self,
