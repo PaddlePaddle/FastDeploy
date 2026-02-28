@@ -40,6 +40,7 @@ except ImportError:
     pass
 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    deep_gemm,
     quant_weight_ue8m0,
     transform_scale_ue8m0,
 )
@@ -1381,16 +1382,30 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             layer.hidden_size,
             layer.moe_intermediate_size,
         ]
-        self.up_gate_proj_scale_shape = [
-            layer.num_local_experts,
-            ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
-            ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
-        ]
-        self.down_proj_scale_shape = [
-            layer.num_local_experts,
-            ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
-            ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
-        ]
+
+        if not self.quant_config.deepgemm_scale_ue8m0:
+            self.up_gate_proj_scale_shape = [
+                layer.num_local_experts,
+                ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
+                ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
+            ]
+            self.down_proj_scale_shape = [
+                layer.num_local_experts,
+                ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
+                ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
+            ]
+        else:
+            self.up_gate_proj_scale_shape = [
+                layer.num_local_experts,
+                layer.moe_intermediate_size * 2,
+                deep_gemm.utils.align(ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]), 4) // 4,
+            ]
+            self.down_proj_scale_shape = [
+                layer.num_local_experts,
+                layer.hidden_size,
+                deep_gemm.utils.align(ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]), 4)
+                // 4,
+            ]
         # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
         self.model_format = extra_weight_attrs.get("model_format")
 
@@ -1521,7 +1536,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 up_gate_proj_scale_name,
                 layer.create_parameter(
                     shape=up_gate_proj_scale_shape,
-                    dtype="float32",
+                    dtype="float32" if not self.quant_config.deepgemm_scale_ue8m0 else "int32",
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
@@ -1530,7 +1545,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 down_proj_scale_name,
                 layer.create_parameter(
                     shape=down_proj_scale_shape,
-                    dtype="float32",
+                    dtype="float32" if not self.quant_config.deepgemm_scale_ue8m0 else "int32",
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
