@@ -35,7 +35,6 @@ mv fd-router /usr/local/bin/fd-router
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/fastdeploy/golang_router
 bash build.sh
-cp
 ```
 
 ## 集中式部署
