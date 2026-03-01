@@ -110,7 +110,9 @@ __global__ void update_value_by_repeat_times(const int *repeat_times,
   float beta = static_cast<float>(frequency_score[bi]);
   float gamma = static_cast<float>(presence_score[bi]);
   float temperature = temperatures[bi];
-  if (alpha == 1.f && beta == 0.f && gamma == 0.f && temperature == 1.f) {
+  // Skip if no penalties and temperature is 1.0 or 0.0 (greedy)
+  if (alpha == 1.f && beta == 0.f && gamma == 0.f &&
+      (temperature == 1.f || temperature == 0.f)) {
     return;
   }
 
@@ -123,7 +125,13 @@ __global__ void update_value_by_repeat_times(const int *repeat_times,
     if (times > 0) {
       logit_now = logit_now - times * beta - gamma;
     }
-    logits_now[i] = static_cast<T>(logit_now / temperature);
+    // When temperature is 0.0 (greedy), skip temperature scaling to avoid
+    // division by zero
+    if (temperature == 0.f) {
+      logits_now[i] = static_cast<T>(logit_now);
+    } else {
+      logits_now[i] = static_cast<T>(logit_now / temperature);
+    }
   }
 }
 

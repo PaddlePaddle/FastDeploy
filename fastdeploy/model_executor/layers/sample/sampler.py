@@ -548,18 +548,22 @@ class Sampler(nn.Layer):
                 logits_md5 = hashlib.md5(logits.cpu().numpy().tobytes()).hexdigest()[:16]
                 logger.info(f"[DET-SAMPLING] seed={seed_val[:3]}, logits_md5={logits_md5}")
 
-        _, next_tokens = top_k_top_p_sampling(
-            probs,
-            sampling_metadata.top_p,
-            sampling_metadata.top_k,
-            sampling_metadata.top_k_list,
-            topp_seed=sampling_metadata.seed,
-        )
-
-        # Log sampled tokens
-        if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
-            sampled = next_tokens.cpu().numpy().tolist()
-            logger.info(f"[DET-SAMPLING] sampled_tokens={sampled[:3]}")
+        # When all requests in the batch use temperature=0 (greedy decoding),
+        # use argmax instead of top_p_sampling to guarantee determinism.
+        # top_p_sampling may introduce non-determinism even with a fixed seed
+        # because the probability distribution is not sharply peaked when
+        # temperature scaling is skipped (to avoid division by zero).
+        _all_greedy = paddle.all(sampling_metadata.temperature == 0.0).item()
+        if _all_greedy:
+            next_tokens = paddle.argmax(logits, axis=-1)
+        else:
+            _, next_tokens = top_k_top_p_sampling(
+                probs,
+                sampling_metadata.top_p,
+                sampling_metadata.top_k,
+                sampling_metadata.top_k_list,
+                topp_seed=sampling_metadata.seed,
+            )
 
         logprobs_tensors = (
             None if num_logprobs is None else self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)

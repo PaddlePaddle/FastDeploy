@@ -191,7 +191,10 @@ class GPUModelRunner(ModelRunnerBase):
         # self.kv_caches: list[paddle.Tensor] = []
 
         # CUDA Graph
-        self.use_cudagraph = self.graph_opt_config.use_cudagraph
+        # Disable CUDA graph in deterministic mode to ensure batch invariance
+        self.use_cudagraph = self.graph_opt_config.use_cudagraph and not envs.FD_DETERMINISTIC_MODE
+        if envs.FD_DETERMINISTIC_MODE and self.graph_opt_config.use_cudagraph:
+            logger.info("CUDA graph disabled in deterministic mode for batch invariance")
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.cudagraph_capture_sizes_prefill = list(reversed(self.graph_opt_config.cudagraph_capture_sizes_prefill))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
