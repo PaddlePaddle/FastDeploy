@@ -179,5 +179,41 @@ class TestPaddleUseTritonV2(unittest.TestCase):
         self.assertEqual(my_kernel.key_args, ["N", "K"])
 
 
+class TestKernelInterfaceUnsupportedTypes(unittest.TestCase):
+    """Test assert False paths for unsupported types in KernelInterface decorator (L192, L200)."""
+
+    def test_unsupported_constexpr_type_raises_assertion(self):
+        """Passing unsupported constexpr type triggers assert with message (L192)."""
+
+        def kernel(a, N: tl.constexpr, K: tl.constexpr):
+            return
+
+        ki = tu2.KernelInterface(kernel, other_config={})
+        ki.grid = [1, 1, 1]
+
+        # Pass a string (unsupported type) as constexpr arg 'N'
+        a = paddle.to_tensor([1], dtype="float32")
+        with self.assertRaises(AssertionError) as ctx:
+            ki.decorator(a, N="bad_string", K=8)
+        self.assertIn("Unsupported constexpr type", str(ctx.exception))
+        self.assertIn("N", str(ctx.exception))
+
+    def test_unsupported_non_constexpr_arg_type_raises_assertion(self):
+        """Passing unsupported non-constexpr arg type triggers assert with message (L200)."""
+
+        def kernel(a, b, N: tl.constexpr, K: tl.constexpr):
+            return
+
+        ki = tu2.KernelInterface(kernel, other_config={})
+        ki.grid = [1, 1, 1]
+
+        # 'a' is a Tensor, 'b' is a non-constexpr non-Tensor — pass a string
+        a = paddle.to_tensor([1], dtype="float32")
+        with self.assertRaises(AssertionError) as ctx:
+            ki.decorator(a, "bad_string", N=8, K=16)
+        self.assertIn("Unsupported arg type", str(ctx.exception))
+        self.assertIn("b", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

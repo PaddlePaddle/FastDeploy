@@ -16,6 +16,8 @@ Environment variables used by FastDeploy.
 """
 
 import os
+import sys
+from types import ModuleType
 from typing import Any, Callable
 
 
@@ -231,13 +233,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
 }
 
 
-def __getattr__(name: str):
-    # lazy evaluation of environment variables
-    if name in environment_variables:
-        return environment_variables[name]()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 def get_unique_name(self, name):
     """
     Get unique name for config
@@ -246,12 +241,24 @@ def get_unique_name(self, name):
     return name + f"_{shm_uuid}"
 
 
-def __setattr__(name: str, value: Any):
-    assert name in environment_variables, (
-        f"Unknown environment variable '{name}'. " f"Available variables: {list(environment_variables.keys())}"
-    )
-    environment_variables[name] = lambda: value
+class _EnvsModule(ModuleType):
+    """Custom module class to support __setattr__ for environment variables."""
+
+    def __getattr__(self, name: str):
+        if name in environment_variables:
+            return environment_variables[name]()
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    def __setattr__(self, name: str, value: Any):
+        assert name in environment_variables, (
+            f"Unknown environment variable '{name}'. " f"Available variables: {list(environment_variables.keys())}"
+        )
+        environment_variables[name] = lambda: value
+
+    def __dir__(self):
+        return list(environment_variables.keys())
 
 
-def __dir__():
-    return list(environment_variables.keys())
+# Replace the module with our custom class
+_current_module = sys.modules[__name__]
+_current_module.__class__ = _EnvsModule

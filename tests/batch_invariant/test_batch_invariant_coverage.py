@@ -22,7 +22,7 @@ Covers:
 
 import os
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 class TestGetComputeUnitsFallback(unittest.TestCase):
@@ -76,15 +76,12 @@ class TestMmBatchInvariantOut(unittest.TestCase):
         b = paddle.randn([8, 4])
         out = paddle.zeros([4, 4])
 
-        with patch(
-            "fastdeploy.model_executor.layers.batch_invariant_ops.batch_invariant_ops.matmul_persistent"
-        ) as mock_matmul:
-            mock_result = MagicMock()
-            mock_matmul.return_value = mock_result
+        result = mm_batch_invariant(a, b, out=out)
 
-            result = mm_batch_invariant(a, b, out=out)
-
-            mock_result.copy_.assert_called_once_with(result, False)
+        # Result should be the same object as out
+        self.assertIs(result, out)
+        # out should no longer be zeros
+        self.assertFalse(paddle.allclose(out, paddle.zeros([4, 4])).item())
 
     def test_no_out_parameter(self):
         """When out is None, result is returned directly (L478)."""
@@ -100,14 +97,9 @@ class TestMmBatchInvariantOut(unittest.TestCase):
         a = paddle.randn([4, 8])
         b = paddle.randn([8, 4])
 
-        with patch(
-            "fastdeploy.model_executor.layers.batch_invariant_ops.batch_invariant_ops.matmul_persistent"
-        ) as mock_matmul:
-            expected = MagicMock()
-            mock_matmul.return_value = expected
-
-            result = mm_batch_invariant(a, b)
-            self.assertEqual(result, expected)
+        result = mm_batch_invariant(a, b)
+        # Result should have correct shape
+        self.assertEqual(result.shape, [4, 4])
 
 
 if __name__ == "__main__":

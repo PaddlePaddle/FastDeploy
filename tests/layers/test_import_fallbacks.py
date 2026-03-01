@@ -161,19 +161,31 @@ class TestCacheManagerOpsFallback(unittest.TestCase):
         if not self.can_test:
             self.skipTest(f"Cannot import {self.MODULE}")
 
-        # Force the platform check to fail by mocking current_platform
+        # Mock current_platform to return False for all platform checks
+        # This will cause the try block to raise RuntimeError("No supported platform")
         mock_platform = MagicMock()
         mock_platform.is_cuda.return_value = False
         mock_platform.is_maca.return_value = False
         mock_platform.is_xpu.return_value = False
 
-        with patch.object(self.mod, "current_platform", mock_platform):
-            importlib.reload(self.mod)
-            self.assertIsNone(self.mod.cuda_host_alloc)
-            self.assertIsNone(self.mod.cuda_host_free)
+        # Remove the module from sys.modules to force re-import
+        mods_to_remove = [k for k in sys.modules.keys() if k == self.MODULE]
+        saved_mods = {k: sys.modules[k] for k in mods_to_remove}
+        for k in mods_to_remove:
+            del sys.modules[k]
 
-        # Restore
-        importlib.reload(self.mod)
+        try:
+            # Patch at the source where current_platform is imported from
+            with patch("fastdeploy.platforms.current_platform", mock_platform):
+                reloaded = importlib.import_module(self.MODULE)
+                # The except branch should have set these to None
+                self.assertIsNone(reloaded.cuda_host_alloc)
+                self.assertIsNone(reloaded.cuda_host_free)
+        finally:
+            # Restore
+            for k, v in saved_mods.items():
+                sys.modules[k] = v
+            importlib.reload(self.mod)
 
 
 class TestCustomAllReduceFallback(unittest.TestCase):
@@ -190,12 +202,26 @@ class TestCustomAllReduceFallback(unittest.TestCase):
         if not self.can_test:
             self.skipTest(f"Cannot import {self.MODULE}")
 
-        with patch.object(self.mod, "meta_size", side_effect=RuntimeError("mocked")):
-            importlib.reload(self.mod)
-            self.assertFalse(self.mod.custom_ar)
+        # Mock the gpu ops module to trigger meta_size failure during reload
+        fake_gpu = MagicMock()
+        fake_gpu.meta_size.side_effect = RuntimeError("mocked meta_size failure")
 
-        # Restore
-        importlib.reload(self.mod)
+        # Remove the module from sys.modules to force re-import
+        mods_to_remove = [k for k in sys.modules.keys() if k.startswith(self.MODULE)]
+        saved_mods = {k: sys.modules[k] for k in mods_to_remove}
+        for k in mods_to_remove:
+            del sys.modules[k]
+
+        try:
+            with patch.dict(sys.modules, {"fastdeploy.model_executor.ops.gpu": fake_gpu}):
+                reloaded = importlib.import_module(self.MODULE)
+                # The except branch should have set custom_ar to False
+                self.assertFalse(reloaded.custom_ar)
+        finally:
+            # Restore
+            for k, v in saved_mods.items():
+                sys.modules[k] = v
+            importlib.reload(self.mod)
 
 
 if __name__ == "__main__":

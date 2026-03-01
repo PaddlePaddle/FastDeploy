@@ -24,21 +24,17 @@ from fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser import (
 
 
 class DummyTokenizer:
-    """Dummy tokenizer with minimal vocab for testing"""
+    """Dummy tokenizer with vocab containing tool_call tokens"""
 
     def __init__(self):
         self.vocab = {"<tool_call>": 1, "</tool_call>": 2}
 
+    def get_vocab(self):
+        return self.vocab
+
 
 class TestErnieX1ToolParser(unittest.TestCase):
     def setUp(self):
-        class DummyTokenizer:
-            def __init__(self):
-                self.vocab = {"<tool_call>": 1, "</tool_call>": 2}
-
-            def get_vocab(self):
-                return self.vocab
-
         self.tokenizer = DummyTokenizer()
         self.parser = ErnieX1ToolParser(tokenizer=self.tokenizer)
         self.dummy_request = ChatCompletionRequest(messages=[{"role": "user", "content": "hi"}])
@@ -47,7 +43,7 @@ class TestErnieX1ToolParser(unittest.TestCase):
 
     def test_extract_tool_calls_complete(self):
         """Test normal extraction of complete tool_call JSON"""
-        output = '<tool_call>{"name": "get_weather", "arguments": {"location": "北京"}}</tool_call>'
+        output = '<tool_call>{"name": "get_weather", "arguments": {"location": "Beijing"}}</tool_call>'
         result = self.parser.extract_tool_calls(output, self.dummy_request)
         self.assertTrue(result.tools_called)
         self.assertEqual(result.tool_calls[0].function.name, "get_weather")
@@ -67,10 +63,43 @@ class TestErnieX1ToolParser(unittest.TestCase):
             result = self.parser.extract_tool_calls(output, self.dummy_request)
             self.assertFalse(result.tools_called)
 
+    def test_extract_tool_calls_partial_json_parser_failure(self):
+        """Test partial_json_parser failure path for arguments (L165-166).
+        json.loads fails on malformed JSON, partial_json_parser.loads also fails.
+        Partial result has _is_partial=True so tools_called=False, but tool_calls is populated."""
+        with patch(
+            "fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.partial_json_parser.loads",
+            side_effect=ValueError("cannot parse"),
+        ):
+            # Malformed JSON inside complete tags: extra `{` breaks json.loads,
+            # regex still finds name and arguments, partial_json_parser raises → L165-166 hit
+            output = '<tool_call>{"name": "test", "arguments": {{"nested_bad": 1}}</tool_call>'
+            result = self.parser.extract_tool_calls(output, self.dummy_request)
+            # _is_partial=True → tools_called=False, but tool_calls list is populated
+            self.assertFalse(result.tools_called)
+            self.assertIsNotNone(result.tool_calls)
+            self.assertEqual(result.tool_calls[0].function.name, "test")
+            # arguments=None → converted to {} → serialized as "{}"
+            self.assertEqual(result.tool_calls[0].function.arguments, "{}")
+
+    def test_partial_json_parser_exception_triggers_debug_log(self):
+        """Malformed JSON + partial_json_parser failure exercises L165-166 exactly."""
+        with patch(
+            "fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.partial_json_parser.loads",
+            side_effect=ValueError("mocked parse error"),
+        ):
+            # Malformed: unclosed string in arguments breaks json.loads
+            output = '<tool_call>{"name": "my_tool", "arguments": {"key": "unterminated}</tool_call>'
+            result = self.parser.extract_tool_calls(output, self.dummy_request)
+            # Partial parse → tools_called=False but tool_calls has entries
+            self.assertFalse(result.tools_called)
+            self.assertIsNotNone(result.tool_calls)
+            self.assertEqual(result.tool_calls[0].function.name, "my_tool")
+
     # ---------------- Streaming extraction tests ----------------
 
     def test_streaming_no_toolcall(self):
-        """Streaming extraction returns normal DeltaMessage when no <tool_call>"""
+        """Streaming extraction returns normal DeltaMessage when no toolcall tag"""
         result = self.parser.extract_tool_calls_streaming(
             "", "abc", "abc", [], [], [], self.dummy_request.model_dump()
         )
@@ -103,7 +132,7 @@ class TestErnieX1ToolParser(unittest.TestCase):
 
     def test_streaming_complete_arguments_and_end(self):
         """Streaming extraction completes arguments with brackets matched and closes tool_call"""
-        text = '"arguments": {"location": "北京"}}'
+        text = '"arguments": {"location": "Beijing"}}'
         delta = self.parser.extract_tool_calls_streaming(
             "", "<tool_call>" + text, text, [], [1], [1], self.dummy_request.model_dump()
         )

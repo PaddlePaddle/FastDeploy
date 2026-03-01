@@ -26,6 +26,7 @@ Covers:
 """
 
 import unittest
+from unittest.mock import patch
 
 import paddle
 
@@ -176,6 +177,45 @@ class TestCommunicationFallbackFunctions(unittest.TestCase):
         with self.assertRaises(RuntimeError) as ctx:
             communication.tensor_model_parallel_all_reduce_custom(inp)
         self.assertIn("not available", str(ctx.exception))
+
+
+# ---------------------------------------------------------------------------
+# 4. Reimport-based tests — force the except blocks to execute under coverage
+# ---------------------------------------------------------------------------
+class TestCommunicationReimportFallback(unittest.TestCase):
+    """Force-reimport communication.py with broken register_custom_python_op
+    to exercise L186-195 and L223-229 under coverage.
+    """
+
+    MODULE = "fastdeploy.distributed.communication"
+
+    def test_reimport_forces_first_except_block(self):
+        """Reimport with broken register_custom_python_op exercises L186-195."""
+        import importlib
+        import sys
+
+        mod = sys.modules.get(self.MODULE)
+        if mod is None:
+            self.skipTest(f"Cannot find {self.MODULE} in sys.modules")
+
+        # Save and remove
+        saved = sys.modules.pop(self.MODULE)
+        try:
+            # Patch register_custom_python_op to raise, forcing the except block
+            with patch(
+                "fastdeploy.utils.register_custom_python_op",
+                side_effect=RuntimeError("mocked registration failure"),
+            ):
+                reloaded = importlib.import_module(self.MODULE)
+                # The except block should define _reg_err and fallback functions
+                self.assertTrue(hasattr(reloaded, "_reg_err"))
+                # Calling the fallback should raise RuntimeError
+                inp = paddle.zeros([2, 4], dtype=paddle.float16)
+                with self.assertRaises(RuntimeError) as ctx:
+                    reloaded.tensor_model_parallel_all_reduce(inp)
+                self.assertIn("not available", str(ctx.exception))
+        finally:
+            sys.modules[self.MODULE] = saved
 
 
 if __name__ == "__main__":
