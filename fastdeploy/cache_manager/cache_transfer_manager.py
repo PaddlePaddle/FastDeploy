@@ -179,6 +179,10 @@ class CacheTransferManager:
         if self.has_cache_scale:
             self.cache_scale_shape = [self.num_gpu_blocks, self.head_num, self.block_size]
 
+        # kv cache storage
+        self.storage_backend_type = args.kvcache_storage_backend
+        self.key_prefix = ""
+
         # extract other arg values
         self.model_id = os.path.basename(args.model_path.rstrip("/"))
         self.n_ranks = args.mp_num
@@ -230,7 +234,8 @@ class CacheTransferManager:
         self._init_gpu_cache(args)
         if self.num_cpu_blocks > 0:
             self._init_cpu_cache(args)
-        self._init_storage(args)
+        if self.storage_backend_type is not None:
+            self._init_storage(args)
 
         cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
         self.cache_task_broadcast_signal = IPCSignal(
@@ -295,8 +300,6 @@ class CacheTransferManager:
         self.cache_transfer_inited_signal.value[self.rank] = 1
 
     def _init_storage(self, args):
-        self.storage_backend_type = args.kvcache_storage_backend
-
         try:
             # TODO: support cache scale for other backend
             if self.has_cache_scale:
@@ -351,7 +354,6 @@ class CacheTransferManager:
             raise ValueError(f"Invalid write policy: {args.write_policy}")
         self.write_policy = args.write_policy
 
-        self.key_prefix = ""
         version_file_path = os.path.join(args.model_path, "version.yaml")
         if os.path.exists(version_file_path):
             self.key_prefix = get_key_prefix_from_version(version_file_path)

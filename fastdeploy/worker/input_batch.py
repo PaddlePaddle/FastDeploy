@@ -99,22 +99,22 @@ class InputBatch:
         self.enable_expert_parallel = fd_config.parallel_config.enable_expert_parallel
         self.index_to_batch_id = {}
         self.enable_pd_reorder = False
+        # Qwen vl etc. do not support mm_max_tokens_per_item now
+        if self.enable_mm and self.model_config.mm_max_tokens_per_item is None:
+            self.max_chunk_tokens = self.model_config.max_model_len
+        else:
+            self.max_chunk_tokens = self.fd_config.get_max_chunk_tokens(self.model_config.mm_max_tokens_per_item)
 
     def init_share_inputs(self):
         max_num_seqs = self.scheduler_config.max_num_seqs
 
-        self.pre_ids = paddle.full(
+        self.token_ids_all = paddle.full(
             [max_num_seqs, self.model_config.max_model_len],
             -1,
             dtype="int64",
         )
         self.input_ids = paddle.full(
-            [max_num_seqs, self.model_config.max_model_len],
-            self.model_config.pad_token_id,
-            dtype="int64",
-        )
-        self.prompt_ids = paddle.full(
-            [max_num_seqs, self.model_config.max_model_len],
+            [max_num_seqs, self.max_chunk_tokens],
             self.model_config.pad_token_id,
             dtype="int64",
         )
@@ -147,10 +147,10 @@ class InputBatch:
         self.prompt_lens = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.step_idx = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         if current_platform.is_maca():
-            self.not_need_stop = paddle.full([1], False, dtype="bool").cpu()
-            self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").cpu()
-            self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").cpu()
-            self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").cpu()
+            self.not_need_stop = paddle.full([1], False, dtype="bool", device="cpu")
+            self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64", device="cpu")
+            self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32", device="cpu")
+            self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool", device="cpu")
         else:
             self.not_need_stop = paddle.full([1], False, dtype="bool").pin_memory()
             self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
@@ -163,7 +163,7 @@ class InputBatch:
         self.bad_tokens_len = paddle.full([max_num_seqs], 1, dtype="int64")
         self.next_tokens = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.is_block_step = paddle.full([max_num_seqs], False, dtype="bool")
-        self.is_chunk_step = paddle.full([max_num_seqs], False, dtype="bool").cpu()
+        self.is_chunk_step = paddle.full([max_num_seqs], False, dtype="bool", device="cpu")
         self.encoder_block_lens = paddle.full([max_num_seqs], 0, dtype="int32")
         self.step_block_list = paddle.full([max_num_seqs], -1, dtype="int32")
         self.step_lens = paddle.full([1], 0, dtype="int32")
@@ -172,18 +172,18 @@ class InputBatch:
         self.need_block_list = paddle.full([max_num_seqs], -1, dtype="int32")
         self.need_block_len = paddle.full([1], 0, dtype="int32")
         self.used_list_len = paddle.full([max_num_seqs], 0, dtype="int32")
-        self.infer_seed = paddle.full([max_num_seqs, 1], 0, dtype="int64").cpu()
+        self.infer_seed = paddle.full([max_num_seqs, 1], 0, dtype="int64", device="cpu")
         self.first_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.ori_seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.system_lens = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.system_ids = paddle.full([max_num_seqs, 1], -1, dtype="int32")
 
         self.ids_remove_padding = paddle.full(
-            [max_num_seqs * self.model_config.max_model_len],
+            [max_num_seqs * self.max_chunk_tokens],
             0,
             dtype="int64",
         )
-        self.batch_id_per_token = paddle.full([max_num_seqs * self.model_config.max_model_len, 1], 0, dtype="int32")
+        self.batch_id_per_token = paddle.full([max_num_seqs * self.max_chunk_tokens, 1], 0, dtype="int32")
         self.cu_seqlens_q = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
         self.cu_seqlens_k = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
 
@@ -263,7 +263,8 @@ class InputBatch:
                 shape=[max_num_seqs, self.model_config.max_model_len],
                 fill_value=-1,
                 dtype="int64",
-            ).cpu()
+                device="cpu",
+            )
             self.accept_tokens = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
                 fill_value=0,
@@ -339,8 +340,8 @@ class InputBatch:
         logger.info(f"Enabled logits processors: {self.logits_processors}")
 
         self.mask_rollback = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
-        self.last_preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
+        self.preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32", device="cpu")
+        self.last_preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32", device="cpu")
 
     def swap_states(self, i1, i2) -> None:
         """Swap the data at indices i1 and i2 for all array-like attributes"""
@@ -352,9 +353,8 @@ class InputBatch:
             tensor[idx2] = temp
 
         self.index_to_batch_id[i1], self.index_to_batch_id[i2] = self.index_to_batch_id[i2], self.index_to_batch_id[i1]
-        swap_data(self.pre_ids, i1, i2)
+        swap_data(self.token_ids_all, i1, i2)
         swap_data(self.input_ids, i1, i2)
-        swap_data(self.prompt_ids, i1, i2)
         swap_data(self.top_p, i1, i2)
         swap_data(self.top_k, i1, i2)
         swap_data(self.min_p, i1, i2)
@@ -512,9 +512,8 @@ class InputBatch:
             max_num_seqs = self.scheduler_config.max_num_seqs
 
             # Reset basic tensors to their default values
-            fill_paddle_tensor(self, "pre_ids", -1)
+            fill_paddle_tensor(self, "token_ids_all", -1)
             fill_paddle_tensor(self, "input_ids", self.model_config.pad_token_id)
-            fill_paddle_tensor(self, "prompt_ids", self.model_config.pad_token_id)
             fill_paddle_tensor(self, "eos_token_id", 0)
             fill_paddle_tensor(self, "top_p", self.model_config.top_p)
             fill_paddle_tensor(self, "top_k", 0)
@@ -685,7 +684,8 @@ class ProposerInputBatch(InputBatch):
             shape=[self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
             fill_value=-1,
             dtype="int64",
-        ).cpu()
+            device="cpu",
+        )
         self.seq_lens_this_time_buffer = paddle.clone(self.target_model_input_batch["seq_lens_this_time"])
 
         self.seq_lens_encoder = paddle.clone(self.target_model_input_batch["seq_lens_encoder"])
@@ -693,13 +693,26 @@ class ProposerInputBatch(InputBatch):
         self.step_idx = paddle.clone(self.target_model_input_batch["step_idx"])
         self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
-        self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
         if current_platform.is_cuda():
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
+            self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
+            # TODO: delete pre_ids in mtp
+            self.pre_ids = paddle.full(
+                [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
+                -1,
+                dtype="int64",
+            )
+            for bs_idx in range(self.scheduler_config.max_num_seqs):
+                prompt_len = self.target_model_input_batch["prompt_lens"][bs_idx]
+                pre_ids_len = self.model_config.max_model_len - prompt_len
+                self.pre_ids[bs_idx, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][
+                    bs_idx, prompt_len:
+                ]
         else:
             self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
             self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
+            self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
         self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
         self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
         self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
@@ -788,7 +801,7 @@ class ProposerInputBatch(InputBatch):
             self.last_seq_lens_this_time = paddle.full_like(
                 self.target_model_input_batch["seq_lens_this_time"], fill_value=-1, dtype="int32"
             )
-        self.input_ids_len = paddle.zeros(shape=[self.scheduler_config.max_num_seqs, 1], dtype="int64").cpu()
+        self.input_ids_len = paddle.zeros(shape=[self.scheduler_config.max_num_seqs, 1], dtype="int64", device="cpu")
         self.temp_scaled_logprobs = self.target_model_input_batch["temp_scaled_logprobs"]
         self.top_p_normalized_logprobs = self.target_model_input_batch["top_p_normalized_logprobs"]
         self.accept_num = self.target_model_input_batch["accept_num"]
@@ -848,6 +861,7 @@ class ProposerInputBatch(InputBatch):
         if current_platform.is_cuda():
             swap_data(self.cu_seqlens_q_output, i1, i2)
             swap_data(self.batch_id_per_token_output, i1, i2)
+            swap_data(self.token_ids_all, i1, i2)
         else:
             swap_data(self.output_cum_offsets, i1, i2)
             swap_data(self.output_padding_offset, i1, i2)
@@ -908,7 +922,22 @@ class ProposerInputBatch(InputBatch):
             self.step_idx = paddle.clone(self.target_model_input_batch["step_idx"])
             self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
             self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
-            self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+            if current_platform.is_cuda():
+                self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
+                # TODO: delete pre_ids in mtp
+                self.pre_ids = paddle.full(
+                    [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
+                    -1,
+                    dtype="int64",
+                )
+                for bs_idx in range(self.scheduler_config.max_num_seqs):
+                    prompt_len = self.target_model_input_batch["prompt_lens"][bs_idx]
+                    pre_ids_len = self.model_config.max_model_len - prompt_len
+                    self.pre_ids[bs_idx, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][
+                        bs_idx, prompt_len:
+                    ]
+            else:
+                self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
             self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
             self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
             self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])

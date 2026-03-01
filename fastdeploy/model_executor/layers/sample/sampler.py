@@ -511,9 +511,7 @@ class Sampler(nn.Layer):
             logits = proc.apply(logits)
 
         logits = apply_penalty_multi_scores(
-            sampling_metadata.pre_token_ids,
-            sampling_metadata.prompt_ids,
-            sampling_metadata.prompt_lens,
+            sampling_metadata.token_ids_all,
             logits,
             sampling_metadata.repetition_penalties,
             sampling_metadata.frequency_penalties,
@@ -521,9 +519,11 @@ class Sampler(nn.Layer):
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
             sampling_metadata.bad_words_token_len,
+            sampling_metadata.prompt_lens,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
+            sampling_metadata.pre_token_ids,
         )
 
         if num_logprobs is not None:
@@ -754,7 +754,8 @@ class SpeculativeSampler(nn.Layer):
         from fastdeploy.model_executor.ops.gpu import speculate_verify, top_p_candidates
 
         logits = apply_speculative_penalty_multi_scores(
-            sampling_metadata.pre_token_ids,
+            sampling_metadata.token_ids_all,
+            sampling_metadata.prompt_lens,
             logits,
             sampling_metadata.repetition_penalties,
             sampling_metadata.frequency_penalties,
@@ -769,12 +770,14 @@ class SpeculativeSampler(nn.Layer):
             share_inputs["batch_id_per_token_output"],
             share_inputs["cu_seqlens_q_output"],
             max_model_len,
+            sampling_metadata.pre_token_ids,
         )
 
         if self.enf_gen_phase_tag:
             reasoning_phase_token_constraint(
                 logits,
-                sampling_metadata.pre_token_ids,
+                sampling_metadata.token_ids_all,
+                sampling_metadata.prompt_lens,
                 share_inputs["stop_flags"],
                 share_inputs["seq_lens_this_time"],
                 share_inputs["seq_lens_encoder"],
@@ -900,7 +903,8 @@ class SpeculativeSampler(nn.Layer):
         from fastdeploy.model_executor.ops.xpu import speculate_verify, top_p_candidates
 
         logits = apply_speculative_penalty_multi_scores(
-            sampling_metadata.pre_token_ids,
+            sampling_metadata.token_ids_all,
+            sampling_metadata.prompt_lens,
             logits,
             sampling_metadata.repetition_penalties,
             sampling_metadata.frequency_penalties,
@@ -915,6 +919,7 @@ class SpeculativeSampler(nn.Layer):
             share_inputs["output_padding_offset"],
             share_inputs["output_cum_offsets"],
             max_model_len,
+            sampling_metadata.pre_token_ids,
         )
 
         probs = F.softmax(logits)
@@ -1131,7 +1136,8 @@ class MTPSampler(nn.Layer):
                 raw_logprobs = share_inputs["draft_logits"][:real_token_num, :].clone()
 
         logits = apply_speculative_penalty_multi_scores(
-            sampling_metadata.pre_token_ids,
+            sampling_metadata.token_ids_all,
+            sampling_metadata.prompt_lens,
             logits,
             sampling_metadata.repetition_penalties,
             sampling_metadata.frequency_penalties,
@@ -1146,6 +1152,7 @@ class MTPSampler(nn.Layer):
             share_inputs["batch_id_per_token_output"],
             share_inputs["cu_seqlens_q_output"],
             max_model_len,
+            sampling_metadata.pre_token_ids,
         )
         probs = F.softmax(logits)
 
@@ -1184,7 +1191,8 @@ class MTPSampler(nn.Layer):
     ) -> paddle.Tensor:
 
         logits = apply_speculative_penalty_multi_scores(
-            sampling_metadata.pre_token_ids,
+            sampling_metadata.token_ids_all,
+            sampling_metadata.prompt_lens,
             logits,
             sampling_metadata.repetition_penalties,
             sampling_metadata.frequency_penalties,
@@ -1199,6 +1207,7 @@ class MTPSampler(nn.Layer):
             share_inputs["output_padding_offset"],
             share_inputs["output_cum_offsets"],
             max_model_len,
+            sampling_metadata.pre_token_ids,
         )
         probs = F.softmax(logits)
 
