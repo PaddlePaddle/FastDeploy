@@ -46,15 +46,62 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 from fastdeploy.platforms import current_platform
 
-# Import unified extend attention for deterministic mode with prefix caching
-try:
-    from fastdeploy.model_executor.layers.attention.triton_ops import (
-        extend_attention_fwd_unified,
-    )
+# Lazy import to avoid circular dependency
+_cuda_wrapper = None
 
-    TRITON_UNIFIED_ATTENTION_AVAILABLE = True
-except ImportError:
-    TRITON_UNIFIED_ATTENTION_AVAILABLE = False
+
+def _is_cuda_stream_capturing() -> bool:
+    """Check if the current CUDA stream is capturing.
+
+    This is similar to torch.cuda.is_current_stream_capturing() in PyTorch.
+    Returns True if the stream is in capturing mode, False otherwise.
+    """
+    global _cuda_wrapper
+    if _cuda_wrapper is None:
+        from fastdeploy.distributed.custom_all_reduce import (
+            cuda_wrapper as _cuda_wrapper,
+        )
+    try:
+        lib = _cuda_wrapper.CudaRTLibrary()
+        stream = paddle.device.current_stream()
+        is_capturing = lib.cudaStreamIsCapturing(stream)
+        # 1 is cudaStreamCaptureStatusActive: The stream is capturing.
+        return is_capturing.value == 1
+    except Exception:
+        # If we can't determine the status, assume not capturing
+        return False
+
+
+# Lazy import: do NOT import triton_ops at module level.
+# Triton JIT compilation is triggered on first import and requires a fully
+# initialized CUDA context. Importing at module level causes worker processes
+# to hang during initialization (before CUDA context is ready).
+# Instead, we probe availability once lazily at first use.
+_triton_unified_attention_checked = False
+TRITON_UNIFIED_ATTENTION_AVAILABLE = False
+_extend_attention_fwd_unified = None
+
+
+def _ensure_triton_unified_attention():
+    """Lazily import and JIT-compile the unified Triton attention kernel.
+
+    Called only when actually needed (FD_DETERMINISTIC_MODE + prefix cache hit),
+    not during worker process initialization.
+    """
+    global _triton_unified_attention_checked, TRITON_UNIFIED_ATTENTION_AVAILABLE
+    global _extend_attention_fwd_unified
+    if _triton_unified_attention_checked:
+        return
+    _triton_unified_attention_checked = True
+    try:
+        from fastdeploy.model_executor.layers.attention.triton_ops import (
+            extend_attention_fwd_unified as _fn,
+        )
+
+        _extend_attention_fwd_unified = _fn
+        TRITON_UNIFIED_ATTENTION_AVAILABLE = True
+    except ImportError:
+        TRITON_UNIFIED_ATTENTION_AVAILABLE = False
 
 
 @dataclass
@@ -290,6 +337,8 @@ class AppendAttentionBackend(AttentionBackend):
         has_prefix_cache_hit = self._has_prefix_cache_hit(forward_meta)
 
         if envs.FD_DETERMINISTIC_MODE and has_prefix_cache_hit:
+            # Lazily import Triton kernel (avoids JIT compilation during worker init)
+            _ensure_triton_unified_attention()
             # Defensive check: Triton kernel must be available for deterministic mode
             if not TRITON_UNIFIED_ATTENTION_AVAILABLE:
                 raise RuntimeError(
@@ -524,8 +573,9 @@ class AppendAttentionBackend(AttentionBackend):
         """
         # During CUDA graph capture, we cannot use .item() as it causes
         # CUDA synchronization which is not allowed during capture.
-        # Return False early to avoid the synchronization.
-        if getattr(forward_meta, "step_use_cudagraph", False):
+        # This is the same pattern used in sglang:
+        # https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/models/ernie45_moe_vl.py#L284
+        if _is_cuda_stream_capturing():
             return False
 
         prefix_lens = getattr(forward_meta, "prefix_lens", None)
@@ -655,7 +705,7 @@ class AppendAttentionBackend(AttentionBackend):
         logit_cap = getattr(layer, "logit_cap", 0.0) if hasattr(layer, "logit_cap") else 0.0
 
         # Step 11: Call the unified Triton kernel
-        extend_attention_fwd_unified(
+        _extend_attention_fwd_unified(
             q=q_tensor,
             o=o_tensor,
             k_buffer=cache_k,

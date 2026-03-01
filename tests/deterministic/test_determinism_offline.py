@@ -20,13 +20,13 @@ Test scenarios:
 2. Batch invariance (single vs. batch, different positions)
 3. Different batch sizes consistency
 4. Sampling-parameter combinations (temperature x top_p, parametrized)
-5. Long sequence generation (512-1024 tokens)
-6. Long input prompt handling
-7. Minimal output (max_tokens=1, early stop)
-8. Special characters & multi-language prompts
-9. Multi-turn conversation
-10. State isolation (interleaved / interference prompts)
-11. Non-deterministic validation (proves tests are effective)
+5. Minimal output (max_tokens=1, early stop)
+6. Special characters & multi-language prompts
+7. Multi-turn conversation
+8. State isolation (interleaved / interference prompts)
+9. Non-deterministic validation (proves tests are effective)
+
+Note: Long sequence tests are in test_determinism_long_sequence.py
 
 Usage:
     CUDA_VISIBLE_DEVICES=0,1,2,3 pytest tests/deterministic/test_determinism_offline.py -v
@@ -43,6 +43,7 @@ MODEL_NAME = "Qwen2-7B-Instruct"
 
 _ENV_CUDA_VISIBLE_DEVICES = "CUDA_VISIBLE_DEVICES"
 _ENV_FD_DETERMINISTIC_MODE = "FD_DETERMINISTIC_MODE"
+_ENV_FD_CUSTOM_AR_MAX_SIZE_MB = "FD_CUSTOM_AR_MAX_SIZE_MB"
 
 
 # ---------------------------------------------------------------------------
@@ -55,9 +56,11 @@ def _module_env():
     """Set env vars before importing fastdeploy (must happen first)."""
     old_cuda = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES)
     old_det = os.environ.get(_ENV_FD_DETERMINISTIC_MODE)
+    old_ar = os.environ.get(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB)
 
     os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0,1,2,3")
     os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
+    os.environ[_ENV_FD_CUSTOM_AR_MAX_SIZE_MB] = os.environ.get(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB, "57")
 
     global LLM, SamplingParams  # noqa: PLW0603
     from fastdeploy import LLM, SamplingParams
@@ -72,6 +75,10 @@ def _module_env():
         os.environ.pop(_ENV_FD_DETERMINISTIC_MODE, None)
     else:
         os.environ[_ENV_FD_DETERMINISTIC_MODE] = old_det
+    if old_ar is None:
+        os.environ.pop(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB, None)
+    else:
+        os.environ[_ENV_FD_CUSTOM_AR_MAX_SIZE_MB] = old_ar
 
 
 @pytest.fixture(autouse=True)
@@ -94,7 +101,7 @@ def llm(model_path, _module_env):
         model=model_path,
         tensor_parallel_size=4,
         max_model_len=8192,
-        enable_prefix_caching=True,
+        enable_prefix_caching=False,  # Disabled for determinism testing
     )
 
 
@@ -182,36 +189,6 @@ def test_deterministic_param_combos(llm, temp, top_p, seed):
     """Determinism holds across various (temperature, top_p) combinations."""
     sp = SamplingParams(temperature=temp, top_p=top_p, max_tokens=30, seed=seed)
     _assert_deterministic(llm, "What is a neural network?", sp)
-
-
-# ===================== Long sequence tests =====================
-
-
-@pytest.mark.parametrize(
-    "temp,seed",
-    [
-        (0.0, 100),
-        (0.3, 130),
-        (0.5, 150),
-        (0.7, 170),
-    ],
-)
-def test_deterministic_long_sequence(llm, temp, seed):
-    """Long generation (512+ tokens) stays deterministic at various temperatures."""
-    prompt = "Please describe the history of AI in detail, including major milestones and key technical breakthroughs."
-    sp = SamplingParams(temperature=temp, top_p=0.95, max_tokens=512, seed=seed)
-
-    text, token_ids = _assert_deterministic(llm, prompt, sp)
-    assert len(token_ids) >= 100, f"Expected >= 100 tokens, got {len(token_ids)}"
-
-
-def test_deterministic_long_prompt(llm):
-    """Long input prompt (prefill-heavy) stays deterministic."""
-    base = "This is a description about natural language processing. "
-    long_prompt = (base * 50) + "Please summarize the above."
-    sp = SamplingParams(temperature=0.5, max_tokens=100, seed=2024)
-
-    _assert_deterministic(llm, long_prompt, sp)
 
 
 # ===================== Minimal / boundary output tests =====================

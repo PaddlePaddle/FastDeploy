@@ -535,6 +535,19 @@ class Sampler(nn.Layer):
         probs = F.softmax(logits)
 
         probs = min_p_sampling(probs, sampling_metadata.min_p, sampling_metadata.min_p_list)
+
+        # Diagnostic logging for determinism debugging
+        from fastdeploy import envs
+
+        if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
+            import hashlib
+
+            if sampling_metadata.seed is not None:
+                seed_val = sampling_metadata.seed.cpu().numpy().tolist()
+                # Log logits MD5 to detect non-determinism in model output
+                logits_md5 = hashlib.md5(logits.cpu().numpy().tobytes()).hexdigest()[:16]
+                logger.info(f"[DET-SAMPLING] seed={seed_val[:3]}, logits_md5={logits_md5}")
+
         _, next_tokens = top_k_top_p_sampling(
             probs,
             sampling_metadata.top_p,
@@ -542,6 +555,11 @@ class Sampler(nn.Layer):
             sampling_metadata.top_k_list,
             topp_seed=sampling_metadata.seed,
         )
+
+        # Log sampled tokens
+        if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
+            sampled = next_tokens.cpu().numpy().tolist()
+            logger.info(f"[DET-SAMPLING] sampled_tokens={sampled[:3]}")
 
         logprobs_tensors = (
             None if num_logprobs is None else self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)
