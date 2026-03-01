@@ -86,7 +86,7 @@ def _module_env():
     old_ar = os.environ.get(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB)
     old_partition_size = os.environ.get(_ENV_FLAGS_MAX_PARTITION_SIZE)
 
-    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0,1,2,3")
+    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0")
     os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
     os.environ[_ENV_FD_CUSTOM_AR_MAX_SIZE_MB] = os.environ.get(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB, "57")
     os.environ[_ENV_FLAGS_MAX_PARTITION_SIZE] = _CHUNK_SIZE_FOR_TEST
@@ -135,7 +135,7 @@ def llm(model_path, _module_env):
     """Create LLM instance, shared across all tests in this module."""
     instance = LLM(
         model=model_path,
-        tensor_parallel_size=int(os.getenv("TP_SIZE", "4")),
+        tensor_parallel_size=int(os.getenv("TP_SIZE", "1")),
         max_model_len=8192,
         enable_prefix_caching=False,  # Disabled for determinism testing
     )
@@ -156,15 +156,64 @@ def _generate_text(llm, prompt, sp):
     return out.outputs.text, list(out.outputs.token_ids)
 
 
+def _collect_logits_hashes():
+    """Read and clear the per-step logits hashes collected by the sampler."""
+    try:
+        from fastdeploy.model_executor.layers.sample import sampler as _sampler_mod
+        hashes = list(_sampler_mod._det_logits_hashes)
+        _sampler_mod._det_logits_hashes.clear()
+        return hashes
+    except Exception:
+        return []
+
+
+def _report_logits_diff(hashes_list):
+    """Compare logits hashes between runs and report first divergence."""
+    if len(hashes_list) < 2 or not hashes_list[0]:
+        print("[DIAG-LOGITS] No logits hashes collected (FD_DETERMINISTIC_LOG_MODE=1 ?)")
+        return
+    baseline = hashes_list[0]
+    for run_idx, hashes in enumerate(hashes_list[1:], start=1):
+        min_len = min(len(baseline), len(hashes))
+        for step in range(min_len):
+            if baseline[step]["logits_md5"] != hashes[step]["logits_md5"]:
+                print(f"[DIAG-LOGITS] Run {run_idx}: LOGITS FIRST DIFFER at step {step}")
+                print(f"[DIAG-LOGITS]   baseline logits_md5={baseline[step]['logits_md5']}, "
+                      f"probs_md5={baseline[step]['probs_md5']}")
+                print(f"[DIAG-LOGITS]   run_{run_idx} logits_md5={hashes[step]['logits_md5']}, "
+                      f"probs_md5={hashes[step]['probs_md5']}")
+                print(f"[DIAG-LOGITS]   → Non-determinism is in MODEL COMPUTATION (not sampling)")
+                return
+        if len(baseline) != len(hashes):
+            print(f"[DIAG-LOGITS] Run {run_idx}: All logits identical "
+                  f"but length differs ({len(baseline)} vs {len(hashes)})")
+            return
+        # Check if probs differ even though logits are the same
+        for step in range(min_len):
+            if baseline[step]["probs_md5"] != hashes[step]["probs_md5"]:
+                print(f"[DIAG-LOGITS] Run {run_idx}: logits identical but PROBS DIFFER at step {step}")
+                print(f"[DIAG-LOGITS]   → Non-determinism is in SOFTMAX/PENALTY (not model)")
+                return
+        print(f"[DIAG-LOGITS] Run {run_idx}: ALL logits AND probs IDENTICAL across {min_len} steps")
+        print(f"[DIAG-LOGITS]   → Non-determinism is in SAMPLING OPERATOR")
+
+
 def _assert_deterministic(llm, prompt, sp, runs=3):
     """Run *runs* times and assert all outputs are identical (text AND token_ids)."""
-    results = [_generate_text(llm, prompt, sp) for _ in range(runs)]
+    all_hashes = []
+    results = []
+    for _ in range(runs):
+        _collect_logits_hashes()  # clear before each run
+        results.append(_generate_text(llm, prompt, sp))
+        all_hashes.append(_collect_logits_hashes())
+
     texts = [r[0] for r in results]
     token_ids = [r[1] for r in results]
 
     # Check token_ids equality with detailed token-level diff
     if not all(t == token_ids[0] for t in token_ids):
         _report_token_diff(token_ids, sp)
+        _report_logits_diff(all_hashes)
         pytest.fail("Token IDs differ across runs")
 
     # Check text equality with detailed diff on failure

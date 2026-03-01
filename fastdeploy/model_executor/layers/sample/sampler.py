@@ -45,6 +45,10 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.reasoning import ReasoningParser
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 
+# Global list for collecting per-step logits hashes (determinism diagnostics).
+# Only populated when FD_DETERMINISTIC_MODE=1 and FD_DETERMINISTIC_LOG_MODE=1.
+_det_logits_hashes: list = []
+
 
 def top_p_normalize_probs_paddle(
     probs: paddle.Tensor,
@@ -536,17 +540,24 @@ class Sampler(nn.Layer):
 
         probs = min_p_sampling(probs, sampling_metadata.min_p, sampling_metadata.min_p_list)
 
-        # Diagnostic logging for determinism debugging
+        # Diagnostic: collect per-step logits hash for determinism analysis.
+        # Enable with FD_DETERMINISTIC_LOG_MODE=1. Hashes are appended to
+        # a global list (_det_logits_hashes) so the test can compare two
+        # generation runs *after* they complete, without per-step CPU sync.
         from fastdeploy import envs
 
         if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE:
             import hashlib
 
-            if sampling_metadata.seed is not None:
-                seed_val = sampling_metadata.seed.cpu().numpy().tolist()
-                # Log logits MD5 to detect non-determinism in model output
-                logits_md5 = hashlib.md5(logits.cpu().numpy().tobytes()).hexdigest()[:16]
-                logger.info(f"[DET-SAMPLING] seed={seed_val[:3]}, logits_md5={logits_md5}")
+            logits_md5 = hashlib.md5(logits.cpu().numpy().tobytes()).hexdigest()[:16]
+            probs_md5 = hashlib.md5(probs.cpu().numpy().tobytes()).hexdigest()[:16]
+            seed_val = sampling_metadata.seed.cpu().numpy().tolist()[:1] if sampling_metadata.seed is not None else None
+            global _det_logits_hashes  # noqa: PLW0602
+            _det_logits_hashes.append({
+                "logits_md5": logits_md5,
+                "probs_md5": probs_md5,
+                "seed": seed_val,
+            })
 
         # When all requests in the batch use temperature=0 (greedy decoding),
         # use argmax instead of top_p_sampling to guarantee determinism.

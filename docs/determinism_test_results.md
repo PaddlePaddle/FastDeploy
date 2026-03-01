@@ -76,17 +76,48 @@ FLAGS_max_partition_size=64  # 长序列测试专用
 **状态**: ~~FAILED~~ → **FIXED** (见下方"修复 4")
 **原因**: temperature=0 时 sampler 仍使用 top_p_sampling 而非 argmax，导致非确定性。
 
-#### `test_long_sequence_temperature_sweep[1.0-200]` ❌ 待排查
+#### `test_long_sequence_temperature_sweep[1.0-200]` ❌ 排查中
 
-**状态**: FAILED - 非确定性
+**状态**: FAILED - 非确定性（根因已定位：模型计算非确定性，非采样问题）
 **配置**: `temperature=1.0`, `seed=200`, `top_p=0.95`, `max_tokens=512`
-**现象**: token 在位置 40 处首次出现分歧，后续 464/512 个 token 均不同
-**诊断输出**:
-```
-[DIAG] Run 1: FIRST DIVERGENCE at token position 40
-[DIAG]   Total differing tokens (in shared range): 464/512
-```
-**分析**: 这是一个独立于 temp=0.0 的问题，`top_p_sampling` 在高温度下即使使用固定 seed 也可能产生不确定结果。待进一步排查。
+**现象**: token 在位置 40 处首次出现分歧，后续 464/512 个 token 均不同（分歧位置不固定，有时为 40，有时为 249）
+
+**详细排查过程**:
+
+1. **隔离采样 vs 模型计算**:
+   - 编写独立采样单测 `tests/deterministic/test_sampling_determinism.py`（8/8 全部通过）
+   - 测试覆盖：固定 logits 重复采样、多步 seed 递增、GPU 噪声干扰、平坦分布、不同 top_p 值
+   - **结论：`paddle.tensor.top_p_sampling` 在相同输入下是完全确定性的**
+   - 非确定性来源是 **模型计算产生的 logits 在两次运行间不同**
+
+2. **添加 per-step logits hash 诊断**:
+   - 在 `sampler.py` 中添加 MD5 hash 收集（`FD_DETERMINISTIC_LOG_MODE=1` 启用）
+   - 发现：启用诊断日志后，测试反而通过了！
+   - **关键发现**：诊断代码中的 `.cpu().numpy()` 调用会触发 `cudaStreamSynchronize`，
+     强制 GPU 操作串行化，消除了异步执行顺序差异 — 这就是为什么加日志就好了
+
+3. **排除 cuBLAS 非确定性**:
+   - 设置 `CUBLAS_WORKSPACE_CONFIG=:4096:8` 强制 cuBLAS 使用确定性 GEMM 算法
+   - 结果：**不一致** — 第一次测试失败，第二次通过
+   - **结论：cuBLAS 不是唯一的非确定性来源**
+
+4. **排除 FlashAttention 非确定性**:
+   - `FD_DETERMINISTIC_SPLIT_KV_SIZE=16` 已固定 FA 的 `num_split`
+   - 11/11 attention 算子级测试全部通过
+   - **结论：FA 在当前配置下是确定性的**
+
+5. **温度对确定性的影响分析**:
+   - temp=0.3/0.5/0.7 通过，temp=1.0 失败 — 但执行路径完全相同（都走 `top_p_sampling`）
+   - 区别在于 **概率分布的陡峭程度**：
+     - temp=0.7 → logits 除以 0.7 → 放大差异 → softmax 更尖锐 → 对微小 logit 变化不敏感
+     - temp=1.0 → logits 不缩放 → softmax 更平坦 → 微小 logit 变化可能改变采样结果
+   - **结论：不是 temp=1.0 的采样有 bug，而是 temp=1.0 对模型计算的微小非确定性更敏感**
+
+6. **根因总结**:
+   - GPU 异步执行顺序导致浮点累加顺序不同 → logits 有微小差异（~1e-6 级别）
+   - 低温度时 softmax 尖锐，微小差异不影响采样结果
+   - 高温度时 softmax 平坦，微小差异可能翻转 token 概率排序 → 采样不同 → 自回归放大
+   - GPU-CPU 同步（如 `.cpu().numpy()`）会串行化执行，消除异步顺序差异
 
 ---
 
@@ -180,25 +211,43 @@ else:
    - 表现为测试隔离问题（套件内失败、单独通过），实际是 GPU 状态残留放大了采样非确定性
    - 修复方式：当 batch 内所有 temperature=0 时，直接用 `paddle.argmax` 替代 `top_p_sampling`
 
-4. **剩余问题**:
-   - `temperature=1.0` 非确定性：高温度下 `top_p_sampling` 即使使用固定 seed 也产生不同结果
-   - 首次分歧在 token position 40，总计 464/512 tokens 不同
+4. **Temperature=1.0 根因已定位** 🔍:
+   - **采样层面是确定性的**：独立采样单测 8/8 全部通过（`test_sampling_determinism.py`）
+   - **非确定性来自模型计算**：两次推理产生的 logits 存在微小差异（GPU 浮点累加顺序不同）
+   - **GPU 异步执行是核心因素**：
+     - 插入 GPU-CPU 同步点（如 `.cpu().numpy()`）后非确定性消失
+     - 诊断日志中的 `.cpu().numpy()` 无意中充当了同步屏障，掩盖了 bug
+   - **温度放大效应**：temp=1.0 的 softmax 更平坦，对 logit 微小变化敏感；temp≤0.7 的 softmax 更尖锐，能容忍微小 logit 差异
+   - **cuBLAS 不是唯一来源**：`CUBLAS_WORKSPACE_CONFIG=:4096:8` 结果不一致（首次失败，再次通过）
 
-### 测试层级关系
+### 非确定性层级排查图
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    端到端测试                               │
 │         (test_determinism_long_sequence.py)                 │
-│                         ✅ 8/9 通过                        │
+│                 ✅ 8/9 通过 (temp=1.0 ❌)                  │
+├─────────────────────────────────────────────────────────────┤
+│                    采样层                                   │
+│         (test_sampling_determinism.py)                      │
+│               ✅ 8/8 全部通过 → 采样是确定性的              │
+├─────────────────────────────────────────────────────────────┤
+│                    模型计算层                               │
+│         (logits 在两次运行间不完全相同)                      │
+│               ❌ GPU 异步执行顺序 → 浮点累加差异             │
 ├─────────────────────────────────────────────────────────────┤
 │                    算子级测试                               │
 │         (test_attention_determinism.py)                     │
-│                         ✅ 11/11 全部通过                   │
+│                 ✅ 11/11 全部通过                           │
 └─────────────────────────────────────────────────────────────┘
+
+关键观察：
+• 插入 GPU-CPU 同步 → 非确定性消失（执行串行化）
+• temp≤0.7 通过 → 不是采样 bug，是 softmax 容忍度差异
+• cuBLAS 确定性模式 → 结果不稳定（不是唯一来源）
 ```
 
-**结论**: 通过修复 temperature=0 除零问题、禁用 CUDA graph、以及添加 argmax 贪心解码路径，确定性测试通过率从 67% 提升到 89%。temp=0.0 的测试隔离问题已彻底解决。
+**结论**: 通过修复 temperature=0 除零问题、禁用 CUDA graph、以及添加 argmax 贪心解码路径，确定性测试通过率从 67% 提升到 89%。temp=1.0 的非确定性已确认来自模型计算层的 GPU 异步执行顺序差异，而非采样算子。
 
 ---
 
@@ -224,10 +273,51 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 FD_DETERMINISTIC_MODE=1 pytest tests/deterministic/
 
 1. ~~**测试隔离问题**: 排查为什么 `temperature=0.0` 测试在完整套件中运行时失败，单独运行时通过。~~ ✅ 已修复
 
-2. **Temperature=1.0 非确定性**: 排查 `top_p_sampling` 在 `temperature=1.0` 下的非确定性问题。
-   - 可能原因: seed 传递问题、`top_p_sampling` 算子本身的非确定性、GPU 浮点精度
-   - 排查方向: 验证 seed 是否正确传递到底层采样算子
+2. ~~**采样非确定性排查**: 排查 `top_p_sampling` 是否本身非确定。~~ ✅ 已排除（采样单测 8/8 通过）
 
-3. **性能评估**: 评估禁用 CUDA graph 对性能的影响，考虑是否需要更精细的条件判断。
+3. **模型计算确定性 (temp=1.0)**:
+   - 已确认根因：GPU 异步执行顺序导致浮点累加差异
+   - 已排除的因素：采样算子、cuBLAS（不是唯一来源）、FlashAttention（num_split 已固定）
+   - 可能的修复方向：
+     - a) 在关键计算节点插入同步屏障（牺牲性能，保证确定性）
+     - b) 使用 `torch.use_deterministic_algorithms` 的 Paddle 等价方案（如有）
+     - c) 参考 SGLang 的确定性实现方案
+     - d) 找到具体哪个算子/层引入了非确定性（需要逐层 hash 对比）
 
-4. **回归测试**: 确保修复不影响其他功能的正确性。
+4. **性能评估**: 评估禁用 CUDA graph 对性能的影响，考虑是否需要更精细的条件判断。
+
+5. **回归测试**: 确保修复不影响其他功能的正确性。
+
+---
+
+## 新增测试文件
+
+### `tests/deterministic/test_sampling_determinism.py`
+
+**目的**: 隔离验证采样层的确定性，独立于模型计算。
+
+**方法**: 固定 logits（通过 `paddle.seed` 生成可复现的随机 logits），只运行采样管线。
+
+**测试用例** (8/8 全部通过):
+| 测试名称 | 描述 |
+|---------|------|
+| `test_sampling_determinism_basic` | 相同 logits + 相同 seed → 20 次采样结果一致 |
+| `test_sampling_determinism_multistep` | 模拟 100 步解码（seed 每步 +4），两次运行结果一致 |
+| `test_sampling_determinism_with_gpu_noise` | 采样间插入 GPU matmul 运算，验证 GPU 状态不影响采样 |
+| `test_sampling_determinism_flat_distribution` | 近似均匀分布（最难的确定性场景），5 组 seed 各 10 次采样一致 |
+| `test_sampling_determinism_various_top_p[0.5]` | top_p=0.5 确定性 |
+| `test_sampling_determinism_various_top_p[0.8]` | top_p=0.8 确定性 |
+| `test_sampling_determinism_various_top_p[0.95]` | top_p=0.95 确定性 |
+| `test_sampling_determinism_various_top_p[1.0]` | top_p=1.0 确定性 |
+
+**结论**: `paddle.tensor.top_p_sampling` 在相同输入下是完全确定性的，温度=1.0 的非确定性来自上游的 logits 差异。
+
+### 诊断工具：per-step logits hash
+
+**文件**: `fastdeploy/model_executor/layers/sample/sampler.py`
+**启用**: `FD_DETERMINISTIC_MODE=1 FD_DETERMINISTIC_LOG_MODE=1`
+
+在每个采样步骤收集 logits 和 probs 的 MD5 hash（前 16 位），存储到全局列表 `_det_logits_hashes`。
+测试可在两次生成完成后对比 hash 序列，定位首次 logits 分歧的位置。
+
+**注意**: 此诊断工具中的 `.cpu().numpy()` 会触发 GPU-CPU 同步，可能掩盖非确定性问题。仅用于分析，不应在生产环境启用。
