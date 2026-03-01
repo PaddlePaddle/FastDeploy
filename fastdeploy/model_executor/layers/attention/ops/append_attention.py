@@ -84,13 +84,13 @@ def append_attention(
     speculate_decoder: bool = False,
     sliding_window: int = 0,
     sink_size: int = 0,
-    full_hidden_size: int = 0,
+    head_wise_full_hidden: int = 0,
 ) -> paddle.Tensor:
     """
     append_attention
     """
     if current_platform.is_cuda():
-        if sliding_window > 0 and full_hidden_size > 0:
+        if sliding_window > 0 and head_wise_full_hidden > 0:
             out_swa = append_attention_gpu(
                 qkv.clone(),
                 key_cache,
@@ -206,8 +206,8 @@ def append_attention(
             sliding_window,
             sink_size,
         )
-        if full_hidden_size > 0:
-            out_swa[:, :full_hidden_size] = out[:, :full_hidden_size]
+        if head_wise_full_hidden > 0:
+            out_swa[:, :head_wise_full_hidden] = out[:, :head_wise_full_hidden]
             return out_swa
 
         return out
