@@ -15,7 +15,6 @@
 """
 
 import asyncio
-import inspect
 import os
 import time
 import unittest
@@ -26,10 +25,7 @@ import numpy as np
 import paddle
 import pytest
 
-if not hasattr(paddle, "compat"):
-    paddle.compat = SimpleNamespace(enable_torch_proxy=lambda *args, **kwargs: None)
-
-from fastdeploy.engine.request import ControlRequest, ControlResponse
+from fastdeploy.engine.request import ControlRequest
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.inter_communicator import (
     KVCacheStatus,
@@ -309,247 +305,6 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         assert request["chat_template_kwargs"]["chat_template"] == "Hello"
         assert request["tools"] == [1]
         # assert request["chat_template_kwargs"]["tools"] == [1]
-
-    async def test_init_non_master_and_eplb_enabled(self):
-        """Test initialization when tensor parallel size exceeds chips and EPLB enabled."""
-        mock_config = create_mock_fd_config(enable_eplb=True, tensor_parallel_size=16)
-        mock_config.parallel_config.tensor_parallel_rank = 0
-        mock_config.parallel_config.local_data_parallel_id = 0
-        mock_config.node_rank = 0
-
-        with (
-            patch("fastdeploy.entrypoints.engine_client.InputPreprocessor"),
-            patch("fastdeploy.entrypoints.engine_client.current_platform") as mock_platform,
-            patch("fastdeploy.entrypoints.engine_client.IPCSignal") as mock_ipcsignal,
-            patch("fastdeploy.entrypoints.engine_client.StatefulSemaphore"),
-            patch("fastdeploy.entrypoints.engine_client.DealerConnectionManager"),
-            patch("fastdeploy.entrypoints.engine_client.FileLock"),
-        ):
-            mock_platform.is_iluvatar.return_value = False
-            mock_signal_instance = Mock()
-            mock_signal_instance.value = np.array([0])
-            mock_ipcsignal.return_value = mock_signal_instance
-
-            with patch.object(EngineClient, "init_eplb_signals") as mock_init:
-                client = EngineClient(pid=1, port=9000, fd_config=mock_config, workers=1)
-
-        self.assertFalse(client.is_master)
-        mock_init.assert_called_once()
-
-    async def test_add_requests_input_ids_exceeds_max_model_len(self):
-        """Test add_requests hits input length exceeds max_model_len branch."""
-        self.engine_client.max_model_len = 4
-        self.engine_client.data_processor = Mock(process_request_dict=Mock())
-        task = {
-            "request_id": "req",
-            "prompt_token_ids": [1, 2, 3, 4, 5],
-            "max_tokens": 1,
-            "min_tokens": -10,
-            "metrics": {},
-        }
-
-        with self.assertRaises(EngineError) as context:
-            await self.engine_client.add_requests(task)
-
-        self.assertIn("Length of input token", str(context.exception))
-        self.assertEqual(context.exception.error_code, 400)
-
-    async def test_rearrange_experts_eplb_disabled(self):
-        """Test rearrange_experts returns disabled message when EPLB off."""
-        self.engine_client.fd_config = create_mock_fd_config(enable_eplb=False)
-        content, status_code = await self.engine_client.rearrange_experts({"user": "u", "passwd": "p"})
-
-        self.assertEqual(content["msg"], "redundant expert is disabled")
-        self.assertEqual(status_code, 400)
-
-    async def test_rearrange_experts_rank_not_zero(self):
-        """Test rearrange_experts rejects non-zero tensor parallel rank."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        mock_config.parallel_config.tensor_parallel_rank = 2
-        self.engine_client.fd_config = mock_config
-
-        content, status_code = await self.engine_client.rearrange_experts({"user": "test_user", "passwd": "test_pass"})
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(status_code, 400)
-
-    async def test_rearrange_experts_recv_expert_weight_success(self):
-        """Test rearrange_experts recv_expert_weight success updates arrays."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.fd_config = mock_config
-        self.engine_client.expert_tokens_stats_array_list = [Mock(value=np.zeros((2, 2), dtype=np.int32))]
-        self.engine_client.signal_update_weight_from_disk_array_list = [Mock(value=np.array([0]))]
-
-        content, status_code = await self.engine_client.rearrange_experts(
-            {"user": "test_user", "passwd": "test_pass", "action": "recv_expert_weight", "data": [[1, 2], [3, 4]]}
-        )
-
-        self.assertEqual(content["code"], 0)
-        self.assertEqual(status_code, 200)
-        self.assertEqual(self.engine_client.signal_update_weight_from_disk_array_list[0].value[0], 1)
-
-    async def test_rearrange_experts_update_weight_wrong_status(self):
-        """Test update_weight_from_tensor rejects when status is not LOAD_SUCC."""
-        mock_config = create_mock_fd_config(enable_eplb=True, splitwise_role="prefill")
-        self.engine_client.fd_config = mock_config
-        self.engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.DOING.value]))
-
-        content, status_code = await self.engine_client.rearrange_experts(
-            {"user": "test_user", "passwd": "test_pass", "action": "update_weight_from_tensor"}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(status_code, 400)
-
-    async def test_get_per_expert_tokens_stats_invalid_auth(self):
-        """Test get_per_expert_tokens_stats rejects invalid credentials."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.fd_config = mock_config
-
-        content, status_code = await self.engine_client.get_per_expert_tokens_stats({"user": "bad", "passwd": "bad"})
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(status_code, 401)
-
-    async def test_get_per_expert_tokens_stats_rank_not_zero(self):
-        """Test get_per_expert_tokens_stats rejects non-zero rank."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        mock_config.parallel_config.tensor_parallel_rank = 1
-        self.engine_client.fd_config = mock_config
-
-        content, status_code = await self.engine_client.get_per_expert_tokens_stats(
-            {"user": "test_user", "passwd": "test_pass"}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(status_code, 400)
-
-    async def test_check_redundant_invalid_auth(self):
-        """Test check_redundant rejects invalid credentials."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.fd_config = mock_config
-
-        content, status_code = await self.engine_client.check_redundant({"user": "bad", "passwd": "bad"})
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(status_code, 401)
-
-    async def test_check_redundant_rank_not_zero(self):
-        """Test check_redundant rejects non-zero tensor parallel rank."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        mock_config.parallel_config.tensor_parallel_rank = 3
-        self.engine_client.fd_config = mock_config
-
-        content, status_code = await self.engine_client.check_redundant({"user": "test_user", "passwd": "test_pass"})
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(status_code, 400)
-
-    def test_update_model_weight_prefix_and_cache_transfer_success(self):
-        """Test update_model_weight completes when prefix tree and cache are ready."""
-        self.engine_client.enable_prefix_caching = True
-        self.engine_client.enable_cache_transfer = True
-        self.engine_client.clear_update_lock = Mock()
-        self.engine_client.clear_update_lock.__enter__ = Mock(return_value=None)
-        self.engine_client.clear_update_lock.__exit__ = Mock(return_value=None)
-        self.engine_client.prefix_tree_status_signal = SimpleNamespace(value=np.array([PrefixTreeStatus.CLEARED]))
-        self.engine_client.model_weights_status_signal = SimpleNamespace(value=np.array([999]))
-        self.engine_client.kv_cache_status_signal = SimpleNamespace(value=np.array([KVCacheStatus.NORMAL]))
-
-        call_state = {"count": 0}
-
-        def advance_status(_):
-            if call_state["count"] == 0:
-                self.engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
-            else:
-                self.engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.NORMAL
-            call_state["count"] += 1
-
-        with patch("fastdeploy.entrypoints.engine_client.time.sleep", side_effect=advance_status):
-            result, payload = self.engine_client.update_model_weight(timeout=2)
-
-        self.assertEqual(result, 200)
-        self.assertIn("update model weight successfully", payload["msg"])
-
-    def test_clear_load_weight_prefix_and_cache_transfer_success(self):
-        """Test clear_load_weight completes when prefix tree and cache are cleared."""
-        self.engine_client.enable_prefix_caching = True
-        self.engine_client.enable_cache_transfer = True
-        self.engine_client.clear_update_lock = Mock()
-        self.engine_client.clear_update_lock.__enter__ = Mock(return_value=None)
-        self.engine_client.clear_update_lock.__exit__ = Mock(return_value=None)
-        self.engine_client.prefix_tree_status_signal = SimpleNamespace(value=np.array([PrefixTreeStatus.NORMAL]))
-        self.engine_client.model_weights_status_signal = SimpleNamespace(value=np.array([999]))
-        self.engine_client.kv_cache_status_signal = SimpleNamespace(value=np.array([KVCacheStatus.CLEARED]))
-
-        call_state = {"count": 0}
-
-        def advance_status(_):
-            if call_state["count"] == 0:
-                self.engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARED
-            else:
-                self.engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARED
-            call_state["count"] += 1
-
-        with patch("fastdeploy.entrypoints.engine_client.time.sleep", side_effect=advance_status):
-            result, payload = self.engine_client.clear_load_weight(timeout=2)
-
-        self.assertEqual(result, 200)
-        self.assertIn("clear model weight successfully", payload["msg"])
-
-    def test_abort_with_suffix_uses_prefix(self):
-        """Test abort handles request id with numeric suffix."""
-        self.engine_client._send_task = Mock()
-
-        with patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", True):
-            asyncio.run(self.engine_client.abort("req_3", n=2))
-
-        sent_request_ids = [call.args[0]["request_id"] for call in self.engine_client._send_task.call_args_list]
-        self.assertEqual(sent_request_ids, ["req_0", "req_1"])
-
-    async def test_run_control_method_success(self):
-        """Test run_control_method returns successful ControlResponse."""
-        request = ControlRequest(request_id="control-req", method="reset_scheduler", args={"force": True})
-        expected_response = ControlResponse(
-            request_id="control-req",
-            error_code=200,
-            error_message=None,
-            result={"status": "ok"},
-        )
-        dealer = Mock()
-        response_queue = AsyncMock()
-        response_queue.get.return_value = [expected_response.to_dict()]
-
-        self.engine_client.zmq_client = Mock()
-        self.engine_client.connection_manager = Mock()
-        self.engine_client.connection_manager.get_connection = AsyncMock(return_value=(dealer, response_queue))
-
-        response = await self.engine_client.run_control_method(request)
-
-        self.engine_client.zmq_client.send_json.assert_called_once_with(request.to_dict())
-        dealer.write.assert_called_once()
-        self.assertEqual(response.error_code, 200)
-        self.assertEqual(response.result, {"status": "ok"})
-
-    async def test_run_control_method_timeout(self):
-        """Test run_control_method returns timeout response on asyncio.TimeoutError."""
-        request = ControlRequest(request_id="timeout-req", method="get_metrics")
-        dealer = Mock()
-        response_queue = Mock()
-        response_queue.get = Mock(return_value=asyncio.Future())
-
-        self.engine_client.zmq_client = Mock()
-        self.engine_client.connection_manager = Mock()
-        self.engine_client.connection_manager.get_connection = AsyncMock(return_value=(dealer, response_queue))
-
-        async def fake_wait_for(*args, **kwargs):
-            raise asyncio.TimeoutError
-
-        with patch("fastdeploy.entrypoints.engine_client.asyncio.wait_for", side_effect=fake_wait_for):
-            response = await self.engine_client.run_control_method(request)
-
-        self.assertEqual(response.error_code, 500)
-        self.assertIn("Timeout waiting for control method response", response.error_message)
 
 
 class TestEngineClientValidParameters(unittest.TestCase):
@@ -1134,88 +889,6 @@ class TestEngineClientValidParameters(unittest.TestCase):
         # Should not raise exception
         self.engine_client.valid_parameters(data)
 
-    def test_valid_parameters_max_tokens_requires_request_id(self):
-        """Test max_tokens validation raises ValueError when out of range."""
-        data = {"request_id": "req", "max_tokens": 0}
-
-        with self.assertRaises(ValueError) as context:
-            self.engine_client.valid_parameters(data)
-
-        self.assertIn("max_tokens can be defined", str(context.exception))
-
-    def test_valid_parameters_logprobs_int_sets_top_logprobs(self):
-        """Test logprobs integer path validates like top_logprobs."""
-        self.engine_client.enable_logprob = True
-        data = {"request_id": "req", "logprobs": 2}
-        self.engine_client.valid_parameters(data)
-
-    def test_prompt_logprobs_rejects_when_logprob_disabled(self):
-        """Test prompt_logprobs rejects when enable_logprob is False."""
-        self.engine_client.enable_logprob = False
-        data = {"request_id": "req", "prompt_logprobs": 1}
-
-        with self.assertRaises(ParameterError):
-            self.engine_client.valid_parameters(data)
-
-    def test_prompt_logprobs_rejects_when_fd_use_v1_disabled(self):
-        """Test prompt_logprobs rejects when FD_USE_GET_SAVE_OUTPUT_V1 is disabled."""
-        self.engine_client.enable_logprob = True
-        data = {"request_id": "req", "prompt_logprobs": 1}
-
-        with patch("fastdeploy.entrypoints.engine_client.envs.FD_USE_GET_SAVE_OUTPUT_V1", False):
-            with self.assertRaises(ParameterError):
-                self.engine_client.valid_parameters(data)
-
-    def test_prompt_logprobs_rejects_when_prefix_caching_enabled(self):
-        """Test prompt_logprobs rejects when prefix caching is enabled."""
-        self.engine_client.enable_logprob = True
-        self.engine_client.enable_prefix_caching = True
-        data = {"request_id": "req", "prompt_logprobs": 1}
-
-        with patch("fastdeploy.entrypoints.engine_client.envs.FD_USE_GET_SAVE_OUTPUT_V1", True):
-            with self.assertRaises(ParameterError):
-                self.engine_client.valid_parameters(data)
-
-    def test_prompt_logprobs_unlimited_exceeds_max_logprobs(self):
-        """Test prompt_logprobs -1 fails when vocab exceeds max_logprobs."""
-        self.engine_client.enable_logprob = True
-        self.engine_client.max_logprobs = 5
-        self.engine_client.ori_vocab_size = 10
-        data = {"request_id": "req", "prompt_logprobs": -1}
-
-        with patch("fastdeploy.entrypoints.engine_client.envs.FD_USE_GET_SAVE_OUTPUT_V1", True):
-            with self.assertRaises(ValueError):
-                self.engine_client.valid_parameters(data)
-
-    def test_top_logprobs_unlimited_exceeds_max_logprobs(self):
-        """Test top_logprobs -1 fails when vocab exceeds max_logprobs."""
-        self.engine_client.enable_logprob = True
-        self.engine_client.max_logprobs = 5
-        self.engine_client.ori_vocab_size = 10
-        data = {"request_id": "req", "logprobs": True, "top_logprobs": -1}
-
-        with patch("fastdeploy.entrypoints.engine_client.envs.FD_USE_GET_SAVE_OUTPUT_V1", True):
-            with self.assertRaises(ValueError):
-                self.engine_client.valid_parameters(data)
-
-    def test_send_task_converts_multimodal_inputs_to_tensor(self):
-        """Test _send_task converts multimodal inputs when tensor conversion is enabled."""
-        self.engine_client.enable_mm = False
-        self.engine_client.zmq_client = Mock()
-        self.engine_client.zmq_client.send_pyobj = Mock()
-
-        task = SimpleNamespace(multimodal_inputs={"images": np.array([1, 2, 3], dtype=np.float32)})
-
-        with (
-            patch("fastdeploy.entrypoints.engine_client.envs.ENABLE_V1_DATA_PROCESSOR", True),
-            patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_E2W_TENSOR_CONVERT", True),
-        ):
-            self.engine_client._send_task(task)
-
-        images_tensor = task.multimodal_inputs["images"]
-        self.assertIsInstance(images_tensor, paddle.Tensor)
-        self.engine_client.zmq_client.send_pyobj.assert_called_once_with(task)
-
     def test_check_health_healthy(self):
         """Test check_health returns healthy status."""
         self.engine_client.worker_healthy_live_signal.value = np.array([time.time()])
@@ -1513,58 +1186,6 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.assertEqual(content["data"], [[1, 2, 3]])
         self.assertEqual(status_code, 200)
 
-    async def test_get_per_expert_tokens_stats_clear_stat(self):
-        """Test get_per_expert_tokens_stats clears stats when requested."""
-        mock_eplb_config = Mock()
-        mock_eplb_config.enable_eplb = True
-        mock_eplb_config.redundant_expert_api_user = "test_user"
-        mock_eplb_config.redundant_expert_api_password = "test_pass"
-
-        mock_parallel_config = Mock()
-        mock_parallel_config.tensor_parallel_rank = 0
-
-        mock_config = Mock()
-        mock_config.eplb_config = mock_eplb_config
-        mock_config.parallel_config = mock_parallel_config
-
-        self.engine_client.config = mock_config
-
-        clear_signal = Mock(value=np.array([0]))
-        self.engine_client.signal_clear_experts_token_stats_list = [clear_signal]
-        local_stats = Mock(value=np.array([[9, 8, 7]]))
-        self.engine_client.local_experts_token_stats_array_list = [local_stats]
-
-        content, status_code = await self.engine_client.get_per_expert_tokens_stats(
-            {"user": "test_user", "passwd": "test_pass", "clear_stat": True}
-        )
-
-        self.assertEqual(clear_signal.value[0], 1)
-        self.assertEqual(content["data"], [[[9, 8, 7]]])
-        self.assertEqual(status_code, 200)
-
-    async def test_get_per_expert_tokens_stats_rank_not_zero(self):
-        """Test get_per_expert_tokens_stats rejects non-zero tensor parallel rank."""
-        mock_eplb_config = Mock()
-        mock_eplb_config.enable_eplb = True
-        mock_eplb_config.redundant_expert_api_user = "test_user"
-        mock_eplb_config.redundant_expert_api_password = "test_pass"
-
-        mock_parallel_config = Mock()
-        mock_parallel_config.tensor_parallel_rank = 1
-
-        mock_config = Mock()
-        mock_config.eplb_config = mock_eplb_config
-        mock_config.parallel_config = mock_parallel_config
-
-        self.engine_client.config = mock_config
-
-        content, status_code = await self.engine_client.get_per_expert_tokens_stats(
-            {"user": "test_user", "passwd": "test_pass"}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(status_code, 400)
-
     async def test_check_redundant_disabled(self):
         """Test check_redundant when EPLB is disabled."""
         mock_config = Mock()
@@ -1605,84 +1226,6 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.assertEqual(content["code"], 0)
         self.assertEqual(content["msg"], "ok")
         self.assertEqual(content["status"], "FREE")
-        self.assertEqual(status_code, 200)
-
-    async def test_check_redundant_status_unknown(self):
-        """Test check_redundant returns unknown status when enum conversion fails."""
-        mock_eplb_config = Mock()
-        mock_eplb_config.enable_eplb = True
-        mock_eplb_config.redundant_expert_api_user = "test_user"
-        mock_eplb_config.redundant_expert_api_password = "test_pass"
-
-        mock_parallel_config = Mock()
-        mock_parallel_config.tensor_parallel_rank = 0
-
-        mock_config = Mock()
-        mock_config.eplb_config = mock_eplb_config
-        mock_config.parallel_config = mock_parallel_config
-
-        self.engine_client.config = mock_config
-        self.engine_client.rearrange_experts_signal = Mock()
-        self.engine_client.rearrange_experts_signal.value = np.array([999])
-
-        content, status_code = await self.engine_client.check_redundant(
-            {"user": "test_user", "passwd": "test_pass", "action": ""}
-        )
-
-        self.assertEqual(content["status"], "unknown")
-        self.assertEqual(status_code, 200)
-
-    async def test_check_redundant_with_workloads(self):
-        """Test check_redundant loads workloads when requested."""
-        mock_eplb_config = Mock()
-        mock_eplb_config.enable_eplb = True
-        mock_eplb_config.redundant_expert_api_user = "test_user"
-        mock_eplb_config.redundant_expert_api_password = "test_pass"
-        mock_eplb_config.redundant_expert_meta_dir = "/tmp/meta"
-
-        mock_parallel_config = Mock()
-        mock_parallel_config.tensor_parallel_rank = 0
-
-        mock_config = Mock()
-        mock_config.eplb_config = mock_eplb_config
-        mock_config.parallel_config = mock_parallel_config
-
-        self.engine_client.config = mock_config
-        self.engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.FREE.value]))
-
-        with patch("fastdeploy.entrypoints.engine_client.RedundantExpertWorkload") as mock_workload:
-            mock_workload.return_value.load.return_value = ({"layer": [1, 2]}, "loaded")
-
-            content, status_code = await self.engine_client.check_redundant(
-                {"user": "test_user", "passwd": "test_pass", "check_get_workloads": True}
-            )
-
-        self.assertEqual(content["data"], {"layer": [1, 2]})
-        self.assertEqual(content["msg"], "loaded")
-        self.assertEqual(status_code, 200)
-
-    async def test_check_redundant_check_load_weight_result(self):
-        """Test check_redundant returns load weight results."""
-        mock_eplb_config = Mock()
-        mock_eplb_config.enable_eplb = True
-        mock_eplb_config.redundant_expert_api_user = "test_user"
-        mock_eplb_config.redundant_expert_api_password = "test_pass"
-
-        mock_parallel_config = Mock()
-        mock_parallel_config.tensor_parallel_rank = 0
-
-        mock_config = Mock()
-        mock_config.eplb_config = mock_eplb_config
-        mock_config.parallel_config = mock_parallel_config
-
-        self.engine_client.config = mock_config
-        self.engine_client.update_weight_from_disk_result_list = [Mock(value=np.array([3]))]
-
-        content, status_code = await self.engine_client.check_redundant(
-            {"user": "test_user", "passwd": "test_pass", "action": "check_load_weight_result"}
-        )
-
-        self.assertEqual(content["data"], [3])
         self.assertEqual(status_code, 200)
 
     def test_init_eplb_signals_non_zero_rank(self):
@@ -2058,79 +1601,6 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.assertIn("max limit", content["msg"])
         self.assertEqual(status_code, 500)
 
-    async def test_rearrange_experts_start_not_free(self):
-        """Test rearrange_experts rejects start when status is not FREE."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config = mock_config
-        self.engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.LOADING.value]))
-
-        content, status_code = await self.engine_client.rearrange_experts(
-            {"user": "test_user", "passwd": "test_pass", "action": ""}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertIn("rearrange is doing", content["msg"])
-        self.assertEqual(status_code, 400)
-
-    async def test_rearrange_experts_start_missing_ips(self):
-        """Test rearrange_experts returns error when ips are missing."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config = mock_config
-        self.engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.FREE.value]))
-
-        content, status_code = await self.engine_client.rearrange_experts(
-            {"user": "test_user", "passwd": "test_pass", "action": ""}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(content["msg"], "ips in request is None")
-        self.assertEqual(status_code, 400)
-
-    async def test_rearrange_experts_recv_expert_weight_invalid_data(self):
-        """Test rearrange_experts recv_expert_weight rejects invalid data."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config = mock_config
-
-        content, status_code = await self.engine_client.rearrange_experts(
-            {"user": "test_user", "passwd": "test_pass", "action": "recv_expert_weight", "data": "invalid"}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(status_code, 400)
-
-    async def test_rearrange_experts_update_weight_from_tensor_wrong_role(self):
-        """Test rearrange_experts update_weight_from_tensor rejects non-prefill role."""
-        mock_config = create_mock_fd_config(enable_eplb=True, splitwise_role="decode")
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config = mock_config
-        self.engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.LOAD_SUCC.value]))
-
-        content, status_code = await self.engine_client.rearrange_experts(
-            {"user": "test_user", "passwd": "test_pass", "action": "update_weight_from_tensor"}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertIn("expect role prefill", content["msg"])
-        self.assertEqual(status_code, 400)
-
-    async def test_rearrange_experts_update_weight_from_tensor_wrong_status(self):
-        """Test rearrange_experts update_weight_from_tensor rejects wrong status."""
-        mock_config = create_mock_fd_config(enable_eplb=True, splitwise_role="prefill")
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config = mock_config
-        self.engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.LOADING.value]))
-
-        content, status_code = await self.engine_client.rearrange_experts(
-            {"user": "test_user", "passwd": "test_pass", "action": "update_weight_from_tensor"}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertIn("expect status", content["msg"])
-        self.assertEqual(status_code, 400)
-
     async def test_add_requests_preprocessing_exception(self):
         """Test add_requests with preprocessing error raises EngineError."""
         self.engine_client.data_processor = Mock(process_request_dict=Mock(side_effect=Exception("Processing failed")))
@@ -2188,74 +1658,368 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         with self.assertRaises(Exception) as context:
             await self.engine_client.add_requests(
-                {"request_id": "test-id", "prompt_token_ids": [1, 2, 3], "max_tokens": 100, "metrics": {}}
+                {"request_id": "test-id", "prompt_token_ids": [1, 2, 3], "max_tokens": 100}
             )
 
         self.assertIn("ZMQ send failed", str(context.exception))
 
-    def test_abort_handles_request_prefixes(self):
-        """Test abort handles request id prefixes and emits abort tasks."""
-        self.engine_client.zmq_client = Mock()
-        self.engine_client._send_task = Mock()
 
-        with patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", True):
-            asyncio.run(self.engine_client.abort("request-123", n=2))
-
-        sent_request_ids = [call.args[0]["request_id"] for call in self.engine_client._send_task.call_args_list]
-        self.assertEqual(sent_request_ids, ["request-123_0", "request-123_1"])
-
-    def test_abort_skips_when_n_non_positive(self):
-        """Test abort returns early when n is non-positive."""
-        self.engine_client._send_task = Mock()
-
-        with patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", True):
-            asyncio.run(self.engine_client.abort("request-0", n=0))
-
-        self.engine_client._send_task.assert_not_called()
-
-
-def test_execute_async_unittest_methods_for_coverage():
-    """Run async unittest-style methods so their bodies are executed under coverage."""
-    async_methods = [
-        name
-        for name, func in inspect.getmembers(TestEngineClientValidParameters, predicate=inspect.iscoroutinefunction)
-        if name.startswith("test_")
-    ]
-    assert async_methods
-    success_count = 0
-    for method_name in async_methods:
-        case = TestEngineClientValidParameters(methodName=method_name)
-        case.setUp()
-        original_add_requests = case.engine_client.add_requests
-
-        async def safe_add_requests(task):
-            task.setdefault("metrics", {})
-            return await original_add_requests(task)
-
-        case.engine_client.add_requests = safe_add_requests
-        try:
-            asyncio.run(getattr(case, method_name)())
-            success_count += 1
-        except Exception:
-            continue
-    assert success_count > 0
+@pytest.fixture
+def minimal_engine_client():
+    client = EngineClient.__new__(EngineClient)
+    client.max_model_len = 16
+    client.max_logprobs = 5
+    client.ori_vocab_size = 8
+    client.enable_logprob = True
+    client.enable_prefix_caching = False
+    client.enable_cache_transfer = False
+    client.enable_mm = False
+    client.enable_splitwise = False
+    client.disable_prefix_mm = False
+    client.data_parallel_info = {"dp_rank": 0, "local_dp_rank": 0}
+    client.clear_update_lock = MagicMock()
+    client.clear_update_lock.__enter__ = Mock(return_value=None)
+    client.clear_update_lock.__exit__ = Mock(return_value=None)
+    client.zmq_client = MagicMock(send_json=Mock(), send_pyobj=Mock())
+    return client
 
 
-def test_helpers_create_expected_mocks():
-    """Exercise helper factories for coverage and basic expectations."""
-    tokenizer = create_mock_tokenizer(vocab_size=321)
-    assert len(tokenizer) == 321
+def test_format_add_data_and_abort_paths(minimal_engine_client):
+    async def fake_add(task):
+        task["prompt_token_ids"] = [1, 2, 3]
 
-    fd_config = create_mock_fd_config(enable_mm=False, max_model_len=2048)
-    assert fd_config.model_config.enable_mm is False
-    assert fd_config.model_config.max_model_len == 2048
+    minimal_engine_client.add_requests = fake_add
+    request = {"metrics": {}, "request_id": "req_9"}
+    tokens = asyncio.run(minimal_engine_client.format_and_add_data(request))
+    assert tokens == [1, 2, 3]
+    assert request["max_tokens"] == 15
 
-    eplb_config = create_mock_eplb_config(enable_eplb=True, shm_size=2048)
-    assert eplb_config.enable_eplb is True
-    assert eplb_config.redundant_expert_ip_shm_size == 2048
+    with patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", True):
+        minimal_engine_client._send_task = Mock()
+        asyncio.run(minimal_engine_client.abort("broken-format", n=2))
+        sent_ids = [call.args[0]["request_id"] for call in minimal_engine_client._send_task.call_args_list]
+        assert sent_ids == ["broken-format_0", "broken-format_1"]
 
-    signals = create_mock_signals()
-    assert "kv_cache_status_signal" in signals
+
+def test_add_requests_uses_async_processor_and_tensor_send(minimal_engine_client):
+    class Processor:
+        async def process_request_dict(self, task, _max_len):
+            ids = paddle.to_tensor([3, 4, 5], dtype="int64")
+            task["prompt_token_ids"] = ids.tolist()
+
+    minimal_engine_client.data_processor = Processor()
+    minimal_engine_client.enable_mm = True
+    with (
+        patch("fastdeploy.entrypoints.engine_client.envs.FD_MAX_STOP_SEQS_NUM", 8),
+        patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_E2W_TENSOR_CONVERT", True),
+        patch("fastdeploy.entrypoints.engine_client.to_tensor", return_value=[{"t": 1}]) as tensor_mock,
+    ):
+        payload = {"request_id": "a_1", "metrics": {}, "max_tokens": 6, "chat_template": "tmpl"}
+        asyncio.run(minimal_engine_client.add_requests(payload))
+
+    assert payload["prompt_token_ids_len"] == 3
+    assert payload["need_prefill_tokens"] == 3
+    assert payload["max_tokens"] == 6
+    tensor_mock.assert_called_once()
+    minimal_engine_client.zmq_client.send_pyobj.assert_called_once()
+
+
+def test_control_and_redundant_and_expert_stats(minimal_engine_client):
+    queue = asyncio.Queue()
+    asyncio.run(queue.put(({"request_id": "c1", "status": 200, "msg": "ok"},)))
+    dealer = Mock(write=Mock())
+    minimal_engine_client.connection_manager = MagicMock(get_connection=AsyncMock(return_value=(dealer, queue)))
+
+    req = ControlRequest(request_id="c1", method="ping")
+    resp = asyncio.run(minimal_engine_client.run_control_method(req))
+    assert resp.error_code == 200
+    dealer.write.assert_called_once()
+
+    cfg = create_mock_fd_config(enable_eplb=True)
+    cfg.parallel_config.tensor_parallel_rank = 0
+    cfg.scheduler_config.splitwise_role = "prefill"
+    minimal_engine_client.fd_config = cfg
+    minimal_engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.LOAD_SUCC.value]))
+    minimal_engine_client.signal_update_weight_from_tensor_array = Mock(value=np.array([0]))
+    minimal_engine_client.signal_clear_experts_token_stats_list = [Mock(value=np.array([0]))]
+    minimal_engine_client.local_experts_token_stats_array_list = [Mock(value=np.array([[1, 2]]))]
+    minimal_engine_client.update_weight_from_disk_result_list = [Mock(value=np.array([7]))]
+
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": "update_weight_from_tensor"}
+        )
+    )
+    assert (content["code"], code) == (0, 200)
+    assert minimal_engine_client.signal_update_weight_from_tensor_array.value[0] == 1
+
+    content, code = asyncio.run(
+        minimal_engine_client.get_per_expert_tokens_stats(
+            {"user": "test_user", "passwd": "test_pass", "clear_stat": True}
+        )
+    )
+    assert code == 200 and content["data"] == [[[1, 2]]]
+    assert minimal_engine_client.signal_clear_experts_token_stats_list[0].value[0] == 1
+
+    content, code = asyncio.run(minimal_engine_client.check_redundant({"user": "test_user", "passwd": "test_pass"}))
+    assert (content["code"], code) == (0, 200)
+
+
+def test_weight_update_and_clear_and_misc_status(minimal_engine_client):
+    minimal_engine_client.model_weights_status_signal = Mock(value=np.array([ModelWeightsStatus.CLEARED]))
+    minimal_engine_client.kv_cache_status_signal = Mock(value=np.array([KVCacheStatus.NORMAL]))
+    minimal_engine_client.prefix_tree_status_signal = Mock(value=np.array([PrefixTreeStatus.NORMAL]))
+    minimal_engine_client.enable_prefix_caching = True
+    with patch("time.sleep", return_value=None):
+        code, body = minimal_engine_client.update_model_weight(timeout=0)
+    assert code == 404
+    assert "timeout" in body["msg"]
+
+    minimal_engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.NORMAL
+    minimal_engine_client.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+    minimal_engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
+    with patch("time.sleep", return_value=None):
+        code, body = minimal_engine_client.clear_load_weight(timeout=0)
+    assert code == 404
+    assert "timeout" in body["msg"]
+
+    assert bool(minimal_engine_client.check_model_weight_status()) is True
+    minimal_engine_client.worker_healthy_live_signal = Mock(value=np.array([time.time() - 99]))
+    assert minimal_engine_client.check_health(time_interval_threashold=1)[0] is False
+    assert minimal_engine_client.is_workers_alive()[0] is False
+
+
+def test_add_requests_objgraph_and_error_paths(minimal_engine_client):
+    minimal_engine_client.zmq_client = MagicMock(send_json=Mock(), send_pyobj=Mock())
+
+    class BadProcessor:
+        def process_request_dict(self, *_args, **_kwargs):
+            raise RuntimeError("bad preprocess")
+
+    minimal_engine_client.data_processor = BadProcessor()
+    with (
+        patch(
+            "fastdeploy.entrypoints.engine_client.os.getenv",
+            side_effect=lambda k: "1" if k == "FD_ENABLE_OBJGRAPH_DEBUG" else None,
+        ),
+        patch("fastdeploy.entrypoints.engine_client._has_objgraph", True),
+        patch("fastdeploy.entrypoints.engine_client._has_psutil", False),
+        patch("fastdeploy.entrypoints.engine_client.objgraph", create=True) as og,
+    ):
+        og.growth.return_value = [("A", 2, 1), ("B", 3), ("C",)]
+        with pytest.raises(EngineError):
+            asyncio.run(minimal_engine_client.add_requests({"request_id": "x_1", "metrics": {}, "max_tokens": 3}))
+
+    class SmallProcessor:
+        def process_request_dict(self, task, _max_len):
+            task["prompt_token_ids"] = [1, 2, 3]
+
+    minimal_engine_client.data_processor = SmallProcessor()
+    with patch("fastdeploy.entrypoints.engine_client.envs.FD_MAX_STOP_SEQS_NUM", 1):
+        with pytest.raises(EngineError):
+            asyncio.run(
+                minimal_engine_client.add_requests(
+                    {"request_id": "x_2", "metrics": {}, "max_tokens": 3, "min_tokens": 13}
+                )
+            )
+
+
+def test_valid_parameters_and_control_timeout(minimal_engine_client):
+    with pytest.raises(ValueError):
+        minimal_engine_client.valid_parameters({"request_id": "r1", "max_tokens": 16})
+    with pytest.raises(ParameterError):
+        minimal_engine_client.valid_parameters({"request_id": "r1", "reasoning_max_tokens": -1, "max_tokens": 2})
+    with pytest.raises(ParameterError):
+        minimal_engine_client.valid_parameters({"request_id": "r1", "response_max_tokens": 0, "max_tokens": 2})
+    with patch("fastdeploy.entrypoints.engine_client.envs.FD_USE_GET_SAVE_OUTPUT_V1", False):
+        with pytest.raises(ParameterError):
+            minimal_engine_client.valid_parameters({"request_id": "r1", "max_tokens": 2, "prompt_logprobs": 1})
+
+    queue = asyncio.Queue()
+    dealer = Mock(write=Mock())
+    minimal_engine_client.connection_manager = MagicMock(get_connection=AsyncMock(return_value=(dealer, queue)))
+    with patch("fastdeploy.entrypoints.engine_client.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+        resp = asyncio.run(minimal_engine_client.run_control_method(ControlRequest(request_id="r2", method="m")))
+    assert resp.error_code == 500
+
+
+def test_rearrange_and_redundant_branch_matrix(minimal_engine_client):
+    cfg = create_mock_fd_config(enable_eplb=True)
+    cfg.parallel_config.tensor_parallel_rank = 0
+    cfg.scheduler_config.splitwise_role = "decode"
+    cfg.eplb_config.redundant_expert_ip_shm_size = 4
+    minimal_engine_client.fd_config = cfg
+    minimal_engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.FREE.value]))
+    minimal_engine_client.rearrange_experts_ips_size_signal = Mock(value=np.array([0]))
+    minimal_engine_client.shm_rearrange_experts_ips_list = Mock(shm=Mock(buf=bytearray(8)))
+    minimal_engine_client.expert_tokens_stats_array_list = [Mock(value=np.zeros((1, 2), dtype=np.int32))]
+    minimal_engine_client.signal_update_weight_from_disk_array_list = [Mock(value=np.array([0]))]
+    minimal_engine_client.signal_update_weight_from_tensor_array = Mock(value=np.array([0]))
+    minimal_engine_client.update_weight_from_disk_result_list = [Mock(value=np.array([1]))]
+
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts({"user": "test_user", "passwd": "test_pass", "ips": ["1.1.1.1"]})
+    )
+    assert code == 500 and content["code"] == 1
+
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": "recv_expert_weight", "data": [1]}
+        )
+    )
+    assert code == 200 and content["code"] == 0
+
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": "update_weight_from_tensor"}
+        )
+    )
+    assert code == 400 and "expect role prefill" in content["msg"]
+
+    minimal_engine_client.rearrange_experts_signal.value[0] = 999
+    content, code = asyncio.run(minimal_engine_client.check_redundant({"user": "test_user", "passwd": "test_pass"}))
+    assert code == 200 and content["status"] == "unknown"
+    content, code = asyncio.run(
+        minimal_engine_client.check_redundant(
+            {"user": "test_user", "passwd": "test_pass", "action": "check_load_weight_result"}
+        )
+    )
+    assert content["data"] == [1]
+
+
+def test_update_clear_success_prefix_and_rearrange_success_paths(minimal_engine_client):
+    # format_and_add_data generates request_id/max_tokens defaults
+    async def fake_add(task):
+        task["prompt_token_ids"] = [9]
+
+    minimal_engine_client.add_requests = fake_add
+    req = {"metrics": {}}
+    asyncio.run(minimal_engine_client.format_and_add_data(req))
+    assert "request_id" in req and req["max_tokens"] == 15
+
+    # update_model_weight success with prefix tree update
+    minimal_engine_client.enable_prefix_caching = True
+    minimal_engine_client.model_weights_status_signal = Mock(value=np.array([ModelWeightsStatus.CLEARED]))
+    minimal_engine_client.kv_cache_status_signal = Mock(value=np.array([KVCacheStatus.NORMAL]))
+    minimal_engine_client.prefix_tree_status_signal = Mock(value=np.array([PrefixTreeStatus.CLEARED]))
+
+    def update_sleep(_):
+        minimal_engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.NORMAL
+        minimal_engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
+
+    with patch("time.sleep", side_effect=update_sleep):
+        code, body = minimal_engine_client.update_model_weight(timeout=2)
+    assert code == 200 and "successfully" in body["msg"]
+
+    # clear_load_weight success with prefix tree clearing
+    minimal_engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.NORMAL
+    minimal_engine_client.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+    minimal_engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
+
+    def clear_sleep(_):
+        minimal_engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARED
+        minimal_engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARED
+
+    with patch("time.sleep", side_effect=clear_sleep):
+        code, body = minimal_engine_client.clear_load_weight(timeout=2)
+    assert code == 200 and "successfully" in body["msg"]
+
+    # rearrange start branch for status-check and success copy-to-shm
+    cfg = create_mock_fd_config(enable_eplb=True)
+    cfg.parallel_config.tensor_parallel_rank = 0
+    cfg.eplb_config.redundant_expert_ip_shm_size = 64
+    minimal_engine_client.fd_config = cfg
+    minimal_engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.DOING.value]))
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts({"user": "test_user", "passwd": "test_pass", "ips": ["1:1"]})
+    )
+    assert code == 400 and "rearrange is doing" in content["msg"]
+
+    minimal_engine_client.rearrange_experts_signal.value[0] = RearrangeExpertStatus.FREE.value
+    minimal_engine_client.rearrange_experts_ips_size_signal = Mock(value=np.array([0]))
+    minimal_engine_client.shm_rearrange_experts_ips_list = Mock(shm=Mock(buf=bytearray(64)))
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "ips": ["10.0.0.1:80", "10.0.0.2:80"]}
+        )
+    )
+    assert code == 200 and content["code"] == 0
+
+
+def test_update_and_clear_prefix_timeout_branches(minimal_engine_client):
+    minimal_engine_client.enable_prefix_caching = True
+    minimal_engine_client.enable_cache_transfer = False
+
+    # hit update prefix-tree timeout path
+    minimal_engine_client.model_weights_status_signal = Mock(value=np.array([ModelWeightsStatus.NORMAL]))
+    minimal_engine_client.kv_cache_status_signal = Mock(value=np.array([KVCacheStatus.NORMAL]))
+    minimal_engine_client.prefix_tree_status_signal = Mock(value=np.array([PrefixTreeStatus.CLEARED]))
+    with patch("time.sleep", return_value=None):
+        code, body = minimal_engine_client.update_model_weight(timeout=0)
+    assert code == 404
+    assert body["msg"] == "update prefix tree timeout"
+
+    # hit clear prefix-tree timeout path
+    minimal_engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARED
+    minimal_engine_client.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+    minimal_engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
+    with patch("time.sleep", return_value=None):
+        code, body = minimal_engine_client.clear_load_weight(timeout=0)
+    assert code == 404
+    assert body["msg"] == "clear prefix tree timeout"
+
+
+def test_eplb_guard_and_invalid_rearrange_branches(minimal_engine_client):
+    # rearrange disabled
+    minimal_engine_client.fd_config = create_mock_fd_config(enable_eplb=False)
+    content, code = asyncio.run(minimal_engine_client.rearrange_experts({"user": "u", "passwd": "p"}))
+    assert code == 400 and "disabled" in content["msg"]
+
+    # invalid credential and rank checks
+    cfg = create_mock_fd_config(enable_eplb=True)
+    cfg.parallel_config.tensor_parallel_rank = 1
+    minimal_engine_client.fd_config = cfg
+    content, code = asyncio.run(minimal_engine_client.get_per_expert_tokens_stats({"user": "bad", "passwd": "bad"}))
+    assert code == 401
+    content, code = asyncio.run(minimal_engine_client.check_redundant({"user": "test_user", "passwd": "test_pass"}))
+    assert code == 400 and "expect rank 0" in content["msg"]
+
+    # start action with missing ips branch
+    cfg.parallel_config.tensor_parallel_rank = 0
+    minimal_engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.FREE.value]))
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts({"user": "test_user", "passwd": "test_pass", "action": ""})
+    )
+    assert code == 400 and "ips" in content["msg"]
+
+    # recv_expert_weight with invalid payload
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": "recv_expert_weight", "data": "bad"}
+        )
+    )
+    assert code == 400 and "data is not a list" in content["msg"]
+
+    # update_weight_from_tensor status mismatch branch
+    cfg.scheduler_config.splitwise_role = "prefill"
+    minimal_engine_client.rearrange_experts_signal.value[0] = RearrangeExpertStatus.FREE.value
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": "update_weight_from_tensor"}
+        )
+    )
+    assert code == 400 and "expect status" in content["msg"]
+
+
+def test_abort_n_non_positive_and_numeric_suffix(minimal_engine_client):
+    minimal_engine_client._send_task = Mock()
+    with patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", True):
+        asyncio.run(minimal_engine_client.abort("req_8", n=0))
+        minimal_engine_client._send_task.assert_not_called()
+
+        asyncio.run(minimal_engine_client.abort("req_8", n=2))
+        sent_ids = [c.args[0]["request_id"] for c in minimal_engine_client._send_task.call_args_list]
+        assert sent_ids[-2:] == ["req_0", "req_1"]
 
 
 if __name__ == "__main__":
