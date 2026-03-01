@@ -491,6 +491,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.rope_theta = 10000
         self.sliding_window = 128
         self.sink_size = 0  # Only supports sinksize = 0 or 128.
+        self.head_wise_full_hidden = 0
         self.dtype = "bfloat16"
         self.use_qk_norm = True
         self.use_mask_offset = False
@@ -723,6 +724,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 False,  # speculate_decoder
                 self.sliding_window,
                 self.sink_size,
+                self.head_wise_full_hidden,
             )
 
         # Warm up
@@ -787,6 +789,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 False,  # speculate_decoder
                 self.sliding_window,
                 self.sink_size,
+                self.head_wise_full_hidden,
             )
 
         # Warm up
@@ -895,6 +898,7 @@ class TestAppendGroupQueryAttnWithNeoXRope(TestAppendGroupQueryAttnWithRope):
         self.rope_theta = 10000
         self.sliding_window = 128
         self.sink_size = 0
+        self.head_wise_full_hidden = 0
         self.dtype = "float16"
         self.use_qk_norm = False
         self.use_mask_offset = True
@@ -925,6 +929,7 @@ class TestAppendGroupQueryAttnWithRopeDyCfp8(TestAppendGroupQueryAttnWithRope):
         self.rope_theta = 10000
         self.sliding_window = 0
         self.sink_size = 0  # Only supports sinksize = 0 or 128.
+        self.head_wise_full_hidden = 0
         self.dtype = "bfloat16"
         self.use_qk_norm = True
         self.use_mask_offset = False
@@ -955,6 +960,7 @@ class TestAppendGroupQueryAttnWithRopeAboutSinkSwa(TestAppendGroupQueryAttnWithR
         self.rope_theta = 10000
         self.sliding_window = 8
         self.sink_size = 128  # Only supports sinksize = 0 or 128.
+        self.head_wise_full_hidden = 1
         self.dtype = "bfloat16"
         self.use_qk_norm = True
         self.use_mask_offset = True
