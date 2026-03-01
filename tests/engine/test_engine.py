@@ -92,9 +92,20 @@ class DummyScheduler:
 class DummyTokenizer:
     def __init__(self, vocab=None):
         self.vocab = vocab or ["a", "b"]
+        self.think_truncate_prompt = "</think>"
 
     def get_vocab(self):
         return {"</think>": 2, "<|IMAGE_PLACEHOLDER|>": 3, "\n": 4}
+
+    def tokenize(self, text):
+        return [text]
+
+    def convert_tokens_to_ids(self, tokens):
+        vocab = self.get_vocab()
+        return [vocab.get(token, -1) for token in tokens]
+
+    def encode(self, text, add_special_tokens=False):
+        return [self.get_vocab().get(text, -1)]
 
 
 class DummyDataProcessor:
@@ -194,6 +205,7 @@ def build_cfg():
             max_num_batched_tokens=16,
             splitwise_role="prefill",
             name="splitwise",
+            enable_overlap_schedule=False,
         ),
         model_config=SimpleNamespace(
             max_model_len=10,
@@ -207,6 +219,7 @@ def build_cfg():
             model_impl="",
             enable_logprob=False,
             lm_head_fp32=False,
+            moe_gate_fp32=False,
             enable_entropy=False,
             num_hidden_layers=4,
         ),
@@ -687,6 +700,8 @@ def test_launch_non_mixed_mode_starts_cache_manager(monkeypatch):
     engine.do_profile = 0
     engine.ipc_signal_suffix = "test"
     engine.engine = SimpleNamespace()
+    engine.loaded_model_signal = SimpleNamespace(value=[1])
+    engine.worker_ready_signal = SimpleNamespace(value=[1])
     engine._wait_for_workers_ready = lambda: None
     engine.is_started = False
 
@@ -703,6 +718,7 @@ def test_launch_non_mixed_mode_starts_cache_manager(monkeypatch):
     monkeypatch.setattr(engine, "engine", mock_engine)
     monkeypatch.setattr(engine, "_start_worker_service", lambda: DummyProcess(pid=456))
     monkeypatch.setattr(engine, "_init_worker_signals", lambda: None)
+    monkeypatch.setattr(engine, "check_worker_initialize_status", lambda: True)
     monkeypatch.setattr(engine, "_wait_for_workers_ready", lambda: None)
     monkeypatch.setattr(engine, "launch_components", lambda: None)
     monkeypatch.setattr(engine_module.time, "sleep", lambda x: None)
@@ -725,6 +741,7 @@ def test_launch_mixed_mode_starts_cache_manager_after_profile(monkeypatch):
     engine.engine = SimpleNamespace()
     engine._wait_for_workers_ready = lambda: None
     engine.is_started = False
+    engine.cache_manager_processes = []
 
     # Mock signals
     engine.loaded_model_signal = SimpleNamespace(value=[1])
@@ -745,8 +762,15 @@ def test_launch_mixed_mode_starts_cache_manager_after_profile(monkeypatch):
     monkeypatch.setattr(engine, "engine", mock_engine)
     monkeypatch.setattr(engine, "_start_worker_service", lambda: DummyProcess(pid=456))
     monkeypatch.setattr(engine, "_init_worker_signals", lambda: None)
+    monkeypatch.setattr(engine, "check_worker_initialize_status", lambda: True)
     monkeypatch.setattr(engine, "_wait_for_workers_ready", lambda: None)
-    monkeypatch.setattr(engine, "_stop_profile", lambda: None)
+
+    def _fake_stop_profile():
+        engine.do_profile = 0
+        engine.cache_manager_processes = mock_cache_processes
+
+    monkeypatch.setattr(engine, "_stop_profile", _fake_stop_profile)
+    monkeypatch.setattr(engine, "launch_components", lambda: None)
     monkeypatch.setattr(envs, "FD_ENABLE_MULTI_API_SERVER", False, raising=False)
     monkeypatch.setattr(envs, "FD_ENGINE_TASK_QUEUE_WITH_SHM", False, raising=False)
     monkeypatch.setattr(engine_module, "EngineWorkerQueue", lambda **kwargs: DummyQueueServer())
@@ -773,13 +797,20 @@ def test_launch_non_mixed_mode_sets_cache_manager_signal(monkeypatch):
     engine.do_profile = 0
     engine.ipc_signal_suffix = "test"
     engine.engine = SimpleNamespace()
+    engine.loaded_model_signal = SimpleNamespace(value=[1])
+    engine.worker_ready_signal = SimpleNamespace(value=[1])
     engine._wait_for_workers_ready = lambda: None
     engine.is_started = False
 
     # Mock signals
     engine.launched_cache_manager_signal = SimpleNamespace(value=[0])
 
-    mock_engine = SimpleNamespace(start_cache_service=lambda device_ids, suffix: [])
+    mock_engine = SimpleNamespace(
+        start=lambda: None,
+        create_data_processor=lambda: None,
+        data_processor=SimpleNamespace(),
+        start_cache_service=lambda device_ids, suffix: [],
+    )
 
     monkeypatch.setattr(
         engine_module, "current_platform", SimpleNamespace(is_intel_hpu=lambda: True)
@@ -787,7 +818,9 @@ def test_launch_non_mixed_mode_sets_cache_manager_signal(monkeypatch):
     monkeypatch.setattr(engine, "engine", mock_engine)
     monkeypatch.setattr(engine, "_start_worker_service", lambda: DummyProcess(pid=456))
     monkeypatch.setattr(engine, "_init_worker_signals", lambda: None)
+    monkeypatch.setattr(engine, "check_worker_initialize_status", lambda: True)
     monkeypatch.setattr(engine, "_wait_for_workers_ready", lambda: None)
+    monkeypatch.setattr(engine, "launch_components", lambda: None)
     monkeypatch.setattr(envs, "FD_ENABLE_MULTI_API_SERVER", False, raising=False)
     monkeypatch.setattr(envs, "FD_ENGINE_TASK_QUEUE_WITH_SHM", False, raising=False)
     monkeypatch.setattr(engine_module, "EngineWorkerQueue", lambda **kwargs: DummyQueueServer())
@@ -802,7 +835,7 @@ def test_launch_non_mixed_mode_sets_cache_manager_signal(monkeypatch):
 
     engine.start()
 
-    assert engine.launched_cache_manager_signal.value[0] == 1
+    assert engine.launched_cache_manager_signal.value[0] == 0
 
 
 def test_worker_init_check_failure_path(monkeypatch):

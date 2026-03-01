@@ -263,8 +263,15 @@ def test_top_p_normalize_probs_and_padding_params():
     infer_seed = paddle.to_tensor([100, 200], dtype="int64")
     seq_lens_this_time = paddle.to_tensor([3, 2], dtype="int64")
     seq_lens_encoder = paddle.to_tensor([0, 1], dtype="int64")
-    with pytest.raises(RuntimeError, match="gather"):
-        padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_lens_encoder)
+    top_p_pad, top_k_pad, seed_pad = padding_sampling_params(
+        top_p, top_k, infer_seed, seq_lens_this_time, seq_lens_encoder
+    )
+    assert top_p_pad.shape == [4, 1]
+    assert top_k_pad.shape == [4, 1]
+    assert seed_pad.shape == [4, 1]
+    assert paddle.allclose(top_p_pad.squeeze(), paddle.to_tensor([0.9, 0.9, 0.9, 0.8], dtype="float32"))
+    assert paddle.equal_all(top_k_pad.squeeze(), paddle.to_tensor([10, 10, 10, 20], dtype="int64"))
+    assert paddle.equal_all(seed_pad.squeeze(), paddle.to_tensor([100, 104, 108, 200], dtype="int64"))
 
 
 def test_guided_decoding_update_apply_and_accept_paths(monkeypatch):

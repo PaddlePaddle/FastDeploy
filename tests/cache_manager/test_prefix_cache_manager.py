@@ -417,7 +417,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             "mm_match_block",
             return_value=([], [], [], manager.radix_tree_root, 0, 0),
         ):
-            with self.assertRaises(ValueError):
+            with self.assertRaises(TypeError):
                 manager.request_match_blocks(task, block_size=2)
 
     def test_get_required_block_num_rounds_up(self):
