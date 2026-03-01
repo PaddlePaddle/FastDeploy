@@ -1,4 +1,4 @@
-[English](../../best_practices/DeepSeek-V3-V3.1.md)
+[English](../../best_practices/DeepSeek-V3.md)
 
 # DeepSeek-V3/V3.1 模型
 
