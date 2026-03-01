@@ -1422,6 +1422,9 @@ class CacheConfig:
                 self.cache_dtype = self.model_cfg.quantization.get("kv_cache_quant_type", self.cache_dtype)
             if self.model_cfg.quantization_config is not None:
                 self.cache_dtype = self.model_cfg.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
+            if any(t in self.cache_dtype.lower() for t in ["int4", "int8", "float4", "float8"]):
+                self.cache_dtype = "uint8"
+
             self.head_num = getattr(self.model_cfg, "num_key_value_heads", None) or getattr(
                 self.model_cfg, "num_attention_heads", None
             )
@@ -1450,7 +1453,7 @@ class CacheConfig:
             return 2
         elif any(t in cache_dtype.lower() for t in ["uint8", "int8", "float8", "fp8"]):
             return 1
-        elif any(t in cache_dtype.lower() for t in ["int4"]):
+        elif any(t in cache_dtype.lower() for t in ["int4", "float4"]):
             return 0.5
         else:
             raise ValueError(f"Unsupported cache dtype: {cache_dtype}")
