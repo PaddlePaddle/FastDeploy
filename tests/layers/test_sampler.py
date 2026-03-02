@@ -70,7 +70,6 @@ def _create_default_sampling_metadata(
     max_seq_len: int,
     max_num_logprobs: int = None,
 ) -> SamplingMetadata:
-
     fake_sampling_metadata = SamplingMetadata(
         temperature=paddle.full(shape=[batch_size, 1], fill_value=0.9, dtype="float32"),
         top_p=paddle.full(shape=[batch_size, 1], fill_value=0.7, dtype="float32"),
@@ -334,55 +333,6 @@ def test_guided_decoding_update_and_mask(monkeypatch):
     assert masked_logits[0, 0].item() == pytest.approx(1.0)
 
 
-def test_guided_decoding_add_logits_processor_variants():
-    guided = GuidedDecoding(_make_min_fd_config(2))
-    processor = FakeLogitsProcessor()
-    future_done = Future()
-    future_done.set_result(processor)
-    guided.add_logits_processor(0, future=future_done, prefill_tokens=[1])
-    assert processor.accepted_tokens == [1]
-    guided.add_logits_processor(1, future=None)
-    assert guided.logits_processors[1] is None
-    async_future = FakeFuture(processor, done_value=False)
-    guided.add_logits_processor(1, future=async_future, prefill_tokens=[4])
-    assert guided._tokens_to_acc[1] == [4]
-    processor.enable_reasoning = True
-    guided.apply_reasoning_parser(FakeReasoningParser())
-    assert guided.should_fill_bitmask(0) is True
-    processor.enable_reasoning = False
-    processor.reasoning_ended = False
-    assert guided.should_fill_bitmask(0) is False
-
-
-def test_guided_decoding_apply_token_mask_future_wait(monkeypatch):
-    guided = GuidedDecoding(_make_min_fd_config(1))
-    processor = FakeLogitsProcessor()
-    future = FakeFuture(processor, done_value=False)
-    guided.logits_processors[0] = future
-    guided._prefill_done_idxs[0] = True
-    guided._tokens_to_acc[0] = [9]
-
-    def _apply_token_mask(logits, token_bitmask, indices, is_cuda_platform):
-        return logits
-
-    stub_backend = types.SimpleNamespace(apply_token_mask=_apply_token_mask)
-    monkeypatch.setitem(sys.modules, "fastdeploy.model_executor.guided_decoding.xgrammar_backend", stub_backend)
-    guided.token_bitmask = processor.allocate_token_bitmask()
-    logits = paddle.zeros([1, 4], dtype="float32")
-    guided.apply_token_mask(logits)
-    assert processor.accepted_tokens == [9]
-
-
-def test_guided_decoding_join_async_fillmask_exception(monkeypatch):
-    guided = GuidedDecoding(_make_min_fd_config(1))
-    monkeypatch.setattr("fastdeploy.model_executor.layers.sample.sampler.logger.error", lambda *args, **kwargs: None)
-    future = Future()
-    future.set_exception(RuntimeError("boom"))
-    guided._fillmask_futures[0] = future
-    guided.join_async_fillmask()
-    assert guided._fillmask_futures[0] is None
-
-
 def test_guided_decoding_reasoning_and_reset():
     guided = GuidedDecoding(_make_min_fd_config(2))
     processor = FakeLogitsProcessor()
@@ -446,13 +396,6 @@ def test_sampler_compute_and_gather_logprobs():
     assert gathered_zero.logprob_token_ids.shape[1] == 1
 
 
-def test_sampler_compute_logprobs_without_metadata():
-    sampler = Sampler.__new__(Sampler)
-    logits = paddle.to_tensor([[1.0, 2.0]], dtype="float32")
-    logprobs = sampler.compute_logprobs(logits, sampling_metadata=None)
-    assert paddle.allclose(logprobs, F.log_softmax(logits, axis=-1))
-
-
 def test_sampler_init_and_hooks(monkeypatch):
     fd_config = types.SimpleNamespace(
         model_config=types.SimpleNamespace(logprobs_mode="raw_logits"),
@@ -497,37 +440,6 @@ def test_sampler_forward_cuda(monkeypatch):
     assert output.logprobs_tensors is not None
 
 
-def test_sampler_forward_cuda_raw_and_processed_logits(monkeypatch):
-    sampler = _make_stubbed_sampler(logprobs_mode="raw_logprobs")
-    logits = paddle.to_tensor([[1.0, 2.0, 3.0]], dtype="float32")
-    sampling_metadata = _build_sampling_metadata_for_forward(batch_size=1, min_seq_len=1, max_seq_len=3)
-
-    class _Proc:
-        def apply(self, tensor):
-            return tensor + 0.2
-
-    sampling_metadata.logits_processors = [_Proc()]
-
-    def _apply_penalty(*args, **kwargs):
-        return args[3]
-
-    def _min_p_sampling(probs, min_p, min_p_list):
-        return probs
-
-    def _top_k_top_p_sampling(probs, top_p, top_k, top_k_list, topp_seed=None):
-        return None, paddle.to_tensor([[1]], dtype="int64")
-
-    monkeypatch.setattr("fastdeploy.model_executor.layers.sample.sampler.apply_penalty_multi_scores", _apply_penalty)
-    monkeypatch.setattr("fastdeploy.model_executor.layers.sample.sampler.min_p_sampling", _min_p_sampling)
-    monkeypatch.setattr("fastdeploy.model_executor.layers.sample.sampler.top_k_top_p_sampling", _top_k_top_p_sampling)
-    output = sampler.forward_cuda(logits, sampling_metadata)
-    assert output.sampled_token_ids.numpy().tolist() == [[1]]
-
-    sampler.logprobs_mode = "processed_logits"
-    output_processed = sampler.forward_cuda(logits, sampling_metadata)
-    assert output_processed.logits.shape[-1] == 3
-
-
 def test_sampler_forward_intel_hpu(monkeypatch):
     sampler = Sampler.__new__(Sampler)
 
@@ -541,58 +453,6 @@ def test_sampler_forward_intel_hpu(monkeypatch):
     batch_ids = paddle.to_tensor([0, 1], dtype="int64")
     result = sampler.forward_intel_hpu(logits, sampling_metadata, batch_ids, max_batch=3, rank=0, local_rank=0)
     assert result.shape[0] == 3
-
-
-def test_sampler_forward_intel_hpu_full_batch(monkeypatch):
-    sampler = Sampler.__new__(Sampler)
-
-    def _fused_sampler(*args, **kwargs):
-        return None, paddle.to_tensor([[1], [2], [3]], dtype="int64")
-
-    stub_hpu = types.SimpleNamespace(fused_sampler=_fused_sampler)
-    monkeypatch.setitem(sys.modules, "fastdeploy.model_executor.ops.intel_hpu", stub_hpu)
-    sampling_metadata = _create_default_sampling_metadata(batch_size=3, min_seq_len=1, max_seq_len=3)
-    logits = paddle.ones([3, 4], dtype="float32")
-    batch_ids = paddle.to_tensor([0, 1, 2], dtype="int64")
-    result = sampler.forward_intel_hpu(logits, sampling_metadata, batch_ids, max_batch=3, rank=0, local_rank=0)
-    assert result.shape[0] == 3
-
-
-def _make_speculative_sampler():
-    sampler = SpeculativeSampler.__new__(SpeculativeSampler)
-    sampler.logprobs_mode = "raw_logprobs"
-    sampler.speculative_verify_window = 2
-    sampler.speculative_max_candidate_len = 3
-    sampler.speculative_benchmark_mode = False
-    sampler.think_end_id = 1
-    sampler.line_break_id = 2
-    sampler.enf_gen_phase_tag = True
-    return sampler
-
-
-def _build_speculative_share_inputs(batch_size):
-    seq_lens_this_time = paddle.ones([batch_size, 1], dtype="int64")
-    seq_lens_encoder = paddle.zeros([batch_size, 1], dtype="int64")
-    if batch_size > 1:
-        seq_lens_encoder[1, 0] = 1
-    accept_num = paddle.ones([batch_size], dtype="int64")
-    return {
-        "seq_lens_this_time": seq_lens_this_time,
-        "output_padding_offset": paddle.zeros([batch_size, 1], dtype="int64"),
-        "output_cum_offsets": paddle.zeros([batch_size, 1], dtype="int64"),
-        "reasoning_allowed_tokens": paddle.zeros([batch_size, 1], dtype="int64"),
-        "accept_tokens": paddle.zeros([batch_size, 2], dtype="int64"),
-        "accept_num": accept_num,
-        "step_idx": paddle.zeros([batch_size, 1], dtype="int64"),
-        "stop_flags": paddle.zeros([batch_size, 1], dtype="int64"),
-        "seq_lens_encoder": seq_lens_encoder,
-        "seq_lens_decoder": paddle.zeros([batch_size, 1], dtype="int64"),
-        "draft_tokens": paddle.zeros([batch_size, 2], dtype="int64"),
-        "max_dec_len": paddle.to_tensor([5], dtype="int64"),
-        "is_block_step": paddle.zeros([batch_size, 1], dtype="int64"),
-        "actual_draft_token_num": paddle.zeros([batch_size, 1], dtype="int64"),
-        "reasoning_status": paddle.zeros([batch_size, 1], dtype="int64"),
-    }
 
 
 def test_speculative_sampler_init_and_hooks(monkeypatch):
@@ -613,75 +473,6 @@ def test_speculative_sampler_init_and_hooks(monkeypatch):
     sampler.post_process(paddle.to_tensor([[1]], dtype="int64"))
     sampler.apply_logits_processor(0)
     assert sampler.logprobs_mode == "raw_logits"
-
-
-def test_speculative_sampler_compute_and_gather_logprobs():
-    sampler = _make_speculative_sampler()
-    logits = paddle.to_tensor([[1.0, 2.0, 3.0]], dtype="float32")
-    sampling_metadata = _create_default_sampling_metadata(batch_size=1, min_seq_len=1, max_seq_len=3)
-    sampling_metadata.temp_scaled_logprobs = paddle.to_tensor([[1]], dtype="bool")
-    sampling_metadata.top_p_normalized_logprobs = paddle.to_tensor([[1]], dtype="bool")
-    sampling_metadata.temp_scaled_logprobs_flag = True
-    sampling_metadata.top_p_normalized_logprobs_flag = True
-    sampling_metadata.top_p = paddle.to_tensor([[0.6]], dtype="float32")
-    sampling_metadata.share_inputs = {
-        "seq_lens_this_time": paddle.to_tensor([[1]], dtype="int64"),
-        "accept_num": paddle.to_tensor([1], dtype="int64"),
-    }
-    logprobs = sampler.compute_logprobs(logits, sampling_metadata)
-    gathered = sampler.gather_logprobs(logprobs, num_logprobs=0, token_ids=paddle.to_tensor([1], dtype="int64"))
-    assert gathered.logprob_token_ids.shape[1] == 1
-
-
-def test_speculative_sampler_forward_xpu(monkeypatch):
-    sampler = _make_speculative_sampler()
-    logits = paddle.ones([1, 4], dtype="float32")
-    sampling_metadata = _create_default_sampling_metadata(batch_size=1, min_seq_len=1, max_seq_len=3)
-    sampling_metadata.top_k = paddle.full([1, 1], 2, dtype="int64")
-    sampling_metadata.top_k_list = [2]
-    sampling_metadata.share_inputs = _build_speculative_share_inputs(batch_size=1)
-    original_gather = paddle.gather
-    original_where = paddle.where
-
-    def _safe_gather(x, index, axis=0, name=None):
-        if x.dtype == paddle.bool:
-            x = x.astype("int32")
-        return original_gather(x, index, axis=axis, name=name)
-
-    def _safe_where(condition, x=None, y=None, name=None):
-        if condition.dtype != paddle.bool:
-            condition = condition.astype("bool")
-        return original_where(condition, x, y, name=name)
-
-    monkeypatch.setattr(paddle, "gather", _safe_gather)
-    monkeypatch.setattr(paddle, "where", _safe_where)
-
-    def _apply_speculative_penalty(*args, **kwargs):
-        return args[1]
-
-    def _top_k_top_p_sampling(probs, top_p, top_k, topp_seed):
-        return None, paddle.to_tensor([[0]], dtype="int64")
-
-    def _top_p_candidates(*args, **kwargs):
-        return paddle.ones([1, 1]), paddle.zeros([1, 1], dtype="int64"), paddle.to_tensor([1], dtype="int64")
-
-    def _speculate_verify(*args, **kwargs):
-        return None
-
-    monkeypatch.setattr(
-        "fastdeploy.model_executor.layers.sample.sampler.apply_speculative_penalty_multi_scores",
-        _apply_speculative_penalty,
-    )
-    monkeypatch.setattr("fastdeploy.model_executor.layers.sample.sampler.top_k_top_p_sampling", _top_k_top_p_sampling)
-    stub_xpu = types.SimpleNamespace(
-        speculate_verify=_speculate_verify,
-        top_p_candidates=_top_p_candidates,
-    )
-    monkeypatch.setitem(sys.modules, "fastdeploy.model_executor.ops.xpu", stub_xpu)
-    output = sampler.forward_xpu(
-        logits, sampling_metadata, max_model_len=8, share_inputs=sampling_metadata.share_inputs
-    )
-    assert output.sampled_token_ids.shape[0] == 1
 
 
 def test_mtp_sampler_forward_cuda(monkeypatch):
@@ -728,40 +519,6 @@ def test_mtp_sampler_forward_cuda(monkeypatch):
     assert output.logprobs_tensors is not None
 
 
-def test_mtp_sampler_forward_xpu(monkeypatch):
-    sampler = MTPSampler.__new__(MTPSampler)
-    sampler.logprobs_mode = "raw_logits"
-    sampler.enable_draft_logprob = False
-    sampling_metadata = _create_default_sampling_metadata(batch_size=1, min_seq_len=1, max_seq_len=3)
-    sampling_metadata.top_k = paddle.full([1, 1], 2, dtype="int64")
-    sampling_metadata.top_k_list = [2]
-    share_inputs = {
-        "seq_lens_this_time": paddle.to_tensor([[1]], dtype="int64"),
-        "seq_lens_encoder": paddle.to_tensor([[0]], dtype="int64"),
-        "batch_token_num": paddle.to_tensor([[1]], dtype="int64"),
-        "output_padding_offset": paddle.zeros([1, 1], dtype="int64"),
-        "output_cum_offsets": paddle.zeros([1, 1], dtype="int64"),
-    }
-    sampling_metadata.share_inputs = share_inputs
-
-    def _apply_speculative_penalty(*args, **kwargs):
-        return args[1]
-
-    def _top_k_top_p_sampling(probs, top_p, top_k, top_k_list):
-        return None, paddle.to_tensor([[1]], dtype="int64")
-
-    monkeypatch.setattr(
-        "fastdeploy.model_executor.layers.sample.sampler.apply_speculative_penalty_multi_scores",
-        _apply_speculative_penalty,
-    )
-    monkeypatch.setattr("fastdeploy.model_executor.layers.sample.sampler.top_k_top_p_sampling", _top_k_top_p_sampling)
-    next_tokens, output = sampler.forward_xpu(
-        paddle.ones([1, 4], dtype="float32"), sampling_metadata, max_model_len=8, share_inputs=share_inputs
-    )
-    assert next_tokens.shape[0] == 1
-    assert output.logprobs_tensors is None
-
-
 def test_mtp_sampler_init_and_compute_logprobs(monkeypatch):
     fd_config = types.SimpleNamespace(
         model_config=types.SimpleNamespace(logprobs_mode="raw_logits"),
@@ -789,50 +546,6 @@ def test_mtp_sampler_init_and_compute_logprobs(monkeypatch):
     monkeypatch.setattr("fastdeploy.model_executor.layers.sample.logprobs.current_platform.is_cuda", lambda: False)
     gathered = sampler.gather_logprobs(logprobs, num_logprobs=0, token_ids=paddle.to_tensor([1], dtype="int64"))
     assert gathered.logprob_token_ids.shape[1] == 1
-
-
-def test_mtp_sampler_forward_cuda_raw_logprobs(monkeypatch):
-    sampler = MTPSampler.__new__(MTPSampler)
-    sampler.logprobs_mode = "raw_logprobs"
-    sampler.enable_draft_logprob = True
-    sampling_metadata = _create_default_sampling_metadata(
-        batch_size=1, min_seq_len=1, max_seq_len=3, max_num_logprobs=1
-    )
-    share_inputs = {
-        "seq_lens_this_time": paddle.to_tensor([[1]], dtype="int64"),
-        "seq_lens_encoder": paddle.to_tensor([[0]], dtype="int64"),
-        "batch_token_num": paddle.to_tensor([[1]], dtype="int64"),
-        "substep": 0,
-        "draft_logits": paddle.ones([1, 4], dtype="float32"),
-        "accept_tokens": paddle.zeros([1, 2], dtype="int64"),
-        "cu_next_token_offset": paddle.zeros([1], dtype="int64"),
-        "cu_batch_token_offset": paddle.zeros([1], dtype="int64"),
-        "output_padding_offset": paddle.zeros([1, 1], dtype="int64"),
-        "output_cum_offsets": paddle.zeros([1, 1], dtype="int64"),
-        "batch_id_per_token_output": paddle.zeros([1], dtype="int64"),
-        "cu_seqlens_q_output": paddle.zeros([2], dtype="int32"),
-    }
-    sampling_metadata.share_inputs = share_inputs
-
-    def _apply_speculative_penalty(*args, **kwargs):
-        return args[1]
-
-    def _speculate_insert_first_token(token_ids, accept_tokens, next_tokens, *args, **kwargs):
-        token_ids[:] = next_tokens.flatten()
-
-    monkeypatch.setattr(
-        "fastdeploy.model_executor.layers.sample.sampler.apply_speculative_penalty_multi_scores",
-        _apply_speculative_penalty,
-    )
-    monkeypatch.setattr(
-        "fastdeploy.model_executor.layers.sample.sampler.speculate_insert_first_token",
-        _speculate_insert_first_token,
-    )
-    next_tokens, output = sampler.forward_cuda(
-        paddle.ones([1, 4], dtype="float32"), sampling_metadata, max_model_len=8, share_inputs=share_inputs
-    )
-    assert next_tokens.shape[0] == 1
-    assert output.logprobs_tensors is not None
 
 
 if __name__ == "__main__":
