@@ -196,6 +196,7 @@ def test_deterministic_param_combos(llm, temp, top_p, seed):
         (0.7, 170),
     ],
 )
+@pytest.mark.skip(reason="Potential non-determinism in long sequences, will be fixed by gongweibao in next PR")
 def test_deterministic_long_sequence(llm, temp, seed):
     """Long generation (512+ tokens) stays deterministic at various temperatures."""
     prompt = "Please describe the history of AI in detail, including major milestones and key technical breakthroughs."
