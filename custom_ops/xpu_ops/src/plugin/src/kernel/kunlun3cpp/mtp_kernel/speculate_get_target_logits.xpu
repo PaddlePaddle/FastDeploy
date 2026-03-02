@@ -1,0 +1,85 @@
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/*
+ * copyright (C) 2022 KUNLUNXIN, Inc
+ */
+
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+
+namespace xpu3 {
+namespace plugin {
+
+__global__ void speculate_get_target_logits_kernel(
+    float* target_logtis,
+    const float* logits,
+    const int* cu_batch_token_offset,
+    const int* ori_cu_batch_token_offset,
+    const int* seq_lens_this_time,
+    const int* seq_lens_encoder,
+    const int* accept_num,
+    const int vocab_size,
+    const int real_bsz) {
+  int ncores = core_num();
+  int cid = core_id();
+  int clus_id = cluster_id();
+  int tid = cid * cluster_num() + cluster_id();
+  int nthreads = cluster_num() * ncores;
+
+  int lm_size = 2 * 1024;
+  int lm_buf_len = lm_size / sizeof(float);
+  float logits_now_lm[lm_buf_len];
+
+  int cu_batch_token_offset_lm;
+  int ori_cu_batch_token_offset_lm;
+  int seq_len_encoder_lm;
+  int accept_num_lm;
+
+  for (int bid = clus_id; bid < real_bsz; bid += cluster_num()) {
+    // TODO(chenhuan09)：prefix_sum GM2SM
+
+    GM2LM_ASYNC(
+        cu_batch_token_offset + bid, &cu_batch_token_offset_lm, sizeof(int));
+    GM2LM_ASYNC(ori_cu_batch_token_offset + bid,
+                &ori_cu_batch_token_offset_lm,
+                sizeof(int));
+    GM2LM_ASYNC(accept_num + bid, &accept_num_lm, sizeof(int));
+    GM2LM(seq_lens_encoder + bid, &seq_len_encoder_lm, sizeof(int));
+
+    auto* target_logtis_now =
+        target_logtis + cu_batch_token_offset_lm * vocab_size;
+    auto* logits_now = logits + ori_cu_batch_token_offset_lm * vocab_size;
+
+    for (int i = cid * lm_buf_len; i < vocab_size; i += ncores * lm_buf_len) {
+      int read_len = min(lm_buf_len, vocab_size - i);
+      if (seq_len_encoder_lm > 0) {
+        GM2LM(logits_now + i, logits_now_lm, read_len * sizeof(float));
+        LM2GM(logits_now_lm, target_logtis_now + i, read_len * sizeof(float));
+      } else {
+        for (int j = 0; j < accept_num_lm; j++) {
+          GM2LM(logits_now + j * vocab_size + i,
+                logits_now_lm,
+                read_len * sizeof(float));
+          LM2GM(logits_now_lm,
+                target_logtis_now + j * vocab_size + i,
+                read_len * sizeof(float));
+        }
+      }
+    }
+  }
+}
+
+}  // namespace plugin
+}  // namespace xpu3

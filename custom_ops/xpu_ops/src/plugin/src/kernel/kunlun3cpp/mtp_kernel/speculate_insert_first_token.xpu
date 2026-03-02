@@ -1,0 +1,74 @@
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/*
+ * copyright (C) 2022 KUNLUNXIN, Inc
+ */
+
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/xtdk_io.h"
+
+namespace xpu3 {
+namespace plugin {
+
+__global__ void speculate_insert_first_token_kernel(
+    int64_t* token_ids,
+    const int64_t* accept_tokens,
+    const int64_t* next_tokens,
+    const int* cu_next_token_offset,
+    const int* cu_batch_token_offset,
+    const int* seq_lens_this_time,
+    const int* seq_lens_encoder,
+    const int max_draft_tokens,
+    const int real_bsz) {
+  int cid = core_id();
+  int clus_id = cluster_id();
+  int tid = cid * cluster_num() + cluster_id();
+
+  int cu_batch_token_offset_lm;
+  int cu_next_token_offset_lm;
+  int seq_lens_encoder_lm;
+  int seq_lens_this_time_lm;
+  // max draft token = 6
+  int64_t token_buf_lm[6];
+
+  // 12 * 64 = 768, if max bsz > 768, need to change
+  if (tid < real_bsz) {
+    GM2LM_ASYNC(seq_lens_encoder + tid, &seq_lens_encoder_lm, sizeof(int));
+    GM2LM_ASYNC(
+        cu_batch_token_offset + tid, &cu_batch_token_offset_lm, sizeof(int));
+    GM2LM(cu_next_token_offset + tid, &cu_next_token_offset_lm, sizeof(int));
+
+    auto* token_ids_now = token_ids + cu_batch_token_offset_lm;
+    auto* accept_tokens_now = accept_tokens + tid * max_draft_tokens;
+    auto* next_tokens_now = next_tokens + cu_next_token_offset_lm;
+
+    if (seq_lens_encoder_lm != 0) {
+      GM2LM_ASYNC(accept_tokens_now, token_buf_lm, sizeof(int64_t));
+      GM2LM(next_tokens_now, token_buf_lm + 1, sizeof(int64_t));
+      LM2GM(token_buf_lm, token_ids_now, 2 * sizeof(int64_t));
+    } else {
+      GM2LM(seq_lens_this_time + tid, &seq_lens_this_time_lm, sizeof(int));
+      GM2LM(next_tokens_now,
+            token_buf_lm,
+            seq_lens_this_time_lm * sizeof(int64_t));
+      LM2GM(
+          token_buf_lm, token_ids_now, seq_lens_this_time_lm * sizeof(int64_t));
+    }
+  }
+}
+
+}  // namespace plugin
+}  // namespace xpu3

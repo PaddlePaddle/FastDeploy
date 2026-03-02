@@ -724,6 +724,28 @@ DLL_EXPORT int speculate_limit_thinking_content_length_kernel(
     const int eos_token_id_len,
     const int inject_len,
     const bool splitwise_role_is_decode);
+DLL_EXPORT int speculate_get_target_logits(Context* ctx,
+                                           float* target_logtis,
+                                           const float* logits,
+                                           const int* cu_batch_token_offset,
+                                           const int* ori_cu_batch_token_offset,
+                                           const int* seq_lens_this_time,
+                                           const int* seq_lens_encoder,
+                                           const int* accept_num,
+                                           const int vocab_size,
+                                           const int real_bsz);
+
+DLL_EXPORT int speculate_insert_first_token(Context* ctx,
+                                            int64_t* token_ids,
+                                            const int64_t* accept_tokens,
+                                            const int64_t* next_tokens,
+                                            const int* cu_next_token_offset,
+                                            const int* cu_batch_token_offset,
+                                            const int* seq_lens_this_time,
+                                            const int* seq_lens_encoder,
+                                            const int max_draft_tokens,
+                                            const int real_bsz);
+
 /*--------------------------------------- MTP end
  * --------------------------------------------*/
 
