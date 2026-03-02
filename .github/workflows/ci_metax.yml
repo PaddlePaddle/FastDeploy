@@ -6,7 +6,7 @@ on:
       - opened
       - synchronize
     branches:
-      - develop
+      - develop_1
       - release/**
 
 permissions:

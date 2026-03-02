@@ -1,5 +1,5 @@
-name: 4-GPU E2E Tests
-description: "Run FastDeploy e2e tests on 4 GPUs"
+name: GOLANG_ROUTER Tests
+description: "Run FastDeploy golang_router tests"
 
 on:
   workflow_call:
@@ -17,6 +17,11 @@ on:
         description: "URL of the FastDeploy Wheel."
         required: true
         type: string
+      FASTDEPLOY_ROUTER_URL:
+        description: "URL of the FastDeploy Router"
+        required: true
+        type: string
+        default: "https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router"
       CACHE_DIR:
         description: "Cache Dir Use"
         required: false
@@ -32,8 +37,8 @@ on:
         required: true
 
 jobs:
-  run_4_cards_tests:
-    runs-on: [self-hosted, GPU-h20-4Cards]
+  run_golang_router_tests:
+    runs-on: [self-hosted, GPU-h20-2Cards]
     timeout-minutes: 30
     steps:
       - name: Code Prepare
@@ -84,11 +89,12 @@ jobs:
           git config --global user.email "fastdeploy_ci@example.com"
           git log -n 3 --oneline
 
-      - name: Run Four Cards Tests
+      - name: Run Golang_Router Tests
         shell: bash
         env:
           docker_image: ${{ inputs.DOCKER_IMAGE }}
           fd_wheel_url: ${{ inputs.FASTDEPLOY_WHEEL_URL }}
+          fd_router_url: ${{ inputs.FASTDEPLOY_ROUTER_URL }}
           CACHE_DIR: ${{ inputs.CACHE_DIR }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           MODEL_CACHE_DIR: ${{ inputs.MODEL_CACHE_DIR }}
@@ -172,13 +178,13 @@ jobs:
           -e "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}" \
           -e TZ="Asia/Shanghai" \
           -e "fd_wheel_url=${fd_wheel_url}" \
+          -e "fd_router_url=${fd_router_url}" \
           -e "BASE_REF=${BASE_REF}" \
           -e "IS_PR=${IS_PR}" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -c '
 
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
-          git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
 
           python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -189,6 +195,9 @@ jobs:
           python -m pip install ${fd_wheel_url} --no-deps --target=/workspace/FastDeploy
           export PYTHONPATH=/workspace/FastDeploy/
 
-          export CUDA_VISIBLE_DEVICES=0,1,2,3
-          bash scripts/run_gpu_4cards.sh
+          # download fd-router binary
+          wget -q --no-proxy ${fd_router_url} -O /usr/local/bin/fd-router
+          chmod +x /usr/local/bin/fd-router
+
+          bash scripts/run_golang_router.sh
           '
