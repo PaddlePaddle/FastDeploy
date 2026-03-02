@@ -696,19 +696,24 @@ class ProposerInputBatch(InputBatch):
         if current_platform.is_cuda():
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
-            self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
-            # TODO: delete pre_ids in mtp
-            self.pre_ids = paddle.full(
-                [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
-                -1,
-                dtype="int64",
-            )
-            for bs_idx in range(self.scheduler_config.max_num_seqs):
-                prompt_len = self.target_model_input_batch["prompt_lens"][bs_idx]
-                pre_ids_len = self.model_config.max_model_len - prompt_len
-                self.pre_ids[bs_idx, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][
-                    bs_idx, prompt_len:
-                ]
+            if "token_ids_all" in self.target_model_input_batch:
+                self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
+                # TODO: delete pre_ids in mtp
+                self.pre_ids = paddle.full(
+                    [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
+                    -1,
+                    dtype="int64",
+                )
+                for bs_idx in range(self.scheduler_config.max_num_seqs):
+                    prompt_len = self.target_model_input_batch["prompt_lens"][bs_idx]
+                    pre_ids_len = self.model_config.max_model_len - prompt_len
+                    self.pre_ids[bs_idx, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][
+                        bs_idx, prompt_len:
+                    ]
+            else:
+                self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+                self.token_ids_all = None
+                self.fake_prompt_lens = paddle.full([self.scheduler_config.max_num_seqs, 1], 0, dtype="int64")
         else:
             self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
             self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
@@ -923,19 +928,24 @@ class ProposerInputBatch(InputBatch):
             self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
             self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
             if current_platform.is_cuda():
-                self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
-                # TODO: delete pre_ids in mtp
-                self.pre_ids = paddle.full(
-                    [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
-                    -1,
-                    dtype="int64",
-                )
-                for bs_idx in range(self.scheduler_config.max_num_seqs):
-                    prompt_len = self.target_model_input_batch["prompt_lens"][bs_idx]
-                    pre_ids_len = self.model_config.max_model_len - prompt_len
-                    self.pre_ids[bs_idx, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][
-                        bs_idx, prompt_len:
-                    ]
+                if "token_ids_all" in self.target_model_input_batch:
+                    self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
+                    # TODO: delete pre_ids in mtp
+                    self.pre_ids = paddle.full(
+                        [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
+                        -1,
+                        dtype="int64",
+                    )
+                    for bs_idx in range(self.scheduler_config.max_num_seqs):
+                        prompt_len = self.target_model_input_batch["prompt_lens"][bs_idx]
+                        pre_ids_len = self.model_config.max_model_len - prompt_len
+                        self.pre_ids[bs_idx, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][
+                            bs_idx, prompt_len:
+                        ]
+                else:
+                    self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+                    self.token_ids_all = None
+                    self.fake_prompt_lens = paddle.full([self.scheduler_config.max_num_seqs, 1], 0, dtype="int64")
             else:
                 self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
             self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
