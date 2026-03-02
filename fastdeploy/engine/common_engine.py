@@ -2118,9 +2118,8 @@ class EngineService:
             self.scheduler.start(role, host_ip, self.cfg.register_info)
         elif self.cfg.scheduler_config.name == "dp":
             request_queues_for_dp_ipc = []
-            result_queue_for_dp_ipc = multiprocessing.Queue()
-            for i in range(self.cfg.parallel_config.data_parallel_size):
-                request_queues_for_dp_ipc.append(multiprocessing.Queue())
+            result_queue_for_dp_ipc = [multiprocessing.Queue()]
+            request_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.scheduler.start(
                 self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
                 request_queues_for_dp_ipc,
