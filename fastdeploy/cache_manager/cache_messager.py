@@ -376,8 +376,13 @@ class CacheMessager:
                             item["decode_device_ids"] if "decode_device_ids" in item else item["device_ids"]
                         )
                         decode_idx = int(decode_device_ids[self.rank])
-                    src_block_ids = paddle.to_tensor(item["src_block_ids"], dtype="int32", place="cpu")
-                    dest_block_ids = paddle.to_tensor(item["dest_block_ids"], dtype="int32", place="cpu")
+
+                    if current_transfer_protocol == "ipc":
+                        src_block_ids = paddle.to_tensor(item["src_block_ids"], dtype="int32", place="cpu")
+                        dest_block_ids = paddle.to_tensor(item["dest_block_ids"], dtype="int32", place="cpu")
+                    else:
+                        src_block_ids = item["src_block_ids"]
+                        dest_block_ids = item["dest_block_ids"]
                     if item["current_id"] < prefilled_step_idx:
                         current_layer_idx = self.num_layers
                     else:
@@ -771,6 +776,9 @@ class CacheMessagerV1:
 
                                 src_block_ids = task["src_block_ids"][block_id_start:block_id_end]
                                 dest_block_ids = task["dest_block_ids"][block_id_start:block_id_end]
+                                if current_transfer_protocol == "ipc":
+                                    src_block_ids = paddle.to_tensor(src_block_ids, dtype="int32", place="cpu")
+                                    dest_block_ids = paddle.to_tensor(dest_block_ids, dtype="int32", place="cpu")
 
                                 logger.info(
                                     f"start write cache for a layer, {req_id}, {layer_idx}, {decode_ip}, {decode_idx}, block_id_start {block_id_start} block_id_end {block_id_end}"
