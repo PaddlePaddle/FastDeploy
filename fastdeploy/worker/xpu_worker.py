@@ -124,10 +124,7 @@ class XpuWorker(WorkerBase):
             f"free_memory: {free_memory / 1024**3}GB."
         )
 
-        if self.parallel_config.use_ep:
-            logger.warning("EP mode does not support profile run.")
-        else:
-            self.model_runner.profile_run()
+        self.model_runner.profile_run()
         set_random_seed(self.fd_config.model_config.seed)
 
         total_available_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
@@ -135,8 +132,6 @@ class XpuWorker(WorkerBase):
         available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
         available_kv_cache_memory += model_block_memory_used * self.cache_config.total_block_num
-        if self.parallel_config.use_ep:
-            available_kv_cache_memory = int(available_kv_cache_memory * 0.6)
 
         self.model_runner.clear_block_table()
 

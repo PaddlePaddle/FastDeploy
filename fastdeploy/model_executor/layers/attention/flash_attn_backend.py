@@ -57,7 +57,6 @@ if TYPE_CHECKING:
 
 from fastdeploy.platforms import current_platform
 
-paddle.compat.enable_torch_proxy(scope={"cutlass"})
 flashmask_attention_v4 = None
 
 if current_platform.is_cuda():
@@ -79,6 +78,7 @@ def init_flash_attn_version():
         sm_version = get_sm_version()
         if sm_version >= 100:
             try:
+                paddle.compat.enable_torch_proxy(scope={"cutlass"})
                 from flash_mask.cute.interface import flashmask_attention as fa4
 
                 global flashmask_attention_v4
@@ -97,6 +97,9 @@ def init_flash_attn_version():
                 logger.info("The current platform only support Flash Attention V2.")
     else:
         logger.info("Only support CUDA version flash attention.")
+
+
+init_flash_attn_version()
 
 
 def flash_attn_func(
