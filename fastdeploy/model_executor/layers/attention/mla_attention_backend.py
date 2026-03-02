@@ -24,7 +24,6 @@ import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
-import flash_mla
 import paddle
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
 
@@ -642,6 +641,8 @@ class MLAAttentionBackend(AttentionBackend):
 
                 return fmha_out
             else:
+                import flash_mla
+
                 decoder_q, cache_seqlens = extract_decoder_token_from_q(
                     q,
                     forward_meta.cu_seqlens_q,
