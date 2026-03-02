@@ -221,8 +221,9 @@ std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
   cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, 0);
 
   constexpr int BLOCKS_PER_SM = 2;
-  int gridx = std::min(sm_count * BLOCKS_PER_SM, token_num);
-  int blockx = std::min(1024, hidden_size / 128 * 32);
+  int gridx =
+      std::min(static_cast<int64_t>(sm_count * BLOCKS_PER_SM), token_num);
+  int blockx = std::min(1024L, hidden_size / 128 * 32);
 
   bool use_finegrained_range = false;
   if (auto* env = getenv("PER_TOKEN_QUANT_FP8_USE_FINEGRAINED_RANGE"))
