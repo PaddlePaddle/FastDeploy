@@ -23,6 +23,8 @@ from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import fused_neox_rope_embedding, gelu_tanh
+elif current_platform.is_iluvatar():
+    from fastdeploy.model_executor.ops.iluvatar import fused_neox_rope_embedding
 
 
 def rotate_half(x):
@@ -66,7 +68,7 @@ jit_unified_marker = paddle.jit.marker.unified if hasattr(paddle.jit.marker, "un
 def neox_rope_embedding(
     qkv: paddle.Tensor, cos_emb: paddle.Tensor, sin_emb: paddle.Tensor, num_heads: int, head_dim: int
 ) -> List[paddle.Tensor]:
-    if current_platform.is_cuda() and paddle.in_dynamic_mode():
+    if (current_platform.is_cuda() or current_platform.is_iluvatar()) and paddle.in_dynamic_mode():
         return fused_neox_rope_embedding(qkv, cos_emb, sin_emb, num_heads, head_dim)
     else:
         return native_neox_rope_embedding(qkv, cos_emb, sin_emb, num_heads)

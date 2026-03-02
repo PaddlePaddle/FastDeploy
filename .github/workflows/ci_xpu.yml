@@ -21,7 +21,7 @@ jobs:
     uses: ./.github/workflows/_build_xpu.yml
     with:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:xpu-ubuntu2204-x86_64-gcc123-py310
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
 
   xpu_4cards_case_test:
     name: xpu_4cards_case_test
@@ -29,7 +29,7 @@ jobs:
     uses: ./.github/workflows/_xpu_4cards_case_test.yml
     with:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:xpu-ubuntu2204-x86_64-gcc123-py310
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
       FASTDEPLOY_WHEEL_URL: ${{ needs.xpu_build_test.outputs.wheel_path }}
       MODEL_PATH: /ssd3/model
 
@@ -39,6 +39,6 @@ jobs:
     uses: ./.github/workflows/_xpu_8cards_case_test.yml
     with:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:xpu-ubuntu2204-x86_64-gcc123-py310
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
       FASTDEPLOY_WHEEL_URL: ${{ needs.xpu_build_test.outputs.wheel_path }}
       MODEL_PATH: /ssd3/model

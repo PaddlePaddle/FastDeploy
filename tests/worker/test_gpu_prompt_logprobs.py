@@ -45,6 +45,7 @@ class MockConfig:
         max_logprobs = -1
         logprobs_mode = "raw_logprobs"
         enable_mm = False
+        mm_max_tokens_per_item = None
 
     class SchedulerConfig:
         max_num_seqs = 6
@@ -63,6 +64,9 @@ class MockConfig:
     scheduler_config = SchedulerConfig()
     cache_config = CacheConfig()
     parallel_config = ParallelConfig()
+
+    def get_max_chunk_tokens(self, mm_max_tokens_per_item=None):
+        return 8192
 
 
 class MockTask:

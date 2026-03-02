@@ -27,8 +27,9 @@ def test_set_stop_value_multi_ends_with_stop_seq():
     eos_token_id = paddle.to_tensor([2], dtype="int64")
     next_tokens = paddle.to_tensor([[61502], [2]], dtype="int64")
 
-    pre_ids = paddle.full([2, 32768], -1, dtype="int64")
-    pre_ids[0, :10] = np.array([21, 22, 23, 24, 25, 26, 27, 28, 8038, 61502])
+    token_ids_all = paddle.full([2, 32768], -1, dtype="int64")
+    token_ids_all[0, :10] = np.array([21, 22, 23, 24, 25, 26, 27, 28, 8038, 61502])
+    prompt_lens = paddle.zeros([2, 1], dtype="int64")
     step_idx = paddle.to_tensor([[10], [0]], dtype="int64")
 
     stop_token_ids = paddle.full([2, 5, 8], -1, dtype="int64")
@@ -44,7 +45,8 @@ def test_set_stop_value_multi_ends_with_stop_seq():
         seq_lens_this_time,
         eos_token_id,
         next_tokens,
-        pre_ids,
+        token_ids_all,
+        prompt_lens,
         step_idx,
         stop_token_ids,
         stop_seqs_len,
@@ -64,7 +66,8 @@ def test_min_tokens():
     eos_token_id = paddle.to_tensor([2], dtype="int64")
     next_tokens = paddle.to_tensor([[2], [100], [200]], dtype="int64")
 
-    pre_ids = paddle.full([3, 100], -1, dtype="int64")
+    token_ids_all = paddle.full([3, 100], -1, dtype="int64")
+    prompt_lens = paddle.zeros([3, 1], dtype="int64")
     step_idx = paddle.to_tensor([[5], [50], [10]], dtype="int64")
 
     stop_seqs = paddle.full([3, 5, 8], -1, dtype="int64")
@@ -78,7 +81,8 @@ def test_min_tokens():
         seq_lens_this_time,
         eos_token_id,
         next_tokens,
-        pre_ids,
+        token_ids_all,
+        prompt_lens,
         step_idx,
         stop_seqs,
         stop_seqs_len,

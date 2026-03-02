@@ -57,8 +57,22 @@ from fastdeploy.utils import (
     ParameterError,
     StatefulSemaphore,
     api_server_logger,
+    obj_logger,
     to_tensor,
 )
+
+try:
+    import objgraph
+
+    _has_objgraph = True
+except ImportError:
+    _has_objgraph = False
+try:
+    import psutil
+
+    _has_psutil = True
+except ImportError:
+    _has_psutil = False
 
 
 class EngineClient:
@@ -289,6 +303,35 @@ class EngineClient:
         Returns:
             None
         """
+        # objgraph 统计，通过环境变量控制是否启用
+        if os.getenv("FD_ENABLE_OBJGRAPH_DEBUG") == "1":
+            if not _has_objgraph:
+                obj_logger.warning(
+                    "FD_ENABLE_OBJGRAPH_DEBUG is enabled but objgraph is not installed. Run `pip install objgraph` to enable it."
+                )
+            else:
+                request_id = task.get("request_id", "unknown")
+                obj_logger.info(f"\n{'='*60} OBJGRAPH DEBUG [request_id={request_id}] {'='*60}")
+                # 打印内存占用
+                if not _has_psutil:
+                    obj_logger.warning(
+                        "FD_ENABLE_OBJGRAPH_DEBUG is enabled but psutil is not installed. Run `pip install psutil` to enable it."
+                    )
+                else:
+                    process = psutil.Process()
+                    rss_memory = process.memory_info().rss / 1024**3
+                    obj_logger.info(f"Process Memory (RSS): {rss_memory:.2f} GB")
+                obj_logger.info("Object growth statistics:")
+                growth_data = objgraph.growth(limit=20)
+                for item in growth_data:
+                    if len(item) == 3:
+                        obj_type, current_count, growth = item
+                        obj_logger.info(f"  {obj_type:30s} {current_count:8d} +{growth}")
+                    elif len(item) == 2:
+                        obj_type, count = item
+                        obj_logger.info(f"  {obj_type:30s} +{count}")
+                    else:
+                        obj_logger.info(f"  {item}")
 
         task["metrics"]["preprocess_start_time"] = time.time()
         request_id = task.get("request_id").split("_")[0]
@@ -409,13 +452,18 @@ class EngineClient:
                 )
 
         if data.get("reasoning_max_tokens") is not None:
-            if data["reasoning_max_tokens"] < 1:
-                raise ParameterError("reasoning_max_tokens", "reasoning_max_tokens must be greater than 1")
+            if data["reasoning_max_tokens"] < 0:
+                raise ParameterError("reasoning_max_tokens", "reasoning_max_tokens must be greater than 0")
             if data["reasoning_max_tokens"] > data["max_tokens"]:
                 data["reasoning_max_tokens"] = data["max_tokens"]
                 api_server_logger.warning(
                     f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to {data['max_tokens']}"
                 )
+
+        if data.get("response_max_tokens") is not None:
+            if data["response_max_tokens"] <= 0:
+                raise ParameterError("response_max_tokens", "response_max_tokens must be greater than 0")
+
         if data.get("temperature") is not None and abs(data["temperature"]) < 1e-6:
             data["temperature"] = 1e-6
         # logprobs

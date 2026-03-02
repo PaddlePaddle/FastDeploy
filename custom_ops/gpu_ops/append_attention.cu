@@ -90,7 +90,8 @@ void AppendAttentionKernel(
     const int speculate_max_draft_token_num,
     const bool causal,
     const bool speculate_decoder,
-    const int sliding_window) {
+    const int sliding_window,
+    const int sink_size = 0) {
   typedef PDTraits<D> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
@@ -171,7 +172,8 @@ void AppendAttentionKernel(
         lambda_enable_prefill,
         lambda_stream,
         &fmha_out,
-        sliding_window);
+        sliding_window,
+        sink_size);
   };
 
   if (max_enc_len_this_time > 0) {
@@ -495,7 +497,8 @@ std::vector<paddle::Tensor> AppendAttention(
     const int speculate_max_draft_token_num,
     const bool causal,
     const bool speculate_decoder,
-    const int sliding_window) {
+    const int sliding_window,
+    const int sink_size = 0) {
   AppendAttnMetaData meta_data;
 
   const auto& qkv_dims = qkv.dims();
@@ -627,7 +630,8 @@ std::vector<paddle::Tensor> AppendAttention(
         speculate_max_draft_token_num,
         causal,
         speculate_decoder,
-        sliding_window);
+        sliding_window,
+        sink_size);
   };
 
   phi::dtype::float16 fp16_dtype;
@@ -705,7 +709,8 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const int speculate_max_draft_token_num,
     const bool causal,
     const bool speculate_decoder,
-    const int sliding_window) {
+    const int sliding_window,
+    const int sink_size = 0) {
   AppendAttnMetaData meta_data;
 
   const auto& qkv_dims = qkv.dims();
@@ -783,7 +788,8 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
         speculate_max_draft_token_num,
         causal,
         speculate_decoder,
-        sliding_window);
+        sliding_window,
+        sink_size);
   };
 
   phi::dtype::float16 fp16_dtype;
@@ -874,7 +880,8 @@ std::vector<std::vector<int64_t>> AppendAttentionInferShape(
     const int speculate_max_draft_token_num,
     const bool causal,
     const bool speculate_decoder,
-    const int sliding_window) {
+    const int sliding_window,
+    const int sink_size) {
   const int token_num = qkv_shape[0];
   const int kv_num_heads = key_cache_shape[1];
   int head_dim = key_cache_shape[3];
@@ -939,7 +946,8 @@ std::vector<paddle::DataType> AppendAttentionInferDtype(
     const int speculate_max_draft_token_num,
     const bool causal,
     const bool speculate_decoder,
-    const int sliding_window) {
+    const int sliding_window,
+    const int sink_size) {
   if (compute_dtype == "bf16") {
     if (out_linear_in_scale > 0.0) {
       if (fabs(quant_max_bound - 127.0f) < 0.000001) {
@@ -1025,7 +1033,8 @@ std::vector<std::vector<int64_t>> AppendAttentionWithOutputInferShape(
     const int speculate_max_draft_token_num,
     const bool causal,
     const bool speculate_decoder,
-    const int sliding_window) {
+    const int sliding_window,
+    const int sink_size) {
   return {fmha_out_shape};
 }
 
@@ -1083,7 +1092,8 @@ std::vector<paddle::DataType> AppendAttentionWithOutputInferDtype(
     const int speculate_max_draft_token_num,
     const bool causal,
     const bool speculate_decoder,
-    const int sliding_window) {
+    const int sliding_window,
+    const int sink_size) {
   return {fmha_out_dtype};
 }
 
@@ -1143,6 +1153,7 @@ PD_BUILD_STATIC_OP(append_attention)
         "causal: bool",
         "speculate_decoder: bool",
         "sliding_window: int",
+        "sink_size: int",
     })
     .SetKernelFn(PD_KERNEL(AppendAttention))
     .SetInferShapeFn(PD_INFER_SHAPE(AppendAttentionInferShape))
@@ -1206,6 +1217,7 @@ PD_BUILD_STATIC_OP(append_attention_with_output)
         "causal: bool",
         "speculate_decoder: bool",
         "sliding_window: int",
+        "sink_size: int",
     })
     .SetKernelFn(PD_KERNEL(AppendAttentionWithOutput))
     .SetInferShapeFn(PD_INFER_SHAPE(AppendAttentionWithOutputInferShape))

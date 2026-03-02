@@ -7,6 +7,9 @@ import paddle
 from fastdeploy.model_executor.layers.batch_invariant_ops import (
     set_batch_invariant_mode,
 )
+from fastdeploy.model_executor.layers.batch_invariant_ops.batch_invariant_ops import (
+    addmm_batch_invariant,
+)
 
 
 class TestBatchInvariantForAddmm(unittest.TestCase):
@@ -44,6 +47,23 @@ class TestBatchInvariantForAddmm(unittest.TestCase):
             )
             if ass:
                 assert max(difflist) == 0
+
+    def test_alpha_zero(self):
+        """alpha == 0: result should be beta * input broadcast to [M, N]"""
+        M, N, K = 32, 64, 128
+        for dtype in [paddle.float32, paddle.bfloat16]:
+            x = paddle.randn([M, K], dtype=dtype)
+            y = paddle.randn([K, N], dtype=dtype)
+            bias = paddle.randn([N], dtype=dtype)
+
+            for beta in [0.0, 1.0, 2.5]:
+                out = addmm_batch_invariant(bias, x, y, beta=beta, alpha=0.0)
+                expected = (beta * bias).expand([M, N])
+                # shape must be [M, N]
+                assert out.shape == [M, N], f"Expected shape [{M}, {N}], got {out.shape}"
+                # cast to float32 for comparison (bfloat16 not supported by isclose)
+                diff = (out.cast(paddle.float32) - expected.cast(paddle.float32)).abs().max()
+                assert diff.item() == 0, f"dtype={dtype}, beta={beta}, max diff={diff.item()}"
 
     def test_case(self):
         # Test with standard Paddle (likely to show differences)

@@ -124,8 +124,9 @@ class PrefixCacheManager:
         self.cache_status_lock = Lock()
 
         logger.info(
-            f"num_gpu_blocks_server_owned {self.num_gpu_blocks} num_cpu_blocks "
-            + f"{self.num_cpu_blocks}, bytes_per_layer_per_block {self.cache_config.bytes_per_layer_per_block}"
+            f"Prefix cache manager is initialized with {self.num_gpu_blocks} gpu blocks "
+            f"and {self.num_cpu_blocks} cpu blocks, bytes_per_token_per_layer for each rank: "
+            f"{self.cache_config.bytes_per_token_per_layer / self.config.parallel_config.tensor_parallel_size}"
         )
 
         main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
@@ -495,6 +496,24 @@ class PrefixCacheManager:
         """
         recycle gpu blocks.
         """
+        if (
+            hasattr(self, "prefix_tree_status_signal")
+            and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL
+        ):
+            # Prefix Tree Clearing, skip recycle gpu blocks
+            logger.warning("Prefix tree is not normal, skip recycle gpu blocks")
+            return
+        if not isinstance(gpu_block_ids, list):
+            gpu_block_ids = [gpu_block_ids]
+        if len(self.gpu_free_block_list) + len(gpu_block_ids) > self.num_gpu_blocks:
+            # The block allocation and recycling are abnormal, and the test results are not convincing
+            logger.error(
+                f"The number of free gpu blocks {len(self.gpu_free_block_list)} plus the number of recycled "
+                f"gpu blocks {len(gpu_block_ids)} exceeds the total number of gpu blocks {self.num_gpu_blocks} \n"
+                f"this indicates a block allocation and deallocation error, recycled blocks will be discarded {gpu_block_ids}"
+            )
+            return
+
         logger.info(
             f"req_id:{req_id} recycle_gpu_blocks: {gpu_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
@@ -2140,6 +2159,7 @@ class PrefixCacheManager:
                 prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARED
                 logger.info("Prefix cache tree is cleared.")
             if prefix_tree_status_signal.value[0] == PrefixTreeStatus.UPDATING:
+                self.reset()
                 prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
                 logger.info("Prefix cache tree is updated.")
             time.sleep(0.01)
