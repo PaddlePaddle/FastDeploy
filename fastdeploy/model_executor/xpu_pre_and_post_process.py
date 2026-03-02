@@ -44,6 +44,7 @@ if current_platform.is_xpu():
         speculate_get_padding_offset,
         speculate_get_seq_lens_output,
         speculate_save_output,
+        speculate_save_output_topk,
         speculate_set_stop_value_multi_seqs,
         speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
@@ -456,8 +457,21 @@ def xpu_post_process_specualate(
                 bool(envs.ENABLE_V1_KVCACHE_SCHEDULER),
             )
         else:
-            # TODO(chenhuan09): support speculate_save_output_topk
-            raise NotImplementedError("Not support speculate_save_output_topk now.")
+            speculate_save_output_topk(
+                sampler_output.sampled_token_ids,
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                sampler_output.token_num_per_batch,
+                sampler_output.cu_batch_token_offset,
+                model_output.not_need_stop,
+                model_output.seq_lens_decoder,
+                model_output.prompt_lens,
+                share_inputs["preempted_idx"],
+                3,  # message_flag: target model
+                model_output.mp_rank,
+                save_each_rank,
+            )
 
     speculate_clear_accept_nums(model_output.accept_num, model_output.seq_lens_decoder)
 

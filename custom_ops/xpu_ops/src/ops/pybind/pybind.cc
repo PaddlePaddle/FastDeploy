@@ -334,6 +334,20 @@ void SpeculateSaveWithOutputMsgDynamic(const paddle::Tensor& accept_tokens,
                                        bool save_each_rank,
                                        bool skip_prefill);
 
+void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
+                              const paddle::Tensor& logprob_token_ids,
+                              const paddle::Tensor& logprob_scores,
+                              const paddle::Tensor& logprob_ranks,
+                              const paddle::Tensor& token_num_per_batch,
+                              const paddle::Tensor& cu_batch_token_offset,
+                              const paddle::Tensor& not_need_stop,
+                              const paddle::Tensor& seq_lens_decoder,
+                              const paddle::Tensor& prompt_lens,
+                              const paddle::Tensor& preempted_idx,
+                              int message_flag,
+                              int64_t rank_id,
+                              bool save_each_rank);
+
 void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& input_ids,
                           const paddle::Tensor& stop_flags,
@@ -1178,6 +1192,23 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("save_each_rank"),
         py::arg("skip_prefill"),
         "speculate save output function dynamic");
+
+  m.def("speculate_save_output_topk",
+        &SpeculateSaveOutMmsgTopK,
+        py::arg("sampled_token_ids"),
+        py::arg("logprob_token_ids"),
+        py::arg("logprob_scores"),
+        py::arg("logprob_ranks"),
+        py::arg("token_num_per_batch"),
+        py::arg("cu_batch_token_offset"),
+        py::arg("not_need_stop"),
+        py::arg("seq_lens_decoder"),
+        py::arg("prompt_lens"),
+        py::arg("preempted_idx"),
+        py::arg("message_flag"),
+        py::arg("rank_id"),
+        py::arg("save_each_rank"),
+        "speculate save output topk function");
 
   m.def("speculate_clear_accept_nums",
         &SpeculateClearAcceptNums,
