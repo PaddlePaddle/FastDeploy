@@ -51,6 +51,9 @@ if current_platform.is_cuda():
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
+import triton
+import triton.language as tl
+
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
@@ -58,6 +61,139 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+
+
+@triton.jit()
+def extract_kernel(
+    q,
+    cu_seqlens_q,
+    seq_lens_encoder,
+    seq_lens_decoder,
+    output,
+    cache_seqlens,
+    HIDDEN_DIM: tl.constexpr,
+    BLOCK_SIZE: tl.constexpr,
+):
+
+    batch_id = tl.program_id(axis=0)
+    cache_kv_len = tl.load(seq_lens_decoder + batch_id)
+
+    # 这个batch不是decoder，所以不需要动弹
+    if cache_kv_len <= 0:
+        return
+
+    cu_len_this_batch = tl.load(cu_seqlens_q + batch_id)
+
+    read_offsets = tl.arange(0, BLOCK_SIZE)
+    q += cu_len_this_batch * HIDDEN_DIM
+
+    row_data = tl.load(q + read_offsets, mask=read_offsets < HIDDEN_DIM)
+
+    output += batch_id * HIDDEN_DIM
+
+    tl.store(output + read_offsets, row_data, mask=read_offsets < HIDDEN_DIM)
+
+    tl.store(cache_seqlens + batch_id, cache_kv_len + 1)
+
+
+def extract_decoder_token_from_q(
+    q: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
+    seq_lens_encoder: paddle.Tensor,
+    seq_lens_decoder: paddle.Tensor,
+):
+    assert len(q.shape) == 2
+    assert len(cu_seqlens_q.shape) == 1
+    assert len(seq_lens_encoder.shape) == 1
+    assert len(seq_lens_decoder.shape) == 1
+
+    max_bsz = seq_lens_decoder.shape[0]
+
+    hidden_dim = q.shape[-1]
+    out = paddle.zeros([max_bsz, hidden_dim], dtype=q.dtype)
+
+    cache_seqlens = paddle.zeros_like(seq_lens_decoder)
+
+    BLOCK_SIZE = triton.next_power_of_2(hidden_dim)
+
+    grid = (max_bsz,)
+
+    extract_kernel[grid](
+        q,
+        cu_seqlens_q,
+        seq_lens_encoder,
+        seq_lens_decoder,
+        out,
+        cache_seqlens,
+        hidden_dim,
+        BLOCK_SIZE,
+    )
+
+    return out, cache_seqlens
+
+
+@triton.jit()
+def insert_kernel(
+    decoder_res,
+    cu_seqlens_q,
+    seq_lens_encoder,
+    seq_lens_decoder,
+    output,
+    HIDDEN_DIM: tl.constexpr,
+    BLOCK_SIZE: tl.constexpr,
+):
+
+    batch_id = tl.program_id(axis=0)
+    cache_kv_len = tl.load(seq_lens_decoder + batch_id)
+
+    # 这个batch不是decoder，所以不需要动弹
+    if cache_kv_len <= 0:
+        return
+
+    cu_len_this_batch = tl.load(cu_seqlens_q + batch_id)
+
+    read_offsets = tl.arange(0, BLOCK_SIZE)
+
+    decoder_res += batch_id * HIDDEN_DIM
+
+    row_data = tl.load(decoder_res + read_offsets, mask=read_offsets < HIDDEN_DIM)
+
+    output += cu_len_this_batch * HIDDEN_DIM
+
+    tl.store(output + read_offsets, row_data, mask=read_offsets < HIDDEN_DIM)
+
+
+def insert_decoder_result_back(
+    decoder_result: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
+    seq_lens_encoder: paddle.Tensor,
+    seq_lens_decoder: paddle.Tensor,
+    mixed_token_num,
+):
+    assert len(decoder_result.shape) == 4
+    assert len(cu_seqlens_q.shape) == 1
+    assert len(seq_lens_encoder.shape) == 1
+
+    max_bsz = seq_lens_encoder.shape[0]
+
+    hidden_dim = decoder_result.shape[-2] * decoder_result.shape[-1]
+    out = paddle.zeros([mixed_token_num, hidden_dim], dtype=decoder_result.dtype)
+
+    BLOCK_SIZE = triton.next_power_of_2(hidden_dim)
+
+    grid = (max_bsz,)
+
+    insert_kernel[grid](
+        decoder_result,
+        cu_seqlens_q,
+        seq_lens_encoder,
+        seq_lens_decoder,
+        out,
+        hidden_dim,
+        BLOCK_SIZE,
+    )
+
+    return out
 
 
 def yarn_get_mscale(scale=1, mscale=1):
@@ -506,23 +642,40 @@ class MLAAttentionBackend(AttentionBackend):
 
                 return fmha_out
             else:
+                decoder_q, cache_seqlens = extract_decoder_token_from_q(
+                    q,
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                )
+
                 tile_scheduler_metadata, num_splits = flash_mla.get_mla_metadata()
-                real_batch_size = q.shape[0]
-                q.reshape_([real_batch_size, 1, self.num_heads, 576])
+                token_num = q.shape[0]
+                decoder_q.reshape_([-1, 1, self.num_heads, 576])
+
                 num_blocks = latent_cache.shape[0]
                 cache_dim = latent_cache.shape[-1]
 
-                res = flash_mla.flash_mla_with_kvcache(
-                    q,
+                decoder_res, _ = flash_mla.flash_mla_with_kvcache(
+                    decoder_q,
                     # 外面的开源仓库的kv cache存储格式和FD的不同
+                    # 幸好这里缓存的头是1，直接view即可，否则上上下下要改很多！
                     latent_cache.view([num_blocks, self.block_size, 1, cache_dim]),
-                    metadata.block_tables[:real_batch_size],
-                    forward_meta.seq_lens_decoder[:real_batch_size] + 1,
+                    metadata.block_tables,
+                    cache_seqlens,
                     512,  # t.dv,
                     tile_scheduler_metadata,
                     num_splits,
                     softmax_scale=self.attn_softmax_scale,
                     causal=True,
                 )
-                res[0].reshape_([real_batch_size, self.num_heads * 512])
-                return res[0]
+
+                final_res = insert_decoder_result_back(
+                    decoder_res,
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    token_num,
+                )
+
+                return final_res
