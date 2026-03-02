@@ -13,7 +13,10 @@ rm -rf core*
 # /opt/nvidia/nsight-compute/2025.1.0/ncu --set full -o mla_ncu -k MLAWithKVCacheKernel \
 # --python-backtrace=cuda --python-sampling=true
 
-# /ssd1/nvidia/nsight-systems/2025.5.1/bin/nsys start --output=binbin_launch --session=binbin
+
+
+##################################### DSK_TP ####################################################
+
 
 # MODEL_PATH=/root/paddlejob/workspace/models/DeepSeek-V3.1-Terminus-BF16-5layers
 MODEL_PATH=/root/paddlejob/workspace/models/DeepSeek-V3.2-Exp-BF16-5layers
@@ -23,7 +26,7 @@ MODEL_PATH=/root/paddlejob/workspace/models/DeepSeek-V3.2-Exp-BF16-5layers
 export FD_DISABLE_CHUNKED_PREFILL=1
 export FD_ATTENTION_BACKEND="DSA_ATTN"
 export FLAGS_flash_attn_version=3
-export FD_SAMPLING_CLASS=rejection
+# export FD_SAMPLING_CLASS=rejection
 
 # # /ssd1/nvidia/nsight-systems/2023.1.1/bin/nsys launch  --cuda-event-trace=true --cuda-memory-usage=true --cudabacktrace=all --dask=functions-trace --osrt-file-access=true  --trace=cuda,cublas,oshmem,ucx,osrt,cudnn --cuda-graph-trace=node  --session=binbin \
 # nohup
@@ -48,20 +51,43 @@ python -m fastdeploy.entrypoints.openai.api_server \
   # --graph-optimization-config '{"use_cudagraph":false}' \
   # --graph-optimization-config '{"use_unique_memory_pool": true}' \
   # --max-num-batched-tokens 4096 \
-  #
+
+##################################### DSK_TP ####################################################
 
 
 
+##################################### DSK_EP ####################################################
 
 
-# /ssd2/DeepSeek-V3-0324-bf16-5layers
-# /ssd2/DeepSeek-V3.1-Terminus-BF16-5layers
-# /ssd2/DeepSeek-V3.1-Terminus-BF16
-# /ssd3/DeepSeek-V3.2-Exp-BF16-5layers
-# /ssd3/DeepSeek-V3.2-Exp-BF16
-# /ssd2/dsv3.1-terminous-L7
+# MODEL_PATH=/models/DeepSeek-V3.2-Exp-BF16
 
-# /ssd2/safetensor_ckpt_step500
+# export FD_DISABLE_CHUNKED_PREFILL=1
+# export FD_ATTENTION_BACKEND="MLA_ATTN"
+# export FLAGS_flash_attn_version=3
+
+# # 暂时只支持 tp_size为8，ep_size 为 16的 配置
+
+
+# export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+# export FD_ENABLE_MULTI_API_SERVER=1
+# python -m fastdeploy.entrypoints.openai.multi_api_server \
+#        --ports "9811" \
+#        --num-servers 1 \
+#        --args --model "$model_path" \
+#        --ips "10.95.247.24,10.95.244.147" \
+#        --no-enable-prefix-caching \
+#        --quantization block_wise_fp8 \
+#        --disable-sequence-parallel-moe \
+#        --tensor-parallel-size 8 \
+#        --num-gpu-blocks-override 1024 \
+#        --data-parallel-size 2 \
+#        --max-model-len 16384 \
+#        --enable-expert-parallel \
+#        --max-num-seqs 20 \
+#        --graph-optimization-config '{"use_cudagraph":true}' \
+
+
+##################################### DSK_EP ####################################################
 
 
 

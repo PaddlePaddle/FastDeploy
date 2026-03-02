@@ -901,7 +901,7 @@ class DeepseekV32DSAAttention(nn.Layer):
             #     print("indexer_top_k is NAN")
             #     breakpoint()
 
-            fmha_out_prefill = self.dsa_attn(
+            fmha_out = self.dsa_attn(
                 q=q_input.contiguous(),
                 k=kv.unsqueeze(1).contiguous(),
                 v=indexer_top_k.unsqueeze(1).contiguous(),
@@ -933,7 +933,7 @@ class DeepseekV32DSAAttention(nn.Layer):
 
             # indexer_top_k = self.indexer(forward_meta, hidden_states, qr, position_ids, rotary_emb = self.indexer_rotary_emb )
 
-            fmha_out_decode = self.dsa_attn(
+            fmha_out = self.dsa_attn(
                 q=q_input,
                 k=None,
                 v=indexer_top_k.unsqueeze(1).contiguous(),
@@ -959,12 +959,12 @@ class DeepseekV32DSAAttention(nn.Layer):
 
             # ================decode end
 
-        fmha_out_prefill = fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
+        fmha_out = fmha_out.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
             [1, 0, 2]
         )
         fmha_out = (
             self.kv_b_proj_bmm(
-                fmha_out_prefill,
+                fmha_out,
                 proj_type="v",
             )
             .transpose([1, 0, 2])
