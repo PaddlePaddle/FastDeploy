@@ -666,12 +666,14 @@ DLL_EXPORT int rebuild_hidden_states(api::Context* ctx,
                                      const int* position_map,
                                      T* out,
                                      int dim_embed,
-                                     int elem_cnt);
+                                     int elem_cnt,
+                                     int output_token_num);
 template <typename T>
 DLL_EXPORT int rebuild_self_hidden_states(api::Context* ctx,
                                           const T* input,
                                           int* src_map,
                                           T* output,
+                                          int input_token_num,
                                           int dim_embed,
                                           int elem_cnt);
 
