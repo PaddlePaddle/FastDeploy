@@ -211,7 +211,7 @@ class ZmqServerBase(ABC):
                                 need_send_after_finished_inference = True
                     if need_send_after_finished_inference:
                         self.send_response(req_id_str, [])
-                        llm_logger.info(f"send_multipart finished, req_id: {req_id_str}")
+                        llm_logger.debug(f"send_multipart finished, req_id: {req_id_str}")
                         self.req_dict.pop(req_id_str, None)
 
             except zmq.Again:
@@ -310,7 +310,7 @@ class ZmqServerBase(ABC):
         if data and data[-1].finished:
             with self.mutex:
                 if req_id in self.req_dict:
-                    llm_logger.info(f"send_multipart finished, req_id: {req_id}")
+                    llm_logger.debug(f"send_multipart finished, req_id: {req_id}")
                     self.req_dict.pop(req_id, None)
 
     def send_response(self, req_id, data):

@@ -37,12 +37,13 @@ from fastdeploy.transformer_utils.config import get_pooling_config
 from fastdeploy.utils import (
     ceil_div,
     check_unified_ckpt,
+    get_console_only_logger,
     get_host_ip,
-    get_logger,
     parse_ports,
+    print_config_dict,
 )
 
-logger = get_logger("config", "config.log")
+logger = get_console_only_logger("config")
 
 TaskOption = Literal["auto", "generate", "embedding", "embed"]
 
@@ -596,10 +597,7 @@ class ModelConfig:
         """
         Print all configuration information.
         """
-        logger.info("Model Configuration Information :")
-        for k, v in self.__dict__.items():
-            logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+        print_config_dict("Model Configuration Information", self.__dict__)
 
 
 class ParallelConfig:
@@ -707,10 +705,7 @@ class ParallelConfig:
         print all config
 
         """
-        logger.info("Parallel Configuration Information :")
-        for k, v in self.__dict__.items():
-            logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+        print_config_dict("Parallel Configuration Information", self.__dict__)
 
 
 class SpeculativeConfig:
@@ -835,10 +830,7 @@ class SpeculativeConfig:
         print all config
 
         """
-        logger.info("Speculative Decoding Configuration Information :")
-        for k, v in self.__dict__.items():
-            logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+        print_config_dict("Speculative Decoding Configuration Information", self.__dict__)
 
     def check_legality_parameters(
         self,
@@ -1338,10 +1330,7 @@ class EPLBConfig:
         """
         Print all configuration information.
         """
-        logger.info("EPLB Configuration Information :")
-        for k, v in self.__dict__.items():
-            logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+        print_config_dict("EPLB Configuration Information", self.__dict__)
 
 
 class CacheConfig:
@@ -1515,10 +1504,7 @@ class CacheConfig:
         print all config
 
         """
-        logger.info("Cache Configuration Information :")
-        for k, v in self.__dict__.items():
-            logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+        print_config_dict("Cache Configuration Information", self.__dict__)
 
 
 class RouterConfig:
@@ -1594,10 +1580,7 @@ class CommitConfig:
         print all config
 
         """
-        logger.info("Fasedeploy Commit Information :")
-        for k, v in self.__dict__.items():
-            logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+        print_config_dict("Fasedeploy Commit Information", self.__dict__)
 
 
 class StructuredOutputsConfig:
@@ -2120,23 +2103,27 @@ class FDConfig:
         """
         print all config
         """
-        logger.info("=================== Configuration Information ===============")
+        config_dict = {}
         for k, v in self.__dict__.items():
             if k == "generation_config" and v is not None:
-                for gck, gcv in v.to_dict().items():
-                    logger.info("{:<20}:{:<6}{}".format(gck, "", gcv))
-            elif (
-                k == "cache_config"
-                or k == "model_config"
-                or k == "scheduler_config"
-                or k == "parallel_config"
-                or k == "commit_config"
+                config_dict[k] = v.to_dict()
+            elif k in (
+                "cache_config",
+                "model_config",
+                "scheduler_config",
+                "parallel_config",
+                "commit_config",
+                "speculative_config",
+                "graph_opt_config",
+                "load_config",
+                "eplb_config",
+                "structured_outputs_config",
             ):
-                if v is not None:
-                    v.print()
+                config_dict[k] = v.__dict__ if v is not None else None
             else:
-                logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+                config_dict[k] = v
+
+        print_config_dict("Configuration Information", config_dict)
 
     def init_cache_info(self):
         """

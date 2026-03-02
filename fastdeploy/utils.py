@@ -17,6 +17,7 @@
 import argparse
 import asyncio
 import codecs
+import glob
 import hashlib
 import importlib
 import json
@@ -155,6 +156,38 @@ def _output_with_pager(text: str):
 
     # No pager worked, fall back to normal print
     print(text)
+
+
+def ensure_workerlog_alias(log_dir: str, paddle_log_dir: str) -> None:
+    try:
+
+        def ensure_alias_for_target(target_path: str) -> None:
+            if not target_path:
+                return
+            link_path = os.path.join(log_dir, os.path.basename(target_path))
+            abs_target_path = os.path.abspath(target_path)
+            if os.path.islink(link_path):
+                current_target = os.readlink(link_path)
+                abs_current_target = os.path.abspath(os.path.join(os.path.dirname(link_path), current_target))
+                if abs_current_target == abs_target_path:
+                    return
+                os.remove(link_path)
+            elif os.path.isfile(link_path):
+                os.remove(link_path)
+            elif os.path.exists(link_path):
+                return
+            os.symlink(abs_target_path, link_path)
+
+        # Always alias workerlog.0 even if it does not exist yet.
+        ensure_alias_for_target(os.path.join(paddle_log_dir, "workerlog.0"))
+
+        # Alias any existing workerlog.* files.
+        for target_path in glob.glob(os.path.join(paddle_log_dir, "workerlog.*")):
+            if os.path.isfile(target_path):
+                ensure_alias_for_target(target_path)
+    except OSError:
+        # Best effort: if symlink creation fails, keep paddle logs intact.
+        pass
 
 
 class EngineError(Exception):
@@ -1048,6 +1081,37 @@ def parse_quantization(value: str):
         return json.loads(value)
     except ValueError:
         return {"quantization": value}
+
+
+# Print configuration dicts to console in a single JSON payload.
+def print_config_dict(title: str, config: dict, mask_keys=None) -> None:
+    if mask_keys is None:
+        mask_keys = set()
+    else:
+        mask_keys = set(mask_keys)
+
+    data = {}
+    for key, value in config.items():
+        if key in mask_keys:
+            data[key] = "******"
+        else:
+            data[key] = value
+
+    payload = {"title": title, "config": data}
+    print(payload)
+
+
+# Console-only logger that does not write to files.
+def get_console_only_logger(name: str):
+    logger = logging.getLogger(f"fd.console.{name}")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter("%(levelname)-8s %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    return logger
 
 
 # 日志使用全局访问点（兼容原有使用方式）

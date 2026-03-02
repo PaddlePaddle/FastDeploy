@@ -138,8 +138,10 @@ def setup_logging(log_dir=None, config_file=None):
             for handler_name, handler_config in config["handlers"].items():
                 if "backupCount" not in handler_config and "DailyRotating" in handler_config.get("class", ""):
                     handler_config["backupCount"] = backup_count
-                if handler_config.get("level") == "INFO" and is_debug:
-                    handler_config["level"] = "DEBUG"
+                if handler_config.get("level") == "INFO":
+                    level_no = logging._nameToLevel.get(log_level_name)
+                    if level_no is not None and level_no < logging.INFO:
+                        handler_config["level"] = log_level_name
     else:
         config = default_config
 
