@@ -330,14 +330,14 @@ class AsyncEPLoader(object):
         last_device = paddle.device.get_device()
         paddle.set_device("cpu")
 
-        from safetensors import safe_open
+        from paddleformers.utils.safetensors import fast_safe_open
 
         for st_file in hf_weights_files:
-            with safe_open(st_file, framework="paddle", device="cpu") as f:
+            with fast_safe_open(st_file, framework="np") as f:
                 for name in f.keys():
                     if name in ckpt_name:
                         weight = f.get_tensor(name)
-                        state_dicts[name] = paddle.Tensor(weight, zero_copy=True)
+                        state_dicts[name] = paddle.Tensor.__call__(weight, zero_copy=True)
         weights_list = []
         for name in ckpt_name:
             weights_list.append((name, state_dicts[name]))
