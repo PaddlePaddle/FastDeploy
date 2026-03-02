@@ -68,6 +68,7 @@ def offline_infer_check():
                 videos.append({"video": video_bytes, "max_frames": 30})
 
     sampling_params = SamplingParams(temperature=0.1, max_tokens=16)
+    graph_optimization_config = {"use_cudagraph": False}
     llm = LLM(
         model=PATH,
         tensor_parallel_size=2,
@@ -76,6 +77,7 @@ def offline_infer_check():
         quantization="wint8",
         limit_mm_per_prompt={"image": 100},
         reasoning_parser="ernie-45-vl",
+        graph_optimization_config=graph_optimization_config,
     )
     outputs = llm.generate(
         prompts={"prompt": prompt, "multimodal_data": {"image": images, "video": videos}},
