@@ -333,38 +333,23 @@ class DeepseekV3MLAAttention(nn.Layer):
             return 1.0
         return 0.1 * mscale * math.log(scale) + 1.0
 
-    def forward(
+    @paddle.jit.marker.capture_control_flow
+    def mla_attention(
         self,
-        forward_meta: ForwardMeta,
-        hidden_states: paddle.Tensor,
-        position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
+        forward_meta,
+        needs_prefill,
+        needs_decode,
+        compressed_kv,
+        query,
+        query_pe,
+        key_pe,
+        mask_encoder_batch,
+        query_nope,
+        output,
     ):
-        """ """
-
-        # NOTE: (changwenbin) Bring out the public calculation in PD MIX to avoid repeated calculation.
-        fmha_out = None
-
-        # NOTE: (changwenbin) qkv_a_proj horizontal fusion
-        qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
-
-        query, compressed_kv, key_pe = qkv_a_out.split(
-            [self.q_lora_rank, self.kv_lora_rank, self.qk_rope_head_dim], axis=-1
-        )
-
-        query = self.q_a_layernorm(query)[0]
-        query = self.q_b_proj(query)
-        query.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
-        query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
-
-        key_pe.reshape_([-1, 1, self.qk_rope_head_dim])
-        query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
-
-        compressed_kv = self.kv_a_layernorm(compressed_kv)[0]
-
-        if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
+        if needs_prefill:
             key_value = self.kv_b_proj(compressed_kv)
-            key_value.reshape_(
+            key_value = key_value.reshape(
                 [
                     -1,
                     self.num_attention_heads_tp,
@@ -388,19 +373,17 @@ class DeepseekV3MLAAttention(nn.Layer):
                 k_pe=key_pe,
                 forward_meta=forward_meta,
             )
-
-            fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
+            fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
             fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
-            fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
+            fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
+            output = paddle.assign(fmha_out_prefill, output)
 
-            fmha_out = fmha_out_prefill
-
-        if forward_meta.max_len_tensor_cpu[2]:  # max_dec_len_this_time
+        if needs_decode:
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
-            q_input.reshape_(
+            q_input = q_input.reshape(
                 [
                     -1,
                     self.num_attention_heads_tp * (self.kv_lora_rank + self.qk_rope_head_dim),
@@ -417,20 +400,61 @@ class DeepseekV3MLAAttention(nn.Layer):
                 forward_meta=forward_meta,
             )
 
-            fmha_out_decode = fmha_out_decode.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
+            fmha_out_decode = fmha_out_decode.reshape([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
                 [1, 0, 2]
             )
-
             fmha_out_decode = (
                 self.kv_b_proj_bmm(fmha_out_decode, proj_type="v")
                 .transpose([1, 0, 2])
-                .reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
+                .reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
+            output = paddle.assign(output + fmha_out_decode, output)
 
-            if fmha_out is None:
-                fmha_out = fmha_out_decode
-            else:
-                fmha_out = fmha_out + fmha_out_decode
+        return output
+
+    def forward(
+        self,
+        forward_meta: ForwardMeta,
+        hidden_states: paddle.Tensor,
+        position_ids: paddle.Tensor,
+        mask_encoder_batch: paddle.Tensor,
+    ):
+        """ """
+
+        # NOTE: (changwenbin) Bring out the public calculation in PD MIX to avoid repeated calculation.
+        # NOTE: (changwenbin) qkv_a_proj horizontal fusion
+        qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
+        query, compressed_kv, key_pe = qkv_a_out.split(
+            [self.q_lora_rank, self.kv_lora_rank, self.qk_rope_head_dim], axis=-1
+        )
+
+        query = self.q_a_layernorm(query)[0]
+        query = self.q_b_proj(query)
+        query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
+        query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
+
+        key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
+        query_pe = paddle.assign(query_pe)
+        key_pe = paddle.assign(key_pe)
+        query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
+
+        compressed_kv = self.kv_a_layernorm(compressed_kv)[0]
+
+        bs = query.shape[0]
+        fmha_out = paddle.zeros([bs, self.num_attention_heads_tp * self.v_head_dim], dtype=query.dtype)
+
+        fmha_out = self.mla_attention(
+            forward_meta,
+            forward_meta.needs_prefill,
+            forward_meta.needs_decode,
+            compressed_kv,
+            query,
+            query_pe,
+            key_pe,
+            mask_encoder_batch,
+            query_nope,
+            fmha_out,
+        )
 
         output = self.o_proj(fmha_out)
         return output

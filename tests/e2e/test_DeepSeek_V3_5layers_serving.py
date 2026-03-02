@@ -35,8 +35,8 @@ os.environ["FLAGS_flash_attn_version"] = os.getenv("FLAGS_flash_attn_version", "
 os.getenv("FLAGS_flash_attn_version", 3)
 
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_and_run_server():
+@pytest.fixture(scope="session", autouse=True, params=[0, 1])
+def setup_and_run_server(request):
     """
     Pytest fixture that runs once per test session:
     - Cleans ports before tests
@@ -56,6 +56,7 @@ def setup_and_run_server():
         model_path = "/model/DeepSeekV3-0324-5layers"
 
     log_path = "server.log"
+    graph_opt_level = request.param
     cmd = [
         sys.executable,
         "-m",
@@ -80,7 +81,7 @@ def setup_and_run_server():
         "wint4",
         "--no-enable-prefix-caching",
         "--graph-optimization-config",
-        '{"use_cudagraph":true, "cudagraph_capture_sizes": [1]}',
+        f'{{"use_cudagraph":true, "cudagraph_capture_sizes": [1], "graph_opt_level": {graph_opt_level}}}',
     ]
 
     # Start subprocess in new process group

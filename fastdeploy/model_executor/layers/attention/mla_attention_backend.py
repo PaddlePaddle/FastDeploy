@@ -164,6 +164,16 @@ class MLAAttentionBackend(AttentionBackend):
                     "The current platform does not support Flash Attention V3, so Flash Attention V2 will be used instead."
                 )
 
+        if fd_config.graph_opt_config.use_cudagraph:
+            if fd_config.graph_opt_config.full_cuda_graph:
+                print(
+                    "[Warning] Full graph capture with CUDAGraph is not supported in the presence of control flow; "
+                    "`full_cuda_graph` has been automatically set to False."
+                )
+
+            flag = "FLAGS_cuda_graph_blacklist"
+            paddle.set_flags({flag: ",".join(list(set(paddle.get_flags(flag)[flag].split(",") + ["pd_op.if"])))})
+
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attention metadata hence all layers in the forward pass can reuse it."""
         metadata = MLAAttentionMetadata()
@@ -203,6 +213,9 @@ class MLAAttentionBackend(AttentionBackend):
             -1,  # not need.
             self.block_size,
         )
+        forward_meta.needs_prefill = forward_meta.max_len_tensor_cpu[1] > 0
+        forward_meta.needs_decode = forward_meta.max_len_tensor_cpu[2] > 0
+
         # MLA
         metadata.max_enc_len_this_time = forward_meta.max_len_tensor_cpu[1]
         metadata.max_dec_len_this_time = forward_meta.max_len_tensor_cpu[2]
