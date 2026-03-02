@@ -24,6 +24,7 @@ import paddle.nn.functional as F
 from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.model_executor.utils import h2d_copy, slice_fn
+from fastdeploy.platforms import current_platform
 
 from .config import PaddleOCRVisionConfig
 from .siglip_ops import get_activation_fn, neox_rope_embedding
@@ -63,7 +64,10 @@ class SiglipAttention(nn.Layer):
             self.flash_attn_func = flash_attention_v3_varlen
             self.flash_attn_kwargs = {}
         else:
-            from paddle.nn.functional.flash_attention import flash_attn_unpadded
+            if current_platform.is_iluvatar():
+                from fastdeploy.model_executor.ops.iluvatar import flash_attn_unpadded
+            else:
+                from paddle.nn.functional.flash_attention import flash_attn_unpadded
 
             self.flash_attn_func = flash_attn_unpadded
             self.flash_attn_kwargs = {"scale": self.scale, "training": False}

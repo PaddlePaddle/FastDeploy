@@ -753,9 +753,15 @@ class SpeculativeSampler(nn.Layer):
 
         from fastdeploy.model_executor.ops.gpu import speculate_verify, top_p_candidates
 
+        if sampling_metadata.token_ids_all is not None:
+            token_ids_all = sampling_metadata.token_ids_all
+            prompt_lens = sampling_metadata.prompt_lens
+        else:
+            token_ids_all = sampling_metadata.pre_token_ids
+            prompt_lens = sampling_metadata.fake_prompt_lens
         logits = apply_speculative_penalty_multi_scores(
-            sampling_metadata.token_ids_all,
-            sampling_metadata.prompt_lens,
+            token_ids_all,
+            prompt_lens,
             logits,
             sampling_metadata.repetition_penalties,
             sampling_metadata.frequency_penalties,
@@ -770,14 +776,13 @@ class SpeculativeSampler(nn.Layer):
             share_inputs["batch_id_per_token_output"],
             share_inputs["cu_seqlens_q_output"],
             max_model_len,
-            sampling_metadata.pre_token_ids,
         )
 
         if self.enf_gen_phase_tag:
             reasoning_phase_token_constraint(
                 logits,
-                sampling_metadata.token_ids_all,
-                sampling_metadata.prompt_lens,
+                token_ids_all,
+                prompt_lens,
                 share_inputs["stop_flags"],
                 share_inputs["seq_lens_this_time"],
                 share_inputs["seq_lens_encoder"],
@@ -1135,9 +1140,16 @@ class MTPSampler(nn.Layer):
             elif self.logprobs_mode == "raw_logits":
                 raw_logprobs = share_inputs["draft_logits"][:real_token_num, :].clone()
 
+        if sampling_metadata.token_ids_all is not None:
+            token_ids_all = sampling_metadata.token_ids_all
+            prompt_lens = sampling_metadata.prompt_lens
+        else:
+            token_ids_all = sampling_metadata.pre_token_ids
+            prompt_lens = sampling_metadata.fake_prompt_lens
+
         logits = apply_speculative_penalty_multi_scores(
-            sampling_metadata.token_ids_all,
-            sampling_metadata.prompt_lens,
+            token_ids_all,
+            prompt_lens,
             logits,
             sampling_metadata.repetition_penalties,
             sampling_metadata.frequency_penalties,

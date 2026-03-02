@@ -871,6 +871,7 @@ class MTPProposer(Proposer):
                     token_ids_all=self.model_inputs["token_ids_all"],
                     pre_token_ids=self.model_inputs["pre_ids"],
                     prompt_lens=self.model_inputs["prompt_lens"],
+                    fake_prompt_lens=self.model_inputs["fake_prompt_lens"],
                     frequency_penalties=self.model_inputs["frequency_score"],
                     presence_penalties=self.model_inputs["presence_score"],
                     repetition_penalties=self.model_inputs["penalty_score"],
