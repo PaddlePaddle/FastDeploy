@@ -7,3 +7,4 @@ graph_optimization_config:
 load_choices: "default_v1"
 dynamic_load_weight: True
 load_strategy: ipc_snapshot
+no_shutdown_comm_group_if_worker_idle: True
