@@ -117,7 +117,7 @@ class RedundantExpertManager:
         self.dp_rank_address = None
         self.need_allgather_load_weight_result = False
         self.load_weight_begin_ts = 0
-        self.load_weight_timeout = 300  # 5min
+        self.load_weight_timeout = 1500  # 25min
         self.need_rearrange_expert = False
         self.need_update_expert_tokens_stat = True
         self.http_timeout = 1
