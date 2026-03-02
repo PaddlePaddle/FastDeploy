@@ -459,6 +459,8 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.softmax_scale = self.dim_head**-0.5
         self.rope_theta = 10000
         self.sliding_window = 128
+        self.sink_size = 0  # Only supports sinksize = 0 or 128.
+        self.head_wise_full_hidden = 0
         self.dtype = "bfloat16"
         self.use_qk_norm = True
         self.use_mask_offset = False
@@ -690,6 +692,8 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 True,  # causal
                 False,  # speculate_decoder
                 self.sliding_window,
+                self.sink_size,
+                self.head_wise_full_hidden,
             )
 
         # Warm up
@@ -753,6 +757,8 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 True,  # causal
                 False,  # speculate_decoder
                 self.sliding_window,
+                self.sink_size,
+                self.head_wise_full_hidden,
             )
 
         # Warm up
@@ -859,6 +865,8 @@ class TestAppendGroupQueryAttnWithNeoXRope(TestAppendGroupQueryAttnWithRope):
         self.softmax_scale = self.dim_head**-0.5
         self.rope_theta = 10000
         self.sliding_window = 128
+        self.sink_size = 0
+        self.head_wise_full_hidden = 0
         self.dtype = "float16"
         self.use_qk_norm = False
         self.use_mask_offset = True
@@ -888,12 +896,45 @@ class TestAppendGroupQueryAttnWithRopeDyCfp8(TestAppendGroupQueryAttnWithRope):
         self.softmax_scale = self.dim_head**-0.5
         self.rope_theta = 10000
         self.sliding_window = 0
+        self.sink_size = 0  # Only supports sinksize = 0 or 128.
+        self.head_wise_full_hidden = 0
         self.dtype = "bfloat16"
         self.use_qk_norm = True
         self.use_mask_offset = False
         self.use_sinks = False
         self.use_yarn = False
         self.use_dynamic_quant = True
+        self.init_tensor()
+
+
+class TestAppendGroupQueryAttnWithRopeAboutSinkSwa(TestAppendGroupQueryAttnWithRope):
+    def setUp(self):
+        paddle.disable_static()
+        self.name = "TestAppendGroupQueryAttnWithRopeAboutSinkSwa"
+        self.place = paddle.CUDAPlace(0)
+        self.batch_size = 1
+        self.q_num_head = 16
+        self.kv_num_head = 2
+        self.seq_len = 256
+        self.max_dec_len = 32
+        self.dim_head = 128
+        self.q_hid_dim = self.q_num_head * self.dim_head
+        self.kv_hid_dim = self.kv_num_head * self.dim_head
+        self.blocksize = 64
+        self.use_neox_rotary_style = False
+        # max_seq_len = self.seq_len + self.max_dec_len
+        self.max_seq_len = self.seq_len + self.max_dec_len
+        self.softmax_scale = self.dim_head**-0.5
+        self.rope_theta = 10000
+        self.sliding_window = 8
+        self.sink_size = 128  # Only supports sinksize = 0 or 128.
+        self.head_wise_full_hidden = 1
+        self.dtype = "bfloat16"
+        self.use_qk_norm = True
+        self.use_mask_offset = True
+        self.use_sinks = True
+        self.use_yarn = False
+        self.use_dynamic_quant = False
         self.init_tensor()
 
 

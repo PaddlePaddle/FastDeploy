@@ -1,8 +1,12 @@
-top_p: 0.8
-temperature: 0.8
-metadata:
-  min_tokens: 1
-max_tokens: 12288
+max_tokens: 1024
+top_p: 1e-05
+temperature: 1
 repetition_penalty: 1.0
 frequency_penalty: 0
 presence_penalty: 0
+metadata:
+  enable_thinking: close
+  min_tokens: 127
+chat_template_kwargs:
+  options:
+    thinking_mode: close
