@@ -514,6 +514,7 @@ class MLAAttentionBackend(AttentionBackend):
 
                 res = flash_mla.flash_mla_with_kvcache(
                     q,
+                    # 外面的开源仓库的kv cache存储格式和FD的不同
                     latent_cache.view([num_blocks, self.block_size, 1, cache_dim]),
                     metadata.block_tables[:real_batch_size],
                     forward_meta.seq_lens_decoder[:real_batch_size] + 1,
