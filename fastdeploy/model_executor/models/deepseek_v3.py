@@ -344,7 +344,6 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         # NOTE: (changwenbin) Bring out the public calculation in PD MIX to avoid repeated calculation.
         fmha_out = None
-        fmha_out_prefill = None
 
         # NOTE: (changwenbin) qkv_a_proj horizontal fusion
         qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
@@ -397,6 +396,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
             fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
+            fmha_out = fmha_out_prefill
 
         if need_do_decode:  # max_dec_len_this_time
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
