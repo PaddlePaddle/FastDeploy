@@ -267,8 +267,11 @@ class Qwen3VLProcessor(TextProcessor):
             ]  # Leave space for at least 1 new token
 
         # Set default max_tokens if not specified
+        max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
+            request["max_tokens"] = max(1, max_tokens)
+        else:
+            request["max_tokens"] = min(max_tokens, request["max_tokens"])
         data_processor_logger.info(f"Processed request {request}")
 
         return request

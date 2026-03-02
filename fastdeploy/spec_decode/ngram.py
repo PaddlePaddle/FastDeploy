@@ -52,7 +52,8 @@ class NgramProposer(Proposer):
         ngram_match(
             share_inputs["input_ids_cpu"],
             self.input_ids_len.cpu(),
-            share_inputs["pre_ids"].cpu(),
+            share_inputs["token_ids_all"].cpu(),
+            share_inputs["prompt_lens"].cpu(),
             share_inputs["step_idx"].cpu(),
             share_inputs["actual_draft_token_num"].cpu(),
             draft_tokens,

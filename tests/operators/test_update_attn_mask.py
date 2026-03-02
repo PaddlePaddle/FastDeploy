@@ -112,9 +112,8 @@ def py_update_attn_mask_offsets_op(
             attn_mask_offsets_decoder[bid] = int(attn_mask_offsets_decoder[bid]) + seq_len_this
 
             # speculative decoding: if seq_len_this > 1 then set decode_states_now[i] accordingly
-            if seq_len_this > 1:
-                for i in range(decode_states_len):
-                    decode_now[i] = 0 if i < seq_len_this else -1
+            for i in range(decode_states_len):
+                decode_now[i] = 0 if i < seq_len_this and decode_now[i] != 1 else -1
             # done decoder branch
             continue
 

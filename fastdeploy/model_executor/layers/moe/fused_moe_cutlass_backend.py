@@ -97,7 +97,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 token_nums_per_expert,
                 getattr(layer, self.added_weight_attrs[0]),
                 getattr(layer, self.added_weight_attrs[1]),
-                # None,
                 (layer.up_gate_proj_bias if hasattr(layer, "up_gate_proj_bias") else None),
                 (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
                 (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
@@ -105,6 +104,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 expert_idx_per_token,
                 self.moe_quant_type,
                 used_in_ep_low_latency,
+                layer.fd_config.model_config.moe_phase.phase,
             )
         else:
             ffn_out_without_down_proj_bias = fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
@@ -141,7 +141,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         Apply the EP prefill method.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         # 2. EP Dispatch
@@ -232,7 +233,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         Apply the EP decoder method.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
         estimate_total_token_nums = gate_out.shape[0] * layer.top_k
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
@@ -291,7 +293,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         Paddle Cutlass compute Fused MoE.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
         if layer.topk_method == "noaux_tc":
             gate_out, topk_weights, topk_idx = get_moe_scores(
                 gate_out,
