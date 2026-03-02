@@ -13,23 +13,59 @@
 # limitations under the License.
 
 """
-Determinism tests for long sequences and long prompts.
+Long sequence determinism tests.
+
+This test ensures that the deterministic mode works correctly for long sequences
+that trigger the partition_kv code path (num_chunks > 1 when KV length > 1024).
+
+Key requirements:
+1. Total KV length (prompt_tokens + max_tokens) must exceed 1024 to trigger partition_kv
+2. Recommended: KV length >= 2048 to ensure num_chunks >= 2
 
 Usage:
     CUDA_VISIBLE_DEVICES=0 pytest tests/deterministic/test_determinism_long.py -v
 """
 
+import gc
+import itertools
 import os
 
 import pytest
 
 pytestmark = pytest.mark.gpu
 
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
 DEFAULT_MODEL_DIR = "./models"
 MODEL_NAME = "Qwen2-7B-Instruct"
 
 _ENV_CUDA_VISIBLE_DEVICES = "CUDA_VISIBLE_DEVICES"
 _ENV_FD_DETERMINISTIC_MODE = "FD_DETERMINISTIC_MODE"
+_ENV_FD_CUSTOM_AR_MAX_SIZE_MB = "FD_CUSTOM_AR_MAX_SIZE_MB"
+_ENV_FLAGS_MAX_PARTITION_SIZE = "FLAGS_max_partition_size"
+
+# Use smallest chunk_size (64) to maximize num_chunks and increase
+# sensitivity to partition_kv non-determinism. With chunk_size=64:
+# - 1200 tokens -> 19 chunks (vs 2 chunks with default 1024)
+# - More chunks = more merge operations = easier to detect non-determinism
+_CHUNK_SIZE_FOR_TEST = "64"
+
+# Long prompt to ensure KV length > 1024 (triggers partition_kv path)
+# This sentence is ~20 tokens, repeated 40 times = ~800 tokens
+_BASE_SENTENCE = (
+    "Artificial intelligence has transformed various industries including healthcare, "
+    "finance, transportation, and education through machine learning algorithms. "
+)
+_LONG_PROMPT = _BASE_SENTENCE * 40 + (
+    "Based on the above context about AI, please provide a detailed analysis of "
+    "the future trends and potential challenges in AI development."
+)
+
+# With ~800 token prompt + 512 max_tokens, total KV length ~1312 > 1024
+# This ensures num_chunks >= 2, triggering the partition_kv code path
+_MAX_TOKENS_LONG = 512
 
 
 # ---------------------------------------------------------------------------
@@ -39,12 +75,16 @@ _ENV_FD_DETERMINISTIC_MODE = "FD_DETERMINISTIC_MODE"
 
 @pytest.fixture(scope="module", autouse=True)
 def _module_env():
-    """Set env vars before importing fastdeploy (must happen first)."""
+    """Set env vars BEFORE importing fastdeploy (must happen first)."""
     old_cuda = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES)
     old_det = os.environ.get(_ENV_FD_DETERMINISTIC_MODE)
+    old_ar = os.environ.get(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB)
+    old_partition_size = os.environ.get(_ENV_FLAGS_MAX_PARTITION_SIZE)
 
     os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0")
     os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
+    os.environ[_ENV_FD_CUSTOM_AR_MAX_SIZE_MB] = os.environ.get(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB, "57")
+    os.environ[_ENV_FLAGS_MAX_PARTITION_SIZE] = _CHUNK_SIZE_FOR_TEST
 
     global LLM, SamplingParams  # noqa: PLW0603
     from fastdeploy import LLM, SamplingParams
@@ -59,6 +99,14 @@ def _module_env():
         os.environ.pop(_ENV_FD_DETERMINISTIC_MODE, None)
     else:
         os.environ[_ENV_FD_DETERMINISTIC_MODE] = old_det
+    if old_ar is None:
+        os.environ.pop(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB, None)
+    else:
+        os.environ[_ENV_FD_CUSTOM_AR_MAX_SIZE_MB] = old_ar
+    if old_partition_size is None:
+        os.environ.pop(_ENV_FLAGS_MAX_PARTITION_SIZE, None)
+    else:
+        os.environ[_ENV_FLAGS_MAX_PARTITION_SIZE] = old_partition_size
 
 
 @pytest.fixture(autouse=True)
@@ -77,12 +125,16 @@ def model_path():
 
 @pytest.fixture(scope="module")
 def llm(model_path, _module_env):
-    return LLM(
+    instance = LLM(
         model=model_path,
-        tensor_parallel_size=1,
+        tensor_parallel_size=int(os.getenv("TP_SIZE", "1")),
         max_model_len=8192,
         enable_prefix_caching=False,
+        graph_optimization_config={"use_cudagraph": False},
     )
+    yield instance
+    del instance
+    gc.collect()
 
 
 # ---------------------------------------------------------------------------
@@ -93,16 +145,125 @@ def llm(model_path, _module_env):
 def _generate_text(llm, prompt, sp):
     """Generate once, return (text, token_ids)."""
     out = llm.generate([prompt], sp)[0]
-    return out.outputs.text, out.outputs.token_ids
+    return out.outputs.text, list(out.outputs.token_ids)
+
+
+def _collect_logits_hashes():
+    """Read and clear the per-step logits hashes collected by the sampler."""
+    try:
+        from fastdeploy.model_executor.layers.sample import sampler as _sampler_mod
+
+        hashes = list(_sampler_mod._det_logits_hashes)
+        _sampler_mod._det_logits_hashes.clear()
+        return hashes
+    except Exception:
+        return []
+
+
+def _report_logits_diff(hashes_list):
+    """Compare logits hashes between runs and report first divergence."""
+    if len(hashes_list) < 2 or not hashes_list[0]:
+        print("[DIAG-LOGITS] No logits hashes collected (FD_DETERMINISTIC_LOG_MODE=1 ?)")
+        return
+    baseline = hashes_list[0]
+    for run_idx, hashes in enumerate(hashes_list[1:], start=1):
+        min_len = min(len(baseline), len(hashes))
+        for step in range(min_len):
+            if baseline[step]["logits_md5"] != hashes[step]["logits_md5"]:
+                print(f"[DIAG-LOGITS] Run {run_idx}: LOGITS FIRST DIFFER at step {step}")
+                print(
+                    f"[DIAG-LOGITS]   baseline logits_md5={baseline[step]['logits_md5']}, "
+                    f"probs_md5={baseline[step]['probs_md5']}"
+                )
+                print(
+                    f"[DIAG-LOGITS]   run_{run_idx} logits_md5={hashes[step]['logits_md5']}, "
+                    f"probs_md5={hashes[step]['probs_md5']}"
+                )
+                print("[DIAG-LOGITS]   -> Non-determinism is in MODEL COMPUTATION (not sampling)")
+                return
+        if len(baseline) != len(hashes):
+            print(
+                f"[DIAG-LOGITS] Run {run_idx}: All logits identical "
+                f"but length differs ({len(baseline)} vs {len(hashes)})"
+            )
+            return
+        for step in range(min_len):
+            if baseline[step]["probs_md5"] != hashes[step]["probs_md5"]:
+                print(f"[DIAG-LOGITS] Run {run_idx}: logits identical but PROBS DIFFER at step {step}")
+                print("[DIAG-LOGITS]   -> Non-determinism is in SOFTMAX/PENALTY (not model)")
+                return
+        print(f"[DIAG-LOGITS] Run {run_idx}: ALL logits AND probs IDENTICAL across {min_len} steps")
+        print("[DIAG-LOGITS]   -> Non-determinism is in SAMPLING OPERATOR")
+
+
+def _report_token_diff(token_ids_list, sp=None):
+    """Report detailed token-level diff to diagnose determinism issues."""
+    print("\n" + "=" * 70)
+    print("[DIAG] Token-level determinism diagnosis")
+    print("=" * 70)
+    if sp is not None:
+        print(f"[DIAG] SamplingParams: temperature={sp.temperature}, seed={sp.seed}, top_p={sp.top_p}")
+    for i, tids in enumerate(token_ids_list):
+        print(f"[DIAG] Run {i}: {len(tids)} tokens, first 10: {tids[:10]}")
+
+    baseline = token_ids_list[0]
+    for i, tids in enumerate(token_ids_list[1:], start=1):
+        if tids == baseline:
+            print(f"[DIAG] Run {i}: IDENTICAL to baseline")
+            continue
+        min_len = min(len(baseline), len(tids))
+        for j in range(min_len):
+            if baseline[j] != tids[j]:
+                print(f"[DIAG] Run {i}: FIRST DIVERGENCE at token position {j}")
+                print(f"[DIAG]   baseline[{j}] = {baseline[j]}")
+                print(f"[DIAG]   run_{i}[{j}]  = {tids[j]}")
+                start = max(0, j - 3)
+                end = min(min_len, j + 4)
+                print(f"[DIAG]   baseline[{start}:{end}] = {baseline[start:end]}")
+                print(f"[DIAG]   run_{i}[{start}:{end}]  = {tids[start:end]}")
+                total_diff = sum(1 for a, b in zip(baseline[:min_len], tids[:min_len]) if a != b)
+                print(f"[DIAG]   Total differing tokens (in shared range): {total_diff}/{min_len}")
+                break
+        if len(baseline) != len(tids):
+            print(f"[DIAG]   Length differs: baseline={len(baseline)}, run_{i}={len(tids)}")
+    print("=" * 70 + "\n")
+
+
+def _report_text_diff(texts):
+    """Report detailed diff when texts differ."""
+    for i, text in enumerate(texts[1:], start=1):
+        if text != texts[0]:
+            if len(text) != len(texts[0]):
+                print(f"Run {i}: length differs (baseline={len(texts[0])}, got={len(text)})")
+            for j, (c1, c2) in enumerate(itertools.zip_longest(texts[0], text, fillvalue="")):
+                if c1 != c2:
+                    print(f"Run {i}: first diff at pos {j}")
+                    print(f"  Baseline: {repr(texts[0][max(0, j-10):j+20])}")
+                    print(f"  Run {i}:   {repr(text[max(0, j-10):j+20])}")
+                    break
 
 
 def _assert_deterministic(llm, prompt, sp, runs=2):
-    """Run *runs* times and assert all outputs are identical."""
-    results = [_generate_text(llm, prompt, sp) for _ in range(runs)]
+    """Run *runs* times and assert all outputs are identical (text AND token_ids)."""
+    all_hashes = []
+    results = []
+    for _ in range(runs):
+        _collect_logits_hashes()  # clear before each run
+        results.append(_generate_text(llm, prompt, sp))
+        all_hashes.append(_collect_logits_hashes())
+
     texts = [r[0] for r in results]
     token_ids = [r[1] for r in results]
-    assert all(t == texts[0] for t in texts), "Text outputs differ across runs"
-    assert all(t == token_ids[0] for t in token_ids), "Token IDs differ across runs"
+
+    if not all(t == token_ids[0] for t in token_ids):
+        _report_token_diff(token_ids, sp)
+        _report_logits_diff(all_hashes)
+        pytest.fail("Token IDs differ across runs")
+
+    if not all(t == texts[0] for t in texts):
+        _report_text_diff(texts)
+        pytest.fail("Text outputs differ across runs")
+
     return texts[0], token_ids[0]
 
 
@@ -113,7 +274,6 @@ def _assert_deterministic(llm, prompt, sp, runs=2):
     "temp,seed",
     [
         (0.0, 100),
-        (0.7, 170),
         (1.0, 200),
     ],
 )
@@ -133,6 +293,80 @@ def test_deterministic_long_prompt(llm):
     sp = SamplingParams(temperature=0.5, max_tokens=100, seed=2024)
 
     _assert_deterministic(llm, long_prompt, sp)
+
+
+# ===================== Partition-kv aware tests =====================
+
+
+def test_long_sequence_determinism_basic(llm):
+    """
+    Basic long sequence test: KV length > 2048 to trigger partition_kv.
+
+    This is the core test that verifies the deterministic mode fix works
+    for long sequences that would normally trigger num_chunks > 1.
+    """
+    sp = SamplingParams(temperature=0.7, top_p=0.95, max_tokens=_MAX_TOKENS_LONG, seed=170)
+    _, token_ids = _assert_deterministic(llm, _LONG_PROMPT, sp, runs=10)
+
+    assert len(token_ids) >= 200, f"Expected >= 200 tokens, got {len(token_ids)}"
+
+
+def test_long_sequence_multiple_lengths(llm):
+    """
+    Test determinism across sequence lengths that cross the chunk boundary.
+
+    With FLAGS_max_partition_size=64 (chunk_size=64), we test:
+    - ~1200 tokens: 19 chunks
+    - ~2000 tokens: 32 chunks
+    - ~3000 tokens: 47 chunks
+
+    Note: min_expected is set conservatively because the model may stop early
+    due to EOS. The key test is determinism, not exact token count.
+    """
+    test_configs = [
+        {"max_tokens": 400, "min_expected": 100, "desc": "~1200 total (~19 chunks)"},
+        {"max_tokens": 1280, "min_expected": 200, "desc": "~2000 total (~32 chunks)"},
+        {"max_tokens": 2200, "min_expected": 300, "desc": "~3000 total (~47 chunks)"},
+    ]
+
+    for config in test_configs:
+        sp = SamplingParams(
+            temperature=0.7,
+            top_p=0.95,
+            max_tokens=config["max_tokens"],
+            seed=42,
+        )
+        _, token_ids = _assert_deterministic(llm, _LONG_PROMPT, sp, runs=2)
+        assert (
+            len(token_ids) >= config["min_expected"]
+        ), f"{config['desc']}: expected >= {config['min_expected']} tokens, got {len(token_ids)}"
+
+
+def test_long_sequence_batch_invariance(llm):
+    """
+    Long sequence output should be identical regardless of batch position.
+
+    This tests that the partition_kv fix maintains batch invariance.
+    """
+    sp = SamplingParams(temperature=0.7, top_p=0.95, max_tokens=_MAX_TOKENS_LONG, seed=170)
+
+    baseline_text, baseline_ids = _generate_text(llm, _LONG_PROMPT, sp)
+
+    filler = "What is machine learning?"
+    batch_configs = [
+        [_LONG_PROMPT, filler],
+        [filler, _LONG_PROMPT],
+        [filler, _LONG_PROMPT, filler],
+    ]
+
+    for i, batch in enumerate(batch_configs):
+        outputs = llm.generate(batch, sp)
+        idx = batch.index(_LONG_PROMPT)
+        result_text = outputs[idx].outputs.text
+        result_ids = list(outputs[idx].outputs.token_ids)
+
+        assert result_text == baseline_text, f"Batch config {i} (pos {idx}): text differs"
+        assert result_ids == baseline_ids, f"Batch config {i} (pos {idx}): token_ids differ"
 
 
 if __name__ == "__main__":
