@@ -551,13 +551,17 @@ class Sampler(nn.Layer):
 
             logits_md5 = hashlib.md5(logits.cpu().numpy().tobytes()).hexdigest()[:16]
             probs_md5 = hashlib.md5(probs.cpu().numpy().tobytes()).hexdigest()[:16]
-            seed_val = sampling_metadata.seed.cpu().numpy().tolist()[:1] if sampling_metadata.seed is not None else None
+            seed_val = (
+                sampling_metadata.seed.cpu().numpy().tolist()[:1] if sampling_metadata.seed is not None else None
+            )
             global _det_logits_hashes  # noqa: PLW0602
-            _det_logits_hashes.append({
-                "logits_md5": logits_md5,
-                "probs_md5": probs_md5,
-                "seed": seed_val,
-            })
+            _det_logits_hashes.append(
+                {
+                    "logits_md5": logits_md5,
+                    "probs_md5": probs_md5,
+                    "seed": seed_val,
+                }
+            )
 
         # When all requests in the batch use temperature=0 (greedy decoding),
         # use argmax instead of top_p_sampling to guarantee determinism.

@@ -86,7 +86,7 @@ def _module_env():
     old_ar = os.environ.get(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB)
     old_partition_size = os.environ.get(_ENV_FLAGS_MAX_PARTITION_SIZE)
 
-    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0")
+    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0,1,2,3")
     os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
     os.environ[_ENV_FD_CUSTOM_AR_MAX_SIZE_MB] = os.environ.get(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB, "57")
     os.environ[_ENV_FLAGS_MAX_PARTITION_SIZE] = _CHUNK_SIZE_FOR_TEST
@@ -135,7 +135,7 @@ def llm(model_path, _module_env):
     """Create LLM instance, shared across all tests in this module."""
     instance = LLM(
         model=model_path,
-        tensor_parallel_size=int(os.getenv("TP_SIZE", "1")),
+        tensor_parallel_size=int(os.getenv("TP_SIZE", "4")),
         max_model_len=8192,
         enable_prefix_caching=False,  # Disabled for determinism testing
     )
@@ -160,6 +160,7 @@ def _collect_logits_hashes():
     """Read and clear the per-step logits hashes collected by the sampler."""
     try:
         from fastdeploy.model_executor.layers.sample import sampler as _sampler_mod
+
         hashes = list(_sampler_mod._det_logits_hashes)
         _sampler_mod._det_logits_hashes.clear()
         return hashes
@@ -178,24 +179,30 @@ def _report_logits_diff(hashes_list):
         for step in range(min_len):
             if baseline[step]["logits_md5"] != hashes[step]["logits_md5"]:
                 print(f"[DIAG-LOGITS] Run {run_idx}: LOGITS FIRST DIFFER at step {step}")
-                print(f"[DIAG-LOGITS]   baseline logits_md5={baseline[step]['logits_md5']}, "
-                      f"probs_md5={baseline[step]['probs_md5']}")
-                print(f"[DIAG-LOGITS]   run_{run_idx} logits_md5={hashes[step]['logits_md5']}, "
-                      f"probs_md5={hashes[step]['probs_md5']}")
-                print(f"[DIAG-LOGITS]   → Non-determinism is in MODEL COMPUTATION (not sampling)")
+                print(
+                    f"[DIAG-LOGITS]   baseline logits_md5={baseline[step]['logits_md5']}, "
+                    f"probs_md5={baseline[step]['probs_md5']}"
+                )
+                print(
+                    f"[DIAG-LOGITS]   run_{run_idx} logits_md5={hashes[step]['logits_md5']}, "
+                    f"probs_md5={hashes[step]['probs_md5']}"
+                )
+                print("[DIAG-LOGITS]   → Non-determinism is in MODEL COMPUTATION (not sampling)")
                 return
         if len(baseline) != len(hashes):
-            print(f"[DIAG-LOGITS] Run {run_idx}: All logits identical "
-                  f"but length differs ({len(baseline)} vs {len(hashes)})")
+            print(
+                f"[DIAG-LOGITS] Run {run_idx}: All logits identical "
+                f"but length differs ({len(baseline)} vs {len(hashes)})"
+            )
             return
         # Check if probs differ even though logits are the same
         for step in range(min_len):
             if baseline[step]["probs_md5"] != hashes[step]["probs_md5"]:
                 print(f"[DIAG-LOGITS] Run {run_idx}: logits identical but PROBS DIFFER at step {step}")
-                print(f"[DIAG-LOGITS]   → Non-determinism is in SOFTMAX/PENALTY (not model)")
+                print("[DIAG-LOGITS]   → Non-determinism is in SOFTMAX/PENALTY (not model)")
                 return
         print(f"[DIAG-LOGITS] Run {run_idx}: ALL logits AND probs IDENTICAL across {min_len} steps")
-        print(f"[DIAG-LOGITS]   → Non-determinism is in SAMPLING OPERATOR")
+        print("[DIAG-LOGITS]   → Non-determinism is in SAMPLING OPERATOR")
 
 
 def _assert_deterministic(llm, prompt, sp, runs=3):
