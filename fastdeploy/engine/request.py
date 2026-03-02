@@ -190,6 +190,7 @@ class Request:
         # extend block tables
         self.use_extend_tables = False
         self.extend_block_tables = []
+        self.match_block_node_map = {}
         # dp
         self.dp_rank = dp_rank
         self.ic_req_data = ic_req_data
