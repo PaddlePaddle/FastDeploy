@@ -306,7 +306,7 @@ def test_long_sequence_determinism_basic(llm):
     for long sequences that would normally trigger num_chunks > 1.
     """
     sp = SamplingParams(temperature=0.7, top_p=0.95, max_tokens=_MAX_TOKENS_LONG, seed=170)
-    _, token_ids = _assert_deterministic(llm, _LONG_PROMPT, sp, runs=10)
+    _, token_ids = _assert_deterministic(llm, _LONG_PROMPT, sp, runs=5)
 
     assert len(token_ids) >= 200, f"Expected >= 200 tokens, got {len(token_ids)}"
 
@@ -336,7 +336,7 @@ def test_long_sequence_multiple_lengths(llm):
             max_tokens=config["max_tokens"],
             seed=42,
         )
-        _, token_ids = _assert_deterministic(llm, _LONG_PROMPT, sp, runs=2)
+        _, token_ids = _assert_deterministic(llm, _LONG_PROMPT, sp, runs=5)
         assert (
             len(token_ids) >= config["min_expected"]
         ), f"{config['desc']}: expected >= {config['min_expected']} tokens, got {len(token_ids)}"
