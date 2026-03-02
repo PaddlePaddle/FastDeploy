@@ -72,6 +72,17 @@ class ScheduledPreemptTask:
 
 
 @dataclass
+class ScheduledAbortTask:
+    """
+    Task for allocating new blocks to skip.
+    """
+
+    idx: int
+    request_id: str
+    task_type: RequestType = RequestType.ABORT
+
+
+@dataclass
 class ScheduledExtendBlocksTask:
     """
     Task for allocating new blocks to extend.
@@ -172,6 +183,9 @@ class ResourceManagerV1(ResourceManager):
         self.lock = threading.Lock()
         self.to_be_rescheduled_request_id_set = set()
         main_process_metrics.max_batch_size.set(max_num_seqs)
+        # requests to be aborted
+        self.waiting_abort_req_id_set = set()  # request recieved signal, waiting to be handled
+        self.to_be_aborted_req_id_set = set()  # request is handled
 
         self.using_extend_tables_req_id = set()
         self.reuse_block_num_map = dict()
@@ -249,6 +263,9 @@ class ResourceManagerV1(ResourceManager):
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
 
+    def _prepare_abort_task(self, request):
+        return ScheduledAbortTask(idx=request.idx, request_id=request.request_id)
+
     def reschedule_preempt_task(self, request_id):
         with self.lock:
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
@@ -264,6 +281,19 @@ class ResourceManagerV1(ResourceManager):
                     request = self.requests[request_id]
                     self.waiting.appendleft(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
+
+    def recycle_abort_task(self, request_id):
+        with self.lock:
+            if request_id in self.to_be_aborted_req_id_set and request_id in self.requests:
+                request = self.requests[request_id]
+                self.tasks_list[request.idx] = None
+                self.stop_flags[request.idx] = True
+                if request_id in self.requests:
+                    del self.requests[request_id]
+                if request_id in self.req_dict:
+                    del self.req_dict[request_id]
+                self.to_be_aborted_req_id_set.remove(request_id)
+                llm_logger.info(f"Recycle slot resource for aborted request_id: {request_id}")
 
     def _info_each_block(self):
         """
@@ -282,6 +312,18 @@ class ResourceManagerV1(ResourceManager):
             if not req.use_extend_tables:
                 return True
         return False
+
+    def _trigger_abort(self, request_id, scheduled_reqs):
+        if request_id in self.requests:
+            abort_request = self.requests[request_id]
+            abort_request.status = RequestStatus.PREEMPTED
+            abort_request.num_computed_tokens = 0
+            self._free_blocks(abort_request)
+            abort_request.cached_block_num = 0
+            llm_logger.info(f"Abort is triggered! Abort request id: {request_id}")
+            scheduled_reqs.append(self._prepare_abort_task(abort_request))
+            self.to_be_aborted_req_id_set.add(request_id)
+            self.waiting_abort_req_id_set.remove(request_id)
 
     def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
         """
@@ -541,6 +583,13 @@ class ResourceManagerV1(ResourceManager):
                 return True
         return False
 
+    def add_abort_req_ids(self, req_ids):
+        with self.lock:
+            if isinstance(req_ids, list):
+                self.waiting_abort_req_id_set.update(req_ids)
+            else:
+                self.waiting_abort_req_id_set.add(req_ids)
+
     def schedule(self):
         """
         Try to pull a batch of requests from the waiting queue and schedule them.
@@ -549,6 +598,7 @@ class ResourceManagerV1(ResourceManager):
             scheduled_reqs: list[Request] = []
             preempted_reqs: list[Request] = []
             error_reqs: list[tuple[str, str]] = []
+            need_abort_requests = []  # users trigger abortion
             token_budget = self.config.scheduler_config.max_num_batched_tokens
 
             # First, schedule the RUNNING requests.
@@ -569,6 +619,13 @@ class ResourceManagerV1(ResourceManager):
                         continue
                     if request.num_total_tokens > request.need_prefill_tokens:  # has generated tokens
                         request.num_computed_tokens = request.num_total_tokens - 1
+
+                    if request.request_id in self.waiting_abort_req_id_set:
+                        self._trigger_abort(request.request_id, scheduled_reqs)
+                        req_index += 1
+                        need_abort_requests.append(request)
+                        continue
+
                     if (
                         self.allocated_slots(request) - request.num_total_tokens
                         <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
@@ -681,6 +738,11 @@ class ResourceManagerV1(ResourceManager):
                             request, self.config.cache_config.block_size, request.num_computed_tokens
                         )
                 req_index += 1
+
+            # remove requests to be aborted from running list
+            for request in need_abort_requests:
+                self.running.remove(request)
+
             # schedule the WAITING requests.
             if not preempted_reqs:
                 skip_requests: list[Request] = []
