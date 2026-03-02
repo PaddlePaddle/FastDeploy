@@ -34,7 +34,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         self.stop_flags = paddle.to_tensor([False, False], dtype="bool")
 
         # ------------------------
-        # pre_ids
+        # token_ids_all
         #
         # batch 0:
         #   ... \n <think_end> \n \n   → status 1 -> 2
@@ -42,18 +42,20 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         # batch 1:
         #   contains think_end, but pattern not complete → status 0 -> 1
         # ------------------------
-        pre_ids = np.zeros((self.bs, self.max_seq_len), dtype=np.int64)
+        token_ids_all = np.zeros((self.bs, self.max_seq_len), dtype=np.int64)
+        self.prompt_lens = paddle.zeros([self.bs, 1], dtype="int64")
 
         # batch 0
-        pre_ids[0, 1] = self.line_break_id
-        pre_ids[0, 2] = self.think_end_id
-        pre_ids[0, 3] = self.line_break_id
-        pre_ids[0, 4] = self.line_break_id
+        token_ids_all[0, 1] = self.line_break_id
+        token_ids_all[0, 2] = self.think_end_id
+        token_ids_all[0, 3] = self.line_break_id
+        token_ids_all[0, 4] = self.line_break_id
 
         # batch 1
-        pre_ids[1, 3] = self.think_end_id
+        token_ids_all[1, 3] = self.think_end_id
 
-        self.pre_ids = paddle.to_tensor(pre_ids, dtype="int64")
+        self.token_ids_all = paddle.to_tensor(token_ids_all, dtype="int64")
+        self.prompt_lens = paddle.zeros([self.bs, 1], dtype="int64")
 
         # ------------------------
         # reasoning_status (init)
@@ -106,7 +108,8 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         # ------------------------
         reasoning_phase_token_constraint(
             self.logits,
-            self.pre_ids,
+            self.token_ids_all,
+            self.prompt_lens,
             self.stop_flags,
             self.seq_lens_this_time,
             self.seq_lens_encoder,
@@ -165,15 +168,15 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         # ------------------------
         # setup: only think_end appears
         # ------------------------
-        pre_ids = np.zeros((self.bs, self.max_seq_len), dtype=np.int64)
+        token_ids_all = np.zeros((self.bs, self.max_seq_len), dtype=np.int64)
 
         # batch 0: think_end at cur_step - 1
-        pre_ids[0, 3] = self.think_end_id
+        token_ids_all[0, 3] = self.think_end_id
 
         # batch 1: no think_end
-        pre_ids[1, :] = 0
+        token_ids_all[1, :] = 0
 
-        self.pre_ids = paddle.to_tensor(pre_ids, dtype="int64")
+        self.token_ids_all = paddle.to_tensor(token_ids_all, dtype="int64")
 
         self.reasoning_status = paddle.to_tensor([0, 0], dtype="int32")
 
@@ -184,7 +187,8 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         # ------------------------
         reasoning_phase_token_constraint(
             self.logits,
-            self.pre_ids,
+            self.token_ids_all,
+            self.prompt_lens,
             self.stop_flags,
             self.seq_lens_this_time,
             self.seq_lens_encoder,
@@ -228,7 +232,8 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
 
         reasoning_phase_token_constraint(
             self.logits,
-            self.pre_ids,
+            self.token_ids_all,
+            self.prompt_lens,
             self.stop_flags,
             self.seq_lens_this_time,
             self.seq_lens_encoder,
@@ -264,7 +269,8 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
 
         reasoning_phase_token_constraint(
             self.logits,
-            self.pre_ids,
+            self.token_ids_all,
+            self.prompt_lens,
             self.stop_flags,
             self.seq_lens_this_time,
             self.seq_lens_encoder,
@@ -317,7 +323,8 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
 
         reasoning_phase_token_constraint(
             self.logits,
-            self.pre_ids,
+            self.token_ids_all,
+            self.prompt_lens,
             self.stop_flags,
             self.seq_lens_this_time,
             self.seq_lens_encoder,
@@ -362,7 +369,8 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
 
         reasoning_phase_token_constraint(
             self.logits,
-            self.pre_ids,
+            self.token_ids_all,
+            self.prompt_lens,
             self.stop_flags,
             self.seq_lens_this_time,
             self.seq_lens_encoder,
@@ -415,16 +423,16 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         stop_flags = paddle.zeros([bs], dtype="bool")
 
         # ------------------------
-        # pre_ids: force 1 -> 2 pattern
+        # token_ids_all: force 1 -> 2 pattern
         # ------------------------
-        pre_ids = np.zeros((bs, max_seq_len), dtype=np.int64)
+        token_ids_all = np.zeros((bs, max_seq_len), dtype=np.int64)
         for i in range(bs):
-            pre_ids[i, 1] = line_break_id
-            pre_ids[i, 2] = think_end_id
-            pre_ids[i, 3] = line_break_id
-            pre_ids[i, 4] = line_break_id
+            token_ids_all[i, 1] = line_break_id
+            token_ids_all[i, 2] = think_end_id
+            token_ids_all[i, 3] = line_break_id
+            token_ids_all[i, 4] = line_break_id
 
-        pre_ids = paddle.to_tensor(pre_ids, dtype="int64")
+        token_ids_all = paddle.to_tensor(token_ids_all, dtype="int64")
 
         # ------------------------
         # reasoning_status: start from 1
@@ -469,7 +477,8 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         for _ in range(5):
             reasoning_phase_token_constraint(
                 logits,
-                pre_ids,
+                token_ids_all,
+                self.prompt_lens,
                 stop_flags,
                 seq_lens_this_time,
                 seq_lens_encoder,
@@ -496,7 +505,8 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         for _ in range(iters):
             reasoning_phase_token_constraint(
                 logits,
-                pre_ids,
+                token_ids_all,
+                self.prompt_lens,
                 stop_flags,
                 seq_lens_this_time,
                 seq_lens_encoder,

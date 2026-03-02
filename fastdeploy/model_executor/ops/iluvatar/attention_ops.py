@@ -18,6 +18,7 @@ import paddle
 
 try:
     from fastdeploy.model_executor.ops.iluvatar import (
+        cuinfer_flash_attn_unpadded,
         mixed_fused_paged_attn,
         paged_attn,
         prefill_fused_paged_attn,
@@ -188,3 +189,21 @@ def mixed_fused_paged_attention(
         rope_batch_stride,
         is_interleaved_rope_mode,
     )
+
+
+def flash_attn_unpadded(
+    query,
+    key,
+    value,
+    cu_seqlens_q,
+    cu_seqlens_k,
+    max_seqlen_q,
+    max_seqlen_k,
+    scale,
+    causal=False,
+    training=False,
+):
+    output = cuinfer_flash_attn_unpadded(
+        query, key, value, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, causal, scale, training
+    )
+    return output, None  # return_softmax

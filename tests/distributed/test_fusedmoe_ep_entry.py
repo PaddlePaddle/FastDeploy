@@ -26,6 +26,14 @@ def test_fused_moe_launch():
     """
     current_dir = os.path.dirname(os.path.abspath(__file__))
     py_script = os.path.join(current_dir, "../layers/test_fusedmoe.py")
+
+    # 为了方便在PDC的环境下直接python运行这个脚本
+    os.environ.pop("PADDLE_ELASTIC_JOB_ID", None)
+    os.environ.pop("PADDLE_TRAINER_ENDPOINTS", None)
+    os.environ.pop("DISTRIBUTED_TRAINER_ENDPOINTS", None)
+    os.environ.pop("FLAGS_START_PORT", None)
+    os.environ.pop("PADDLE_ELASTIC_TIMEOUT", None)
+
     os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
     os.environ["DISABLE_CI_FUSEDMOE_EP"] = "1"
