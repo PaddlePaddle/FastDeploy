@@ -1396,15 +1396,25 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
             ]
         else:
+            up_num_scales = ceil_div(
+                layer.hidden_size,
+                self.quant_config.weight_block_size[1],
+            )
+            up_num_scale_packs = (up_num_scales + 3) // 4
             self.up_gate_proj_scale_shape = [
                 layer.num_local_experts,
                 layer.moe_intermediate_size * 2,
-                ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]) // 4,
+                up_num_scale_packs,
             ]
+            down_num_scales = ceil_div(
+                layer.moe_intermediate_size,
+                self.quant_config.weight_block_size[1],
+            )
+            down_num_scale_packs = (down_num_scales + 3) // 4
             self.down_proj_scale_shape = [
                 layer.num_local_experts,
                 layer.hidden_size,
-                ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]) // 4,
+                down_num_scale_packs,
             ]
         # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
         self.model_format = extra_weight_attrs.get("model_format")

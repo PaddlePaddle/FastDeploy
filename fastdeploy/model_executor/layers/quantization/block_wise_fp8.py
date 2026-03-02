@@ -289,11 +289,16 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         if not self.quant_config.deepgemm_scale_ue8m0:
             quanted_weight_tensor, weight_block_scale_tensor = per_block_cast_to_fp8(weight_tensor)
         else:
-            quanted_weight_tensor, weight_block_scale_tensor = quant_weight_ue8m0(weight_tensor, [128, 128])
+            weight_block_size = self.quant_config.weight_block_size
+            assert weight_block_size == [
+                128,
+                128,
+            ], f"weight_block_size must be [128, 128] for ue8m0, but got {weight_block_size}"
+            quanted_weight_tensor, weight_block_scale_tensor = quant_weight_ue8m0(weight_tensor, weight_block_size)
             weight_block_scale_tensor = transform_scale_ue8m0(
                 weight_block_scale_tensor,
                 mn=quanted_weight_tensor.shape[-2],
-                weight_block_size=[128, 128],
+                weight_block_size=weight_block_size,
             )
         layer.weight.copy_(quanted_weight_tensor, False)
         layer.weight_scale_inv.data = weight_block_scale_tensor
