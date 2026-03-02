@@ -15,13 +15,27 @@ export FD_LOG_DIR=/fdlog/$HOSTNAME
 echo "FD log will be saved into $FD_LOG_DIR"
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 ln -sf /usr/local/bin/python3 /usr/local/bin/python
+function pip_install_with_retry() {
+    local max_retries=3
+    local retry_delay=30
+    for ((i=1; i<=max_retries; i++)); do
+        echo "Attempt $i/$max_retries: pip install $@"
+        python -m pip install "$@" && return 0
+        echo "pip install failed (attempt $i/$max_retries)"
+        if [ $i -lt $max_retries ]; then
+            echo "Retrying in ${retry_delay}s..."
+            sleep $retry_delay
+        fi
+    done
+    echo "pip install failed after $max_retries attempts: $@"
+    return 1
+}
+
 echo "pip requirements"
-python -m pip install -r requirements_iluvatar.txt
+pip_install_with_retry -r requirements_iluvatar.txt
 echo "install paddle cpu and custom device"
-# python -m pip install  --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-# python -m pip install --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
-python -m pip install paddlepaddle==3.4.0.dev20260206 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-python -m pip install paddle-iluvatar-gpu==3.0.0.dev20260206 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+pip_install_with_retry --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+pip_install_with_retry --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
 
 INCLUDE_FOLDERS=(
     "ERNIE_300B_4L"
