@@ -1042,13 +1042,9 @@ class ResourceManagerV1(ResourceManager):
                             request.extend_block_tables.extend(
                                 self.cache_manager.allocate_gpu_blocks(allocate_block_num, request.request_id)
                             )
-                            scheduled_reqs.append(
-                                ScheduledExtendBlocksTask(
-                                    idx=request.idx,
-                                    request_id=request.request_id,
-                                    extend_block_tables=request.extend_block_tables,
-                                )
-                            )
+                            # EXTEND task is treated as PREFILL with 0 new tokens
+                            # This ensures worker handles it correctly instead of treating as PREEMPTED
+                            scheduled_reqs.append(self._prepare_prefill_task(request, 0))
                             llm_logger.debug(f"extend blocks is {request.extend_block_tables}")
 
                         if self.cache_manager.can_allocate_gpu_blocks(
