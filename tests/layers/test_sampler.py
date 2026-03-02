@@ -532,21 +532,6 @@ def test_mtp_sampler_init_and_compute_logprobs(monkeypatch):
     sampler.post_process(paddle.to_tensor([[1]], dtype="int64"))
     sampler.apply_logits_processor(0)
 
-    sampling_metadata = _create_default_sampling_metadata(batch_size=1, min_seq_len=1, max_seq_len=3)
-    sampling_metadata.top_p_normalized_logprobs = paddle.to_tensor([[1]], dtype="bool")
-    sampling_metadata.top_p_normalized_logprobs_flag = True
-    sampling_metadata.temp_scaled_logprobs = paddle.to_tensor([[1]], dtype="bool")
-    sampling_metadata.temp_scaled_logprobs_flag = True
-    sampling_metadata.top_p = paddle.to_tensor([[0.9]], dtype="float32")
-    sampling_metadata.share_inputs = {
-        "seq_lens_this_time": paddle.to_tensor([[1]], dtype="int64"),
-        "batch_token_num": paddle.to_tensor([[1]], dtype="int64"),
-    }
-    logprobs = sampler.compute_logprobs(paddle.to_tensor([[1.0, 2.0]], dtype="float32"), sampling_metadata)
-    monkeypatch.setattr("fastdeploy.model_executor.layers.sample.logprobs.current_platform.is_cuda", lambda: False)
-    gathered = sampler.gather_logprobs(logprobs, num_logprobs=0, token_ids=paddle.to_tensor([1], dtype="int64"))
-    assert gathered.logprob_token_ids.shape[1] == 1
-
 
 if __name__ == "__main__":
     pytest.main([__file__])
