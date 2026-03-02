@@ -1159,9 +1159,12 @@ void MultiQueryAppendAttention(
     }
 
     const int num_chunks = div_up(max_seq_len, chunk_size);
+    // Deterministic mode: force use nosplit kernel to ensure consistent
+    // floating-point accumulation order across all sequence lengths
+    const bool force_no_partition = getBoolEnv("FD_DETERMINISTIC_MODE");
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
-    if (num_chunks <= 0) {
+    if (num_chunks <= 1 || force_no_partition) {
       auto nosplit_kv_kernel =
           multi_query_append_attention_warp1_4_kernel<NV_TYPE,
                                                       false,

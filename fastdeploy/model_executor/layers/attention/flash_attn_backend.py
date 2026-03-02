@@ -99,6 +99,11 @@ def init_flash_attn_version():
         logger.info("Only support CUDA version flash attention.")
 
 
+def _is_deterministic_mode():
+    """Check if FD_DETERMINISTIC_MODE is enabled."""
+    return os.environ.get("FD_DETERMINISTIC_MODE", "0") == "1"
+
+
 def flash_attn_func(
     q: paddle.Tensor,
     k: paddle.Tensor,
@@ -118,6 +123,7 @@ def flash_attn_func(
         init_flash_attn_version()
     if version is None:
         version = FLASH_ATTN_VERSION
+
     if version == 4:
         assert (
             flashmask_attention_v4 is not None
@@ -155,6 +161,8 @@ def flash_attn_func(
         )
     else:
         if version == 3:
+            # Force num_splits=1 to prevent non-deterministic KV split
+            # across SMs, ensuring consistent accumulation order.
             out = flash_attention_v3_varlen(
                 q,
                 k,
@@ -164,6 +172,7 @@ def flash_attn_func(
                 max_seqlen_q=max_seqlen_q,
                 max_seqlen_k=max_seqlen_k,
                 causal=causal,
+                num_splits=1,
             )
         else:
             out = flash_attn_unpadded(

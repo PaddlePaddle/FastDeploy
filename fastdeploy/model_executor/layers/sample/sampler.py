@@ -45,6 +45,28 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.reasoning import ReasoningParser
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 
+# Deterministic mode: per-step logits fingerprints for cross-run comparison.
+_det_logits_file = None
+
+
+def _record_logits_fingerprint(logits: paddle.Tensor):
+    """Append a lightweight fingerprint to /tmp/fd_det_logits.jsonl."""
+    global _det_logits_file
+    import json
+
+    if _det_logits_file is None:
+        _det_logits_file = open("/tmp/fd_det_logits.jsonl", "w")
+    with paddle.no_grad():
+        fp = logits.astype("float32")
+        entry = {
+            "sum": float(fp.sum()),
+            "argmax": int(fp[0].argmax()),
+            "max": float(fp[0].max()),
+            "batch": logits.shape[0],
+        }
+        _det_logits_file.write(json.dumps(entry) + "\n")
+        _det_logits_file.flush()
+
 
 def top_p_normalize_probs_paddle(
     probs: paddle.Tensor,
@@ -498,6 +520,12 @@ class Sampler(nn.Layer):
         p_done_idxs: List[int] = [],
     ) -> SamplerOutput:
         """ """
+        # Record raw logits fingerprint for determinism debugging
+        from fastdeploy import envs
+
+        if envs.FD_DETERMINISTIC_LOG_MODE:
+            _record_logits_fingerprint(logits)
+
         logits = self.guided_decoding.apply_token_mask(logits, p_done_idxs)
 
         num_logprobs = sampling_metadata.max_num_logprobs

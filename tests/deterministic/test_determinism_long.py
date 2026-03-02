@@ -305,7 +305,7 @@ def test_long_sequence_determinism_basic(llm):
     This is the core test that verifies the deterministic mode fix works
     for long sequences that would normally trigger num_chunks > 1.
     """
-    sp = SamplingParams(temperature=0.7, top_p=0.95, max_tokens=_MAX_TOKENS_LONG, seed=170)
+    sp = SamplingParams(temperature=0.7, top_p=0.95, max_tokens=1024, seed=170)
     _, token_ids = _assert_deterministic(llm, _LONG_PROMPT, sp, runs=5)
 
     assert len(token_ids) >= 200, f"Expected >= 200 tokens, got {len(token_ids)}"
