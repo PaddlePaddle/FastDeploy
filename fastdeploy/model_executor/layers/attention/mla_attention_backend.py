@@ -653,14 +653,15 @@ class MLAAttentionBackend(AttentionBackend):
                 token_num = q.shape[0]
                 decoder_q.reshape_([-1, 1, self.num_heads, 576])
 
-                num_blocks = latent_cache.shape[0]
-                cache_dim = latent_cache.shape[-1]
+                new_cache_shape = latent_cache.shape
+                assert new_cache_shape[1] == 1
+                new_cache_shape[1], new_cache_shape[2] = new_cache_shape[2], new_cache_shape[1]
 
                 decoder_res, _ = flash_mla.flash_mla_with_kvcache(
                     decoder_q,
                     # 外面的开源仓库的kv cache存储格式和FD的不同
                     # 幸好这里缓存的头是1，直接view即可，否则上上下下要改很多！
-                    latent_cache.view([num_blocks, self.block_size, 1, cache_dim]),
+                    latent_cache.view(new_cache_shape),
                     metadata.block_tables,
                     cache_seqlens,
                     512,  # t.dv,
