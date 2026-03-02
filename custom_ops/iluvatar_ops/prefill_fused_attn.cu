@@ -35,6 +35,10 @@ void PrefillFusedPagedAttnKernel(const paddle::Tensor& qkv,
                                  bool v_rope,
                                  bool is_interleaved_rope_mode,
                                  paddle::Tensor& out) {
+  auto dev_ctx = static_cast<const phi::CustomContext*>(
+      paddle::experimental::DeviceContextPool::Instance().Get(qkv.place()));
+  auto stream = static_cast<const cudaStream_t>(dev_ctx->stream());
+
   // check dtype and contiguous
   const auto& dtype = qkv.dtype();
   cuinferDataType_t data_type;
@@ -164,6 +168,7 @@ void PrefillFusedPagedAttnKernel(const paddle::Tensor& qkv,
 
   cuinferHandle_t cuinfer_handle =
       iluvatar::getContextInstance()->getIxInferHandle();
+  CUINFER_CHECK(cuinferSetStream(cuinfer_handle, stream));
 
   size_t workspace_size = 0;
   CUINFER_CHECK(cuinferGetFmhaFwdMergedFuseRopeWorkspaceSize(num_tokens,
