@@ -430,7 +430,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             )
 
             if need_do_prefill:
-                fmha_out = fmha_out_prefill + fmha_out_decode
+                fmha_out += fmha_out_decode
             else:
                 fmha_out = fmha_out_decode
 
