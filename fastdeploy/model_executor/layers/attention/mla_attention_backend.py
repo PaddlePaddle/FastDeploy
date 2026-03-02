@@ -16,11 +16,15 @@
 
 from __future__ import annotations
 
+import paddle
+
+paddle.enable_compat(scope={"flash_mla"})  # Enable torch proxy before importing flash_mla
 import math
 import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
+import flash_mla
 import paddle
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
 
@@ -455,47 +459,69 @@ class MLAAttentionBackend(AttentionBackend):
                 speculate_decoder,
             )
 
-            # 多头潜在注意力计算
-            fmha_out = multi_head_latent_attention(
-                q,
-                latent_cache,
-                latent_cache,
-                forward_meta.seq_lens_decoder,
-                forward_meta.seq_lens_this_time,
-                forward_meta.cu_seqlens_q,
-                forward_meta.batch_id_per_token,
-                metadata.block_tables,
-                forward_meta.kv_batch_ids,
-                forward_meta.kv_tile_ids_per_batch,
-                forward_meta.kv_num_blocks_x_cpu,
-                forward_meta.decoder_batch_ids,
-                forward_meta.decoder_tile_ids_per_batch,
-                forward_meta.decoder_num_blocks_device,
-                forward_meta.decoder_chunk_size_device,
-                metadata.max_dec_len_this_time,
-                metadata.max_kv_len_this_time,
-                None,  # attn_mask
-                None,  # qkv_bias
-                None,  # qkv_out_scales
-                None,  # cache_k_quant_scales
-                None,  # cache_v_quant_scales
-                None,  # cache_k_dequant_scales
-                None,  # cache_v_dequant_scales
-                None,  # cache_k_zp
-                None,  # cache_v_zp
-                None,  # out_shifts
-                None,  # out_smooths
-                metadata._fuse_kernel_compute_dtype,
-                "none",  # cache_quant_type
-                self.kv_lora_rank,
-                self.max_seq_len,
-                self.attn_softmax_scale,
-                0.0,  # quant_max_bound
-                0.0,  # quant_min_bound
-                0.0,  # out_linear_in_scale
-                speculate_max_tokens,
-                True,  # causal
-                speculate_decoder,
-            )
+            if int(os.getenv("USE_FLASH_MLA", "0")) == 0:
+                assert self.num_heads <= 64, "paddle mla attention support failed"
+                # 多头潜在注意力计算
+                fmha_out = multi_head_latent_attention(
+                    q,
+                    latent_cache,
+                    latent_cache,
+                    forward_meta.seq_lens_decoder,
+                    forward_meta.seq_lens_this_time,
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.batch_id_per_token,
+                    metadata.block_tables,
+                    forward_meta.kv_batch_ids,
+                    forward_meta.kv_tile_ids_per_batch,
+                    forward_meta.kv_num_blocks_x_cpu,
+                    forward_meta.decoder_batch_ids,
+                    forward_meta.decoder_tile_ids_per_batch,
+                    forward_meta.decoder_num_blocks_device,
+                    forward_meta.decoder_chunk_size_device,
+                    metadata.max_dec_len_this_time,
+                    metadata.max_kv_len_this_time,
+                    None,  # attn_mask
+                    None,  # qkv_bias
+                    None,  # qkv_out_scales
+                    None,  # cache_k_quant_scales
+                    None,  # cache_v_quant_scales
+                    None,  # cache_k_dequant_scales
+                    None,  # cache_v_dequant_scales
+                    None,  # cache_k_zp
+                    None,  # cache_v_zp
+                    None,  # out_shifts
+                    None,  # out_smooths
+                    metadata._fuse_kernel_compute_dtype,
+                    "none",  # cache_quant_type
+                    self.kv_lora_rank,
+                    self.max_seq_len,
+                    self.attn_softmax_scale,
+                    0.0,  # quant_max_bound
+                    0.0,  # quant_min_bound
+                    0.0,  # out_linear_in_scale
+                    speculate_max_tokens,
+                    True,  # causal
+                    speculate_decoder,
+                )
 
-            return fmha_out
+                return fmha_out
+            else:
+                tile_scheduler_metadata, num_splits = flash_mla.get_mla_metadata()
+                real_batch_size = q.shape[0]
+                q.reshape_([real_batch_size, 1, self.num_heads, 576])
+                num_blocks = latent_cache.shape[0]
+                cache_dim = latent_cache.shape[-1]
+
+                res = flash_mla.flash_mla_with_kvcache(
+                    q,
+                    latent_cache.view([num_blocks, self.block_size, 1, cache_dim]),
+                    metadata.block_tables[:real_batch_size],
+                    forward_meta.seq_lens_decoder[:real_batch_size] + 1,
+                    512,  # t.dv,
+                    tile_scheduler_metadata,
+                    num_splits,
+                    softmax_scale=self.attn_softmax_scale,
+                    causal=True,
+                )
+                res[0].reshape_([real_batch_size, self.num_heads * 512])
+                return res[0]
