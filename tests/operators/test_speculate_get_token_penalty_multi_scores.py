@@ -48,7 +48,7 @@ def min_length_logits_process(
 
 
 def update_repeat_times(
-    pre_ids, cur_len, repeat_times, batch_id_per_token_output, token_num, bs, length, length_id, max_seq_len
+    token_ids_all, cur_len, repeat_times, batch_id_per_token_output, token_num, bs, length, length_id, max_seq_len
 ):
     for token_idx in range(token_num):
         bi = batch_id_per_token_output[token_idx]
@@ -58,11 +58,11 @@ def update_repeat_times(
         if cur_len[bi] < 0:
             continue
 
-        pre_ids_now = pre_ids[bi]
+        token_ids_all_now = token_ids_all[bi]
         repeat_times_now = repeat_times[token_idx]
 
         for i in range(length_id):
-            id = pre_ids_now[i]
+            id = token_ids_all_now[i]
             if id < 0:
                 break
             repeat_times_now[id] = repeat_times_now[id] + 1
@@ -129,7 +129,8 @@ def ban_bad_words(
 
 
 def speculate_get_token_penalty_multi_scores_ref(
-    pre_ids,
+    token_ids_all,
+    prompt_lens,
     logits,
     penalty_scores,
     frequency_score,
@@ -150,7 +151,7 @@ def speculate_get_token_penalty_multi_scores_ref(
     bs = seq_lens_this_time.shape[0]
     token_num = shape[0]
     length = shape[1]
-    length_id = pre_ids.shape[1]
+    length_id = token_ids_all.shape[1]
     length_bad_words = bad_tokens.shape[1]
 
     end_length = eos_token_id.shape[0]
@@ -170,7 +171,7 @@ def speculate_get_token_penalty_multi_scores_ref(
     )
 
     update_repeat_times(
-        pre_ids, cur_len, repeat_times, batch_id_per_token_output, token_num, bs, length, length_id, max_seq_len
+        token_ids_all, cur_len, repeat_times, batch_id_per_token_output, token_num, bs, length, length_id, max_seq_len
     )
 
     update_value_by_repeat_times(
@@ -225,14 +226,15 @@ class TestSpeculateGetTokenPenaltyMultiScores(unittest.TestCase):
         batch_id_per_token_output = paddle.to_tensor(batch_id_per_token_output, "int32")
         cu_seqlens_q_output = paddle.to_tensor(cu_seqlens_q_output, "int32")
 
-        # prepare pre_ids and logits
-        pre_ids_len = 122
+        # prepare token_ids_all and logits
+        token_ids_all_len = 122
         logits_len = 110
-        pre_ids = np.random.randint(1, logits_len, size=(bs, pre_ids_len))
-        negative_start = np.random.randint(1, pre_ids_len + 1, size=(bs))
+        token_ids_all = np.random.randint(1, logits_len, size=(bs, token_ids_all_len))
+        negative_start = np.random.randint(1, token_ids_all_len + 1, size=(bs))
         for i in range(bs):
-            pre_ids[:, negative_start[i] :] = -1
-        pre_ids = paddle.to_tensor(pre_ids).astype("int64")
+            token_ids_all[i, negative_start[i] :] = -1
+        token_ids_all = paddle.to_tensor(token_ids_all).astype("int64")
+        prompt_lens = paddle.zeros([bs, 1], dtype="int64")
         logits = paddle.zeros([token_num, logits_len]).astype(data_type)
         # prepare other params
         penalty_scores = paddle.to_tensor(np.random.random([bs])).astype(data_type)
@@ -249,7 +251,8 @@ class TestSpeculateGetTokenPenaltyMultiScores(unittest.TestCase):
         )  # value of seq_len_this_time is useless
 
         inputs = (
-            pre_ids,
+            token_ids_all,
+            prompt_lens,
             logits,
             penalty_scores,
             frequency_scores,

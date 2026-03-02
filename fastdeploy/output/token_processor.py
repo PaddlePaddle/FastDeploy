@@ -409,7 +409,7 @@ class TokenProcessor:
                 speculate_get_output,
             )
         elif current_platform.is_iluvatar():
-            from fastdeploy.model_executor.ops.iluvatar import get_output
+            from fastdeploy.model_executor.ops.iluvatar import get_output, get_output_ep
         elif current_platform.is_gcu():
             from fastdeploy.model_executor.ops.gcu import get_output
         elif current_platform.is_intel_hpu():
@@ -787,6 +787,8 @@ class TokenProcessor:
                         + i * MAX_DRAFT_TOKENS
                         + accept_num[i]
                     ].tolist()
+                if accept_num[i] == 0:
+                    continue
             else:
                 token_id = int(tokens[i, 0])
                 token_ids = [token_id]
