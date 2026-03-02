@@ -116,20 +116,21 @@ static int xpu3_wrapper(Context* ctx,
                         int real_bsz,
                         int max_model_len,
                         int decode_states_len) {
-  xpu3::plugin::update_attn_mask_offsets<<<ctx->ncluster(), 1, ctx->xpu_stream>>>(
-    attn_mask_offsets,
-    seq_lens_this_time,
-    seq_lens_encoder,
-    seq_lens_decoder,
-    cu_seqlens_q,
-    attn_mask_offsets_full,
-    attn_mask_offsets_decoder,
-    is_block_step,
-    decode_states,
-    mask_rollback,
-    real_bsz,
-    max_model_len,
-    decode_states_len);
+  xpu3::plugin::
+      update_attn_mask_offsets<<<ctx->ncluster(), 1, ctx->xpu_stream>>>(
+          attn_mask_offsets,
+          seq_lens_this_time,
+          seq_lens_encoder,
+          seq_lens_decoder,
+          cu_seqlens_q,
+          attn_mask_offsets_full,
+          attn_mask_offsets_decoder,
+          is_block_step,
+          decode_states,
+          mask_rollback,
+          real_bsz,
+          max_model_len,
+          decode_states_len);
   return api::SUCCESS;
 }
 
@@ -161,20 +162,17 @@ int update_attn_mask_offsets(Context* ctx,
                       is_block_step,
                       decode_states,
                       mask_rollback);
-  WRAPPER_DUMP_PARAM3(ctx,
-                      real_bsz,
-                      max_model_len,
-                      decode_states_len);
+  WRAPPER_DUMP_PARAM3(ctx, real_bsz, max_model_len, decode_states_len);
   WRAPPER_DUMP(ctx);
 
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_this_time);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_encoder);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_decoder);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, cu_seqlens_q);
-  WRAPPER_CHECK_PTR(ctx, int, real_bsz * max_model_len, attn_mask_offsets_full);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz* max_model_len, attn_mask_offsets_full);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, attn_mask_offsets_decoder);
   WRAPPER_CHECK_PTR(ctx, bool, real_bsz, is_block_step);
-  WRAPPER_CHECK_PTR(ctx, int, real_bsz * decode_states_len, decode_states);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz* decode_states_len, decode_states);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, mask_rollback);
 
   WRAPPER_ASSERT_GT(ctx, real_bsz, 0);

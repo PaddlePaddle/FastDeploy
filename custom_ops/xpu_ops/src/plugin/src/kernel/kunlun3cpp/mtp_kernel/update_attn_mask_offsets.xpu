@@ -30,7 +30,8 @@ __global__ void update_attn_mask_offsets(int* attn_mask_offsets,
 
     __global_ptr__ const int* attn_mask_offsets_full_now =
         attn_mask_offsets_full + bid * max_model_len;
-    __global_ptr__ int* decode_states_now = decode_states + bid * decode_states_len;
+    __global_ptr__ int* decode_states_now =
+        decode_states + bid * decode_states_len;
     if (!is_block_step[bid]) {
       if (seq_len_encoder == 0 && seq_len_decoder == 0) {
         // Status: stop

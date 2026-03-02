@@ -35,7 +35,6 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& is_block_step,
     const paddle::Tensor& decode_states,
     const paddle::Tensor& mask_rollback) {
-
   int max_model_len = attn_mask_offsets_full.shape()[1];
   int real_bsz = seq_lens_this_time.shape()[0];
   int batch_seq_lens = ids_remove_padding.shape()[0];
@@ -49,11 +48,10 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     ctx = new baidu::xpu::api::Context(baidu::xpu::api::kCPU);
   }
 
-  auto attn_mask_offsets = paddle::full(
-      {batch_seq_lens * 2},
-      0,
-      paddle::DataType::INT32,
-      ids_remove_padding.place());
+  auto attn_mask_offsets = paddle::full({batch_seq_lens * 2},
+                                        0,
+                                        paddle::DataType::INT32,
+                                        ids_remove_padding.place());
 
   baidu::xpu::api::plugin::update_attn_mask_offsets(
       ctx,
