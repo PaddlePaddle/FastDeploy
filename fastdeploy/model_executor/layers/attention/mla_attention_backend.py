@@ -110,7 +110,7 @@ def extract_decoder_token_from_q(
     max_bsz = seq_lens_decoder.shape[0]
 
     hidden_dim = q.shape[-1]
-    out = paddle.zeros([max_bsz, hidden_dim], dtype=q.dtype)
+    out = paddle.empty([max_bsz, hidden_dim], dtype=q.dtype)
 
     cache_seqlens = paddle.zeros_like(seq_lens_decoder)
 
