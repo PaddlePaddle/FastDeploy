@@ -23,9 +23,22 @@
 
 #define MAX_BSZ 256
 #define MAX_DRAFT_TOKENS 6
+#define K 20
 
 struct speculate_msgdata {
   long mtype;  // NOLINT
   int mtext[MAX_BSZ * MAX_DRAFT_TOKENS + MAX_BSZ +
             2];  // stop_flag, bsz, tokens
+};
+
+struct batch_msgdata {
+  int tokens[MAX_DRAFT_TOKENS * (K + 1)];
+  float scores[MAX_DRAFT_TOKENS * (K + 1)];
+  int ranks[MAX_DRAFT_TOKENS];
+};
+
+struct msgdata {
+  long mtype;
+  int meta[3 + MAX_BSZ];  // stop_flag, message_flag, bsz, batch_token_nums
+  batch_msgdata mtext[MAX_BSZ];
 };
