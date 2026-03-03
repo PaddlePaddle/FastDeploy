@@ -253,7 +253,7 @@ class TokenProcessor:
                     f"CachedDetail={cached_detail}, OutputToken={self.tokens_counter[task_id]}, "
                     f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, "
                     f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
-                    f"RescheduleCount={getattr(task.metrics, 'reschedule_count', 0)}"
+                    f"PreemptedCount={getattr(task.metrics, 'preempted_count', 0)}"
                 )
 
                 main_process_metrics.request_token_ratio.observe(token_ratio)
@@ -949,7 +949,7 @@ class TokenProcessor:
                         f"CachedDetail={cached_detail}, OutputToken={self.tokens_counter[task_id]}, "
                         f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, "
                         f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
-                        f"RescheduleCount={getattr(task.metrics, 'reschedule_count', 0)}"
+                        f"PreemptedCount={getattr(task.metrics, 'preempted_count', 0)}"
                     )
 
                     main_process_metrics.request_token_ratio.observe(token_ratio)
