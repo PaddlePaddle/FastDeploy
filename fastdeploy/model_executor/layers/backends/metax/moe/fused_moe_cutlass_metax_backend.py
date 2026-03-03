@@ -240,7 +240,7 @@ class MetaxCutlassWeightOnlyMoEMethod(MetaxCutlassMoEMethod):
     def __init__(self, quant_config):
         super().__init__(quant_config)
         if quant_config is None:
-            self.quant_config = WeightOnlyConfig(algo="weight_only_int8", is_checkpoint_bf16=True)
+            self.quant_config = WeightOnlyConfig(algo="weight_only_int8")
         else:
             self.quant_config = quant_config
         self.moe_quant_type = self.quant_config.algo
