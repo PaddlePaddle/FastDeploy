@@ -833,6 +833,26 @@ def enable_batch_invariant_mode():
     _batch_invariant_MODE = True
 
 
+def init_deterministic_mode(enable_probe=False):
+    """One-stop initialization for deterministic mode.
+
+    Call after worker creation but before model loading.
+    Args:
+        enable_probe: also enable op call tracking and log diagnostics.
+    """
+    if not is_batch_invariant_mode_enabled():
+        enable_batch_invariant_mode()
+
+    if enable_probe:
+        enable_op_tracking()
+        legacy_flag = paddle.get_flags("FLAGS_use_legacy_linear")["FLAGS_use_legacy_linear"]
+        logger.info(f"[OP-TRACK] batch_invariant_mode enabled, FLAGS_use_legacy_linear={legacy_flag}")
+        logger.info(
+            f"[OP-TRACK] paddle._C_ops.matmul is mm_batch_invariant: "
+            f"{paddle._C_ops.matmul.__name__ if hasattr(paddle._C_ops.matmul, '__name__') else type(paddle._C_ops.matmul)}"
+        )
+
+
 def disable_batch_invariant_mode():
     global _batch_invariant_MODE, _original_ops
     if not _batch_invariant_MODE:

@@ -15,12 +15,76 @@
 """
 
 import hashlib
+import json
 import logging
 import time
 
 import numpy as np
+import paddle
 
 det_logger = logging.getLogger("fastdeploy.deterministic")
+
+# Deterministic mode: per-step logits fingerprints for cross-run comparison.
+_det_logits_file = None
+
+# File-based MD5 hash collection (shared across processes via filesystem).
+# Path: /tmp/fd_det_logits_md5.jsonl (truncated on reset, appended on record).
+_DET_MD5_PATH = "/tmp/fd_det_logits_md5.jsonl"
+
+
+def _reset_logits_md5_file():
+    """Truncate the MD5 hash file (call before each generate run)."""
+    with open(_DET_MD5_PATH, "w"):
+        pass
+
+
+def _read_logits_md5_file():
+    """Read all MD5 hash entries from the file (call after generate completes)."""
+    entries = []
+    try:
+        with open(_DET_MD5_PATH, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    entries.append(json.loads(line))
+    except FileNotFoundError:
+        pass
+    return entries
+
+
+def _record_logits_fingerprint(logits: paddle.Tensor):
+    """Append a lightweight fingerprint to /tmp/fd_det_logits.jsonl."""
+    global _det_logits_file
+
+    if _det_logits_file is None:
+        _det_logits_file = open("/tmp/fd_det_logits.jsonl", "w")
+    with paddle.no_grad():
+        fp = logits.astype("float32")
+        entry = {
+            "sum": float(fp.sum()),
+            "argmax": int(fp[0].argmax()),
+            "max": float(fp[0].max()),
+            "batch": logits.shape[0],
+        }
+        _det_logits_file.write(json.dumps(entry) + "\n")
+        _det_logits_file.flush()
+
+
+def _record_logits_md5(logits: paddle.Tensor, tag: str = "logits", probs: paddle.Tensor = None):
+    """Record MD5 hash of logits (and optionally probs) to file for bit-exact comparison.
+
+    WARNING: This triggers GPU sync via .cpu().numpy() -- it WILL change CUDA
+    stream timing and may mask timing-sensitive bugs. Use only for diagnostics.
+    """
+    with paddle.no_grad():
+        logits_bytes = logits.astype("float32").cpu().numpy().tobytes()
+        logits_md5 = hashlib.md5(logits_bytes).hexdigest()
+        entry = {"tag": tag, "logits_md5": logits_md5, "probs_md5": ""}
+        if probs is not None:
+            probs_bytes = probs.astype("float32").cpu().numpy().tobytes()
+            entry["probs_md5"] = hashlib.md5(probs_bytes).hexdigest()
+        with open(_DET_MD5_PATH, "a") as f:
+            f.write(json.dumps(entry) + "\n")
 
 
 class DeterministicLogger:

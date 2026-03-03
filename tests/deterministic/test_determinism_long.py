@@ -130,7 +130,7 @@ def llm(model_path, _module_env):
         tensor_parallel_size=int(os.getenv("TP_SIZE", "1")),
         max_model_len=8192,
         enable_prefix_caching=False,
-        graph_optimization_config={"use_cudagraph": False},
+        graph_optimization_config={"use_cudagraph": os.getenv("USE_CUDAGRAPH", "0") == "1"},
     )
     yield instance
     del instance
@@ -151,9 +151,7 @@ def _generate_text(llm, prompt, sp):
 def _collect_logits_hashes():
     """Read and clear the per-step logits MD5 hashes written by the worker process."""
     try:
-        from fastdeploy.model_executor.layers.sample.sampler import (
-            _read_logits_md5_file,
-        )
+        from fastdeploy.logger.deterministic_logger import _read_logits_md5_file
 
         return _read_logits_md5_file()
     except Exception:
@@ -163,9 +161,7 @@ def _collect_logits_hashes():
 def _reset_logits_hashes():
     """Reset the logits MD5 hash file before a new generate run."""
     try:
-        from fastdeploy.model_executor.layers.sample.sampler import (
-            _reset_logits_md5_file,
-        )
+        from fastdeploy.logger.deterministic_logger import _reset_logits_md5_file
 
         _reset_logits_md5_file()
     except Exception:
