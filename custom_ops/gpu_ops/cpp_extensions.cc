@@ -118,7 +118,8 @@ std::vector<paddle::Tensor> AppendAttention(
     const int speculate_max_draft_token_num,
     const bool causal,
     const bool speculate_decoder,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::Tensor& qkv,
@@ -174,7 +175,8 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const int speculate_max_draft_token_num,
     const bool causal,
     const bool speculate_decoder,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor& qkv,
@@ -746,6 +748,14 @@ void clear_ipc_handles(int64_t _fa);
 
 std::vector<paddle::Tensor> SpeculateGetSeqLensOutput(
     const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder);
+
+std::vector<paddle::Tensor> SpeculatePreProcess(
+    const int64_t cpu_token_num,
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& seq_len,
+    const paddle::Tensor& draft_tokens,
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder);
 
@@ -1601,6 +1611,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_get_seq_lens_output",
         &SpeculateGetSeqLensOutput,
         "speculate_get_seq_lens_output function");
+
+  m.def("speculate_pre_process",
+        &SpeculatePreProcess,
+        "speculate_pre_process function");
 
   m.def("speculate_get_token_penalty_multi_scores",
         &SpecTokenPenaltyMultiScores,

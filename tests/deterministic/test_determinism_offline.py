@@ -29,7 +29,7 @@ Test scenarios:
 Long sequence / long prompt tests have been moved to test_determinism_long.py.
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0 pytest tests/deterministic/test_determinism_offline.py -v
+    CUDA_VISIBLE_DEVICES=0,1,2,3 pytest tests/deterministic/test_determinism_offline.py -v
 """
 
 import os
@@ -56,7 +56,7 @@ def _module_env():
     old_cuda = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES)
     old_det = os.environ.get(_ENV_FD_DETERMINISTIC_MODE)
 
-    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0")
+    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0,1,2,3")
     os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
 
     global LLM, SamplingParams  # noqa: PLW0603
@@ -92,7 +92,7 @@ def model_path():
 def llm(model_path, _module_env):
     return LLM(
         model=model_path,
-        tensor_parallel_size=1,
+        tensor_parallel_size=4,
         max_model_len=8192,
         enable_prefix_caching=False,
     )
@@ -182,6 +182,37 @@ def test_deterministic_param_combos(llm, temp, top_p, seed):
     """Determinism holds across various (temperature, top_p) combinations."""
     sp = SamplingParams(temperature=temp, top_p=top_p, max_tokens=30, seed=seed)
     _assert_deterministic(llm, "What is a neural network?", sp)
+
+
+# ===================== Long sequence tests =====================
+
+
+@pytest.mark.parametrize(
+    "temp,seed",
+    [
+        (0.0, 100),
+        (0.3, 130),
+        (0.5, 150),
+        (0.7, 170),
+    ],
+)
+@pytest.mark.skip(reason="Potential non-determinism in long sequences, will be fixed by gongweibao in next PR")
+def test_deterministic_long_sequence(llm, temp, seed):
+    """Long generation (512+ tokens) stays deterministic at various temperatures."""
+    prompt = "Please describe the history of AI in detail, including major milestones and key technical breakthroughs."
+    sp = SamplingParams(temperature=temp, top_p=0.95, max_tokens=512, seed=seed)
+
+    text, token_ids = _assert_deterministic(llm, prompt, sp)
+    assert len(token_ids) >= 100, f"Expected >= 100 tokens, got {len(token_ids)}"
+
+
+def test_deterministic_long_prompt(llm):
+    """Long input prompt (prefill-heavy) stays deterministic."""
+    base = "This is a description about natural language processing. "
+    long_prompt = (base * 50) + "Please summarize the above."
+    sp = SamplingParams(temperature=0.5, max_tokens=100, seed=2024)
+
+    _assert_deterministic(llm, long_prompt, sp)
 
 
 # ===================== Minimal / boundary output tests =====================

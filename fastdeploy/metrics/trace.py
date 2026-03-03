@@ -657,8 +657,8 @@ def trace_slice_end(
     if thread_finish_flag:
         thread_context.thread_span.end(end_time=ts)
         del reqs_context[rid].threads_context[pid]
-        if reqs_context[rid].is_copy and not reqs_context[rid].threads_context:
-            del reqs_context[rid]
+        # Note: Don't delete reqs_context[rid] here, let trace_req_finish do it
+        # to ensure trace info is available for the entire request lifecycle.
         return
 
     if auto_next_anon:
@@ -764,6 +764,55 @@ def trace_span(span_name: str = None):
             return sync_wrapper
 
     return decorator
+
+
+def get_trace_info_for_request(rid: str) -> Optional[Dict[str, str]]:
+    """Get trace_id and span_id for the specified request
+
+    Args:
+        rid: Request ID
+
+    Returns:
+        Dictionary containing trace_id and span_id, returns None if not found
+    """
+    if not tracing_enabled:
+        return None
+    rid = str(rid)
+    if rid not in reqs_context:
+        # Try using original rid (remove _idx suffix)
+        orig_rid = rid.split("_")[0]
+        if orig_rid not in reqs_context:
+            return None
+        rid = orig_rid
+
+    req_context = reqs_context[rid]
+
+    # First try to get from root_span
+    if req_context.root_span:
+        span_context = req_context.root_span.get_span_context()
+        if span_context.is_valid and span_context.trace_id != 0:
+            return {
+                "trace_id": format(span_context.trace_id, "032x"),
+                "span_id": format(span_context.span_id, "016x"),
+            }
+
+    # If restored from other process context, get trace_id from root_span_context
+    if req_context.root_span_context:
+        # Extract span from Context
+        from opentelemetry.trace import get_current_span
+
+        try:
+            span = get_current_span(req_context.root_span_context)
+            span_context = span.get_span_context()
+            if span_context.is_valid and span_context.trace_id != 0:
+                return {
+                    "trace_id": format(span_context.trace_id, "032x"),
+                    "span_id": format(span_context.span_id, "016x"),
+                }
+        except:
+            pass
+
+    return None
 
 
 @unique

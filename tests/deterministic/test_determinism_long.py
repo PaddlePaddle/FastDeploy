@@ -23,7 +23,7 @@ Key requirements:
 2. Recommended: KV length >= 2048 to ensure num_chunks >= 2
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0 pytest tests/deterministic/test_determinism_long.py -v
+    CUDA_VISIBLE_DEVICES=0,1,2,3 pytest tests/deterministic/test_determinism_long.py -v
 """
 
 import gc
@@ -81,7 +81,7 @@ def _module_env():
     old_ar = os.environ.get(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB)
     old_partition_size = os.environ.get(_ENV_FLAGS_MAX_PARTITION_SIZE)
 
-    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0")
+    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0,1,2,3")
     os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
     os.environ[_ENV_FD_CUSTOM_AR_MAX_SIZE_MB] = os.environ.get(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB, "57")
     os.environ[_ENV_FLAGS_MAX_PARTITION_SIZE] = _CHUNK_SIZE_FOR_TEST
@@ -127,7 +127,7 @@ def model_path():
 def llm(model_path, _module_env):
     instance = LLM(
         model=model_path,
-        tensor_parallel_size=int(os.getenv("TP_SIZE", "1")),
+        tensor_parallel_size=int(os.getenv("TP_SIZE", "4")),
         max_model_len=8192,
         enable_prefix_caching=False,
         graph_optimization_config={"use_cudagraph": os.getenv("USE_CUDAGRAPH", "0") == "1"},
