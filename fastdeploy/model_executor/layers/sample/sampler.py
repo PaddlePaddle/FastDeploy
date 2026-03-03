@@ -26,10 +26,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.envs import FD_FILL_BITMASK_BATCH
-from fastdeploy.logger.deterministic_logger import (
-    _record_logits_fingerprint,
-    _record_logits_md5,
-)
+from fastdeploy.logger.deterministic_logger import _record_logits_diagnostic
 from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
 from fastdeploy.model_executor.layers.sample.early_stopper import (
     get_early_stopper_cls_from_stragegy,
@@ -506,9 +503,7 @@ class Sampler(nn.Layer):
         from fastdeploy import envs
 
         if envs.FD_DETERMINISTIC_LOG_MODE:
-            _record_logits_fingerprint(logits)
-            # Record raw logits MD5 BEFORE penalty
-            _record_logits_md5(logits, tag="raw_logits")
+            _record_logits_diagnostic(logits, tag="raw_logits")
 
         logits = self.guided_decoding.apply_token_mask(logits, p_done_idxs)
 
@@ -548,7 +543,7 @@ class Sampler(nn.Layer):
 
         # Record post-penalty logits and probs MD5 for determinism diagnosis
         if envs.FD_DETERMINISTIC_LOG_MODE:
-            _record_logits_md5(logits, tag="post_penalty_logits", probs=probs)
+            _record_logits_diagnostic(logits, tag="post_penalty_logits", probs=probs)
 
         probs = min_p_sampling(probs, sampling_metadata.min_p, sampling_metadata.min_p_list)
         _, next_tokens = top_k_top_p_sampling(

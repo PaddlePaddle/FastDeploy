@@ -47,6 +47,9 @@ from fastdeploy.model_executor.layers.attention.ops import (  # noqa: E402
 
 SEED = 42
 
+ENCODER_BLOCK_SHAPE_Q = 64
+DECODER_BLOCK_SHAPE_Q = 16
+
 
 def make_rope_emb(max_seq_len, dim_head, base=10000):
     pos = paddle.arange(max_seq_len).reshape((1, -1))
@@ -57,6 +60,36 @@ def make_rope_emb(max_seq_len, dim_head, base=10000):
     rope_emb[0] = paddle.cos(emb)
     rope_emb[1] = paddle.sin(emb)
     return rope_emb
+
+
+def apply_rope(x, rope_emb, positions):
+    """
+    Apply rotary position embedding (non-neox interleaved style).
+
+    x: (batch, heads, seq_len, dim_head)
+    rope_emb: (2, 1, max_seq_len, 1, dim_head//2)
+    positions: list of int, one position per seq index
+    """
+    dim_head = x.shape[-1]
+    half = dim_head // 2
+    x_f32 = x.cast("float32")
+    out = x_f32.clone()
+
+    for seq_idx, pos in enumerate(positions):
+        cos_p = rope_emb[0, 0, pos, 0, :]  # (dim_head//2,)
+        sin_p = rope_emb[1, 0, pos, 0, :]
+
+        x_slice = x_f32[:, :, seq_idx, :]  # (batch, heads, dim_head)
+        x_pairs = x_slice.reshape(list(x_slice.shape[:-1]) + [half, 2])
+        x0 = x_pairs[..., 0]  # (batch, heads, half)
+        x1 = x_pairs[..., 1]
+
+        out0 = x0 * cos_p - x1 * sin_p
+        out1 = x0 * sin_p + x1 * cos_p
+
+        out[:, :, seq_idx, :] = paddle.stack([out0, out1], axis=-1).reshape(x_slice.shape)
+
+    return out.cast(x.dtype)
 
 
 def get_padding_offset(bsz, max_seq_len, seq_lens_this_time):
@@ -134,7 +167,8 @@ def run_c16_warp14_decoder_test(
     block_per_seq = (max_seq_len + blocksize - 1) // blocksize
     max_block_num = block_per_seq * batch_size
     scale = 1.0 / np.sqrt(dim_head)
-    group_size = (q_num_head + 2 * kv_num_head) // kv_num_head
+    group_size = q_num_head // kv_num_head
+    compute_type = "bf16" if dtype == "bfloat16" else "fp16"
 
     rope_emb = make_rope_emb(max_seq_len, dim_head)
 
@@ -148,19 +182,23 @@ def run_c16_warp14_decoder_test(
     cache_k = paddle.zeros((max_block_num, kv_num_head, blocksize, dim_head), dtype=dtype)
     cache_v = paddle.zeros((max_block_num, kv_num_head, blocksize, dim_head), dtype=dtype)
 
-    # Tile metadata
-    dtile = int(1024 * batch_size * np.ceil((2 * 10) / 12))
-    dec_batch_ids = paddle.full([dtile], 0, dtype="int32")
-    dec_tile_ids = paddle.full([dtile], 0, dtype="int32")
+    # Tile metadata buffers, sized per allocate_launch_related_buffer() formula
+    gqa_ratio = q_num_head // kv_num_head
+    decode_tile_size = int(1024 * batch_size * np.ceil((2 * gqa_ratio) / DECODER_BLOCK_SHAPE_Q))
+    encode_tile_size = max(batch_size, batch_size * (max_seq_len * gqa_ratio // ENCODER_BLOCK_SHAPE_Q))
+    kv_tile_size = max(batch_size, batch_size * (max_seq_len // blocksize))
+
+    dec_batch_ids = paddle.full([decode_tile_size], 0, dtype="int32")
+    dec_tile_ids = paddle.full([decode_tile_size], 0, dtype="int32")
     dec_nblocks_cpu = paddle.full([1], 0, dtype="int32").pin_memory()
     dec_nblocks_dev = paddle.full([1], 0, dtype="int32")
     dec_chunk_dev = paddle.full([1], decoder_max_partition_size, dtype="int32")
     max_len_cpu = paddle.full([8], 0, dtype="int32").cpu()
-    enc_batch_ids = paddle.full([batch_size], 0, dtype="int32")
-    enc_tile_ids = paddle.full([batch_size], 0, dtype="int32")
+    enc_batch_ids = paddle.full([encode_tile_size], 0, dtype="int32")
+    enc_tile_ids = paddle.full([encode_tile_size], 0, dtype="int32")
     enc_nblocks_cpu = paddle.full([1], 0, dtype="int32").cpu()
-    kv_batch_ids = paddle.full([batch_size], 0, dtype="int32")
-    kv_tile_ids = paddle.full([batch_size], 0, dtype="int32")
+    kv_batch_ids = paddle.full([kv_tile_size], 0, dtype="int32")
+    kv_tile_ids = paddle.full([kv_tile_size], 0, dtype="int32")
     kv_nblocks_cpu = paddle.full([1], 0, dtype="int32").cpu()
 
     # ===== Encoder phase =====
@@ -205,8 +243,8 @@ def run_c16_warp14_decoder_test(
         kv_batch_ids,
         kv_tile_ids,
         kv_nblocks_cpu,
-        encoder_partition_size,
-        12,
+        ENCODER_BLOCK_SHAPE_Q,
+        DECODER_BLOCK_SHAPE_Q,
         group_size,
         blocksize,
     )
@@ -249,7 +287,7 @@ def run_c16_warp14_decoder_test(
         None,
         None,
         1e-6,
-        "fp16",
+        compute_type,
         "none",
         False,
         False,
@@ -257,8 +295,8 @@ def run_c16_warp14_decoder_test(
         0.0,
         0.0,
         -1,
-        64,  # encoder_block_shape_q
-        16,  # decoder_block_shape_q
+        ENCODER_BLOCK_SHAPE_Q,
+        DECODER_BLOCK_SHAPE_Q,
         encoder_partition_size,
         encoder_partition_size,
         2,
@@ -268,7 +306,7 @@ def run_c16_warp14_decoder_test(
     )
     paddle.device.synchronize()
 
-    # Extract naive KV cache for reference
+    # Extract naive KV cache for reference (already has RoPE applied by kernel)
     naive_ck, naive_cv = block_cache_to_naive(
         cache_k,
         cache_v,
@@ -298,6 +336,86 @@ def run_c16_warp14_decoder_test(
         axis=1,
     )
 
+    # Warmup: first decoder call on multi-chunk path may return zeros
+    # due to kernel JIT compilation. Run once and discard.
+    get_block_shape_and_split_kv_block(
+        seq_enc_d,
+        seq_dec_d,
+        seq_this_d,
+        dec_batch_ids,
+        dec_tile_ids,
+        dec_nblocks_cpu,
+        dec_nblocks_dev,
+        dec_chunk_dev,
+        max_len_cpu,
+        enc_batch_ids,
+        enc_tile_ids,
+        enc_nblocks_cpu,
+        kv_batch_ids,
+        kv_tile_ids,
+        kv_nblocks_cpu,
+        ENCODER_BLOCK_SHAPE_Q,
+        DECODER_BLOCK_SHAPE_Q,
+        group_size,
+        blocksize,
+    )
+    append_attention(
+        dec_qkv.clone(),
+        cache_k.clone(),
+        cache_v.clone(),
+        seq_enc_d,
+        seq_dec_d,
+        seq_this_d,
+        bid_dec,
+        cu_dec,
+        block_tables,
+        enc_batch_ids,
+        enc_tile_ids,
+        enc_nblocks_cpu,
+        kv_batch_ids,
+        kv_tile_ids,
+        kv_nblocks_cpu,
+        dec_batch_ids,
+        dec_tile_ids,
+        dec_nblocks_cpu,
+        max_len_cpu,
+        rope_emb,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        1e-6,
+        compute_type,
+        "none",
+        False,
+        False,
+        max_seq_len,
+        0.0,
+        0.0,
+        -1,
+        ENCODER_BLOCK_SHAPE_Q,
+        DECODER_BLOCK_SHAPE_Q,
+        decoder_max_partition_size,
+        encoder_partition_size,
+        2,
+        True,
+        False,
+        0,
+    )
+    paddle.device.synchronize()
+
     results = []
     for _ in range(num_decode_runs):
         cache_k_c = cache_k.clone()
@@ -320,8 +438,8 @@ def run_c16_warp14_decoder_test(
             kv_batch_ids,
             kv_tile_ids,
             kv_nblocks_cpu,
-            decoder_max_partition_size,
-            12,
+            ENCODER_BLOCK_SHAPE_Q,
+            DECODER_BLOCK_SHAPE_Q,
             group_size,
             blocksize,
         )
@@ -364,7 +482,7 @@ def run_c16_warp14_decoder_test(
             None,
             None,
             1e-6,
-            "fp16",
+            compute_type,
             "none",
             False,
             False,
@@ -372,8 +490,8 @@ def run_c16_warp14_decoder_test(
             0.0,
             0.0,
             -1,
-            64,  # encoder_block_shape_q
-            16,  # decoder_block_shape_q
+            ENCODER_BLOCK_SHAPE_Q,
+            DECODER_BLOCK_SHAPE_Q,
             decoder_max_partition_size,
             encoder_partition_size,
             2,
@@ -384,8 +502,11 @@ def run_c16_warp14_decoder_test(
         paddle.device.synchronize()
         results.append(out.numpy().copy())
 
-    # Naive reference
-    ref = naive_attention_impl(dq, dk, dv, naive_ck, naive_cv, scale)
+    # Naive reference: apply RoPE to decoder Q/K at position prefill_seq_len
+    # (cached K/V already have RoPE applied by the kernel during encoder phase)
+    dq_rope = apply_rope(dq, rope_emb, [prefill_seq_len])
+    dk_rope = apply_rope(dk, rope_emb, [prefill_seq_len])
+    ref = naive_attention_impl(dq_rope, dk_rope, dv, naive_ck, naive_cv, scale)
     ref_np = ref.transpose([0, 2, 1, 3]).reshape([batch_size, q_num_head * dim_head]).numpy()
 
     return results, ref_np
@@ -412,10 +533,10 @@ class TestC16Warp14Determinism(unittest.TestCase):
             max_dec_len=32,
             dtype="bfloat16",
             decoder_max_partition_size=32768,
-            num_decode_runs=5,
+            num_decode_runs=10,
         )
         for i in range(1, len(results)):
-            np.testing.assert_array_equal(results[0], results[i])
+            np.testing.assert_array_equal(results[0], results[i], err_msg=f"Determinism failure: run 0 vs run {i}")
         np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
 
     def test_long_kv_multi_chunk(self):
@@ -433,10 +554,10 @@ class TestC16Warp14Determinism(unittest.TestCase):
             max_dec_len=32,
             dtype="bfloat16",
             decoder_max_partition_size=64,
-            num_decode_runs=5,
+            num_decode_runs=10,
         )
         for i in range(1, len(results)):
-            np.testing.assert_array_equal(results[0], results[i])
+            np.testing.assert_array_equal(results[0], results[i], err_msg=f"Determinism failure: run 0 vs run {i}")
         np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
 
     def test_multi_batch(self):
@@ -451,10 +572,10 @@ class TestC16Warp14Determinism(unittest.TestCase):
             max_dec_len=32,
             dtype="bfloat16",
             decoder_max_partition_size=64,
-            num_decode_runs=3,
+            num_decode_runs=10,
         )
         for i in range(1, len(results)):
-            np.testing.assert_array_equal(results[0], results[i])
+            np.testing.assert_array_equal(results[0], results[i], err_msg=f"Determinism failure: run 0 vs run {i}")
         np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
 
     def test_float16(self):
@@ -469,11 +590,106 @@ class TestC16Warp14Determinism(unittest.TestCase):
             max_dec_len=32,
             dtype="float16",
             decoder_max_partition_size=64,
-            num_decode_runs=3,
+            num_decode_runs=10,
         )
         for i in range(1, len(results)):
-            np.testing.assert_array_equal(results[0], results[i])
+            np.testing.assert_array_equal(results[0], results[i], err_msg=f"Determinism failure: run 0 vs run {i}")
         np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
+
+    def test_unaligned_seq_len(self):
+        """prefill_seq_len not divisible by blocksize (100 % 64 != 0)."""
+        results, ref = run_c16_warp14_decoder_test(
+            batch_size=1,
+            q_num_head=16,
+            kv_num_head=2,
+            dim_head=128,
+            blocksize=64,
+            prefill_seq_len=100,
+            max_dec_len=32,
+            dtype="bfloat16",
+            decoder_max_partition_size=64,
+            num_decode_runs=10,
+        )
+        for i in range(1, len(results)):
+            np.testing.assert_array_equal(results[0], results[i], err_msg=f"Determinism failure: run 0 vs run {i}")
+        np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
+
+    def test_mha_no_gqa(self):
+        """MHA: q_num_head == kv_num_head (no GQA grouping)."""
+        results, ref = run_c16_warp14_decoder_test(
+            batch_size=1,
+            q_num_head=8,
+            kv_num_head=8,
+            dim_head=128,
+            blocksize=64,
+            prefill_seq_len=128,
+            max_dec_len=32,
+            dtype="bfloat16",
+            decoder_max_partition_size=64,
+            num_decode_runs=10,
+        )
+        for i in range(1, len(results)):
+            np.testing.assert_array_equal(results[0], results[i], err_msg=f"Determinism failure: run 0 vs run {i}")
+        np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
+
+    def test_nosplit_vs_split_consistency(self):
+        """
+        Cross-path check: force_no_partition (deterministic) vs split (partitioned)
+        should produce numerically close results.
+
+        The two paths differ only in floating-point accumulation order:
+          - nosplit: single chunk, sequential accumulation
+          - split: multi-chunk parallel, then merge
+        Difference should be within low-precision rounding (rtol/atol=1e-2 for bf16).
+        """
+        # Run once in deterministic mode (already set at module level)
+        det_results, det_ref = run_c16_warp14_decoder_test(
+            batch_size=1,
+            q_num_head=16,
+            kv_num_head=2,
+            dim_head=128,
+            blocksize=64,
+            prefill_seq_len=256,
+            max_dec_len=32,
+            dtype="bfloat16",
+            decoder_max_partition_size=64,
+            num_decode_runs=1,
+        )
+
+        # Run once in non-deterministic mode (split/partitioned path)
+        os.environ["FD_DETERMINISTIC_MODE"] = "0"
+        try:
+            split_results, split_ref = run_c16_warp14_decoder_test(
+                batch_size=1,
+                q_num_head=16,
+                kv_num_head=2,
+                dim_head=128,
+                blocksize=64,
+                prefill_seq_len=256,
+                max_dec_len=32,
+                dtype="bfloat16",
+                decoder_max_partition_size=64,
+                num_decode_runs=1,
+            )
+        finally:
+            os.environ["FD_DETERMINISTIC_MODE"] = "1"
+
+        # Both paths should match the naive reference
+        np.testing.assert_allclose(
+            det_results[0], det_ref, rtol=1e-2, atol=1e-2, err_msg="Deterministic path vs naive reference"
+        )
+        np.testing.assert_allclose(
+            split_results[0], split_ref, rtol=1e-2, atol=1e-2, err_msg="Split path vs naive reference"
+        )
+
+        # Cross-path: nosplit vs split should be close
+        np.testing.assert_allclose(
+            det_results[0],
+            split_results[0],
+            rtol=1e-2,
+            atol=1e-2,
+            err_msg="Deterministic (nosplit) vs split path divergence",
+        )
 
 
 if __name__ == "__main__":
