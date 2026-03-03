@@ -704,7 +704,7 @@ DLL_EXPORT int update_attn_mask_offsets(Context* ctx,
                                         int real_bsz,
                                         int max_model_len,
                                         int decode_states_len);
-                                        
+
 DLL_EXPORT int speculate_limit_thinking_content_length_kernel(
     api::Context* ctx,
     int64_t* next_tokens,
