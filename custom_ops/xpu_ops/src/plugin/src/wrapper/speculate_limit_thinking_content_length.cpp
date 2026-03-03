@@ -227,12 +227,18 @@ int speculate_limit_thinking_content_length_kernel(
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(
       ctx, "speculate_limit_thinking_content_length_kernel", int);
-  WRAPPER_DUMP_PARAM5(
-      ctx, next_tokens, max_think_lens, max_reply_lens, step_idx,
-      eos_token_ids);
-  WRAPPER_DUMP_PARAM5(
-      ctx, limit_status, accept_num, stop_flags, think_end_id,
-      inject_token_ids);
+  WRAPPER_DUMP_PARAM5(ctx,
+                      next_tokens,
+                      max_think_lens,
+                      max_reply_lens,
+                      step_idx,
+                      eos_token_ids);
+  WRAPPER_DUMP_PARAM5(ctx,
+                      limit_status,
+                      accept_num,
+                      stop_flags,
+                      think_end_id,
+                      inject_token_ids);
   WRAPPER_DUMP_PARAM5(ctx,
                       tokens_per_step,
                       bs,

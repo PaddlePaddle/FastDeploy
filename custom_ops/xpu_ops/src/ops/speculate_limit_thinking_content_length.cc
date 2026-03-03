@@ -21,18 +21,17 @@
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
-void SpeculateLimitThinkingContentLength(
-    const paddle::Tensor& next_tokens,
-    const paddle::Tensor& max_think_lens,
-    const paddle::Tensor& max_reply_lens,
-    const paddle::Tensor& step_idx,
-    const paddle::Tensor& limit_status,
-    const paddle::Tensor& accept_num,
-    const paddle::Tensor& stop_flags,
-    const paddle::Tensor& eos_token_ids,
-    const paddle::Tensor& inject_token_ids,
-    const int64_t think_end_id,
-    const bool splitwise_role_is_decode) {
+void SpeculateLimitThinkingContentLength(const paddle::Tensor& next_tokens,
+                                         const paddle::Tensor& max_think_lens,
+                                         const paddle::Tensor& max_reply_lens,
+                                         const paddle::Tensor& step_idx,
+                                         const paddle::Tensor& limit_status,
+                                         const paddle::Tensor& accept_num,
+                                         const paddle::Tensor& stop_flags,
+                                         const paddle::Tensor& eos_token_ids,
+                                         const paddle::Tensor& inject_token_ids,
+                                         const int64_t think_end_id,
+                                         const bool splitwise_role_is_decode) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
   auto xpu_ctx = static_cast<const phi::XPUContext*>(dev_ctx);
@@ -60,10 +59,9 @@ void SpeculateLimitThinkingContentLength(
           eos_token_id_len,
           inject_len,
           splitwise_role_is_decode);
-  PD_CHECK(
-      r == 0,
-      "baidu::xpu::api::plugin::"
-      "speculate_limit_thinking_content_length_kernel failed.");
+  PD_CHECK(r == 0,
+           "baidu::xpu::api::plugin::"
+           "speculate_limit_thinking_content_length_kernel failed.");
 }
 
 PD_BUILD_STATIC_OP(speculate_limit_thinking_content_length)
