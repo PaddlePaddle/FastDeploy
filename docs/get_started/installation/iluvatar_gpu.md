@@ -6,6 +6,12 @@
 | :---: | :---: | :---: | :---: |
 | x86 | 1TB| 16xBI150| 1TB|
 
+**Important: ensure that the KMD version is as follows:**
+```bash
+modinfo iluvatar |grep description
+# description:    Iluvatar Big Island for PCI Express: a66854d130483853556e1a2c3d623cb78bcbab34
+```
+
 ## 2. Image Preparation
 Pull the Docker image
 
@@ -17,30 +23,29 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0
 ### 3.1 Start Container
 
 ```bash
-docker run -itd --name paddle_infer --network host -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0
+docker run -itd --name paddle_infer --network host -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle -v /usr/local/corex/bin/ixsmi:/usr/local/corex/bin/ixsmi -v /usr/local/corex/lib64/libcuda.so.1:/usr/local/corex/lib64/libcuda.so.1 -v /usr/local/corex/lib64/libixml.so:/usr/local/corex/lib64/libixml.so -v /usr/local/corex/lib64/libixthunk.so:/usr/local/corex/lib64/libixthunk.so --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0
 docker exec -it paddle_infer bash
 ```
+
+Note: Because the 4.3.8 SDK in the image is incompatible with KMD, paddle cannot find the iluvatar device. Therefore, it is temporarily necessary to map ixsmi, libcuda.so.1, libixml.so, and libixthunk.so from the host corex-4.3.8 directory into the container.
 
 /home/paddle contains the model files, *.whl packages, and scripts.
 
 ### 3.2 Install paddle
 
 ```bash
-pip3 install paddlepaddle==3.3.0.dev20251219 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-pip3 install paddle-iluvatar-gpu==3.0.0.dev20251223 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+pip3 install paddlepaddle==3.4.0.dev20260226 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+pip3 install paddle-iluvatar-gpu==3.0.0.dev20260226 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
 ```
 
 ### 3.3 Install or build FastDeploy
 ```bash
-pip3 install fastdeploy_iluvatar_gpu==2.4.0.dev0 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/ --extra-index-url https://mirrors.aliyun.com/pypi/simple/
+pip3 install fastdeploy_iluvatar_gpu==2.5.0.dev0 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/ --extra-index-url https://mirrors.aliyun.com/pypi/simple/
 ```
 You can build FastDeploy from source if you need the ```latest version```.
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy
 cd FastDeploy
-ln -sf /usr/local/bin/python3 /usr/local/bin/python
-pip3 install -r requirements_iluvatar.txt
-export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 bash build.sh
 ```
 
@@ -74,7 +79,8 @@ prompts = [
 sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=256)
 
 # load the model
-llm = LLM(model="/home/paddle/ERNIE-4.5-21B-A3B-Paddle", tensor_parallel_size=1, max_model_len=8192, block_size=16, quantization='wint8')
+graph_optimization_config = {"use_cudagraph": False}
+llm = LLM(model="/home/paddle/ERNIE-4.5-21B-A3B-Paddle", tensor_parallel_size=1, max_model_len=8192, block_size=16, quantization='wint8', graph_optimization_config=graph_optimization_config)
 
 # Perform batch inference
 outputs = llm.generate(prompts, sampling_params)
@@ -140,7 +146,8 @@ python3 -m fastdeploy.entrypoints.openai.api_server \
        --quantization wint8 \
        --max-model-len 32768 \
        --max-num-seqs 8 \
-       --block-size 16
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": false}'
 ```
 If you want to use v0 loader, please set `--load-choices "default"`.
 
@@ -198,7 +205,8 @@ python3 -m fastdeploy.entrypoints.openai.api_server \
        --reasoning-parser ernie_x1 \
        --tool-call-parser ernie_x1 \
        --max-num-seqs 8 \
-       --block-size 16
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": false}'
 ```
 
 client:
@@ -232,7 +240,8 @@ python3 -m fastdeploy.entrypoints.openai.api_server \
        --quantization wint8 \
        --max-model-len 32768 \
        --max-num-seqs 8 \
-       --block-size 16
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": false}'
 ```
 If you want to use v0 loader, please set `--load-choices "default"`.
 
@@ -333,7 +342,8 @@ for message in messages:
             })
 
 sampling_params = SamplingParams(temperature=0.1, max_tokens=6400)
-llm = LLM(model=PATH, tensor_parallel_size=2, max_model_len=32768, block_size=16, quantization="wint8", limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+graph_optimization_config = {"use_cudagraph": False}
+llm = LLM(model=PATH, tensor_parallel_size=2, max_model_len=32768, block_size=16, quantization="wint8", limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl", graph_optimization_config=graph_optimization_config)
 outputs = llm.generate(prompts={
     "prompt": prompt,
     "multimodal_data": {
@@ -392,7 +402,8 @@ python3 -m fastdeploy.entrypoints.openai.api_server \
        --limit-mm-per-prompt '{"image": 100, "video": 100}' \
        --reasoning-parser ernie-45-vl \
        --max-num-seqs 8 \
-       --block-size 16
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": false}'
 ```
 
 client:
@@ -433,7 +444,8 @@ python3 -m fastdeploy.entrypoints.openai.api_server \
        --tool-call-parser ernie-45-vl-thinking \
        --mm-processor-kwargs '{"image_max_pixels": 12845056 }' \
        --max-num-seqs 8 \
-       --block-size 16
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": false}'
 ```
 
 client:
@@ -472,6 +484,7 @@ export PADDLE_XCCL_BACKEND=iluvatar_gpu
 export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
+export CUDA_VISIBLE_DEVICES=1
 python3 -m fastdeploy.entrypoints.openai.api_server \
        --model /data1/fastdeploy/PaddleOCR-VL \
        --port 8180 \
@@ -482,7 +495,8 @@ python3 -m fastdeploy.entrypoints.openai.api_server \
        --max-num-batched-tokens 16384 \
        --max-num-seqs 64 \
        --workers 2 \
-       --block-size 16
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": true}'
 ```
 
 client:
@@ -532,4 +546,4 @@ for file_name in file_list:
 python3 infer_ocr_vl_benchmark.py
 ```
 
-After each image is inferred, a corresponding `md` file will be generated in the `output` path. Running the entire benchmark (1355 images) takes approximately 5 hours.
+After each image is inferred, a corresponding `md` file will be generated in the `output` path. Running the entire benchmark (1355 images) takes approximately 1.8 hours.

@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import asyncio
 import os
 import time
 import unittest
@@ -21,8 +22,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import numpy as np
+import paddle
 import pytest
 
+from fastdeploy.engine.request import ControlRequest
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.inter_communicator import (
     KVCacheStatus,
@@ -1659,6 +1662,364 @@ class TestEngineClientValidParameters(unittest.TestCase):
             )
 
         self.assertIn("ZMQ send failed", str(context.exception))
+
+
+@pytest.fixture
+def minimal_engine_client():
+    client = EngineClient.__new__(EngineClient)
+    client.max_model_len = 16
+    client.max_logprobs = 5
+    client.ori_vocab_size = 8
+    client.enable_logprob = True
+    client.enable_prefix_caching = False
+    client.enable_cache_transfer = False
+    client.enable_mm = False
+    client.enable_splitwise = False
+    client.disable_prefix_mm = False
+    client.data_parallel_info = {"dp_rank": 0, "local_dp_rank": 0}
+    client.clear_update_lock = MagicMock()
+    client.clear_update_lock.__enter__ = Mock(return_value=None)
+    client.clear_update_lock.__exit__ = Mock(return_value=None)
+    client.zmq_client = MagicMock(send_json=Mock(), send_pyobj=Mock())
+    return client
+
+
+def test_format_add_data_and_abort_paths(minimal_engine_client):
+    async def fake_add(task):
+        task["prompt_token_ids"] = [1, 2, 3]
+
+    minimal_engine_client.add_requests = fake_add
+    request = {"metrics": {}, "request_id": "req_9"}
+    tokens = asyncio.run(minimal_engine_client.format_and_add_data(request))
+    assert tokens == [1, 2, 3]
+    assert request["max_tokens"] == 15
+
+    with patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", True):
+        minimal_engine_client._send_task = Mock()
+        asyncio.run(minimal_engine_client.abort("broken-format", n=2))
+        sent_ids = [call.args[0]["request_id"] for call in minimal_engine_client._send_task.call_args_list]
+        assert sent_ids == ["broken-format_0", "broken-format_1"]
+
+
+def test_add_requests_uses_async_processor_and_tensor_send(minimal_engine_client):
+    class Processor:
+        async def process_request_dict(self, task, _max_len):
+            ids = paddle.to_tensor([3, 4, 5], dtype="int64")
+            task["prompt_token_ids"] = ids.tolist()
+
+    minimal_engine_client.data_processor = Processor()
+    minimal_engine_client.enable_mm = True
+    with (
+        patch("fastdeploy.entrypoints.engine_client.envs.FD_MAX_STOP_SEQS_NUM", 8),
+        patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_E2W_TENSOR_CONVERT", True),
+        patch("fastdeploy.entrypoints.engine_client.to_tensor", return_value=[{"t": 1}]) as tensor_mock,
+    ):
+        payload = {"request_id": "a_1", "metrics": {}, "max_tokens": 6, "chat_template": "tmpl"}
+        asyncio.run(minimal_engine_client.add_requests(payload))
+
+    assert payload["prompt_token_ids_len"] == 3
+    assert payload["need_prefill_tokens"] == 3
+    assert payload["max_tokens"] == 6
+    tensor_mock.assert_called_once()
+    minimal_engine_client.zmq_client.send_pyobj.assert_called_once()
+
+
+def test_control_and_redundant_and_expert_stats(minimal_engine_client):
+    queue = asyncio.Queue()
+    asyncio.run(queue.put(({"request_id": "c1", "status": 200, "msg": "ok"},)))
+    dealer = Mock(write=Mock())
+    minimal_engine_client.connection_manager = MagicMock(get_connection=AsyncMock(return_value=(dealer, queue)))
+
+    req = ControlRequest(request_id="c1", method="ping")
+    resp = asyncio.run(minimal_engine_client.run_control_method(req))
+    assert resp.error_code == 200
+    dealer.write.assert_called_once()
+
+    cfg = create_mock_fd_config(enable_eplb=True)
+    cfg.parallel_config.tensor_parallel_rank = 0
+    cfg.scheduler_config.splitwise_role = "prefill"
+    minimal_engine_client.fd_config = cfg
+    minimal_engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.LOAD_SUCC.value]))
+    minimal_engine_client.signal_update_weight_from_tensor_array = Mock(value=np.array([0]))
+    minimal_engine_client.signal_clear_experts_token_stats_list = [Mock(value=np.array([0]))]
+    minimal_engine_client.local_experts_token_stats_array_list = [Mock(value=np.array([[1, 2]]))]
+    minimal_engine_client.update_weight_from_disk_result_list = [Mock(value=np.array([7]))]
+
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": "update_weight_from_tensor"}
+        )
+    )
+    assert (content["code"], code) == (0, 200)
+    assert minimal_engine_client.signal_update_weight_from_tensor_array.value[0] == 1
+
+    content, code = asyncio.run(
+        minimal_engine_client.get_per_expert_tokens_stats(
+            {"user": "test_user", "passwd": "test_pass", "clear_stat": True}
+        )
+    )
+    assert code == 200 and content["data"] == [[[1, 2]]]
+    assert minimal_engine_client.signal_clear_experts_token_stats_list[0].value[0] == 1
+
+    content, code = asyncio.run(minimal_engine_client.check_redundant({"user": "test_user", "passwd": "test_pass"}))
+    assert (content["code"], code) == (0, 200)
+
+
+def test_weight_update_and_clear_and_misc_status(minimal_engine_client):
+    minimal_engine_client.model_weights_status_signal = Mock(value=np.array([ModelWeightsStatus.CLEARED]))
+    minimal_engine_client.kv_cache_status_signal = Mock(value=np.array([KVCacheStatus.NORMAL]))
+    minimal_engine_client.prefix_tree_status_signal = Mock(value=np.array([PrefixTreeStatus.NORMAL]))
+    minimal_engine_client.enable_prefix_caching = True
+    with patch("time.sleep", return_value=None):
+        code, body = minimal_engine_client.update_model_weight(timeout=0)
+    assert code == 404
+    assert "timeout" in body["msg"]
+
+    minimal_engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.NORMAL
+    minimal_engine_client.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+    minimal_engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
+    with patch("time.sleep", return_value=None):
+        code, body = minimal_engine_client.clear_load_weight(timeout=0)
+    assert code == 404
+    assert "timeout" in body["msg"]
+
+    assert bool(minimal_engine_client.check_model_weight_status()) is True
+    minimal_engine_client.worker_healthy_live_signal = Mock(value=np.array([time.time() - 99]))
+    assert minimal_engine_client.check_health(time_interval_threashold=1)[0] is False
+    assert minimal_engine_client.is_workers_alive()[0] is False
+
+
+def test_add_requests_objgraph_and_error_paths(minimal_engine_client):
+    minimal_engine_client.zmq_client = MagicMock(send_json=Mock(), send_pyobj=Mock())
+
+    class BadProcessor:
+        def process_request_dict(self, *_args, **_kwargs):
+            raise RuntimeError("bad preprocess")
+
+    minimal_engine_client.data_processor = BadProcessor()
+    with (
+        patch(
+            "fastdeploy.entrypoints.engine_client.os.getenv",
+            side_effect=lambda k: "1" if k == "FD_ENABLE_OBJGRAPH_DEBUG" else None,
+        ),
+        patch("fastdeploy.entrypoints.engine_client._has_objgraph", True),
+        patch("fastdeploy.entrypoints.engine_client._has_psutil", False),
+        patch("fastdeploy.entrypoints.engine_client.objgraph", create=True) as og,
+    ):
+        og.growth.return_value = [("A", 2, 1), ("B", 3), ("C",)]
+        with pytest.raises(EngineError):
+            asyncio.run(minimal_engine_client.add_requests({"request_id": "x_1", "metrics": {}, "max_tokens": 3}))
+
+    class SmallProcessor:
+        def process_request_dict(self, task, _max_len):
+            task["prompt_token_ids"] = [1, 2, 3]
+
+    minimal_engine_client.data_processor = SmallProcessor()
+    with patch("fastdeploy.entrypoints.engine_client.envs.FD_MAX_STOP_SEQS_NUM", 1):
+        with pytest.raises(EngineError):
+            asyncio.run(
+                minimal_engine_client.add_requests(
+                    {"request_id": "x_2", "metrics": {}, "max_tokens": 3, "min_tokens": 13}
+                )
+            )
+
+
+def test_valid_parameters_and_control_timeout(minimal_engine_client):
+    with pytest.raises(ValueError):
+        minimal_engine_client.valid_parameters({"request_id": "r1", "max_tokens": 16})
+    with pytest.raises(ParameterError):
+        minimal_engine_client.valid_parameters({"request_id": "r1", "reasoning_max_tokens": -1, "max_tokens": 2})
+    with pytest.raises(ParameterError):
+        minimal_engine_client.valid_parameters({"request_id": "r1", "response_max_tokens": 0, "max_tokens": 2})
+    with patch("fastdeploy.entrypoints.engine_client.envs.FD_USE_GET_SAVE_OUTPUT_V1", False):
+        with pytest.raises(ParameterError):
+            minimal_engine_client.valid_parameters({"request_id": "r1", "max_tokens": 2, "prompt_logprobs": 1})
+
+    queue = asyncio.Queue()
+    dealer = Mock(write=Mock())
+    minimal_engine_client.connection_manager = MagicMock(get_connection=AsyncMock(return_value=(dealer, queue)))
+    with patch("fastdeploy.entrypoints.engine_client.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+        resp = asyncio.run(minimal_engine_client.run_control_method(ControlRequest(request_id="r2", method="m")))
+    assert resp.error_code == 500
+
+
+def test_rearrange_and_redundant_branch_matrix(minimal_engine_client):
+    cfg = create_mock_fd_config(enable_eplb=True)
+    cfg.parallel_config.tensor_parallel_rank = 0
+    cfg.scheduler_config.splitwise_role = "decode"
+    cfg.eplb_config.redundant_expert_ip_shm_size = 4
+    minimal_engine_client.fd_config = cfg
+    minimal_engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.FREE.value]))
+    minimal_engine_client.rearrange_experts_ips_size_signal = Mock(value=np.array([0]))
+    minimal_engine_client.shm_rearrange_experts_ips_list = Mock(shm=Mock(buf=bytearray(8)))
+    minimal_engine_client.expert_tokens_stats_array_list = [Mock(value=np.zeros((1, 2), dtype=np.int32))]
+    minimal_engine_client.signal_update_weight_from_disk_array_list = [Mock(value=np.array([0]))]
+    minimal_engine_client.signal_update_weight_from_tensor_array = Mock(value=np.array([0]))
+    minimal_engine_client.update_weight_from_disk_result_list = [Mock(value=np.array([1]))]
+
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts({"user": "test_user", "passwd": "test_pass", "ips": ["1.1.1.1"]})
+    )
+    assert code == 500 and content["code"] == 1
+
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": "recv_expert_weight", "data": [1]}
+        )
+    )
+    assert code == 200 and content["code"] == 0
+
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": "update_weight_from_tensor"}
+        )
+    )
+    assert code == 400 and "expect role prefill" in content["msg"]
+
+    minimal_engine_client.rearrange_experts_signal.value[0] = 999
+    content, code = asyncio.run(minimal_engine_client.check_redundant({"user": "test_user", "passwd": "test_pass"}))
+    assert code == 200 and content["status"] == "unknown"
+    content, code = asyncio.run(
+        minimal_engine_client.check_redundant(
+            {"user": "test_user", "passwd": "test_pass", "action": "check_load_weight_result"}
+        )
+    )
+    assert content["data"] == [1]
+
+
+def test_update_clear_success_prefix_and_rearrange_success_paths(minimal_engine_client):
+    # format_and_add_data generates request_id/max_tokens defaults
+    async def fake_add(task):
+        task["prompt_token_ids"] = [9]
+
+    minimal_engine_client.add_requests = fake_add
+    req = {"metrics": {}}
+    asyncio.run(minimal_engine_client.format_and_add_data(req))
+    assert "request_id" in req and req["max_tokens"] == 15
+
+    # update_model_weight success with prefix tree update
+    minimal_engine_client.enable_prefix_caching = True
+    minimal_engine_client.model_weights_status_signal = Mock(value=np.array([ModelWeightsStatus.CLEARED]))
+    minimal_engine_client.kv_cache_status_signal = Mock(value=np.array([KVCacheStatus.NORMAL]))
+    minimal_engine_client.prefix_tree_status_signal = Mock(value=np.array([PrefixTreeStatus.CLEARED]))
+
+    def update_sleep(_):
+        minimal_engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.NORMAL
+        minimal_engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
+
+    with patch("time.sleep", side_effect=update_sleep):
+        code, body = minimal_engine_client.update_model_weight(timeout=2)
+    assert code == 200 and "successfully" in body["msg"]
+
+    # clear_load_weight success with prefix tree clearing
+    minimal_engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.NORMAL
+    minimal_engine_client.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+    minimal_engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
+
+    def clear_sleep(_):
+        minimal_engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARED
+        minimal_engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARED
+
+    with patch("time.sleep", side_effect=clear_sleep):
+        code, body = minimal_engine_client.clear_load_weight(timeout=2)
+    assert code == 200 and "successfully" in body["msg"]
+
+    # rearrange start branch for status-check and success copy-to-shm
+    cfg = create_mock_fd_config(enable_eplb=True)
+    cfg.parallel_config.tensor_parallel_rank = 0
+    cfg.eplb_config.redundant_expert_ip_shm_size = 64
+    minimal_engine_client.fd_config = cfg
+    minimal_engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.DOING.value]))
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts({"user": "test_user", "passwd": "test_pass", "ips": ["1:1"]})
+    )
+    assert code == 400 and "rearrange is doing" in content["msg"]
+
+    minimal_engine_client.rearrange_experts_signal.value[0] = RearrangeExpertStatus.FREE.value
+    minimal_engine_client.rearrange_experts_ips_size_signal = Mock(value=np.array([0]))
+    minimal_engine_client.shm_rearrange_experts_ips_list = Mock(shm=Mock(buf=bytearray(64)))
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "ips": ["10.0.0.1:80", "10.0.0.2:80"]}
+        )
+    )
+    assert code == 200 and content["code"] == 0
+
+
+def test_update_and_clear_prefix_timeout_branches(minimal_engine_client):
+    minimal_engine_client.enable_prefix_caching = True
+    minimal_engine_client.enable_cache_transfer = False
+
+    # hit update prefix-tree timeout path
+    minimal_engine_client.model_weights_status_signal = Mock(value=np.array([ModelWeightsStatus.NORMAL]))
+    minimal_engine_client.kv_cache_status_signal = Mock(value=np.array([KVCacheStatus.NORMAL]))
+    minimal_engine_client.prefix_tree_status_signal = Mock(value=np.array([PrefixTreeStatus.CLEARED]))
+    with patch("time.sleep", return_value=None):
+        code, body = minimal_engine_client.update_model_weight(timeout=0)
+    assert code == 404
+    assert body["msg"] == "update prefix tree timeout"
+
+    # hit clear prefix-tree timeout path
+    minimal_engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARED
+    minimal_engine_client.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+    minimal_engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
+    with patch("time.sleep", return_value=None):
+        code, body = minimal_engine_client.clear_load_weight(timeout=0)
+    assert code == 404
+    assert body["msg"] == "clear prefix tree timeout"
+
+
+def test_eplb_guard_and_invalid_rearrange_branches(minimal_engine_client):
+    # rearrange disabled
+    minimal_engine_client.fd_config = create_mock_fd_config(enable_eplb=False)
+    content, code = asyncio.run(minimal_engine_client.rearrange_experts({"user": "u", "passwd": "p"}))
+    assert code == 400 and "disabled" in content["msg"]
+
+    # invalid credential and rank checks
+    cfg = create_mock_fd_config(enable_eplb=True)
+    cfg.parallel_config.tensor_parallel_rank = 1
+    minimal_engine_client.fd_config = cfg
+    content, code = asyncio.run(minimal_engine_client.get_per_expert_tokens_stats({"user": "bad", "passwd": "bad"}))
+    assert code == 401
+    content, code = asyncio.run(minimal_engine_client.check_redundant({"user": "test_user", "passwd": "test_pass"}))
+    assert code == 400 and "expect rank 0" in content["msg"]
+
+    # start action with missing ips branch
+    cfg.parallel_config.tensor_parallel_rank = 0
+    minimal_engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.FREE.value]))
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts({"user": "test_user", "passwd": "test_pass", "action": ""})
+    )
+    assert code == 400 and "ips" in content["msg"]
+
+    # recv_expert_weight with invalid payload
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": "recv_expert_weight", "data": "bad"}
+        )
+    )
+    assert code == 400 and "data is not a list" in content["msg"]
+
+    # update_weight_from_tensor status mismatch branch
+    cfg.scheduler_config.splitwise_role = "prefill"
+    minimal_engine_client.rearrange_experts_signal.value[0] = RearrangeExpertStatus.FREE.value
+    content, code = asyncio.run(
+        minimal_engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": "update_weight_from_tensor"}
+        )
+    )
+    assert code == 400 and "expect status" in content["msg"]
+
+
+def test_abort_n_non_positive_and_numeric_suffix(minimal_engine_client):
+    minimal_engine_client._send_task = Mock()
+    with patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", True):
+        asyncio.run(minimal_engine_client.abort("req_8", n=0))
+        minimal_engine_client._send_task.assert_not_called()
+
+        asyncio.run(minimal_engine_client.abort("req_8", n=2))
+        sent_ids = [c.args[0]["request_id"] for c in minimal_engine_client._send_task.call_args_list]
+        assert sent_ids[-2:] == ["req_0", "req_1"]
 
 
 if __name__ == "__main__":

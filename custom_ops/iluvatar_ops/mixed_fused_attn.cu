@@ -50,6 +50,10 @@ void MixedFusedPagedAttnKernel(
   typedef PDTraits<T> traits_;
   typedef typename traits_::data_t data_t;
 
+  auto dev_ctx = static_cast<const phi::CustomContext*>(
+      paddle::experimental::DeviceContextPool::Instance().Get(qkv.place()));
+  auto stream = static_cast<const cudaStream_t>(dev_ctx->stream());
+
   const auto& dtype = qkv.dtype();
   cuinferDataType_t cuinfer_data_type;
   cudaDataType_t cu_data_type;
@@ -191,6 +195,7 @@ void MixedFusedPagedAttnKernel(
 
   cuinferHandle_t cuinfer_handle =
       iluvatar::getContextInstance()->getIxInferHandle();
+  CUINFER_CHECK(cuinferSetStream(cuinfer_handle, stream));
 
   size_t prefill_workspace_size = 0;
   CUINFER_CHECK(
