@@ -45,11 +45,7 @@ from fastdeploy.model_executor.layers.attention.ops import (
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        decode_mla_write_cache,
-        multi_head_latent_attention,
-        prefill_mla_write_cache,
-    )
+    pass
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -373,8 +369,8 @@ class DSAAttentionBackend(AttentionBackend):
         Mixed模式的前向传播
         """
         metadata = self.attention_metadata
-        speculate_decoder = self.speculative_method is not None
-        speculate_max_tokens = self.speculate_max_draft_token_num
+        # speculate_decoder = self.speculative_method is not None
+        # speculate_max_tokens = self.speculate_max_draft_token_num
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
@@ -384,108 +380,55 @@ class DSAAttentionBackend(AttentionBackend):
 
         latent_cache = forward_meta.caches[2 * layer.layer_id] if hasattr(forward_meta, "caches") else None
 
-        if k is not None:
-            if not Sparse_fp8:
-                prefill_mla_write_cache(
-                    compressed_kv,
-                    k_pe,
-                    latent_cache,
-                    forward_meta.seq_lens_encoder,
-                    forward_meta.seq_lens_decoder,
-                    forward_meta.batch_id_per_token,
-                    forward_meta.cu_seqlens_q,
-                    metadata.block_tables,
-                    metadata.kv_signal_data_list[layer.layer_id],
-                    "none",
-                    self.max_seq_len,
-                )
-                # # FA
-                # fmha_out = self.flash_attn_func(
-                #     q,
-                #     k,
-                #     v,
-                #     forward_meta.cu_seqlens_q,
-                #     forward_meta.cu_seqlens_k,
-                #     metadata.max_enc_len_this_time,
-                #     metadata.max_enc_len_this_time,
-                #     causal=self.causal,
-                #     **self.flash_attn_kwargs,
-                # )[0]
+        # if k is not None:
+        if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
 
-            if Sparse_fp8:
+            def calc_kv_scales(self, q: paddle.Tensor, kv_c_normed: paddle.Tensor, k_pe: paddle.Tensor) -> None:
+                """Optional scale calculation for MLA inputs.
 
-                def calc_kv_scales(self, q: paddle.Tensor, kv_c_normed: paddle.Tensor, k_pe: paddle.Tensor) -> None:
-                    """Optional scale calculation for MLA inputs.
-
-                    Mirrors Attention.calc_kv_scales. Not all MLA backends require this
-                    """
-                    # Use safe defaults if ranges are not present
-                    q_range = paddle.tensor(200.0)
-                    k_range = paddle.tensor(200.0)
-                    v_range = paddle.tensor(100.0)
-
-                    self._q_scale.copy_(paddle.abs(q).max() / q_range)
-                    # kv_c_normed is the compressed KV representation; use it for k/v
-                    kv_abs_max = paddle.abs(kv_c_normed).max()
-                    self._k_scale.copy_(kv_abs_max / k_range)
-                    self._v_scale.copy_(kv_abs_max / v_range)
-                    self._q_scale_float = self._q_scale.item()
-                    self._k_scale_float = self._k_scale.item()
-                    self._v_scale_float = self._v_scale.item()
-                    self.calculate_kv_scales = False
-
-                # calc_kv_scales(q, compressed_kv, k_pe)
-                # breakpoint()
-                metadata.slot_mapping = compute_slot_mapping(
-                    forward_meta.block_tables,
-                    forward_meta.position_ids,
-                    forward_meta.batch_id_per_token,
-                    self.block_size,
-                )
-                k_range = paddle.tensor(200.0)
-                scale = paddle.abs(compressed_kv).max() / k_range
-                from fastdeploy.model_executor.ops.gpu import dsmla_write_cache
-
-                # breakpoint()
-
-                dsmla_write_cache(
-                    compressed_kv,
-                    k_pe,
-                    latent_cache,
-                    metadata.slot_mapping,
-                    forward_meta.seq_lens_encoder,
-                    forward_meta.seq_lens_decoder,
-                    forward_meta.batch_id_per_token,
-                    forward_meta.cu_seqlens_q,
-                    metadata.block_tables,
-                    None,
-                    scale.cast(paddle.float32),
-                    "fp8_ds_mla",
-                    self.max_seq_len,
-                    True,
-                )
-
-                """ vllm
-                ops.concat_and_cache_mla(
-                    k_c_normed,
-                    k_pe.squeeze(1),
-                    kv_cache,
-                    attn_metadata.slot_mapping.flatten(),
-                    kv_cache_dtype=self.kv_cache_dtype,
-                    scale=self._k_scale,
-                )
+                Mirrors Attention.calc_kv_scales. Not all MLA backends require this
                 """
-                # breakpoint()
+                # Use safe defaults if ranges are not present
+                q_range = paddle.tensor(200.0)
+                k_range = paddle.tensor(200.0)
+                v_range = paddle.tensor(100.0)
 
-            # if paddle.isnan(q.contiguous()).sum().item() > 0:
-            #     print("attention q_input is NAN")
-            #     breakpoint()
-            # if paddle.isnan(k).sum().item() > 0:
-            #     print("attention kv is NAN")
-            #     breakpoint()
-            # if paddle.isnan(v.unsqueeze(1).contiguous()).sum().item() > 0:
-            #     print("attention indexer_top_k is NAN")
-            #     breakpoint()
+                self._q_scale.copy_(paddle.abs(q).max() / q_range)
+
+                kv_abs_max = paddle.abs(kv_c_normed).max()
+                self._k_scale.copy_(kv_abs_max / k_range)
+                self._v_scale.copy_(kv_abs_max / v_range)
+                self._q_scale_float = self._q_scale.item()
+                self._k_scale_float = self._k_scale.item()
+                self._v_scale_float = self._v_scale.item()
+                self.calculate_kv_scales = False
+
+            metadata.slot_mapping = compute_slot_mapping(
+                forward_meta.block_tables,
+                forward_meta.position_ids,
+                forward_meta.batch_id_per_token,
+                self.block_size,
+            )
+            k_range = paddle.tensor(200.0)
+            scale = paddle.abs(compressed_kv).max() / k_range
+            from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
+
+            dsk_attn_write_cache(
+                compressed_kv,
+                k_pe,
+                latent_cache,
+                metadata.slot_mapping,
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.batch_id_per_token,
+                forward_meta.cu_seqlens_q,
+                metadata.block_tables,
+                None,
+                scale.cast(paddle.float32),
+                "fp8_ds_mla",
+                self.max_seq_len,
+                True,
+            )
 
             fmha_out_prefill, _, __ = flash_mla.flash_mla_sparse_fwd(
                 q,  # q_input.contiguous(),
@@ -493,126 +436,59 @@ class DSAAttentionBackend(AttentionBackend):
                 v,  # indexer_top_k.unsqueeze(1),
                 sm_scale=self.attn_softmax_scale,
             )
-            # if paddle.isnan(fmha_out_prefill).sum().item() > 0:
-            #     print("attention fmha_out_prefill is NAN")
-            #     breakpoint()
 
             return fmha_out_prefill
 
         # Decode
-        if k is None:
-            print("dsa_backend,decode")
-            # breakpoint()
-            if not Sparse_fp8:
-                decode_mla_write_cache(
-                    compressed_kv,
-                    k_pe,
-                    latent_cache,
-                    forward_meta.seq_lens_decoder,
-                    forward_meta.seq_lens_encoder,
-                    forward_meta.batch_id_per_token,
-                    forward_meta.cu_seqlens_q,
-                    metadata.block_tables,
-                    "none",
-                    self.max_seq_len,
-                    speculate_decoder,
-                )
+        # if k is None:
+        if forward_meta.max_len_tensor_cpu[2]:  # max_enc_len_this_time
 
-                # 多头潜在注意力计算
-                fmha_out = multi_head_latent_attention(
-                    q,
-                    latent_cache,
-                    latent_cache,
-                    forward_meta.seq_lens_decoder,
-                    forward_meta.seq_lens_this_time,
-                    forward_meta.cu_seqlens_q,
-                    forward_meta.batch_id_per_token,
-                    metadata.block_tables,
-                    forward_meta.kv_batch_ids,
-                    forward_meta.kv_tile_ids_per_batch,
-                    forward_meta.kv_num_blocks_x_cpu,
-                    forward_meta.decoder_batch_ids,
-                    forward_meta.decoder_tile_ids_per_batch,
-                    forward_meta.decoder_num_blocks_device,
-                    forward_meta.decoder_chunk_size_device,
-                    metadata.max_dec_len_this_time,
-                    metadata.max_kv_len_this_time,
-                    None,  # attn_mask
-                    None,  # qkv_bias
-                    None,  # qkv_out_scales
-                    None,  # cache_k_quant_scales
-                    None,  # cache_v_quant_scales
-                    None,  # cache_k_dequant_scales
-                    None,  # cache_v_dequant_scales
-                    None,  # cache_k_zp
-                    None,  # cache_v_zp
-                    None,  # out_shifts
-                    None,  # out_smooths
-                    metadata._fuse_kernel_compute_dtype,
-                    "none",  # cache_quant_type
-                    self.kv_lora_rank,
-                    self.max_seq_len,
-                    self.attn_softmax_scale,
-                    0.0,  # quant_max_bound
-                    0.0,  # quant_min_bound
-                    0.0,  # out_linear_in_scale
-                    speculate_max_tokens,
-                    True,  # causal
-                    speculate_decoder,
-                )
+            metadata.slot_mapping = compute_slot_mapping(
+                forward_meta.block_tables,
+                forward_meta.position_ids,
+                forward_meta.batch_id_per_token,
+                self.block_size,
+            )
+            k_range = paddle.tensor(200.0)
+            scale = paddle.abs(compressed_kv).max() / k_range
+            from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
 
-            if Sparse_fp8:
-                metadata.slot_mapping = compute_slot_mapping(
-                    forward_meta.block_tables,
-                    forward_meta.position_ids,
-                    forward_meta.batch_id_per_token,
-                    self.block_size,
-                )
-                k_range = paddle.tensor(200.0)
-                scale = paddle.abs(compressed_kv).max() / k_range
-                from fastdeploy.model_executor.ops.gpu import dsmla_write_cache
+            dsk_attn_write_cache(
+                compressed_kv,
+                k_pe,
+                latent_cache,
+                metadata.slot_mapping,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.batch_id_per_token,
+                forward_meta.cu_seqlens_q,
+                metadata.block_tables,
+                None,
+                scale.cast(paddle.float32),
+                "fp8_ds_mla",
+                self.max_seq_len,
+                False,
+            )
 
-                # breakpoint()
+            tile_scheduler_metadata, _ = flash_mla.get_mla_metadata()
 
-                dsmla_write_cache(
-                    compressed_kv,
-                    k_pe,
-                    latent_cache,
-                    metadata.slot_mapping,
-                    forward_meta.seq_lens_decoder,
-                    forward_meta.seq_lens_decoder,
-                    forward_meta.batch_id_per_token,
-                    forward_meta.cu_seqlens_q,
-                    metadata.block_tables,
-                    None,
-                    scale.cast(paddle.float32),
-                    "fp8_ds_mla",
-                    self.max_seq_len,
-                    False,
-                )
-
-                tile_scheduler_metadata, _ = flash_mla.get_mla_metadata()
-                # breakpoint()
-
-                # breakpoint()
-                fmha_out_decode, _ = flash_mla.flash_mla_with_kvcache(
-                    q.unsqueeze(1).contiguous(),
-                    latent_cache.transpose([0, 2, 1, 3]).contiguous(),
-                    None,  # forward_meta.block_tables,
-                    None,  # cache_seqlens
-                    512,  # self.qk_nope_head_dim,
-                    tile_scheduler_metadata,
-                    None,  # num_splits,
-                    self.attn_softmax_scale,
-                    False,  # casual
-                    True,  # is_fp8_kvcache
-                    v,  # indices,
-                    None,  # t.attn_sink,
-                    None,  # extra_k_cache,
-                    None,  # extra_indices_in_kvcache: Optional[torch.Tensor] = None,
-                    None,  # topk_length: Optional[torch.Tensor] = None,
-                    None,  # extra_topk_length: Optional[torch.Tensor] = None
-                )
-                # breakpoint()
+            fmha_out_decode, _ = flash_mla.flash_mla_with_kvcache(
+                q.unsqueeze(1).contiguous(),
+                latent_cache.transpose([0, 2, 1, 3]).contiguous(),
+                None,  # forward_meta.block_tables,
+                None,  # cache_seqlens
+                512,  # self.qk_nope_head_dim,
+                tile_scheduler_metadata,
+                None,  # num_splits,
+                self.attn_softmax_scale,
+                False,  # casual
+                True,  # is_fp8_kvcache
+                v,  # indices,
+                None,  # t.attn_sink,
+                None,  # extra_k_cache,
+                None,  # extra_indices_in_kvcache: Optional[torch.Tensor] = None,
+                None,  # topk_length: Optional[torch.Tensor] = None,
+                None,  # extra_topk_length: Optional[torch.Tensor] = None
+            )
 
             return fmha_out_decode
