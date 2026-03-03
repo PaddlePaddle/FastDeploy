@@ -509,7 +509,7 @@ class EngineService:
         if not is_decode:
             self.llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
             for task in tasks:
-                if not getattr(task, "has_been_rescheduled", False):
+                if not getattr(task, "has_been_preempted_before", False):
                     task.metrics.inference_start_time = time.time()
                     tracing.trace_report_span(
                         tracing.TraceSpanName.SCHEDULE,
@@ -1027,7 +1027,7 @@ class EngineService:
                     for task in tasks:
                         if task.task_type == RequestType.PREFILL:
                             rid = task.request_id.split("_")[0]
-                            if isinstance(task, Request) and task.has_been_rescheduled:
+                            if isinstance(task, Request) and task.has_been_preempted_before:
                                 trace_print(
                                     LoggingEventName.RESCHEDULED_INFERENCE_START,
                                     task.request_id,
@@ -1057,7 +1057,7 @@ class EngineService:
                         if isinstance(task, Request):
                             if self.cfg.scheduler_config.splitwise_role == "decode":
                                 task.metrics.decode_inference_start_time = time.time()
-                            elif not task.has_been_rescheduled:
+                            elif not task.has_been_preempted_before:
                                 task.metrics.inference_start_time = time.time()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
 
