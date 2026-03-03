@@ -237,6 +237,23 @@ DLL_EXPORT int recover_decode_task(Context* ctx,
                                    const int block_num_per_seq,
                                    const int block_size);
 
+DLL_EXPORT int recover_spec_decode_task(Context* ctx,
+                                        bool* stop_flags,
+                                        int* seq_lens_this_time,
+                                        int* seq_lens_encoder,
+                                        int* seq_lens_decoder,
+                                        int* step_seq_lens_decoder,
+                                        int* block_tables,
+                                        bool* is_block_step,
+                                        int64_t* draft_tokens,
+                                        const int64_t* step_draft_tokens,
+                                        const int* step_seq_lens_this_time,
+                                        const int bsz,
+                                        const int block_num_per_seq,
+                                        const int block_size,
+                                        const int draft_tokens_len,
+                                        const int num_extra_tokens);
+
 DLL_EXPORT int update_inputs_v1(Context* ctx,
                                 bool* not_need_stop,
                                 int* seq_lens_this_time,
@@ -470,6 +487,7 @@ DLL_EXPORT int speculate_set_stop_value_multi_seqs(Context* ctx,
                                                    const int* stop_seqs_len,
                                                    const int* seq_lens,
                                                    const int64_t* end_ids,
+                                                   const int64_t* min_tokens,
                                                    const int bs_now,
                                                    const int accept_tokens_len,
                                                    const int stop_seqs_bs,
@@ -531,10 +549,10 @@ DLL_EXPORT int draft_model_postprocess(Context* ctx,
 DLL_EXPORT int speculate_set_value_by_flag_and_id(Context* ctx,
                                                   int64_t* pre_ids_all,
                                                   const int64_t* accept_tokens,
-                                                  const int* accept_num,
+                                                  int* accept_num,
                                                   const bool* stop_flags,
                                                   const int* seq_lens_encoder,
-                                                  const int* seq_lens_decoder,
+                                                  int* seq_lens_decoder,
                                                   const int64_t* step_idx,
                                                   int bs,
                                                   int length,
@@ -625,6 +643,23 @@ DLL_EXPORT int speculate_update_v3(Context* ctx,
                                    const int real_bsz,
                                    const int max_bsz,
                                    const int max_draft_tokens);
+
+DLL_EXPORT int speculate_update(Context* ctx,
+                                int* seq_lens_encoder,  // 输入 [B_max, ]
+                                int* seq_lens_decoder,  // 输出 [B_max, ]
+                                bool* not_need_stop,    // [1,]
+                                int64_t* draft_tokens,  // [B_max, T_max]
+                                int* actual_draft_token_nums,  // [B_max, ]
+                                const int64_t* accept_tokens,  // [B_max, T_max]
+                                const int* accept_num,         // [B_max, ]
+                                const bool* stop_flags,        // [B_max, ]
+                                const int* seq_lens_this_time,  // [B_real,]
+                                const bool* is_block_step,      // [B_max, ]
+                                int* mask_rollback,             // [1,]
+                                const int real_bsz,
+                                const int max_bsz,
+                                const int max_draft_tokens);
+
 template <typename T>
 DLL_EXPORT int rebuild_hidden_states(api::Context* ctx,
                                      const T* input,

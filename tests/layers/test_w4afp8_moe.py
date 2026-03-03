@@ -18,6 +18,7 @@ from fastdeploy.config import (
     ParallelConfig,
     RoutingReplayConfig,
 )
+from fastdeploy.model_executor.layers.linear import ReplicatedLinear
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.w4afp8 import W4AFP8Config
 from fastdeploy.scheduler import SchedulerConfig
@@ -82,6 +83,16 @@ class FuseMoEWrapper(paddle.nn.Layer):
             "up_gate_proj_expert_weight_key": f"{self.prefix}.mlp.experts.{{}}.up_gate_proj.weight",
             "down_proj_expert_weight_key": f"{self.prefix}.mlp.experts.{{}}.down_proj.weight",
         }
+
+        self.gating = ReplicatedLinear(
+            fd_config=self.fd_config,
+            prefix=f"{self.prefix}.gate",
+            input_size=self.fd_config.model_config.hidden_size,
+            output_size=self.fd_config.model_config.moe_num_experts,
+            with_bias=False,
+            skip_quant=True,
+            weight_dtype="float32",
+        )
 
         self.fused_moe = FusedMoE(
             fd_config=self.fd_config,
@@ -178,10 +189,6 @@ class TestW4A8FusedMoE(unittest.TestCase):
     def test_fused_moe(self):
         # init_distributed_environment()
 
-        gating = paddle.nn.Linear(self.model_config.hidden_size, self.model_config.moe_num_experts)
-        gating.to(dtype=paddle.float32)  # it's dtype is bfloat16 default, but the forward input is float32
-        gating.weight.set_value(paddle.rand(gating.weight.shape, dtype=paddle.float32))
-
         # ep_size = paddle.distributed.get_world_size()
         # ep_rank = paddle.distributed.get_rank()
         ep_size = 1
@@ -196,6 +203,8 @@ class TestW4A8FusedMoE(unittest.TestCase):
         paddle.seed(ep_rank + 100)
 
         fused_moe = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes).fused_moe
+        gating = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes).gating
+        gating.weight.set_value(paddle.rand(gating.weight.shape, dtype=paddle.float32))
         weight_size = fused_moe.top_k * fused_moe.hidden_size * fused_moe.moe_intermediate_size * 3 / 2
 
         tester = OpPerformanceTester(

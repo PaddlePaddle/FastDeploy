@@ -16,6 +16,7 @@ __global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
                                                     const int *stop_seqs_len,
                                                     const int *seq_lens,
                                                     const int64_t *end_ids,
+                                                    const int64_t *min_tokens,
                                                     const int bs,
                                                     const int accept_tokens_len,
                                                     const int stop_seqs_bs,
@@ -28,12 +29,16 @@ __global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
 
   int accept_num = 0;
   int64_t step_idx_now = 0;
+  int64_t min_token_limit = 0;
   bool stop_flags_now = false;
   int stop_seq_len = 0;
+
   for (int bid = cls_id; bid < bs; bid += nclusters) {
     GM2LM_ASYNC(accept_nums + bid, &accept_num, sizeof(int));
     GM2LM_ASYNC(step_idx + bid, &step_idx_now, sizeof(int64_t));
+    GM2LM_ASYNC(min_tokens + bid, &min_token_limit, sizeof(int64_t));
     GM2LM(stop_flags + bid, &stop_flags_now, sizeof(bool));
+    if (step_idx_now >= min_token_limit) continue;
     if (stop_flags_now) {
       continue;
     }
