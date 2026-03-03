@@ -445,9 +445,6 @@ elif paddle.is_compiled_with_cuda():
         ]
         # Add generated marlin kernel files
         sources += find_end_files("gpu_ops/moe/moe_wna16_marlin_utils", ".cu")
-        if cc < 80:
-            # SM70/SM75 doesn't support BF16 MMA, exclude BF16 Marlin kernel instantiations
-            sources = [s for s in sources if "kernel_bf16" not in s]
         # speculate_decoding (required by cpp_extensions.cc)
         sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
         sources += find_end_files("gpu_ops/speculate_decoding", ".cc")
