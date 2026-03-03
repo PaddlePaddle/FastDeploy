@@ -524,10 +524,10 @@ class OpenAIServingChat:
             )
             yield f"data: {error_data}\n\n"
         finally:
+            trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
-            trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             api_server_logger.info(f"release {request_id} {self.engine_client.semaphore.status()}")
             yield "data: [DONE]\n\n"
 
@@ -691,6 +691,7 @@ class OpenAIServingChat:
                         )
                         choices.append(choice)
         finally:
+            trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
@@ -721,7 +722,6 @@ class OpenAIServingChat:
             choices=choices,
             usage=usage,
         )
-        trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
         api_server_logger.info(f"Chat response: {res.model_dump_json()}")
         return res
 

@@ -165,7 +165,7 @@ class FlashAttentionBackend(AttentionBackend):
         if self.has_prefill:
             batch_ids_prefill = self.prefill_info_dict["batch_ids"]
 
-            seq_lens_this_time_prefill = forward_meta.seq_lens_this_time[batch_ids_prefill, 0]
+            seq_lens_this_time_prefill = forward_meta.seq_lens_this_time[batch_ids_prefill]
             self.prefill_info_dict["cu_seqlens_q"] = paddle.concat(
                 [paddle.zeros([1], dtype="int32"), paddle.cumsum(seq_lens_this_time_prefill, axis=0).astype("int32")],
                 axis=0,
@@ -180,7 +180,7 @@ class FlashAttentionBackend(AttentionBackend):
         if self.has_decode:
             batch_ids_decode = self.decode_info_dict["batch_ids"]
 
-            seq_lens_this_time_decode = forward_meta.seq_lens_this_time[batch_ids_decode, 0]
+            seq_lens_this_time_decode = forward_meta.seq_lens_this_time[batch_ids_decode]
             cu_seqlens_q_decode = paddle.concat(
                 [paddle.zeros([1], dtype="int32"), paddle.cumsum(seq_lens_this_time_decode, axis=0).astype("int32")],
                 axis=0,
@@ -193,7 +193,7 @@ class FlashAttentionBackend(AttentionBackend):
             self.attention_metadata.cu_seqlens_q_decode[: self.decode_len + 1].copy_(cu_seqlens_q_decode)
             self.attention_metadata.batch_ids_per_token_decode[: self.decode_len].copy_(batch_ids_per_token_decode)
             self.attention_metadata.seq_lens_decode[: self.decode_len].copy_(
-                forward_meta.seq_lens_decoder[batch_ids_decode, 0]
+                forward_meta.seq_lens_decoder[batch_ids_decode]
             )
             self.attention_metadata.block_table_decode[: self.decode_len].copy_(
                 forward_meta.block_tables[batch_ids_decode, :]

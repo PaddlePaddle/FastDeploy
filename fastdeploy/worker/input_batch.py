@@ -184,8 +184,8 @@ class InputBatch:
             dtype="int64",
         )
         self.batch_id_per_token = paddle.full([max_num_seqs * self.max_chunk_tokens, 1], 0, dtype="int32")
-        self.cu_seqlens_q = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
-        self.cu_seqlens_k = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
+        self.cu_seqlens_q = paddle.full([max_num_seqs + 1], 0, dtype="int32")
+        self.cu_seqlens_k = paddle.full([max_num_seqs + 1], 0, dtype="int32")
 
         # Declare AttentionBackend buffers
         self.decoder_batch_ids = None
@@ -696,19 +696,23 @@ class ProposerInputBatch(InputBatch):
         if current_platform.is_cuda():
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
-            self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
-            # TODO: delete pre_ids in mtp
-            self.pre_ids = paddle.full(
-                [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
-                -1,
-                dtype="int64",
-            )
-            for bs_idx in range(self.scheduler_config.max_num_seqs):
-                prompt_len = self.target_model_input_batch["prompt_lens"][bs_idx]
-                pre_ids_len = self.model_config.max_model_len - prompt_len
-                self.pre_ids[bs_idx, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][
-                    bs_idx, prompt_len:
-                ]
+            if "token_ids_all" in self.target_model_input_batch:
+                self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
+                # TODO: delete pre_ids in mtp
+                self.pre_ids = paddle.full(
+                    [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
+                    -1,
+                    dtype="int64",
+                )
+                for bs_idx in range(self.scheduler_config.max_num_seqs):
+                    prompt_len = self.target_model_input_batch["prompt_lens"][bs_idx]
+                    pre_ids_len = self.model_config.max_model_len - prompt_len
+                    self.pre_ids[bs_idx, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][
+                        bs_idx, prompt_len:
+                    ]
+            else:
+                self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+                self.token_ids_all = None
         else:
             self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
             self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
@@ -727,19 +731,12 @@ class ProposerInputBatch(InputBatch):
             dtype="bfloat16",
         )
 
-        tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
-
-        self.rope_emb = get_rope(
-            rotary_dim=self.model_config.head_dim,
-            position_ids=tmp_position_ids,
-            base=self.model_config.rope_theta,
-            model_config=self.model_config,
-            partial_rotary_factor=self.model_config.partial_rotary_factor,
-        )
+        self.rope_emb = paddle.clone(self.target_model_input_batch["rope_emb"])
 
         # self.caches = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
         self.prompt_lens = self.target_model_input_batch["prompt_lens"]
+        self.fake_prompt_lens = paddle.full([self.scheduler_config.max_num_seqs, 1], 0, dtype="int64")
         self.top_p = self.target_model_input_batch["top_p"]
         self.top_k = self.target_model_input_batch["top_k"]
         self.temperature = self.target_model_input_batch["temperature"]
@@ -919,23 +916,28 @@ class ProposerInputBatch(InputBatch):
             self.seq_lens_encoder = paddle.clone(self.target_model_input_batch["seq_lens_encoder"])
             self.seq_lens_decoder = paddle.clone(self.target_model_input_batch["seq_lens_decoder"])
             self.prompt_lens = self.target_model_input_batch["prompt_lens"]
+            self.fake_prompt_lens = paddle.full([self.scheduler_config.max_num_seqs, 1], 0, dtype="int64")
             self.step_idx = paddle.clone(self.target_model_input_batch["step_idx"])
             self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
             self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
             if current_platform.is_cuda():
-                self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
-                # TODO: delete pre_ids in mtp
-                self.pre_ids = paddle.full(
-                    [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
-                    -1,
-                    dtype="int64",
-                )
-                for bs_idx in range(self.scheduler_config.max_num_seqs):
-                    prompt_len = self.target_model_input_batch["prompt_lens"][bs_idx]
-                    pre_ids_len = self.model_config.max_model_len - prompt_len
-                    self.pre_ids[bs_idx, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][
-                        bs_idx, prompt_len:
-                    ]
+                if "token_ids_all" in self.target_model_input_batch:
+                    self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
+                    # TODO: delete pre_ids in mtp
+                    self.pre_ids = paddle.full(
+                        [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
+                        -1,
+                        dtype="int64",
+                    )
+                    for bs_idx in range(self.scheduler_config.max_num_seqs):
+                        prompt_len = self.target_model_input_batch["prompt_lens"][bs_idx]
+                        pre_ids_len = self.model_config.max_model_len - prompt_len
+                        self.pre_ids[bs_idx, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][
+                            bs_idx, prompt_len:
+                        ]
+                else:
+                    self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+                    self.token_ids_all = None
             else:
                 self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
             self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
@@ -949,14 +951,35 @@ class ProposerInputBatch(InputBatch):
             fill_paddle_tensor(self, "target_hidden_states", 0)
 
             # Reset rope embedding by recreating with default position_ids
-            tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
-            self.rope_emb = get_rope(
-                rotary_dim=self.model_config.head_dim,
-                position_ids=tmp_position_ids,
-                base=self.model_config.rope_theta,
-                model_config=self.model_config,
-                partial_rotary_factor=self.model_config.partial_rotary_factor,
-            )
+            if self.enable_mm:
+                head_dim = self.model_config.head_dim
+                if "qwen" in self.model_config.model_type or "paddleocr" in self.model_config.model_type:
+                    rope_head_dim = head_dim
+                else:
+                    rope_head_dim = head_dim // 2
+
+                self.rope_emb = paddle.full(
+                    shape=[
+                        self.scheduler_config.max_num_seqs,
+                        2,
+                        1,
+                        self.model_config.max_model_len,
+                        1,
+                        rope_head_dim,
+                    ],
+                    fill_value=0,
+                    dtype="float32",
+                )
+                self.image_features = None
+                self.image_features_list = None
+            else:
+                self.rope_emb = get_rope(
+                    rotary_dim=self.model_config.head_dim,
+                    position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
+                    base=self.model_config.rope_theta,
+                    model_config=self.model_config,
+                    partial_rotary_factor=self.model_config.partial_rotary_factor,
+                )
 
             # Reset generation hyperparameters from the main model
             self.top_p = self.target_model_input_batch["top_p"]
