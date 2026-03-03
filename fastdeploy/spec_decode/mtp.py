@@ -123,6 +123,10 @@ class MTPProposer(Proposer):
         self.model_inputs = ProposerInputBatch(self.fd_config, self.target_model_inputs)
         self.model_inputs.init_share_inputs()
 
+        if current_platform.is_cuda() or current_platform.is_maca():
+            self._real_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
+            self.output_token_num_event = paddle.device.cuda.Event()
+
         # CUDA Graph
         self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
@@ -815,6 +819,7 @@ class MTPProposer(Proposer):
                     cu_seqlens_k,
                     cu_seqlens_q_output,
                     batch_id_per_token_output,
+                    real_output_token_num,
                 ) = pre_process(
                     token_num_cpu,
                     self.model_inputs["input_ids"],
@@ -851,6 +856,8 @@ class MTPProposer(Proposer):
                 # For speculative decoding
                 self.model_inputs["cu_seqlens_q_output"].copy_(cu_seqlens_q_output, False)
                 self.model_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
+                self._real_output_token_num_host.copy_(real_output_token_num, False)
+                self.output_token_num_event.record()
 
                 # Initialize forward meta data
                 self._initialize_forward_meta(
@@ -896,13 +903,17 @@ class MTPProposer(Proposer):
                 )
                 if self.forward_meta.step_use_cudagraph:
                     model_output = model_output[: self.real_token_num]
+
+                self.output_token_num_event.synchronize()
+                real_num = int(self._real_output_token_num_host)
+                real_batch_id_per_token_output = self.model_inputs["batch_id_per_token_output"][:real_num]
                 hidden_states = rebuild_padding(
                     model_output,
                     self.model_inputs["cu_seqlens_q"],
                     self.model_inputs["seq_lens_this_time"],
                     self.model_inputs["seq_lens_decoder"],
                     self.model_inputs["seq_lens_encoder"],
-                    self.model_inputs["batch_id_per_token_output"],
+                    real_batch_id_per_token_output,
                     self.model_inputs["cu_seqlens_q_output"],
                     self.model_inputs["first_token_hidden_states"],
                     self.enable_logprob if substep == 0 else False,
