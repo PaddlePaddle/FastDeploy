@@ -1,4 +1,30 @@
 # Adapted from https://github.com/thinking-machines-lab/batch_invariant_ops/blob/main/batch_invariant_ops/test_batch_invariance.py
+#
+# Test suite for batch-invariant bmm (batched matrix multiply).
+#
+# Purpose:
+#   Verify that the batch-invariant bmm implementation (Triton-based) produces
+#   deterministic and numerically acceptable results, ensuring inference output
+#   does not change when requests are batched together.
+#
+# Test items:
+#   1. test_batch_invariance
+#      - Core property: bmm(A, B)[i] must be BIT-EXACT regardless of batch size.
+#      - Compares batch=1 result vs slicing from a larger-batch bmm.
+#      - Covers float32, float16, bfloat16 with various shapes (power-of-2 and
+#        non-power-of-2 dimensions), repeated across multiple iterations.
+#
+#   2. test_numerical_correctness
+#      - Ensures the Triton kernel output is numerically close to a numpy float64
+#        reference, using np.allclose-style tolerance (atol + rtol * |ref|).
+#      - Accounts for TF32 tensor-core rounding in float32 and reduced precision
+#        in float16/bfloat16.
+#
+#   3. test_special_inputs
+#      - Zero matrix: A @ 0 must produce exact zeros.
+#      - Identity matrix: A @ I must approximate A within TF32 tolerance.
+#      - Per-element batch consistency: each batch element computed individually
+#        must match the corresponding slice from the batched computation (bit-exact).
 
 import unittest
 

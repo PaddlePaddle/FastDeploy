@@ -13,19 +13,56 @@
 # limitations under the License.
 
 """
-Tests for the c16 warp1_4 decoder kernel determinism fix.
+Test suite for the c16 warp1_4 decoder attention kernel determinism.
 
-The fix addresses two bugs in multiquery_attention_c16_impl.cuh:
-  1. Outer: warp1_4 dispatcher lacked force_no_partition check (lines 1164-1175)
-  2. Inner: nosplit kernel used runtime num_chunks_this_seq instead of
-     compile-time partition_kv, causing nullptr writes (lines 545, 748, 772, 812)
+Background:
+  The c16 warp1_4 decoder kernel (multiquery_attention_c16_impl.cuh) had two
+  bugs that caused nondeterministic outputs under FD_DETERMINISTIC_MODE:
+    1. The warp1_4 dispatcher (lines 1164-1175) lacked the force_no_partition
+       check, so it still launched the multi-chunk (split) kernel even when
+       deterministic mode requested the single-chunk (nosplit) path.
+    2. The nosplit kernel template read runtime num_chunks_this_seq instead of
+       compile-time partition_kv, causing out-of-bounds nullptr writes to the
+       partial output buffer (lines 545, 748, 772, 812).
 
-This test exercises the c16 warp1_4 decoder path by:
-  - dim_head=128, blocksize=64, cache_quant_type="none" -> c16 path
-  - decoder_block_shape_q=16 -> NUM_WARP_Q=1 (warp1_4)
-  - seq_lens_encoder=0, seq_lens_decoder>0 -> decoder mode
-  - FD_DETERMINISTIC_MODE=1 -> force nosplit kernel
-  - Small max_partition_size for decoder to ensure num_chunks > 1
+How the c16 warp1_4 path is triggered:
+  - dim_head=128, blocksize=64, cache_quant_type="none"  -> selects c16 kernel
+  - decoder_block_shape_q=16  -> NUM_WARP_Q=1, i.e. warp1_4 configuration
+  - seq_lens_encoder=0, seq_lens_decoder>0               -> decoder mode
+  - FD_DETERMINISTIC_MODE=1                               -> forces nosplit path
+  - Small decoder_max_partition_size (e.g. 64) with long prefill (e.g. 256)
+    ensures num_chunks > 1, which is the scenario that exposed the bugs.
+
+Test items:
+  1. test_short_kv_nosplit
+     - Short KV (num_chunks=1): basic nosplit path with partition_kv=false.
+     - Verifies both correctness (vs naive reference) and determinism (10 runs).
+
+  2. test_long_kv_multi_chunk
+     - Long KV (num_chunks=4, prefill=256, partition=64): the exact scenario
+       the fix addresses. partition_kv=true template but grid_chunks=1.
+     - Verifies correctness and determinism.
+
+  3. test_multi_batch
+     - Multiple batches (batch_size=4) with multi-chunk decoder.
+     - Ensures the fix works across batch elements, not just single-batch.
+
+  4. test_float16
+     - Float16 dtype with multi-chunk decoder.
+     - Ensures the fix is dtype-agnostic (not only bfloat16).
+
+  5. test_unaligned_seq_len
+     - prefill_seq_len not divisible by blocksize (100 % 64 != 0).
+     - Catches off-by-one bugs in block/chunk boundary calculations.
+
+  6. test_mha_no_gqa
+     - MHA config: q_num_head == kv_num_head (no GQA grouping).
+     - Ensures the fix is not GQA-specific.
+
+  7. test_nosplit_vs_split_consistency
+     - Cross-path check: deterministic nosplit vs non-deterministic split.
+     - Both paths should produce numerically close results (rtol/atol=1e-2)
+       and both should match the naive attention reference.
 
 Run:
   python -m pytest tests/deterministic/test_c16_warp1_4_determinism.py -v
