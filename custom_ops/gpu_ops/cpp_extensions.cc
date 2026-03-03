@@ -302,9 +302,11 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
     const int token_nums_this_rank_padded);
 
 std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
-                                          const int block_size);
+                                          const int block_size,
+                                          const bool use_ue8m0);
 std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
-                                                 const int block_size);
+                                                 const int block_size,
+                                                 const bool use_ue8m0);
 
 std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
     paddle::Tensor& input,
@@ -1273,12 +1275,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &PerTokenQuant,
         py::arg("input"),
         py::arg("block_size"),
+        py::arg("use_ue8m0"),
         "per token per block quant");
 
   m.def("per_token_quant_padding",
         &PerTokenQuantPadding,
         py::arg("input"),
         py::arg("block_size"),
+        py::arg("use_ue8m0"),
         "per token per block quant and padding transpose scale");
 
   m.def("fused_mask_swiglu_fp8_quant",

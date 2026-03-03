@@ -58,12 +58,9 @@ def load_deep_ep() -> ModuleType:
             return deep_ep
     except Exception as e:
         logger.error(
-            "import deep_ep failed! FD_USE_PFCC_DEEP_EP=%s. type=%s, err=%s",
-            envs.FD_USE_PFCC_DEEP_EP,
-            type(e).__name__,
-            e,
+            f"import deep_ep failed! FD_USE_PFCC_DEEP_EP={envs.FD_USE_PFCC_DEEP_EP}. type={type(e).__name__}, err={e}"
         )
-        logger.error("Traceback:\n%s", traceback.format_exc())
+        logger.error(f"Traceback:{traceback.format_exc()}")
         raise
 
 

@@ -118,7 +118,7 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
     # down_proj
     if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
         ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-            ffn_out, quant_config_weight_block_size_0
+            ffn_out, quant_config_weight_block_size_0, not disable_ue8m0_cast
         )
 
         ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous()
@@ -287,7 +287,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # 2. Dynamic compute blockwise quantization scales
         if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
             x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-                x, self.quant_config.weight_block_size[0]
+                x, self.quant_config.weight_block_size[0], self.quant_config.deepgemm_scale_ue8m0
             )
         else:
             x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
@@ -486,7 +486,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             # down_proj
             if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
                 ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-                    ffn_out, self.quant_config.weight_block_size[0]
+                    ffn_out, self.quant_config.weight_block_size[0], self.quant_config.deepgemm_scale_ue8m0
                 )
                 ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous().transpose([1, 0])
             else:
@@ -526,6 +526,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         if self.ep_prefill_runner.num_worst_tokens <= 0:
             let_another_thread_run()
 
+        global_values[thread_name]["combine_in"] = tmp_ffn_out
         tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
 
         if self.ep_prefill_runner.num_worst_tokens > 0:
@@ -533,6 +534,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
+
+        global_values[thread_name]["combine_out"] = tmp_ffn_out
 
         return tmp_ffn_out
 
@@ -651,7 +654,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
 
         if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
-            recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, 128)
+            recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(
+                x, 128, self.quant_config.deepgemm_scale_ue8m0
+            )
         else:
 
             recv_x, recv_x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
