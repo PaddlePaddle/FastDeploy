@@ -20,7 +20,8 @@ using c3x::cutlass_gemm_caller;
 
 template <typename InType,
           typename OutType,
-          template <typename, typename, typename> typename Epilogue>
+          template <typename, typename, typename>
+          typename Epilogue>
 struct sm90_fp8_config_default {
   // M in (128, inf)
   static_assert(std::is_same<InType, cutlass::float_e4m3_t>());
@@ -40,7 +41,8 @@ struct sm90_fp8_config_default {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename, typename> typename Epilogue>
+          template <typename, typename, typename>
+          typename Epilogue>
 struct sm90_fp8_config_M128 {
   // M in (64, 128]
   static_assert(std::is_same<InType, cutlass::float_e4m3_t>());
@@ -60,7 +62,8 @@ struct sm90_fp8_config_M128 {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename, typename> typename Epilogue>
+          template <typename, typename, typename>
+          typename Epilogue>
 struct sm90_fp8_config_M64 {
   // M in [1, 64]
   static_assert(std::is_same<InType, cutlass::float_e4m3_t>());
@@ -81,7 +84,8 @@ struct sm90_fp8_config_M64 {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename, typename> typename Epilogue,
+          template <typename, typename, typename>
+          typename Epilogue,
           typename... EpilogueArgs>
 inline void cutlass_gemm_sm90_fp8_dispatch(paddle::Tensor &out,
                                            paddle::Tensor const &a,

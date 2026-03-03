@@ -34,7 +34,8 @@ namespace fastdeploy {
 
 template <typename ElementAB_,
           typename ElementD_,
-          template <typename, typename, typename> typename Epilogue_,
+          template <typename, typename, typename>
+          typename Epilogue_,
           typename TileShape,
           typename ClusterShape,
           typename KernelSchedule,
@@ -103,7 +104,8 @@ struct cutlass_3x_gemm {
 
 template <typename ElementAB_,
           typename ElementD_,
-          template <typename, typename, typename> typename Epilogue_,
+          template <typename, typename, typename>
+          typename Epilogue_,
           typename TileShape,
           typename ClusterShape,
           typename KernelSchedule,

@@ -14,7 +14,8 @@ namespace fastdeploy {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename> typename Epilogue>
+          template <typename, typename>
+          typename Epilogue>
 struct sm75_config_default {
   // This config is used in 2 cases,
   // - M in (256, inf]
@@ -37,7 +38,8 @@ struct sm75_config_default {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename> typename Epilogue>
+          template <typename, typename>
+          typename Epilogue>
 struct sm75_config_M256 {
   // M in (128, 256]
   // Shared memory required by this Gemm 65536
@@ -58,7 +60,8 @@ struct sm75_config_M256 {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename> typename Epilogue>
+          template <typename, typename>
+          typename Epilogue>
 struct sm75_config_M64 {
   // M in (32, 64]
   // Shared memory required by this Gemm 49152
@@ -79,7 +82,8 @@ struct sm75_config_M64 {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename> typename Epilogue>
+          template <typename, typename>
+          typename Epilogue>
 struct sm75_config_M32 {
   // M in [1, 32]
   // Shared memory required by this Gemm 49152
@@ -100,7 +104,8 @@ struct sm75_config_M32 {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename> typename Epilogue,
+          template <typename, typename>
+          typename Epilogue,
           typename... EpilogueArgs>
 inline void cutlass_gemm_sm75_dispatch(paddle::Tensor& out,
                                        paddle::Tensor const& a,

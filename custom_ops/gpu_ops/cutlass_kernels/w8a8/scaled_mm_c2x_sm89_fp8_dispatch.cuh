@@ -15,7 +15,8 @@ namespace fastdeploy {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename> typename Epilogue>
+          template <typename, typename>
+          typename Epilogue>
 struct sm89_fp8_fallback_gemm {
   // Shared Memory required by this Gemm - 61440 bytes
   static_assert(std::is_same<InType, cutlass::float_e4m3_t>());
@@ -43,7 +44,8 @@ struct sm89_fp8_config_default {
 
   template <typename InType,
             typename OutType,
-            template <typename, typename> typename Epilogue,
+            template <typename, typename>
+            typename Epilogue,
             typename... EpilogueArgs>
   static void dispatch(paddle::Tensor& out,
                        paddle::Tensor const& a,
@@ -117,7 +119,8 @@ struct sm89_fp8_config_M256 {
 
   template <typename InType,
             typename OutType,
-            template <typename, typename> typename Epilogue,
+            template <typename, typename>
+            typename Epilogue,
             typename... EpilogueArgs>
   static void dispatch(paddle::Tensor& out,
                        paddle::Tensor const& a,
@@ -175,7 +178,8 @@ struct sm89_fp8_config_M128 {
 
   template <typename InType,
             typename OutType,
-            template <typename, typename> typename Epilogue,
+            template <typename, typename>
+            typename Epilogue,
             typename... EpilogueArgs>
   static void dispatch(paddle::Tensor& out,
                        paddle::Tensor const& a,
@@ -247,7 +251,8 @@ struct sm89_fp8_config_M64 {
 
   template <typename InType,
             typename OutType,
-            template <typename, typename> typename Epilogue,
+            template <typename, typename>
+            typename Epilogue,
             typename... EpilogueArgs>
   static void dispatch(paddle::Tensor& out,
                        paddle::Tensor const& a,
@@ -325,7 +330,8 @@ struct sm89_fp8_config_M32 {
 
   template <typename InType,
             typename OutType,
-            template <typename, typename> typename Epilogue,
+            template <typename, typename>
+            typename Epilogue,
             typename... EpilogueArgs>
   static void dispatch(paddle::Tensor& out,
                        paddle::Tensor const& a,
@@ -402,7 +408,8 @@ struct sm89_fp8_config_M16 {
 
   template <typename InType,
             typename OutType,
-            template <typename, typename> typename Epilogue,
+            template <typename, typename>
+            typename Epilogue,
             typename... EpilogueArgs>
   static void dispatch(paddle::Tensor& out,
                        paddle::Tensor const& a,
@@ -469,7 +476,8 @@ struct sm89_fp8_config_M16 {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename> typename Epilogue,
+          template <typename, typename>
+          typename Epilogue,
           typename... EpilogueArgs>
 inline void cutlass_gemm_sm89_fp8_dispatch(paddle::Tensor& out,
                                            paddle::Tensor const& a,

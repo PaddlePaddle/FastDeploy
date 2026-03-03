@@ -34,8 +34,8 @@ template <typename InputType,
           typename MainloopScheduleType,
           typename EpilogueScheduleType,
           typename TileSchedulerType = void,
-          template <class /* ElementCompute */> class Activation =
-              cutlass::epilogue::thread::SiLu,
+          template <class /* ElementCompute */>
+          class Activation = cutlass::epilogue::thread::SiLu,
           bool SwapAB = true>
 bool dispatch_dual_gemm_act_sm90(DualGemmEpilogueAllParams params) {
   using namespace cute;

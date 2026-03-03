@@ -20,7 +20,8 @@ using c3x::cutlass_gemm_caller;
 
 template <typename InType,
           typename OutType,
-          template <typename, typename, typename> typename Epilogue>
+          template <typename, typename, typename>
+          typename Epilogue>
 struct sm90_int8_config_default {
   // For M > 128 and any N
   static_assert(std::is_same<InType, int8_t>());
@@ -40,7 +41,8 @@ struct sm90_int8_config_default {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename, typename> typename Epilogue>
+          template <typename, typename, typename>
+          typename Epilogue>
 struct sm90_int8_config_M128 {
   // For M in (64, 128] and any N
   static_assert(std::is_same<InType, int8_t>());
@@ -60,7 +62,8 @@ struct sm90_int8_config_M128 {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename, typename> typename Epilogue>
+          template <typename, typename, typename>
+          typename Epilogue>
 struct sm90_int8_config_M64 {
   // For M in (32, 64] and any N
   static_assert(std::is_same<InType, int8_t>());
@@ -79,7 +82,8 @@ struct sm90_int8_config_M64 {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename, typename> typename Epilogue>
+          template <typename, typename, typename>
+          typename Epilogue>
 struct sm90_int8_config_M32_NBig {
   // For M in [1, 32] and N >= 8192
   static_assert(std::is_same<InType, int8_t>());
@@ -98,7 +102,8 @@ struct sm90_int8_config_M32_NBig {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename, typename> typename Epilogue>
+          template <typename, typename, typename>
+          typename Epilogue>
 struct sm90_int8_config_M32_NSmall {
   // For M in [1, 32] and N < 8192
   static_assert(std::is_same<InType, int8_t>());
@@ -117,7 +122,8 @@ struct sm90_int8_config_M32_NSmall {
 
 template <typename InType,
           typename OutType,
-          template <typename, typename, typename> typename Epilogue,
+          template <typename, typename, typename>
+          typename Epilogue,
           typename... EpilogueArgs>
 inline void cutlass_gemm_sm90_int8_dispatch(paddle::Tensor &out,
                                             paddle::Tensor const &a,

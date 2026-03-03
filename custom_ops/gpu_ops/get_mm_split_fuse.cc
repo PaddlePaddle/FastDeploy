@@ -58,7 +58,7 @@ std::vector<paddle::Tensor> GetMmSplitFuse(
       } while (st_idx < seq_lens_origin &&
                input_ids_cpu[st_idx] != image_token_id);
       mp[st_idx] = 1;  // 记录划分chunk的末尾位置，此处为文本的末位+1
-    } else {           // 2. 当前st_idx为多模，根据多模token的长度找到末尾
+    } else {  // 2. 当前st_idx为多模，根据多模token的长度找到末尾
       int ib = last_st_ib;
       int cur_st_len = 0;
       int token_times = 4;

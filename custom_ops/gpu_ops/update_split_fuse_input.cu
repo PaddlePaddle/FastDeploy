@@ -92,9 +92,9 @@ void UpdateSplitFuseInputes(const paddle::Tensor& split_fuse_seq_lens,
 
 PD_BUILD_STATIC_OP(update_split_fuse_inputs)
     .Inputs(
-        {"split_fuse_seq_lens",       // 当前query的长度
-         "split_fuse_cur_seq_lens",   // 当前query已经计算完成的长度，是split
-                                      // size的整数倍
+        {"split_fuse_seq_lens",  // 当前query的长度
+         "split_fuse_cur_seq_lens",  // 当前query已经计算完成的长度，是split
+                                     // size的整数倍
          "split_fuse_all_input_ids",  // 当前query经过split的input
                                       // ids，长度是split size的整数倍
          "input_ids",                 // 当前query所有的input ids

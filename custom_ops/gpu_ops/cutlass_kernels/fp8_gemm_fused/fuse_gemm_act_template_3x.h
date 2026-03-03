@@ -29,7 +29,8 @@
 template <typename InputType,
           typename OutType,
           bool hasbias,
-          template <class> typename Activation,
+          template <class>
+          typename Activation,
           typename TileShape,
           typename ClusterShape,
           typename KernelSchedule =

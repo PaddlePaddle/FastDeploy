@@ -72,10 +72,12 @@ struct enable_sm89_to_sm90 : Kernel {
   }
 };
 template <typename Arch,
-          template <typename> typename ArchGuard,
+          template <typename>
+          typename ArchGuard,
           typename ElementAB_,
           typename ElementD_,
-          template <typename, typename> typename Epilogue_,
+          template <typename, typename>
+          typename Epilogue_,
           typename TileShape,
           typename WarpShape,
           typename InstructionShape,
