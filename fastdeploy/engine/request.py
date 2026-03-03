@@ -892,7 +892,14 @@ class RequestMetrics:
         """
         Convert the RequestMetrics object to a dictionary.
         """
-        return {k: v for k, v in asdict(self).items()}
+        res = {}
+        for k in self.__slots__:
+            v = getattr(self, k)
+            if v is not None and k == "speculate_metrics":
+                res[k] = asdict(v)
+            else:
+                res[k] = v
+        return res
 
     def record_recv_first_token(self):
         cur_time = time.time()
