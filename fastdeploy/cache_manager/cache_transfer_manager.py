@@ -48,7 +48,7 @@ from fastdeploy.cache_manager.transfer_factory import (
     FileStore,
     MooncakeStore,
 )
-from fastdeploy.config import SpeculativeConfig
+from fastdeploy.config import CacheConfig, SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import console_logger, get_logger
@@ -173,11 +173,15 @@ class CacheTransferManager:
 
         # compute cache bytes
         self.cache_dtype = args.cache_dtype
-        self.cache_item_bytes = self._get_cache_item_bytes(self.cache_dtype)
-        self.scale_item_bytes = self._get_cache_item_bytes(paddle.get_default_dtype())
+        self.cache_item_bytes = CacheConfig.get_cache_bytes(self.cache_dtype)
+        self.scale_item_bytes = CacheConfig.get_cache_bytes(paddle.get_default_dtype())
         self.has_cache_scale = self.cache_dtype == "block_wise_fp8"
         if self.has_cache_scale:
             self.cache_scale_shape = [self.num_gpu_blocks, self.head_num, self.block_size]
+
+        # kv cache storage
+        self.storage_backend_type = args.kvcache_storage_backend
+        self.key_prefix = ""
 
         # extract other arg values
         self.model_id = os.path.basename(args.model_path.rstrip("/"))
@@ -230,7 +234,8 @@ class CacheTransferManager:
         self._init_gpu_cache(args)
         if self.num_cpu_blocks > 0:
             self._init_cpu_cache(args)
-        self._init_storage(args)
+        if self.storage_backend_type is not None:
+            self._init_storage(args)
 
         cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
         self.cache_task_broadcast_signal = IPCSignal(
@@ -295,8 +300,6 @@ class CacheTransferManager:
         self.cache_transfer_inited_signal.value[self.rank] = 1
 
     def _init_storage(self, args):
-        self.storage_backend_type = args.kvcache_storage_backend
-
         try:
             # TODO: support cache scale for other backend
             if self.has_cache_scale:
@@ -521,7 +524,7 @@ class CacheTransferManager:
             value_cache_size = self.value_cache_shape[1] * self.value_cache_shape[2] * self.value_cache_shape[3]
         else:
             value_cache_size = 0
-        cache_item_bytes = self._get_cache_item_bytes(self.cache_dtype)
+        cache_item_bytes = CacheConfig.get_cache_bytes(self.cache_dtype)
         key_need_to_allocate_bytes = args.num_cpu_blocks * cache_item_bytes * key_cache_size
         value_need_to_allocate_bytes = args.num_cpu_blocks * cache_item_bytes * value_cache_size
         if args.cache_dtype == "block_wise_fp8":
@@ -563,17 +566,6 @@ class CacheTransferManager:
                     self.v_scales_ptrs.append(self.cpu_cache_kvs[value_cache_scales_name])
         logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ swap space (cpu cache) is ready!")
         self.swap_space_ready_signal.value[self.rank] = 1
-
-    def _get_cache_item_bytes(self, cache_dtype):
-        if cache_dtype == "float32":
-            bytes = 4
-        elif cache_dtype in ("bfloat16", "float16"):
-            bytes = 2
-        elif cache_dtype in ["uint8", "block_wise_fp8"]:
-            bytes = 1
-        else:
-            raise ValueError(f"Unsupported cache dtype: {cache_dtype}")
-        return bytes
 
     def _run_read_storage(
         self,
@@ -917,7 +909,7 @@ class CacheTransferManager:
                 v_scale_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value_scale" for key in task.keys]
 
             match_block_num = 0
-            if self.storage_backend_type == ("mooncake", "file"):
+            if self.storage_backend_type in ("mooncake", "file"):
                 match_block_num = self.storage_backend.query(
                     k_cache_keys, v_cache_keys, k_scale_keys, v_scale_keys, task.timeout
                 )
@@ -1340,6 +1332,7 @@ class CacheTransferManager:
                             time.sleep(0.1)
                         logger.info("[RL] stop waiting! gpu runner has unlinked cuda ipc")
                         paddle.set_device(f"gpu:{self.device}")
+                        paddle.set_flags({"FLAGS_selected_gpus": f"{self.device}"})
                         self.gpu_cache_kvs.clear()
                         self.gpu_cache_k_tensors.clear()
                         self.gpu_cache_v_tensors.clear()

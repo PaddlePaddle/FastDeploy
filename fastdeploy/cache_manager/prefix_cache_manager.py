@@ -124,8 +124,9 @@ class PrefixCacheManager:
         self.cache_status_lock = Lock()
 
         logger.info(
-            f"num_gpu_blocks_server_owned {self.num_gpu_blocks} num_cpu_blocks "
-            + f"{self.num_cpu_blocks}, bytes_per_layer_per_block {self.cache_config.bytes_per_layer_per_block}"
+            f"Prefix cache manager is initialized with {self.num_gpu_blocks} gpu blocks "
+            f"and {self.num_cpu_blocks} cpu blocks, bytes_per_token_per_layer for each rank: "
+            f"{self.cache_config.bytes_per_token_per_layer / self.config.parallel_config.tensor_parallel_size}"
         )
 
         main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
@@ -497,6 +498,24 @@ class PrefixCacheManager:
         """
         recycle gpu blocks.
         """
+        if (
+            hasattr(self, "prefix_tree_status_signal")
+            and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL
+        ):
+            # Prefix Tree Clearing, skip recycle gpu blocks
+            logger.warning("Prefix tree is not normal, skip recycle gpu blocks")
+            return
+        if not isinstance(gpu_block_ids, list):
+            gpu_block_ids = [gpu_block_ids]
+        if len(self.gpu_free_block_list) + len(gpu_block_ids) > self.num_gpu_blocks:
+            # The block allocation and recycling are abnormal, and the test results are not convincing
+            logger.error(
+                f"The number of free gpu blocks {len(self.gpu_free_block_list)} plus the number of recycled "
+                f"gpu blocks {len(gpu_block_ids)} exceeds the total number of gpu blocks {self.num_gpu_blocks} \n"
+                f"this indicates a block allocation and deallocation error, recycled blocks will be discarded {gpu_block_ids}"
+            )
+            return
+
         logger.info(
             f"req_id:{req_id} recycle_gpu_blocks: {gpu_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
@@ -2068,32 +2087,33 @@ class PrefixCacheManager:
                     logger.error(f"recv_data_transfer_result: {str(traceback.format_exc())}")
                     raise e
 
-    def reset(self):
+    def reset(self, wait_for_tasks_done=False):
         """
         Reset the RadixTree.
         """
-        logger.info(f"wait for cache_task_inflight_signal to reset {self.cache_task_inflight_signal.value}")
-        while np.sum(self.cache_task_inflight_signal.value) != 0:
-            time.sleep(0.1)
 
-        logger.info("wait for recv_data_transfer_result done")
-        while not self.cache_task_queue.result_queue_empty():
-            time.sleep(0.1)
+        if wait_for_tasks_done:
+            logger.info(f"wait for cache_task_inflight_signal to reset: {self.cache_task_inflight_signal.value}")
+            while np.sum(self.cache_task_inflight_signal.value) != 0:
+                time.sleep(0.1)
+
+            logger.info("wait for recv_data_transfer_result done")
+            while not self.cache_task_queue.result_queue_empty():
+                time.sleep(0.1)
+
+            logger.info("wait for cpu_free_future to finish")
+            if self.cpu_free_future is not None:
+                self.cpu_free_future.result()
+
+            logger.info("wait for gpu_free_task_future to finish")
+            if self.gpu_free_task_future is not None:
+                self.gpu_free_task_future.result()
 
         logger.info(f"Resetting the RadixTree! node_map len {len(self.node_map)}")
 
-        logger.info("waiting for cpu_free_future to finish")
-        if self.cpu_free_future is not None:
-            self.cpu_free_future.result()
+        # clear future & events
         self.cpu_free_future = None
-        logger.info("reset cpu_free_future")
-
-        logger.info("waiting for gpu_free_task_future to finish")
-        if self.gpu_free_task_future is not None:
-            self.gpu_free_task_future.result()
         self.gpu_free_task_future = None
-        logger.info("reset gpu_free_task_future")
-
         self.task_swapping_event.clear()
 
         # clear node map
@@ -2138,10 +2158,11 @@ class PrefixCacheManager:
         prefix_tree_status_signal = self.prefix_tree_status_signal
         while True:
             if prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARING:
-                self.reset()
+                self.reset(wait_for_tasks_done=True)
                 prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARED
                 logger.info("Prefix cache tree is cleared.")
             if prefix_tree_status_signal.value[0] == PrefixTreeStatus.UPDATING:
+                self.reset(wait_for_tasks_done=False)
                 prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
                 logger.info("Prefix cache tree is updated.")
             time.sleep(0.01)

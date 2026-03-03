@@ -741,15 +741,30 @@ class GPUModelRunner(ModelRunnerBase):
                 length = prefill_end_index - prefill_start_index
                 if not self.is_pooling_model:
                     if request.get("enable_thinking") is not None:
-                        self.share_inputs["enable_thinking"][idx : idx + 1, :] = request.get("enable_thinking")
-                    if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
-                        # Enable thinking
-                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
-                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
-                    else:
-                        # Disable thinking
-                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
-                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                        enable_thinking = bool(request.get("enable_thinking"))
+                        logger.debug(f"request {request.request_id} with {enable_thinking=} at idx {idx}")
+                        self.share_inputs["enable_thinking"][idx : idx + 1, :] = enable_thinking
+                        if enable_thinking:
+                            self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                            if request.get("reasoning_max_tokens") is not None:
+                                # Enable thinking
+                                self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get(
+                                    "reasoning_max_tokens"
+                                )
+                            else:
+                                self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                            if request.get("response_max_tokens") is not None:
+                                # Enable thinking
+                                self.share_inputs["max_reply_lens"][idx : idx + 1, :] = request.get(
+                                    "response_max_tokens"
+                                )
+                            else:
+                                self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
+                        else:
+                            # Disable thinking
+                            self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                            self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
+                            self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
                 if isinstance(request.prompt_token_ids, np.ndarray):
                     prompt_token_ids = request.prompt_token_ids.tolist()
@@ -1530,12 +1545,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
         cache_kvs_list = []
-
-        # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
-        # To rationalize the allocation of kvcache.
-        from fastdeploy import envs
-
-        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         for i in range(self.model_config.num_hidden_layers):
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
@@ -1747,7 +1756,7 @@ class GPUModelRunner(ModelRunnerBase):
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
-            line_break_id=self.model_config.line_break_id,
+            splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
         )
         self.exist_prefill_flag = False
         return pooler_output
@@ -1852,7 +1861,7 @@ class GPUModelRunner(ModelRunnerBase):
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
-            line_break_id=self.model_config.line_break_id,
+            splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
             enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
         )
         self.exist_prefill_flag = False
@@ -2511,7 +2520,7 @@ class GPUModelRunner(ModelRunnerBase):
                 skip_save_output=skip_save_output,
                 async_output_queue=self.async_output_queue,
                 think_end_id=self.model_config.think_end_id,
-                line_break_id=self.model_config.line_break_id,
+                splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
             )
 
@@ -2745,7 +2754,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # NOTE:(changwenbin) Determie whether it is Multi-Head Latent Attention,
         # To rationalize the allocation of kvcache.
-        if self.mla_cache:
+        if self.fd_config.cache_config.use_mla_cache:
             required_memory = (
                 byte_of_dtype
                 * (self.fd_config.model_config.kv_lora_rank + self.fd_config.model_config.qk_rope_head_dim)
@@ -2812,7 +2821,11 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.update_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
+
+        # Reset share_inputs
+        self.share_inputs.reset_share_inputs()
         if self.speculative_method in ["mtp"]:
+            self.proposer.model_inputs.reset_model_inputs()
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
         # Recapture CUDAGraph

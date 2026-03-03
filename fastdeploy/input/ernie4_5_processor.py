@@ -134,8 +134,11 @@ class Ernie4_5Processor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
             request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
+        max_tokens = max_model_len - len(request.prompt_token_ids)
         if request.get("max_tokens") is None:
-            request.set("max_tokens", max(1, max_model_len - len(request.prompt_token_ids)))
+            request.set("max_tokens", max(1, max_tokens))
+        else:
+            request.set("max_tokens", min(max_tokens, request.get("max_tokens")))
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request.set("temperature", 1)
@@ -208,6 +211,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                                 request[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                    request.setdefault("enable_thinking", True)
                 request["prompt_token_ids"] = self.messages2ids(request, **chat_template_kwargs)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
@@ -218,8 +222,11 @@ class Ernie4_5Processor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+        max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
+            request["max_tokens"] = max(1, max_tokens)
+        else:
+            request["max_tokens"] = min(max_tokens, request["max_tokens"])
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request["temperature"] = 1
@@ -238,6 +245,8 @@ class Ernie4_5Processor(BaseDataProcessor):
             else:
                 self.model_status_dict[request["request_id"]] = model_status
             request["enable_thinking"] = model_status == "think_start"
+        if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
+            request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
         data_processor_logger.info(f"Processed request dict: {request}")
         return request
 
