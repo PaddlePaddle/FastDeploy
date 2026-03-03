@@ -592,8 +592,8 @@ class Indexer(nn.Layer):
             # ===================================== cache =============================================
 
             # ks,ke = forward_meta.attn_mask_offsets[::2].contiguous(),forward_meta.attn_mask_offsets[1::2].contiguous()
-            ks = paddle.zeros(forward_meta.seq_lens_encoder[0], dtype=paddle.int32)
-            ke = paddle.arange(forward_meta.seq_lens_encoder[0], dtype=paddle.int32) + 1  # + (seq_len_kv - seq_len)
+            ks = paddle.zeros(forward_meta.seq_lens_encoder, dtype=paddle.int32)
+            ke = paddle.arange(forward_meta.seq_lens_encoder, dtype=paddle.int32) + 1  # + (seq_len_kv - seq_len)
             max_seqlen_k = (ke - ks).max().item()
 
             logits = deep_gemm.fp8_mqa_logits(
@@ -601,12 +601,12 @@ class Indexer(nn.Layer):
             )
 
             # To save GPU global memory usage
-            assert logits.size() == (forward_meta.seq_lens_encoder[0], max_seqlen_k)
+            assert logits.size() == (forward_meta.seq_lens_encoder, max_seqlen_k)
             tmp = paddle.full(
-                (forward_meta.seq_lens_encoder[0], forward_meta.seq_lens_encoder[0]),
+                (forward_meta.seq_lens_encoder, forward_meta.seq_lens_encoder),
                 float("-inf"),
             )
-            for i in range(forward_meta.seq_lens_encoder[0]):
+            for i in range(forward_meta.seq_lens_encoder):
                 tmp[i, ks[i] : ke[i]] = logits[i, : ke[i] - ks[i]]
             logits = tmp
 
@@ -628,14 +628,14 @@ class Indexer(nn.Layer):
             indexer_k_quant_and_cache(k, self.indexer_cache, slot_mapping, self.quant_block_size, self.scale_fmt)
 
             schedule_metadata = deep_gemm.get_paged_mqa_logits_metadata(
-                forward_meta.seq_lens_decoder.squeeze(1) + 1, 64, deep_gemm.get_num_sms()
+                forward_meta.seq_lens_decoder + 1, 64, deep_gemm.get_num_sms()
             )
 
             logits = deep_gemm.fp8_paged_mqa_logits(
                 q_fp8.unsqueeze(1),
                 self.indexer_cache.unsqueeze(2),
                 weights,
-                forward_meta.seq_lens_decoder.squeeze(1) + 1,
+                forward_meta.seq_lens_decoder + 1,
                 forward_meta.block_tables,
                 schedule_metadata,
                 self.max_model_len,
