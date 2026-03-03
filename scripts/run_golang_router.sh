@@ -22,34 +22,63 @@ for test_file in "${test_files[@]}"; do
     echo "------------------------------------------------------------"
     echo "Running pytest: ${test_file}"
     echo "------------------------------------------------------------"
-    rm -rf ${REPO_ROOT}/log*
-    rm -rf ${REPO_ROOT}/*.log
+    # Clean up previous logs
+    rm -rf "${REPO_ROOT}"/log*
+    rm -rf "${REPO_ROOT}"/*.log
 
     if ! python -m pytest -sv --tb=short "${test_file}"; then
         echo "Pytest failed for: ${test_file}"
         echo "${test_file}" >> "${FAILED_CASE_FILE}"
         FAILED_COUNT=$((FAILED_COUNT + 1))
 
-        # print all workerlog.0
-        for log_dir in "${REPO_ROOT}"/log_*; do
-            worker_log="${log_dir}/workerlog.0"
-            if [ -f "${worker_log}" ]; then
-                echo "---------------- ${worker_log} (last 200 lines) -------------"
-                tail -n 200 "${worker_log}"
-                echo "------------------------------------------------------------"
+        echo ""
+        echo "==================== Dumping Logs ===================="
+
+        for log_dir in "${REPO_ROOT}"/log*; do
+            if [ -d "${log_dir}" ]; then
+                echo
+                echo ">>>> Processing log directory: ${log_dir}"
+
+                # print all workerlog.0
+                worker_logs=("${log_dir}"/workerlog.0)
+                if [ "${#worker_logs[@]}" -gt 0 ]; then
+                    for worker_log in "${worker_logs[@]}"; do
+                        if [ -f "${worker_log}" ]; then
+                            echo "---------------- ${worker_log} (last 100 lines) ----------------"
+                            tail -n 100 "${worker_log}" || true
+                            echo "---------------------------------------------------------------"
+                        fi
+                    done
+                else
+                    echo "No workerlog.0 found in ${log_dir}"
+                fi
+
+                echo ">>> grep error in ${log_dir}"
+                grep -Rni --color=auto "error" "${log_dir}" || true
             fi
         done
 
-        # print all server_*.log
-        for server_log in "${REPO_ROOT}"/server_*.log; do
-            if [ -f "${server_log}" ]; then
-                echo "---------------- ${server_log} (last 200 lines) ---------------"
-                tail -n 200 "${server_log}"
-                echo "------------------------------------------------------------"
-            fi
-        done
+        # print all server logs
+        server_logs=("${REPO_ROOT}"/*.log)
+        if [ "${#server_logs[@]}" -gt 0 ]; then
+            for server_log in "${server_logs[@]}"; do
+                if [ -f "${server_log}" ]; then
+                    echo
+                    echo "---------------- ${server_log} (last 100 lines) ----------------"
+                    tail -n 100 "${server_log}" || true
+                    echo "---------------------------------------------------------------"
+                fi
+            done
+        else
+            echo "No *.log files found"
+        fi
+
+        echo "======================================================"
     fi
 done
+
+echo ""
+echo "============================================================"
 
 shopt -u nullglob
 

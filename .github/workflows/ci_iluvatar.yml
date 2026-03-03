@@ -2,7 +2,7 @@ name: ILUVATAR-CI
 on:
   pull_request:
     types: [opened, synchronize]
-    branches: [develop_1, release/**]
+    branches: [develop, release/**]
 permissions: read-all
 
 concurrency:

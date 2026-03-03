@@ -3,7 +3,7 @@ name: CI_HPU
 on:
   pull_request:
     branches:
-      - develop_1
+      - develop
       - 'release/*'
   workflow_dispatch:
 
