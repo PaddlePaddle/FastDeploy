@@ -99,6 +99,7 @@ from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.logger.deterministic_logger import DeterministicLogger
+from fastdeploy.logger.deterministic_probe import init_probe
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
@@ -215,6 +216,9 @@ class GPUModelRunner(ModelRunnerBase):
             if envs.FD_DETERMINISTIC_MODE and envs.FD_DETERMINISTIC_LOG_MODE
             else None
         )
+
+        # Initialize zero-sync deterministic probe (independent of sync-heavy logger)
+        self.det_probe = init_probe() if bool(int(os.environ.get("FD_DETERMINISTIC_PROBE", "0"))) else None
 
         # Initialize attention Backend
         # NOTE(gonshaotian): Currently, all attention layers share one attention backend instance.
@@ -2130,6 +2134,10 @@ class GPUModelRunner(ModelRunnerBase):
                     stage="hidden_states",
                 )
 
+            # Zero-sync probe: record hidden_states hash (GPU-only, no sync)
+            if self.det_probe is not None:
+                self.det_probe.record("hidden_states", hidden_states)
+
             logits = self.model.compute_logits(hidden_states)
 
             if self.deterministic_logger is not None:
@@ -2137,6 +2145,10 @@ class GPUModelRunner(ModelRunnerBase):
                 self.deterministic_logger.log_tensor_md5s(
                     {"logits": logits}, forward_batch_reqs_list=self.forward_batch_reqs_list, stage="logits"
                 )
+
+            # Zero-sync probe: record logits hash
+            if self.det_probe is not None:
+                self.det_probe.record("logits", logits)
 
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
@@ -2162,6 +2174,24 @@ class GPUModelRunner(ModelRunnerBase):
                         forward_batch_reqs_list=self.forward_batch_reqs_list,
                         stage="sampled_tokens",
                     )
+
+                # Zero-sync probe: record sampled tokens and mark step done
+                if self.det_probe is not None:
+                    self.det_probe.record("sampled_tokens", sampler_output.sampled_token_ids)
+                    self.det_probe.step_done()
+
+                    # Log op call report after first step to verify monkey-patch
+                    if self.det_probe._step_count == 1:
+                        try:
+                            from fastdeploy.model_executor.layers.batch_invariant_ops import (
+                                get_op_call_report,
+                            )
+
+                            report = get_op_call_report()
+                            if report:
+                                logger.info(report)
+                        except Exception:
+                            pass
 
                 if (
                     self.enable_logprob
@@ -2302,6 +2332,10 @@ class GPUModelRunner(ModelRunnerBase):
                 )
 
             # 8. Async cpy
+            # [DET-SYNC] Step barrier: ensure ALL GPU ops (sampling + post_process
+            # + update_inputs) complete before next step to prevent cross-step race.
+            if envs.FD_DETERMINISTIC_MODE:
+                paddle.device.cuda.synchronize()
             post_process_event = paddle.device.cuda.create_event()
             if not self.speculative_decoding:
                 self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)

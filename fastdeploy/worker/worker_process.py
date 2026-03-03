@@ -1209,11 +1209,24 @@ def run_worker_proc() -> None:
     if envs.FD_DETERMINISTIC_MODE:
         from fastdeploy.model_executor.layers.batch_invariant_ops import (
             enable_batch_invariant_mode,
+            enable_op_tracking,
             is_batch_invariant_mode_enabled,
         )
 
         if not is_batch_invariant_mode_enabled():
             enable_batch_invariant_mode()
+
+        # Enable op call tracking to verify monkey-patch effectiveness
+        if os.environ.get("FD_DETERMINISTIC_PROBE"):
+            enable_op_tracking()
+            import paddle
+
+            legacy_flag = paddle.get_flags("FLAGS_use_legacy_linear")["FLAGS_use_legacy_linear"]
+            logger.info(f"[OP-TRACK] batch_invariant_mode enabled, FLAGS_use_legacy_linear={legacy_flag}")
+            logger.info(
+                f"[OP-TRACK] paddle._C_ops.matmul is mm_batch_invariant: "
+                f"{paddle._C_ops.matmul.__name__ if hasattr(paddle._C_ops.matmul, '__name__') else type(paddle._C_ops.matmul)}"
+            )
 
     # Initialize device and create model runner
     worker_proc.init_device()

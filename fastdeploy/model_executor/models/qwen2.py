@@ -280,8 +280,16 @@ class Qwen2Model(nn.Layer):
 
         residual = None
 
+        # Per-layer zero-sync probe (only when FD_DETERMINISTIC_PROBE_LAYERS=1)
+        from fastdeploy import envs
+        from fastdeploy.logger.deterministic_probe import get_probe
+
+        probe = get_probe() if envs.FD_DETERMINISTIC_PROBE_LAYERS else None
+
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
+            if probe is not None:
+                probe.record(f"layer_{i}", hidden_states)
 
         out = self.norm(hidden_states, residual)[0]
 

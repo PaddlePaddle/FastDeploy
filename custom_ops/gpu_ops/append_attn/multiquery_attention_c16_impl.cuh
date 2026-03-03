@@ -1173,7 +1173,7 @@ void MultiQueryAppendAttention(
     const int grid_chunks = force_no_partition ? 1 : num_chunks;
     dim3 grids(num_blocks_x_cpu, grid_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
-    if (num_chunks <= 1 && force_no_partition) {
+    if (force_no_partition) {
       auto nosplit_kv_kernel =
           multi_query_append_attention_warp1_4_kernel<NV_TYPE,
                                                       false,
