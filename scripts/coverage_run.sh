@@ -36,7 +36,9 @@ for file in $TEST_FILES; do
     echo "Running pytest file: $file"
     # Clean up previous logs
     rm -rf "${run_path}"/log* || true
-    rm -rf "${run_path}"/*.log || true
+    for f in "${run_path}"/*.log; do
+        [[ "$(basename "$f")" != "failed_tests.log" ]] && rm -f "$f"
+    done
 
     # Run pytest with coverage for the current file
     python -m coverage run -m pytest -c ${PYTEST_INI} "$file" -vv -s
