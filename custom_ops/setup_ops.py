@@ -448,7 +448,6 @@ elif paddle.is_compiled_with_cuda():
         if cc < 80:
             # SM70/SM75 doesn't support BF16 MMA, exclude BF16 Marlin kernel instantiations
             sources = [s for s in sources if "kernel_bf16" not in s]
-            nvcc_compile_args += ["-DMARLIN_DISABLE_BF16"]
         # speculate_decoding (required by cpp_extensions.cc)
         sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
         sources += find_end_files("gpu_ops/speculate_decoding", ".cc")

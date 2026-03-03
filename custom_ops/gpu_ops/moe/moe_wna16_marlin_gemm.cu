@@ -1260,10 +1260,6 @@ MARLIN_NAMESPACE_NAME::Tensor moe_wna16_marlin_gemm(
                                            use_fp32_reduce,
                                            is_zp_float);
   } else if (a.dtype() == MARLIN_NAMESPACE_NAME::kBFloat16) {
-#ifdef MARLIN_DISABLE_BF16
-    PADDLE_ENFORCE(false,
-                   "BF16 Marlin MoE requires SM80+, not supported on this GPU");
-#else
     using DataType = phi::dtype::bfloat16;
 
     void* scales_ptr;
@@ -1310,7 +1306,6 @@ MARLIN_NAMESPACE_NAME::Tensor moe_wna16_marlin_gemm(
         use_atomic_add,
         use_fp32_reduce,
         is_zp_float);
-#endif
   } else {
     PADDLE_ENFORCE(false,
                    "moe_wna16_marlin_gemm only supports bfloat16 and float16");
