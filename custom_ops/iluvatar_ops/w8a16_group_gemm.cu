@@ -23,6 +23,8 @@ std::vector<paddle::Tensor> GroupGemm(const paddle::Tensor& x,
   auto dev_ctx = static_cast<const phi::CustomContext*>(
       paddle::experimental::DeviceContextPool::Instance().Get(x.place()));
   auto stream = static_cast<const cudaStream_t>(dev_ctx->stream());
+  auto prefix_sum_cpu = prefix_sum.copy_to(paddle::CPUPlace(), false);
+
   const auto& x_dims = x.dims();
   const auto& w_dims = weight.dims();
   const auto& ws_dims = weight_scale.dims();
@@ -46,7 +48,6 @@ std::vector<paddle::Tensor> GroupGemm(const paddle::Tensor& x,
   PD_CHECK(prefix_sum_dims[0] == n_experts);
 
   PD_CHECK(prefix_sum.dtype() == paddle::DataType::INT64);
-  PD_CHECK(prefix_sum.is_cpu());
   PD_CHECK(x.dtype() == paddle::DataType::BFLOAT16 ||
            x.dtype() == paddle::DataType::FLOAT16);
   PD_CHECK(weight.dtype() == paddle::DataType::INT8);
@@ -55,7 +56,7 @@ std::vector<paddle::Tensor> GroupGemm(const paddle::Tensor& x,
   PD_CHECK(weight.is_contiguous());
   PD_CHECK(weight_scale.is_contiguous());
 
-  const int64_t* prefix_sum_ptr = prefix_sum.data<int64_t>();
+  const int64_t* prefix_sum_cpu_ptr = prefix_sum_cpu.data<int64_t>();
   auto output = GetEmptyTensor({m, n}, x.dtype(), x.place());
   int16_t* out_data = static_cast<int16_t*>(output.data());
   const int16_t* x_data = static_cast<const int16_t*>(x.data());
@@ -104,7 +105,7 @@ std::vector<paddle::Tensor> GroupGemm(const paddle::Tensor& x,
   auto* allocator = paddle::GetAllocator(x.place());
   phi::Allocator::AllocationPtr tmp_workspace;
   for (int i = 0; i < n_experts; i++) {
-    size_t expert_i_end = prefix_sum_ptr[i];
+    size_t expert_i_end = prefix_sum_cpu_ptr[i];
     size_t cur_len = expert_i_end - pre;
     pre = expert_i_end;
     if (cur_len != 0) {

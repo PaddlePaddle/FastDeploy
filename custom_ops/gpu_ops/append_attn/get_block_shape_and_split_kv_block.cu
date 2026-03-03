@@ -313,7 +313,6 @@ void GetBlockShapeAndSplitKVBlock(
   // decoder
   if (max_dec_len_this_time > 0) {
     if (mla_backend) {
-      PADDLE_ENFORCE(group_size <= 64, "now only group_size <= 64");
       const int set_chunk_size = get_mla_dec_chunk_size(bsz);
 
       CUDA_CHECK(cudaMemsetAsync(
