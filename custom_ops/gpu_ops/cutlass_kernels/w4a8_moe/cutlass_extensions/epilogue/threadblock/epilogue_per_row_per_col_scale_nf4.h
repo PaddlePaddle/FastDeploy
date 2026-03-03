@@ -52,8 +52,7 @@ namespace cutlass {
 namespace epilogue {
 namespace threadblock {
 template <typename T>
-[[gnu::warning("your type here")]]
-bool print_type_1111() {
+[[gnu::warning("your type here")]] bool print_type_1111() {
   return false;
 }
 

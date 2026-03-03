@@ -66,8 +66,7 @@ limitations under the License. */
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 template <typename T>
-[[gnu::warning("your type here")]]
-bool print_type() {
+[[gnu::warning("your type here")]] bool print_type() {
   return false;
 }
 
