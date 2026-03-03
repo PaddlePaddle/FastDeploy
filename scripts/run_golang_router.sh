@@ -22,6 +22,8 @@ for test_file in "${test_files[@]}"; do
     echo "------------------------------------------------------------"
     echo "Running pytest: ${test_file}"
     echo "------------------------------------------------------------"
+    rm -rf ${REPO_ROOT}/log*
+    rm -rf ${REPO_ROOT}/*.log
 
     if ! python -m pytest -sv --tb=short "${test_file}"; then
         echo "Pytest failed for: ${test_file}"
