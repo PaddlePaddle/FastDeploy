@@ -48,6 +48,32 @@ from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 # Deterministic mode: per-step logits fingerprints for cross-run comparison.
 _det_logits_file = None
 
+# File-based MD5 hash collection (shared across processes via filesystem).
+# Path: /tmp/fd_det_logits_md5.jsonl (truncated on reset, appended on record).
+_DET_MD5_PATH = "/tmp/fd_det_logits_md5.jsonl"
+
+
+def _reset_logits_md5_file():
+    """Truncate the MD5 hash file (call before each generate run)."""
+    with open(_DET_MD5_PATH, "w"):
+        pass
+
+
+def _read_logits_md5_file():
+    """Read all MD5 hash entries from the file (call after generate completes)."""
+    import json
+
+    entries = []
+    try:
+        with open(_DET_MD5_PATH, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    entries.append(json.loads(line))
+    except FileNotFoundError:
+        pass
+    return entries
+
 
 def _record_logits_fingerprint(logits: paddle.Tensor):
     """Append a lightweight fingerprint to /tmp/fd_det_logits.jsonl."""
@@ -66,6 +92,26 @@ def _record_logits_fingerprint(logits: paddle.Tensor):
         }
         _det_logits_file.write(json.dumps(entry) + "\n")
         _det_logits_file.flush()
+
+
+def _record_logits_md5(logits: paddle.Tensor, tag: str = "logits", probs: paddle.Tensor = None):
+    """Record MD5 hash of logits (and optionally probs) to file for bit-exact comparison.
+
+    WARNING: This triggers GPU sync via .cpu().numpy() -- it WILL change CUDA
+    stream timing and may mask timing-sensitive bugs. Use only for diagnostics.
+    """
+    import hashlib
+    import json
+
+    with paddle.no_grad():
+        logits_bytes = logits.astype("float32").cpu().numpy().tobytes()
+        logits_md5 = hashlib.md5(logits_bytes).hexdigest()
+        entry = {"tag": tag, "logits_md5": logits_md5, "probs_md5": ""}
+        if probs is not None:
+            probs_bytes = probs.astype("float32").cpu().numpy().tobytes()
+            entry["probs_md5"] = hashlib.md5(probs_bytes).hexdigest()
+        with open(_DET_MD5_PATH, "a") as f:
+            f.write(json.dumps(entry) + "\n")
 
 
 def top_p_normalize_probs_paddle(
@@ -525,6 +571,8 @@ class Sampler(nn.Layer):
 
         if envs.FD_DETERMINISTIC_LOG_MODE:
             _record_logits_fingerprint(logits)
+            # Record raw logits MD5 BEFORE penalty
+            _record_logits_md5(logits, tag="raw_logits")
 
         logits = self.guided_decoding.apply_token_mask(logits, p_done_idxs)
 
@@ -561,6 +609,10 @@ class Sampler(nn.Layer):
                 raw_logprobs = logits.clone()
 
         probs = F.softmax(logits)
+
+        # Record post-penalty logits and probs MD5 for determinism diagnosis
+        if envs.FD_DETERMINISTIC_LOG_MODE:
+            _record_logits_md5(logits, tag="post_penalty_logits", probs=probs)
 
         probs = min_p_sampling(probs, sampling_metadata.min_p, sampling_metadata.min_p_list)
         _, next_tokens = top_k_top_p_sampling(

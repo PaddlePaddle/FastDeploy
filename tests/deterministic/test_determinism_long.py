@@ -149,15 +149,27 @@ def _generate_text(llm, prompt, sp):
 
 
 def _collect_logits_hashes():
-    """Read and clear the per-step logits hashes collected by the sampler."""
+    """Read and clear the per-step logits MD5 hashes written by the worker process."""
     try:
-        from fastdeploy.model_executor.layers.sample import sampler as _sampler_mod
+        from fastdeploy.model_executor.layers.sample.sampler import (
+            _read_logits_md5_file,
+        )
 
-        hashes = list(_sampler_mod._det_logits_hashes)
-        _sampler_mod._det_logits_hashes.clear()
-        return hashes
+        return _read_logits_md5_file()
     except Exception:
         return []
+
+
+def _reset_logits_hashes():
+    """Reset the logits MD5 hash file before a new generate run."""
+    try:
+        from fastdeploy.model_executor.layers.sample.sampler import (
+            _reset_logits_md5_file,
+        )
+
+        _reset_logits_md5_file()
+    except Exception:
+        pass
 
 
 def _report_logits_diff(hashes_list):
@@ -248,7 +260,7 @@ def _assert_deterministic(llm, prompt, sp, runs=2):
     all_hashes = []
     results = []
     for _ in range(runs):
-        _collect_logits_hashes()  # clear before each run
+        _reset_logits_hashes()  # truncate file before each run
         results.append(_generate_text(llm, prompt, sp))
         all_hashes.append(_collect_logits_hashes())
 

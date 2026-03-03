@@ -2332,10 +2332,11 @@ class GPUModelRunner(ModelRunnerBase):
                 )
 
             # 8. Async cpy
-            # [DET-SYNC] Step barrier: ensure ALL GPU ops (sampling + post_process
-            # + update_inputs) complete before next step to prevent cross-step race.
-            if envs.FD_DETERMINISTIC_MODE:
-                paddle.device.cuda.synchronize()
+            # [DET-SYNC] Step barrier removed -- root cause was atomicCAS race
+            # in update_repeat_times kernel (token_penalty_multi_scores.cu),
+            # now fixed with __syncthreads(). Keeping comment for history.
+            # if envs.FD_DETERMINISTIC_MODE:
+            #     paddle.device.cuda.synchronize()
             post_process_event = paddle.device.cuda.create_event()
             if not self.speculative_decoding:
                 self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
