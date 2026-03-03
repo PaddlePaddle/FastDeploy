@@ -80,7 +80,7 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
 
   const int token_num_data = cpu_token_num.data<int64_t>()[0];
   auto x_remove_padding = paddle::full(
-      {token_num_data}, 0, paddle::DataType::INT64, input_ids.place());
+      {token_num_data}, -1, paddle::DataType::INT64, input_ids.place());
   auto batch_id_per_token = paddle::full(
       {token_num_data}, 0, paddle::DataType::INT32, input_ids.place());
   auto cu_seqlens_q =
