@@ -339,7 +339,7 @@ def xpu_post_process_normal(
 
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
-        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER and not skip_save_output:
             update_inputs_v1(
                 model_output.stop_flags,
                 model_output.not_need_stop,
