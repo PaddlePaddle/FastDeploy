@@ -14,13 +14,16 @@
 # limitations under the License.
 """
 
+import hashlib
+import json
 import logging
 import os
 import sys
+import tempfile
 import types
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 
@@ -39,7 +42,29 @@ for _pkg, _rel_path in [
         _mod.__package__ = _pkg
         sys.modules[_pkg] = _mod
 
-from fastdeploy.logger.deterministic_logger import DeterministicLogger  # noqa: E402
+import fastdeploy.logger.deterministic_logger as _det_mod  # noqa: E402
+from fastdeploy.logger.deterministic_logger import (  # noqa: E402
+    DeterministicLogger,
+    _read_logits_md5_file,
+    _record_logits_diagnostic,
+    _reset_logits_md5_file,
+    _tensor_md5,
+)
+
+
+def _make_astype_tensor(array):
+    """Create a mock tensor supporting .astype().cpu().numpy() chain.
+
+    Needed for module-level functions that call tensor.astype("float32").
+    """
+    arr = np.array(array, dtype=np.float32)
+    inner = Mock()
+    inner.cpu.return_value = inner
+    inner.numpy.return_value = arr
+    tensor = Mock()
+    tensor.astype.return_value = inner
+    tensor.shape = arr.shape
+    return tensor
 
 
 def _make_tensor(array):
@@ -339,6 +364,159 @@ class TestLogPrefillInput(unittest.TestCase):
         self.assertIn("idx: 3", output)
         self.assertIn("prefill_start_index: 10", output)
         self.assertIn("prefill_end_index: 20", output)
+
+
+# ---- Tests for module-level functions (L35-108) ----
+
+
+class TestTensorMd5(unittest.TestCase):
+    """Tests for _tensor_md5(): mock paddle tensor (GPU dependency)."""
+
+    def test_returns_valid_md5_hex(self):
+        arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        t = _make_astype_tensor([1.0, 2.0, 3.0])
+        result = _tensor_md5(t)
+        expected = hashlib.md5(arr.tobytes()).hexdigest()
+        self.assertEqual(result, expected)
+        self.assertEqual(len(result), 32)
+
+    def test_deterministic(self):
+        t1 = _make_astype_tensor([1.0, 2.0])
+        t2 = _make_astype_tensor([1.0, 2.0])
+        self.assertEqual(_tensor_md5(t1), _tensor_md5(t2))
+
+    def test_different_data_different_hash(self):
+        t1 = _make_astype_tensor([1.0, 2.0])
+        t2 = _make_astype_tensor([3.0, 4.0])
+        self.assertNotEqual(_tensor_md5(t1), _tensor_md5(t2))
+
+
+class TestResetLogitsMd5File(unittest.TestCase):
+    """Tests for _reset_logits_md5_file(): file I/O (filesystem dependency)."""
+
+    def test_creates_empty_file(self):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jsonl") as f:
+            tmp = f.name
+        try:
+            with patch.object(_det_mod, "_DET_MD5_PATH", tmp):
+                _reset_logits_md5_file()
+            with open(tmp) as f:
+                self.assertEqual(f.read(), "")
+        finally:
+            os.unlink(tmp)
+
+    def test_truncates_existing_content(self):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jsonl", mode="w") as f:
+            f.write('{"old": "data"}\n')
+            tmp = f.name
+        try:
+            with patch.object(_det_mod, "_DET_MD5_PATH", tmp):
+                _reset_logits_md5_file()
+            with open(tmp) as f:
+                self.assertEqual(f.read(), "")
+        finally:
+            os.unlink(tmp)
+
+
+class TestReadLogitsMd5File(unittest.TestCase):
+    """Tests for _read_logits_md5_file(): file I/O (filesystem dependency)."""
+
+    def test_reads_entries(self):
+        entries = [{"tag": "a", "md5": "abc"}, {"tag": "b", "md5": "def"}]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jsonl", mode="w") as f:
+            for e in entries:
+                f.write(json.dumps(e) + "\n")
+            tmp = f.name
+        try:
+            with patch.object(_det_mod, "_DET_MD5_PATH", tmp):
+                result = _read_logits_md5_file()
+            self.assertEqual(result, entries)
+        finally:
+            os.unlink(tmp)
+
+    def test_file_not_found_returns_empty(self):
+        with patch.object(_det_mod, "_DET_MD5_PATH", "/tmp/_nonexistent_12345.jsonl"):
+            result = _read_logits_md5_file()
+        self.assertEqual(result, [])
+
+    def test_skips_blank_lines(self):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jsonl", mode="w") as f:
+            f.write('{"a": 1}\n\n\n{"b": 2}\n')
+            tmp = f.name
+        try:
+            with patch.object(_det_mod, "_DET_MD5_PATH", tmp):
+                result = _read_logits_md5_file()
+            self.assertEqual(len(result), 2)
+        finally:
+            os.unlink(tmp)
+
+
+class TestRecordLogitsDiagnostic(unittest.TestCase):
+    """Tests for _record_logits_diagnostic(): mock paddle tensor (GPU) + file I/O."""
+
+    def setUp(self):
+        self._md5_f = tempfile.NamedTemporaryFile(delete=False, suffix=".jsonl")
+        self._fp_f = tempfile.NamedTemporaryFile(delete=False, suffix=".jsonl")
+        self._md5_f.close()
+        self._fp_f.close()
+        self._patches = [
+            patch.object(_det_mod, "_DET_MD5_PATH", self._md5_f.name),
+            patch.object(_det_mod, "_DET_FINGERPRINT_PATH", self._fp_f.name),
+            # paddle.no_grad is a GPU context manager -- mock as no-op
+            patch.object(
+                _det_mod.paddle,
+                "no_grad",
+                Mock(return_value=Mock(__enter__=Mock(), __exit__=Mock(return_value=False))),
+            ),
+        ]
+        for p in self._patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self._patches:
+            p.stop()
+        os.unlink(self._md5_f.name)
+        os.unlink(self._fp_f.name)
+
+    def _read_jsonl(self, path):
+        with open(path) as f:
+            return [json.loads(line) for line in f if line.strip()]
+
+    def test_writes_fingerprint_and_md5(self):
+        t = _make_astype_tensor([[1.0, 2.0, 3.0]])
+        _record_logits_diagnostic(t, tag="test")
+
+        fp_entries = self._read_jsonl(self._fp_f.name)
+        self.assertEqual(len(fp_entries), 1)
+        for key in ("sum", "argmax", "max", "batch"):
+            self.assertIn(key, fp_entries[0])
+        self.assertEqual(fp_entries[0]["batch"], 1)
+
+        md5_entries = self._read_jsonl(self._md5_f.name)
+        self.assertEqual(len(md5_entries), 1)
+        self.assertEqual(md5_entries[0]["tag"], "test")
+        self.assertEqual(len(md5_entries[0]["logits_md5"]), 32)
+        self.assertEqual(md5_entries[0]["probs_md5"], "")
+
+    def test_with_probs(self):
+        logits = _make_astype_tensor([[1.0, 2.0]])
+        probs = _make_astype_tensor([[0.3, 0.7]])
+        _record_logits_diagnostic(logits, tag="t", probs=probs)
+
+        md5_entries = self._read_jsonl(self._md5_f.name)
+        self.assertNotEqual(md5_entries[0]["probs_md5"], "")
+        self.assertEqual(len(md5_entries[0]["probs_md5"]), 32)
+
+    def test_appends_multiple_calls(self):
+        t1 = _make_astype_tensor([[1.0]])
+        t2 = _make_astype_tensor([[2.0]])
+        _record_logits_diagnostic(t1, tag="first")
+        _record_logits_diagnostic(t2, tag="second")
+
+        md5_entries = self._read_jsonl(self._md5_f.name)
+        self.assertEqual(len(md5_entries), 2)
+        self.assertEqual(md5_entries[0]["tag"], "first")
+        self.assertEqual(md5_entries[1]["tag"], "second")
 
 
 if __name__ == "__main__":

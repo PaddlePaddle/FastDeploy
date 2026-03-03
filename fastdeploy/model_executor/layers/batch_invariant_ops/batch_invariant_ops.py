@@ -466,6 +466,15 @@ def mean_dim(
     return output
 
 
+# The bmm_kernel_persistent kernel and bmm_persistent wrapper below are adapted from
+# SGLang (https://github.com/sgl-project/sglang), licensed under Apache License 2.0.
+# Original source:
+#   sglang/python/sglang/srt/batch_invariant_ops/batch_invariant_ops.py
+# which itself was adapted from:
+#   https://github.com/thinking-machines-lab/batch_invariant_ops
+# We thank the SGLang authors and the Thinking Machines Lab for their contributions.
+
+
 @triton.jit
 def bmm_kernel_persistent(
     a_ptr,
