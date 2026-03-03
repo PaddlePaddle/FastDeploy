@@ -1575,8 +1575,8 @@ class XPUModelRunner(ModelRunnerBase):
             )
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
-            if self.not_need_stop() and not is_dummy_run:
-                paddle.device.xpu.set_debug_level(0xa1)
+            # if self.not_need_stop() and not is_dummy_run:
+            #     paddle.device.xpu.set_debug_level(0xa1)
             sampler_output = None
             if not self.speculative_decoding:
                 sampler_output = self.sampler(logits, self.sampling_metadata)
@@ -1634,8 +1634,8 @@ class XPUModelRunner(ModelRunnerBase):
                     sampler_output,
                     model_output_data,
                     self.share_inputs,
-                    self.parallel_config.data_parallel_size > 0,
-                    skip_save_output,
+                    save_each_rank=self.parallel_config.data_parallel_size > 1,
+                    skip_save_output=skip_save_output,
                 )
             else:
                 xpu_post_process_normal(
@@ -1644,7 +1644,7 @@ class XPUModelRunner(ModelRunnerBase):
                     share_inputs=self.share_inputs,
                     block_size=self.cache_config.block_size,
                     skip_save_output=skip_save_output,
-                    save_each_rank=self.parallel_config.data_parallel_size > 0,
+                    save_each_rank=self.parallel_config.data_parallel_size > 1,
                     async_output_queue=self.async_output_queue,
                     think_end_id=self.model_config.think_end_id,
                     line_break_id=self.model_config.line_break_id,
