@@ -46,6 +46,8 @@ from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.platforms import current_platform
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import download_from_bos, init_bos_client, llm_logger
 
 
@@ -246,6 +248,8 @@ class ResourceManagerV1(ResourceManager):
             llm_logger.debug(f"reschedule {request_id} into waiting queue")
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
+                request.has_been_rescheduled = True
+                request.metrics.reschedule_count += 1
                 if process_func is not None:
                     process_func(request)
                 llm_logger.debug(f"self.waiting append request:{request.request_id},req.type:{request.status}")
@@ -284,6 +288,7 @@ class ResourceManagerV1(ResourceManager):
                 self._free_blocks(req)
                 req.cached_block_num = 0
                 self.to_be_rescheduled_request_id_set.add(req.request_id)
+                trace_print(LoggingEventName.PREEMPTED, req.request_id, getattr(req, "user", ""))
                 preempted_reqs.append(self._prepare_preempt_task(req))
             return preempted_reqs
 
@@ -329,6 +334,9 @@ class ResourceManagerV1(ResourceManager):
                     self._free_blocks(preempted_req)
                     preempted_req.num_cached_blocks = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
+                    trace_print(
+                        LoggingEventName.PREEMPTED, preempted_req.request_id, getattr(preempted_req, "user", "")
+                    )
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
