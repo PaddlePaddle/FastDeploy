@@ -19,8 +19,8 @@
 #include <cuda_runtime_api.h>
 #include <string>
 
-#include "paddle/phi/kernels/fusion/cutlass/cutlass_extensions/ft_gemm_configs.h"
 #include "cutlass_extensions/wint_type_traits.h"
+#include "paddle/phi/kernels/fusion/cutlass/cutlass_extensions/ft_gemm_configs.h"
 
 namespace phi {
 

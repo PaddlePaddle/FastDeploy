@@ -1033,9 +1033,9 @@ INSTANTIATE_NOAUX_TC(float, int32_t);
       T * topk_values,                              \
       IdxT * topk_indices,                          \
       T * scores_with_bias,                         \
-      int32_t * expert_id_to_ep_rank_array,         \
-      int32_t * expert_in_rank_num_list,            \
-      int32_t * tokens_per_expert_stats_list,       \
+      int32_t* expert_id_to_ep_rank_array,          \
+      int32_t* expert_in_rank_num_list,             \
+      int32_t* tokens_per_expert_stats_list,        \
       int64_t const num_tokens,                     \
       int64_t const num_experts,                    \
       int64_t const n_group,                        \

@@ -290,7 +290,8 @@ struct GemmWithEpilogueVisitorInterleavedNf4 {
       //       ceil_div(args.problem_size.k(), args.batch_count), kAlignK);
 
       //   if (gemm_k_size) {
-      //     grid_tiled_shape.k() = ceil_div(args.problem_size.k(), gemm_k_size);
+      //     grid_tiled_shape.k() = ceil_div(args.problem_size.k(),
+      //     gemm_k_size);
       //   }
       // }
 
@@ -318,7 +319,8 @@ struct GemmWithEpilogueVisitorInterleavedNf4 {
 
   /// Determines whether kernel satisfies alignment
   static Status can_implement(cutlass::gemm::GemmCoord const& problem_size) {
-    CUTLASS_TRACE_HOST("GemmWithEpilogueVisitorInterleavedNf4::can_implement()");
+    CUTLASS_TRACE_HOST(
+        "GemmWithEpilogueVisitorInterleavedNf4::can_implement()");
 
     static int const kAlignmentA = Mma::IteratorA::AccessType::kElements;
     static int const kAlignmentB = Mma::IteratorB::AccessType::kElements;
@@ -440,16 +442,17 @@ struct GemmWithEpilogueVisitorInterleavedNf4 {
           params.ptr_B)[threadblock_tile_offset.k()];
     }
 #endif
-  // if(threadIdx.x==0){
-  //     printf("##### block: %d-%d-%d, offset_k:%d, threadblock_tile_offset.m-n-k():%d-%d-%d, params.gemm_k_size:%d \n",
-  //             blockIdx.x, blockIdx.y, blockIdx.z,
-  //             offset_k,
-  //             threadblock_tile_offset.m(),
-  //             threadblock_tile_offset.n(),
-  //             threadblock_tile_offset.k(),
-  //             params.gemm_k_size
-  //             );
-  //   }
+    // if(threadIdx.x==0){
+    //     printf("##### block: %d-%d-%d, offset_k:%d,
+    //     threadblock_tile_offset.m-n-k():%d-%d-%d, params.gemm_k_size:%d \n",
+    //             blockIdx.x, blockIdx.y, blockIdx.z,
+    //             offset_k,
+    //             threadblock_tile_offset.m(),
+    //             threadblock_tile_offset.n(),
+    //             threadblock_tile_offset.k(),
+    //             params.gemm_k_size
+    //             );
+    //   }
 
     // Compute initial location in logical coordinates
     cutlass::MatrixCoord tb_offset_A{
@@ -460,7 +463,8 @@ struct GemmWithEpilogueVisitorInterleavedNf4 {
     // cutlass::MatrixCoord tb_offset_B{offset_k, threadblock_tile_offset.n() *
     // Mma::Shape::kN};
     // printf("#### kInterleave:%d \n", kInterleave);
-    // printf("###### offset_k : %d; params.gemm_k_size:%d; threadblock_tile_offset.k():%d \n",
+    // printf("###### offset_k : %d; params.gemm_k_size:%d;
+    // threadblock_tile_offset.k():%d \n",
     //         offset_k,
     //         params.gemm_k_size,
     //         threadblock_tile_offset.k()
@@ -470,7 +474,8 @@ struct GemmWithEpilogueVisitorInterleavedNf4 {
         offset_k * kInterleave,
         threadblock_tile_offset.n() * Mma::Shape::kN / kInterleave};
     // if(threadIdx.x==0){
-    //   printf("##### block: %d-%d-%d, tb_offset_B:%d-%d, kInterleave:%d, Mma::IteratorB::Shape::kRow:%d, Mma::Shape::kK:%d \n",
+    //   printf("##### block: %d-%d-%d, tb_offset_B:%d-%d, kInterleave:%d,
+    //   Mma::IteratorB::Shape::kRow:%d, Mma::Shape::kK:%d \n",
     //           blockIdx.x, blockIdx.y, blockIdx.z,
     //           offset_k * kInterleave,
     //           threadblock_tile_offset.n() * Mma::Shape::kN / kInterleave,
@@ -500,13 +505,11 @@ struct GemmWithEpilogueVisitorInterleavedNf4 {
         thread_idx,
         tb_offset_B);
     typename Mma::IteratorNF4LookUpTable iterator_nf4_look_up_table =
-      Mma::IteratorNF4LookUpTable(
-        params.params_nf4_look_up_table,
-      params.ref_nf4_look_up_table.data(),
-        {0,16},
-        threadIdx.x,
-        {0,0}
-      );
+        Mma::IteratorNF4LookUpTable(params.params_nf4_look_up_table,
+                                    params.ref_nf4_look_up_table.data(),
+                                    {0, 16},
+                                    threadIdx.x,
+                                    {0, 0});
 
     // Broadcast the warp_id computed by lane 0 to ensure dependent code
     // is compiled as warp-uniform.
@@ -530,7 +533,12 @@ struct GemmWithEpilogueVisitorInterleavedNf4 {
         (problem_size_k - offset_k + Mma::Shape::kK - 1) / Mma::Shape::kK;
     // printf("#### gemm_k_iterations: %d \n", gemm_k_iterations);
     // Compute threadblock-scoped matrix multiply-add
-    mma(gemm_k_iterations, accumulators, iterator_A, iterator_B, iterator_nf4_look_up_table, accumulators);
+    mma(gemm_k_iterations,
+        accumulators,
+        iterator_A,
+        iterator_B,
+        iterator_nf4_look_up_table,
+        accumulators);
     // if(threadIdx.x==0){
     //   printf("##### block: %d-%d-%d, offset-m-n-k:%d-%d-%d \n",
     //           blockIdx.x, blockIdx.y, blockIdx.z,
@@ -552,7 +560,8 @@ struct GemmWithEpilogueVisitorInterleavedNf4 {
         threadblock_tile_offset.n() * Mma::Shape::kN);
 
     // int block_idx = threadblock_tile_offset.m() +
-    //                 threadblock_tile_offset.n() * params.grid_tiled_shape.m();
+    //                 threadblock_tile_offset.n() *
+    //                 params.grid_tiled_shape.m();
 
     //
     // Construct the epilogue visitor

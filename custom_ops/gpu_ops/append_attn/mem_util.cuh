@@ -13,9 +13,9 @@
 // limitations under the License.
 #pragma once
 
+#include <cooperative_groups/memcpy_async.h>
 #include <cuda_runtime.h>
 #include <stdint.h>
-#include <cooperative_groups/memcpy_async.h>
 
 enum class SharedMemFillMode { kFillZero, kNoFill };
 
@@ -44,7 +44,8 @@ __device__ __forceinline__ void ldmatrix_m8n8x4_trans_impl(uint32_t* R,
 
 __device__ __forceinline__ void commit_group() {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
-  {}
+  {
+  }
 #else
   asm volatile("cp.async.commit_group;\n" ::);
 #endif
@@ -66,10 +67,10 @@ __device__ __forceinline__ void load_128b(T* smem_ptr, const T* gmem_ptr) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
   if constexpr (prefetch_mode == PrefetchMode::kPrefetch) {
     memset(__cvta_shared_to_generic(smem_int_ptr), 0, 16);
-    memcpy(__cvta_shared_to_generic(smem_int_ptr), (void *)gmem_ptr, 16);
+    memcpy(__cvta_shared_to_generic(smem_int_ptr), (void*)gmem_ptr, 16);
   } else {
     memset(__cvta_shared_to_generic(smem_int_ptr), 0, 16);
-    memcpy(__cvta_shared_to_generic(smem_int_ptr), (void *)gmem_ptr, 16);
+    memcpy(__cvta_shared_to_generic(smem_int_ptr), (void*)gmem_ptr, 16);
   }
 #else
   if constexpr (prefetch_mode == PrefetchMode::kPrefetch) {
@@ -100,19 +101,23 @@ __device__ __forceinline__ void pred_load_128b(T* smem_ptr,
     int src_in_bytes = predicate ? 16 : 0;
     if constexpr (prefetch_mode == PrefetchMode::kPrefetch) {
       memset(__cvta_shared_to_generic(smem_int_ptr), 0, 16);
-      memcpy(__cvta_shared_to_generic(smem_int_ptr), (void *)gmem_ptr, src_in_bytes);
+      memcpy(__cvta_shared_to_generic(smem_int_ptr),
+             (void*)gmem_ptr,
+             src_in_bytes);
     } else {
       memset(__cvta_shared_to_generic(smem_int_ptr), 0, 16);
-      memcpy(__cvta_shared_to_generic(smem_int_ptr), (void *)gmem_ptr, src_in_bytes);
+      memcpy(__cvta_shared_to_generic(smem_int_ptr),
+             (void*)gmem_ptr,
+             src_in_bytes);
     }
   } else {
     if constexpr (prefetch_mode == PrefetchMode::kPrefetch) {
       if (predicate) {
-        memcpy(__cvta_shared_to_generic(smem_int_ptr), (void *)gmem_ptr, 16);
+        memcpy(__cvta_shared_to_generic(smem_int_ptr), (void*)gmem_ptr, 16);
       }
     } else {
       if (predicate) {
-        memcpy(__cvta_shared_to_generic(smem_int_ptr), (void *)gmem_ptr, 16);
+        memcpy(__cvta_shared_to_generic(smem_int_ptr), (void*)gmem_ptr, 16);
       }
     }
   }
@@ -169,10 +174,11 @@ __device__ __forceinline__ void pred_load_64b(T* smem_ptr,
   if constexpr (fill_mode == SharedMemFillMode::kFillZero) {
     int src_in_bytes = predicate ? 8 : 0;
     memset(__cvta_shared_to_generic(smem_int_ptr), 0, 8);
-    memcpy(__cvta_shared_to_generic(smem_int_ptr), (void *)gmem_ptr, src_in_bytes);
+    memcpy(
+        __cvta_shared_to_generic(smem_int_ptr), (void*)gmem_ptr, src_in_bytes);
   } else {
     if (predicate) {
-      memcpy(__cvta_shared_to_generic(smem_int_ptr), (void *)gmem_ptr, 8);
+      memcpy(__cvta_shared_to_generic(smem_int_ptr), (void*)gmem_ptr, 8);
     }
   }
 #else
@@ -207,10 +213,11 @@ __device__ __forceinline__ void pred_load_32b(T* smem_ptr,
   if constexpr (fill_mode == SharedMemFillMode::kFillZero) {
     int src_in_bytes = predicate ? 4 : 0;
     memset(__cvta_shared_to_generic(smem_int_ptr), 0, 4);
-    memcpy(__cvta_shared_to_generic(smem_int_ptr), (void *)gmem_ptr, src_in_bytes);
+    memcpy(
+        __cvta_shared_to_generic(smem_int_ptr), (void*)gmem_ptr, src_in_bytes);
   } else {
     if (predicate) {
-      memcpy(__cvta_shared_to_generic(smem_int_ptr), (void *)gmem_ptr, 4);
+      memcpy(__cvta_shared_to_generic(smem_int_ptr), (void*)gmem_ptr, 4);
     }
   }
 #else
@@ -274,7 +281,6 @@ struct smem_t {
   __device__ __forceinline__ smem_t() : base(nullptr) {}
   template <typename T>
   __device__ __forceinline__ smem_t(T* base) : base((b128_t*)base) {}
-
 
   template <uint32_t stride, uint32_t inv_stride = 0>
   static __device__ __forceinline__ uint32_t get_permuted_offset(uint32_t i,

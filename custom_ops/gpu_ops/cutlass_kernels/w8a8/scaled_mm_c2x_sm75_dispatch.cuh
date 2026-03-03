@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/scaled_mm_c2x_sm75_dispatch.cuh
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/scaled_mm_c2x_sm75_dispatch.cuh
 
 #pragma once
 
@@ -11,7 +12,8 @@
 
 namespace fastdeploy {
 
-template <typename InType, typename OutType,
+template <typename InType,
+          typename OutType,
           template <typename, typename> typename Epilogue>
 struct sm75_config_default {
   // This config is used in 2 cases,
@@ -22,12 +24,19 @@ struct sm75_config_default {
   using TileShape = typename cutlass::gemm::GemmShape<128, 128, 64>;
   using WarpShape = typename cutlass::gemm::GemmShape<64, 64, 64>;
   using InstructionShape = typename cutlass::gemm::GemmShape<8, 8, 16>;
-  using Cutlass2xGemm =
-      cutlass_2x_gemm<cutlass::arch::Sm75, enable_sm75_to_sm80, InType, OutType,
-                      Epilogue, TileShape, WarpShape, InstructionShape, 2>;
+  using Cutlass2xGemm = cutlass_2x_gemm<cutlass::arch::Sm75,
+                                        enable_sm75_to_sm80,
+                                        InType,
+                                        OutType,
+                                        Epilogue,
+                                        TileShape,
+                                        WarpShape,
+                                        InstructionShape,
+                                        2>;
 };
 
-template <typename InType, typename OutType,
+template <typename InType,
+          typename OutType,
           template <typename, typename> typename Epilogue>
 struct sm75_config_M256 {
   // M in (128, 256]
@@ -36,12 +45,19 @@ struct sm75_config_M256 {
   using TileShape = typename cutlass::gemm::GemmShape<128, 128, 128>;
   using WarpShape = typename cutlass::gemm::GemmShape<64, 64, 64>;
   using InstructionShape = typename cutlass::gemm::GemmShape<8, 8, 16>;
-  using Cutlass2xGemm =
-      cutlass_2x_gemm<cutlass::arch::Sm75, enable_sm75_to_sm80, InType, OutType,
-                      Epilogue, TileShape, WarpShape, InstructionShape, 2>;
+  using Cutlass2xGemm = cutlass_2x_gemm<cutlass::arch::Sm75,
+                                        enable_sm75_to_sm80,
+                                        InType,
+                                        OutType,
+                                        Epilogue,
+                                        TileShape,
+                                        WarpShape,
+                                        InstructionShape,
+                                        2>;
 };
 
-template <typename InType, typename OutType,
+template <typename InType,
+          typename OutType,
           template <typename, typename> typename Epilogue>
 struct sm75_config_M64 {
   // M in (32, 64]
@@ -50,12 +66,19 @@ struct sm75_config_M64 {
   using TileShape = typename cutlass::gemm::GemmShape<64, 128, 128>;
   using WarpShape = typename cutlass::gemm::GemmShape<64, 64, 64>;
   using InstructionShape = typename cutlass::gemm::GemmShape<8, 8, 16>;
-  using Cutlass2xGemm =
-      cutlass_2x_gemm<cutlass::arch::Sm75, enable_sm75_to_sm80, InType, OutType,
-                      Epilogue, TileShape, WarpShape, InstructionShape, 2>;
+  using Cutlass2xGemm = cutlass_2x_gemm<cutlass::arch::Sm75,
+                                        enable_sm75_to_sm80,
+                                        InType,
+                                        OutType,
+                                        Epilogue,
+                                        TileShape,
+                                        WarpShape,
+                                        InstructionShape,
+                                        2>;
 };
 
-template <typename InType, typename OutType,
+template <typename InType,
+          typename OutType,
           template <typename, typename> typename Epilogue>
 struct sm75_config_M32 {
   // M in [1, 32]
@@ -64,12 +87,19 @@ struct sm75_config_M32 {
   using TileShape = typename cutlass::gemm::GemmShape<32, 128, 64>;
   using WarpShape = typename cutlass::gemm::GemmShape<32, 64, 64>;
   using InstructionShape = typename cutlass::gemm::GemmShape<8, 8, 16>;
-  using Cutlass2xGemm =
-      cutlass_2x_gemm<cutlass::arch::Sm75, enable_sm75_to_sm80, InType, OutType,
-                      Epilogue, TileShape, WarpShape, InstructionShape, 2>;
+  using Cutlass2xGemm = cutlass_2x_gemm<cutlass::arch::Sm75,
+                                        enable_sm75_to_sm80,
+                                        InType,
+                                        OutType,
+                                        Epilogue,
+                                        TileShape,
+                                        WarpShape,
+                                        InstructionShape,
+                                        2>;
 };
 
-template <typename InType, typename OutType,
+template <typename InType,
+          typename OutType,
           template <typename, typename> typename Epilogue,
           typename... EpilogueArgs>
 inline void cutlass_gemm_sm75_dispatch(paddle::Tensor& out,
@@ -96,7 +126,8 @@ inline void cutlass_gemm_sm75_dispatch(paddle::Tensor& out,
   // sm75_config_default has the least shared-memory requirements.
   using FallbackGemm = Cutlass2xGemmDefault;
 
-  uint32_t const m = a.dims()[0];;
+  uint32_t const m = a.dims()[0];
+  ;
   uint32_t const mp2 =
       std::max(static_cast<uint32_t>(32), next_pow_2(m));  // next power of 2
   if (mp2 <= 32) {

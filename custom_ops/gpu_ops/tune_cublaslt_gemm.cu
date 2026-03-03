@@ -483,7 +483,7 @@ class DevContext {};
 class CPUContext : public DevContext {};
 
 class CUBLASLTContext : public DevContext {
-public:
+ public:
   CUBLASLTContext() { CUDA_CHECK(cublasLtCreate(&handle)); }
 
   cublasLtHandle_t handle;

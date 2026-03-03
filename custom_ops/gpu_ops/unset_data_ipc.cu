@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "helper.h"
 #include "cuda_multiprocess.h"
+#include "helper.h"
 
 #if !defined(_WIN32)
 #include <errno.h>
-#include <string.h>
 #include <fcntl.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #endif
@@ -46,10 +46,11 @@ static inline int sharedMemoryUnlinkByName(const char* name) {
 }
 
 void UnsetDataIpc(const paddle::Tensor& tmp_input,
-                         const std::string& shm_name,
-                         bool close_ipc,
-                         bool unlink_shm) {
-  // 1) 关闭消费者导入的 IPC 映射（仅当 close_ipc=true 且该指针确为 OpenMemHandle 得来）
+                  const std::string& shm_name,
+                  bool close_ipc,
+                  bool unlink_shm) {
+  // 1) 关闭消费者导入的 IPC 映射（仅当 close_ipc=true 且该指针确为
+  // OpenMemHandle 得来）
   if (close_ipc) {
     void* ptr = const_cast<void*>(tmp_input.data());
     checkCudaErrors(cudaIpcCloseMemHandle(ptr));
@@ -59,8 +60,8 @@ void UnsetDataIpc(const paddle::Tensor& tmp_input,
   if (unlink_shm) {
     int rc = sharedMemoryUnlinkByName(shm_name.c_str());
     if (rc != 0) {
-      PD_THROW("Unlink shared memory failed: name=%s, err=%d",
-               shm_name.c_str(), rc);
+      PD_THROW(
+          "Unlink shared memory failed: name=%s, err=%d", shm_name.c_str(), rc);
     }
   }
 }

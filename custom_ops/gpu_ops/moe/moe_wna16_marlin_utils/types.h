@@ -30,7 +30,7 @@ struct Tensor {
   Tensor() : raw_tensor_() {}
   Tensor(const Tensor &) = default;
   Tensor(Tensor &&) = default;
-  Tensor operator=(const Tensor &x) &noexcept {
+  Tensor operator=(const Tensor &x) & noexcept {
     raw_tensor_ = x.raw_tensor_;
     return *this;
   }
@@ -48,7 +48,6 @@ struct Tensor {
   bool is_contiguous() const { return true; }
 
   int64_t size(int64_t d) const { return raw_tensor_.dims().at(d); }
-
 
   template <typename T>
   T *data_ptr() const {
@@ -73,7 +72,6 @@ struct Tensor {
   bool is_gpu() const {
     return raw_tensor_.place().GetType() == phi::AllocationType::GPU;
   }
-
 
   // MARLIN_NAMESPACE_NAME::ScalarType scalar_type() const {
   //   return raw_tensor_.dtype();
