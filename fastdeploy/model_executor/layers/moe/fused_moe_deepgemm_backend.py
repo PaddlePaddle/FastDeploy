@@ -223,14 +223,26 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 )
             )
 
-        up_gate_proj_weight = (
-            paddle.stack(up_gate_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
-        )
-        down_proj_weight = (
-            paddle.stack(down_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
-        )
-        up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
-        down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
+        if not self.quant_config.deepgemm_scale_ue8m0:
+            up_gate_proj_weight = (
+                paddle.stack(up_gate_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+            )
+            down_proj_weight = (
+                paddle.stack(down_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+            )
+            up_gate_proj_weight_scale = (
+                paddle.stack(up_gate_proj_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
+            )
+            down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
+        else:
+            up_gate_proj_weight = (
+                paddle.stack(up_gate_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+            )
+            down_proj_weight = (
+                paddle.stack(down_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+            )
+            up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0).transpose([0, 2, 1])
+            down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).transpose([0, 2, 1])
 
         name_tensor_map = {
             "up_gate_proj_weight": up_gate_proj_weight,
@@ -239,7 +251,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             "down_proj_weight_scale_inv": down_proj_weight_scale,
         }
         for name, tensor in name_tensor_map.items():
-            getattr(layer, name).set_value(tensor)
+            getattr(layer, name).data = tensor
 
     def apply_ep_prefill(
         self,
