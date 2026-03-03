@@ -573,6 +573,7 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         _register_manager_cleanup(self, manager)
         manager.cache_manager = MagicMock()
         manager.cache_manager.can_allocate_gpu_blocks.return_value = True
+        manager.cache_manager.num_gpu_blocks = 128
         manager.preallocated_reqs["prefilled"] = _make_request(request_id="prefilled")
         manager.preallocated_reqs["prefilled"].disaggregate_info["block_tables"] = [1, 2]
         self.assertTrue(manager.has_resource_for_prefilled_req("prefilled"))

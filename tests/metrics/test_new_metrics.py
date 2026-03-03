@@ -67,29 +67,22 @@ class TestCoverageFix(unittest.TestCase):
         )
         self.processor.resource_manager = self.mock_resource_manager
 
-    # 使用 patch 来模拟 token_processor 模块中引用的 main_process_metrics
-    @patch("fastdeploy.output.token_processor.main_process_metrics")
-    def test_recycle_resources_updates_metrics(self, mock_main_process_metrics):
+    @patch("fastdeploy.output.token_processor.envs")
+    def test_recycle_resources_non_prefill(self, mock_envs):
         """
-        测试 TokenProcessor._recycle_resources 方法。
+        测试 TokenProcessor._recycle_resources 方法（非 prefill、V1 调度器分支）。
 
-        目标：确保 available_batch_size 等指标被更新，覆盖第 285 行左右的代码。
+        目标：确保 finish_requests_async 和 update_metrics 被正确调用，tokens_counter 被清理。
         """
-        print("\nRunning test for TokenProcessor._recycle_resources (metric update)...")
+        print("\nRunning test for TokenProcessor._recycle_resources (non-prefill, V1 scheduler)...")
+
+        # 启用 V1 调度器（默认行为）
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = True
 
         # 1. 准备测试数据和 mock 行为
         task_id = "request-456"
         index = 0
         mock_task = MagicMock()
-
-        # 配置 resource_manager 的 mock 返回值
-        self.mock_resource_manager.available_batch.return_value = 8
-        self.mock_resource_manager.total_block_number.return_value = 1024
-        self.mock_resource_manager.max_num_seqs = 16
-
-        # _recycle_resources 方法内部会操作这些列表/字典
-        self.mock_resource_manager.tasks_list = [mock_task]
-        self.mock_resource_manager.stop_flags = [False]
 
         # 为了避免 del self.tokens_counter[task_id] 抛出 KeyError
         self.processor.tokens_counter[task_id] = 5
@@ -97,8 +90,10 @@ class TestCoverageFix(unittest.TestCase):
         # 调用目标方法
         self.processor._recycle_resources(task_id=task_id, index=index, task=mock_task, result=None, is_prefill=False)
 
-        # 核心断言：验证 available_batch_size 指标是否被正确设置
-        mock_main_process_metrics.available_batch_size.set.assert_called_once_with(8)
+        # 核心断言：验证 V1 调度器路径的行为
+        self.mock_resource_manager.finish_requests_async.assert_called_once_with(task_id)
+        self.mock_resource_manager.update_metrics.assert_called_once()
+        self.assertNotIn(task_id, self.processor.tokens_counter)
 
         print("Test for TokenProcessor passed.")
 

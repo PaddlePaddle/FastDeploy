@@ -8,8 +8,11 @@ After FastDeploy is launched, it supports continuous monitoring of the FastDeplo
 | :---: | ----------------------------------------- | --------- | ------------------------------ | ------ |
 | Request | `fastdeploy:requests_number` | Counter | Total number of received requests | count |
 | Request | `fastdeploy:request_success_total` | Counter | Number of successfully processed requests | count |
-| Request | `fastdeploy:num_requests_running` | Gauge | Number of requests currently running | count |
+| Request | `fastdeploy:request_preempted_total` | Counter | Number of preempted requests | count   |
+| Request | `fastdeploy:num_requests_enqueued` | Gauge | Number of requests to be scheduled | count |
 | Request | `fastdeploy:num_requests_waiting` | Gauge | Number of requests currently waiting | count |
+| Request | `fastdeploy:num_requests_running` | Gauge | Number of requests currently running | count |
+| Request | `fastdeploy:num_requests_preempted` | Gauge | Number of requests currently preempted | count |
 | Latency | `fastdeploy:time_to_first_token_seconds` | Histogram | Time to generate the first token (TTFT) | s |
 | Latency | `fastdeploy:time_per_output_token_seconds` | Histogram | Time interval between generated tokens (TPOT) | s |
 | Latency | `fastdeploy:e2e_request_latency_seconds` | Histogram | End-to-end request latency distribution | s |
@@ -34,6 +37,7 @@ After FastDeploy is launched, it supports continuous monitoring of the FastDeplo
 | KV Cache | `fastdeploy:prefix_cache_token_num` | Counter | Total number of tokens in prefix cache | count |
 | KV Cache | `fastdeploy:prefix_gpu_cache_token_num` | Counter | Total number of prefix cache tokens on GPU | count |
 | KV Cache | `fastdeploy:prefix_cpu_cache_token_num` | Counter | Total number of prefix cache tokens on CPU | count |
+| KV Cache | `fastdeploy:prefix_storage_cache_token_num` | Counter | Total number of prefix cache tokens on external cache storage | count |
 | KV Cache | `fastdeploy:available_gpu_block_num` | Gauge | Available GPU blocks in cache (including unreleased prefix blocks) | count |
 | KV Cache | `fastdeploy:free_gpu_block_num` | Gauge | Number of free GPU blocks in cache | count |
 | KV Cache | `fastdeploy:max_gpu_block_num` | Gauge | Total number of GPU blocks initialized at startup | count |

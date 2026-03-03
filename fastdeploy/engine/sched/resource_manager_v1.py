@@ -172,7 +172,7 @@ class ResourceManagerV1(ResourceManager):
         self.finish_execution_pool = ThreadPoolExecutor(max_workers=1)
         self.lock = threading.Lock()
         self.to_be_rescheduled_request_id_set = set()
-        main_process_metrics.max_batch_size.set(max_num_seqs)
+        self.reset_metrics()
 
         self.using_extend_tables_req_id = set()
         self.reuse_block_num_map = dict()
@@ -251,6 +251,7 @@ class ResourceManagerV1(ResourceManager):
                 llm_logger.debug(f"self.waiting append request:{request.request_id},req.type:{request.status}")
                 self.waiting.appendleft(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
+                self.update_metrics()
 
     def _info_each_block(self):
         """
@@ -332,6 +333,7 @@ class ResourceManagerV1(ResourceManager):
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
+                main_process_metrics.request_preempted_total.inc()
 
                 llm_logger.debug(
                     f"preempt {preempted_req.request_id} in idx {preempted_req.idx} with generated ids {preempted_req.output_token_ids}"
@@ -1199,6 +1201,7 @@ class ResourceManagerV1(ResourceManager):
             main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
             main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
             main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.cpu_cache_token_num)
+            main_process_metrics.prefix_storage_cache_token_num.inc(request.metrics.storage_cache_token_num)
 
             return True
         except Exception as e:
@@ -1231,6 +1234,7 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             for request in requests:
                 self.running.append(request)
+            self.update_metrics()
 
     def preallocate_resource_in_p(self, request: Request):
         """
@@ -1361,6 +1365,7 @@ class ResourceManagerV1(ResourceManager):
             request_output.metrics.decode_preallocate_req_time = request.metrics.decode_preallocate_req_time
             request.metrics = request_output.metrics
             self.running.append(request)
+            self.update_metrics()
 
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:
@@ -1441,11 +1446,19 @@ class ResourceManagerV1(ResourceManager):
     def clear_data(self):
         self.waiting: deque[Request] = deque()
         self.to_be_rescheduled_request_id_set = set()
-        self.update_metrics(verbose=True)
+        self.reset_metrics()
+
+    def reset_metrics(self):
+        main_process_metrics.available_gpu_block_num.set(self.total_block_number())
+        main_process_metrics.batch_size.set(0)
+        main_process_metrics.gpu_cache_usage_perc.set(0)
+        main_process_metrics.num_requests_enqueued.set(0)
+        main_process_metrics.num_requests_running.set(0)
+        main_process_metrics.num_requests_waiting.set(0)
+        main_process_metrics.num_requests_preempted.set(0)
 
     def update_metrics(self, verbose=False):
         # Update metrics
-        num_tasks = sum([1 if task else 0 for task in self.tasks_list])
         blocks_used_by_tasks = set()
         for task in self.tasks_list:
             if task is not None:
@@ -1454,9 +1467,8 @@ class ResourceManagerV1(ResourceManager):
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
         main_process_metrics.num_requests_running.set(len(self.running))
-        main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
-        if verbose:
-            llm_logger.info(f"update metrics: running={len(self.running)}, waiting={num_tasks - len(self.running)}")
+        main_process_metrics.num_requests_waiting.set(len(self.waiting))
+        main_process_metrics.num_requests_preempted.set(len(self.to_be_rescheduled_request_id_set))
 
     def log_status(self):
         llm_logger.info(

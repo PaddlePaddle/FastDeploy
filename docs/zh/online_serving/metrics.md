@@ -8,8 +8,11 @@
 | :---: | ----------------------------------------- | --------- |------------------------------|------|
 | 请求| `fastdeploy:requests_number`              | Counter   | 已接收的请求总数             | 个   |
 | 请求 | `fastdeploy:request_success_total`        | Counter   | 成功处理的请求个数           | 个   |
+| 请求 | `fastdeploy:request_preempted_total`        | Counter   | 触发重调度的请求个数           | 个   |
+| 请求 | `fastdeploy:num_requests_enqueued`         | Gauge     | 当前等待调度的请求数量         | 个   |
+| 请求 | `fastdeploy:num_requests_waiting`         | Gauge     | 当前等待运行的请求数量         | 个   |
 | 请求 | `fastdeploy:num_requests_running`         | Gauge     | 当前正在运行的请求数量       | 个   |
-| 请求 | `fastdeploy:num_requests_waiting`         | Gauge     | 当前等待中的请求数量         | 个   |
+| 请求 | `fastdeploy:num_requests_preempted`         | Gauge     | 当前被抢占的请求数量         | 个   |
 | 时延 | `fastdeploy:time_to_first_token_seconds`  | Histogram | 首 token 生成所需时间        | 秒   |
 | 时延 | `fastdeploy:time_per_output_token_seconds`| Histogram | 间隔输出 token 的生成时间    | 秒   |
 | 时延 | `fastdeploy:e2e_request_latency_seconds`  | Histogram | 请求的端到端延迟分布         | 秒   |
@@ -31,9 +34,10 @@
 | KV缓存 | `fastdeploy:hit_token_rate`               | Gauge     | token 级别前缀缓存命中率      | 百分比   |
 | KV缓存 | `fastdeploy:cpu_hit_token_rate`           | Gauge     | token 级别 CPU 前缀缓存命中率   | 百分比   |
 | KV缓存 | `fastdeploy:gpu_hit_token_rate`           | Gauge     | token 级别 GPU 前缀缓存命中率   | 百分比   |
-| KV缓存 | `fastdeploy:prefix_cache_token_num`       | Counter   | 前缀缓存token总数           | 个   |
-| KV缓存 | `fastdeploy:prefix_gpu_cache_token_num`   | Counter   | 位于 GPU 上的前缀缓存 token 总数  | 个   |
-| KV缓存 | `fastdeploy:prefix_cpu_cache_token_num`   | Counter   | 位于 CPU 上的前缀缓存 token 总数  | 个   |
+| KV缓存 | `fastdeploy:prefix_cache_token_num`       | Counter   | 前缀缓存匹配的 token 总数           | 个   |
+| KV缓存 | `fastdeploy:prefix_gpu_cache_token_num`   | Counter   | 在 GPU 前缀缓存成功匹配的 token 总数  | 个   |
+| KV缓存 | `fastdeploy:prefix_cpu_cache_token_num`   | Counter   | 在 CPU 前缀缓存成功匹配的 token 总数  | 个   |
+| KV缓存 | `fastdeploy:prefix_storage_cache_token_num`   | Counter   | 在外部存储前缀缓存上成功匹配的 token 总数  | 个   |
 | KV缓存 | `fastdeploy:available_gpu_block_num`      | Gauge     | 缓存中可用的 GPU 块数量（包含尚未正式释放的前缀缓存块）| 个   |
 | KV缓存 | `fastdeploy:free_gpu_block_num`           | Gauge     | 缓存中的可用块数             | 个   |
 | KV缓存 | `fastdeploy:max_gpu_block_num`            | Gauge     | 服务启动时确定的 GPU 总块数        | 个   |
