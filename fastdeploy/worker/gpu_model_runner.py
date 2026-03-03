@@ -1536,9 +1536,10 @@ class GPUModelRunner(ModelRunnerBase):
 
         # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
         # To rationalize the allocation of kvcache.
+        from fastdeploy import envs
 
-        self.mla_cache = False  # envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
-        self.dsa_cache = True  # envs.FD_ATTENTION_BACKEND == "DSA_ATTN"
+        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
+        self.dsa_cache = envs.FD_ATTENTION_BACKEND == "DSA_ATTN"
         if self.dsa_cache:
             cache_type = "uint8"
         for i in range(self.model_config.num_hidden_layers):
@@ -1548,9 +1549,8 @@ class GPUModelRunner(ModelRunnerBase):
             if value_cache_shape:
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
                 value_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device}"
-            if indexer_cache_shape:
+            elif indexer_cache_shape:
                 indexer_cache_name = f"indexer_caches_{i}_rank{local_rank}.device{self.device_id}"
-                indexer_cache_scales_name = f"indexer_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
             if create_cache_tensor:
                 logger.info(
                     f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}, indexer:{indexer_cache_shape}"
@@ -1615,13 +1615,6 @@ class GPUModelRunner(ModelRunnerBase):
                     indexer_cache = share_external_data(indexer_cache, indexer_cache_name, indexer_cache_shape)
                     self.cache_kvs_map[indexer_cache_name] = indexer_cache
                     cache_kvs_list.extend([key_cache, indexer_cache])
-                    # if kv_cache_quant_type == "block_wise_fp8":
-                    #     indexer_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
-                    #     indexer_cache_scales = share_external_data(
-                    #         indexer_cache_scales, indexer_cache_scales_name, indexer_cache_shape
-                    #     )
-                    #     self.cache_kvs_map[indexer_cache_scales_name] = indexer_cache_scales
-                    #     cache_kvs_list.extend([key_cache_scales])
                 else:
                     cache_kvs_list.extend([key_cache])
                     if kv_cache_quant_type == "block_wise_fp8":
@@ -1971,7 +1964,6 @@ class GPUModelRunner(ModelRunnerBase):
                     (self.share_inputs["batch_id_per_token_output"] if self.speculative_decoding else None),
                     (self.share_inputs["cu_seqlens_q_output"] if self.speculative_decoding else None),
                 )
-                # breakpoint()
                 self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
 
             # 7. Updata 'infer_seed' and step_cuda()

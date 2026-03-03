@@ -583,41 +583,34 @@ std::vector<paddle::Tensor> CpGatherIndexerKQuantCacheKernel(
 // Paddle Custom Operator Registration
 //==============================================================================
 
-// PD_BUILD_STATIC_OP(ds_mla_write_cache)
-//     .Inputs({"kv_nope",
-//              "kv_pe",
-//              "kv_cache",
-//              "slot_mapping",
-//              "seq_lens",
-//              "seq_lens_decoder",
-//              "batch_id_per_token",
-//              "cu_seqlens_q",
-//              "block_tables",
-//              paddle::Optional("kv_signal_data"),
-//              paddle::Optional("scale")})
-//     .Outputs({"kv_cache_out"})
-//     .SetInplaceMap({{"kv_cache", "kv_cache_out"}})
-//     .Attrs({"cache_quant_type_str: std::string",
-//             "max_seq_len: int",
-//             "is_prefill: bool"})
-//     .SetKernelFn(PD_KERNEL(DSMLAWriteCacheKernel));
+PD_BUILD_STATIC_OP(ds_mla_write_cache)
+    .Inputs({"kv_nope",
+             "kv_pe",
+             "kv_cache",
+             "slot_mapping",
+             "seq_lens",
+             "seq_lens_decoder",
+             "batch_id_per_token",
+             "cu_seqlens_q",
+             "block_tables",
+             paddle::Optional("kv_signal_data"),
+             paddle::Optional("scale")})
+    .Outputs({"kv_cache_out"})
+    .SetInplaceMap({{"kv_cache", "kv_cache_out"}})
+    .Attrs({"cache_quant_type_str: std::string",
+            "max_seq_len: int",
+            "is_prefill: bool"})
+    .SetKernelFn(PD_KERNEL(DSMLAWriteCacheKernel));
 
-// PD_BUILD_STATIC_OP(indexer_k_quant_and_cache)
-//     .Inputs({"k",
-//              "kv_cache",
-//              "slot_mapping"})
-//     .Outputs({"kv_cache_out"})
-//     .SetInplaceMap({{"kv_cache", "kv_cache_out"}})
-//     .Attrs({"quant_block_size: int64_t",
-//             "scale_fmt: std::string"})
-//     .SetKernelFn(PD_KERNEL(IndexerKQuantAndCacheKernel));
+PD_BUILD_STATIC_OP(indexer_k_quant_and_cache)
+    .Inputs({"k", "kv_cache", "slot_mapping"})
+    .Outputs({"kv_cache_out"})
+    .SetInplaceMap({{"kv_cache", "kv_cache_out"}})
+    .Attrs({"quant_block_size: int64_t", "scale_fmt: std::string"})
+    .SetKernelFn(PD_KERNEL(IndexerKQuantAndCacheKernel));
 
-// PD_BUILD_STATIC_OP(cp_gather_indexer_k_quant_cache)
-//     .Inputs({"kv_cache",
-//              "dst_k",
-//              "dst_scale",
-//              "block_table",
-//              "cu_seq_lens"})
-//     .Outputs({"dst_k_out", "dst_scale_out"})
-//     .SetInplaceMap({{"dst_k", "dst_k_out"}, {"dst_scale", "dst_scale_out"}})
-//     .SetKernelFn(PD_KERNEL(CpGatherIndexerKQuantCacheKernel));
+PD_BUILD_STATIC_OP(cp_gather_indexer_k_quant_cache)
+    .Inputs({"kv_cache", "dst_k", "dst_scale", "block_table", "cu_seq_lens"})
+    .Outputs({"dst_k_out", "dst_scale_out"})
+    .SetInplaceMap({{"dst_k", "dst_k_out"}, {"dst_scale", "dst_scale_out"}})
+    .SetKernelFn(PD_KERNEL(CpGatherIndexerKQuantCacheKernel));

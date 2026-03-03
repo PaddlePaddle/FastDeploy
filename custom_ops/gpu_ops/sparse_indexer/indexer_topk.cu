@@ -3,13 +3,15 @@
 
 #include <cuda_bf16.h>
 
+#include "paddle/extension.h"
+
+#include "paddle/phi/api/ext/op_meta_info.h"
+#include "paddle/utils/optional.h"
+
 #include "append_attn/mem_util.cuh"
 #include "append_attn/mma_tensor_op.cuh"
 #include "append_attn/utils.cuh"
 #include "helper.h"
-#include "paddle/extension.h"
-#include "paddle/phi/api/ext/op_meta_info.h"
-#include "paddle/utils/optional.h"
 
 // using namespace flashinfer;
 #ifndef PD_BUILD_STATIC_OP

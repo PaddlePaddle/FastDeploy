@@ -1167,23 +1167,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "get expert token num");
 
   /**
-   * indexer_topk.cu
-   * radix_topk_ragged_transform
-   */
-  m.def("radix_topk_ragged_transform",
-        &RadixTopkRaggedTransform,
-        "radix_topk_ragged_transform function");
-
-  m.def("dsmla_write_cache", &DSMLAWriteCacheKernel, "dsmla_write_cache");
-
-  m.def("indexer_k_quant_and_cache",
-        &IndexerKQuantAndCacheKernel,
-        "indexer_k_quant_and_cache");
-
-  m.def("cp_gather_indexer_k_quant_cache",
-        &CpGatherIndexerKQuantCacheKernel,
-        "cp_gather_indexer_k_quant_cache");
-  /**
    * moe/fused_moe/moe_redundant_topk_select.cu
    * moe_redundant_topk_select
    */
@@ -1783,4 +1766,18 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_stop", &GetStop, "get_stop function");
 
   m.def("set_stop", &SetStop, "set_stop function");
+
+  m.def("radix_topk_ragged_transform",
+        &RadixTopkRaggedTransform,
+        "radix_topk_ragged_transform function");
+
+  m.def("dsk_attn_write_cache", &DSMLAWriteCacheKernel, "dsk_attn_write_cache");
+
+  m.def("indexer_k_quant_and_cache",
+        &IndexerKQuantAndCacheKernel,
+        "indexer_k_quant_and_cache");
+
+  m.def("cp_gather_indexer_k_quant_cache",
+        &CpGatherIndexerKQuantCacheKernel,
+        "cp_gather_indexer_k_quant_cache");
 }
