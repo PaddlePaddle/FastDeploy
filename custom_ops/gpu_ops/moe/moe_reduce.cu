@@ -90,17 +90,17 @@ paddle::Tensor MoeExpertReduceFunc(
                                                   &output);
       break;
     case paddle::DataType::FLOAT16:
-      MoeReduceKernel<paddle::DataType::BFLOAT16>(ffn_out,
-                                                  top_k_weight,
-                                                  permute_indices_per_token,
-                                                  top_k_indices,
-                                                  down_proj_bias,
-                                                  norm_topk_prob,
-                                                  routed_scaling_factor,
-                                                  num_rows,
-                                                  hidden_size,
-                                                  topk,
-                                                  &output);
+      MoeReduceKernel<paddle::DataType::FLOAT16>(ffn_out,
+                                                 top_k_weight,
+                                                 permute_indices_per_token,
+                                                 top_k_indices,
+                                                 down_proj_bias,
+                                                 norm_topk_prob,
+                                                 routed_scaling_factor,
+                                                 num_rows,
+                                                 hidden_size,
+                                                 topk,
+                                                 &output);
       break;
     default:
       PD_THROW("Unsupported data type for MoeDispatchKernel");
