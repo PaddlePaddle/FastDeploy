@@ -704,6 +704,24 @@ DLL_EXPORT int update_attn_mask_offsets(Context* ctx,
                                         int real_bsz,
                                         int max_model_len,
                                         int decode_states_len);
+                                        
+DLL_EXPORT int speculate_limit_thinking_content_length_kernel(
+    api::Context* ctx,
+    int64_t* next_tokens,
+    const int* max_think_lens,
+    int* max_reply_lens,
+    int64_t* step_idx,
+    const int64_t* eos_token_ids,
+    int* limit_status,
+    int* accept_num,
+    const bool* stop_flags,
+    const int64_t think_end_id,
+    const int64_t* inject_token_ids,
+    const int tokens_per_step,
+    const int bs,
+    const int eos_token_id_len,
+    const int inject_len,
+    const bool splitwise_role_is_decode);
 /*--------------------------------------- MTP end
  * --------------------------------------------*/
 
