@@ -56,6 +56,7 @@ class SamplingMetadata:
     token_ids_all: Optional[paddle.Tensor] = None  # prompt + generated tokens
     prompt_ids: Optional[paddle.Tensor] = None
     prompt_lens: Optional[paddle.Tensor] = None
+    fake_prompt_lens: Optional[paddle.Tensor] = None  # TODO[minghaipeng]: remove this later
     temp_scaled_logprobs_flag: Optional[bool] = None
     top_p_normalized_logprobs_flag: Optional[bool] = None
     temp_scaled_logprobs: Optional[paddle.Tensor] = None
