@@ -25,15 +25,20 @@ TEST_FILES=$(
     | sort -u
 )
 
+
 failed_pytest=0
 success_pytest=0
+
+# nullglob: if no match, the pattern expands to nothing
+shopt -s nullglob
 
 for file in $TEST_FILES; do
     echo "Running pytest file: $file"
     # Clean up previous logs
-    rm -f "$run_path"/log*
-    rm -rf "$run_path"/*.log
-    # Run pytest
+    rm -rf "${run_path}"/log* || true
+    rm -rf "${run_path}"/*.log || true
+
+    # Run pytest with coverage for the current file
     python -m coverage run -m pytest -c ${PYTEST_INI} "$file" -vv -s
     status=$?
     if [ "$status" -ne 0 ]; then
@@ -89,6 +94,7 @@ for file in $TEST_FILES; do
     ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9
     ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9
 done
+shopt -u nullglob
 
 ##################################
 # Summary
@@ -98,8 +104,6 @@ echo "Pytest total: $((failed_pytest + success_pytest))"
 echo "Pytest successful: $success_pytest"
 echo "Pytest failed: $failed_pytest"
 
-echo "Special tests total: ${#special_tests[@]}"
-echo "Special tests successful: $success_special"
 
 if [ "$failed_pytest" -ne 0 ]; then
     echo "Failed test cases are listed in $failed_tests_file"

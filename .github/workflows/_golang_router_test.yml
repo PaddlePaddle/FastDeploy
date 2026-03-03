@@ -21,7 +21,6 @@ on:
         description: "URL of the FastDeploy Router"
         required: true
         type: string
-        default: "https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router"
       CACHE_DIR:
         description: "Cache Dir Use"
         required: false
