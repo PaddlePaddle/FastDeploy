@@ -904,7 +904,7 @@ def benchmark_metrics(
 ):
     """Benchmark metrics statistics，generate benchmark result"""
     outputs = []
-    with open(result_file) as f:
+    with open(result_file, encoding='utf-8', errors='ignore') as f:
         for line in f.readlines():
             if "RequestFuncOutput" in line:
                 start = line.find("RequestFuncOutput")
@@ -1183,7 +1183,7 @@ def main(args: argparse.Namespace):
 
     # 超参由yaml传入
     if args.hyperparameter_path:
-        with open(args.hyperparameter_path, "r") as f:
+        with open(args.hyperparameter_path, "r", encoding='utf-8', errors='ignore') as f:
             hyper_parameters = yaml.safe_load(f)
     else:
         hyper_parameters = {}
