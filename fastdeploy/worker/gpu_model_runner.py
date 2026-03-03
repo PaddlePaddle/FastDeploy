@@ -329,7 +329,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         Returns -1 if prediction is not applicable (non-overlap or prefill exists).
         """
-        if (not self.enable_overlap_schedule) or self.exist_prefill():
+        if self.exist_prefill():
             return -1
         return (
             self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
@@ -1998,7 +1998,7 @@ class GPUModelRunner(ModelRunnerBase):
         num_running_requests: int = None,
     ) -> None:
         model_output, p_done_idxs, _ = self._preprocess_and_execute_model(model_forward_batch, num_running_requests)
-        if self.current_launch_token_num == 0 and not self.parallel_config.use_ep:
+        if model_output is None:
             return
 
         model_output_data, sampler_output, post_process_event = self._postprocess(
