@@ -189,6 +189,7 @@ jobs:
           -e "CLEAN_CUDA=1" \
           -e TZ="Asia/Shanghai" \
           -e "fd_wheel_url=${fd_wheel_url}" \
+          -e "fd_router_url=${fd_router_url}" \
           -e "BASE_REF=${BASE_REF}" \
           -e "IS_PR=${IS_PR}" \
           --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
