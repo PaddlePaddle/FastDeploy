@@ -158,6 +158,7 @@ def xpu_pre_process(
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
 
+    print(f"ch -- pre process rope_emb:{share_inputs['rope_emb'].shape}")
     xpu_forward_meta = XPUForwardMeta(
         ids_remove_padding=share_inputs["ids_remove_padding"],
         rotary_embs=share_inputs["rope_emb"],
@@ -351,7 +352,6 @@ def xpu_post_process_normal(
                 sampled_token_ids,
                 model_output.input_ids,
                 share_inputs["block_tables"],
-                model_output.stop_nums,
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
@@ -364,7 +364,6 @@ def xpu_post_process_normal(
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
                 model_output.input_ids,
-                model_output.stop_nums,
                 sampled_token_ids,
                 model_output.is_block_step,
             )

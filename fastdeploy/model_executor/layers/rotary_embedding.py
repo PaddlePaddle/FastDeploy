@@ -347,9 +347,13 @@ def get_rope_impl(
             use_neox_rotary_style=True,
         )
         rotary_emb = rotary_emb_layer(position_ids)
+    
     else:
         rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
+    print("ch -- debug get_rope_impl architecture:", architecture)
+    print("ch -- debug get_rope_impl rotary_emb_layer:", rotary_emb_layer)
+    print("ch -- debug get_rope_impl rotary_emb:", rotary_emb)
     return rotary_emb
 
 

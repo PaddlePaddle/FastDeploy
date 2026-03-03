@@ -134,6 +134,8 @@ class MTPProposer(Proposer):
         # Forward meta store the global meta information of the forward
         self.forward_meta = None
 
+        self.enable_mm = False
+
     def _update_mtp_config(self, main_model):
         """
         Update config for MTP from global config
@@ -158,7 +160,7 @@ class MTPProposer(Proposer):
         """
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
-
+    
     def dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to model_inputs"""
         max_dec_len = expected_decode_len + 1
@@ -527,7 +529,7 @@ class MTPProposer(Proposer):
                 self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.model_inputs["is_block_step"][idx : idx + 1] = False
                 continue
-
+        print("ch -- debug rope emb", self.model_inputs["rope_emb"].shape)
         # TODO(liuzichang): Solve splitewise-p bug to restore
         # self.model_inputs["seq_lens_this_time"] = self.model_inputs["seq_lens_this_time_buffer"][:num_running_requests]
         self.model_inputs.seq_lens_this_time = self.model_inputs["seq_lens_this_time_buffer"]
