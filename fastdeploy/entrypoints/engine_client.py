@@ -340,6 +340,7 @@ class EngineClient:
         try:
             chat_template_kwargs = task.get("chat_template_kwargs") or {}
             chat_template_kwargs.update({"chat_template": task.get("chat_template")})
+            chat_template_kwargs.update({"chat_template": task.get("reasoning_effort")})
             task["chat_template_kwargs"] = chat_template_kwargs
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
@@ -453,17 +454,18 @@ class EngineClient:
                 )
 
         if data.get("reasoning_max_tokens") is not None:
-            if data["reasoning_max_tokens"] < 0:
+            if data["reasoning_max_tokens"] <= 0:
                 raise ParameterError("reasoning_max_tokens", "reasoning_max_tokens must be greater than 0")
             if data["reasoning_max_tokens"] > data["max_tokens"]:
                 data["reasoning_max_tokens"] = data["max_tokens"]
                 api_server_logger.warning(
                     f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to {data['max_tokens']}"
                 )
-
-        if data.get("response_max_tokens") is not None:
-            if data["response_max_tokens"] <= 0:
-                raise ParameterError("response_max_tokens", "response_max_tokens must be greater than 0")
+            if data.get("reasoning_effort") is not None:
+                data["enable_thinking"] = False
+                api_server_logger.warning(
+                    f"req_id: {data['request_id']}, reasoning_effort is deprecated, please use enable_thinking instead."
+                )
 
         if data.get("temperature") is not None and abs(data["temperature"]) < 1e-6:
             data["temperature"] = 1e-6
