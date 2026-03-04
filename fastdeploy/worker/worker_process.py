@@ -466,7 +466,7 @@ class PaddleDisWorkerProc:
                         else:
                             self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
 
-            # Synchronize the signal set by tp_rank0 visiable to other workers
+            # Synchronize the signal set by tp_rank0 visible to other workers
             self._tp_barrier_wait() if tp_size > 1 else None
 
             if self.fd_config.load_config.dynamic_load_weight:
