@@ -1641,7 +1641,7 @@ class XPUModelRunner(ModelRunnerBase):
                     model_output_data,
                     self.share_inputs,
                     self.parallel_config.data_parallel_size > 1,
-                    skip_save_output=skip_save_output,
+                    skip_save_output,
                 )
             else:
                 xpu_post_process_normal(
