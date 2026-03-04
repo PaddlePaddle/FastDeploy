@@ -1124,6 +1124,19 @@ std::vector<paddle::Tensor> get_attn_mask_q(
     const paddle::optional<paddle::Tensor>& attn_mask_kv,
     const int kv_token_num);
 
+std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
+    const paddle::Tensor& x,
+    const paddle::Tensor& scale,
+    const paddle::Tensor& topk_ids,
+    const int num_local_experts,
+    const int max_token_num);
+
+std::vector<paddle::Tensor> DepermutePrefillCombine(
+    const paddle::Tensor& x,
+    const paddle::Tensor& indice_map,
+    const paddle::Tensor& topk_weights,
+    const int num_worst_tokens);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
         &GetExpertTokenNum,
@@ -1729,4 +1742,21 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_stop", &GetStop, "get_stop function");
 
   m.def("set_stop", &SetStop, "set_stop function");
+
+  m.def("prefill_permute_to_masked_gemm",
+        &PrefillPermuteToMaskedGemm,
+        py::arg("x"),
+        py::arg("scale"),
+        py::arg("topk_ids"),
+        py::arg("num_local_experts"),
+        py::arg("max_token_num"),
+        "Prefill permute to masked GEMM for MoE");
+
+  m.def("depermute_prefill_combine",
+        &DepermutePrefillCombine,
+        py::arg("x"),
+        py::arg("indice_map"),
+        py::arg("topk_weights"),
+        py::arg("num_worst_tokens"),
+        "Depermute and combine expert outputs for MoE prefill");
 }

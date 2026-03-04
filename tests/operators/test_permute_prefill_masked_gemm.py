@@ -19,9 +19,36 @@ import unittest
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.ops.cute_dsl_ops.permute_prefill_masked_gemm import (
-    call_prefill_permute_to_masked_gemm,
-)
+from fastdeploy.model_executor.ops.gpu import prefill_permute_to_masked_gemm
+
+
+def call_prefill_permute_to_masked_gemm(
+    x: paddle.Tensor,
+    scale: paddle.Tensor,
+    topk_ids: paddle.Tensor,
+    num_local_experts: int,
+    max_token_num: int,
+):
+    """
+    Permute input tokens and scales from token-major to expert-major layout
+    for MoE masked GEMM operations.
+
+    Args:
+        x: Input hidden states [num_tokens, hidden].
+        scale: Input scales [num_tokens, hidden_scale].
+        topk_ids: Expert routing indices [num_tokens, topk] (int64 or int32).
+        num_local_experts: Number of local experts on this device.
+        max_token_num: Maximum tokens per expert buffer.
+
+    Returns:
+        tuple: (permute_x, permute_scale, permuted_indice_map, token_nums_per_expert)
+    """
+    if topk_ids.dtype != paddle.int64:
+        topk_ids = topk_ids.cast(paddle.int64)
+
+    results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num)
+
+    return results[0], results[1], results[2], results[3]
 
 
 class TestPrefillPermuteToMaskedGemm(unittest.TestCase):

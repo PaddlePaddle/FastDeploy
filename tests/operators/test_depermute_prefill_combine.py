@@ -19,9 +19,30 @@ import unittest
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.ops.cute_dsl_ops.depermute_prefill_combine import (
-    call_depermute_prefill_combine,
-)
+from fastdeploy.model_executor.ops.gpu import depermute_prefill_combine
+
+
+def call_depermute_prefill_combine(
+    x: paddle.Tensor,
+    indice_map: paddle.Tensor,
+    topk_weights: paddle.Tensor,
+    num_worst_tokens: int,
+):
+    """
+    Depermute and combine expert outputs back to token-major layout.
+
+    Args:
+        x: Expert outputs [num_local_experts, max_tokens_per_expert, hidden].
+        indice_map: Flat index tensor [num_worst_tokens, topk] (int32).
+        topk_weights: Combination weights [num_worst_tokens, topk] (float32).
+        num_worst_tokens: Number of output tokens to produce.
+
+    Returns:
+        depermuted_x: Combined output [num_worst_tokens, hidden].
+    """
+    results = depermute_prefill_combine(x, indice_map, topk_weights, num_worst_tokens)
+
+    return results
 
 
 class TestDepermutePrefillCombine(unittest.TestCase):
