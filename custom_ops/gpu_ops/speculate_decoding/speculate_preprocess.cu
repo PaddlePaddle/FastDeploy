@@ -160,9 +160,9 @@ std::vector<paddle::Tensor> SpeculatePreProcess(
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-            paddle::Tensor(),
-            paddle::Tensor(),
-            paddle::Tensor()};
+            paddle::zeros({1}, paddle::DataType::INT32, input_ids.place()),
+            paddle::empty({0}, paddle::DataType::INT32, input_ids.place()),
+            paddle::zeros({1}, paddle::DataType::INT32, input_ids.place())};
   }
 #ifdef PADDLE_WITH_COREX
   int blockSize =
