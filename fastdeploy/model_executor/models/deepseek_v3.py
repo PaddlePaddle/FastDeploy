@@ -62,11 +62,14 @@ if current_platform.is_cuda() or current_platform.is_maca():
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
     per_token_group_quant_fp8,
 )
-from fastdeploy.model_executor.ops.gpu import (
-    cp_gather_indexer_k_quant_cache,
-    indexer_k_quant_and_cache,
-    radix_topk_ragged_transform,
-)
+from fastdeploy.platforms import current_platform
+
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import (
+        cp_gather_indexer_k_quant_cache,
+        indexer_k_quant_and_cache,
+        radix_topk_ragged_transform,
+    )
 
 paddle.enable_compat(scope={"deep_gemm"})  # Enable torch proxy before importing flash_mla
 
