@@ -37,6 +37,9 @@ echo "install paddle cpu and custom device"
 pip_install_with_retry --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
 pip_install_with_retry --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
 
+echo "Run paddle.utils.run_check()"
+python -c "import paddle; paddle.utils.run_check()"
+
 INCLUDE_FOLDERS=(
     "ERNIE_300B_4L"
     "ERNIE-4.5-21B-A3B-Paddle"
