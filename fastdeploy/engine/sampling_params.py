@@ -20,7 +20,7 @@ import random
 from dataclasses import dataclass, fields
 from enum import Enum
 from typing import Any, List, Optional, TypeVar, Union
-
+import numpy as np
 from fastdeploy import envs
 
 T = TypeVar("T")
@@ -333,6 +333,13 @@ class SamplingParams:
 
         if not 0 <= self.seed <= 922337203685477580:
             raise ValueError("seed must be in [0, 922337203685477580], got " f"{self.seed}.")
+
+        try:
+            np.array(
+                self.bad_words_token_ids, dtype="int64"
+            )
+        except Exception:
+            raise ValueError(f"bad_words_token_ids must be an array of integers, but got {self.bad_words_token_ids}")
 
         # Verify logits processors arguments
         if self.logits_processors_args is not None:
