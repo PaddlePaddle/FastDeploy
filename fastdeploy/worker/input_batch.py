@@ -23,7 +23,6 @@ from fastdeploy.model_executor.logits_processor import build_logits_processors
 from fastdeploy.platforms import current_platform
 
 
-
 class InputBatch:
     def __getitem__(self, key):
         """Support dictionary-style attribute access"""

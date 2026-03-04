@@ -1691,8 +1691,7 @@ class XPUModelRunner(ModelRunnerBase):
                     self.cache_config.block_size,
                     self.speculative_config.num_speculative_tokens,
                 )
-            if self.not_need_stop() and not is_dummy_run:
-                paddle.device.xpu.set_debug_level(0)
+
         return None
 
     def _execute_empty_input(self, forward_meta) -> None:

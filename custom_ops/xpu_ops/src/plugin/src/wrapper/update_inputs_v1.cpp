@@ -122,8 +122,7 @@ int update_inputs_v1(Context* ctx,
                       seq_lens_encoder,
                       seq_lens_decoder,
                       step_seq_lens_decoder);
-  WRAPPER_DUMP_PARAM4(
-      ctx, prompt_lens, topk_ids, input_ids, block_tables);
+  WRAPPER_DUMP_PARAM4(ctx, prompt_lens, topk_ids, input_ids, block_tables);
   WRAPPER_DUMP_PARAM3(ctx, stop_flags, is_block_step, next_tokens);
   WRAPPER_DUMP_PARAM4(
       ctx, bsz, input_ids_stride, block_num_per_seq, block_size);

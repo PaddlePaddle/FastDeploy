@@ -138,8 +138,6 @@ class MTPProposer(Proposer):
         # Forward meta store the global meta information of the forward
         self.forward_meta = None
 
-        self.enable_mm = False
-
     def _update_mtp_config(self, main_model):
         """
         Update config for MTP from global config
@@ -164,7 +162,7 @@ class MTPProposer(Proposer):
         """
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
-    
+
     def dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to model_inputs"""
         max_dec_len = expected_decode_len + 1
