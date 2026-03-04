@@ -971,23 +971,13 @@ class EngineService:
                 self.llm_logger.error(f"fetching request error {e} {str(traceback.format_exc())}")
                 is_fetching = False
 
-        _wait_worker_start = None
         while self.running:
             with self._pause_cond:
                 self._pause_cond.wait_for(lambda: not self.is_paused)
             try:
                 if self.engine_worker_queue.exist_tasks():
-                    if _wait_worker_start is None:
-                        _wait_worker_start = time.time()
                     time.sleep(0.001)
                     continue
-                if _wait_worker_start is not None:
-                    _wait_dur = (time.time() - _wait_worker_start) * 1000
-                    self.llm_logger.info(
-                        f"[PERF-WAIT-WORKER] v1={envs.ENABLE_V1_DATA_PROCESSOR}, "
-                        f"wait_worker_free={_wait_dur:.3f}ms"
-                    )
-                    _wait_worker_start = None
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     if not is_fetching:
                         is_fetching = True
@@ -1009,9 +999,7 @@ class EngineService:
                 if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
                     self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
                 # 2. Schedule requests
-                _t_sched_start = time.time()
                 tasks, error_tasks = self.resource_manager.schedule()
-                _t_sched_end = time.time()
 
                 # 3. Send to engine
                 if tasks:
@@ -1057,19 +1045,7 @@ class EngineService:
                                 task.metrics.decode_inference_start_time = time.time()
                             else:
                                 task.metrics.inference_start_time = time.time()
-                    _t_put_start = time.time()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
-                    _t_put_end = time.time()
-                    prefill_ids = [t.request_id for t in tasks if t.task_type == RequestType.PREFILL]
-                    if prefill_ids:
-                        _running = sum(1 for f in self.resource_manager.stop_flags if not f)
-                        self.llm_logger.info(
-                            f"[PERF-SCHEDULE] v1={envs.ENABLE_V1_DATA_PROCESSOR}, "
-                            f"schedule_cost={(_t_sched_end - _t_sched_start)*1000:.3f}ms, "
-                            f"put_tasks_cost={(_t_put_end - _t_put_start)*1000:.3f}ms, "
-                            f"total_tasks={len(tasks)}, prefill_tasks={len(prefill_ids)}, "
-                            f"real_bsz={self.resource_manager.real_bsz}, running={_running}"
-                        )
 
                 # 4. Response error tasks
                 if error_tasks:
@@ -1195,6 +1171,10 @@ class EngineService:
                             request = Request.from_dict(data)
                         request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.requests_number.inc()
+                        trace_carrier = data.get("trace_carrier")
+                        if trace_carrier:
+                            request_id = data["request_id"].split("_")[0]
+                            tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_QUEUE_START, data["request_id"], data.get("user", ""))

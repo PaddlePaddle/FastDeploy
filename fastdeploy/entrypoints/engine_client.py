@@ -340,7 +340,9 @@ class EngineClient:
         try:
             chat_template_kwargs = task.get("chat_template_kwargs") or {}
             chat_template_kwargs.update({"chat_template": task.get("chat_template")})
-            chat_template_kwargs.update({"reasoning_effort": task.get("reasoning_effort")})
+            reasoning_effort = task.get("reasoning_effort")
+            if reasoning_effort is not None:
+                chat_template_kwargs["reasoning_effort"] = reasoning_effort
             task["chat_template_kwargs"] = chat_template_kwargs
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
