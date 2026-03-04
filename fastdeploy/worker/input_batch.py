@@ -642,7 +642,6 @@ class InputBatch:
                 )
                 self.image_features = None
                 self.image_features_list = None
-                print("ch -- debug self.rope_emb:", self.rope_emb.shape)
             else:
                 # Reset non-multimodal rope_emb
                 self.rope_emb = get_rope(

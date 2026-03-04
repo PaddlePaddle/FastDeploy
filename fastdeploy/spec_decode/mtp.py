@@ -533,7 +533,6 @@ class MTPProposer(Proposer):
                 self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.model_inputs["is_block_step"][idx : idx + 1] = False
                 continue
-        print("ch -- debug rope emb", self.model_inputs["rope_emb"].shape)
         # TODO(liuzichang): Solve splitewise-p bug to restore
         # self.model_inputs["seq_lens_this_time"] = self.model_inputs["seq_lens_this_time_buffer"][:num_running_requests]
         self.model_inputs.seq_lens_this_time = self.model_inputs["seq_lens_this_time_buffer"]
