@@ -129,7 +129,7 @@ class Glm4Moe(nn.Layer):
         self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
         self.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
         self.tp_group = fd_config.parallel_config.tp_group
-
+        self.enable_all_reduce_fusion = fd_config.parallel_config.enable_flashinfer_allreduce_fusion
         self.use_ep = self.expert_parallel_size > 1
         self.use_tp = self.tensor_parallel_size > 1
 
@@ -224,7 +224,7 @@ class Glm4MoeAttention(nn.Layer):
 
         self.o_proj = RowParallelLinear(
             fd_config,
-            prefix=f"{prefix}.o_proj",
+            prefix=f"{prefix}.enable_all_reduce.o_proj",
             input_size=fd_config.model_config.num_attention_heads * fd_config.model_config.head_dim,
             output_size=fd_config.model_config.hidden_size,
             layer_id=layer_id,
@@ -299,7 +299,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{prefix}.input_layernorm",
+            prefix=f"{prefix}.enable_all_reduce_fusion.input_layernorm",
             layer_id=layer_id,
         )
 
@@ -307,7 +307,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{prefix}.post_attention_layernorm",
+            prefix=f"{prefix}.enable_all_reduce_fusion.post_attention_layernorm",
             layer_id=layer_id,
         )
 
