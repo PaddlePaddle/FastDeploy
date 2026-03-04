@@ -913,7 +913,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
-                self.exist_prefill_flag = False
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 self.prompt_logprobs_reqs.pop(request.request_id, None)
                 self.in_progress_prompt_logprobs.pop(request.request_id, None)
@@ -2158,7 +2157,7 @@ class GPUModelRunner(ModelRunnerBase):
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
             )
 
-            return None, None, None, -1
+            return None, None, None
         else:
             hidden_states = rebuild_padding(
                 model_output,
