@@ -550,12 +550,14 @@ class GPUModelRunner(ModelRunnerBase):
                         multi_vision_inputs["grid_thw_lst_batches"].append(
                             paddle.to_tensor(inputs["grid_thw"][request.num_image_start : request.num_image_end])
                         )
-                        multi_vision_inputs["cu_seqlens"].extend(
-                            inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
-                        )
-                        multi_vision_inputs["vit_position_ids_lst"].extend(
-                            inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
-                        )
+                        if "vit_seqlen" in inputs:
+                            multi_vision_inputs["cu_seqlens"].extend(
+                                inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
+                            )
+                        if "vit_position_ids" in inputs:
+                            multi_vision_inputs["vit_position_ids_lst"].extend(
+                                inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
+                            )
                     else:
                         multi_vision_inputs["images_lst"].append(
                             paddle.to_tensor(
