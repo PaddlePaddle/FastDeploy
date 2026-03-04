@@ -158,7 +158,6 @@ def xpu_pre_process(
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
 
-    print(f"ch -- pre process rope_emb:{share_inputs['rope_emb'].shape}")
     xpu_forward_meta = XPUForwardMeta(
         ids_remove_padding=share_inputs["ids_remove_padding"],
         rotary_embs=share_inputs["rope_emb"],

@@ -60,9 +60,6 @@ def top_p_normalize_probs_paddle(
 
 def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_lens_encoder):
     real_bsz = seq_lens_this_time.shape[0]
-    print(f"ch -- debug real bsz: {real_bsz}")
-    print(f"ch -- debug top_p : {top_p}")
-    print(f"ch -- debug infer_seed : {infer_seed}")
     repeats = paddle.where(seq_lens_encoder[:real_bsz] == 0, seq_lens_this_time, paddle.ones_like(seq_lens_this_time))
     top_p_padding = paddle.repeat_interleave(top_p[:real_bsz], repeats).unsqueeze(1)
     top_k_padding = paddle.repeat_interleave(top_k[:real_bsz], repeats).unsqueeze(1)
@@ -1204,10 +1201,7 @@ class MTPSampler(nn.Layer):
             max_model_len,
         )
         probs = F.softmax(logits)
-
-        _, next_tokens = top_k_top_p_sampling(
-            probs, sampling_metadata.top_p, sampling_metadata.top_k, sampling_metadata.top_k_list
-        )
+        next_tokens = paddle.argmax(probs, axis=-1)
         # TODO(chenhuan09): add support for logprobs
         token_ids = None
         logprobs_tensors = None
