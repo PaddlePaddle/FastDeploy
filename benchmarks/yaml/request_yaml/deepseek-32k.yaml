@@ -1,5 +1,5 @@
-temperature: 0.8
-top_p: 0.8
+temperature: 1
+top_p: 1e-05
 presence_penalty: 0
 repetition_penalty: 1.0
 frequency_penalty: 0
