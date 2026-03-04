@@ -1640,7 +1640,7 @@ class XPUModelRunner(ModelRunnerBase):
                     sampler_output,
                     model_output_data,
                     self.share_inputs,
-                    self.parallel_config.data_parallel_size > 0,
+                    self.parallel_config.data_parallel_size > 1,
                     skip_save_output,
                 )
             else:
@@ -1650,7 +1650,7 @@ class XPUModelRunner(ModelRunnerBase):
                     share_inputs=self.share_inputs,
                     block_size=self.cache_config.block_size,
                     skip_save_output=skip_save_output,
-                    save_each_rank=self.parallel_config.data_parallel_size > 0,
+                    save_each_rank=self.parallel_config.data_parallel_size > 1,
                     async_output_queue=self.async_output_queue,
                     think_end_id=self.model_config.think_end_id,
                     line_break_id=self.model_config.line_break_id,
