@@ -121,6 +121,10 @@ class DeepSeekV3MoE(nn.Layer):
         super().__init__()
 
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.ep_size = fd_config.parallel_config.expert_parallel_size
+        self.attn_tp_size = fd_config.parallel_config.tensor_parallel_size
+        if self.ep_size > 1:
+            self.tp_size = 1
         self.norm_topk_prob = fd_config.model_config.norm_topk_prob
 
         weight_key_map = {
@@ -190,6 +194,10 @@ class DeepSeekV3MoE(nn.Layer):
     def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
         """ """
         shared_experts_out = self.shared_experts(hidden_states)
+
+        if self.attn_tp_size > 1 and self.ep_size > 1:
+            shared_experts_out = tensor_model_parallel_all_reduce(shared_experts_out)
+
         moe_out = self.experts(hidden_states, self.gate, forward_meta)
         moe_out = moe_out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
@@ -354,7 +362,10 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         compressed_kv = self.kv_a_layernorm(compressed_kv)[0]
 
-        if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
+        need_do_prefill = forward_meta.max_len_tensor_cpu[1] > 0
+        need_do_decode = forward_meta.max_len_tensor_cpu[2] > 0
+
+        if need_do_prefill:  # max_enc_len_this_time
             key_value = self.kv_b_proj(compressed_kv)
             key_value.reshape_(
                 [
@@ -385,10 +396,9 @@ class DeepseekV3MLAAttention(nn.Layer):
             fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
             fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
-
             fmha_out = fmha_out_prefill
 
-        if forward_meta.max_len_tensor_cpu[2]:  # max_dec_len_this_time
+        if need_do_decode:  # max_dec_len_this_time
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
@@ -419,10 +429,10 @@ class DeepseekV3MLAAttention(nn.Layer):
                 .reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
 
-            if fmha_out is None:
-                fmha_out = fmha_out_decode
+            if need_do_prefill:
+                fmha_out += fmha_out_decode
             else:
-                fmha_out = fmha_out + fmha_out_decode
+                fmha_out = fmha_out_decode
 
         output = self.o_proj(fmha_out)
         return output
@@ -508,13 +518,16 @@ class DeepSeekV3DecoderLayer(nn.Layer):
         mask_encoder_batch: paddle.Tensor,
     ):
         """ """
-        hidden_states, residual = self.input_layernorm(
-            hidden_states, residual_input=residual, forward_meta=forward_meta
-        )
+        if hidden_states.shape[0] > 0:
+            hidden_states, residual = self.input_layernorm(
+                hidden_states, residual_input=residual, forward_meta=forward_meta
+            )
 
-        hidden_states = self.self_attn(forward_meta, hidden_states, position_ids, mask_encoder_batch)
+            hidden_states = self.self_attn(forward_meta, hidden_states, position_ids, mask_encoder_batch)
 
-        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+            hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+        else:
+            residual = hidden_states
         hidden_states = self.mlp(hidden_states, forward_meta)
         return hidden_states, residual
 

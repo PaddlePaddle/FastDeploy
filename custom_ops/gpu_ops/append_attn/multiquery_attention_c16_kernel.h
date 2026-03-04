@@ -53,4 +53,5 @@ void MultiQueryAppendAttention(
     const bool is_decoder,
     cudaStream_t &stream,
     paddle::Tensor *out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);

@@ -18,6 +18,14 @@ Environment variables used by FastDeploy.
 import os
 from typing import Any, Callable
 
+
+def _validate_split_kv_size(value: int) -> int:
+    """Validate FD_DETERMINISTIC_SPLIT_KV_SIZE is a positive power of 2."""
+    if value <= 0 or (value & (value - 1)) != 0:
+        raise ValueError(f"FD_DETERMINISTIC_SPLIT_KV_SIZE must be a positive power of 2, got {value}.")
+    return value
+
+
 environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use BF16 on CPU.
     "FD_CPU_USE_BF16": lambda: os.getenv("FD_CPU_USE_BF16", "False"),
@@ -175,7 +183,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "DO_NOT_TRACK": lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
     # Usage stats server url
     "FD_USAGE_STATS_SERVER": lambda: os.getenv(
-        "FD_USAGE_STATS_SERVER", "http://fd-stats.baidu-int.com/fd/report/periodic"
+        "FD_USAGE_STATS_SERVER", "http://10.169.17.184:8089/fd/report/periodic"
     ),
     # Usage stats source
     "FD_USAGE_SOURCE": lambda: os.getenv("FD_USAGE_SOURCE", "Unknown"),
@@ -192,6 +200,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
     # Whether to use phi FP8 quantization,if 1,use paddle default.
     "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
+    # Whether to use phi MOE permute,if 1,use paddle default.
+    "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))),
     # Reserve output blocks for decoding requests when schedule new prefill requests
     "FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
         os.getenv("FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "16")
@@ -206,6 +216,18 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
     # File path for file storage backend
     "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
+    # Custom all-reduce max buffer size in MB (default 8MB).
+    # Increase this to avoid NCCL fallback for large tensors in deterministic mode.
+    # E.g. FD_CUSTOM_AR_MAX_SIZE_MB=128 for 128MB.
+    "FD_CUSTOM_AR_MAX_SIZE_MB": lambda: int(os.getenv("FD_CUSTOM_AR_MAX_SIZE_MB", "8")),
+    # Enable deterministic inference mode for chunked prefill alignment
+    "FD_DETERMINISTIC_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_MODE", "0"))),
+    # Split KV block size for deterministic alignment (must be power of 2 and > 0, default 16)
+    "FD_DETERMINISTIC_SPLIT_KV_SIZE": lambda: _validate_split_kv_size(
+        int(os.getenv("FD_DETERMINISTIC_SPLIT_KV_SIZE", "16"))
+    ),
+    # Enable determinism logging (print MD5 hashes and debug info)
+    "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
 }
