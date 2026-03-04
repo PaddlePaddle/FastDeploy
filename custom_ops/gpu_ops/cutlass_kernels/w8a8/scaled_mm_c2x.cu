@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/scaled_mm_c2x.cu
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/scaled_mm_c2x.cu
 
 #include "helper.h"
 #include <stddef.h>
@@ -20,7 +21,8 @@ using namespace fastdeploy;
 
 template <template <typename, typename> typename Epilogue,
           typename... EpilogueArgs>
-void cutlass_scaled_mm_sm75_epilogue(paddle::Tensor& out, paddle::Tensor const& a,
+void cutlass_scaled_mm_sm75_epilogue(paddle::Tensor& out,
+                                     paddle::Tensor const& a,
                                      paddle::Tensor const& b,
                                      EpilogueArgs&&... epilogue_args) {
   PD_CHECK(a.dtype() == paddle::DataType::INT8);
@@ -36,7 +38,8 @@ void cutlass_scaled_mm_sm75_epilogue(paddle::Tensor& out, paddle::Tensor const& 
   }
 }
 
-void cutlass_scaled_mm_sm75(paddle::Tensor& out, paddle::Tensor const& a,
+void cutlass_scaled_mm_sm75(paddle::Tensor& out,
+                            paddle::Tensor const& a,
                             paddle::Tensor const& b,
                             paddle::Tensor const& a_scales,
                             paddle::Tensor const& b_scales,
@@ -45,7 +48,8 @@ void cutlass_scaled_mm_sm75(paddle::Tensor& out, paddle::Tensor const& a,
   PD_CHECK(b_scales.dtype() == paddle::DataType::FLOAT32);
   if (bias) {
     PD_CHECK(bias->dtype() == out.dtype(),
-                "currently bias dtype must match output dtype ", out.dtype());
+             "currently bias dtype must match output dtype ",
+             out.dtype());
     return cutlass_scaled_mm_sm75_epilogue<c2x::ScaledEpilogueBias>(
         out, a, b, a_scales, b_scales, *bias);
   } else {
@@ -54,7 +58,8 @@ void cutlass_scaled_mm_sm75(paddle::Tensor& out, paddle::Tensor const& a,
   }
 }
 
-void cutlass_scaled_mm_azp_sm75(paddle::Tensor& out, paddle::Tensor const& a,
+void cutlass_scaled_mm_azp_sm75(paddle::Tensor& out,
+                                paddle::Tensor const& a,
                                 paddle::Tensor const& b,
                                 paddle::Tensor const& a_scales,
                                 paddle::Tensor const& b_scales,
@@ -75,7 +80,8 @@ void cutlass_scaled_mm_azp_sm75(paddle::Tensor& out, paddle::Tensor const& a,
 
 template <template <typename, typename> typename Epilogue,
           typename... EpilogueArgs>
-void cutlass_scaled_mm_sm80_epilogue(paddle::Tensor& out, paddle::Tensor const& a,
+void cutlass_scaled_mm_sm80_epilogue(paddle::Tensor& out,
+                                     paddle::Tensor const& a,
                                      paddle::Tensor const& b,
                                      EpilogueArgs&&... epilogue_args) {
   PD_CHECK(a.dtype() == paddle::DataType::INT8);
@@ -91,7 +97,8 @@ void cutlass_scaled_mm_sm80_epilogue(paddle::Tensor& out, paddle::Tensor const& 
   }
 }
 
-void cutlass_scaled_mm_sm80(paddle::Tensor& out, paddle::Tensor const& a,
+void cutlass_scaled_mm_sm80(paddle::Tensor& out,
+                            paddle::Tensor const& a,
                             paddle::Tensor const& b,
                             paddle::Tensor const& a_scales,
                             paddle::Tensor const& b_scales,
@@ -100,7 +107,8 @@ void cutlass_scaled_mm_sm80(paddle::Tensor& out, paddle::Tensor const& a,
   PD_CHECK(b_scales.dtype() == paddle::DataType::FLOAT32);
   if (bias) {
     PD_CHECK(bias->dtype() == out.dtype(),
-                "currently bias dtype must match output dtype ", out.dtype());
+             "currently bias dtype must match output dtype ",
+             out.dtype());
     return cutlass_scaled_mm_sm80_epilogue<c2x::ScaledEpilogueBias>(
         out, a, b, a_scales, b_scales, *bias);
   } else {
@@ -109,7 +117,8 @@ void cutlass_scaled_mm_sm80(paddle::Tensor& out, paddle::Tensor const& a,
   }
 }
 
-void cutlass_scaled_mm_azp_sm80(paddle::Tensor& out, paddle::Tensor const& a,
+void cutlass_scaled_mm_azp_sm80(paddle::Tensor& out,
+                                paddle::Tensor const& a,
                                 paddle::Tensor const& b,
                                 paddle::Tensor const& a_scales,
                                 paddle::Tensor const& b_scales,
@@ -130,14 +139,16 @@ void cutlass_scaled_mm_azp_sm80(paddle::Tensor& out, paddle::Tensor const& a,
 
 template <template <typename, typename> typename Epilogue,
           typename... EpilogueArgs>
-void cutlass_scaled_mm_sm89_epilogue(paddle::Tensor& out, paddle::Tensor const& a,
+void cutlass_scaled_mm_sm89_epilogue(paddle::Tensor& out,
+                                     paddle::Tensor const& a,
                                      paddle::Tensor const& b,
                                      EpilogueArgs&&... epilogue_args) {
   if (a.dtype() == paddle::DataType::INT8) {
     PD_CHECK(b.dtype() == paddle::DataType::INT8);
 
     if (out.dtype() == paddle::DataType::BFLOAT16) {
-      return cutlass_gemm_sm89_int8_dispatch<int8_t, cutlass::bfloat16_t,
+      return cutlass_gemm_sm89_int8_dispatch<int8_t,
+                                             cutlass::bfloat16_t,
                                              Epilogue>(
           out, a, b, std::forward<EpilogueArgs>(epilogue_args)...);
     } else {
@@ -151,18 +162,21 @@ void cutlass_scaled_mm_sm89_epilogue(paddle::Tensor& out, paddle::Tensor const& 
 
     if (out.dtype() == paddle::DataType::BFLOAT16) {
       return cutlass_gemm_sm89_fp8_dispatch<cutlass::float_e4m3_t,
-                                            cutlass::bfloat16_t, Epilogue>(
+                                            cutlass::bfloat16_t,
+                                            Epilogue>(
           out, a, b, std::forward<EpilogueArgs>(epilogue_args)...);
     } else {
       PD_CHECK(out.dtype() == paddle::DataType::FLOAT16);
       return cutlass_gemm_sm89_fp8_dispatch<cutlass::float_e4m3_t,
-                                            cutlass::half_t, Epilogue>(
+                                            cutlass::half_t,
+                                            Epilogue>(
           out, a, b, std::forward<EpilogueArgs>(epilogue_args)...);
     }
   }
 }
 
-void cutlass_scaled_mm_sm89(paddle::Tensor& out, paddle::Tensor const& a,
+void cutlass_scaled_mm_sm89(paddle::Tensor& out,
+                            paddle::Tensor const& a,
                             paddle::Tensor const& b,
                             paddle::Tensor const& a_scales,
                             paddle::Tensor const& b_scales,
@@ -171,7 +185,8 @@ void cutlass_scaled_mm_sm89(paddle::Tensor& out, paddle::Tensor const& a,
   PD_CHECK(b_scales.dtype() == paddle::DataType::FLOAT32);
   if (bias) {
     PD_CHECK(bias->dtype() == out.dtype(),
-                "currently bias dtype must match output dtype ", out.dtype());
+             "currently bias dtype must match output dtype ",
+             out.dtype());
     return cutlass_scaled_mm_sm89_epilogue<c2x::ScaledEpilogueBias>(
         out, a, b, a_scales, b_scales, *bias);
   } else {
@@ -180,7 +195,8 @@ void cutlass_scaled_mm_sm89(paddle::Tensor& out, paddle::Tensor const& a,
   }
 }
 
-void cutlass_scaled_mm_azp_sm89(paddle::Tensor& out, paddle::Tensor const& a,
+void cutlass_scaled_mm_azp_sm89(paddle::Tensor& out,
+                                paddle::Tensor const& a,
                                 paddle::Tensor const& b,
                                 paddle::Tensor const& a_scales,
                                 paddle::Tensor const& b_scales,

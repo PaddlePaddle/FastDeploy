@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/cutlass_extensions/epilogue/scaled_mm_epilogues_c3x.hpp
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/cutlass_extensions/epilogue/scaled_mm_epilogues_c3x.hpp
 
 #pragma once
 
@@ -24,24 +25,28 @@ namespace fastdeploy::c3x {
 
 using namespace cute;
 
-template <typename T> struct identity {
+template <typename T>
+struct identity {
   CUTLASS_HOST_DEVICE
   T operator()(T lhs) const { return lhs; }
 };
 
 template <typename ElementAcc, typename ElementD, typename TileShape>
 struct TrivialEpilogue {
-private:
+ private:
   using Accum = cutlass::epilogue::fusion::Sm90AccFetch;
   using Compute = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::epilogue::thread::Identity, ElementD, ElementAcc,
+      cutlass::epilogue::thread::Identity,
+      ElementD,
+      ElementAcc,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-public:
+ public:
   using EVTCompute = cutlass::epilogue::fusion::Sm90EVT<Compute, Accum>;
   using ArgumentType = typename EVTCompute::Arguments;
 
-  template <typename... Args> static ArgumentType prepare_args(Args... args) {
+  template <typename... Args>
+  static ArgumentType prepare_args(Args... args) {
     return {};
   }
 };
@@ -52,38 +57,60 @@ public:
  */
 template <typename ElementAcc, typename ElementD, typename TileShape>
 struct ScaledEpilogueBase {
-protected:
+ protected:
   using Accum = cutlass::epilogue::fusion::Sm90AccFetch;
 
   template <typename T>
   using ColOrScalarLoad = cutlass::epilogue::fusion::Sm90ColOrScalarBroadcast<
-      0 /*Stages*/, TileShape, T, Stride<Int<1>, Int<0>, Int<0>>>;
+      0 /*Stages*/,
+      TileShape,
+      T,
+      Stride<Int<1>, Int<0>, Int<0>>>;
 
   template <typename T>
   using RowOrScalarLoad = cutlass::epilogue::fusion::Sm90RowOrScalarBroadcast<
-      0 /*Stages*/, TileShape, T, Stride<Int<0>, Int<1>, Int<0>>>;
+      0 /*Stages*/,
+      TileShape,
+      T,
+      Stride<Int<0>, Int<1>, Int<0>>>;
 
   // Don't want to support nullptr by default
   template <typename T, bool EnableNullPtr = false>
   using ColLoad = cutlass::epilogue::fusion::Sm90ColBroadcast<
-      0 /*Stages*/, TileShape, T, T, Stride<Int<1>, Int<0>, Int<0>>,
-      128 / sizeof_bits_v<T>, EnableNullPtr>;
+      0 /*Stages*/,
+      TileShape,
+      T,
+      T,
+      Stride<Int<1>, Int<0>, Int<0>>,
+      128 / sizeof_bits_v<T>,
+      EnableNullPtr>;
 
   // Don't want to support nullptr by default
   template <typename T, bool EnableNullPtr = false>
   using RowLoad = cutlass::epilogue::fusion::Sm90RowBroadcast<
-      0 /*Stages*/, TileShape, T, T, Stride<Int<0>, Int<1>, Int<0>>,
-      128 / sizeof_bits_v<T>, EnableNullPtr>;
+      0 /*Stages*/,
+      TileShape,
+      T,
+      T,
+      Stride<Int<0>, Int<1>, Int<0>>,
+      128 / sizeof_bits_v<T>,
+      EnableNullPtr>;
 
   template <typename T>
   using ColOrScalarLoadArray =
       cutlass::epilogue::fusion::Sm90ColOrScalarBroadcastArray<
-          0 /*Stages*/, TileShape, T, Stride<Int<1>, Int<0>, Int<0>>>;
+          0 /*Stages*/,
+          TileShape,
+          T,
+          Stride<Int<1>, Int<0>, Int<0>>>;
 
   template <typename T>
   using RowOrScalarLoadArray =
       cutlass::epilogue::fusion::Sm90RowOrScalarBroadcastArray<
-          0 /*Stages*/, TileShape, T, Stride<Int<0>, Int<1>, Int<0>>>;
+          0 /*Stages*/,
+          TileShape,
+          T,
+          Stride<Int<0>, Int<1>, Int<0>>>;
 
   // This utility function constructs the arguments for the load descriptors
   // from a tensor. It can handle both row and column, as well as row/column or
@@ -142,24 +169,28 @@ protected:
 template <typename ElementAcc, typename ElementD, typename TileShape>
 struct ScaledEpilogue
     : private ScaledEpilogueBase<ElementAcc, ElementD, TileShape> {
-private:
+ private:
   using SUPER = ScaledEpilogueBase<ElementAcc, ElementD, TileShape>;
   using Accum = typename SUPER::Accum;
   using ScaleA = typename SUPER::template ColOrScalarLoad<float>;
   using ScaleB = typename SUPER::template RowOrScalarLoad<float>;
 
   using Compute0 = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiplies, float, float,
+      cutlass::multiplies,
+      float,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTCompute0 =
       cutlass::epilogue::fusion::Sm90EVT<Compute0, ScaleB, Accum>;
 
   using Compute1 = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiplies, ElementD, float,
+      cutlass::multiplies,
+      ElementD,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-public:
+ public:
   using EVTCompute =
       cutlass::epilogue::fusion::Sm90EVT<Compute1, ScaleA, EVTCompute0>;
   using ArgumentType = typename EVTCompute::Arguments;
@@ -186,7 +217,7 @@ public:
 template <typename ElementAcc, typename ElementD, typename TileShape>
 struct ScaledEpilogueBias
     : private ScaledEpilogueBase<ElementAcc, ElementD, TileShape> {
-private:
+ private:
   using SUPER = ScaledEpilogueBase<ElementAcc, ElementD, TileShape>;
   using Accum = typename SUPER::Accum;
   using ScaleA = typename SUPER::template ColOrScalarLoad<float>;
@@ -194,17 +225,21 @@ private:
   using Bias = typename SUPER::template RowLoad<ElementD>;
 
   using Compute0 = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiplies, float, float,
+      cutlass::multiplies,
+      float,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTCompute0 =
       cutlass::epilogue::fusion::Sm90EVT<Compute0, ScaleB, Accum>;
 
   using Compute1 = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiply_add, ElementD, float,
+      cutlass::multiply_add,
+      ElementD,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-public:
+ public:
   using EVTCompute =
       cutlass::epilogue::fusion::Sm90EVT<Compute1, ScaleA, EVTCompute0, Bias>;
 
@@ -229,7 +264,7 @@ public:
 template <typename ElementAcc, typename ElementD, typename TileShape>
 struct ScaledEpilogueColumnBias
     : private ScaledEpilogueBase<ElementAcc, ElementD, TileShape> {
-private:
+ private:
   using SUPER = ScaledEpilogueBase<ElementAcc, ElementD, TileShape>;
   using Accum = typename SUPER::Accum;
   using ScaleA = typename SUPER::template ColOrScalarLoad<float>;
@@ -237,17 +272,21 @@ private:
   using Bias = typename SUPER::template ColLoad<ElementD>;
 
   using Compute0 = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiplies, float, float,
+      cutlass::multiplies,
+      float,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTCompute0 =
       cutlass::epilogue::fusion::Sm90EVT<Compute0, ScaleB, Accum>;
 
   using Compute1 = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiply_add, ElementD, float,
+      cutlass::multiply_add,
+      ElementD,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-public:
+ public:
   using EVTCompute =
       cutlass::epilogue::fusion::Sm90EVT<Compute1, ScaleA, EVTCompute0, Bias>;
 
@@ -275,7 +314,7 @@ public:
 template <typename ElementAcc, typename ElementD, typename TileShape>
 struct ScaledEpilogueBiasAzp
     : private ScaledEpilogueBase<ElementAcc, ElementD, TileShape> {
-private:
+ private:
   using SUPER = ScaledEpilogueBase<ElementAcc, ElementD, TileShape>;
   using Accum = typename SUPER::Accum;
   using ScaleA = typename SUPER::template ColOrScalarLoad<float>;
@@ -287,33 +326,39 @@ private:
 
   // Compute float(accum - azp_adj), both operands are int32_t
   using ComputeAzp = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::minus, float, int32_t,
+      cutlass::minus,
+      float,
+      int32_t,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTComputeAzp =
       cutlass::epilogue::fusion::Sm90EVT<ComputeAzp, Accum, AzpWithAdj>;
 
   using ComputeScaleB = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiplies, float, float,
+      cutlass::multiplies,
+      float,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTComputeScaleB =
       cutlass::epilogue::fusion::Sm90EVT<ComputeScaleB, ScaleB, EVTComputeAzp>;
 
   using ComputeScaleBiasA = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiply_add, ElementD, float,
+      cutlass::multiply_add,
+      ElementD,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-public:
-  using EVTCompute =
-      cutlass::epilogue::fusion::Sm90EVT<ComputeScaleBiasA, ScaleA,
-                                         EVTComputeScaleB, Bias>;
+ public:
+  using EVTCompute = cutlass::epilogue::fusion::
+      Sm90EVT<ComputeScaleBiasA, ScaleA, EVTComputeScaleB, Bias>;
   using ArgumentType = typename EVTCompute::Arguments;
 
-  static ArgumentType
-  prepare_args(paddle::Tensor const &a_scales, paddle::Tensor const &b_scales,
-               paddle::Tensor const &azp_adj,
-               paddle::optional<paddle::Tensor> const &bias) {
+  static ArgumentType prepare_args(
+      paddle::Tensor const &a_scales,
+      paddle::Tensor const &b_scales,
+      paddle::Tensor const &azp_adj,
+      paddle::optional<paddle::Tensor> const &bias) {
     auto a_args = SUPER::template args_from_tensor<ScaleA, float>(a_scales);
     auto b_args = SUPER::template args_from_tensor<ScaleB, float>(b_scales);
     auto bias_args = SUPER::template args_from_tensor<Bias, ElementD>(bias);
@@ -340,7 +385,7 @@ public:
 template <typename ElementAcc, typename ElementD, typename TileShape>
 struct ScaledEpilogueBiasAzpToken
     : private ScaledEpilogueBase<ElementAcc, ElementD, TileShape> {
-private:
+ private:
   using SUPER = ScaledEpilogueBase<ElementAcc, ElementD, TileShape>;
   using Accum = typename SUPER::Accum;
   using ScaleA = typename SUPER::template ColOrScalarLoad<float>;
@@ -355,7 +400,9 @@ private:
 
   // Compute azp * azp_adj
   using ComputeAzp = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiplies, int32_t, int32_t,
+      cutlass::multiplies,
+      int32_t,
+      int32_t,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTComputeAzp =
@@ -363,33 +410,40 @@ private:
 
   // Compute float(accum - azp*azp_adj), all operands are int32_t
   using ComputeAcc = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::minus, float, int32_t,
+      cutlass::minus,
+      float,
+      int32_t,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTComputeAcc =
       cutlass::epilogue::fusion::Sm90EVT<ComputeAcc, Accum, EVTComputeAzp>;
 
   using ComputeScaleB = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiplies, float, float,
+      cutlass::multiplies,
+      float,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTComputeScaleB =
       cutlass::epilogue::fusion::Sm90EVT<ComputeScaleB, ScaleB, EVTComputeAcc>;
 
   using ComputeScaleBiasA = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiply_add, ElementD, float,
+      cutlass::multiply_add,
+      ElementD,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-public:
-  using EVTCompute =
-      cutlass::epilogue::fusion::Sm90EVT<ComputeScaleBiasA, ScaleA,
-                                         EVTComputeScaleB, Bias>;
+ public:
+  using EVTCompute = cutlass::epilogue::fusion::
+      Sm90EVT<ComputeScaleBiasA, ScaleA, EVTComputeScaleB, Bias>;
   using ArgumentType = typename EVTCompute::Arguments;
 
-  static ArgumentType
-  prepare_args(paddle::Tensor const &a_scales, paddle::Tensor const &b_scales,
-               paddle::Tensor const &azp_adj, paddle::Tensor const &azp,
-               paddle::optional<paddle::Tensor> const &bias) {
+  static ArgumentType prepare_args(
+      paddle::Tensor const &a_scales,
+      paddle::Tensor const &b_scales,
+      paddle::Tensor const &azp_adj,
+      paddle::Tensor const &azp,
+      paddle::optional<paddle::Tensor> const &bias) {
     auto a_args = SUPER::template args_from_tensor<ScaleA, float>(a_scales);
     auto b_args = SUPER::template args_from_tensor<ScaleB, float>(b_scales);
     auto bias_args = SUPER::template args_from_tensor<Bias, ElementD>(bias);
@@ -414,24 +468,28 @@ public:
 template <typename ElementAcc, typename ElementD, typename EpilogueDescriptor>
 struct ScaledEpilogueArray
     : private ScaledEpilogueBase<ElementAcc, ElementD, EpilogueDescriptor> {
-private:
+ private:
   using SUPER = ScaledEpilogueBase<ElementAcc, ElementD, EpilogueDescriptor>;
   using Accum = typename SUPER::Accum;
   using ScaleA = typename SUPER::template ColOrScalarLoadArray<float>;
   using ScaleB = typename SUPER::template RowOrScalarLoadArray<float>;
 
   using Compute0 = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiplies, float, float,
+      cutlass::multiplies,
+      float,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTCompute0 =
       cutlass::epilogue::fusion::Sm90EVT<Compute0, ScaleB, Accum>;
 
   using Compute1 = cutlass::epilogue::fusion::Sm90Compute<
-      cutlass::multiplies, ElementD, float,
+      cutlass::multiplies,
+      ElementD,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-public:
+ public:
   using EVTCompute =
       cutlass::epilogue::fusion::Sm90EVT<Compute1, ScaleA, EVTCompute0>;
   using ArgumentType = typename EVTCompute::Arguments;
@@ -441,7 +499,8 @@ public:
 
   static ArgumentType prepare_args(float const *const *a_scales_ptr,
                                    float const *const *b_scales_ptr,
-                                   bool a_col_broadcast, bool b_row_broadcast) {
+                                   bool a_col_broadcast,
+                                   bool b_row_broadcast) {
     auto a_args = SUPER::template args_from_tensor<ScaleAArray, float>(
         a_scales_ptr, a_col_broadcast);
     auto b_args = SUPER::template args_from_tensor<ScaleBArray, float>(
@@ -452,4 +511,4 @@ public:
   }
 };
 
-}; // namespace fastdeploy::c3x
+};  // namespace fastdeploy::c3x
