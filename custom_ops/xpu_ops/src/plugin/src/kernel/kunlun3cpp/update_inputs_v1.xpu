@@ -19,7 +19,6 @@ __global__ void update_inputs_v1(bool* not_need_stop,
                                  int64_t* topk_ids,
                                  int64_t* input_ids,
                                  int* block_tables,
-                                 const int64_t* stop_nums,
                                  bool* stop_flags,
                                  bool* is_block_step,
                                  const int64_t* next_tokens,
@@ -143,9 +142,7 @@ __global__ void update_inputs_v1(bool* not_need_stop,
       stop_sum += stop_flags_int_sm[i];
     }
     // printf("stop_sum : %d\n", stop_sum);
-    int64_t stop_num;
-    GM2LM(stop_nums, &stop_num, sizeof(int64_t));
-    bool not_need_stop_update = stop_sum < static_cast<int>(stop_num);
+    bool not_need_stop_update = stop_sum < max_bsz;
     mfence_lm();
     LM2GM(&not_need_stop_update, not_need_stop, sizeof(bool));
   }
