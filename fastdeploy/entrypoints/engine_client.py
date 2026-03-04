@@ -462,7 +462,7 @@ class EngineClient:
                     f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to {data['max_tokens']}"
                 )
             if data.get("reasoning_effort") is not None:
-                data["enable_thinking"] = False
+                data["reasoning_max_tokens"] = None
                 api_server_logger.warning(
                     f"req_id: {data['request_id']}, reasoning_max_tokens and reasoning_effort are both set, "
                     f"enable_thinking will be disabled."
