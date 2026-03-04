@@ -47,8 +47,8 @@ def _create_tokens_tensor(
     batch_size: int,
     max_seq_len: int,
 ) -> paddle.Tensor:
-    pre_token_ids = paddle.full(shape=[batch_size, max_seq_len], fill_value=-1, dtype="int64")
-    return pre_token_ids
+    token_ids_all = paddle.full(shape=[batch_size, max_seq_len], fill_value=-1, dtype="int64")
+    return token_ids_all
 
 
 def _create_default_sampling_metadata(
@@ -62,10 +62,9 @@ def _create_default_sampling_metadata(
         temperature=paddle.full(shape=[batch_size, 1], fill_value=0.9, dtype="float32"),
         top_p=paddle.full(shape=[batch_size, 1], fill_value=0.7, dtype="float32"),
         top_k=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int32"),
-        prompt_ids=paddle.full(shape=[batch_size, max_seq_len], fill_value=0, dtype="int64"),
-        prompt_lens=paddle.full(shape=[batch_size, 1], fill_value=5, dtype="int64"),
+        prompt_lens=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64"),
         step_idx=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64"),
-        pre_token_ids=_create_tokens_tensor(batch_size, max_seq_len),
+        token_ids_all=_create_tokens_tensor(batch_size, max_seq_len),
         frequency_penalties=_create_penalty_tensor(batch_size, 0.0),
         presence_penalties=_create_penalty_tensor(batch_size, 0.0),
         repetition_penalties=_create_penalty_tensor(batch_size, 1.0),

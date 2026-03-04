@@ -36,8 +36,8 @@ UVICORN_CONFIG = {
     "formatters": {
         "custom": {
             "()": "colorlog.ColoredFormatter",
-            "format": "[%(log_color)s%(asctime)s] [%(levelname)+8s] %(reset)s - %(message)s%(reset)s",
-            "datefmt": "%Y-%m-%d %H:%M:%S",  # 时间戳格式
+            "format": "%(log_color)s%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s%(reset)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",  # Timestamp format
             "log_colors": {
                 "DEBUG": "cyan",
                 "INFO": "green",

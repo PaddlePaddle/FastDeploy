@@ -62,7 +62,8 @@ void CascadeAppendAttentionC8Kernel(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window) {
+    const int sliding_window = 0,
+    const int sink_size = 0) {
   const auto token_num = meta_data.token_nums;
   const auto block_size = meta_data.block_size;
   const auto num_heads = meta_data.q_num_heads;
@@ -131,7 +132,8 @@ void CascadeAppendAttentionC8Kernel(
                                 is_decoder,
                                 stream,
                                 out,
-                                sliding_window);
+                                sliding_window,
+                                sink_size);
                           })})})})})})})
 }
 
@@ -173,7 +175,8 @@ CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float16, false>(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 template void
 CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float16, true>(
@@ -213,7 +216,8 @@ CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float16, true>(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 template void
 CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float8_e4m3fn, false>(
@@ -253,7 +257,8 @@ CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float8_e4m3fn, false>(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 template void
 CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float8_e4m3fn, true>(
@@ -293,7 +298,8 @@ CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float8_e4m3fn, true>(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 template void CascadeAppendAttentionC8Kernel<paddle::float16, int8_t, false>(
     const AppendAttnMetaData& meta_data,
@@ -332,7 +338,8 @@ template void CascadeAppendAttentionC8Kernel<paddle::float16, int8_t, false>(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 template void CascadeAppendAttentionC8Kernel<paddle::float16, int8_t, true>(
     const AppendAttnMetaData& meta_data,
@@ -371,7 +378,8 @@ template void CascadeAppendAttentionC8Kernel<paddle::float16, int8_t, true>(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 template void
 CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::bfloat16, false>(
@@ -411,7 +419,8 @@ CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::bfloat16, false>(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 template void
 CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::bfloat16, true>(
@@ -451,7 +460,8 @@ CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::bfloat16, true>(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 template void
 CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::float8_e4m3fn, false>(
@@ -491,7 +501,8 @@ CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::float8_e4m3fn, false>(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 template void
 CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::float8_e4m3fn, true>(
@@ -531,7 +542,8 @@ CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::float8_e4m3fn, true>(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, int8_t, false>(
     const AppendAttnMetaData& meta_data,
@@ -570,7 +582,8 @@ template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, int8_t, false>(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, int8_t, true>(
     const AppendAttnMetaData& meta_data,
@@ -609,4 +622,5 @@ template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, int8_t, true>(
     const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
