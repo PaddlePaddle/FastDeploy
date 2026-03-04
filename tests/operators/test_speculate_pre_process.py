@@ -258,8 +258,7 @@ class TestSpeculatePreProcess(unittest.TestCase):
         fake_cu_seqlens_q_output.copy_(gpu_outs[-3])
         fake_batch_id_per_token_output.copy_(gpu_outs[-2])
         # test slice
-        fake_batch_id_per_token_output[:gpu_outs[-1].item()]
-
+        fake_batch_id_per_token_output[: gpu_outs[-1].item()]
 
     # ----------------------------------------------------------------
     # Test 3: exact token values — manually verify ids_remove_padding
