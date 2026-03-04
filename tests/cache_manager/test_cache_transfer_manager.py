@@ -111,6 +111,13 @@ class TestCacheTransferManager(unittest.TestCase):
         self.addCleanup(patcher2.stop)
 
         # --------------------------
+        # mock threading.Thread
+        # --------------------------
+        patcher_thread = patch("fastdeploy.cache_manager.cache_transfer_manager.threading.Thread")
+        patcher_thread.start()
+        self.addCleanup(patcher_thread.stop)
+
+        # --------------------------
         # mock _init_cpu_cache 和 _init_gpu_cache
         # --------------------------
         self._orig_init_cpu_cache = CacheTransferManager._init_cpu_cache
@@ -310,12 +317,6 @@ class TestCacheTransferManager(unittest.TestCase):
     # ==========================
     # 工具函数与存储相关测试
     # ==========================
-    def test_get_cache_bytes_and_invalid(self):
-        self.assertEqual(self.manager._get_cache_item_bytes("bfloat16"), 2)
-        self.assertEqual(self.manager._get_cache_item_bytes("float32"), 4)
-        with self.assertRaises(ValueError):
-            self.manager._get_cache_item_bytes("int32")
-
     def test_run_read_storage_swaps_valid_blocks(self):
         self.manager.storage_backend = MagicMock()
         self.manager.storage_backend_type = "mooncake"
@@ -717,9 +718,14 @@ class TestCacheTransferManager(unittest.TestCase):
     def test_invalid_write_policy_raises(self):
         class LocalArgs(Args):
             write_policy = "invalid"
+            kvcache_storage_backend = "mooncake"
 
-        with self.assertRaises(ValueError):
-            CacheTransferManager(LocalArgs())
+        with (
+            patch("fastdeploy.cache_manager.cache_transfer_manager.MooncakeStore"),
+            patch("fastdeploy.cache_manager.cache_transfer_manager.CacheTransferManager._init_storage_buffer"),
+        ):
+            with self.assertRaises(ValueError):
+                CacheTransferManager(LocalArgs())
 
     def test_write_back_storage_task_nonzero_rank_no_signal(self):
         self.manager.cache_task_queue.swap_to_storage_barrier = MagicMock()

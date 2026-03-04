@@ -42,6 +42,10 @@ void PagedAttnKernel(const paddle::Tensor& q,
                      int rope_batch_stride,
                      bool is_interleaved_rope_mode,
                      paddle::Tensor& out) {
+  auto dev_ctx = static_cast<const phi::CustomContext*>(
+      paddle::experimental::DeviceContextPool::Instance().Get(q.place()));
+  auto stream = static_cast<const cudaStream_t>(dev_ctx->stream());
+
   if (alibi_slopes) {
     PADDLE_ENFORCE_EQ(alibi_slopes.get().dtype(),
                       paddle::DataType::FLOAT32,
@@ -174,6 +178,7 @@ void PagedAttnKernel(const paddle::Tensor& q,
 
   cuinferHandle_t cuinfer_handle =
       iluvatar::getContextInstance()->getIxInferHandle();
+  CUINFER_CHECK(cuinferSetStream(cuinfer_handle, stream));
 
   size_t workspace_size = 0;
   CUINFER_CHECK(cuInferPageAttentionGetWorkspaceV7(num_seqs,

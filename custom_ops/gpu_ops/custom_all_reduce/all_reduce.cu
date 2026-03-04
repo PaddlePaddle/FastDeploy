@@ -58,7 +58,7 @@ void decode_alltoall_transpose(paddle::Tensor& inp,
   auto fa = reinterpret_cast<paddle::CustomAllreduce*>(_fa);
   auto stream = inp.stream();
 
-  auto input_size = inp.numel() * 2;
+  auto input_size = inp.numel() * phi::SizeOf(inp.dtype());
   auto token_num = inp.shape()[0];
   auto hidden_size = inp.shape()[1];
   auto reg_buffer = reinterpret_cast<void*>(_reg_buffer);
@@ -121,7 +121,7 @@ void all_reduce(paddle::Tensor& inp,
   auto fa = reinterpret_cast<paddle::CustomAllreduce*>(_fa);
   auto stream = inp.stream();
 
-  auto input_size = inp.numel() * 2;
+  auto input_size = inp.numel() * phi::SizeOf(inp.dtype());
   auto reg_buffer = reinterpret_cast<void*>(_reg_buffer);
   if (reg_buffer) {
     cudaMemcpyAsync(

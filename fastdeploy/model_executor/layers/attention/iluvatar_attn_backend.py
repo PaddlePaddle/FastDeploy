@@ -50,16 +50,14 @@ class IluvatarAttentionMetadata(AttentionMetadata):
     softcap: float = 0.0
     use_cuda_graph: bool = False
     use_sqrt_alibi: bool = False
-
-
-# qk[seq, h, d], cos/sin [seq, 1, d]
-def apply_rope(qk, cos, sin):
-    rotate_half = paddle.reshape(
-        paddle.stack([-qk[..., 1::2], qk[..., 0::2]], axis=-1),
-        paddle.shape(qk),
-    )
-    out = paddle.add(paddle.multiply(qk, cos), paddle.multiply(rotate_half, sin))
-    return paddle.cast(out, qk.dtype)
+    prefill_rope_cos: paddle.Tensor = None
+    prefill_rope_sin: paddle.Tensor = None
+    prefill_cu_seqlens_q: paddle.Tensor = None
+    prefill_block_tables: paddle.Tensor = None
+    decode_rope_cos: paddle.Tensor = None
+    decode_rope_sin: paddle.Tensor = None
+    decode_seq_lens: paddle.Tensor = None
+    decode_block_tables: paddle.Tensor = None
 
 
 class IluvatarAttnBackend(AttentionBackend):
@@ -83,8 +81,6 @@ class IluvatarAttnBackend(AttentionBackend):
         assert self.block_size == 16, "Iluvatar paged attn requires block_size must be 16."
         self.max_context_len = fd_config.model_config.max_model_len
         self.causal = getattr(fd_config.model_config, "causal", True)
-        self.speculate_method = getattr(fd_config.parallel_config, "speculate_method", None)
-        self.use_speculate = self.speculate_method is not None
         self.num_kv_heads = kv_num_heads
         self.num_heads = num_heads
         self.total_num_heads = num_heads + 2 * kv_num_heads
@@ -92,7 +88,6 @@ class IluvatarAttnBackend(AttentionBackend):
         self.hidden_dim = fd_config.model_config.hidden_size
         # note: scale need to change if using MLA
         self.scale = 1.0 / sqrt(head_dim)
-        self.num_layers = fd_config.model_config.num_hidden_layers
         self.dtype = paddle.get_default_dtype()
         self.enable_mm = fd_config.model_config.enable_mm
         self.rope_batch_stride = self.max_context_len * self.head_dim if self.enable_mm else 0
@@ -101,64 +96,80 @@ class IluvatarAttnBackend(AttentionBackend):
         else:
             self.is_interleaved_rope_mode = True
 
-    def split_cos_sin(self, batch_ids, forward_meta: ForwardMeta):
+        # enable cuda_graph if qkv is only pure decode stage
+        # pre-alloc is for enabling cuda graph
+        self.attention_metadata.prefill_rope_cos = paddle.empty(shape=(), dtype="float32")
+        self.attention_metadata.prefill_rope_sin = paddle.empty(shape=(), dtype="float32")
+        self.attention_metadata.prefill_cu_seqlens_q = paddle.empty(shape=(), dtype="int32")
+        self.attention_metadata.prefill_block_tables = paddle.empty(shape=(), dtype="int32")
+        self.attention_metadata.decode_rope_cos = paddle.empty(shape=(), dtype="float32")
+        self.attention_metadata.decode_rope_sin = paddle.empty(shape=(), dtype="float32")
+        self.attention_metadata.decode_seq_lens = paddle.empty(shape=(), dtype="int32")
+        self.attention_metadata.decode_block_tables = paddle.empty(shape=(), dtype="int32")
+
+    def split_and_copy_rope(self, batch_ids, forward_meta, stage):
         if self.enable_mm:
             # the num_seqs dim of rotary_embs > 1 (e.g. ernie-vl and paddleocr-vl)
-            cos = forward_meta.rotary_embs[batch_ids, 0, 0, :, :, :]
-            sin = forward_meta.rotary_embs[batch_ids, 1, 0, :, :, :]
+            _1d_batch_ids = batch_ids.unsqueeze(0) if batch_ids.dim() == 0 else batch_ids
+            cos = forward_meta.rotary_embs[_1d_batch_ids, 0, 0, :, :, :]
+            sin = forward_meta.rotary_embs[_1d_batch_ids, 1, 0, :, :, :]
         else:
             #  the num_seqs dim of rotary_embs = 1 (e.g. ernie-text)
             cos = forward_meta.rotary_embs[0, 0, :, :, :]
             sin = forward_meta.rotary_embs[1, 0, :, :, :]
-        return cos, sin
+
+        if stage == "prefill":
+            self.attention_metadata.prefill_rope_cos.copy_(cos)
+            self.attention_metadata.prefill_rope_sin.copy_(sin)
+        elif stage == "decode":
+            self.attention_metadata.decode_rope_cos.copy_(cos)
+            self.attention_metadata.decode_rope_sin.copy_(sin)
+        else:
+            raise ValueError("Only support stage is prefill or decode")
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
         self.prefill_info_dict = {}
         self.decode_info_dict = {}
-        self.prefill_info_dict["batch_ids"] = paddle.where(forward_meta.seq_lens_encoder)[0]
-        self.decode_info_dict["batch_ids"] = paddle.where(forward_meta.seq_lens_decoder)[0]
-        self.prefill_len = len(self.prefill_info_dict["batch_ids"])
-        self.decode_len = len(self.decode_info_dict["batch_ids"])
-        prefill_batch_ids = self.prefill_info_dict["batch_ids"]
-        decode_batch_ids = self.decode_info_dict["batch_ids"]
-        if prefill_batch_ids.dim() == 0:
-            prefill_batch_ids = prefill_batch_ids.unsqueeze(0)
-        if decode_batch_ids.dim() == 0:
-            decode_batch_ids = decode_batch_ids.unsqueeze(0)
+        prefill_batch_ids = paddle.where(forward_meta.seq_lens_encoder)[0]
+        decode_batch_ids = paddle.where(forward_meta.seq_lens_decoder)[0]
+        self.prefill_len = len(prefill_batch_ids)
+        self.decode_len = len(decode_batch_ids)
         # only prefill
         if self.decode_len == 0:
             self.mixed = False
-            cu_seq_ids = self.prefill_info_dict["batch_ids"] + 1
-            self.prefill_info_dict["cu_seqlens_q"] = paddle.concat(
-                [forward_meta.cu_seqlens_q[:1], forward_meta.cu_seqlens_q[cu_seq_ids]]
-            )
-            self.rope_cos, self.rope_sin = self.split_cos_sin(prefill_batch_ids, forward_meta)
+            cu_seq_ids = prefill_batch_ids + 1
+            cu_seqlens_q = paddle.concat([forward_meta.cu_seqlens_q[:1], forward_meta.cu_seqlens_q[cu_seq_ids]])
+            self.split_and_copy_rope(prefill_batch_ids, forward_meta, "prefill")
+
+            self.attention_metadata.prefill_cu_seqlens_q.copy_(cu_seqlens_q)
+            self.attention_metadata.prefill_block_tables.copy_(forward_meta.block_tables[prefill_batch_ids, :])
         # only decode
         elif self.prefill_len == 0:
             self.mixed = False
-            self.rope_cos, self.rope_sin = self.split_cos_sin(decode_batch_ids, forward_meta)
+            self.split_and_copy_rope(decode_batch_ids, forward_meta, "decode")
+            self.attention_metadata.decode_seq_lens.copy_(forward_meta.seq_lens_decoder[decode_batch_ids, 0] + 1)
+            self.attention_metadata.decode_block_tables.copy_(forward_meta.block_tables[decode_batch_ids, :])
+
         # both prefill and decode
         else:
             self.mixed = True
-            self.prefill_rope_cos, self.prefill_rope_sin = self.split_cos_sin(prefill_batch_ids, forward_meta)
-            self.decode_rope_cos, self.decode_rope_sin = self.split_cos_sin(decode_batch_ids, forward_meta)
+            self.split_and_copy_rope(prefill_batch_ids, forward_meta, "prefill")
+            self.split_and_copy_rope(decode_batch_ids, forward_meta, "decode")
             self.prefill_num_tokens = paddle.sum(forward_meta.seq_lens_encoder).item()
-            self.prefill_info_dict["cu_seqlens_q"] = paddle.zeros(
-                [self.prefill_len + 1], dtype=forward_meta.cu_seqlens_q.dtype
-            )
-            self.prefill_info_dict["cu_seqlens_q"][1:] = forward_meta.seq_lens_encoder[
-                self.prefill_info_dict["batch_ids"], 0
-            ]
+            cu_seqlens_q = paddle.zeros([self.prefill_len + 1], dtype=forward_meta.cu_seqlens_q.dtype)
+            cu_seqlens_q[1:] = forward_meta.seq_lens_encoder[prefill_batch_ids, 0]
             # NOTE: The explicit dtype='int32' is required for Iluvatar hardware compatibility.
-            self.prefill_info_dict["cu_seqlens_q"] = paddle.cumsum(
-                self.prefill_info_dict["cu_seqlens_q"], dtype="int32"
-            )
+            cu_seqlens_q = paddle.cumsum(cu_seqlens_q, dtype="int32")
+
+            self.attention_metadata.prefill_cu_seqlens_q.copy_(cu_seqlens_q)
+            self.attention_metadata.prefill_block_tables.copy_(forward_meta.block_tables[prefill_batch_ids, :])
+            self.attention_metadata.decode_seq_lens.copy_(forward_meta.seq_lens_decoder[decode_batch_ids, 0] + 1)
+            self.attention_metadata.decode_block_tables.copy_(forward_meta.block_tables[decode_batch_ids, :])
 
             self.tmp_buffer = paddle.zeros(
                 [self.prefill_num_tokens + self.decode_len, self.hidden_dim], dtype=self.dtype
             )
-
             prefill_start, decode_start, start = 0, self.prefill_num_tokens, 0
             non_zeros_ids = paddle.where(forward_meta.seq_lens_this_time)[0]
             non_zeros_seq_lens = forward_meta.seq_lens_this_time[non_zeros_ids]
@@ -251,10 +262,10 @@ class IluvatarAttnBackend(AttentionBackend):
                 qkv,
                 k_cache,
                 v_cache,
-                block_tables=forward_meta.block_tables[self.prefill_info_dict["batch_ids"], :],
-                cu_seqlens_qkv=self.prefill_info_dict["cu_seqlens_q"],
-                rope_sin=self.rope_sin,
-                rope_cos=self.rope_cos,
+                block_tables=self.attention_metadata.prefill_block_tables,
+                cu_seqlens_qkv=self.attention_metadata.prefill_cu_seqlens_q,
+                rope_sin=self.attention_metadata.prefill_rope_sin,
+                rope_cos=self.attention_metadata.prefill_rope_cos,
                 num_heads=self.num_heads,
                 head_dim=self.head_dim,
                 num_kv_heads=self.num_kv_heads,
@@ -272,8 +283,8 @@ class IluvatarAttnBackend(AttentionBackend):
                 qkv,
                 k_cache,
                 v_cache,
-                block_tables=forward_meta.block_tables[self.decode_info_dict["batch_ids"], :],
-                seq_lens=forward_meta.seq_lens_decoder[self.decode_info_dict["batch_ids"], 0] + 1,
+                block_tables=self.attention_metadata.decode_block_tables,
+                seq_lens=self.attention_metadata.decode_seq_lens,
                 num_heads=self.num_heads,
                 head_dim=self.head_dim,
                 num_kv_heads=self.num_kv_heads,
@@ -290,8 +301,8 @@ class IluvatarAttnBackend(AttentionBackend):
                 merged_qkv=True,
                 k=qkv,
                 v=qkv,
-                rope_sin=self.rope_sin,
-                rope_cos=self.rope_cos,
+                rope_sin=self.attention_metadata.decode_rope_sin,
+                rope_cos=self.attention_metadata.decode_rope_cos,
                 rope_batch_stride=self.rope_batch_stride,
                 is_interleaved_rope_mode=self.is_interleaved_rope_mode,
             )
@@ -300,12 +311,12 @@ class IluvatarAttnBackend(AttentionBackend):
                 qkv,
                 k_cache,
                 v_cache,
-                prefill_block_tables=forward_meta.block_tables[self.prefill_info_dict["batch_ids"], :],
-                decode_block_tables=forward_meta.block_tables[self.decode_info_dict["batch_ids"], :],
-                cu_seqlens_qkv=self.prefill_info_dict["cu_seqlens_q"],
-                seq_lens=forward_meta.seq_lens_decoder[self.decode_info_dict["batch_ids"], 0] + 1,
-                prefill_rope_sin=self.prefill_rope_sin,
-                prefill_rope_cos=self.prefill_rope_cos,
+                prefill_block_tables=self.attention_metadata.prefill_block_tables,
+                decode_block_tables=self.attention_metadata.decode_block_tables,
+                cu_seqlens_qkv=self.attention_metadata.prefill_cu_seqlens_q,
+                seq_lens=self.attention_metadata.decode_seq_lens,
+                prefill_rope_sin=self.attention_metadata.prefill_rope_sin,
+                prefill_rope_cos=self.attention_metadata.prefill_rope_cos,
                 prefill_num_tokens=self.prefill_num_tokens,
                 num_heads=self.num_heads,
                 head_dim=self.head_dim,
@@ -322,8 +333,8 @@ class IluvatarAttnBackend(AttentionBackend):
                 softcap=self.attention_metadata.softcap,
                 use_cuda_graph=self.attention_metadata.use_cuda_graph,
                 use_sqrt_alibi=self.attention_metadata.use_sqrt_alibi,
-                decode_rope_sin=self.decode_rope_sin,
-                decode_rope_cos=self.decode_rope_cos,
+                decode_rope_sin=self.attention_metadata.decode_rope_sin,
+                decode_rope_cos=self.attention_metadata.decode_rope_cos,
                 rope_batch_stride=self.rope_batch_stride,
                 is_interleaved_rope_mode=self.is_interleaved_rope_mode,
             )
