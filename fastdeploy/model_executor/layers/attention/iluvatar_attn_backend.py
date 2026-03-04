@@ -148,7 +148,7 @@ class IluvatarAttnBackend(AttentionBackend):
         elif self.prefill_len == 0:
             self.mixed = False
             self.split_and_copy_rope(decode_batch_ids, forward_meta, "decode")
-            self.attention_metadata.decode_seq_lens.copy_(forward_meta.seq_lens_decoder[decode_batch_ids, 0] + 1)
+            self.attention_metadata.decode_seq_lens.copy_(forward_meta.seq_lens_decoder[decode_batch_ids] + 1)
             self.attention_metadata.decode_block_tables.copy_(forward_meta.block_tables[decode_batch_ids, :])
 
         # both prefill and decode
@@ -158,13 +158,13 @@ class IluvatarAttnBackend(AttentionBackend):
             self.split_and_copy_rope(decode_batch_ids, forward_meta, "decode")
             self.prefill_num_tokens = paddle.sum(forward_meta.seq_lens_encoder).item()
             cu_seqlens_q = paddle.zeros([self.prefill_len + 1], dtype=forward_meta.cu_seqlens_q.dtype)
-            cu_seqlens_q[1:] = forward_meta.seq_lens_encoder[prefill_batch_ids, 0]
+            cu_seqlens_q[1:] = forward_meta.seq_lens_encoder[prefill_batch_ids]
             # NOTE: The explicit dtype='int32' is required for Iluvatar hardware compatibility.
             cu_seqlens_q = paddle.cumsum(cu_seqlens_q, dtype="int32")
 
             self.attention_metadata.prefill_cu_seqlens_q.copy_(cu_seqlens_q)
             self.attention_metadata.prefill_block_tables.copy_(forward_meta.block_tables[prefill_batch_ids, :])
-            self.attention_metadata.decode_seq_lens.copy_(forward_meta.seq_lens_decoder[decode_batch_ids, 0] + 1)
+            self.attention_metadata.decode_seq_lens.copy_(forward_meta.seq_lens_decoder[decode_batch_ids] + 1)
             self.attention_metadata.decode_block_tables.copy_(forward_meta.block_tables[decode_batch_ids, :])
 
             self.tmp_buffer = paddle.zeros(
