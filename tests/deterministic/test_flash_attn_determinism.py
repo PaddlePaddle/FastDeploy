@@ -90,6 +90,19 @@ def _call_flash_attn_func(mod, q, k, v, cu_seqlens, max_seqlen, version=None):
     return result
 
 
+def _run_determinism_check(mod, seq_lens, runs, version, test_name):
+    """Run flash_attn_func multiple times and verify deterministic output."""
+    q, k, v, cu_seqlens, max_seqlen = _make_tensors(seq_lens)
+
+    outputs = []
+    for _ in range(runs):
+        out = _call_flash_attn_func(mod, q, k, v, cu_seqlens, max_seqlen, version=version)
+        outputs.append(out.numpy())
+
+    for i in range(1, runs):
+        assert np.array_equal(outputs[0], outputs[i]), f"{test_name}: run {i} differs from run 0"
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -106,6 +119,20 @@ def _clean_env():
             os.environ.pop(k, None)
         else:
             os.environ[k] = v
+
+
+@pytest.fixture
+def _deterministic_mode_enabled():
+    """Enable deterministic mode and return reloaded module."""
+    os.environ["FD_DETERMINISTIC_MODE"] = "1"
+    return _reload_flash_attn_backend()
+
+
+@pytest.fixture
+def _nondeterministic_mode_enabled():
+    """Disable deterministic mode and return reloaded module."""
+    os.environ["FD_DETERMINISTIC_MODE"] = "0"
+    return _reload_flash_attn_backend()
 
 
 # ---------------------------------------------------------------------------
@@ -147,59 +174,22 @@ class TestFA3Determinism:
             pytest.skip(f"FA3 requires SM89-99, current SM={sm}")
         paddle.set_flags({"FLAGS_flash_attn_version": 3})
 
-    def test_deterministic_produces_identical_output(self):
+    def test_deterministic_produces_identical_output(self, _deterministic_mode_enabled):
         """num_splits=1 (deterministic) gives bitwise identical results."""
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        mod = _reload_flash_attn_backend()
+        _run_determinism_check(_deterministic_mode_enabled, [64, 128, 256], 5, 3, "FA3 deterministic")
 
-        q, k, v, cu_seqlens, max_seqlen = _make_tensors([64, 128, 256])
-
-        outputs = []
-        for _ in range(5):
-            out = _call_flash_attn_func(mod, q, k, v, cu_seqlens, max_seqlen, version=3)
-            outputs.append(out.numpy())
-
-        for i in range(1, 5):
-            assert np.array_equal(outputs[0], outputs[i]), f"FA3 deterministic: run {i} differs from run 0"
-
-    def test_long_sequence_determinism(self):
+    def test_long_sequence_determinism(self, _deterministic_mode_enabled):
         """Long sequences (>1024 tokens) remain deterministic with FA3."""
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        mod = _reload_flash_attn_backend()
+        _run_determinism_check(_deterministic_mode_enabled, [2048], 3, 3, "FA3 long seq")
 
-        q, k, v, cu_seqlens, max_seqlen = _make_tensors([2048])
-
-        outputs = []
-        for _ in range(3):
-            out = _call_flash_attn_func(mod, q, k, v, cu_seqlens, max_seqlen, version=3)
-            outputs.append(out.numpy())
-
-        for i in range(1, 3):
-            assert np.array_equal(outputs[0], outputs[i]), f"FA3 long seq: run {i} differs from run 0"
-
-    def test_mixed_batch_determinism(self):
+    def test_mixed_batch_determinism(self, _deterministic_mode_enabled):
         """Mixed batch with varying sequence lengths stays deterministic."""
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        mod = _reload_flash_attn_backend()
+        _run_determinism_check(_deterministic_mode_enabled, [16, 512, 1024, 64], 3, 3, "FA3 mixed batch")
 
-        q, k, v, cu_seqlens, max_seqlen = _make_tensors([16, 512, 1024, 64])
-
-        outputs = []
-        for _ in range(3):
-            out = _call_flash_attn_func(mod, q, k, v, cu_seqlens, max_seqlen, version=3)
-            outputs.append(out.numpy())
-
-        for i in range(1, 3):
-            assert np.array_equal(outputs[0], outputs[i]), f"FA3 mixed batch: run {i} differs from run 0"
-
-    def test_nondeterministic_mode_also_works(self):
+    def test_nondeterministic_mode_also_works(self, _nondeterministic_mode_enabled):
         """FD_DETERMINISTIC_MODE=0 still works (num_splits=1 is always used)."""
-        os.environ["FD_DETERMINISTIC_MODE"] = "0"
-        mod = _reload_flash_attn_backend()
-
         q, k, v, cu_seqlens, max_seqlen = _make_tensors([256])
-
-        out = _call_flash_attn_func(mod, q, k, v, cu_seqlens, max_seqlen, version=3)
+        out = _call_flash_attn_func(_nondeterministic_mode_enabled, q, k, v, cu_seqlens, max_seqlen, version=3)
         assert out.shape[0] == 256
         assert out.shape[1] == NUM_HEADS
         assert out.shape[2] == HEAD_DIM
@@ -217,32 +207,10 @@ class TestFA2Determinism:
     def _set_fa2(self):
         paddle.set_flags({"FLAGS_flash_attn_version": 2})
 
-    def test_fa2_deterministic(self):
+    def test_fa2_deterministic(self, _deterministic_mode_enabled):
         """FA2 forward is inherently deterministic (no split-KV)."""
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        mod = _reload_flash_attn_backend()
+        _run_determinism_check(_deterministic_mode_enabled, [128, 256], 5, 2, "FA2 deterministic")
 
-        q, k, v, cu_seqlens, max_seqlen = _make_tensors([128, 256])
-
-        outputs = []
-        for _ in range(5):
-            out = _call_flash_attn_func(mod, q, k, v, cu_seqlens, max_seqlen, version=2)
-            outputs.append(out.numpy())
-
-        for i in range(1, 5):
-            assert np.array_equal(outputs[0], outputs[i]), f"FA2: run {i} differs from run 0"
-
-    def test_fa2_long_sequence(self):
+    def test_fa2_long_sequence(self, _deterministic_mode_enabled):
         """FA2 with long sequence remains deterministic."""
-        os.environ["FD_DETERMINISTIC_MODE"] = "1"
-        mod = _reload_flash_attn_backend()
-
-        q, k, v, cu_seqlens, max_seqlen = _make_tensors([2048])
-
-        outputs = []
-        for _ in range(3):
-            out = _call_flash_attn_func(mod, q, k, v, cu_seqlens, max_seqlen, version=2)
-            outputs.append(out.numpy())
-
-        for i in range(1, 3):
-            assert np.array_equal(outputs[0], outputs[i]), f"FA2 long seq: run {i} differs from run 0"
+        _run_determinism_check(_deterministic_mode_enabled, [2048], 3, 2, "FA2 long seq")

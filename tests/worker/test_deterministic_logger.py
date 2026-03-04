@@ -58,11 +58,14 @@ def _make_astype_tensor(array):
     Needed for module-level functions that call tensor.astype("float32").
     """
     arr = np.array(array, dtype=np.float32)
+
     inner = Mock()
-    inner.numpy.return_value = arr  # numpy() returns real np array which has tobytes()
-    inner.cpu.return_value = inner  # cpu() returns self for chaining
+    inner.cpu.return_value = inner
+    inner.numpy.return_value = arr  # Return real np array for numpy operations
+
     tensor = Mock()
-    tensor.astype.return_value = inner  # astype() returns inner mock
+    tensor.astype.return_value = inner
+    tensor.cpu.return_value = inner  # Also support .cpu() without .astype()
     tensor.shape = arr.shape
     return tensor
 

@@ -64,6 +64,14 @@ Test items:
      - Both paths should produce numerically close results (rtol/atol=1e-2)
        and both should match the naive attention reference.
 
+  8. test_partition_boundary
+     - Edge case: prefill_seq_len equals partition_size (boundary condition).
+     - Tests chunk calculation when num_chunks is exactly an integer.
+
+  9. test_empty_kv
+     - Edge case: decoder-only mode (no prefill, empty KV cache).
+     - Tests scenario with no encoder prefill phase.
+
 Run:
   python -m pytest tests/deterministic/test_c16_warp1_4_determinism.py -v
 """
@@ -86,6 +94,25 @@ SEED = 42
 
 ENCODER_BLOCK_SHAPE_Q = 64
 DECODER_BLOCK_SHAPE_Q = 16
+
+
+def _assert_deterministic_and_correct(results, ref):
+    """
+    Helper to verify determinism and correctness.
+
+    Args:
+        results: List of output arrays from repeated runs
+        ref: Reference output array from naive attention
+    """
+    # Verify determinism: all runs should produce identical output
+    for i in range(1, len(results)):
+        np.testing.assert_array_equal(
+            results[0],
+            results[i],
+            err_msg=f"Determinism failure: run 0 vs run {i}",
+        )
+    # Verify correctness: output should match naive reference
+    np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
 
 
 def make_rope_emb(max_seq_len, dim_head, base=10000):
@@ -572,9 +599,7 @@ class TestC16Warp14Determinism(unittest.TestCase):
             decoder_max_partition_size=32768,
             num_decode_runs=10,
         )
-        for i in range(1, len(results)):
-            np.testing.assert_array_equal(results[0], results[i], err_msg=f"Determinism failure: run 0 vs run {i}")
-        np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
+        _assert_deterministic_and_correct(results, ref)
 
     def test_long_kv_multi_chunk(self):
         """
@@ -593,9 +618,7 @@ class TestC16Warp14Determinism(unittest.TestCase):
             decoder_max_partition_size=64,
             num_decode_runs=10,
         )
-        for i in range(1, len(results)):
-            np.testing.assert_array_equal(results[0], results[i], err_msg=f"Determinism failure: run 0 vs run {i}")
-        np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
+        _assert_deterministic_and_correct(results, ref)
 
     def test_multi_batch(self):
         """Multiple batches with multi-chunk decoder."""
@@ -611,9 +634,7 @@ class TestC16Warp14Determinism(unittest.TestCase):
             decoder_max_partition_size=64,
             num_decode_runs=10,
         )
-        for i in range(1, len(results)):
-            np.testing.assert_array_equal(results[0], results[i], err_msg=f"Determinism failure: run 0 vs run {i}")
-        np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
+        _assert_deterministic_and_correct(results, ref)
 
     def test_float16(self):
         """Float16 dtype with multi-chunk decoder."""
@@ -629,9 +650,7 @@ class TestC16Warp14Determinism(unittest.TestCase):
             decoder_max_partition_size=64,
             num_decode_runs=10,
         )
-        for i in range(1, len(results)):
-            np.testing.assert_array_equal(results[0], results[i], err_msg=f"Determinism failure: run 0 vs run {i}")
-        np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
+        _assert_deterministic_and_correct(results, ref)
 
     def test_unaligned_seq_len(self):
         """prefill_seq_len not divisible by blocksize (100 % 64 != 0)."""
@@ -647,9 +666,7 @@ class TestC16Warp14Determinism(unittest.TestCase):
             decoder_max_partition_size=64,
             num_decode_runs=10,
         )
-        for i in range(1, len(results)):
-            np.testing.assert_array_equal(results[0], results[i], err_msg=f"Determinism failure: run 0 vs run {i}")
-        np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
+        _assert_deterministic_and_correct(results, ref)
 
     def test_mha_no_gqa(self):
         """MHA: q_num_head == kv_num_head (no GQA grouping)."""
@@ -665,9 +682,7 @@ class TestC16Warp14Determinism(unittest.TestCase):
             decoder_max_partition_size=64,
             num_decode_runs=10,
         )
-        for i in range(1, len(results)):
-            np.testing.assert_array_equal(results[0], results[i], err_msg=f"Determinism failure: run 0 vs run {i}")
-        np.testing.assert_allclose(results[0], ref, rtol=1e-2, atol=1e-2)
+        _assert_deterministic_and_correct(results, ref)
 
     def test_nosplit_vs_split_consistency(self):
         """
@@ -678,6 +693,9 @@ class TestC16Warp14Determinism(unittest.TestCase):
           - nosplit: single chunk, sequential accumulation
           - split: multi-chunk parallel, then merge
         Difference should be within low-precision rounding (rtol/atol=1e-2 for bf16).
+
+        Note: envs.FD_DETERMINISTIC_MODE is lazily evaluated via __getattr__,
+        so runtime changes to os.environ["FD_DETERMINISTIC_MODE"] take effect.
         """
         # Run once in deterministic mode (already set at module level)
         det_results, det_ref = run_c16_warp14_decoder_test(
@@ -727,6 +745,54 @@ class TestC16Warp14Determinism(unittest.TestCase):
             atol=1e-2,
             err_msg="Deterministic (nosplit) vs split path divergence",
         )
+
+    def test_partition_boundary(self):
+        """
+        Edge case: prefill_seq_len equals partition_size (boundary condition).
+
+        This tests the scenario where num_chunks = prefill_seq_len / partition_size
+        is exactly an integer, which is a boundary condition for chunk calculation.
+        """
+        results, ref = run_c16_warp14_decoder_test(
+            batch_size=1,
+            q_num_head=16,
+            kv_num_head=2,
+            dim_head=128,
+            blocksize=64,
+            prefill_seq_len=128,
+            max_dec_len=32,
+            dtype="bfloat16",
+            decoder_max_partition_size=128,
+            num_decode_runs=10,
+        )
+        _assert_deterministic_and_correct(results, ref)
+
+    def test_empty_kv(self):
+        """
+        Edge case: decoder-only mode (no prefill, empty KV cache).
+
+        This tests the scenario where there's no encoder prefill phase,
+        only decoder with empty KV cache.
+        """
+        results, _ = run_c16_warp14_decoder_test(
+            batch_size=1,
+            q_num_head=16,
+            kv_num_head=2,
+            dim_head=128,
+            blocksize=64,
+            prefill_seq_len=0,
+            max_dec_len=32,
+            dtype="bfloat16",
+            decoder_max_partition_size=64,
+            num_decode_runs=10,
+        )
+        # For empty KV, we only check determinism as naive reference may not be valid
+        for i in range(1, len(results)):
+            np.testing.assert_array_equal(
+                results[0],
+                results[i],
+                err_msg=f"Determinism failure: run 0 vs run {i}",
+            )
 
 
 if __name__ == "__main__":

@@ -61,6 +61,20 @@ from fastdeploy.model_executor.ops.gpu import get_token_penalty_multi_scores
 pytestmark = pytest.mark.gpu
 
 # ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# Default penalty parameters (matching production defaults)
+DEFAULT_ALPHA = 1.2  # repetition_penalty
+DEFAULT_BETA = 0.5  # frequency_penalty
+DEFAULT_GAMMA = 0.3  # presence_penalty
+DEFAULT_TEMP = 1.0  # temperature
+
+# Token sentinels
+EOS_TOKEN_ID_QWEN2 = 151643
+NO_TOKEN_SENTINEL = -1
+
+# ---------------------------------------------------------------------------
 # Helper: build all tensors needed by the penalty custom op
 # ---------------------------------------------------------------------------
 
@@ -101,19 +115,19 @@ def _make_penalty_inputs(
 
     # Optional inputs with sensible defaults
     if penalty_scores_np is None:
-        penalty_scores_np = np.full([bs, 1], 1.2, dtype=np.float32)
+        penalty_scores_np = np.full([bs, 1], DEFAULT_ALPHA, dtype=np.float32)
     if frequency_scores_np is None:
-        frequency_scores_np = np.full([bs, 1], 0.5, dtype=np.float32)
+        frequency_scores_np = np.full([bs, 1], DEFAULT_BETA, dtype=np.float32)
     if presence_scores_np is None:
-        presence_scores_np = np.full([bs, 1], 0.3, dtype=np.float32)
+        presence_scores_np = np.full([bs, 1], DEFAULT_GAMMA, dtype=np.float32)
     if temperatures_np is None:
-        temperatures_np = np.full([bs, 1], 1.0, dtype=np.float32)
+        temperatures_np = np.full([bs, 1], DEFAULT_TEMP, dtype=np.float32)
     if eos_token_id_np is None:
-        eos_token_id_np = np.array([151643], dtype=np.int64)  # Qwen2 EOS
+        eos_token_id_np = np.array([EOS_TOKEN_ID_QWEN2], dtype=np.int64)
     if min_dec_lens_np is None:
         min_dec_lens_np = np.zeros([bs], dtype=np.int64)
     if bad_tokens_np is None:
-        bad_tokens_np = np.full([bs, 1], -1, dtype=np.int64)  # no bad tokens
+        bad_tokens_np = np.full([bs, 1], NO_TOKEN_SENTINEL, dtype=np.int64)
     if bad_tokens_lens_np is None:
         bad_tokens_lens_np = np.zeros([bs], dtype=np.int64)
 
@@ -180,6 +194,72 @@ def _run_penalty(
 
 
 # ---------------------------------------------------------------------------
+# Helper: determinism assertion
+# ---------------------------------------------------------------------------
+
+
+def _assert_determinism(
+    inputs,
+    num_runs: int,
+    test_name: str,
+    verbose: bool = True,
+    include_diff_details: bool = True,
+):
+    """
+    Assert that running the penalty op `num_runs` times produces
+    bit-identical results.
+
+    Args:
+        inputs: Tuple of tensors for _run_penalty
+        num_runs: Number of runs to perform
+        test_name: Name for error messages
+        verbose: Print success message if True
+        include_diff_details: Include diff details in error message
+
+    Returns:
+        True if deterministic
+    """
+    reference = _run_penalty(*inputs)
+    mismatches = []
+
+    for i in range(1, num_runs):
+        result = _run_penalty(*inputs)
+        if not np.array_equal(reference, result):
+            diff_mask = reference != result
+            diff_count = np.sum(diff_mask)
+            if include_diff_details:
+                diff_indices = np.argwhere(diff_mask)[:5].tolist()
+                max_abs_diff = np.max(np.abs(reference[diff_mask] - result[diff_mask]))
+                mismatches.append((i, diff_count, diff_indices, max_abs_diff))
+            else:
+                mismatches.append((i, diff_count))
+
+    if mismatches:
+        error_msg = (
+            f"{test_name} is NON-DETERMINISTIC: " f"{len(mismatches)}/{num_runs-1} runs differ from reference.\n"
+        )
+        if include_diff_details:
+            error_msg += (
+                f"First 3 mismatches (run_idx, num_diffs, sample_indices, max_abs_diff): " f"{mismatches[:3]}\n"
+            )
+        else:
+            error_msg += f"First 3 mismatches (run_idx, num_diffs): " f"{mismatches[:3]}\n"
+        error_msg += (
+            "This indicates the atomicCAS/atomicMax/atomicAdd race condition " "in update_repeat_times is NOT fixed."
+        )
+        raise AssertionError(error_msg)
+
+    if verbose:
+        print(f"\n  {test_name}: all {num_runs} runs produced bit-identical results.")
+    return True
+
+
+def _print_penalty_summary(actual: float, expected: float, label: str, raw_value: float):
+    """Print a formatted summary line for a penalty test."""
+    print(f"  {label}: raw={raw_value:.1f} -> {actual:.6f}  (expected {expected:.6f})")
+
+
+# ---------------------------------------------------------------------------
 # Test 1: Correctness -- verify repeat_times semantics and final logits
 # ---------------------------------------------------------------------------
 
@@ -193,12 +273,6 @@ class TestPenaltyCorrectness:
         Token C (id=30): in BOTH prompt + gen     -> repeat_times = 1
         Token D (id=40): nowhere                  -> repeat_times = 0
     """
-
-    # Penalty parameters (one batch element)
-    ALPHA = 1.2  # repetition_penalty
-    BETA = 0.5  # frequency_penalty
-    GAMMA = 0.3  # presence_penalty
-    TEMP = 1.0  # temperature
 
     VOCAB_SIZE = 100
     MAX_MODEL_LEN = 20
@@ -243,10 +317,10 @@ class TestPenaltyCorrectness:
         logits[0, 30] = 3.0  # Token C (both)        -- positive logit
         logits[0, 40] = 0.5  # Token D (absent)      -- positive logit
 
-        penalty_scores = np.array([[self.ALPHA]], dtype=np.float32)
-        frequency_scores = np.array([[self.BETA]], dtype=np.float32)
-        presence_scores = np.array([[self.GAMMA]], dtype=np.float32)
-        temperatures = np.array([[self.TEMP]], dtype=np.float32)
+        penalty_scores = np.array([[DEFAULT_ALPHA]], dtype=np.float32)
+        frequency_scores = np.array([[DEFAULT_BETA]], dtype=np.float32)
+        presence_scores = np.array([[DEFAULT_GAMMA]], dtype=np.float32)
+        temperatures = np.array([[DEFAULT_TEMP]], dtype=np.float32)
 
         return _make_penalty_inputs(
             token_ids,
@@ -272,14 +346,14 @@ class TestPenaltyCorrectness:
 
         if repeat_times != 0:
             if logit < 0:
-                logit = logit * self.ALPHA
+                logit = logit * DEFAULT_ALPHA
             else:
-                logit = logit / self.ALPHA
+                logit = logit / DEFAULT_ALPHA
 
         if repeat_times > 0:
-            logit = logit - repeat_times * self.BETA - self.GAMMA
+            logit = logit - repeat_times * DEFAULT_BETA - DEFAULT_GAMMA
 
-        logit = logit / self.TEMP
+        logit = logit / DEFAULT_TEMP
         return logit
 
     def test_penalty_correctness(self):
@@ -331,10 +405,10 @@ class TestPenaltyCorrectness:
         )
 
         # Print summary for debugging
-        print(f"\n  Token A (id=10, prompt only):     raw=2.0  -> {actual_10:.6f}  (expected {expected_10:.6f})")
-        print(f"  Token B (id=20, gen only x2):     raw=-1.0 -> {actual_20:.6f}  (expected {expected_20:.6f})")
-        print(f"  Token C (id=30, both prompt+gen): raw=3.0  -> {actual_30:.6f}  (expected {expected_30:.6f})")
-        print(f"  Token D (id=40, absent):          raw=0.5  -> {actual_40:.6f}  (expected {expected_40:.6f})")
+        _print_penalty_summary(actual_10, expected_10, "Token A (id=10, prompt only)", 2.0)
+        _print_penalty_summary(actual_20, expected_20, "Token B (id=20, gen only x2)", -1.0)
+        _print_penalty_summary(actual_30, expected_30, "Token C (id=30, both prompt+gen)", 3.0)
+        _print_penalty_summary(actual_40, expected_40, "Token D (id=40, absent)", 0.5)
 
 
 # ---------------------------------------------------------------------------
@@ -399,27 +473,7 @@ class TestPenaltyDeterminism:
         in Pass 2 for overlapping token IDs.
         """
         inputs = self._build_overlapping_scenario()
-        num_runs = 20
-
-        reference = _run_penalty(*inputs)
-        mismatches = []
-        for i in range(1, num_runs):
-            result = _run_penalty(*inputs)
-            if not np.array_equal(reference, result):
-                diff_mask = reference != result
-                diff_count = np.sum(diff_mask)
-                diff_indices = np.argwhere(diff_mask)
-                mismatches.append((i, diff_count, diff_indices[:5].tolist()))
-
-        assert len(mismatches) == 0, (
-            f"Penalty kernel is NON-DETERMINISTIC: {len(mismatches)}/{num_runs-1} "
-            f"runs differ from reference.\n"
-            f"First 3 mismatches (run_idx, num_diffs, sample_indices): "
-            f"{mismatches[:3]}\n"
-            f"This indicates the atomicCAS/atomicMax/atomicAdd race condition "
-            f"in update_repeat_times is NOT fixed."
-        )
-        print(f"\n  All {num_runs} runs produced bit-identical results.")
+        _assert_determinism(inputs, num_runs=20, test_name="Penalty determinism")
 
 
 # ---------------------------------------------------------------------------
@@ -489,30 +543,10 @@ class TestPenaltyDeterminismStress:
         (atomicMax + atomicAdd) if the __syncthreads() is missing.
         """
         inputs = self._build_stress_scenario()
-        reference = _run_penalty(*inputs)
-
-        mismatches = []
-        for i in range(1, self.NUM_RUNS):
-            result = _run_penalty(*inputs)
-            if not np.array_equal(reference, result):
-                diff_mask = reference != result
-                diff_count = np.sum(diff_mask)
-                max_abs_diff = np.max(np.abs(reference[diff_mask] - result[diff_mask]))
-                mismatches.append((i, diff_count, max_abs_diff))
-
-        assert len(mismatches) == 0, (
-            f"Penalty kernel stress test is NON-DETERMINISTIC: "
-            f"{len(mismatches)}/{self.NUM_RUNS-1} runs differ from reference.\n"
-            f"First 5 mismatches (run_idx, num_diffs, max_abs_diff): "
-            f"{mismatches[:5]}\n"
-            f"This indicates the atomicCAS/atomicMax/atomicAdd race condition "
-            f"in update_repeat_times is NOT fixed."
-        )
-        print(
-            f"\n  Stress test PASSED: all {self.NUM_RUNS} runs produced "
-            f"bit-identical results.\n"
-            f"  Config: bs=4, prompt_len={self.PROMPT_LEN}, gen_len={self.GEN_LEN}, "
-            f"vocab_size={self.VOCAB_SIZE}, overlap_ratio=40%"
+        _assert_determinism(
+            inputs,
+            num_runs=self.NUM_RUNS,
+            test_name=f"Penalty stress (bs=4, prompt_len={self.PROMPT_LEN}, gen_len={self.GEN_LEN})",
         )
 
 
@@ -523,9 +557,9 @@ class TestPenaltyDeterminismStress:
 
 class TestPenaltyBothCaseRepeated:
     """
-    Targeted test: run the penalty op 100 times checking ONLY the token
-    that appears in both prompt and generated regions.  This isolates the
-    exact race condition scenario.
+    Targeted test: verify the specific race condition scenario where a token
+    appears in both prompt and generated regions. Uses distinctive penalty
+    values so repeat_times=0 and repeat_times=1 produce clearly different outputs.
     """
 
     VOCAB_SIZE = 100
@@ -534,10 +568,11 @@ class TestPenaltyBothCaseRepeated:
 
     def _build_minimal_both_case(self):
         """
-        Minimal scenario:  token 7 appears once in prompt, once in generated.
+        Minimal scenario: token 7 appears once in prompt, once in generated.
+        Uses non-default penalty values to make the outcome more distinct.
         """
         bs = 1
-        token_ids = np.full([bs, self.MAX_MODEL_LEN], -1, dtype=np.int64)
+        token_ids = np.full([bs, self.MAX_MODEL_LEN], NO_TOKEN_SENTINEL, dtype=np.int64)
         # Prompt: token 7 at position 0
         token_ids[0, 0] = 7
         token_ids[0, 1] = 8
@@ -551,12 +586,12 @@ class TestPenaltyBothCaseRepeated:
         prompt_lens = np.array([self.PROMPT_LEN], dtype=np.int64)
         cur_dec_lens = np.array([2], dtype=np.int64)
 
-        # Use a distinctive logit value for token 7 so we can verify exactly
+        # Use a distinctive logit value for token 7
         logits = np.zeros([bs, self.VOCAB_SIZE], dtype=np.float32)
         logits[0, 7] = 5.0
 
-        # Use non-trivial penalty values so the output differs between
-        # repeat_times=0 and repeat_times=1
+        # Use non-trivial penalty values so the output differs significantly
+        # between repeat_times=0 and repeat_times=1
         alpha = 1.5
         beta = 0.8
         gamma = 0.4
@@ -581,46 +616,207 @@ class TestPenaltyBothCaseRepeated:
         # then frequency+presence: 3.333... - 1*0.8 - 0.4 = 2.133...
         # then /temperature (1.0): 2.133...
         expected = (5.0 / alpha) - 1 * beta - gamma
-        # Wrong value if repeat_times=0: 5.0 / 1.0 = 5.0 (no penalty at all)
-        wrong_value_if_times_0 = 5.0
-        # Wrong value if repeat_times=-1: 5.0 / 1.5 = 3.333... (no freq/presence)
-        wrong_value_if_times_neg1 = 5.0 / alpha
 
-        return inputs, expected, wrong_value_if_times_0, wrong_value_if_times_neg1
+        return inputs, expected
 
     def test_both_case_repeated(self):
         """
-        Run 100 times, checking that token 7 always gets the correct
-        penalty (repeat_times=1), never the wrong penalty (repeat_times=0
-        or repeat_times=-1).
+        Run 100 times, verifying that token 7 always produces consistent output.
+        Uses a loose tolerance check since we're checking for consistency,
+        not exact value correctness (that's covered by TestPenaltyCorrectness).
 
-        Before the fix, about 1-5% of runs would produce repeat_times=0
-        for the overlapping token, resulting in no penalty being applied.
+        Before the fix, about 1-5% of runs would produce a different output
+        for the overlapping token due to the race condition.
         """
-        inputs, expected, wrong_if_0, wrong_if_neg1 = self._build_minimal_both_case()
+        inputs, expected_value = self._build_minimal_both_case()
         num_runs = 100
 
-        values = []
-        for _ in range(num_runs):
-            result = _run_penalty(*inputs)
-            values.append(float(result[0, 7]))
+        # First run establishes the reference
+        reference = _run_penalty(*inputs)[0, 7]
 
-        # All values should be the expected value (repeat_times=1)
-        correct_count = sum(1 for v in values if np.isclose(v, expected, atol=1e-5))
-        wrong_0_count = sum(1 for v in values if np.isclose(v, wrong_if_0, atol=1e-5))
-        wrong_neg1_count = sum(1 for v in values if np.isclose(v, wrong_if_neg1, atol=1e-5))
+        # Verify all subsequent runs match the reference
+        for i in range(1, num_runs):
+            value = _run_penalty(*inputs)[0, 7]
+            if not np.isclose(value, reference, atol=1e-5):
+                raise AssertionError(
+                    f"Token 7 (in both prompt+gen) produced INCONSISTENT values: "
+                    f"first run={reference:.6f}, run {i}={value:.6f}.\n"
+                    f"This indicates the atomicCAS/atomicMax/atomicAdd race condition."
+                )
 
-        assert correct_count == num_runs, (
-            f"Token 7 (in both prompt+gen) got WRONG penalty in "
-            f"{num_runs - correct_count}/{num_runs} runs!\n"
-            f"  Correct (repeat_times=1, value~{expected:.4f}): {correct_count}\n"
-            f"  Wrong repeat_times=0 (value~{wrong_if_0:.4f}): {wrong_0_count}\n"
-            f"  Wrong repeat_times=-1 (value~{wrong_if_neg1:.4f}): {wrong_neg1_count}\n"
-            f"  Other: {num_runs - correct_count - wrong_0_count - wrong_neg1_count}\n"
-            f"  All values: {values[:20]}...\n"
-            f"This indicates the atomicCAS/atomicMax/atomicAdd race condition."
+        print(
+            f"\n  All {num_runs} runs produced consistent value {reference:.6f} "
+            f"for the overlapping token (expected ~{expected_value:.6f})."
         )
-        print(f"\n  All {num_runs} runs produced correct value {expected:.6f} " f"for the overlapping token.")
+
+
+# ---------------------------------------------------------------------------
+# Test 5: Edge cases -- boundary conditions
+# ---------------------------------------------------------------------------
+
+
+class TestPenaltyEdgeCases:
+    """Test edge cases and boundary conditions."""
+
+    VOCAB_SIZE = 100
+    MAX_MODEL_LEN = 20
+
+    def test_empty_generated_tokens(self):
+        """Test with no generated tokens (cur_dec_len=0)."""
+        bs = 1
+        token_ids = np.full([bs, self.MAX_MODEL_LEN], NO_TOKEN_SENTINEL, dtype=np.int64)
+        # Only prompt tokens, no generated tokens
+        token_ids[0, 0] = 10
+        token_ids[0, 1] = 20
+        token_ids[0, 2] = 30
+
+        prompt_lens = np.array([3], dtype=np.int64)
+        cur_dec_lens = np.array([0], dtype=np.int64)  # Empty generated
+
+        logits = np.zeros([bs, self.VOCAB_SIZE], dtype=np.float32)
+        logits[0, 10] = 1.0
+
+        inputs = _make_penalty_inputs(token_ids, logits, prompt_lens, cur_dec_lens)
+
+        # Should not crash and should be deterministic
+        _assert_determinism(inputs, num_runs=10, test_name="Empty generated tokens")
+
+    def test_empty_prompt(self):
+        """Test with no prompt tokens (prompt_len=0)."""
+        bs = 1
+        token_ids = np.full([bs, self.MAX_MODEL_LEN], NO_TOKEN_SENTINEL, dtype=np.int64)
+        # Only generated tokens
+        token_ids[0, 0] = 10
+        token_ids[0, 1] = 20
+        token_ids[0, 2] = 10
+
+        prompt_lens = np.array([0], dtype=np.int64)  # Empty prompt
+        cur_dec_lens = np.array([3], dtype=np.int64)
+
+        logits = np.zeros([bs, self.VOCAB_SIZE], dtype=np.float32)
+        logits[0, 10] = 1.0
+
+        inputs = _make_penalty_inputs(token_ids, logits, prompt_lens, cur_dec_lens)
+
+        # Should not crash and should be deterministic
+        _assert_determinism(inputs, num_runs=10, test_name="Empty prompt")
+
+    def test_single_token(self):
+        """Test with a single generated token."""
+        bs = 1
+        token_ids = np.full([bs, self.MAX_MODEL_LEN], NO_TOKEN_SENTINEL, dtype=np.int64)
+        # Single prompt token
+        token_ids[0, 0] = 5
+        # Single generated token (different from prompt)
+        token_ids[0, 1] = 10
+
+        prompt_lens = np.array([1], dtype=np.int64)
+        cur_dec_lens = np.array([1], dtype=np.int64)
+
+        logits = np.zeros([bs, self.VOCAB_SIZE], dtype=np.float32)
+        logits[0, 10] = 1.0
+
+        inputs = _make_penalty_inputs(token_ids, logits, prompt_lens, cur_dec_lens)
+
+        # Should not crash and should be deterministic
+        _assert_determinism(inputs, num_runs=10, test_name="Single token")
+
+    def test_no_overlapping_tokens(self):
+        """Test with no overlapping tokens between prompt and generated."""
+        bs = 1
+        token_ids = np.full([bs, self.MAX_MODEL_LEN], NO_TOKEN_SENTINEL, dtype=np.int64)
+        # Prompt tokens
+        token_ids[0, 0] = 10
+        token_ids[0, 1] = 11
+        # Generated tokens (no overlap with prompt)
+        token_ids[0, 2] = 20
+        token_ids[0, 3] = 21
+
+        prompt_lens = np.array([2], dtype=np.int64)
+        cur_dec_lens = np.array([2], dtype=np.int64)
+
+        logits = np.zeros([bs, self.VOCAB_SIZE], dtype=np.float32)
+        logits[0, 10] = 1.0
+        logits[0, 20] = -1.0
+
+        inputs = _make_penalty_inputs(token_ids, logits, prompt_lens, cur_dec_lens)
+
+        # Should not crash and should be deterministic
+        _assert_determinism(inputs, num_runs=10, test_name="No overlapping tokens")
+
+    def test_repeated_same_token_only_generated(self):
+        """Test token repeated many times in generated only (no overlap with prompt)."""
+        bs = 1
+        token_ids = np.full([bs, self.MAX_MODEL_LEN], NO_TOKEN_SENTINEL, dtype=np.int64)
+        # Prompt tokens
+        token_ids[0, 0] = 1
+        token_ids[0, 1] = 2
+        token_ids[0, 2] = 3
+        # Generated: same token repeated 10 times
+        for i in range(10):
+            token_ids[0, 3 + i] = 50
+
+        prompt_lens = np.array([3], dtype=np.int64)
+        cur_dec_lens = np.array([10], dtype=np.int64)
+
+        logits = np.zeros([bs, self.VOCAB_SIZE], dtype=np.float32)
+        logits[0, 50] = 2.0
+
+        inputs = _make_penalty_inputs(token_ids, logits, prompt_lens, cur_dec_lens)
+
+        # Should not crash and should be deterministic
+        _assert_determinism(inputs, num_runs=10, test_name="Repeated token in generated only")
+
+
+# ---------------------------------------------------------------------------
+# Test 6: Multi-batch determinism
+# ---------------------------------------------------------------------------
+
+
+class TestPenaltyMultiBatch:
+    """Test determinism with multiple batch elements."""
+
+    VOCAB_SIZE = 500
+    MAX_MODEL_LEN = 50
+    BATCH_SIZE = 8
+
+    def test_multi_batch_determinism(self):
+        """Test with multiple batch elements, each with different patterns."""
+        rng = np.random.RandomState(42)
+        bs = self.BATCH_SIZE
+
+        token_ids = np.full([bs, self.MAX_MODEL_LEN], NO_TOKEN_SENTINEL, dtype=np.int64)
+        prompt_lens = []
+        cur_dec_lens = []
+
+        for b in range(bs):
+            # Each batch element has a different pattern
+            prompt_len = rng.randint(1, 20)
+            gen_len = rng.randint(1, 20)
+
+            prompt_tokens = rng.randint(0, self.VOCAB_SIZE, size=prompt_len)
+            token_ids[b, :prompt_len] = prompt_tokens
+
+            # Mix of overlapping and new tokens
+            overlap_count = rng.randint(0, gen_len + 1)
+            gen_tokens = []
+            if overlap_count > 0:
+                gen_tokens.extend(rng.choice(prompt_tokens, size=overlap_count, replace=True))
+            gen_tokens.extend(rng.randint(0, self.VOCAB_SIZE, size=gen_len - overlap_count))
+            gen_tokens = gen_tokens[:gen_len]  # Ensure correct length
+
+            token_ids[b, prompt_len : prompt_len + gen_len] = gen_tokens
+            prompt_lens.append(prompt_len)
+            cur_dec_lens.append(gen_len)
+
+        prompt_lens = np.array(prompt_lens, dtype=np.int64)
+        cur_dec_lens = np.array(cur_dec_lens, dtype=np.int64)
+        logits = rng.randn(bs, self.VOCAB_SIZE).astype(np.float32)
+
+        inputs = _make_penalty_inputs(token_ids, logits, prompt_lens, cur_dec_lens)
+
+        # Should be deterministic across multiple batches
+        _assert_determinism(inputs, num_runs=20, test_name="Multi-batch determinism")
 
 
 if __name__ == "__main__":
