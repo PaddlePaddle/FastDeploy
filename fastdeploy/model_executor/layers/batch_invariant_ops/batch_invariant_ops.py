@@ -655,30 +655,11 @@ def bmm_batch_invariant(x, y):
 
 
 def mm_batch_invariant(a, b, transpose_x=False, transpose_y=False, out=None):
-    shape_str = f"a={list(a.shape)}, b={list(b.shape)}, tx={transpose_x}, ty={transpose_y}"
-    _track_op_call("mm_batch_invariant(triton)", shape_str)
-    # Also track lm_head-shaped matmuls separately (vocab_size dimension)
-    is_lm_head = b.shape[-1] > 100000 or a.shape[-1] > 100000
-    if is_lm_head:
-        _track_op_call("mm_batch_invariant(triton)[LM_HEAD]", shape_str)
     if transpose_x:
         a = a.T
     if transpose_y:
         b = b.T
     result = matmul_persistent(a, b)
-    # Debug: hash input/output for lm_head decode calls
-    if _op_tracking_enabled and is_lm_head and a.shape[0] <= 8:
-        import hashlib
-
-        lm_head_count = _op_call_counts.get("mm_batch_invariant(triton)[LM_HEAD]", 0)
-        try:
-            a_hash = hashlib.md5(a.cast("float32").numpy().tobytes()).hexdigest()[:12]
-            r_hash = hashlib.md5(result.cast("float32").numpy().tobytes()).hexdigest()[:12]
-            line = f"lm_head_call={lm_head_count} a_md5={a_hash} result_md5={r_hash} a_shape={list(a.shape)}\n"
-            with open("/tmp/fd_lm_head_hashes.log", "a") as f:
-                f.write(line)
-        except Exception:
-            pass
     return result
 
 
@@ -734,52 +715,6 @@ _original_ops = {"mm": None, "addmm": None, "_log_softmax": None, "mean_dim": No
 
 _batch_invariant_MODE = False
 
-# ---------------------------------------------------------------------------
-# Op call tracking (for determinism debugging)
-# ---------------------------------------------------------------------------
-_op_call_counts: Dict[str, int] = {}
-_op_call_shapes: Dict[str, list] = {}
-_op_tracking_enabled = False
-
-
-def _track_op_call(op_name: str, shapes: str = ""):
-    """Record an op call for debugging."""
-    if not _op_tracking_enabled:
-        return
-    _op_call_counts[op_name] = _op_call_counts.get(op_name, 0) + 1
-    max_shapes = 10 if "LM_HEAD" in op_name else 3  # more detail for lm_head
-    if shapes and _op_call_counts[op_name] <= max_shapes:
-        if op_name not in _op_call_shapes:
-            _op_call_shapes[op_name] = []
-        _op_call_shapes[op_name].append(shapes)
-
-
-def enable_op_tracking():
-    """Enable op call tracking (call after enable_batch_invariant_mode)."""
-    global _op_tracking_enabled
-    _op_tracking_enabled = True
-    _op_call_counts.clear()
-    _op_call_shapes.clear()
-
-
-def get_op_call_report() -> str:
-    """Return a formatted report of op calls since tracking was enabled."""
-    if not _op_call_counts:
-        return "[OP-TRACK] No op calls recorded"
-    lines = ["[OP-TRACK] Op call counts:"]
-    for op_name, count in sorted(_op_call_counts.items()):
-        lines.append(f"  {op_name}: {count} calls")
-        if op_name in _op_call_shapes:
-            for s in _op_call_shapes[op_name]:
-                lines.append(f"    {s}")
-    return "\n".join(lines)
-
-
-def reset_op_tracking():
-    """Reset call counters."""
-    _op_call_counts.clear()
-    _op_call_shapes.clear()
-
 
 def is_batch_invariant_mode_enabled():
     return _batch_invariant_MODE
@@ -823,8 +758,6 @@ def enable_batch_invariant_mode():
         _orig_linear = _original_ops["linear"]
 
         def _tracked_linear(*args, **kwargs):
-            shapes = f"args[0]={list(args[0].shape)}" if args else ""
-            _track_op_call("_C_ops.linear(UNPATCHED!)", shapes)
             return _orig_linear(*args, **kwargs)
 
         paddle._C_ops.linear = _tracked_linear
@@ -833,8 +766,6 @@ def enable_batch_invariant_mode():
         _orig_linear_v2 = _original_ops["linear_v2"]
 
         def _tracked_linear_v2(*args, **kwargs):
-            shapes = f"args[0]={list(args[0].shape)}" if args else ""
-            _track_op_call("_C_ops.linear_v2(UNPATCHED!)", shapes)
             return _orig_linear_v2(*args, **kwargs)
 
         paddle._C_ops.linear_v2 = _tracked_linear_v2
@@ -842,24 +773,13 @@ def enable_batch_invariant_mode():
     _batch_invariant_MODE = True
 
 
-def init_deterministic_mode(enable_probe=False):
+def init_deterministic_mode():
     """One-stop initialization for deterministic mode.
 
     Call after worker creation but before model loading.
-    Args:
-        enable_probe: also enable op call tracking and log diagnostics.
     """
     if not is_batch_invariant_mode_enabled():
         enable_batch_invariant_mode()
-
-    if enable_probe:
-        enable_op_tracking()
-        legacy_flag = paddle.get_flags("FLAGS_use_legacy_linear")["FLAGS_use_legacy_linear"]
-        logger.info(f"[OP-TRACK] batch_invariant_mode enabled, FLAGS_use_legacy_linear={legacy_flag}")
-        logger.info(
-            f"[OP-TRACK] paddle._C_ops.matmul is mm_batch_invariant: "
-            f"{paddle._C_ops.matmul.__name__ if hasattr(paddle._C_ops.matmul, '__name__') else type(paddle._C_ops.matmul)}"
-        )
 
 
 def disable_batch_invariant_mode():

@@ -45,24 +45,24 @@ for _pkg, _rel_path in [
 import fastdeploy.logger.deterministic_logger as _det_mod  # noqa: E402
 from fastdeploy.logger.deterministic_logger import (  # noqa: E402
     DeterministicLogger,
+    _compute_md5,
     _read_logits_md5_file,
     _record_logits_diagnostic,
     _reset_logits_md5_file,
-    _tensor_md5,
 )
 
 
 def _make_astype_tensor(array):
-    """Create a mock tensor supporting .astype().cpu().numpy() chain.
+    """Create a mock tensor supporting .astype().cpu().numpy().tobytes() chain.
 
     Needed for module-level functions that call tensor.astype("float32").
     """
     arr = np.array(array, dtype=np.float32)
     inner = Mock()
-    inner.cpu.return_value = inner
-    inner.numpy.return_value = arr
+    inner.numpy.return_value = arr  # numpy() returns real np array which has tobytes()
+    inner.cpu.return_value = inner  # cpu() returns self for chaining
     tensor = Mock()
-    tensor.astype.return_value = inner
+    tensor.astype.return_value = inner  # astype() returns inner mock
     tensor.shape = arr.shape
     return tensor
 
@@ -366,16 +366,16 @@ class TestLogPrefillInput(unittest.TestCase):
         self.assertIn("prefill_end_index: 20", output)
 
 
-# ---- Tests for module-level functions (L35-108) ----
+# ---- Tests for module-level functions (L35-44) ----
 
 
-class TestTensorMd5(unittest.TestCase):
-    """Tests for _tensor_md5(): mock paddle tensor (GPU dependency)."""
+class TestComputeMd5(unittest.TestCase):
+    """Tests for _compute_md5(): mock paddle tensor (GPU dependency)."""
 
     def test_returns_valid_md5_hex(self):
         arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         t = _make_astype_tensor([1.0, 2.0, 3.0])
-        result = _tensor_md5(t)
+        result = _compute_md5(t)
         expected = hashlib.md5(arr.tobytes()).hexdigest()
         self.assertEqual(result, expected)
         self.assertEqual(len(result), 32)
@@ -383,12 +383,12 @@ class TestTensorMd5(unittest.TestCase):
     def test_deterministic(self):
         t1 = _make_astype_tensor([1.0, 2.0])
         t2 = _make_astype_tensor([1.0, 2.0])
-        self.assertEqual(_tensor_md5(t1), _tensor_md5(t2))
+        self.assertEqual(_compute_md5(t1), _compute_md5(t2))
 
     def test_different_data_different_hash(self):
         t1 = _make_astype_tensor([1.0, 2.0])
         t2 = _make_astype_tensor([3.0, 4.0])
-        self.assertNotEqual(_tensor_md5(t1), _tensor_md5(t2))
+        self.assertNotEqual(_compute_md5(t1), _compute_md5(t2))
 
 
 class TestResetLogitsMd5File(unittest.TestCase):

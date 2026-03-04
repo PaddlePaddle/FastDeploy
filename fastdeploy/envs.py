@@ -226,8 +226,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     ),
     # Enable determinism logging (print MD5 hashes and debug info)
     "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
-    # Enable per-layer zero-sync probing for determinism debugging
-    "FD_DETERMINISTIC_PROBE_LAYERS": lambda: bool(int(os.getenv("FD_DETERMINISTIC_PROBE_LAYERS", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
 }

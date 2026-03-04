@@ -30,14 +30,17 @@ _DET_FINGERPRINT_PATH = "/tmp/fd_det_logits.jsonl"
 
 
 # ---------------------------------------------------------------------------
-# Shared low-level helper
+# Shared low-level helpers
 # ---------------------------------------------------------------------------
-def _tensor_md5(tensor: paddle.Tensor) -> str:
-    """Compute MD5 hex-digest of a tensor (after casting to float32).
+def _compute_md5(tensor: paddle.Tensor) -> str:
+    """Compute MD5 hex-digest of a tensor (after casting to float32 if needed).
 
     Triggers GPU->CPU sync -- use only in diagnostic paths.
     """
-    data = tensor.astype("float32").cpu().numpy().tobytes()
+    try:
+        data = tensor.cpu().numpy().tobytes()
+    except Exception:
+        data = tensor.cpu().numpy().astype(np.float32).tobytes()
     return hashlib.md5(data).hexdigest()
 
 
@@ -94,11 +97,10 @@ def _record_logits_diagnostic(
             f.write(json.dumps(fingerprint) + "\n")
 
         # --- MD5 (bit-exact) ---
-        logits_md5 = hashlib.md5(fp_np.tobytes()).hexdigest()
+        logits_md5 = _compute_md5(fp)
         entry = {"tag": tag, "logits_md5": logits_md5, "probs_md5": ""}
         if probs is not None:
-            probs_bytes = probs.astype("float32").cpu().numpy().tobytes()
-            entry["probs_md5"] = hashlib.md5(probs_bytes).hexdigest()
+            entry["probs_md5"] = _compute_md5(probs)
         with open(_DET_MD5_PATH, "a") as f:
             f.write(json.dumps(entry) + "\n")
 
@@ -148,12 +150,7 @@ class DeterministicLogger:
         if tensor is None:
             return f"{name}_md5=None"
 
-        try:
-            tensor_bytes = tensor.cpu().numpy().tobytes()
-        except Exception:
-            tensor_bytes = tensor.cpu().numpy().astype(np.float32).tobytes()
-
-        md5_hash = hashlib.md5(tensor_bytes).hexdigest()
+        md5_hash = _compute_md5(tensor)
         return f"{prefix}{name}_md5={md5_hash[:16]}"
 
     def log_tensor_md5s(self, tensor_dict, forward_batch_reqs_list=None, stage="forward"):

@@ -1215,7 +1215,7 @@ def run_worker_proc() -> None:
             init_deterministic_mode,
         )
 
-        init_deterministic_mode(enable_probe=bool(os.environ.get("FD_DETERMINISTIC_PROBE")))
+        init_deterministic_mode()
 
     # Initialize device and create model runner
     worker_proc.init_device()
