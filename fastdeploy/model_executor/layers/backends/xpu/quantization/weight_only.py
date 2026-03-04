@@ -20,6 +20,7 @@ from paddle import nn
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     MergedReplicatedLinear,
+    QKVGateParallelLinear,
     QKVParallelLinear,
 )
 from fastdeploy.model_executor.layers.quantization.weight_only import (
@@ -60,6 +61,7 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
                 isinstance(layer, MergedColumnParallelLinear)
                 or isinstance(layer, QKVParallelLinear)
                 or isinstance(layer, MergedReplicatedLinear)
+                or isinstance(layer, QKVGateParallelLinear)
             ):
                 quant_attrs = {
                     **extra_weight_attrs,
