@@ -1142,7 +1142,9 @@ __global__ void cache_kernel(
     const int head_size,
     const int block_size,
     const uint32_t elem_cnt,
-    const int kv_num_heads) {
+    const int kv_num_heads,
+    const bool use_head_wise,
+    const int max_blocks_per_head) {
   using LoadT = AlignedVector<T, VecSize>;
   LoadT src_vec;
 
@@ -1168,16 +1170,25 @@ __global__ void cache_kernel(
     const uint32_t ori_seq_id =
         (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
-    const int32_t *block_table_now = nullptr;
-
-    block_table_now = block_tables + ori_bi * max_blocks_per_seq;
-
-    const uint32_t block_idx = block_table_now[ori_seq_id / block_size];
+    const uint32_t seq_block_idx = ori_seq_id / block_size;
+    const int32_t *block_table_now =
+        block_tables +
+        ori_bi * (use_head_wise ? kv_num_heads * max_blocks_per_head
+                                : max_blocks_per_seq);
+    const int32_t cache_id =
+        use_head_wise
+            ? block_table_now[hi * max_blocks_per_head + seq_block_idx]
+            : block_table_now[seq_block_idx];
+    if (cache_id < 0) continue;
     const uint32_t block_offset = ori_seq_id % block_size;
 
-    const uint32_t tgt_idx = block_idx * kv_num_heads * block_size * head_size +
-                             hi * block_size * head_size +
-                             block_offset * head_size + h_bias;
+    const uint32_t tgt_idx =
+        use_head_wise
+            ? (cache_id * block_size * head_size + block_offset * head_size +
+               h_bias)
+            : (cache_id * kv_num_heads * block_size * head_size +
+               hi * block_size * head_size + block_offset * head_size +
+               h_bias);
     const uint32_t ori_idx =
         token_idx * (num_heads + 2 * kv_num_heads) * head_size +
         num_heads * head_size + qkv_id * hidden_size + hi * head_size + h_bias;
@@ -2736,7 +2747,9 @@ void CascadeAppendWriteCacheKVQKV(
       head_dim,
       block_size,
       elem_nums,
-      kv_num_heads);
+      kv_num_heads,
+      meta_data.use_head_wise,
+      meta_data.max_blocks_per_head);
 }
 
 template <typename T, uint32_t HEAD_DIM, uint32_t BLOCK_SIZE>

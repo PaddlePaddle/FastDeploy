@@ -38,6 +38,8 @@ void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
                                       const cudaStream_t& stream,
                                       const bool use_neox_style,
                                       const bool rope_3d,
+                                      const bool use_head_wise,
+                                      const int max_blocks_per_head,
                                       const float* q_norm_weight,
                                       const float* k_norm_weight,
                                       const float rms_norm_eps) {
@@ -75,6 +77,8 @@ void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
       block_size,
       elem_nums,
       kv_num_heads,
+      use_head_wise,
+      max_blocks_per_head,
       rope_3d,
       q_norm_weight,
       k_norm_weight,
@@ -104,7 +108,9 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                               const int bsz,
                               const cudaStream_t& stream,
                               const bool use_neox_style,
-                              const bool rope_3d) {
+                              const bool rope_3d,
+                              const bool use_head_wise,
+                              const int max_blocks_per_head) {
   const uint32_t elem_nums =
       use_neox_style ? bsz * (num_heads + 2 * kv_num_heads) * dim_head / 2
                      : bsz * (num_heads + 2 * kv_num_heads) * dim_head;
@@ -143,6 +149,8 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
           block_size,
           elem_nums,
           kv_num_heads,
+          use_head_wise,
+          max_blocks_per_head,
           rope_3d);
     } else {
       if (rotary_dim < dim_head) {
@@ -173,6 +181,8 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                                  block_size,
                                  elem_nums,
                                  kv_num_heads,
+                                 use_head_wise,
+                                 max_blocks_per_head,
                                  rope_3d);
       } else {
         auto* kernelFn =
@@ -199,6 +209,8 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                                  block_size,
                                  elem_nums,
                                  kv_num_heads,
+                                 use_head_wise,
+                                 max_blocks_per_head,
                                  rope_3d);
       }
     }
@@ -229,6 +241,8 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
           block_size,
           elem_nums,
           kv_num_heads,
+          use_head_wise,
+          max_blocks_per_head,
           rope_3d);
     } else {
       auto* kernelFn =
@@ -255,6 +269,8 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                                block_size,
                                elem_nums,
                                kv_num_heads,
+                               use_head_wise,
+                               max_blocks_per_head,
                                rope_3d);
     }
   }
@@ -686,6 +702,8 @@ void DecoderWriteCacheWithRoPEKernel(
           stream,
           use_neox_rotary_style,
           rope_3d,
+          meta_data.use_head_wise,
+          meta_data.max_blocks_per_head,
           q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
           k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
           rms_norm_eps);
@@ -807,7 +825,9 @@ void DecoderWriteCacheWithRoPEKernel(
           bsz,
           stream,
           use_neox_rotary_style,
-          rope_3d);
+          rope_3d,
+          meta_data.use_head_wise,
+          meta_data.max_blocks_per_head);
     } else if (cache_quant_type_str == "cache_int8") {
       bool is_scale_channel_wise = false;
       if (cache_k_scale &&

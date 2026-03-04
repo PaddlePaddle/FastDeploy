@@ -123,8 +123,14 @@ class GPUModelRunner(ModelRunnerBase):
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
+        self.enable_head_wise_kv_cache = envs.FD_HEAD_WISE_KV_CACHE == 1
+        self.kv_num_heads = max(
+            1,
+            int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
+        )
         self.spec_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.spec_method is not None
+        self.speculative_method = self.spec_method
         self.enable_logprob = fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
@@ -839,12 +845,27 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
-                encoder_block_num = len(request.block_tables)
+                if self.enable_head_wise_kv_cache:
+                    cache_ids_2d = getattr(request, "block_tables_3d", None)
+                    if cache_ids_2d is None and request.block_tables and isinstance(request.block_tables[0], list):
+                        cache_ids_2d = request.block_tables
+                    if cache_ids_2d is not None and getattr(request, "block_tables_3d", None) is None:
+                        request.block_tables_3d = cache_ids_2d
+                    if cache_ids_2d:
+                        encoder_block_num = len(cache_ids_2d[0])
+                        head0_tables = cache_ids_2d[0]
+                    else:
+                        encoder_block_num = 0
+                        head0_tables = []
+                else:
+                    encoder_block_num = len(request.block_tables)
                 self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
-                self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
-                    request.block_tables, dtype="int32"
-                )
+                if encoder_block_num > 0:
+                    tables = head0_tables if self.enable_head_wise_kv_cache else request.block_tables
+                    self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
+                        tables, dtype="int32"
+                    )
                 self.share_inputs["stop_flags"][idx : idx + 1] = False
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
                 self.share_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = length
@@ -889,17 +910,34 @@ class GPUModelRunner(ModelRunnerBase):
                         )
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
-                encoder_block_num = len(request.block_tables)
+                if self.enable_head_wise_kv_cache:
+                    cache_ids_2d = getattr(request, "block_tables_3d", None)
+                    if cache_ids_2d is None and request.block_tables and isinstance(request.block_tables[0], list):
+                        cache_ids_2d = request.block_tables
+                    if cache_ids_2d is not None and getattr(request, "block_tables_3d", None) is None:
+                        request.block_tables_3d = cache_ids_2d
+                    if cache_ids_2d:
+                        encoder_block_num = len(cache_ids_2d[0])
+                        head0_tables = cache_ids_2d[0]
+                    else:
+                        encoder_block_num = 0
+                        head0_tables = []
+                else:
+                    encoder_block_num = len(request.block_tables)
                 self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
-                if current_platform.is_cuda():
-                    async_set_value(
-                        self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num], request.block_tables
-                    )
-                else:
-                    self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
-                        request.block_tables, dtype="int32"
-                    )
+                if encoder_block_num > 0:
+                    tables = head0_tables if self.enable_head_wise_kv_cache else request.block_tables
+                    if current_platform.is_cuda():
+                        async_set_value(
+                            self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num], tables
+                        )
+                    else:
+                        self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
+                            tables, dtype="int32"
+                        )
+                if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
+                    has_decode_task = True
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
@@ -993,8 +1031,44 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
+        if self.enable_head_wise_kv_cache:
+            self._prepare_block_tables_3d(num_running_requests)
         if self.spec_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests, self.share_inputs.index_to_batch_id)
+
+    def _prepare_block_tables_3d(self, num_running_requests: int):
+        if not self.enable_head_wise_kv_cache:
+            self.share_inputs["block_tables_3d"] = None
+            return
+        if num_running_requests is None or num_running_requests <= 0:
+            self.share_inputs["block_tables_3d"] = None
+            return
+
+        max_blocks_per_head = 0
+        for b in range(num_running_requests):
+            req = self.forward_batch_reqs_list[b]
+            cache_ids_2d = getattr(req, "block_tables_3d", None) if req is not None else None
+            if cache_ids_2d and len(cache_ids_2d) > 0:
+                max_blocks_per_head = max(max_blocks_per_head, len(cache_ids_2d[0]))
+
+        if max_blocks_per_head == 0:
+            self.share_inputs["block_tables_3d"] = None
+            return
+
+        rows = []
+        for b in range(num_running_requests):
+            req = self.forward_batch_reqs_list[b]
+            cache_ids_2d = getattr(req, "block_tables_3d", None) if req is not None else None
+            if cache_ids_2d is None:
+                rows.extend([[-1] * max_blocks_per_head for _ in range(self.kv_num_heads)])
+                continue
+            for h in range(self.kv_num_heads):
+                row = list(cache_ids_2d[h])
+                if len(row) < max_blocks_per_head:
+                    row.extend([-1] * (max_blocks_per_head - len(row)))
+                rows.append(row)
+
+        self.share_inputs["block_tables_3d"] = paddle.to_tensor(np.array(rows, dtype="int32"))
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         raise NotImplementedError("GPUs only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")
@@ -1089,6 +1163,7 @@ class GPUModelRunner(ModelRunnerBase):
     def _dummy_prefill_inputs(self, input_length_list: List[int], max_dec_len_list: List[int], block_num: int):
         """Set dummy prefill inputs to share_inputs"""
         batch_size = len(input_length_list)
+        headwise_rows = []
         for i in range(batch_size):
             idx = i
             input_length = input_length_list[i]
@@ -1111,10 +1186,20 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["temperature"][idx : idx + 1] = 1
 
             self.share_inputs["encoder_block_lens"][idx : idx + 1] = block_num
-            self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
-                idx * block_num, (idx + 1) * block_num, 1
-            )
+            if self.enable_head_wise_kv_cache:
+                base = idx * self.kv_num_heads * block_num
+                self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
+                    base, base + block_num, 1
+                )
+                for h in range(self.kv_num_heads):
+                    headwise_rows.append(np.arange(base + h * block_num, base + (h + 1) * block_num, 1))
+            else:
+                self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
+                    idx * block_num, (idx + 1) * block_num, 1
+                )
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
+        if self.enable_head_wise_kv_cache:
+            self.share_inputs["block_tables_3d"] = paddle.to_tensor(np.array(headwise_rows, dtype="int32"))
 
     def _prepare_inputs(self, cached_token_num=-1, cached_real_bsz=-1, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
@@ -1301,6 +1386,7 @@ class GPUModelRunner(ModelRunnerBase):
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"][:num_running_requests],
+            block_tables_3d=self.share_inputs.get("block_tables_3d", None),
             caches=self.share_inputs["caches"],
             encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
             encoder_tile_ids_per_batch=self.share_inputs["encoder_tile_ids_per_batch"],

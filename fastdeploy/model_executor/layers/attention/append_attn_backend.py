@@ -160,6 +160,7 @@ class AppendAttentionBackend(AttentionBackend):
         self.sink_size: int = getattr(fd_config.model_config, "sink_size", 0)
         self.window_attn_skip_freq: int = getattr(fd_config.model_config, "window_attn_skip_freq", 0)
         self.head_wise_swa_ratio: float = getattr(fd_config.model_config, "head_wise_swa_ratio", 0.0)
+        self.enable_head_wise_kv_cache: bool = envs.FD_HEAD_WISE_KV_CACHE == 1
 
         if self.head_wise_swa_ratio > 0.0:
             self.head_wise_full_hidden = int((1 - self.head_wise_swa_ratio) * self.num_heads * self.head_dim)
@@ -264,6 +265,12 @@ class AppendAttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
+        if self.enable_head_wise_kv_cache:
+            if kv_cache_quant_type is not None and kv_cache_quant_type != "none":
+                raise NotImplementedError("Head-wise KV cache does not support quantized cache.")
+            key_cache_shape = [max_num_blocks * self.kv_num_heads, self.block_size, self.head_dim]
+            value_cache_shape = key_cache_shape
+            return key_cache_shape, value_cache_shape
         key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
             key_cache_shape[-1] = self.head_dim // 2
@@ -348,6 +355,7 @@ class AppendAttentionBackend(AttentionBackend):
                 self.block_size,
             )
 
+        block_tables = forward_meta.block_tables_3d if self.enable_head_wise_kv_cache else forward_meta.block_tables
         if self.use_output:
             quant_max_bound = getattr(layer, "quant_max_bound", 0.0)
             cache_quant_type = getattr(layer, "cache_quant_type_str", "none")
@@ -392,7 +400,7 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_this_time,
                 forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
-                forward_meta.block_tables,
+                block_tables,
                 forward_meta.encoder_batch_ids,
                 forward_meta.encoder_tile_ids_per_batch,
                 forward_meta.encoder_num_blocks_x_cpu,
@@ -449,7 +457,7 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_this_time,
                 forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
-                forward_meta.block_tables,
+                block_tables,
                 forward_meta.encoder_batch_ids,
                 forward_meta.encoder_tile_ids_per_batch,
                 forward_meta.encoder_num_blocks_x_cpu,

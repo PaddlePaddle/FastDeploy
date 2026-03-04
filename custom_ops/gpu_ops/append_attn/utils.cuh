@@ -27,7 +27,9 @@ struct AppendAttnMetaData {
   int head_dims;
   int head_dims_v;
   int max_blocks_per_seq;
-  const int* mask_offset = nullptr;
+  bool use_head_wise = false;
+  int max_blocks_per_head = 0;
+  const int *mask_offset = nullptr;
 };
 
 __forceinline__ __host__ __device__ int div_up(int a, int b) {

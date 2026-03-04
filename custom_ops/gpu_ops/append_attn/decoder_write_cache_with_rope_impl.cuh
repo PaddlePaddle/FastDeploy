@@ -91,6 +91,8 @@ __global__ void append_decode_cache_T_rope_qk_norm_kernel(
     const int block_size,
     const uint32_t elem_cnt,
     const int kv_num_heads,
+    const bool use_head_wise,
+    const int max_blocks_per_head,
     const bool rope_3d,
     const float* q_norm_weight,
     const float* k_norm_weight,
@@ -130,10 +132,18 @@ __global__ void append_decode_cache_T_rope_qk_norm_kernel(
     const int write_seq_id = seq_lens[ori_bi];
     if (write_seq_id == 0) continue;
 
-    const int* block_table_now = nullptr;
-
-    block_table_now = block_tables + ori_bi * max_blocks_per_seq;
-    const int block_idx = block_table_now[write_seq_id / block_size];
+    const int* block_table_now =
+        block_tables +
+        ori_bi * (use_head_wise ? kv_num_heads * max_blocks_per_head
+                                : max_blocks_per_seq);
+    const int kv_head_idx = (hi >= num_heads) ? (hi - num_heads) % kv_num_heads : 0;
+    const int block_idx =
+        (hi >= num_heads)
+            ? (use_head_wise
+                   ? block_table_now[kv_head_idx * max_blocks_per_head +
+                                     write_seq_id / block_size]
+                   : block_table_now[write_seq_id / block_size])
+            : -1;
     const int block_offset = write_seq_id % block_size;
     const uint32_t ori_idx =
         start_token_idx * hidden_size + hi * head_size + h_bias;
@@ -198,10 +208,14 @@ __global__ void append_decode_cache_T_rope_qk_norm_kernel(
     } else {
       // quant + write k/v
       const uint32_t kv_head_idx = (hi - num_heads) % kv_num_heads;
+      if (block_idx < 0) continue;
       const uint32_t tgt_idx =
-          block_idx * kv_num_heads * block_size * head_size +
-          kv_head_idx * block_size * head_size + block_offset * head_size +
-          h_bias;
+          use_head_wise
+              ? (block_idx * block_size * head_size +
+                 block_offset * head_size + h_bias)
+              : (block_idx * kv_num_heads * block_size * head_size +
+                 kv_head_idx * block_size * head_size +
+                 block_offset * head_size + h_bias);
       if (hi < num_heads + kv_num_heads) {
         Store<T, VecSize>(out_vec, &key_cache[tgt_idx]);
       } else {
@@ -237,6 +251,8 @@ __global__ void append_decode_cache_T_rope_kernel(
     const int block_size,
     const uint32_t elem_cnt,
     const int kv_num_heads,
+    const bool use_head_wise,
+    const int max_blocks_per_head,
     const bool rope_3d) {
   using LoadT = AlignedVector<T, VecSize>;
   using LoadBiasT = AlignedVector<T, VecSize>;
@@ -269,10 +285,18 @@ __global__ void append_decode_cache_T_rope_kernel(
     const int write_seq_id = seq_lens[ori_bi];
     if (write_seq_id == 0) continue;
 
-    const int* block_table_now = nullptr;
-
-    block_table_now = block_tables + ori_bi * max_blocks_per_seq;
-    const int block_idx = block_table_now[write_seq_id / block_size];
+    const int* block_table_now =
+        block_tables +
+        ori_bi * (use_head_wise ? kv_num_heads * max_blocks_per_head
+                                : max_blocks_per_seq);
+    const int kv_head_idx = (hi >= num_heads) ? (hi - num_heads) % kv_num_heads : 0;
+    const int block_idx =
+        (hi >= num_heads)
+            ? (use_head_wise
+                   ? block_table_now[kv_head_idx * max_blocks_per_head +
+                                     write_seq_id / block_size]
+                   : block_table_now[write_seq_id / block_size])
+            : -1;
     const int block_offset = write_seq_id % block_size;
     const uint32_t ori_idx =
         start_token_idx * hidden_size + hi * head_size + h_bias;
@@ -312,11 +336,15 @@ __global__ void append_decode_cache_T_rope_kernel(
       Store<T, VecSize>(out_vec, &qkv_out[ori_idx]);
     } else {
       // quant + write k/v
+      if (block_idx < 0) continue;
       const uint32_t kv_head_idx = (hi - num_heads) % kv_num_heads;
       const uint32_t tgt_idx =
-          block_idx * kv_num_heads * block_size * head_size +
-          kv_head_idx * block_size * head_size + block_offset * head_size +
-          h_bias;
+          use_head_wise
+              ? (block_idx * block_size * head_size +
+                 block_offset * head_size + h_bias)
+              : (block_idx * kv_num_heads * block_size * head_size +
+                 kv_head_idx * block_size * head_size +
+                 block_offset * head_size + h_bias);
       if (hi < num_heads + kv_num_heads) {
         Store<T, VecSize>(out_vec, &key_cache[tgt_idx]);
       } else {
@@ -356,6 +384,8 @@ __global__ void append_decode_cache_T_quant_rope_kernel(
     const int block_size,
     const uint32_t elem_cnt,
     const int kv_num_heads,
+    const bool use_head_wise,
+    const int max_blocks_per_head,
     const bool rope_3d) {
   using LoadT = AlignedVector<int, VecSize>;
   using LoadBiasT = AlignedVector<T, VecSize>;
@@ -390,10 +420,18 @@ __global__ void append_decode_cache_T_quant_rope_kernel(
     const int write_seq_id = seq_lens[ori_bi];
     if (write_seq_id == 0) continue;
 
-    const int* block_table_now = nullptr;
-
-    block_table_now = block_tables + ori_bi * max_blocks_per_seq;
-    const int block_idx = block_table_now[write_seq_id / block_size];
+    const int* block_table_now =
+        block_tables +
+        ori_bi * (use_head_wise ? kv_num_heads * max_blocks_per_head
+                                : max_blocks_per_seq);
+    const int kv_head_idx = (hi >= num_heads) ? (hi - num_heads) % kv_num_heads : 0;
+    const int block_idx =
+        (hi >= num_heads)
+            ? (use_head_wise
+                   ? block_table_now[kv_head_idx * max_blocks_per_head +
+                                     write_seq_id / block_size]
+                   : block_table_now[write_seq_id / block_size])
+            : -1;
     const int block_offset = write_seq_id % block_size;
     const uint32_t ori_idx =
         start_token_idx * hidden_size + hi * head_size + h_bias;
@@ -442,11 +480,15 @@ __global__ void append_decode_cache_T_quant_rope_kernel(
       Store<T, VecSize>(bias_vec, &qkv_out[ori_idx]);
     } else {
       // quant + write k/v
+      if (block_idx < 0) continue;
       const uint32_t kv_head_idx = (hi - num_heads) % kv_num_heads;
       const uint32_t tgt_idx =
-          block_idx * kv_num_heads * block_size * head_size +
-          kv_head_idx * block_size * head_size + block_offset * head_size +
-          h_bias;
+          use_head_wise
+              ? (block_idx * block_size * head_size +
+                 block_offset * head_size + h_bias)
+              : (block_idx * kv_num_heads * block_size * head_size +
+                 kv_head_idx * block_size * head_size +
+                 block_offset * head_size + h_bias);
       if (hi < num_heads + kv_num_heads) {
         Store<T, VecSize>(bias_vec, &key_cache[tgt_idx]);
       } else {
@@ -484,6 +526,8 @@ __global__ void append_decode_cache_T_neox_partial_rope_kernel(
     const int block_size,
     const uint32_t elem_cnt,
     const int kv_num_heads,
+    const bool use_head_wise,
+    const int max_blocks_per_head,
     const bool rope_3d) {
   using LoadT = AlignedVector<T, VecSize>;
   using LoadBiasT = AlignedVector<T, VecSize>;
@@ -522,10 +566,18 @@ __global__ void append_decode_cache_T_neox_partial_rope_kernel(
     const int write_seq_id = seq_lens[ori_bi];
     if (write_seq_id == 0) continue;
 
-    const int* block_table_now = nullptr;
-
-    block_table_now = block_tables + ori_bi * max_blocks_per_seq;
-    const int block_idx = block_table_now[write_seq_id / block_size];
+    const int* block_table_now =
+        block_tables +
+        ori_bi * (use_head_wise ? kv_num_heads * max_blocks_per_head
+                                : max_blocks_per_seq);
+    const int kv_head_idx = (hi >= num_heads) ? (hi - num_heads) % kv_num_heads : 0;
+    const int block_idx =
+        (hi >= num_heads)
+            ? (use_head_wise
+                   ? block_table_now[kv_head_idx * max_blocks_per_head +
+                                     write_seq_id / block_size]
+                   : block_table_now[write_seq_id / block_size])
+            : -1;
     const int block_offset = write_seq_id % block_size;
     uint32_t ori_idx_left =
         start_token_idx * hidden_size + hi * head_size + h_bias;
@@ -579,11 +631,15 @@ __global__ void append_decode_cache_T_neox_partial_rope_kernel(
       Store<T, VecSize>(right_bias_vec, &qkv_out[ori_idx_right]);
     } else {
       // write k/v
+      if (block_idx < 0) continue;
       const uint32_t kv_head_idx = (hi - num_heads) % kv_num_heads;
       uint32_t tgt_idx_left =
-          block_idx * kv_num_heads * block_size * head_size +
-          kv_head_idx * block_size * head_size + block_offset * head_size +
-          h_bias;
+          use_head_wise
+              ? (block_idx * block_size * head_size +
+                 block_offset * head_size + h_bias)
+              : (block_idx * kv_num_heads * block_size * head_size +
+                 kv_head_idx * block_size * head_size +
+                 block_offset * head_size + h_bias);
       uint32_t tgt_idx_right = tgt_idx_left + half_head_size;
       if (hi < num_heads + kv_num_heads) {
         if (h_bias < half_rotary_dim) {
@@ -627,6 +683,8 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
     const int block_size,
     const uint32_t elem_cnt,
     const int kv_num_heads,
+    const bool use_head_wise,
+    const int max_blocks_per_head,
     const bool rope_3d) {
   using LoadT = AlignedVector<T, VecSize>;
   using LoadBiasT = AlignedVector<T, VecSize>;
@@ -661,10 +719,18 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
     const int write_seq_id = seq_lens[ori_bi];
     if (write_seq_id == 0) continue;
 
-    const int* block_table_now = nullptr;
-
-    block_table_now = block_tables + ori_bi * max_blocks_per_seq;
-    const int block_idx = block_table_now[write_seq_id / block_size];
+    const int* block_table_now =
+        block_tables +
+        ori_bi * (use_head_wise ? kv_num_heads * max_blocks_per_head
+                                : max_blocks_per_seq);
+    const int kv_head_idx = (hi >= num_heads) ? (hi - num_heads) % kv_num_heads : 0;
+    const int block_idx =
+        (hi >= num_heads)
+            ? (use_head_wise
+                   ? block_table_now[kv_head_idx * max_blocks_per_head +
+                                     write_seq_id / block_size]
+                   : block_table_now[write_seq_id / block_size])
+            : -1;
     const int block_offset = write_seq_id % block_size;
     const uint32_t ori_idx_left =
         start_token_idx * hidden_size + hi * head_size + h_bias;
@@ -706,11 +772,15 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
       Store<T, VecSize>(right_bias_vec, &qkv_out[ori_idx_right]);
     } else {
       // write k/v
+      if (block_idx < 0) continue;
       const uint32_t kv_head_idx = (hi - num_heads) % kv_num_heads;
       const uint32_t tgt_idx_left =
-          block_idx * kv_num_heads * block_size * head_size +
-          kv_head_idx * block_size * head_size + block_offset * head_size +
-          h_bias;
+          use_head_wise
+              ? (block_idx * block_size * head_size +
+                 block_offset * head_size + h_bias)
+              : (block_idx * kv_num_heads * block_size * head_size +
+                 kv_head_idx * block_size * head_size +
+                 block_offset * head_size + h_bias);
       const uint32_t tgt_idx_right = tgt_idx_left + half_head_size;
       if (hi < num_heads + kv_num_heads) {
         Store<T, VecSize>(left_bias_vec, &key_cache[tgt_idx_left]);
@@ -752,6 +822,8 @@ __global__ void append_decode_cache_T_quant_neox_rope_kernel(
     const int block_size,
     const uint32_t elem_cnt,
     const int kv_num_heads,
+    const bool use_head_wise,
+    const int max_blocks_per_head,
     const bool rope_3d) {
   using LoadT = AlignedVector<int, VecSize>;
   using LoadBiasT = AlignedVector<T, VecSize>;
@@ -786,10 +858,18 @@ __global__ void append_decode_cache_T_quant_neox_rope_kernel(
     const int write_seq_id = seq_lens[ori_bi];
     if (write_seq_id == 0) continue;
 
-    const int* block_table_now = nullptr;
-
-    block_table_now = block_tables + ori_bi * max_blocks_per_seq;
-    const int block_idx = block_table_now[write_seq_id / block_size];
+    const int* block_table_now =
+        block_tables +
+        ori_bi * (use_head_wise ? kv_num_heads * max_blocks_per_head
+                                : max_blocks_per_seq);
+    const int kv_head_idx = (hi >= num_heads) ? (hi - num_heads) % kv_num_heads : 0;
+    const int block_idx =
+        (hi >= num_heads)
+            ? (use_head_wise
+                   ? block_table_now[kv_head_idx * max_blocks_per_head +
+                                     write_seq_id / block_size]
+                   : block_table_now[write_seq_id / block_size])
+            : -1;
     const int block_offset = write_seq_id % block_size;
     const uint32_t ori_idx_left =
         start_token_idx * hidden_size + hi * head_size + h_bias;
@@ -847,11 +927,15 @@ __global__ void append_decode_cache_T_quant_neox_rope_kernel(
       Store<T, VecSize>(right_bias_vec, &qkv_out[ori_idx_right]);
     } else {
       // quant + write k/v
+      if (block_idx < 0) continue;
       const uint32_t kv_head_idx = (hi - num_heads) % kv_num_heads;
       const uint32_t tgt_idx_left =
-          block_idx * kv_num_heads * block_size * head_size +
-          kv_head_idx * block_size * head_size + block_offset * head_size +
-          h_bias;
+          use_head_wise
+              ? (block_idx * block_size * head_size +
+                 block_offset * head_size + h_bias)
+              : (block_idx * kv_num_heads * block_size * head_size +
+                 kv_head_idx * block_size * head_size +
+                 block_offset * head_size + h_bias);
       const uint32_t tgt_idx_right = tgt_idx_left + half_head_size;
       if (hi < num_heads + kv_num_heads) {
         Store<T, VecSize>(left_bias_vec, &key_cache[tgt_idx_left]);

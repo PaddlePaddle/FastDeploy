@@ -142,6 +142,10 @@ class ForwardMeta:
     pre_caches_length: int = 0
     # Block tables
     block_tables: Optional[paddle.Tensor] = None
+
+    # Head-wise KV cache: flattened block_tables for cache_id-based architecture
+    # block_tables_3d: [batch_size * kv_num_heads, max_blocks_per_head] storing cache_id directly
+    block_tables_3d: Optional[paddle.Tensor] = None
     # KV caches
     caches: Optional[list[paddle.Tensor]] = None
     # Flag of profile run
