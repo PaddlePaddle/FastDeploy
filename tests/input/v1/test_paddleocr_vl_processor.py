@@ -73,7 +73,7 @@ class TestProcessVideo(unittest.TestCase):
         self.assertIn("exceeds", str(context.exception))
 
     def test_error_mutual_exclusion(self):
-        """新增：测试 num_frames 和 fps 互斥"""
+        """Test  num_frames 和 fps mutual exclusion"""
         with self.assertRaises(ValueError) as context:
             sample_frames(
                 frame_factor=self.frame_factor,
@@ -86,7 +86,7 @@ class TestProcessVideo(unittest.TestCase):
         self.assertIn("mutually exclusive", str(context.exception))
 
     def test_error_fps_without_metadata(self):
-        """新增：测试 fps > 0 但 metadata 为 None"""
+        """Test  fps > 0 but metadata is None"""
         with self.assertRaises(TypeError) as context:
             sample_frames(
                 frame_factor=self.frame_factor,
@@ -100,7 +100,7 @@ class TestProcessVideo(unittest.TestCase):
         self.assertIn("'NoneType' object is not subscriptable", str(context.exception))
 
     def test_num_frames_rounding(self):
-        """新增：测试 num_frames 向 frame_factor 舍入"""
+        """Test  num_frames rounding to frame_factor"""
         num_frames = 17  # 不是 4 的倍数
         # 逻辑: round(17 / 4) * 4 = round(4.25) * 4 = 4 * 4 = 16
         indices = sample_frames(
@@ -115,7 +115,7 @@ class TestProcessVideo(unittest.TestCase):
         self.assertEqual(len(indices), 16)
 
     def test_sample_with_fps_basic(self):
-        """新增：测试使用 fps 采样（基本路径，被 max_frames 限制）"""
+        """Test fps sampling (basic path, limited by max_frames)"""
         # 逻辑: num_frames_calc = 100 / 25 * 10 = 40
         #      num_frames_clamped = min(max(40, 8), 32) = 32
         #      num_frames_factored = floor(32 / 4) * 4 = 32
@@ -132,7 +132,7 @@ class TestProcessVideo(unittest.TestCase):
         self.assertEqual(indices[-1], 96)
 
     def test_sample_with_fps_hits_min_frames(self):
-        """新增：测试使用 fps 采样（被 min_frames 限制）"""
+        """Test fps sampling (limited by min_frames)"""
         # 逻辑: num_frames_calc = 100 / 25 * 1 = 4
         #      num_frames_clamped = min(max(4, 8), 32) = 8
         #      num_frames_factored = floor(8 / 4) * 4 = 8
@@ -149,7 +149,7 @@ class TestProcessVideo(unittest.TestCase):
         self.assertEqual(indices[-1], 87)
 
     def test_sample_with_fps_hits_total_frames(self):
-        """新增：测试使用 fps 采样（被 total_num_frames 限制）"""
+        """Test fps sampling (limited by total_num_frames)"""
         local_max_frames = 200
 
         # 逻辑: num_frames_calc = 100 / 25 * 50 = 200
@@ -168,7 +168,7 @@ class TestProcessVideo(unittest.TestCase):
         self.assertEqual(indices[-1], 99)  # 采样所有帧
 
     def test_no_sampling(self):
-        """新增：测试不采样（fps=0, num_frames=0）"""
+        """Test no sampling (fps=0, num_frames=0)"""
         indices = sample_frames(
             frame_factor=self.frame_factor,
             min_frames=self.min_frames,
@@ -444,7 +444,7 @@ class Test_DataProcessor(unittest.TestCase):
         self.assertEqual(meta["fps"], 1)
 
     def test_init_with_external_tokenizer(self):
-        """新增：测试使用外部传入的 tokenizer 初始化"""
+        """Test initialization with external tokenizer"""
         self.mock_auto_tokenizer_constructor.reset_mock()
 
         external_tokenizer = MagicMock()
@@ -454,7 +454,7 @@ class Test_DataProcessor(unittest.TestCase):
         self.assertIs(processor.tokenizer, external_tokenizer)
 
     def test_add_text_empty(self):
-        """新增：测试 _add_text 传入空字符串"""
+        """Test  _add_text with empty string"""
         outputs = self._get_init_outputs()
         self.processor._add_text("", outputs)
         self.assertEqual(outputs["input_ids"], [])
@@ -462,7 +462,7 @@ class Test_DataProcessor(unittest.TestCase):
 
     @patch(f"{MODULE_PATH}.IDS_TYPE_FLAG", {"text": 0})
     def test_add_text_pre_tokenized(self):
-        """新增：测试 _add_text 传入已 tokenized 的 IDs"""
+        """Test  _add_text with pre-tokenized IDs"""
         outputs = self._get_init_outputs()
         token_ids = [10, 11, 12]
         self.processor._add_text(token_ids, outputs)
@@ -475,7 +475,7 @@ class Test_DataProcessor(unittest.TestCase):
     @patch(f"{MODULE_PATH}.MultimodalHasher.hash_features", return_value="dummy_hash_456")
     @patch(f"{MODULE_PATH}.IDS_TYPE_FLAG", {"text": 0, "image": 1, "video": 2})
     def test_add_video_no_uuid(self, mock_hasher):
-        """新增：测试 _add_video 在 uuid 为 None 时自动哈希"""
+        """Test  _add_video auto-hashing when uuid is None"""
         outputs = self._get_init_outputs()
         meta = {"fps": 30}
         mock_preprocess_return = {
@@ -491,7 +491,7 @@ class Test_DataProcessor(unittest.TestCase):
 
     @patch(f"{MODULE_PATH}.IDS_TYPE_FLAG", {"text": 0, "image": 1, "video": 2})
     def test_add_processed_image(self):
-        """新增：测试 _add_processed_image 处理缓存数据"""
+        """Test  _add_processed_image with cached data"""
         outputs = self._get_init_outputs()
         outputs["cur_position"] = 3
 
@@ -508,7 +508,7 @@ class Test_DataProcessor(unittest.TestCase):
 
     @patch(f"{MODULE_PATH}.IDS_TYPE_FLAG", {"text": 0, "image": 1, "video": 2})
     def test_add_processed_video(self):
-        """新增：测试 _add_processed_video 处理缓存数据"""
+        """Test  _add_processed_video with cached data"""
         outputs = self._get_init_outputs()
         outputs["cur_position"] = 5
 
@@ -527,7 +527,7 @@ class Test_DataProcessor(unittest.TestCase):
         self.assertGreater(outputs["cur_position"], 5)
 
     def test_text2ids_with_processed_data(self):
-        """新增：测试 text2ids 调用 _add_processed_image 和 _add_processed_video"""
+        """Test  text2ids calling _add_processed_image and _add_processed_video"""
         with (
             patch.object(self.processor, "_add_processed_image") as mock_add_proc_img,
             patch.object(self.processor, "_add_processed_video") as mock_add_proc_vid,
@@ -547,7 +547,7 @@ class Test_DataProcessor(unittest.TestCase):
     @patch(f"{MODULE_PATH}.sample_frames")
     @patch(f"{MODULE_PATH}.read_video_decord")
     def test_load_and_process_video_no_sampling(self, mock_read_video, mock_sample_frames):
-        """新增：测试 _load_and_process_video 不采样（fps=-1）"""
+        """Test  _load_and_process_video without sampling (fps=-1)"""
         mock_reader = MagicMock()
         mock_reader.__getitem__.return_value.asnumpy.return_value = np.random.randint(
             0, 255, (100, 100, 3), dtype=np.uint8
@@ -565,7 +565,7 @@ class Test_DataProcessor(unittest.TestCase):
         self.assertEqual(meta["num_of_frame"], 10)
 
     def test_get_processor_cache(self):
-        """新增：测试 get_processor_cache (zmq)"""
+        """Test  get_processor_cache (zmq)"""
         hashes = ["hash1", "hash2"]
         expected_items = ["item1", "item2"]
         mock_resp = pickle.dumps(expected_items)
@@ -577,7 +577,7 @@ class Test_DataProcessor(unittest.TestCase):
         self.assertEqual(items, expected_items)
 
     def test_update_processor_cache(self):
-        """新增：测试 update_processor_cache (zmq)"""
+        """Test  update_processor_cache (zmq)"""
         hashes = ["hash1"]
         items = ["item1"]
 
@@ -587,7 +587,7 @@ class Test_DataProcessor(unittest.TestCase):
         self.mock_zmq_socket.send_multipart.assert_called_once_with([b"", expected_req])
 
     def test_apply_chat_template(self):
-        """新增：测试 apply_chat_template 核心逻辑"""
+        """Test  apply_chat_template core logic"""
         request = {"messages": ["msg1"], "add_generation_prompt": True, "request_id": "req123"}
         self.mock_tokenizer.apply_chat_template.return_value = "Prompt <|IMAGE_PLACEHOLDER|> text"
         self.mock_tokenizer.tokenize.return_value = ["Prompt", "text"]
@@ -603,7 +603,7 @@ class Test_DataProcessor(unittest.TestCase):
         self.mock_tokenizer.tokenize.assert_called_with("Prompt  text")
 
     def test_apply_chat_template_raises_error(self):
-        """新增：测试 apply_chat_template 在模板不存在时引发 ValueError"""
+        """Test  apply_chat_template raises ValueError when template is missing"""
         self.mock_tokenizer.chat_template = None
         with self.assertRaises(ValueError) as context:
             self.processor.apply_chat_template({"messages": []})
@@ -611,7 +611,7 @@ class Test_DataProcessor(unittest.TestCase):
 
     @patch(f"{MODULE_PATH}.parse_chat_messages")
     def test_request2ids_cache_miss_raises_error(self, mock_parse_chat):
-        """新增：测试 request2ids 在缓存关闭时缺少数据引发 ValueError"""
+        """Test  request2ids raises ValueError when data is missing and cache is disabled"""
         messages = [{"role": "user", "content": [{"type": "image", "uuid": "img1"}]}]
         request = {"request_id": "test_0", "messages": messages}
         request = Request.from_dict(request)
@@ -628,7 +628,7 @@ class Test_DataProcessor(unittest.TestCase):
     @patch(f"{MODULE_PATH}.DataProcessor.text2ids")
     @patch(f"{MODULE_PATH}.parse_chat_messages")
     def test_request2ids_cache_hit_and_update(self, mock_parse_chat, mock_text2ids, mock_update_cache, mock_get_cache):
-        """新增：测试 request2ids 缓存命中和缓存更新"""
+        """Test  request2ids cache hit and cache update"""
         self.processor = DataProcessor(model_path="dummy_model_path", enable_processor_cache=True)
         self._configure_processor_ids()
 
@@ -675,7 +675,7 @@ class Test_DataProcessor(unittest.TestCase):
     @patch(f"{MODULE_PATH}.DataProcessor.text2ids")
     @patch(f"{MODULE_PATH}.parse_chat_messages")
     def test_request2ids_unsupported_type(self, mock_parse_chat, mock_text2ids):
-        """新增：测试 request2ids 静默忽略不支持的类型"""
+        """Test  request2ids silently ignores unsupported types"""
         messages = [
             {
                 "role": "user",
@@ -696,6 +696,76 @@ class Test_DataProcessor(unittest.TestCase):
         self.assertEqual(call_args[2], [])  # videos
         self.assertEqual(call_args[3], [])  # image_uuid
         self.assertEqual(call_args[4], [])  # video_uuid
+
+    def test_get_max_image_tokens(self):
+        """Test  get_max_image_tokens method"""
+        # 配置 mock image_processor 的属性
+        self.mock_image_processor.patch_size = 14
+        self.mock_image_processor.merge_size = 2
+        self.mock_image_processor.min_pixels = 28 * 28 * 130
+        self.mock_image_processor.max_pixels = 28 * 28 * 1280
+
+        seq_len = 100000
+        max_tokens = self.processor.get_max_image_tokens(seq_len)
+
+        # 验证返回值是正整数且不超过 seq_len
+        self.assertIsInstance(max_tokens, int)
+        self.assertGreater(max_tokens, 0)
+        self.assertLessEqual(max_tokens, seq_len)
+
+    def test_get_max_video_tokens(self):
+        """Test  get_max_video_tokens method"""
+        # 配置 mock image_processor 的属性
+        self.mock_image_processor.patch_size = 14
+        self.mock_image_processor.merge_size = 2
+        self.mock_image_processor.min_pixels = 28 * 28 * 130
+        self.mock_image_processor.max_pixels = 28 * 28 * 1280
+
+        seq_len = 100000
+        max_tokens = self.processor.get_max_video_tokens(seq_len)
+
+        # 验证返回值是正整数且不超过 seq_len
+        self.assertIsInstance(max_tokens, int)
+        self.assertGreater(max_tokens, 0)
+        self.assertLessEqual(max_tokens, seq_len)
+
+    def test_get_mm_max_tokens_per_item(self):
+        """Test  get_mm_max_tokens_per_item method"""
+        # 配置 mock image_processor 的属性
+        self.mock_image_processor.patch_size = 14
+        self.mock_image_processor.merge_size = 2
+        self.mock_image_processor.min_pixels = 28 * 28 * 130
+        self.mock_image_processor.max_pixels = 28 * 28 * 1280
+
+        seq_len = 100000
+        result = self.processor.get_mm_max_tokens_per_item(seq_len)
+
+        # 验证返回值格式
+        self.assertIsInstance(result, dict)
+        self.assertIn("image", result)
+        self.assertIn("video", result)
+        self.assertIsInstance(result["image"], int)
+        self.assertIsInstance(result["video"], int)
+        self.assertGreater(result["image"], 0)
+        self.assertGreater(result["video"], 0)
+        self.assertLessEqual(result["image"], seq_len)
+        self.assertLessEqual(result["video"], seq_len)
+
+    def test_get_mm_max_tokens_per_item_with_small_seq_len(self):
+        """Test  get_mm_max_tokens_per_item truncation with small seq_len"""
+        # 配置 mock image_processor 的属性
+        self.mock_image_processor.patch_size = 14
+        self.mock_image_processor.merge_size = 2
+        self.mock_image_processor.min_pixels = 28 * 28 * 130
+        self.mock_image_processor.max_pixels = 28 * 28 * 1280
+
+        # 使用一个很小的 seq_len
+        small_seq_len = 100
+        result = self.processor.get_mm_max_tokens_per_item(small_seq_len)
+
+        # 验证返回值被截断到 seq_len
+        self.assertLessEqual(result["image"], small_seq_len)
+        self.assertLessEqual(result["video"], small_seq_len)
 
 
 class TestPaddleOCR_VL_ImageProcessor(unittest.TestCase):
