@@ -2032,7 +2032,7 @@ class GPUModelRunner(ModelRunnerBase):
         # ensuring that the token count for the current batch is ready to be computed and reused in the subsequent batch.
         token_num_event.synchronize()
         next_launch_token_num = self._predict_next_launch_token_num()
-        if next_launch_token_num != 0 or model_output is not None:
+        if self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item() > 0 and model_output is not None:
             model_output_data, sampler_output, post_process_event = self._postprocess(
                 model_output, p_done_idxs, model_forward_batch, num_running_requests
             )
