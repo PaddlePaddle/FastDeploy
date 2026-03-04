@@ -356,6 +356,17 @@ class AppendAttentionBackend(AttentionBackend):
             )
 
         block_tables = forward_meta.block_tables_3d if self.enable_head_wise_kv_cache else forward_meta.block_tables
+        if self.enable_head_wise_kv_cache:
+            block_tables_3d = getattr(forward_meta, "block_tables_3d", None)
+            logger.info(
+                "[headwise dbg] q_heads=%s kv_heads=%s group=%s block_tables_3d=%s batch=%s cache_k=%s",
+                self.num_heads,
+                self.kv_num_heads,
+                self.num_heads // max(self.kv_num_heads, 1),
+                block_tables_3d.shape if block_tables_3d is not None else None,
+                forward_meta.seq_lens_this_time.shape[0],
+                cache_k.shape,
+            )
         if self.use_output:
             quant_max_bound = getattr(layer, "quant_max_bound", 0.0)
             cache_quant_type = getattr(layer, "cache_quant_type_str", "none")
