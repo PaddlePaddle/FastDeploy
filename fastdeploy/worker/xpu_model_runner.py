@@ -1581,8 +1581,6 @@ class XPUModelRunner(ModelRunnerBase):
             )
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
-            # if self.not_need_stop() and not is_dummy_run:
-            #     paddle.device.xpu.set_debug_level(0xa1)
             sampler_output = None
             if not self.speculative_decoding:
                 sampler_output = self.sampler(logits, self.sampling_metadata)
