@@ -2019,7 +2019,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # save output (last batch)
-        if self._cached_model_output_data is not None and not self.speculative_decoding:
+        if self._cached_model_output_data is not None:
             # synchronizes the async DtoH copies of sampled_token_ids.
             self._cached_post_process_event.synchronize()
             self._save_model_output(
