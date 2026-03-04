@@ -2,6 +2,7 @@
 #include <cuda.h>
 
 #include <cstdlib>
+#include <cstring>
 #include <cuda/std/limits>
 #include <numeric>
 
