@@ -64,12 +64,17 @@ echo "build whl"
 bash build.sh || exit 1
 
 function print_error_message() {
-    if [ ! -f "log/workerlog.0" ]; then
+    if [ -f "log/launch_worker.0" ]; then
         echo "------------------- log/launch_worker.log -----------------"
         cat log/launch_worker.log
-    else
+    fi
+    if [ -f "log/workerlog.0" ]; then
         echo "------------------- log/workerlog.0 -----------------"
         cat log/workerlog.0
+    fi
+    if [ -f "log/workerlog.1" ]; then
+        echo "------------------- log/workerlog.1 -----------------"
+        cat log/workerlog.1
     fi
     if [ -f "log/fastdeploy_error.log" ]; then
         echo "------------------- log/fastdeploy_error.log -----------------"
@@ -182,7 +187,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --quantization wint8 \
        --max-model-len 32768 \
        --max-num-seqs 8 \
-       --block-size 16 > server.log 2>&1 &
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": false}' > server.log 2>&1 &
 
 check_server_status
 
@@ -229,7 +235,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --reasoning-parser ernie-45-vl \
        --max-model-len 32768 \
        --max-num-seqs 8 \
-       --block-size 16 > server.log 2>&1 &
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": false}' > server.log 2>&1 &
 
 check_server_status
 
@@ -284,7 +291,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --max-num-batched-tokens 16384 \
        --max-num-seqs 64 \
        --workers 2 \
-       --block-size 16 > server.log 2>&1 &
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": true}' > server.log 2>&1 &
 
 check_server_status
 

@@ -41,13 +41,11 @@ __global__ void ComputeSelfOrderKernel(const int* last_seq_lens_this_time,
       // 1. encoder
       if (cur_step_idx == 1 && cur_seq_lens_this_time > 0) {
         in_offset += 1;
-        lm_src_map[j] = in_offset - 1;
-        out_offset++;
+        lm_src_map[out_offset++] = in_offset - 1;
         // 2. decoder
       } else if (cur_seq_lens_this_time > 0) /* =1 */ {
         in_offset += cur_last_seq_lens_this_time;
-        lm_src_map[j] = in_offset - 1;
-        out_offset++;
+        lm_src_map[out_offset++] = in_offset - 1;
         // 3. stop
       } else {
         // first token end

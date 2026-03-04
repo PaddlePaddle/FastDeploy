@@ -409,7 +409,7 @@ class TokenProcessor:
                 speculate_get_output,
             )
         elif current_platform.is_iluvatar():
-            from fastdeploy.model_executor.ops.iluvatar import get_output
+            from fastdeploy.model_executor.ops.iluvatar import get_output, get_output_ep
         elif current_platform.is_gcu():
             from fastdeploy.model_executor.ops.gcu import get_output
         elif current_platform.is_intel_hpu():

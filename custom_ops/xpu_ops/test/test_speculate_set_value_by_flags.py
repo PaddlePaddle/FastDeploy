@@ -28,6 +28,7 @@ def test_speculate_set_value_by_flags_and_idx():
     max_draft_tokens = 4
 
     pre_ids_all = paddle.to_tensor(np.full((bs, length), -1), dtype="int64")
+    prompt_lens = paddle.zeros([bs, 1], dtype="int64")
 
     accept_tokens = np.random.randint(100, 200, size=(bs, max_draft_tokens))
     accept_tokens = paddle.to_tensor(accept_tokens, dtype="int64")
@@ -45,16 +46,29 @@ def test_speculate_set_value_by_flags_and_idx():
     step_idx = np.random.randint(max_draft_tokens, length, size=bs)
     step_idx = paddle.to_tensor(step_idx, dtype="int64")
 
-    out_xpu = speculate_set_value_by_flags_and_idx(
-        pre_ids_all,
-        accept_tokens,
-        accept_num,
-        stop_flags,
-        seq_lens_this_time,
-        seq_lens_encoder,
-        seq_lens_decoder,
-        step_idx,
-    )
+    if paddle.is_compiled_with_xpu():
+        out_xpu = speculate_set_value_by_flags_and_idx(
+            pre_ids_all,
+            accept_tokens,
+            accept_num,
+            stop_flags,
+            seq_lens_this_time,
+            seq_lens_encoder,
+            seq_lens_decoder,
+            step_idx,
+        )
+    else:
+        out_xpu = speculate_set_value_by_flags_and_idx(
+            pre_ids_all,
+            prompt_lens,
+            accept_tokens,
+            accept_num,
+            stop_flags,
+            seq_lens_this_time,
+            seq_lens_encoder,
+            seq_lens_decoder,
+            step_idx,
+        )
     out_xpu = out_xpu.numpy()
 
     out_cpu = paddle.to_tensor(np.full((bs, length), -1), dtype="int64")
