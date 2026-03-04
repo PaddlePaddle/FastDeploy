@@ -48,6 +48,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
   static constexpr int kBlockN = Ktraits::kBlockN;
   constexpr int kHeadDim = Ktraits::kHeadDim;
   constexpr bool NeedMask = Ktraits::NeedMask;
+  constexpr bool UseSWA = Ktraits::UseSWA;
 
   using CollectiveMainloop = CollectiveMainloopAttn<Ktraits>;
 
@@ -65,6 +66,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
   const int m_block = blockIdx.x;
   const int bidh = blockIdx.y;
   const int bidb = blockIdx.z;
+  const int bidh_kv = mainloop_params.qhead_per_khead_divmod.divide(bidh);
   if (data_params.seq_len_encoder[bidb] <= 0) {
     return;
   }
@@ -131,6 +133,14 @@ __global__ void __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
                                kBlockN),
                 cute::ceil_div(seq_len_k, kBlockN));
   ;
+  int n_block_min = 0;
+
+  if constexpr (UseSWA) {
+    if (data_params.head_use_swa[bidh_kv]) {
+      n_block_min =
+          max(n_block_min, n_block_max - data_params.swa_window_blocks);
+    }
+  }
 
   if (warp_group_idx == 0) {  // Producer
     cutlass::arch::warpgroup_reg_dealloc<Ktraits::kNWarps == 8 ? 56 : 24>();
@@ -152,11 +162,13 @@ __global__ void __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
                                n_block_max,
                                m_block,
                                bidh,
+                               bidh_kv,
                                bidb,
                                data_params.cu_seq_q,
                                data_params.cu_seq_k,
                                seq_len_q,
-                               seq_len_k);
+                               seq_len_k,
+                               n_block_min);
     }
   } else {  // Consumer
     cutlass::arch::warpgroup_reg_alloc<Ktraits::kNWarps == 8 ? 256 : 240>();
@@ -183,7 +195,8 @@ __global__ void __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
                             m_block,
                             seq_len_q,
                             seq_len_k,
-                            shared_storage);
+                            shared_storage,
+                            n_block_min);
 
     const int o_head_stride = data_params.head_num * kHeadDim;
     const int store_offset =
@@ -255,6 +268,7 @@ void run_flash_mask(Flash_mask_params &params, cudaStream_t stream) {
 template <int kBlockM,
           int kBlockN,
           bool NeedMask,
+          bool UseSWA,
           typename InputType,
           typename OutputType>
 void flash_attn_headdim128(Flash_mask_params &params, cudaStream_t stream) {
@@ -268,6 +282,7 @@ void flash_attn_headdim128(Flash_mask_params &params, cudaStream_t stream) {
                                            kNWarps,
                                            kStages,
                                            NeedMask,
+                                           UseSWA,
                                            InputType,
                                            OutputType>;
   run_flash_mask<Ktraits>(params, stream);

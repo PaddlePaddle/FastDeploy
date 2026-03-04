@@ -50,6 +50,7 @@ struct CollectiveMainloopAttn {
   static constexpr int kBlockM = Ktraits::kBlockM;
   static constexpr int kBlockN = Ktraits::kBlockN;
   static constexpr bool NeedMask = Ktraits::NeedMask;
+  static constexpr bool UseSWA = Ktraits::UseSWA;
 
   using ShapeT = cute::Shape<int32_t, int32_t, int32_t>;
   using StrideT = cute::Shape<int32_t, _1, int32_t>;
@@ -220,11 +221,13 @@ struct CollectiveMainloopAttn {
                            const int n_block_max,
                            const int m_block,
                            const int bidh,
+                           const int bidh_kv,
                            const int bidb,
                            const int* cu_seq_q,
                            const int* cu_seq_k,
                            const int seq_len_q,
-                           const int seq_len_k) {
+                           const int seq_len_k,
+                           const int n_block_min) {
     Tensor sQ =
         make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
     Tensor sK =
@@ -238,7 +241,6 @@ struct CollectiveMainloopAttn {
         mainloop_params.layout_K.shape());
     Tensor mV = mainloop_params.tma_load_V.get_tma_tensor(
         mainloop_params.layout_V.shape());
-    int bidh_kv = mainloop_params.qhead_per_khead_divmod.divide(bidh);
 
     Tensor gQ = get_local_tile_tensor(
         mQ, select<0, 2>(TileShape_MNK{}), cu_seq_q, bidh, bidb, seq_len_q)(
@@ -296,25 +298,43 @@ struct CollectiveMainloopAttn {
     }
 
     if (lane_predicate) {
+      if constexpr (UseSWA) {
 #pragma unroll 2
-      for (; n_block > 0; --n_block) {
-        pipeline_k.producer_acquire(smem_pipe_write_k);
-        copy(mainloop_params.tma_load_K.with(
-                 *pipeline_k.producer_get_barrier(smem_pipe_write_k),
-                 mcast_mask_kv),
-             tKgK(_, n_block - 1),
-             tKsK(_, smem_pipe_write_k.index()));
-        ++smem_pipe_write_k;
-        pipeline_v.producer_acquire(smem_pipe_write_v);
-        copy(mainloop_params.tma_load_V.with(
-                 *pipeline_v.producer_get_barrier(smem_pipe_write_v),
-                 mcast_mask_kv),
-             tVgV(_, n_block),
-             tVsV(_, smem_pipe_write_v.index()));
-        ++smem_pipe_write_v;
+        for (; n_block > n_block_min; --n_block) {
+          pipeline_k.producer_acquire(smem_pipe_write_k);
+          copy(mainloop_params.tma_load_K.with(
+                   *pipeline_k.producer_get_barrier(smem_pipe_write_k),
+                   mcast_mask_kv),
+               tKgK(_, n_block - 1),
+               tKsK(_, smem_pipe_write_k.index()));
+          ++smem_pipe_write_k;
+          pipeline_v.producer_acquire(smem_pipe_write_v);
+          copy(mainloop_params.tma_load_V.with(
+                   *pipeline_v.producer_get_barrier(smem_pipe_write_v),
+                   mcast_mask_kv),
+               tVgV(_, n_block),
+               tVsV(_, smem_pipe_write_v.index()));
+          ++smem_pipe_write_v;
+        }
+      } else {
+        for (; n_block > 0; --n_block) {
+          pipeline_k.producer_acquire(smem_pipe_write_k);
+          copy(mainloop_params.tma_load_K.with(
+                   *pipeline_k.producer_get_barrier(smem_pipe_write_k),
+                   mcast_mask_kv),
+               tKgK(_, n_block - 1),
+               tKsK(_, smem_pipe_write_k.index()));
+          ++smem_pipe_write_k;
+          pipeline_v.producer_acquire(smem_pipe_write_v);
+          copy(mainloop_params.tma_load_V.with(
+                   *pipeline_v.producer_get_barrier(smem_pipe_write_v),
+                   mcast_mask_kv),
+               tVgV(_, n_block),
+               tVsV(_, smem_pipe_write_v.index()));
+          ++smem_pipe_write_v;
+        }
       }
-    }
-    if (lane_predicate) {
+
       pipeline_v.producer_acquire(smem_pipe_write_v);
       copy(mainloop_params.tma_load_V.with(
                *pipeline_v.producer_get_barrier(smem_pipe_write_v),
@@ -396,7 +416,8 @@ struct CollectiveMainloopAttn {
                           const int m_block,
                           const int seq_len_q,
                           const int seq_len_k,
-                          SharedStorage& shared_storage) {
+                          SharedStorage& shared_storage,
+                          const int n_block_min) {
     Tensor sQ =
         make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
     Tensor sK =
@@ -478,43 +499,88 @@ struct CollectiveMainloopAttn {
     Tensor scores_scale = make_fragment_like(softmax.row_max);
     clear(scores_scale);
 
-#pragma unroll 2
-    for (; n_block > 0; --n_block) {
-      Tensor tSrS =
-          partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}));
-      consumer_wait(pipeline_k, smem_pipe_read_k);
-      warp_scheduler_barrier_sync();
+    if constexpr (UseSWA) {
+#pragma unroll 1
+      for (; n_block > n_block_min; --n_block) {
+        Tensor tSrS =
+            partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}));
+        consumer_wait(pipeline_k, smem_pipe_read_k);
+        warp_scheduler_barrier_sync();
 
-      gemm</*zero_init=*/true, /*wg_wait=*/-1>(
-          tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read_k.index()), tSrS);
+        gemm</*zero_init=*/true, /*wg_wait=*/-1>(
+            tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read_k.index()), tSrS);
 
-      softmax.rescale_o(tOrO, scores_scale);
-      consumer_wait(pipeline_v, smem_pipe_read_v);
-      gemm</*zero_init=*/false, /*wg_wait=*/-1>(
-          tiled_mma1, tOrP, tOrV(_, _, _, smem_pipe_read_v.index()), tOrO);
-      warp_scheduler_barrier_arrive();
-      warpgroup_wait<1>();
-      pipeline_k.consumer_release(smem_pipe_read_k);  // release K
-      if constexpr (NeedMask) {
-        if (n_block - 1 >= mask_start_idx) {
-          app_mask(
-              tSrS, mask, mask_row_id, col_base + n_block * kBlockN - kBlockN);
+        softmax.rescale_o(tOrO, scores_scale);
+        consumer_wait(pipeline_v, smem_pipe_read_v);
+        gemm</*zero_init=*/false, /*wg_wait=*/-1>(
+            tiled_mma1, tOrP, tOrV(_, _, _, smem_pipe_read_v.index()), tOrO);
+        warp_scheduler_barrier_arrive();
+        warpgroup_wait<1>();
+        pipeline_k.consumer_release(smem_pipe_read_k);  // release K
+        if constexpr (NeedMask) {
+          if (n_block - 1 >= mask_start_idx) {
+            app_mask(tSrS,
+                     mask,
+                     mask_row_id,
+                     col_base + n_block * kBlockN - kBlockN);
+          }
         }
+        cute::copy(softmax.template max</*Is_first=*/false>(
+                       tSrS, mainloop_params.softmax_scale_log2),
+                   scores_scale);
+        softmax.template online_softmax</*Is_first=*/false>(
+            tSrS, mainloop_params.softmax_scale_log2);
+        warpgroup_wait<0>();
+        pipeline_v.consumer_release(smem_pipe_read_v);  // release V
+        ++smem_pipe_read_k;
+        ++smem_pipe_read_v;
+        cute::copy(
+            make_tensor(convert_type<Element>(tSrS).data(),
+                        convert_layout_acc_Aregs<typename Ktraits::TiledMma1>(
+                            tSrS.layout())),
+            tOrP);
       }
-      cute::copy(softmax.template max</*Is_first=*/false>(
-                     tSrS, mainloop_params.softmax_scale_log2),
-                 scores_scale);
-      softmax.template online_softmax</*Is_first=*/false>(
-          tSrS, mainloop_params.softmax_scale_log2);
-      warpgroup_wait<0>();
-      pipeline_v.consumer_release(smem_pipe_read_v);  // release V
-      ++smem_pipe_read_k;
-      ++smem_pipe_read_v;
-      cute::copy(
-          make_tensor(convert_type<Element>(tSrS).data(),
-                      convert_layout_acc_Aregs<typename Ktraits::TiledMma1>(
-                          tSrS.layout())),
-          tOrP);
+    } else {
+#pragma unroll 1
+      for (; n_block > 0; --n_block) {
+        Tensor tSrS =
+            partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}));
+        consumer_wait(pipeline_k, smem_pipe_read_k);
+        warp_scheduler_barrier_sync();
+
+        gemm</*zero_init=*/true, /*wg_wait=*/-1>(
+            tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read_k.index()), tSrS);
+
+        softmax.rescale_o(tOrO, scores_scale);
+        consumer_wait(pipeline_v, smem_pipe_read_v);
+        gemm</*zero_init=*/false, /*wg_wait=*/-1>(
+            tiled_mma1, tOrP, tOrV(_, _, _, smem_pipe_read_v.index()), tOrO);
+        warp_scheduler_barrier_arrive();
+        warpgroup_wait<1>();
+        pipeline_k.consumer_release(smem_pipe_read_k);  // release K
+        if constexpr (NeedMask) {
+          if (n_block - 1 >= mask_start_idx) {
+            app_mask(tSrS,
+                     mask,
+                     mask_row_id,
+                     col_base + n_block * kBlockN - kBlockN);
+          }
+        }
+        cute::copy(softmax.template max</*Is_first=*/false>(
+                       tSrS, mainloop_params.softmax_scale_log2),
+                   scores_scale);
+        softmax.template online_softmax</*Is_first=*/false>(
+            tSrS, mainloop_params.softmax_scale_log2);
+        warpgroup_wait<0>();
+        pipeline_v.consumer_release(smem_pipe_read_v);  // release V
+        ++smem_pipe_read_k;
+        ++smem_pipe_read_v;
+        cute::copy(
+            make_tensor(convert_type<Element>(tSrS).data(),
+                        convert_layout_acc_Aregs<typename Ktraits::TiledMma1>(
+                            tSrS.layout())),
+            tOrP);
+      }
     }
 
     softmax.rescale_o(tOrO, scores_scale);
