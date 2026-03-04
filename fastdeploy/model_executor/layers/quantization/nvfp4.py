@@ -351,7 +351,8 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         out = fp4_gemm(x_fp4, w, x_scale_interleaved, w_scale_interleaved, layer.alpha, output_dtype, backend=backend)
         if layer.with_bias:
             out = paddle.add(out, layer.bias)
-        return out.view(*output_shape)
+        assert out.shape == output_shape
+        return out
 
 
 class ModelOptNvFp4FusedMoE(QuantMethodBase):
