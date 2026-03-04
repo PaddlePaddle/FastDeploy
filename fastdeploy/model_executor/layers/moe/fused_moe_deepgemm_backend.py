@@ -44,31 +44,6 @@ else:
     m_grouped_fp8_gemm_nt_masked = None
 
 
-# ===================== 工具函数 =====================
-def dump_tensor(*args):
-    """打印张量的关键信息（类型、形状、 dtype、步长），用于调试精度问题"""
-    # paddle.cuda.synchronize()
-    import inspect
-
-    frame = inspect.currentframe().f_back
-    try:
-        call = inspect.getframeinfo(frame).code_context[0]
-        names = call[call.find("(") + 1 : call.rfind(")")].split(",")
-    except Exception:
-        names = [f"arg{i}" for i in range(len(args))]
-
-    print(100 * "*")
-    for i, x in enumerate(args):
-        name = names[i].strip() if i < len(names) else f"arg{i}"
-        print(
-            f"[{name:<60}] "
-            f"type={type(x).__name__:<12} "
-            f"shape={tuple(x.shape)!s:<18} "
-            f"dtype={str(x.dtype):<20} "
-            f"strides={x.strides}"
-        )
-
-
 def m_grouped_fp8_gemm_nt_contiguous_custom_python_op_infermeta(
     permute_input: "paddle.static.MetaTensor",
     permute_scale: "paddle.static.MetaTensor",
@@ -351,8 +326,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             (recv_x, recv_x_scale) = recv_x
 
             if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE:
-                dump_tensor(recv_x, recv_x_scale, recv_topk_idx, recv_topk_weights)
-                print("layer.num_local_experts:", layer.num_local_experts, "token_all_num:", token_all_num)
                 recv_topk_idx = recv_topk_idx.astype(paddle.int32)
                 (
                     permute_input,
@@ -603,19 +576,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 if not self.quant_config.deepgemm_scale_ue8m0
                 else recv_x_scale.T[: recv_x.shape[0]]
             )
-        phase = layer.fd_config.model_config.moe_phase.phase
-        print()
-        print("cudagraph captrueing:", paddle.cuda.is_current_stream_capturing())
-        if phase == "prefill":
-            print("prefill_tp")
-        else:
-            print(phase)
-            print("decode_tp")
+
         if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE:
             topk_ids = topk_ids.astype(paddle.int32)
             override_buffer_size = recv_x.shape[0] * layer.top_k + layer.num_experts * (128 - 1)
-            dump_tensor(recv_x, recv_x_scale, topk_ids, topk_weights)
-            print("layer.num_experts:", layer.num_experts, "override_buffer_size:", override_buffer_size)
             (
                 permute_input,
                 permute_indices_per_token,  # == zipped_expertwise_rowmap
