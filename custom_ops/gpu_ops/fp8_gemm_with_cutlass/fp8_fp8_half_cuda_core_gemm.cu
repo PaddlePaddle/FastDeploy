@@ -116,9 +116,10 @@ __global__ void cudaCoreGemm(InputType const* __restrict__ act,
     }
 
     if constexpr (UseBias) {
-        output[mid * n + nid] = static_cast<OutputType>(val * alpha + (float)*(bias+nid)) ;
+      output[mid * n + nid] =
+          static_cast<OutputType>(val * alpha + (float)*(bias + nid));
     } else {
-        output[mid * n + nid] = static_cast<OutputType>(val * alpha);
+      output[mid * n + nid] = static_cast<OutputType>(val * alpha);
     }
   }
 }
@@ -129,12 +130,13 @@ template <typename InputType,
           int32_t TILE_N,
           int32_t BLOCK_SIZE>
 void cudaCoreGemmKernel(GemmParams const& params) {
-    dim3 block(BLOCK_SIZE);
-    dim3 grid(params.m / TILE_M, params.n / TILE_N);
-    // std::cout << "m" << params.m << " n" << params.n <<  " k " << params.k << std::endl;
+  dim3 block(BLOCK_SIZE);
+  dim3 grid(params.m / TILE_M, params.n / TILE_N);
+  // std::cout << "m" << params.m << " n" << params.n <<  " k " << params.k <<
+  // std::endl;
 
-    if (params.bias != nullptr) {
-        cudaCoreGemm<InputType, OutputType, TILE_M, TILE_N, BLOCK_SIZE, true>
+  if (params.bias != nullptr) {
+    cudaCoreGemm<InputType, OutputType, TILE_M, TILE_N, BLOCK_SIZE, true>
         <<<grid, block, 0, params.stream>>>(
             reinterpret_cast<InputType const*>(params.act),
             reinterpret_cast<InputType const*>(params.weight),
@@ -144,8 +146,8 @@ void cudaCoreGemmKernel(GemmParams const& params) {
             params.n,
             params.k,
             params.alpha);
-    } else {
-        cudaCoreGemm<InputType, OutputType, TILE_M, TILE_N, BLOCK_SIZE, false>
+  } else {
+    cudaCoreGemm<InputType, OutputType, TILE_M, TILE_N, BLOCK_SIZE, false>
         <<<grid, block, 0, params.stream>>>(
             reinterpret_cast<InputType const*>(params.act),
             reinterpret_cast<InputType const*>(params.weight),
@@ -155,7 +157,7 @@ void cudaCoreGemmKernel(GemmParams const& params) {
             params.n,
             params.k,
             params.alpha);
-    }
+  }
 }
 
 template <typename InputType,
@@ -185,7 +187,9 @@ bool cuda_core_gemm_launcher(GemmParams const& params) {
   return cudaCoreGemmTemplateCaller<InputType, OutputType, 1, 2, 256>(params);
 }
 
-template bool cuda_core_gemm_launcher<__nv_fp8_e4m3, __nv_bfloat16>(GemmParams const&);
+template bool cuda_core_gemm_launcher<__nv_fp8_e4m3, __nv_bfloat16>(
+    GemmParams const&);
 template bool cuda_core_gemm_launcher<__nv_fp8_e4m3, half>(GemmParams const&);
-template bool cuda_core_gemm_launcher<__nv_fp8_e5m2, __nv_bfloat16>(GemmParams const&);
+template bool cuda_core_gemm_launcher<__nv_fp8_e5m2, __nv_bfloat16>(
+    GemmParams const&);
 template bool cuda_core_gemm_launcher<__nv_fp8_e5m2, half>(GemmParams const&);

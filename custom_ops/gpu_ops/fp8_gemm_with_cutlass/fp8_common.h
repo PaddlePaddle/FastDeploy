@@ -26,7 +26,6 @@
 #include "paddle/phi/core/allocator.h"
 #include "paddle/common/flags.h"
 
-
 typedef struct {
   const void *A;
   const void *B;
@@ -47,8 +46,8 @@ typedef struct {
   std::vector<int64_t> &bias_dims;
   std::string &fuse_gemm_config;
   int split_k = 1;
-  const float* scalar_scale = nullptr;
-  const float* channel_scale = nullptr;
+  const float *scalar_scale = nullptr;
+  const float *channel_scale = nullptr;
   const void *A_scale = nullptr;
   const void *B_scale = nullptr;
 } GemmEpilogueAllParams;

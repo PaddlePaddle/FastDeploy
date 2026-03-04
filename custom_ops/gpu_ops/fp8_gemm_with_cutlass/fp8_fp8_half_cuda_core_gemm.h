@@ -17,20 +17,22 @@
 #include "fp8_common.h"  // NOLINT
 
 typedef struct {
-    void const* act;
-    void const* weight;
-    void const* bias;
-    void* output;
-    int32_t m, n, k;
-    float alpha;
-    cudaStream_t stream;
+  void const* act;
+  void const* weight;
+  void const* bias;
+  void* output;
+  int32_t m, n, k;
+  float alpha;
+  cudaStream_t stream;
 } GemmParams;
 
 inline bool enable_cuda_core_fp8_gemm() {
-    static const char* enable_cuda_core_fp8_env = std::getenv("FLAGS_cuda_core_fp8_gemm");
-    static const bool enable_cuda_core_fp8_gemm =
-            enable_cuda_core_fp8_env != nullptr && std::string(enable_cuda_core_fp8_env) == "1";
-    return enable_cuda_core_fp8_gemm;
+  static const char* enable_cuda_core_fp8_env =
+      std::getenv("FLAGS_cuda_core_fp8_gemm");
+  static const bool enable_cuda_core_fp8_gemm =
+      enable_cuda_core_fp8_env != nullptr &&
+      std::string(enable_cuda_core_fp8_env) == "1";
+  return enable_cuda_core_fp8_gemm;
 }
 
 template <typename InputType, typename OutputType>

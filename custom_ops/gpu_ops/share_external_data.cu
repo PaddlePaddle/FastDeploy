@@ -13,21 +13,20 @@
 // limitations under the License.
 
 #include "helper.h"
-#include<stdlib.h>
-#include<string.h>
-#include<sys/types.h>
-#include<sys/stat.h>
-#include<unistd.h>
-#include<fcntl.h>
-#include<sys/mman.h>
-#include<stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <stdio.h>
 #include "cuda_multiprocess.h"
 #include "paddle/phi/core/tensor_meta.h"
 
-
-std::vector<paddle::Tensor> ShareExternalData(paddle::Tensor& input,
+std::vector<paddle::Tensor> ShareExternalData(paddle::Tensor &input,
                                               const std::string shm_name,
-                                              const std::vector<int>& shape) {
+                                              const std::vector<int> &shape) {
   volatile shmStruct *shm = NULL;
   sharedMemoryInfo info;
   if (sharedMemoryOpen(shm_name.c_str(), sizeof(shmStruct), &info) != 0) {
@@ -40,8 +39,8 @@ std::vector<paddle::Tensor> ShareExternalData(paddle::Tensor& input,
 #ifdef PADDLE_WITH_HIP
   checkCudaErrors(
       hipIpcOpenMemHandle(&ptr,
-                           *(hipIpcMemHandle_t *)&shm->memHandle,  // NOLINT
-                           hipIpcMemLazyEnablePeerAccess));
+                          *(hipIpcMemHandle_t *)&shm->memHandle,  // NOLINT
+                          hipIpcMemLazyEnablePeerAccess));
 #else
   checkCudaErrors(
       cudaIpcOpenMemHandle(&ptr,
@@ -49,11 +48,7 @@ std::vector<paddle::Tensor> ShareExternalData(paddle::Tensor& input,
                            cudaIpcMemLazyEnablePeerAccess));
 #endif
 
-  paddle::Tensor tmp_tensor = paddle::from_blob(
-    ptr,
-    shape,
-    input.type()
-  );
+  paddle::Tensor tmp_tensor = paddle::from_blob(ptr, shape, input.type());
   sharedMemoryClose(&info);
   return {tmp_tensor};
 }
