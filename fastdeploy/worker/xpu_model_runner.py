@@ -1640,7 +1640,7 @@ class XPUModelRunner(ModelRunnerBase):
                     sampler_output,
                     model_output_data,
                     self.share_inputs,
-                    save_each_rank=self.parallel_config.data_parallel_size > 1,
+                    self.parallel_config.data_parallel_size > 1,
                     skip_save_output=skip_save_output,
                 )
             else:
