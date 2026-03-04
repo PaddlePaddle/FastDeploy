@@ -464,7 +464,8 @@ class EngineClient:
             if data.get("reasoning_effort") is not None:
                 data["enable_thinking"] = False
                 api_server_logger.warning(
-                    f"req_id: {data['request_id']}, reasoning_effort is deprecated, please use enable_thinking instead."
+                    f"req_id: {data['request_id']}, reasoning_max_tokens and reasoning_effort are both set, "
+                    f"enable_thinking will be disabled."
                 )
 
         if data.get("temperature") is not None and abs(data["temperature"]) < 1e-6:
