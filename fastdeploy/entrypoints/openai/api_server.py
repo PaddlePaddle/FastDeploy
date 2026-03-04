@@ -175,8 +175,9 @@ async def lifespan(app: FastAPI):
     uvicorn_access = logging.getLogger("uvicorn.access")
     uvicorn_access.handlers.clear()
 
-    # 使用 gunicorn 的格式
-    formatter = logging.Formatter("[%(asctime)s] [%(process)d] [INFO] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    formatter = logging.Formatter(
+        "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
+    )
 
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
@@ -668,7 +669,7 @@ def launch_api_server() -> None:
         "loglevel": "info",
         "graceful_timeout": args.timeout_graceful_shutdown,
         "timeout": args.timeout,
-        "control_socket_disable": True, 
+        "control_socket_disable": True,
     }
 
     try:

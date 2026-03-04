@@ -62,6 +62,7 @@ elif current_platform.is_maca():
         save_output_topk,
         set_stop_value_multi_ends,
         speculate_limit_thinking_content_length,
+        speculate_pre_process,
         speculate_save_output,
         speculate_save_output_topk,
         speculate_set_stop_value_multi_seqs,

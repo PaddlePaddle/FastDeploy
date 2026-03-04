@@ -65,7 +65,9 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
   auto out = paddle::empty(
       {output_token_num_cpu, dim_embed}, input.dtype(), input.place());
   int elem_cnt = input_token_num * dim_embed;
-
+  if (output_token_num_cpu <= 0) {
+    return {out};
+  }
   switch (input.dtype()) {
     case paddle::DataType::BFLOAT16:
       using XPUTypeBF16 = typename XPUTypeTrait<bfloat16>::Type;
@@ -76,7 +78,8 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
           position_map.data<int>(),
           reinterpret_cast<XPUTypeBF16*>(out.data<bf16_data_t>()),
           dim_embed,
-          elem_cnt);
+          elem_cnt,
+          output_token_num_cpu);
       PD_CHECK(r == 0, "xpu::plugin::rebuild_hidden_states failed.");
       return {out};
     case paddle::DataType::FLOAT16:
@@ -88,7 +91,8 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
           position_map.data<int>(),
           reinterpret_cast<XPUTypeFP16*>(out.data<fp16_data_t>()),
           dim_embed,
-          elem_cnt);
+          elem_cnt,
+          output_token_num_cpu);
       PD_CHECK(r == 0, "xpu::plugin::rebuild_hidden_states failed.");
       return {out};
     case paddle::DataType::FLOAT32:
@@ -98,7 +102,8 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
           position_map.data<int>(),
           reinterpret_cast<float*>(out.data<float>()),
           dim_embed,
-          elem_cnt);
+          elem_cnt,
+          output_token_num_cpu);
       PD_CHECK(r == 0, "xpu::plugin::rebuild_hidden_states failed.");
       return {out};
     default:

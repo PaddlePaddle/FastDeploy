@@ -142,6 +142,7 @@ std::vector<paddle::Tensor> BlockAttnKernel(
   int max_enc_len = len_info_cpu.data<int32_t>()[3];
   int max_kv_len = len_info_cpu.data<int32_t>()[4];
   int prefix_block_num_per_seq = len_info_cpu.data<int32_t>()[5];
+  int max_dec_len = len_info_cpu.data<int32_t>()[6];
 
   int rope_max_seqlen = 0;
   int rope_head_dim = 0;
@@ -700,28 +701,6 @@ std::vector<paddle::Tensor> BlockAttnKernel(
       std::vector<int> lody_vec(dec_batch + 1);
       std::vector<int> offset_vec(dec_batch, 0);
       std::vector<int> lod_ref_vec(dec_batch + 1, 0);
-      if (!Eq_len) {
-        q_buf_ptr = RAII_GUARD.alloc<XPU_XType>(dec_batch * hidden_dim);
-        decode_output_ptr = RAII_GUARD.alloc<XPU_XType>(dec_batch * hidden_dim);
-        std::iota(lody_vec.begin(), lody_vec.end(), 0);  // 从0开始填充
-        for (int i = 0; i < dec_batch; ++i) {
-          int seq_len_this_time =
-              decoder_context_len_ptr[i] - decoder_context_len_cache_ptr[i];
-          offset_vec[i] = seq_len_this_time - 1;
-          lod_ref_vec[i + 1] = lod_ref_vec[i] + seq_len_this_time;
-        }
-        ret = api::sequence_slice<float16, int>(
-            xpu_ctx->x_context(),
-            reinterpret_cast<float16*>(q_buf.data<XPU_XType>()),
-            // {total_dec_len, hidden_dim}
-            reinterpret_cast<float16*>(q_buf_ptr),
-            // {dec_batch, hidden_dim}
-            decoder_seq_lod_vp,
-            {offset_vec.data(), dec_batch, nullptr},
-            {lody_vec.data(), dec_batch + 1, nullptr},
-            hidden_dim);
-        PD_CHECK(ret == api::SUCCESS, "api::sequence_slice failed.");
-      }
       using TGEMM = std::conditional_t<std::is_same_v<XPU_XType, XPU_CType>,
                                        tfloat32,
                                        int8_wo_t>;
@@ -748,7 +727,7 @@ std::vector<paddle::Tensor> BlockAttnKernel(
           decoder_context_len_vp,             // seq_lengths
           decoder_batch_map_vp,               // valid_batch
           param.max_batch_size,               // batch_num
-          q_len,                              // qlen
+          max_dec_len,                        // qlen
           max_seq_len,                        // max_seq_len
           param.head_num,                     // head_num
           param.head_dim,                     // head_dim
@@ -766,23 +745,11 @@ std::vector<paddle::Tensor> BlockAttnKernel(
           has_zp  // v_cache_maxptr
               ? fake_perhead_scale
               : quant_v_scale_inv,
-          nullptr,          // o_maxptr
-          param.head_dim);  // vo_head_dim
+          nullptr,              // o_maxptr
+          param.head_dim,       // vo_head_dim
+          decoder_seq_lod_vp);  // qlod
       PD_CHECK(ret == api::SUCCESS,
                "xfa::speculative_attention_decoder failed.");
-      if (!Eq_len) {
-        ret = api::sequence_expand<float16, int>(
-            xpu_ctx->x_context(),
-            reinterpret_cast<float16*>(decode_output_ptr),
-            // {dec_batch, hidden_dim}
-            reinterpret_cast<float16*>(decode_output.data<XPU_XType>()),
-            // {total_dec_len, hidden_dim}
-            {lody_vec.data(), dec_batch + 1, nullptr},
-            decoder_seq_lod_vp,
-            {lod_ref_vec.data(), dec_batch + 1, nullptr},
-            hidden_dim);
-        PD_CHECK(ret == api::SUCCESS, "api::sequence_expand failed.");
-      }
     } else {
       vsl.usual_lod_vp = {
           const_cast<int32_t*>(decoder_context_len_cpu.data<int32_t>()),

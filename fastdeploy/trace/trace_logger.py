@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from fastdeploy.metrics.trace import get_trace_info_for_request
 from fastdeploy.trace.constants import EVENT_TO_STAGE_MAP
 from fastdeploy.utils import trace_logger
 
@@ -20,19 +21,27 @@ def print(event, request_id, user):
     """
     Records task tracking log information, including task name, start time, end time, etc.
     Args:
-        task (Task): Task object to be recorded.
+        event: Event to be recorded.
+        request_id: Request ID.
+        user: User identifier.
     """
     try:
+        attributes = {
+            "request_id": f"{request_id}",
+            "user_id": f"{user}",
+            "event": event.value,
+            "stage": EVENT_TO_STAGE_MAP.get(event).value,
+        }
+
+        trace_info = get_trace_info_for_request(request_id)
+        if trace_info:
+            attributes["trace_id"] = trace_info["trace_id"]
+        else:
+            attributes["trace_id"] = "unknown"
+
         trace_logger.info(
             "",
-            extra={
-                "attributes": {
-                    "request_id": f"{request_id}",
-                    "user_id": f"{user}",
-                    "event": event.value,
-                    "stage": EVENT_TO_STAGE_MAP.get(event).value,
-                }
-            },
+            extra={"attributes": attributes},
             stacklevel=2,
         )
     except:
