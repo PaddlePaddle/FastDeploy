@@ -88,6 +88,10 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
       prefill_one_step_stop);
 
   PD_CHECK(r == 0, "draft_model_update  failed.");
+  auto not_need_stop_cpu =
+      not_need_stop_device.copy_to(not_need_stop.place(), false);
+  bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());
+  not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
 
 PD_BUILD_STATIC_OP(draft_model_update)
