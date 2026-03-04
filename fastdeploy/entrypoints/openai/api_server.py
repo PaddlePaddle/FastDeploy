@@ -15,7 +15,6 @@
 
 import asyncio
 import json
-import multiprocessing
 import os
 import signal
 import threading
@@ -158,16 +157,8 @@ def load_data_service():
     config = engine_args.create_engine_config()
     api_server_logger.info(f"local_data_parallel_id: {config.parallel_config}")
     api_server_logger.info(f"local_data_parallel_id: {config.parallel_config.local_data_parallel_id}")
-    api_server_logger.info(f"scheduler_config.name: {config.scheduler_config.name}")
-    request_queues_for_dp_ipc = None
-    result_queues_for_dp_ipc = None
-    if config.scheduler_config.name == "dp":
-        request_queues_for_dp_ipc = [multiprocessing.Queue()]
-        result_queues_for_dp_ipc = [multiprocessing.Queue()]
     expert_service = ExpertService(config, config.parallel_config.local_data_parallel_id)
-    if not expert_service.start(
-        args.port, config.parallel_config.local_data_parallel_id, request_queues_for_dp_ipc, result_queues_for_dp_ipc
-    ):
+    if not expert_service.start(args.port, config.parallel_config.local_data_parallel_id):
         api_server_logger.error("Failed to initialize FastDeploy LLM expert service, service exit now!")
         return None
     llm_engine = expert_service

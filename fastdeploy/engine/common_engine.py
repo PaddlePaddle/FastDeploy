@@ -2112,18 +2112,11 @@ class EngineService:
 
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
-        request_queues_for_dp_ipc = None
-        result_queue_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
             self.scheduler.start(role, host_ip, self.cfg.register_info)
         elif self.cfg.scheduler_config.name == "dp":
-            request_queues_for_dp_ipc = []
-            result_queue_for_dp_ipc = [multiprocessing.Queue()]
-            request_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.scheduler.start(
                 self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
-                request_queues_for_dp_ipc,
-                result_queue_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
