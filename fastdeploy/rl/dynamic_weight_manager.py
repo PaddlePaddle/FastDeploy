@@ -272,6 +272,9 @@ class DynamicWeightManager:
                 target_param = self.state_dict[name]
                 self._validate_parameter_match(name, new_param, target_param)
                 if new_param.stride() != target_param.stride():
+                    logger.warning(
+                        f"name:[{name}] target_param.stride():[{target_param.stride()}] != new_param.stride():[{new_param.stride()}]"
+                    )
                     target_param[...] = new_param
                 else:
                     new_param._share_buffer_to(target_param)
