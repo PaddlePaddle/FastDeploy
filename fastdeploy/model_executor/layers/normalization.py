@@ -31,6 +31,11 @@ else:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused
 
+from .batch_invariant_ops import (
+    is_batch_invariant_mode_enabled,
+    rms_norm_batch_invariant,
+)
+from .flashinfer_comm_fusion import flashinfer_allreduce_residual_rmsnorm
 from .utils import get_tensor, modules_to_convert
 
 
@@ -118,6 +123,10 @@ class RMSNorm(nn.Layer):
         self.tp_rank = self.fd_config.parallel_config.tensor_parallel_rank
         self.tp_group = self.fd_config.parallel_config.tp_group
         is_input_norm = prefix.endswith(".input_layernorm")
+        self.enable_all_reduce_fusion = (
+            fd_config.parallel_config.enable_flashinfer_allreduce_fusion and "post_attention_layernorm" in prefix
+        )
+
         self.is_last_norm = prefix.endswith(".norm")
         self.split_x = (
             self.fd_config.parallel_config.use_sequence_parallel_moe
@@ -236,6 +245,11 @@ class RMSNorm(nn.Layer):
                     norm_out = rms_norm(x, self.weight, self.eps)
                     return norm_out.astype(x_dtype), residual_out
                 norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
+            # enable trtllm all reduce fusion
+            elif self.enable_all_reduce_fusion:
+                norm_out = flashinfer_allreduce_residual_rmsnorm(
+                    fd_config=self.fd_config, input_tensor=x, residual=residual_input, weight=self.weight, eps=self.eps
+                )
             else:
                 norm_out = self.norm_func(
                     x,

@@ -16,6 +16,8 @@
 
 import os
 import re
+import importlib
+import importlib.util
 from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -614,6 +616,8 @@ def reconstruct_memory(model):
         paddle.device.cuda.empty_cache()
         _reload_model(model)
 
+def has_flashinfer():
+    return importlib.util.find_spec("flashinfer") is not None
 
 def need_memory_reconstruction(fd_config):
     _need_memory_reconstruction_archs = ["DeepseekV3ForCausalLM", "DeepseekV32ForCausalLM"]
