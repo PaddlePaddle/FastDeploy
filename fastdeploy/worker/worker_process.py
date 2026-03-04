@@ -23,9 +23,13 @@ import traceback
 from typing import Tuple
 
 import numpy as np
-import paddle
-import paddle.distributed as dist
-from paddle.distributed import fleet
+
+from fastdeploy.logger.logger import intercept_paddle_loggers
+
+with intercept_paddle_loggers():
+    import paddle
+    import paddle.distributed as dist
+    from paddle.distributed import fleet
 
 from fastdeploy import envs
 from fastdeploy.config import (

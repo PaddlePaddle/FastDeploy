@@ -100,10 +100,14 @@ class CustomFormatter(logging.Formatter):
 
         try:
             log_fields = {
-                "thread": record.thread,
-                "thread_name": record.threadName,
                 "timestamp": int(time.time() * 1000),
             }
+
+            # Add thread information if available
+            if hasattr(record, "thread") and record.thread is not None:
+                log_fields["thread"] = record.thread
+            if hasattr(record, "threadName") and record.threadName is not None:
+                log_fields["thread_name"] = record.threadName
 
             if hasattr(record, "attributes") and isinstance(record.attributes, dict):
                 for k, v in record.attributes.items():
