@@ -23,18 +23,12 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import paddle
 
-paddle.enable_compat(scope={"flash_mla"})
-import flash_mla
+from fastdeploy.platforms import current_platform
 
-Sparse_fp8 = True
+if current_platform.is_cuda():
+    paddle.enable_compat(scope={"flash_mla"})
+    import flash_mla
 
-
-from paddle.nn.functional.flash_attention import flash_attn_unpadded
-
-try:
-    from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
-except:
-    flash_attention_v3_varlen = None
 
 from fastdeploy.model_executor.layers.attention.ops import (
     get_block_shape_and_split_kv_block,
@@ -42,10 +36,6 @@ from fastdeploy.model_executor.layers.attention.ops import (
     init_signal_layerwise,
     open_shm_and_get_meta_signal,
 )
-from fastdeploy.platforms import current_platform
-
-if current_platform.is_cuda():
-    pass
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -115,18 +105,7 @@ class DSAAttentionMetadata(AttentionMetadata):
     max_dec_len_this_time: Optional[paddle.Tensor] = None
     max_kv_len_this_time: Optional[paddle.Tensor] = None
 
-    # num_reqs: int
-    # max_query_len: int
-    # max_seq_len: int
-
-    # num_actual_tokens: int  # Number of tokens excluding padding.
-    # query_start_loc: paddle.Tensor
     slot_mapping: Optional[paddle.Tensor] = None
-
-    # block_table: paddle.Tensor
-    # req_id_per_token: paddle.Tensor
-    # block_size: int = 64
-    # topk_tokens: int = 2048
 
 
 class DSAAttentionBackend(AttentionBackend):
@@ -196,22 +175,6 @@ class DSAAttentionBackend(AttentionBackend):
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
         self.useless_tensor = paddle.randn([1]).cast("int32")
-
-        if self.flash_attn_func is None:
-            prop = paddle.device.cuda.get_device_properties()
-            cc = prop.major * 10 + prop.minor
-            is_current_sm_supported = cc >= 90
-            is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
-            if is_current_sm_supported and is_paddle_supported:
-                self.flash_attn_func = flash_attention_v3_varlen
-                print("The current platform supports Flash Attention V3.")
-                self.flash_attn_kwargs = {"softmax_scale": self.attn_softmax_scale}
-            else:
-                self.flash_attn_func = flash_attn_unpadded
-                self.flash_attn_kwargs = {"scale": self.attn_softmax_scale, "training": False}
-                print(
-                    "The current platform does not support Flash Attention V3, so Flash Attention V2 will be used instead."
-                )
 
     def _cast_scale_inv_to_ue8m0(self, scales_inv: paddle.Tensor, out_dtype=paddle.float32) -> paddle.Tensor:
         return paddle.pow(2, paddle.clamp_min(scales_inv, 1e-4).log2().ceil()).to(out_dtype)
@@ -342,17 +305,14 @@ class DSAAttentionBackend(AttentionBackend):
         -   **Last 128 bytes:** The "RoPE" part, containing 64 `bfloat16` values. This part is not quantized for accuracy.
 
         """
-        if Sparse_fp8:
-            fp8_key_cahe_dim = self.kv_lora_rank + 4 * (self.kv_lora_rank // 128) + 2 * self.qk_rope_head_dim
-            fp8_indexer_dim = self.index_head_dim + self.index_head_dim // self.quant_block_size * 4
-            key_cache_shape = [max_num_blocks, 1, self.block_size, fp8_key_cahe_dim]
-            value_cache_shape = []
-            indexer_cache_shape = [max_num_blocks, self.block_size, fp8_indexer_dim]
-            return key_cache_shape, value_cache_shape, indexer_cache_shape
-        else:
-            key_cache_shape = [max_num_blocks, 1, self.block_size, self.kv_lora_rank + self.qk_rope_head_dim]
-            value_cache_shape = []
-            return key_cache_shape, value_cache_shape, []
+
+        fp8_key_cahe_dim = self.kv_lora_rank + 4 * (self.kv_lora_rank // 128) + 2 * self.qk_rope_head_dim
+        fp8_indexer_dim = self.index_head_dim + self.index_head_dim // self.quant_block_size * 4
+        key_cache_shape = [max_num_blocks, 1, self.block_size, fp8_key_cahe_dim]
+        value_cache_shape = []
+        indexer_cache_shape = [max_num_blocks, self.block_size, fp8_indexer_dim]
+
+        return key_cache_shape, value_cache_shape, indexer_cache_shape
 
     def forward_mixed(
         self,
@@ -380,7 +340,6 @@ class DSAAttentionBackend(AttentionBackend):
 
         latent_cache = forward_meta.caches[2 * layer.layer_id] if hasattr(forward_meta, "caches") else None
 
-        # if k is not None:
         if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
 
             def calc_kv_scales(self, q: paddle.Tensor, kv_c_normed: paddle.Tensor, k_pe: paddle.Tensor) -> None:

@@ -62,14 +62,17 @@ if current_platform.is_cuda() or current_platform.is_maca():
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
     per_token_group_quant_fp8,
 )
-from fastdeploy.model_executor.ops.gpu import (
-    cp_gather_indexer_k_quant_cache,
-    indexer_k_quant_and_cache,
-    radix_topk_ragged_transform,
-)
+from fastdeploy.platforms import current_platform
 
-paddle.enable_compat(scope={"flash_mla", "deep_gemm"})  # Enable torch proxy before importing flash_mla
-import deep_gemm
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import (
+        cp_gather_indexer_k_quant_cache,
+        indexer_k_quant_and_cache,
+        radix_topk_ragged_transform,
+    )
+
+    paddle.enable_compat(scope={"flash_mla", "deep_gemm"})  # Enable torch proxy before importing flash_mla
+    import deep_gemm
 
 
 class DeepSeekV3MLP(nn.Layer):
@@ -593,8 +596,8 @@ class Indexer(nn.Layer):
             # ===================================== cache =============================================
 
             # ks,ke = forward_meta.attn_mask_offsets[::2].contiguous(),forward_meta.attn_mask_offsets[1::2].contiguous()
-            ks = paddle.zeros(forward_meta.seq_lens_encoder[0], dtype=paddle.int32)
-            ke = paddle.arange(forward_meta.seq_lens_encoder[0], dtype=paddle.int32) + 1  # + (seq_len_kv - seq_len)
+            ks = paddle.zeros(forward_meta.seq_lens_encoder, dtype=paddle.int32)
+            ke = paddle.arange(forward_meta.seq_lens_encoder, dtype=paddle.int32) + 1  # + (seq_len_kv - seq_len)
             max_seqlen_k = (ke - ks).max().item()
 
             logits = deep_gemm.fp8_mqa_logits(
@@ -602,12 +605,12 @@ class Indexer(nn.Layer):
             )
 
             # To save GPU global memory usage
-            assert logits.size() == (forward_meta.seq_lens_encoder[0], max_seqlen_k)
+            assert logits.size() == (forward_meta.seq_lens_encoder, max_seqlen_k)
             tmp = paddle.full(
-                (forward_meta.seq_lens_encoder[0], forward_meta.seq_lens_encoder[0]),
+                (forward_meta.seq_lens_encoder, forward_meta.seq_lens_encoder),
                 float("-inf"),
             )
-            for i in range(forward_meta.seq_lens_encoder[0]):
+            for i in range(forward_meta.seq_lens_encoder):
                 tmp[i, ks[i] : ke[i]] = logits[i, : ke[i] - ks[i]]
             logits = tmp
 
@@ -626,17 +629,16 @@ class Indexer(nn.Layer):
 
         if forward_meta.max_len_tensor_cpu[2]:
 
+            seq_len_kv = forward_meta.seq_lens_decoder + forward_meta.seq_lens_this_time
             indexer_k_quant_and_cache(k, self.indexer_cache, slot_mapping, self.quant_block_size, self.scale_fmt)
 
-            schedule_metadata = deep_gemm.get_paged_mqa_logits_metadata(
-                forward_meta.seq_lens_decoder.squeeze(1) + 1, 64, deep_gemm.get_num_sms()
-            )
+            schedule_metadata = deep_gemm.get_paged_mqa_logits_metadata(seq_len_kv, 64, deep_gemm.get_num_sms())
 
             logits = deep_gemm.fp8_paged_mqa_logits(
                 q_fp8.unsqueeze(1),
                 self.indexer_cache.unsqueeze(2),
                 weights,
-                forward_meta.seq_lens_decoder.squeeze(1) + 1,
+                seq_len_kv,
                 forward_meta.block_tables,
                 schedule_metadata,
                 self.max_model_len,
@@ -650,7 +652,7 @@ class Indexer(nn.Layer):
                 indexer_top_k,
                 self.offsets,  # unused
                 self.lengths,  # unused
-                forward_meta.seq_lens_decoder + 1,
+                seq_len_kv,
                 forward_meta.batch_id_per_token,
                 None,  # self.buffer
                 self.index_topk,
