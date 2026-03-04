@@ -666,12 +666,14 @@ DLL_EXPORT int rebuild_hidden_states(api::Context* ctx,
                                      const int* position_map,
                                      T* out,
                                      int dim_embed,
-                                     int elem_cnt);
+                                     int elem_cnt,
+                                     int output_token_num);
 template <typename T>
 DLL_EXPORT int rebuild_self_hidden_states(api::Context* ctx,
                                           const T* input,
                                           int* src_map,
                                           T* output,
+                                          int input_token_num,
                                           int dim_embed,
                                           int elem_cnt);
 
@@ -687,6 +689,21 @@ DLL_EXPORT int speculate_get_logits(Context* ctx,
                                     const int* seq_lens_encoder,
                                     const int real_bsz,
                                     const int vocab_size);
+
+DLL_EXPORT int update_attn_mask_offsets(Context* ctx,
+                                        int* attn_mask_offsets,
+                                        const int* seq_lens_this_time,
+                                        const int* seq_lens_encoder,
+                                        const int* seq_lens_decoder,
+                                        const int* cu_seqlens_q,
+                                        const int* attn_mask_offsets_full,
+                                        int* attn_mask_offsets_decoder,
+                                        const bool* is_block_step,
+                                        int* decode_states,
+                                        int* mask_rollback,
+                                        int real_bsz,
+                                        int max_model_len,
+                                        int decode_states_len);
 /*--------------------------------------- MTP end
  * --------------------------------------------*/
 
