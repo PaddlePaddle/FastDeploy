@@ -61,6 +61,7 @@ class ScheduledDecodeTask:
     idx: int
     request_id: str
     block_tables: list[int]
+    block_tables_3d: Union[list[list[int]], None] = None
     task_type: RequestType = RequestType.DECODE
 
 
@@ -252,7 +253,12 @@ class ResourceManagerV1(ResourceManager):
         return request
 
     def _prepare_decode_task(self, request):
-        return ScheduledDecodeTask(idx=request.idx, request_id=request.request_id, block_tables=request.block_tables)
+        return ScheduledDecodeTask(
+            idx=request.idx,
+            request_id=request.request_id,
+            block_tables=list(request.block_tables),
+            block_tables_3d=copy.deepcopy(getattr(request, "block_tables_3d", None)),
+        )
 
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)

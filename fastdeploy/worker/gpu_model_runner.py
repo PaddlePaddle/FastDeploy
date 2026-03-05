@@ -126,6 +126,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.enable_head_wise_kv_cache = envs.FD_HEAD_WISE_KV_CACHE == 1
         self.head_wise_debug_log = bool(int(os.getenv("FD_HEAD_WISE_KV_LOG", "0")))
         self._head_wise_debug_log_count = 0
+        self._head_wise_prepare_log_count = 0
         self.kv_num_heads = max(
             1,
             int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
@@ -934,6 +935,16 @@ class GPUModelRunner(ModelRunnerBase):
                         cache_ids_2d = request.block_tables
                     if cache_ids_2d is not None and getattr(request, "block_tables_3d", None) is None:
                         request.block_tables_3d = cache_ids_2d
+                    # Keep cached request metadata in sync for subsequent forward_meta assembly.
+                    cached_req = self.forward_batch_reqs_list[idx]
+                    if cached_req is not None:
+                        cached_req.block_tables = list(request.block_tables)
+                        if cache_ids_2d is not None:
+                            cached_req.block_tables_3d = cache_ids_2d
+                    else:
+                        logger.warning(
+                            f"[headwise decode] missing cached request at batch idx={idx}, request_id={request.request_id}"
+                        )
                     if cache_ids_2d:
                         encoder_block_num = len(cache_ids_2d[0])
                     else:
@@ -1082,7 +1093,8 @@ class GPUModelRunner(ModelRunnerBase):
                 per_req_head_lens.append([])
 
         if max_blocks_per_head == 0:
-            logger.info(f"[headwise _prepare_block_tables_3d] max_blocks_per_head=0, returning None")
+            if self.head_wise_debug_log:
+                logger.info(f"[headwise _prepare_block_tables_3d] max_blocks_per_head=0, returning None")
             self.share_inputs["block_tables_3d"] = None
             return
 
@@ -1092,7 +1104,8 @@ class GPUModelRunner(ModelRunnerBase):
             cache_ids_2d = getattr(req, "block_tables_3d", None) if req is not None else None
             if cache_ids_2d is None:
                 rows.extend([[-1] * max_blocks_per_head for _ in range(self.kv_num_heads)])
-                logger.info(f"[headwise _prepare_block_tables_3d] req {b}: cache_ids_2d=None, adding dummy rows")
+                if self.head_wise_debug_log:
+                    logger.info(f"[headwise _prepare_block_tables_3d] req {b}: cache_ids_2d=None, adding dummy rows")
                 continue
             for h in range(self.kv_num_heads):
                 if h >= len(cache_ids_2d) or cache_ids_2d[h] is None:
@@ -1116,13 +1129,24 @@ class GPUModelRunner(ModelRunnerBase):
             cache_id_capacity = int(self.share_inputs["caches"][0].shape[0])
         out_of_range_cnt = int((valid_ids >= cache_id_capacity).sum()) if cache_id_capacity > 0 else 0
 
-        logger.info(
-            f"[headwise _prepare_block_tables_3d] shape={block_tables_3d.shape} "
-            f"num_running_requests={num_running_requests} kv_num_heads={self.kv_num_heads} "
-            f"max_blocks_per_head={max_blocks_per_head} min_id={min_id} max_id={max_id} "
-            f"neg_count={neg_count} cache_id_capacity={cache_id_capacity} "
-            f"out_of_range_cnt={out_of_range_cnt} first_rows={rows[:min(4, len(rows))]}"
+        should_log_prepare = self.head_wise_debug_log and (
+            self._head_wise_prepare_log_count < 50 or self._head_wise_prepare_log_count % 100 == 0
         )
+        if should_log_prepare:
+            logger.info(
+                f"[headwise _prepare_block_tables_3d] shape={block_tables_3d.shape} "
+                f"num_running_requests={num_running_requests} kv_num_heads={self.kv_num_heads} "
+                f"max_blocks_per_head={max_blocks_per_head} min_id={min_id} max_id={max_id} "
+                f"neg_count={neg_count} cache_id_capacity={cache_id_capacity} "
+                f"out_of_range_cnt={out_of_range_cnt} first_rows={rows[:min(4, len(rows))]}"
+            )
+        if self.head_wise_debug_log:
+            self._head_wise_prepare_log_count += 1
+        if out_of_range_cnt > 0:
+            logger.error(
+                f"[headwise _prepare_block_tables_3d invalid] out_of_range_cnt={out_of_range_cnt}, "
+                f"cache_id_capacity={cache_id_capacity}, min_id={min_id}, max_id={max_id}"
+            )
         if self.head_wise_debug_log and self._head_wise_debug_log_count < 20:
             logger.info(
                 f"[headwise _prepare_block_tables_3d details] per_req_head_lens={per_req_head_lens[:num_running_requests]}"
