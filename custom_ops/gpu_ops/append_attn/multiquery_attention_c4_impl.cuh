@@ -13,7 +13,7 @@
 // limitations under the License.
 #pragma once
 
-#include "helper.h"  // For getBoolEnv
+#include "helper.h"  // For getEnvDeterministicMode, getEnvDeterministicDebug
 #include "multiquery_attention_c4_kernel.h"
 
 template <typename T,
@@ -1126,10 +1126,10 @@ void MultiQueryAppendC4Attention(
 
     // Deterministic mode: force use nosplit kernel to ensure consistent
     // floating-point accumulation order across all sequence lengths
-    const bool force_no_partition = getBoolEnv("FD_DETERMINISTIC_MODE");
+    const bool force_no_partition = getEnvDeterministicMode();
 
     // Debug log for determinism verification
-    if (getBoolEnv("FD_DETERMINISTIC_DEBUG")) {
+    if (getEnvDeterministicDebug()) {
       printf(
           "[DET_DEBUG] num_chunks=%d, chunk_size=%u, max_dec_len=%d, "
           "force_no_partition=%d\n",

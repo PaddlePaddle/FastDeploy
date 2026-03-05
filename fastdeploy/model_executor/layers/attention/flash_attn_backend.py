@@ -166,8 +166,6 @@ def flash_attn_func(
         )
     else:
         if version == 3:
-            # Force num_splits=1 to prevent non-deterministic KV split
-            # across SMs, ensuring consistent accumulation order.
             out = flash_attention_v3_varlen(
                 q,
                 k,
@@ -177,7 +175,6 @@ def flash_attn_func(
                 max_seqlen_q=max_seqlen_q,
                 max_seqlen_k=max_seqlen_k,
                 causal=causal,
-                num_splits=1,
             )
         else:
             out = flash_attn_unpadded(

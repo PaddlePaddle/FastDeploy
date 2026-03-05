@@ -749,27 +749,6 @@ def enable_batch_invariant_mode():
     paddle._C_ops.mean = mean_batch_invariant
     paddle._C_ops.bmm = bmm_batch_invariant
 
-    # Install tracking wrappers for ops that SHOULD NOT be called in patched paths
-    # These detect if F.linear bypasses _C_ops.matmul via _C_ops.linear or _C_ops.linear_v2
-    _original_ops["linear"] = getattr(paddle._C_ops, "linear", None)
-    _original_ops["linear_v2"] = getattr(paddle._C_ops, "linear_v2", None)
-
-    if _original_ops["linear"] is not None:
-        _orig_linear = _original_ops["linear"]
-
-        def _tracked_linear(*args, **kwargs):
-            return _orig_linear(*args, **kwargs)
-
-        paddle._C_ops.linear = _tracked_linear
-
-    if _original_ops["linear_v2"] is not None:
-        _orig_linear_v2 = _original_ops["linear_v2"]
-
-        def _tracked_linear_v2(*args, **kwargs):
-            return _orig_linear_v2(*args, **kwargs)
-
-        paddle._C_ops.linear_v2 = _tracked_linear_v2
-
     _batch_invariant_MODE = True
 
 
@@ -797,10 +776,6 @@ def disable_batch_invariant_mode():
         paddle._C_ops.mean = _original_ops["mean"]
     if _original_ops["bmm"]:
         paddle._C_ops.bmm = _original_ops["bmm"]
-    if _original_ops.get("linear"):
-        paddle._C_ops.linear = _original_ops["linear"]
-    if _original_ops.get("linear_v2"):
-        paddle._C_ops.linear_v2 = _original_ops["linear_v2"]
 
     _batch_invariant_MODE = False
 

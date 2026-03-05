@@ -13,7 +13,7 @@
 // limitations under the License.
 #pragma once
 
-#include "helper.h"  // For getBoolEnv
+#include "helper.h"  // For getEnvDeterministicMode, getEnvDeterministicDebug
 #include "multiquery_attention_c16_kernel.h"
 
 template <typename T,
@@ -940,10 +940,10 @@ void MultiQueryAppendAttention(
     const int num_chunks = div_up(max_dec_len, chunk_size);
     // Deterministic mode: force use nosplit kernel to ensure consistent
     // floating-point accumulation order across all sequence lengths
-    const bool force_no_partition = getBoolEnv("FD_DETERMINISTIC_MODE");
+    const bool force_no_partition = getEnvDeterministicMode();
 
     // Debug log for determinism verification
-    if (getBoolEnv("FD_DETERMINISTIC_DEBUG")) {
+    if (getEnvDeterministicDebug()) {
       printf(
           "[DET_DEBUG] num_chunks=%d, chunk_size=%u, max_dec_len=%d, "
           "force_no_partition=%d\n",
@@ -1176,7 +1176,7 @@ void MultiQueryAppendAttention(
     // NOTE: the warp1_4 nosplit kernel uses runtime num_chunks_this_seq check
     // (not constexpr partition_kv), so we MUST set gridDim.y=1 to avoid
     // nullptr write to tmp_workspace when num_chunks_this_seq > 1.
-    const bool force_no_partition = getBoolEnv("FD_DETERMINISTIC_MODE");
+    const bool force_no_partition = getEnvDeterministicMode();
     const int grid_chunks = force_no_partition ? 1 : num_chunks;
     dim3 grids(num_blocks_x_cpu, grid_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);

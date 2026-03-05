@@ -418,21 +418,6 @@ void MultiQueryDecoderAttention(
 
   const uint32_t chunk_size = get_max_partition_size(bsz);
   const int num_chunks = div_up(max_dec_len, chunk_size);
-  // Deterministic mode: force use nosplit kernel to ensure consistent
-  // floating-point accumulation order across all sequence lengths
-  const bool force_no_partition = getBoolEnv("FD_DETERMINISTIC_MODE");
-
-  // Debug log for determinism verification
-  if (getBoolEnv("FD_DETERMINISTIC_DEBUG")) {
-    printf(
-        "[DET_DEBUG][Decode] num_chunks=%d, chunk_size=%u, max_dec_len=%d, "
-        "force_no_partition=%d\n",
-        num_chunks,
-        chunk_size,
-        max_dec_len,
-        force_no_partition);
-  }
-
   size_t smem_size = cache_smem_bytes + GROUP_SIZE * HEAD_DIM_QK * sizeof(T);
 
   if (smem_size >= 48 * 1024) {
@@ -455,7 +440,7 @@ void MultiQueryDecoderAttention(
 
   dim3 grids(gridx, num_chunks, kv_num_heads);
   dim3 blocks(blockx, blocky);
-  if (num_chunks <= 1 || force_no_partition) {
+  if (num_chunks <= 1) {
     auto no_splitkv_kernel = multi_query_decode_attention_kernel<false,
                                                                  NV_TYPE,
                                                                  NV_TYPE,
