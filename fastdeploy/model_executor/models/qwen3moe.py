@@ -369,10 +369,13 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         for loaded_weight_name, loaded_weight in weights_iterator:
             logger.debug(f"Loading weight: {loaded_weight_name}")
             for param_name, weight_name, shard_id in stacked_params_mapping:
+                # weight_name是存储在 model.safetensors.index.json 中的key的部分字段！
                 if weight_name not in loaded_weight_name:
                     continue
+                # 专家权重需要特殊处理，先continue！
                 if "mlp.experts" in loaded_weight_name:
                     continue
+                # 这里需要将 weight_name部分替换成param_name！
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
                 if model_param_name not in params_dict:
                     continue
@@ -400,6 +403,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
                     weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                     weight_loader(param, loaded_weight)
 
+            # 这个代码的作用是将 param_name 换成 sublayer_name，从而找到layer！
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
 
