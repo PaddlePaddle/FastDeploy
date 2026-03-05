@@ -334,12 +334,28 @@ class SamplingParams:
         if not 0 <= self.seed <= 922337203685477580:
             raise ValueError("seed must be in [0, 922337203685477580], got " f"{self.seed}.")
 
-        try:
-            np.array(
+        if self.bad_words_token_ids is not None:
+            try:
+                np.array(
                 self.bad_words_token_ids, dtype="int64"
             )
-        except Exception:
-            raise ValueError(f"bad_words_token_ids must be an array of integers, but got {self.bad_words_token_ids}")
+            except Exception:
+                raise TypeError(f"bad_words_token_ids must be an array of integers, but got {self.bad_words_token_ids}")
+
+        if self.stop_token_ids is not None:
+            try:
+                np.array(
+                self.stop_token_ids, dtype="int64"
+            )
+            except Exception:
+                raise TypeError(f"stop_token_ids must be an array of integers, and all sublists must have the same length, but got {self.stop_token_ids}")
+        
+            if self.stop_seqs_len is not None:
+                if len(self.stop_token_ids) != self.stop_seqs_len:
+                    raise ValueError(
+                        f"The number of tokens in stop_token_ids should match the stop_seqs_len, "
+                        f"but got {len(self.stop_token_ids)} != {self.stop_seqs_len}"
+                    )
 
         # Verify logits processors arguments
         if self.logits_processors_args is not None:
