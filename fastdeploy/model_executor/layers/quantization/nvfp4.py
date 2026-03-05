@@ -132,8 +132,6 @@ class ModelOptNvFp4Config(QuantConfigBase):
         else:
             return ModelOptNvFp4LinearMethod(self)
 
-        return None
-
 
 class ModelOptNvFp4LinearMethod(QuantMethodBase):
     """Linear method for Model Optimizer NVFP4.
@@ -226,12 +224,6 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
             weight_scale_2_shape: 权重缩放2形状
             extra_weight_attrs: 额外权重属性
         """
-        layer.weight_scale_2 = layer.create_parameter(
-            shape=weight_scale_2_shape,
-            dtype=paddle.float32,
-            is_bias=False,
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
         layer.weight_scale = layer.create_parameter(
             shape=weight_scale_shape,
             dtype=paddle.float8_e4m3fn,
@@ -241,6 +233,13 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         set_weight_attrs(
             layer.weight_scale,
             extra_weight_attrs,
+        )
+
+        layer.weight_scale_2 = layer.create_parameter(
+            shape=weight_scale_2_shape,
+            dtype=paddle.float32,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
         )
 
     def process_weights_after_loading(self, layer) -> None:
