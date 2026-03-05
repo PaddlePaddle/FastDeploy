@@ -236,7 +236,10 @@ class InputBatch:
         pre_max_block_num = (
             self.model_config.max_model_len + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
-        self.block_tables = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
+        kv_num_heads = max(1, self.model_config.num_key_value_heads // self.fd_config.parallel_config.tensor_parallel_size)
+        # In head-wise mode, block_tables needs to accommodate all heads
+        block_tables_cols = pre_max_block_num * kv_num_heads
+        self.block_tables = paddle.full([max_num_seqs, block_tables_cols], -1, dtype="int32")
         # Head-wise KV cache: flattened [batch*kv_num_heads, max_blocks_per_head] (set dynamically)
         self.block_tables_3d = None
 

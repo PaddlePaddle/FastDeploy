@@ -884,7 +884,9 @@ void MultiQueryAppendAttention(
   auto kv_num_heads = meta_data.kv_num_heads;
   auto token_num = meta_data.token_nums;
   auto bsz = meta_data.batch_size;
-  auto max_block_num_per_seq = meta_data.max_blocks_per_seq;
+  // In head-wise mode, use max_blocks_per_head for block_table offset calculation
+  auto max_block_num_per_seq = meta_data.use_head_wise ? meta_data.max_blocks_per_head
+                                                      : meta_data.max_blocks_per_seq;
 
   constexpr uint32_t num_warps = 4;
   constexpr uint32_t NUM_WARP_KV = num_warps / NUM_WARP_Q;

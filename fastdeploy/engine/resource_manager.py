@@ -361,7 +361,9 @@ class ResourceManager:
                 if task and getattr(task, "block_tables_3d", None):
                     head_tables = task.block_tables_3d
                     if head_tables and len(head_tables) > 0:
-                        num_blocks_used_by_tasks += len(head_tables[0])
+                        # Count all blocks across all heads for each task
+                        for head_blocks in head_tables:
+                            num_blocks_used_by_tasks += len(head_blocks)
         else:
             num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
         main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)

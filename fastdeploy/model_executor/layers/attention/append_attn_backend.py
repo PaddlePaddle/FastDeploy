@@ -30,6 +30,7 @@ from fastdeploy.model_executor.layers.attention.ops import (
     init_signal_layerwise,
     open_shm_and_get_meta_signal,
 )
+from paddleformers.utils.log import logger
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -358,14 +359,14 @@ class AppendAttentionBackend(AttentionBackend):
         block_tables = forward_meta.block_tables_3d if self.enable_head_wise_kv_cache else forward_meta.block_tables
         if self.enable_head_wise_kv_cache:
             block_tables_3d = getattr(forward_meta, "block_tables_3d", None)
+            batch_size = forward_meta.seq_lens_this_time.shape[0]
             logger.info(
-                "[headwise dbg] q_heads=%s kv_heads=%s group=%s block_tables_3d=%s batch=%s cache_k=%s",
-                self.num_heads,
-                self.kv_num_heads,
-                self.num_heads // max(self.kv_num_heads, 1),
-                block_tables_3d.shape if block_tables_3d is not None else None,
-                forward_meta.seq_lens_this_time.shape[0],
-                cache_k.shape,
+                f"[headwise dbg] q_heads={self.num_heads} kv_heads={self.kv_num_heads} "
+                f"group={self.num_heads // max(self.kv_num_heads, 1)} "
+                f"block_tables_3d={block_tables_3d.shape if block_tables_3d is not None else None} "
+                f"batch={batch_size} cache_k={cache_k.shape} "
+                f"expected_block_tables_3d_dim0={batch_size * self.kv_num_heads} "
+                f"block_tables_3d_dtype={block_tables_3d.dtype if block_tables_3d is not None else None}"
             )
         if self.use_output:
             quant_max_bound = getattr(layer, "quant_max_bound", 0.0)

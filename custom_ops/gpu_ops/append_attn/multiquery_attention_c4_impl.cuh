@@ -47,7 +47,7 @@ __global__ void multi_query_append_attention_c4_kernel(
     const int *__restrict__ batch_ids,
     const int *__restrict__ tile_ids_per_batch,
     const int *__restrict__ cu_seqlens_q,
-    const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
+    const int *__restrict__ block_table,  // [bsz, block_num_per_seq] or [bsz * kv_num_heads, block_num_per_seq] when head_wise
     const int *__restrict__ mask_offset,
     const int max_seq_len,
     const int max_dec_len,
@@ -63,6 +63,7 @@ __global__ void multi_query_append_attention_c4_kernel(
     float *__restrict__ tmp_m,      // [token_num, num_chunks, num_heads]
     float *__restrict__ tmp_d,      // [token_num, num_chunks, num_heads]
     OutT *__restrict__ out,
+    const bool use_head_wise,
     const int speculate_max_draft_token_num = 5,
     const int sliding_window = 0,
     const int sink_size = 0) {
@@ -84,9 +85,13 @@ __global__ void multi_query_append_attention_c4_kernel(
   const uint32_t batch_id = batch_ids[btid];
   const uint32_t tile_id = tile_ids_per_batch[btid];
   const uint32_t num_rows_per_block = NUM_WARPS * num_frags_x * 16;
-  const int *block_table_now = nullptr;
-
-  block_table_now = block_table + batch_id * max_block_num_per_seq;
+  // In head-wise mode, block_table has shape [batch_size * kv_num_heads, max_blocks_per_head]
+  // Otherwise, block_table has shape [batch_size, max_blocks_per_seq]
+  const int *block_table_now =
+      block_table +
+      (use_head_wise ? (batch_id * kv_num_heads + kv_head_idx) *
+                           max_block_num_per_seq
+                     : batch_id * max_block_num_per_seq);
 
   // When cudagraph capture prefill, may launch more gridDim.x
   if (btid >= static_cast<uint32_t>(num_blocks_x_cpu)) {
@@ -152,7 +157,10 @@ __global__ void multi_query_append_attention_c4_kernel(
 
   const uint32_t q_n_stride = q_num_heads * HEAD_DIM;
   const uint32_t q_ori_n_stride = (q_num_heads + kv_num_heads * 2) * HEAD_DIM;
-  const uint32_t kv_n_stride = kv_num_heads * BLOCK_SIZE * HEAD_DIM / 2;
+  // In head-wise mode, cache layout is [max_cache_ids, block_size, head_dim]
+  // Otherwise, cache layout is [num_blocks, kv_num_heads, block_size, head_dim]
+  const uint32_t kv_n_stride = use_head_wise ? BLOCK_SIZE * HEAD_DIM / 2
+                                             : kv_num_heads * BLOCK_SIZE * HEAD_DIM / 2;
   const uint32_t kv_h_stride = BLOCK_SIZE * HEAD_DIM / 2;
   const uint32_t kv_b_stride = HEAD_DIM / 2;
   const uint32_t kv_d_stride = BLOCK_SIZE / 2;
@@ -281,12 +289,15 @@ __global__ void multi_query_append_attention_c4_kernel(
           wid * 16 + tid / 2, tid % 2);  // 2 * 128 / 8 = 32B, 64 nums
 
   uint32_t kv_idx_base = chunk_start;
-  const uint32_t const_k_offset = kv_head_idx * kv_h_stride +
-                                  (wid * 8 + tid / 4) * kv_b_stride +
-                                  tid % 4 * num_elems_per_128b<CacheT>();
-  const uint32_t const_v_offset = kv_head_idx * kv_h_stride +
-                                  (wid * 16 + tid / 2) * kv_d_stride +
-                                  tid % 2 * num_elems_per_128b<CacheT>();
+  // In head-wise mode, cache_k and cache_v don't have the head dimension in stride
+  const uint32_t const_k_offset =
+      (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
+      (wid * 8 + tid / 4) * kv_b_stride +
+      tid % 4 * num_elems_per_128b<CacheT>();
+  const uint32_t const_v_offset =
+      (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
+      (wid * 16 + tid / 2) * kv_d_stride +
+      tid % 2 * num_elems_per_128b<CacheT>();
 
   produce_k_blockwise_c4<SharedMemFillMode::kNoFill,
                          NUM_WARPS,
@@ -543,7 +554,7 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
     const int *__restrict__ batch_ids,
     const int *__restrict__ tile_ids_per_batch,
     const int *__restrict__ cu_seqlens_q,
-    const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
+    const int *__restrict__ block_table,  // [bsz, block_num_per_seq] or [bsz * kv_num_heads, block_num_per_seq] when head_wise
     const int *__restrict__ mask_offset,
     const bool *__restrict__ attn_mask,  // [bsz, max_q, max_q] for tree-mask
     const int max_seq_len,
@@ -560,6 +571,7 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
     float *__restrict__ tmp_m,      // [token_num, num_chunks, num_heads]
     float *__restrict__ tmp_d,      // [token_num, num_chunks, num_heads]
     OutT *__restrict__ out,
+    const bool use_head_wise,
     const int speculate_max_draft_token_num = 5,
     const uint32_t attn_mask_len = -1,
     const int sliding_window = 0,
@@ -586,7 +598,13 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
 
   const uint32_t tile_id = tile_ids_per_batch[btid];
   const uint32_t num_rows_per_block = num_frags_x * 16;
-  const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
+  // In head-wise mode, block_table has shape [batch_size * kv_num_heads, max_blocks_per_head]
+  // Otherwise, block_table has shape [batch_size, max_blocks_per_seq]
+  const int *block_table_now =
+      block_table +
+      (use_head_wise ? (batch_id * kv_num_heads + kv_head_idx) *
+                           max_block_num_per_seq
+                     : batch_id * max_block_num_per_seq);
 
   // When cudagraph capture prefill, may launch more gridDim.x
   if (btid >= static_cast<uint32_t>(num_blocks_x_cpu)) {
@@ -655,7 +673,10 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
 
   const uint32_t q_n_stride = q_num_heads * HEAD_DIM;
   const uint32_t q_ori_n_stride = (q_num_heads + kv_num_heads * 2) * HEAD_DIM;
-  const uint32_t kv_n_stride = kv_num_heads * BLOCK_SIZE * HEAD_DIM / 2;
+  // In head-wise mode, cache layout is [max_cache_ids, block_size, head_dim]
+  // Otherwise, cache layout is [num_blocks, kv_num_heads, block_size, head_dim]
+  const uint32_t kv_n_stride = use_head_wise ? BLOCK_SIZE * HEAD_DIM / 2
+                                             : kv_num_heads * BLOCK_SIZE * HEAD_DIM / 2;
   const uint32_t kv_h_stride = BLOCK_SIZE * HEAD_DIM / 2;
   const uint32_t kv_b_stride = HEAD_DIM / 2;
   const uint32_t kv_d_stride = BLOCK_SIZE / 2;
@@ -783,12 +804,15 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
           wid * 16 + tid / 2, tid % 2);
 
   uint32_t kv_idx_base = chunk_start;
-  const uint32_t const_k_offset = kv_head_idx * kv_h_stride +
-                                  (wid * 8 + tid / 4) * kv_b_stride +
-                                  tid % 4 * num_elems_per_128b<CacheT>();
-  const uint32_t const_v_offset = kv_head_idx * kv_h_stride +
-                                  (wid * 16 + tid / 2) * kv_d_stride +
-                                  tid % 2 * num_elems_per_128b<CacheT>();
+  // In head-wise mode, cache_k and cache_v don't have the head dimension in stride
+  const uint32_t const_k_offset =
+      (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
+      (wid * 8 + tid / 4) * kv_b_stride +
+      tid % 4 * num_elems_per_128b<CacheT>();
+  const uint32_t const_v_offset =
+      (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
+      (wid * 16 + tid / 2) * kv_d_stride +
+      tid % 2 * num_elems_per_128b<CacheT>();
 
   produce_k_blockwise_c4<SharedMemFillMode::kNoFill,
                          NUM_WARPS,
@@ -1070,7 +1094,10 @@ void MultiQueryAppendC4Attention(
   auto kv_num_heads = meta_data.kv_num_heads;
   auto token_num = meta_data.token_nums;
   auto bsz = meta_data.batch_size;
-  auto max_block_num_per_seq = meta_data.max_blocks_per_seq;
+  bool use_head_wise = meta_data.use_head_wise;
+  // In head-wise mode, use max_blocks_per_head for block_table offset calculation
+  auto max_block_num_per_seq = use_head_wise ? meta_data.max_blocks_per_head
+                                            : meta_data.max_blocks_per_seq;
 
   constexpr uint32_t num_warps = 4;
   constexpr uint32_t NUM_WARP_KV = num_warps / NUM_WARP_Q;
@@ -1193,6 +1220,7 @@ void MultiQueryAppendC4Attention(
           nullptr,
           nullptr,
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+          use_head_wise,
           speculate_max_draft_token_num,
           sliding_window,
           sink_size);
@@ -1268,6 +1296,7 @@ void MultiQueryAppendC4Attention(
           static_cast<float *>(tmp_m->ptr()),
           static_cast<float *>(tmp_d->ptr()),
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+          use_head_wise,
           speculate_max_draft_token_num,
           sliding_window,
           sink_size);
@@ -1308,6 +1337,7 @@ void MultiQueryAppendC4Attention(
                       const_cast<T *>(sinks.get().data<T>()))
                 : nullptr,
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+          use_head_wise,
           quant_max_bound,
           quant_min_bound,
           in_scale,
@@ -1442,6 +1472,7 @@ void MultiQueryAppendC4Attention(
           nullptr,
           nullptr,
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+          use_head_wise,
           speculate_max_draft_token_num,
           attn_mask_len,
           sliding_window,
@@ -1534,6 +1565,7 @@ void MultiQueryAppendC4Attention(
           static_cast<float *>(tmp_m->ptr()),
           static_cast<float *>(tmp_d->ptr()),
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+          use_head_wise,
           speculate_max_draft_token_num,
           attn_mask_len,
           sliding_window,
