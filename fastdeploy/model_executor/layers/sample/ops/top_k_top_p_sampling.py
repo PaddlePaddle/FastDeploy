@@ -68,11 +68,13 @@ def top_k_top_p_sampling(
         ids = rejection_top_p_sampling(x, top_p, top_k, top_k_list, seed, order)
         _ = None
     elif top_p_class == "base_non_truncated":
+        topp_seed_gpu = paddle.empty(shape=topp_seed.shape, dtype=topp_seed.dtype)
+        topp_seed_gpu.copy_(topp_seed, False)
         _, ids = paddle.tensor.top_p_sampling(
             x,
             top_p,
             threshold=threshold,
-            topp_seed=topp_seed,
+            topp_seed=topp_seed_gpu,
             seed=seed,
             k=k,
             mode="non-truncated",
@@ -85,11 +87,13 @@ def top_k_top_p_sampling(
 
             _, ids = native_top_p_sampling(x, top_p)
         else:
+            topp_seed_gpu = paddle.empty(shape=topp_seed.shape, dtype=topp_seed.dtype)
+            topp_seed_gpu.copy_(topp_seed, False)
             _, ids = paddle.tensor.top_p_sampling(
                 x,
                 top_p,
                 threshold=threshold,
-                topp_seed=topp_seed,
+                topp_seed=topp_seed_gpu,
                 seed=seed,
                 k=k,
                 mode="truncated",
