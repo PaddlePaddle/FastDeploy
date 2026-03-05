@@ -352,13 +352,6 @@ class SamplingParams:
                     f"stop_token_ids must be an array of integers, and all sublists must have the same length, but got {self.stop_token_ids}"
                 )
 
-            if self.stop_seqs_len is not None:
-                if len(self.stop_token_ids) != self.stop_seqs_len:
-                    raise ValueError(
-                        f"The number of tokens in stop_token_ids should match the stop_seqs_len, "
-                        f"but got {len(self.stop_token_ids)} != {self.stop_seqs_len}"
-                    )
-
         # Verify logits processors arguments
         if self.logits_processors_args is not None:
             if self.logits_processors_args.get("logit_bias") is not None:
