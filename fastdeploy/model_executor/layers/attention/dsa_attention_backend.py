@@ -28,6 +28,7 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_cuda():
     paddle.enable_compat(scope={"flash_mla"})
     import flash_mla
+    from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
 
 
 from fastdeploy.model_executor.layers.attention.ops import (
@@ -161,7 +162,8 @@ class DSAAttentionBackend(AttentionBackend):
         self.qk_rope_head_dim: int = fd_config.model_config.qk_rope_head_dim
         self.qk_head_dim: int = fd_config.model_config.qk_nope_head_dim + fd_config.model_config.qk_rope_head_dim
         self.attn_softmax_scale: float = self.qk_head_dim**-0.5
-        if fd_config.model_config.rope_scaling:
+        self.rope_scaling = getattr(fd_config.model_config, "rope_scaling", None)
+        if self.rope_scaling:
             mscale_all_dim = fd_config.model_config.rope_scaling.get("mscale_all_dim", False)  # 1.0
             scaling_factor = fd_config.model_config.rope_scaling["factor"]  # 40
             mscale = yarn_get_mscale(scaling_factor, float(mscale_all_dim))
@@ -342,25 +344,25 @@ class DSAAttentionBackend(AttentionBackend):
 
         if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
 
-            def calc_kv_scales(self, q: paddle.Tensor, kv_c_normed: paddle.Tensor, k_pe: paddle.Tensor) -> None:
-                """Optional scale calculation for MLA inputs.
+            # def calc_kv_scales(self, q: paddle.Tensor, kv_c_normed: paddle.Tensor, k_pe: paddle.Tensor) -> None:
+            #     """Optional scale calculation for MLA inputs.
 
-                Mirrors Attention.calc_kv_scales. Not all MLA backends require this
-                """
-                # Use safe defaults if ranges are not present
-                q_range = paddle.tensor(200.0)
-                k_range = paddle.tensor(200.0)
-                v_range = paddle.tensor(100.0)
+            #     Mirrors Attention.calc_kv_scales. Not all MLA backends require this
+            #     """
+            #     # Use safe defaults if ranges are not present
+            #     q_range = paddle.tensor(200.0)
+            #     k_range = paddle.tensor(200.0)
+            #     v_range = paddle.tensor(100.0)
 
-                self._q_scale.copy_(paddle.abs(q).max() / q_range)
+            #     self._q_scale.copy_(paddle.abs(q).max() / q_range)
 
-                kv_abs_max = paddle.abs(kv_c_normed).max()
-                self._k_scale.copy_(kv_abs_max / k_range)
-                self._v_scale.copy_(kv_abs_max / v_range)
-                self._q_scale_float = self._q_scale.item()
-                self._k_scale_float = self._k_scale.item()
-                self._v_scale_float = self._v_scale.item()
-                self.calculate_kv_scales = False
+            #     kv_abs_max = paddle.abs(kv_c_normed).max()
+            #     self._k_scale.copy_(kv_abs_max / k_range)
+            #     self._v_scale.copy_(kv_abs_max / v_range)
+            #     self._q_scale_float = self._q_scale.item()
+            #     self._k_scale_float = self._k_scale.item()
+            #     self._v_scale_float = self._v_scale.item()
+            #     self.calculate_kv_scales = False
 
             metadata.slot_mapping = compute_slot_mapping(
                 forward_meta.block_tables,
@@ -370,7 +372,6 @@ class DSAAttentionBackend(AttentionBackend):
             )
             k_range = paddle.tensor(200.0)
             scale = paddle.abs(compressed_kv).max() / k_range
-            from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
 
             dsk_attn_write_cache(
                 compressed_kv,
@@ -410,7 +411,6 @@ class DSAAttentionBackend(AttentionBackend):
             )
             k_range = paddle.tensor(200.0)
             scale = paddle.abs(compressed_kv).max() / k_range
-            from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
 
             dsk_attn_write_cache(
                 compressed_kv,

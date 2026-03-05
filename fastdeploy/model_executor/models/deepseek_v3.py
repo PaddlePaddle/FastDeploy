@@ -285,33 +285,41 @@ class DeepseekV3MLAAttention(nn.Layer):
             qk_nope_head_dim=self.qk_nope_head_dim,
             v_head_dim=self.v_head_dim,
         )
-
-        self.rope_scaling = fd_config.model_config.rope_scaling
+        self.rope_scaling = getattr(fd_config.model_config, "rope_scaling", None)
         if self.rope_scaling:
             mscale_all_dim = self.rope_scaling.get("mscale_all_dim", False)
             scaling_factor = self.rope_scaling["factor"]
             mscale = self.yarn_get_mscale(scaling_factor, float(mscale_all_dim))
             self.attn_softmax_scale = self.attn_softmax_scale * mscale * mscale
 
-        rope_scaling_kwargs = {
-            key: self.rope_scaling[key]
-            for key in [
-                "beta_fast",
-                "beta_slow",
-                "mscale",
-                "mscale_all_dim",
-            ]
-            if key in self.rope_scaling
-        }
-        self.rope_scaling_factor = self.rope_scaling["factor"]
-        self.rope_scaling_original_max_position_embeddings = self.rope_scaling["original_max_position_embeddings"]
-        self.rotary_emb = DeepseekScalingRotaryEmbedding(
-            self.qk_rope_head_dim,
-            max_position_embeddings=self.rope_scaling_original_max_position_embeddings,
-            base=self.rope_theta,
-            scaling_factor=self.rope_scaling_factor,
-            **rope_scaling_kwargs,
-        )
+            rope_scaling_kwargs = {
+                key: self.rope_scaling[key]
+                for key in [
+                    "beta_fast",
+                    "beta_slow",
+                    "mscale",
+                    "mscale_all_dim",
+                ]
+                if key in self.rope_scaling
+            }
+            self.rope_scaling_factor = self.rope_scaling["factor"]
+            self.rope_scaling_original_max_position_embeddings = self.rope_scaling["original_max_position_embeddings"]
+            self.rotary_emb = DeepseekScalingRotaryEmbedding(
+                self.qk_rope_head_dim,
+                max_position_embeddings=self.rope_scaling_original_max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=self.rope_scaling_factor,
+                **rope_scaling_kwargs,
+            )
+        else:
+            # Default rope without scaling
+            max_position_embeddings = getattr(fd_config.model_config, "max_position_embeddings", 8192)
+            self.rotary_emb = DeepseekScalingRotaryEmbedding(
+                self.qk_rope_head_dim,
+                max_position_embeddings=max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=1.0,
+            )
 
         self.mla_attn = Attention(
             fd_config=fd_config,
@@ -750,40 +758,54 @@ class DeepseekV32DSAAttention(nn.Layer):
             qk_nope_head_dim=self.qk_nope_head_dim,
             v_head_dim=self.v_head_dim,
         )
-
-        self.rope_scaling = fd_config.model_config.rope_scaling
+        self.rope_scaling = getattr(fd_config.model_config, "rope_scaling", None)
         if self.rope_scaling:
             mscale_all_dim = self.rope_scaling.get("mscale_all_dim", False)
             scaling_factor = self.rope_scaling["factor"]
             mscale = self.yarn_get_mscale(scaling_factor, float(mscale_all_dim))
             self.attn_softmax_scale = self.attn_softmax_scale * mscale * mscale
 
-        rope_scaling_kwargs = {
-            key: self.rope_scaling[key]
-            for key in [
-                "beta_fast",
-                "beta_slow",
-                "mscale",
-                "mscale_all_dim",
-            ]
-            if key in self.rope_scaling
-        }
-        self.rope_scaling_factor = self.rope_scaling["factor"]
-        self.rope_scaling_original_max_position_embeddings = self.rope_scaling["original_max_position_embeddings"]
-        self.rotary_emb = DeepseekScalingRotaryEmbedding(
-            self.qk_rope_head_dim,
-            max_position_embeddings=self.rope_scaling_original_max_position_embeddings,
-            base=self.rope_theta,
-            scaling_factor=self.rope_scaling_factor,
-            **rope_scaling_kwargs,
-        )
-        self.indexer_rotary_emb = DeepseekScalingRotaryEmbedding(
-            self.qk_rope_head_dim,
-            max_position_embeddings=self.rope_scaling_original_max_position_embeddings,
-            base=self.rope_theta,
-            scaling_factor=self.rope_scaling_factor,
-            **rope_scaling_kwargs,
-        )
+            rope_scaling_kwargs = {
+                key: self.rope_scaling[key]
+                for key in [
+                    "beta_fast",
+                    "beta_slow",
+                    "mscale",
+                    "mscale_all_dim",
+                ]
+                if key in self.rope_scaling
+            }
+            self.rope_scaling_factor = self.rope_scaling["factor"]
+            self.rope_scaling_original_max_position_embeddings = self.rope_scaling["original_max_position_embeddings"]
+            self.rotary_emb = DeepseekScalingRotaryEmbedding(
+                self.qk_rope_head_dim,
+                max_position_embeddings=self.rope_scaling_original_max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=self.rope_scaling_factor,
+                **rope_scaling_kwargs,
+            )
+            self.indexer_rotary_emb = DeepseekScalingRotaryEmbedding(
+                self.qk_rope_head_dim,
+                max_position_embeddings=self.rope_scaling_original_max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=self.rope_scaling_factor,
+                **rope_scaling_kwargs,
+            )
+        else:
+            # Default rope without scaling
+            max_position_embeddings = getattr(fd_config.model_config, "max_position_embeddings", 8192)
+            self.rotary_emb = DeepseekScalingRotaryEmbedding(
+                self.qk_rope_head_dim,
+                max_position_embeddings=max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=1.0,
+            )
+            self.indexer_rotary_emb = DeepseekScalingRotaryEmbedding(
+                self.qk_rope_head_dim,
+                max_position_embeddings=max_position_embeddings,
+                base=self.rope_theta,
+                scaling_factor=1.0,
+            )
 
         self.indexer = Indexer(
             fd_config=fd_config,
