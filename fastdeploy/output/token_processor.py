@@ -252,7 +252,8 @@ class TokenProcessor:
                     f"Request={task_id}, InputToken={task.prompt_token_ids_len}, "
                     f"CachedDetail={cached_detail}, OutputToken={self.tokens_counter[task_id]}, "
                     f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, "
-                    f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}"
+                    f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
+                    f"PreemptedCount={getattr(task.metrics, 'preempted_count', 0)}"
                 )
 
                 main_process_metrics.request_token_ratio.observe(token_ratio)
@@ -943,11 +944,13 @@ class TokenProcessor:
 
                     # Print combined log with all required information
                     ttft = task.metrics.first_token_time if task.metrics.first_token_time else 0
+                    ttft_s = ttft + task.metrics.time_in_queue
                     llm_logger.info(
                         f"Request={task_id}, InputToken={task.prompt_token_ids_len}, "
                         f"CachedDetail={cached_detail}, OutputToken={self.tokens_counter[task_id]}, "
-                        f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, "
-                        f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}"
+                        f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, TTFT_S={ttft_s:.2f}, "
+                        f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
+                        f"PreemptedCount={getattr(task.metrics, 'preempted_count', 0)}"
                     )
 
                     main_process_metrics.request_token_ratio.observe(token_ratio)
