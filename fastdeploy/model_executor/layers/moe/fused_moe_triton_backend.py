@@ -1384,16 +1384,38 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             layer.hidden_size,
             layer.moe_intermediate_size,
         ]
-        self.up_gate_proj_scale_shape = [
-            layer.num_local_experts,
-            ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
-            ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
-        ]
-        self.down_proj_scale_shape = [
-            layer.num_local_experts,
-            ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
-            ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
-        ]
+        if not self.quant_config.deepgemm_scale_ue8m0:
+            self.up_gate_proj_scale_shape = [
+                layer.num_local_experts,
+                ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
+                ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
+            ]
+            self.down_proj_scale_shape = [
+                layer.num_local_experts,
+                ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
+                ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
+            ]
+        else:
+            up_num_scales = ceil_div(
+                layer.hidden_size,
+                self.quant_config.weight_block_size[1],
+            )
+            up_num_scale_packs = (up_num_scales + 3) // 4
+            self.up_gate_proj_scale_shape = [
+                layer.num_local_experts,
+                layer.moe_intermediate_size * 2,
+                up_num_scale_packs,
+            ]
+            down_num_scales = ceil_div(
+                layer.moe_intermediate_size,
+                self.quant_config.weight_block_size[1],
+            )
+            down_num_scale_packs = (down_num_scales + 3) // 4
+            self.down_proj_scale_shape = [
+                layer.num_local_experts,
+                layer.hidden_size,
+                down_num_scale_packs,
+            ]
         # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
         self.model_format = extra_weight_attrs.get("model_format")
 
@@ -1519,24 +1541,44 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 ),
             )
             # weight_scale
-            setattr(
-                layer,
-                up_gate_proj_scale_name,
-                layer.create_parameter(
-                    shape=up_gate_proj_scale_shape,
-                    dtype="float32",
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
-            setattr(
-                layer,
-                down_proj_scale_name,
-                layer.create_parameter(
-                    shape=down_proj_scale_shape,
-                    dtype="float32",
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
+            if not self.quant_config.deepgemm_scale_ue8m0:
+                setattr(
+                    layer,
+                    up_gate_proj_scale_name,
+                    layer.create_parameter(
+                        shape=up_gate_proj_scale_shape,
+                        dtype="float32",
+                        default_initializer=paddle.nn.initializer.Constant(0),
+                    ),
+                )
+                setattr(
+                    layer,
+                    down_proj_scale_name,
+                    layer.create_parameter(
+                        shape=down_proj_scale_shape,
+                        dtype="float32",
+                        default_initializer=paddle.nn.initializer.Constant(0),
+                    ),
+                )
+            else:
+                setattr(
+                    layer,
+                    up_gate_proj_scale_name,
+                    layer.create_parameter(
+                        shape=up_gate_proj_scale_shape,
+                        dtype="int32",
+                        default_initializer=paddle.nn.initializer.Constant(0),
+                    ),
+                )
+                setattr(
+                    layer,
+                    down_proj_scale_name,
+                    layer.create_parameter(
+                        shape=down_proj_scale_shape,
+                        dtype="int32",
+                        default_initializer=paddle.nn.initializer.Constant(0),
+                    ),
+                )
             set_weight_attrs(
                 getattr(layer, up_gate_proj_weight_name),
                 up_gate_proj_attrs,
@@ -1653,8 +1695,19 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 process_weight_transpose(layer, down_proj_weight_name)
                 process_weight_transpose(layer, up_gate_proj_scale_name)
                 process_weight_transpose(layer, down_proj_scale_name)
-            else:
-                return
+            if self.quant_config.deepgemm_scale_ue8m0:
+                up_gate_proj_scale = getattr(layer, self.added_scale_attrs[0])
+                new_up_gate_proj_scale = paddle.empty(
+                    up_gate_proj_scale.shape[:1] + up_gate_proj_scale.shape[1:][::-1], dtype=up_gate_proj_scale.dtype
+                )
+                new_up_gate_proj_scale = new_up_gate_proj_scale.transpose([0, 2, 1])
+                getattr(layer, self.added_scale_attrs[0]).data = new_up_gate_proj_scale
+                down_proj_scale = getattr(layer, self.added_scale_attrs[1])
+                new_down_proj_scale = paddle.empty(
+                    down_proj_scale.shape[:1] + down_proj_scale.shape[1:][::-1], dtype=down_proj_scale.dtype
+                )
+                new_down_proj_scale = new_down_proj_scale.transpose([0, 2, 1])
+                getattr(layer, self.added_scale_attrs[1]).data = new_down_proj_scale
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """

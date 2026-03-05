@@ -26,6 +26,7 @@ from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     MergedReplicatedLinear,
+    QKVGateParallelLinear,
     QKVParallelLinear,
 )
 from fastdeploy.model_executor.utils import (
@@ -252,6 +253,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
                 isinstance(layer, MergedColumnParallelLinear)
                 or isinstance(layer, QKVParallelLinear)
                 or isinstance(layer, MergedReplicatedLinear)
+                or isinstance(layer, QKVGateParallelLinear)
             ):
                 # Only MergedReplicatedLinear uses the default outdim.
                 tensor_output_dim = (self.model_format == "torch") ^ quant_attrs.get("output_dim", True)

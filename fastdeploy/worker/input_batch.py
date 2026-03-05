@@ -184,8 +184,8 @@ class InputBatch:
             dtype="int64",
         )
         self.batch_id_per_token = paddle.full([max_num_seqs * self.max_chunk_tokens, 1], 0, dtype="int32")
-        self.cu_seqlens_q = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
-        self.cu_seqlens_k = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
+        self.cu_seqlens_q = paddle.full([max_num_seqs + 1], 0, dtype="int32")
+        self.cu_seqlens_k = paddle.full([max_num_seqs + 1], 0, dtype="int32")
 
         # Declare AttentionBackend buffers
         self.decoder_batch_ids = None

@@ -53,6 +53,14 @@ paddle::Tensor GetStop(paddle::Tensor& not_need_stop);
 
 void SetStop(paddle::Tensor& not_need_stop, bool flag);
 
+std::vector<paddle::Tensor> SpeculatePreProcess(
+    const int64_t cpu_token_num,
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& seq_len,
+    const paddle::Tensor& draft_tokens,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   /**
    * alloc_cache_pinned.cc
@@ -71,4 +79,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_stop", &GetStop, "get_stop function");
 
   m.def("set_stop", &SetStop, "set_stop function");
+
+  m.def("speculate_pre_process",
+        &SpeculatePreProcess,
+        "speculate_pre_process function");
 }
