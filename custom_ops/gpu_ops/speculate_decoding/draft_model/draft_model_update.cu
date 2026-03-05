@@ -25,6 +25,7 @@ __global__ void draft_model_update_kernel(const int64_t* inter_next_tokens,
                                           int64_t* step_idx,
                                           const int* cu_seqlens_q_output,
                                           bool* stop_flags,
+                                          bool* drop_batch,
                                           bool* not_need_stop,
                                           const int64_t* max_dec_len,
                                           const int64_t* end_ids,
@@ -84,8 +85,9 @@ __global__ void draft_model_update_kernel(const int64_t* inter_next_tokens,
         stop_flags[tid] = true;
         stop_flag_now_int = 1;
         // max_dec_len
-      } else if (step_idx[tid] >= max_dec_len[tid]) {
+      } else if (step_idx[tid] >= max_dec_len[tid] - 2) {
         stop_flags[tid] = true;
+        drop_batch[tid] = true;
         draft_token_now[seq_len_this_time - 1] = end_ids[0];
         base_model_draft_tokens_now[substep + 1] = end_ids[0];
         stop_flag_now_int = 1;
@@ -121,6 +123,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& step_idx,
                       const paddle::Tensor& cu_seqlens_q_output,
                       const paddle::Tensor& stop_flags,
+                      const paddle::Tensor& batch_drop,
                       const paddle::Tensor& not_need_stop,
                       const paddle::Tensor& max_dec_len,
                       const paddle::Tensor& end_ids,
@@ -156,6 +159,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
       const_cast<int64_t*>(step_idx.data<int64_t>()),
       cu_seqlens_q_output.data<int>(),
       const_cast<bool*>(stop_flags.data<bool>()),
+      const_cast<bool*>(batch_drop.data<bool>()),
       not_need_stop_gpu.data<bool>(),
       max_dec_len.data<int64_t>(),
       end_ids.data<int64_t>(),
@@ -185,6 +189,7 @@ PD_BUILD_STATIC_OP(draft_model_update)
              "step_idx",
              "cu_seqlens_q_output",
              "stop_flags",
+             "batch_drop",
              "not_need_stop",
              "max_dec_len",
              "end_ids",
