@@ -2,21 +2,21 @@
 
 # PD分离部署最佳实践
 
-本文档介绍FastDeploy的PD分离式部署方案，包括单机部署和跨机部署两种模式，支持TP、DP和EP。
+本文档详细介绍 FastDeploy 的 PD（Prefill-Decode）分离式部署方案，涵盖单机部署与跨机部署两种模式，支持张量并行（TP）、数据并行（DP）和专家并行（EP）。
 
 
-## 一、部署方案和环境准备
+## 一、部署方案概览与环境准备
 
-在 ERNIE-4.5-300B-A47B-Paddle 模型上进行部署实践，硬件使用H100 80GB，不同部署模式下所需的最小GPU卡数如下：
+本文以 ERNIE-4.5-300B-A47B-Paddle 模型为例进行部署实践，硬件环境采用 H100 80GB GPU。下面例举了不同部署模式下的最小 GPU 卡数需求：
 
-#### 单机部署（8卡单节点）
+**单机部署（8卡单节点）**
 
 | 配置方案 | TP | DP | EP | 所需卡数 | 
 |---------|----|----|----|---------|
 | TP4DP1 | 4 | 1 | - | 8 |
 | TP1DP4EP | 1 | 4 | ✓ | 8 |
 
-#### 多机部署（16卡跨节点）
+**多机部署（16卡跨节点）**
 
 | 配置方案 | TP | DP | EP | 所需卡数 |
 |---------|----|----|----|---------|
@@ -24,19 +24,20 @@
 | TP4DP2 | 4 | 2 | - | 16 | 
 | TP1DP8EP | 1 | 8 | ✓ | 16 | 
 
-**说明**：
-1. **量化精度**：以上所有配置均采用 WINT4 量化，通过 `--quantization wint4` 指定
-2. **EP限制**：开启 EP（专家并行）后，目前仅支持 TP=1，暂不支持多 TP 场景
-3. **跨机网络**：跨机部署需要 RDMA 网络支持，用于 KV Cache 高速传输
-4. **卡数计算**：总卡数 = TP × DP × 2，Prefill实例和Decode实例采用一致配置
+**重要说明**：
+1. **量化精度**：以上所有配置均采用 WINT4 量化，通过 `--quantization wint4` 参数指定
+2. **EP 限制**：开启专家并行（EP）后，当前仅支持 TP=1，暂不支持多 TP 场景
+3. **跨机网络**：跨机部署依赖 RDMA 网络实现 KV Cache 的高速传输
+4. **卡数计算**：总卡数 = TP × DP × 2（Prefill 实例与 Decode 实例配置相同）
+5. **CUDA Graph 捕获**：Decode 实例默认启用 CUDA Graph 捕获以加速推理，Prefill 实例默认不启用
 
-### 1.3 安装 FastDeploy
+### 1.1 安装 FastDeploy
 
-安装请参考 [FastDeploy Installation](https://paddlepaddle.github.io/FastDeploy/zh/install/) 完成安装。
+请参考 [FastDeploy 安装指南](https://paddlepaddle.github.io/FastDeploy/zh/install/) 完成环境搭建。
 
 模型下载请参考 [支持模型列表](https://paddlepaddle.github.io/FastDeploy/zh/model_summary/)。
 
-### 1.4 部署拓扑
+### 1.2 部署拓扑结构
 
 **单机部署拓扑（TP1DP4EP）**
 
@@ -78,8 +79,22 @@
 ```
 
 ---
-## 单机PD分离部署
-### 3.2 启动脚本
+## 二、单机 PD 分离部署
+
+### 2.1 测试场景与并行度配置
+
+本章节演示的测试场景为 **TP1DP4EP** 配置：
+- **张量并行度（TP）**：1 —— 每张 GPU 独立加载完整模型参数
+- **数据并行度（DP）**：4 —— 4 张 GPU 组成一个数据并行组，共 4 个实例
+- **专家并行（EP）**：启用 —— MoE 层的专家网络分布在不同 GPU 上并行计算
+
+**若需测试其他并行度配置，请按以下方式调整参数：**
+1. **TP 调整**：修改 `--tensor-parallel-size`
+2. **DP 调整**：修改 `--data-parallel-size`，同时确保 `--ports` 和 `--num-servers` 与 DP 保持一致
+3. **EP 开关**：添加或移除 `--enable-expert-parallel`
+4. **GPU 分配**：通过 `CUDA_VISIBLE_DEVICES` 控制 Prefill 和 Decode 实例使用的 GPU
+
+### 2.2 启动脚本
 
 #### 启动 Router
 
@@ -131,7 +146,7 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --num-gpu-blocks-override 1024
 ```
 
-### 3.3 关键参数说明
+### 2.3 关键参数说明
 
 | 参数 | 说明 |
 |-----|------|
@@ -149,17 +164,30 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 
 ---
 
-## 四、跨机PD分离部署
+## 三、跨机 PD 分离部署
 
-### 4.1 原理
+### 3.1 部署原理
 
-跨机 PD 分离将 Prefill 和 Decode 部署在不同机器上：
-- **Prefill 机器**：部署 Router 和 Prefill 节点
-- **Decode 机器**：部署 Decode 节点，通过 RDMA 网络与 Prefill 机器通信
+跨机 PD 分离将 Prefill 和 Decode 实例部署在不同物理机器上：
+- **Prefill 机器**：运行 Router 和 Prefill 节点，负责处理输入序列的预填充计算
+- **Decode 机器**：运行 Decode 节点，通过 RDMA 网络与 Prefill 机器通信，负责自回归解码生成
 
-### 4.2 网络配置
+### 3.2 测试场景与并行度配置
 
-跨机部署需要 RDMA 网络支持，启动前需配置 RDMA 网卡（Prefill 机器）：
+本章节演示的测试场景为 **TP1DP8EP** 跨机配置（共 16 张 GPU）：
+- **张量并行度（TP）**：1
+- **数据并行度（DP）**：8 —— 每机 8 张 GPU，共 8 个 Prefill 实例和 8 个 Decode 实例
+- **专家并行（EP）**：启用
+
+**若需测试其他跨机并行度配置，请按以下方法调整参数：**
+1. **机器间通信**：确保两机之间 RDMA 网络连通，Prefill 机器需配置 `KVCACHE_RDMA_NICS` 环境变量
+2. **Router 地址**：Decode 机器的 `--router` 参数需指向 Prefill 机器的实际 IP 地址
+3. **端口配置**：`--ports` 列表的端口数量必须与 `--num-servers` 和 `--data-parallel-size` 保持一致
+4. **GPU 可见性**：每机通过 `CUDA_VISIBLE_DEVICES` 指定本机使用的 GPU
+
+### 3.3 网络配置
+
+跨机部署需要 RDMA 网络支持，启动前需在 Prefill 机器上配置 RDMA 网卡：
 
 ```bash
 export $(bash /path/to/get_rdma_nics.sh gpu)
@@ -170,7 +198,7 @@ if [ -z "${KVCACHE_RDMA_NICS}" ]; then
 fi
 ```
 
-### 4.3 Prefill 机器启动脚本
+### 3.4 Prefill 机器启动脚本
 
 #### 启动 Router
 
@@ -204,7 +232,7 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --num-gpu-blocks-override 1024
 ```
 
-### 4.4 Decode 机器启动脚本
+### 3.5 Decode 机器启动脚本
 
 #### 启动 Decode 节点
 
@@ -227,11 +255,11 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --num-gpu-blocks-override 1024
 ```
 
-**注意**：将 `<ROUTER_MACHINE_IP>` 替换为 Prefill 机器的实际 IP 地址。
+**注意**：请将 `<PREFILL_MACHINE_IP>` 替换为 Prefill 机器的实际 IP 地址。
 
 
 
-## 五、发送测试请求
+## 四、发送测试请求
 
 ```bash
 curl -X POST "http://localhost:8109/v1/chat/completions" \
@@ -246,6 +274,6 @@ curl -X POST "http://localhost:8109/v1/chat/completions" \
 ```
 
 
+## 五、常见问题 FAQ
 
-## 六、常见问题FAQ
-如果您在使用过程中遇到问题，可以在[FAQ](./FAQ.md)中查阅。
+如果您在使用过程中遇到问题，可以在 [FAQ](./FAQ.md) 中查阅解决方案。

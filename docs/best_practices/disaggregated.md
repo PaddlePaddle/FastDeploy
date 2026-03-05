@@ -1,148 +1,279 @@
 [简体中文](../zh/best_practices/disaggregated.md)
 
-# ERNIE-4.5-300B-A47B
-## Environmental Preparation
-### 1.1 Hardware requirements
-The minimum number of GPUs required to deploy `ERNIE-4.5-300B-A47B` on the following hardware for each quantization is as follows:
+# PD Disaggregated Deployment Best Practices
 
-| | WINT8 | WINT4 | FP8 | WINT2 | W4A8 |
-|-----|-----|-----|-----|-----|-----|
-|H800 80GB| 8 | 4 | 8 | 2 | 4 |
-|A800 80GB| 8 | 4 | / | 2 | 4 |
+This document provides a comprehensive guide to FastDeploy's PD (Prefill-Decode) disaggregated deployment solution, covering both single-machine and cross-machine deployment modes with support for Tensor Parallelism (TP), Data Parallelism (DP), and Expert Parallelism (EP).
 
-**Tips:**
-1. To modify the number of deployment GPUs, specify `--tensor-parallel-size 4` in starting command.
-2. Since only 4-GPSs quantization scale is provided, the W4A8 model needs to be deployed on 4 GPUs.
-3. For hardware not listed in the table, you can estimate whether it can be deployed based on the GPU memory.
 
-### 1.2 Install fastdeploy
-- Installation: For detail, please refer to [Fastdeploy Installation](../get_started/installation/README.md).
+## 1. Deployment Overview and Environment Preparation
 
-- Model Download，For detail, please refer to [Supported Models](../supported_models.md).
+This guide demonstrates deployment practices using the ERNIE-4.5-300B-A47B-Paddle model on H100 80GB GPUs. Below are the minimum GPU requirements for different deployment configurations:
 
-## 2.How to Use
-### 2.1 Basic: Launching the Service
-Start the service by following command:
+**Single-Machine Deployment (8 GPUs, Single Node)**
+
+| Configuration | TP | DP | EP | GPUs Required | 
+|---------|----|----|----|---------|
+| TP4DP1 | 4 | 1 | - | 8 |
+| TP1DP4EP | 1 | 4 | ✓ | 8 |
+
+**Multi-Machine Deployment (16 GPUs, Cross-Node)**
+
+| Configuration | TP | DP | EP | GPUs Required |
+|---------|----|----|----|---------|
+| TP8DP1 | 8 | 1 | - | 16 | 
+| TP4DP2 | 4 | 2 | - | 16 | 
+| TP1DP8EP | 1 | 8 | ✓ | 16 | 
+
+**Important Notes**:
+1. **Quantization**: All configurations above use WINT4 quantization, specified via `--quantization wint4`
+2. **EP Limitations**: When Expert Parallelism (EP) is enabled, only TP=1 is currently supported; multi-TP scenarios are not yet available
+3. **Cross-Machine Network**: Cross-machine deployment requires RDMA network support for high-speed KV Cache transmission
+4. **GPU Calculation**: Total GPUs = TP × DP × 2, with identical configurations for both Prefill and Decode instances
+5. **CUDA Graph Capture**: Decode instances enable CUDA Graph capture by default for inference acceleration, while Prefill instances do not
+
+### 1.1 Installing FastDeploy
+
+Please refer to the [FastDeploy Installation Guide](https://paddlepaddle.github.io/FastDeploy/zh/install/) to set up your environment.
+
+For model downloads, please check the [Supported Models List](https://paddlepaddle.github.io/FastDeploy/zh/model_summary/).
+
+### 1.2 Deployment Topology
+
+**Single-Machine Deployment Topology (TP1DP4EP)**
+
+```
+┌──────────────────────────────┐
+│  Single Machine 8×H100 80GB  │
+│  ┌──────────────┐            │
+│  │  Router      │            │
+│  │  0.0.0.0:8109│            │
+│  └──────────────┘            │
+│         │                    │
+│    ┌────┴────┐               │
+│    ▼         ▼               │
+│ ┌─────────┐  ┌─────────┐     │
+│ │Prefill  │  │Decode   │     │
+│ │GPU 0-3  │  │GPU 4-7  │     │
+│ └─────────┘  └─────────┘     │
+└──────────────────────────────┘
+```
+
+**Cross-Machine Deployment Topology (TP1DP8EP)**
+
+```
+┌─────────────────────┐                      ┌─────────────────────┐
+│   Prefill Machine   │      RDMA Network    │   Decode Machine    │
+│   8×H100 80GB       │◄────────────────────►│   8×H100 80GB       │
+│                     │                      │                     │
+│  ┌──────────────┐   │                      │                     │
+│  │  Router      │   │                      │                     │
+│  │ 0.0.0.0:8109 │───┼──────────────────────┼──────────           │
+│  └──────────────┘   │                      │         │           │
+│         │           │                      │         │           │
+│         ▼           │                      │         ▼           │
+│  ┌──────────────┐   │                      │  ┌──────────────┐   │
+│  │Prefill Nodes │   │                      │  │Decode Nodes  │   │
+│  │GPU 0-7       │   │                      │  │GPU 0-7       │   │
+│  └──────────────┘   │                      │  └──────────────┘   │
+└─────────────────────┘                      └─────────────────────┘
+```
+
+---
+## 2. Single-Machine PD Disaggregated Deployment
+
+### 2.1 Test Scenarios and Parallelism Configuration
+
+This chapter demonstrates the **TP1DP4EP** configuration test scenario:
+- **Tensor Parallelism (TP)**: 1 — Each GPU independently loads complete model parameters
+- **Data Parallelism (DP)**: 4 — 4 GPUs form a data parallelism group, totaling 4 instances
+- **Expert Parallelism (EP)**: Enabled — MoE layer expert networks are distributed across different GPUs for parallel computation
+
+**To test other parallelism configurations, adjust parameters as follows:**
+1. **TP Adjustment**: Modify `--tensor-parallel-size`
+2. **DP Adjustment**: Modify `--data-parallel-size`, ensuring `--ports` and `--num-servers` remain consistent with DP
+3. **EP Toggle**: Add or remove `--enable-expert-parallel`
+4. **GPU Allocation**: Control GPUs used by Prefill and Decode instances via `CUDA_VISIBLE_DEVICES`
+
+### 2.2 Startup Scripts
+
+#### Start Router
+
 ```bash
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-       --tensor-parallel-size 8 \
-       --quantization wint4 \
-       --max-model-len 32768 \
-       --max-num-seqs 128
-```
-- `--quantization`: indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model. It could be one of `wint8` / `wint4` / `block_wise_fp8`(Hopper is needed).
-- `--max-model-len`: Indicates the maximum number of tokens supported by the currently deployed service. The larger the value, the longer the context length the model can support, but the more GPU memory is occupied, which may affect the concurrency.
-
-For more parameter meanings and default settings, see [FastDeploy Parameter Documentation](../parameters.md)。
-
-### 2.2 Advanced: How to get better performance
-#### 2.2.1 Correctly set parameters that match the application scenario
-Evaluate average input length, average output length, and maximum context length
-- Set max-model-len according to the maximum context length. For example, if the average input length is 1000 and the output length is 30000, then it is recommended to set it to 32768
-
-#### 2.2.2 Prefix Caching
-**Idea:** The core idea of Prefix Caching is to avoid repeated calculations by caching the intermediate calculation results of the input sequence (KV Cache), thereby speeding up the response speed of multiple requests with the same prefix. For details, refer to [prefix-cache](../features/prefix_caching.md)
-
-**How to enable:**
-Since version 2.2 (including the develop branch), Prefix Caching has been enabled by default.
-
-For versions 2.1 and earlier, you need to enable it manually by adding following lines to the startup parameters, where `--enable-prefix-caching` enables prefix caching, and `--swap-space` enables CPU cache in addition to GPU cache. The size is GB and should be adjusted according to the actual situation of the machine. The recommended value is `(total machine memory - model size) * 20%`. If the service fails to start because other programs are occupying memory, try reducing the `--swap-space` value.
-```
---enable-prefix-caching
---swap-space 50
+python -m fastdeploy.router.launch \
+    --port 8109 \
+    --splitwise
 ```
 
-#### 2.2.3 Chunked Prefill
-**Idea:** This strategy is adopted to split the prefill stage request into small-scale sub-chunks, and execute them in batches mixed with the decode request. This can better balance the computation-intensive (Prefill) and memory-intensive (Decode) operations, optimize GPU resource utilization, reduce the computational workload and memory usage of a single Prefill, thereby reducing the peak memory usage and avoiding the problem of insufficient memory. For details, please refer to [Chunked Prefill](../features/chunked_prefill.md)
+#### Start Prefill Nodes
 
-**How to enable:**
-Since version 2.2 (including the develop branch), Chunked Prefill has been enabled by default.
-
-For versions 2.1 and earlier, you need to enable it manually by adding
-```
---enable-chunked-prefill
-```
-
-#### 2.2.4 MTP (Multi-Token Prediction)
-**Idea:**
-By predicting multiple tokens at once, the number of decoding steps is reduced to significantly speed up the generation speed, while maintaining the generation quality through certain strategies. For details, please refer to [Speculative Decoding](../features/speculative_decoding.md)。
-
-**How to enable:**
-Add the following lines to the startup parameters
-```
---speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${path_to_mtp_model}"}'
-```
-Notes:
-1. MTP currently does not support simultaneous use with Prefix Caching, Chunked Prefill, and CUDAGraph.
-   - Use `export FD_DISABLE_CHUNKED_PREFILL=1` to disable Chunked Prefill.
-   - When setting `speculative-config`, Prefix Caching will be automatically disabled.
-2. MTP currently does not support service management global blocks, When setting `speculative-config`, service management global blocks will be automatically disabled.
-3. MTP currently does not support rejection sampling, i.e. do not run with `export FD_SAMPLING_CLASS=rejection`
-
-#### 2.2.5 W4A8C8 Quantization
-**Idea:**
-Quantization can achieve model compression, reduce GPU memory usage and speed up inference. To achieve better inference results, per-channel symmetric 4-bit quantization is used for MoE weights. static per-tensor symmetric 8-bit quantization is used for activation. And static per-channel symmetric 8-bit quantization is used for KVCache.
-
-**How to enable:**
-Just specify the corresponding model name in the startup command, `baidu/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle`
-```
---model baidu/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle
-```
-
-Note:
-- W4A8C8 quantized models are not supported when loaded via `--load-choices "default_v1"`.
-
-#### 2.2.6 Rejection Sampling
-**Idea:**
-Rejection sampling is to generate samples from a proposal distribution that is easy to sample, avoiding explicit sorting to increase the sampling speed, which has a significant improvement on small-sized models.
-
-**How to enable:**
-Add the following environment variables before starting
-```
-export FD_SAMPLING_CLASS=rejection
-```
-
-#### 2.2.7 Disaggregated Deployment
-**Idea:** Deploying Prefill and Decode separately in certain scenarios can improve hardware utilization, effectively increase throughput, and reduce overall sentence latency.
-
-**How to enable:** Take the deployment of a single machine with 8 GPUs and 1P1D (4 GPUs each) as an example. Compared with the default hybrid deployment method, `--splitwise-role` is required to specify the role of the node. And the GPUs and logs of the two nodes are isolated through the environment variables `FD_LOG_DIR` and `CUDA_VISIBLE_DEVICES`.
-```
-export FD_LOG_DIR="log_prefill"
+```bash
 export CUDA_VISIBLE_DEVICES=0,1,2,3
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-       --port 8180 --metrics-port 8181 \
-       --engine-worker-queue-port 8182 \
-       --cache-queue-port 8183 \
-       --tensor-parallel-size 4 \
-       --quantization wint4 \
-       --splitwise-role "prefill"
+
+python -m fastdeploy.entrypoints.openai.multi_api_server \
+    --ports 8188,8189,8190,8191 \
+    --num-servers 4 \
+    --args --model /path/to/ERNIE-4.5-300B-A47B-Paddle \
+    --splitwise-role "prefill" \
+    --cache-transfer-protocol "rdma,ipc" \
+    --router "0.0.0.0:8109" \
+    --quantization wint4 \
+    --tensor-parallel-size 1 \
+    --data-parallel-size 4 \
+    --enable-expert-parallel \
+    --max-model-len 8192 \
+    --max-num-seqs 64 \
+    --num-gpu-blocks-override 1024
 ```
-```
-export FD_LOG_DIR="log_decode"
+
+#### Start Decode Nodes
+
+```bash
 export CUDA_VISIBLE_DEVICES=4,5,6,7
-# Note that innode-prefill-ports is specified as the Prefill serviceengine-worker-queue-port
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-300B-A47B-Paddle\
-       --port 8184 --metrics-port 8185 \
-       --engine-worker-queue-port 8186 \
-       --cache-queue-port 8187 \
-       --tensor-parallel-size 4 \
-       --quantization wint4 \
-       --innode-prefill-ports 8182 \
-       --splitwise-role "decode"
+
+python -m fastdeploy.entrypoints.openai.multi_api_server \
+    --ports 8198,8199,8200,8201 \
+    --num-servers 4 \
+    --args --model /path/to/ERNIE-4.5-300B-A47B-Paddle \
+    --splitwise-role "decode" \
+    --cache-transfer-protocol "rdma,ipc" \
+    --router "0.0.0.0:8109" \
+    --quantization wint4 \
+    --tensor-parallel-size 1 \
+    --data-parallel-size 4 \
+    --enable-expert-parallel \
+    --max-model-len 8192 \
+    --max-num-seqs 64 \
+    --num-gpu-blocks-override 1024
 ```
 
-#### 2.2.8 CUDAGraph
-**Idea:**
-CUDAGraph is a GPU computing acceleration technology provided by NVIDIA. It achieves efficient execution and optimization of GPU tasks by capturing CUDA operation sequences into a graph structure. The core idea of CUDAGraph is to encapsulate a series of GPU computing and memory operations into a re-executable graph, thereby reducing CPU-GPU communication overhead, reducing kernel startup latency, and improving overall computing performance.
+### 2.3 Key Parameter Descriptions
 
-**How to enable:**
-Before version 2.3, it needs to be enabled through `--use-cudagraph`.
-CUDAGraph has been enabled by default in some scenarios at the beginning of version 2.3. CUDAGraph will be automatically closed for functions that are not compatible with CUDAGraph (speculative decoding, RL training, multi-mode model).
-Notes:
-- Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
+| Parameter | Description |
+|-----|------|
+| `--splitwise` | Enable PD disaggregated mode |
+| `--splitwise-role` | Node role: `prefill` or `decode` |
+| `--cache-transfer-protocol` | KV Cache transfer protocol: `rdma` or `ipc` |
+| `--router` | Router service address |
+| `--quantization` | Quantization strategy (wint4/wint8/fp8, etc.) |
+| `--tensor-parallel-size` | Tensor parallelism degree (TP) |
+| `--data-parallel-size` | Data parallelism degree (DP) |
+| `--enable-expert-parallel` | Enable Expert Parallelism (EP) |
+| `--max-model-len` | Maximum sequence length |
+| `--max-num-seqs` | Maximum concurrent sequences |
+| `--num-gpu-blocks-override` | GPU KV Cache block count override |
 
-## FAQ
-If you encounter any problems during use, you can refer to [FAQ](./FAQ.md).
+---
+
+## 3. Cross-Machine PD Disaggregated Deployment
+
+### 3.1 Deployment Principles
+
+Cross-machine PD disaggregation deploys Prefill and Decode instances on different physical machines:
+- **Prefill Machine**: Runs the Router and Prefill nodes, responsible for processing input sequence prefill computation
+- **Decode Machine**: Runs Decode nodes, communicates with the Prefill machine via RDMA network, responsible for autoregressive decoding generation
+
+### 3.2 Test Scenarios and Parallelism Configuration
+
+This chapter demonstrates the **TP1DP8EP** cross-machine configuration (16 GPUs total):
+- **Tensor Parallelism (TP)**: 1
+- **Data Parallelism (DP)**: 8 — 8 GPUs per machine, totaling 8 Prefill instances and 8 Decode instances
+- **Expert Parallelism (EP)**: Enabled
+
+**To test other cross-machine parallelism configurations, adjust parameters as follows:**
+1. **Inter-Machine Communication**: Ensure RDMA network connectivity between machines; Prefill machine needs `KVCACHE_RDMA_NICS` environment variable configured
+2. **Router Address**: The `--router` parameter on the Decode machine must point to the actual IP address of the Prefill machine
+3. **Port Configuration**: The number of ports in the `--ports` list must match `--num-servers` and `--data-parallel-size`
+4. **GPU Visibility**: Each machine specifies its local GPUs via `CUDA_VISIBLE_DEVICES`
+
+### 3.3 Network Configuration
+
+Cross-machine deployment requires RDMA network support. Before starting, configure the RDMA NIC on the Prefill machine:
+
+```bash
+export $(bash /path/to/get_rdma_nics.sh gpu)
+echo "KVCACHE_RDMA_NICS:${KVCACHE_RDMA_NICS}"
+if [ -z "${KVCACHE_RDMA_NICS}" ]; then
+  echo "KVCACHE_RDMA_NICS is empty, please check the output of get_rdma_nics.sh"
+  exit 1
+fi
+```
+
+### 3.4 Prefill Machine Startup Scripts
+
+#### Start Router
+
+```bash
+unset http_proxy && unset https_proxy
+
+python -m fastdeploy.router.launch \
+    --port 8109 \
+    --splitwise
+```
+
+#### Start Prefill Nodes
+
+```bash
+export $(bash /path/to/get_rdma_nics.sh gpu)
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+python -m fastdeploy.entrypoints.openai.multi_api_server \
+    --ports 8198,8199,8200,8201,8202,8203,8204,8205 \
+    --num-servers 8 \
+    --args --model /path/to/ERNIE-4.5-300B-A47B-Paddle \
+    --splitwise-role "prefill" \
+    --cache-transfer-protocol "rdma,ipc" \
+    --router "<ROUTER_MACHINE_IP>:8109" \
+    --quantization wint4 \
+    --tensor-parallel-size 1 \
+    --data-parallel-size 8 \
+    --enable-expert-parallel \
+    --max-model-len 8192 \
+    --max-num-seqs 64 \
+    --num-gpu-blocks-override 1024
+```
+
+### 3.5 Decode Machine Startup Scripts
+
+#### Start Decode Nodes
+
+```bash
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+python -m fastdeploy.entrypoints.openai.multi_api_server \
+    --ports 8198,8199,8200,8201,8202,8203,8204,8205 \
+    --num-servers 8 \
+    --args --model /path/to/ERNIE-4.5-300B-A47B-Paddle \
+    --splitwise-role "decode" \
+    --cache-transfer-protocol "rdma,ipc" \
+    --router "<PREFILL_MACHINE_IP>:8109" \
+    --quantization wint4 \
+    --tensor-parallel-size 1 \
+    --data-parallel-size 8 \
+    --enable-expert-parallel \
+    --max-model-len 8192 \
+    --max-num-seqs 64 \
+    --num-gpu-blocks-override 1024
+```
+
+**Note**: Please replace `<PREFILL_MACHINE_IP>` with the actual IP address of the Prefill machine.
+
+
+
+## 4. Sending Test Requests
+
+```bash
+curl -X POST "http://localhost:8109/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "Hello, please introduce yourself."}
+  ],
+  "max_tokens": 100,
+  "stream": false
+}'
+```
+
+
+## 5. Frequently Asked Questions (FAQ)
+
+If you encounter issues during use, please refer to [FAQ](./FAQ.md) for solutions.
