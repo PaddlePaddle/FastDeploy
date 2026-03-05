@@ -1352,6 +1352,8 @@ class XPUModelRunner(ModelRunnerBase):
         """
         max_dec_len = expected_decode_len + 1
         input_length = min(num_tokens // batch_size, self.model_config.max_model_len - max_dec_len)
+        if self.fd_config.parallel_config.enable_expert_parallel:
+            input_length = min(input_length, 4)
         block_num = (
             input_length + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
