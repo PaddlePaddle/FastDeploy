@@ -155,15 +155,6 @@ std::vector<paddle::Tensor> SpeculatePreProcess(
   auto cu_seqlens_k =
       paddle::empty({bsz + 1}, paddle::DataType::INT32, input_ids.place());
 
-  if (token_num_data == 0) {
-    return {ids_remove_padding,
-            batch_id_per_token,
-            cu_seqlens_q,
-            cu_seqlens_k,
-            paddle::Tensor(),
-            paddle::Tensor(),
-            paddle::Tensor()};
-  }
 #ifdef PADDLE_WITH_COREX
   int blockSize =
       std::min((token_num_data + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
@@ -184,6 +175,16 @@ std::vector<paddle::Tensor> SpeculatePreProcess(
                     input_ids.place());
   auto real_output_token_num =
       paddle::empty({1}, paddle::DataType::INT32, input_ids.place());
+
+  if (token_num_data == 0) {
+    return {ids_remove_padding,
+            batch_id_per_token,
+            cu_seqlens_q,
+            cu_seqlens_k,
+            cu_seq_lens_q_output,
+            batch_id_per_token_output,
+            real_output_token_num};
+  }
 
   int64_t *ids_remove_padding_ptr = ids_remove_padding.data<int64_t>();
   int *batch_id_per_token_ptr = batch_id_per_token.data<int>();

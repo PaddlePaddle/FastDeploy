@@ -62,10 +62,8 @@ from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
 from fastdeploy.model_executor.ops.gpu import (
-    get_stop,
     recover_decode_task,
     set_data_ipc,
-    set_stop,
     set_value_by_flags_and_idx,
     share_external_data,
     speculate_schedule_cache,
@@ -884,7 +882,7 @@ class MetaxModelRunner(ModelRunnerBase):
 
         self._process_mm_features(req_dicts)
         if has_prefill_task or has_decode_task:
-            set_stop(self.share_inputs["not_need_stop"], True)
+            self.share_inputs["not_need_stop"][0] = True
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
         if self.speculative_method in ["mtp"]:
@@ -967,7 +965,7 @@ class MetaxModelRunner(ModelRunnerBase):
 
             self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
 
-        set_stop(self.share_inputs["not_need_stop"], True)
+        self.share_inputs["not_need_stop"][0] = True
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
 
@@ -2489,7 +2487,7 @@ class MetaxModelRunner(ModelRunnerBase):
 
     def not_need_stop(self) -> bool:
         """Stop decoding if the tensor meets the termination condition"""
-        return get_stop(self.share_inputs["not_need_stop"]).item()
+        return self.share_inputs["not_need_stop"][0]
 
     def clear_cache(self, profile=False):
         """Clear cached data from shared inputs and forward metadata"""

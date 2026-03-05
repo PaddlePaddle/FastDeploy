@@ -21,9 +21,15 @@
 #include "fp8_gemm_fused/dual_gemm/device/dual_gemm.h"
 #include "fp8_gemm_fused/dual_gemm/thread/left_silu_and_mul.h"
 
-template <typename InputType, typename OutType, typename BiasType,
-            typename ThreadBlockShape, typename WarpShape,
-            typename MMAShape, int Stages, bool hasbias, typename SM>
+template <typename InputType,
+          typename OutType,
+          typename BiasType,
+          typename ThreadBlockShape,
+          typename WarpShape,
+          typename MMAShape,
+          int Stages,
+          bool hasbias,
+          typename SM>
 bool dispatch_dual_gemm_swiglu(DualGemmEpilogueAllParams params) {
   using ElementInputA = typename std::conditional_t<
       std::is_same_v<InputType, phi::dtype::float8_e4m3fn>,
@@ -73,8 +79,8 @@ bool dispatch_dual_gemm_swiglu(DualGemmEpilogueAllParams params) {
       cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>;  // <- ??
 
   static constexpr auto ScaleType =
-              hasbias? cutlass::epilogue::thread::ScaleType::NoBetaScaling
-                       : cutlass::epilogue::thread::ScaleType::OnlyAlphaScaling;
+      hasbias ? cutlass::epilogue::thread::ScaleType::NoBetaScaling
+              : cutlass::epilogue::thread::ScaleType::OnlyAlphaScaling;
 
   using EpilogueOp0 = cutlass::epilogue::thread::LinearCombination<
       ElementInputC,  // <- data type of output matrix
@@ -86,7 +92,7 @@ bool dispatch_dual_gemm_swiglu(DualGemmEpilogueAllParams params) {
       ElementAccumulator,  // <- data type of accumulator
       ElementComputeEpilogue,
       ScaleType>;  // <- data type for alpha/beta in linear
-                              // combination function
+                   // combination function
 
   using EpilogueOp1 = cutlass::epilogue::thread::LeftSiLUAndMul<
       ElementOutput,
@@ -129,9 +135,9 @@ bool dispatch_dual_gemm_swiglu(DualGemmEpilogueAllParams params) {
   cutlass::gemm::GemmCoord problem_size =
       cutlass::gemm::GemmCoord{params.M, params.N, params.K};
 
-  cutlass::gemm::DualGemmMode mode = params.batch_count > 1 ?
-        cutlass::gemm::DualGemmMode::kBatched :
-        cutlass::gemm::DualGemmMode::kGemm;
+  cutlass::gemm::DualGemmMode mode = params.batch_count > 1
+                                         ? cutlass::gemm::DualGemmMode::kBatched
+                                         : cutlass::gemm::DualGemmMode::kGemm;
 
   typename cutlass::TensorRef<typename Gemm::ElementC, typename Gemm::LayoutC>
       nullptr_ref{};
@@ -144,11 +150,23 @@ bool dispatch_dual_gemm_swiglu(DualGemmEpilogueAllParams params) {
        params.lda},
       {reinterpret_cast<ElementInputB*>(const_cast<void*>(params.B0)),
        params.ldb},
-      hasbias ? typename cutlass::TensorRef<typename Gemm::ElementC, typename Gemm::LayoutC>{reinterpret_cast<ElementInputC*>(const_cast<void*>(params.bias0)), 0} : nullptr_ref,
+      hasbias
+          ? typename cutlass::TensorRef<
+                typename Gemm::ElementC,
+                typename Gemm::LayoutC>{reinterpret_cast<ElementInputC*>(
+                                            const_cast<void*>(params.bias0)),
+                                        0}
+          : nullptr_ref,
       nullptr_ref,
       {reinterpret_cast<ElementInputB*>(const_cast<void*>(params.B1)),
        params.ldb},
-      hasbias ? typename cutlass::TensorRef<typename Gemm::ElementC, typename Gemm::LayoutC>{reinterpret_cast<ElementInputC*>(const_cast<void*>(params.bias1)), 0} : nullptr_ref,
+      hasbias
+          ? typename cutlass::TensorRef<
+                typename Gemm::ElementC,
+                typename Gemm::LayoutC>{reinterpret_cast<ElementInputC*>(
+                                            const_cast<void*>(params.bias1)),
+                                        0}
+          : nullptr_ref,
       nullptr_ref,
       {reinterpret_cast<ElementOutput*>(const_cast<void*>(params.D)),
        params.ldd},

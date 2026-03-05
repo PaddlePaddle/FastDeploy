@@ -36,8 +36,8 @@ namespace cub = hipcub;
 static constexpr int kBlockSizeForSmallBeamWidth = 256;
 static constexpr int kMaxVocabPartForStage1FastKernel = 128;
 
-#define CASE_K(K)                                        \
-  case K:                                                \
+#define CASE_K(K)                               \
+  case K:                                       \
     invokeTopKSoftMaxLauncher<T, 2 * K, GROUP>( \
         params, beam_group_idx, stream);        \
     break
@@ -1336,24 +1336,25 @@ adding while op and without affecting the speed. Use a 'fake inplace' method
 here. Not elegant but useful ︸_︸.
 *****/
 
-std::vector<paddle::Tensor> BeamSearchSoftmax(const paddle::Tensor &logits,
-                             const paddle::Tensor &seq_lens,
-                             const paddle::Tensor &stop_flags,       // inplace
-                             const paddle::Tensor &end_ids,
-                             const paddle::Tensor &step_ids,
-                             const paddle::Tensor &max_dec_lens,
-                             const paddle::Tensor &block_tables,     // inplace
-                             const paddle::Tensor &cum_scores,       // inplace
-                             const paddle::Tensor &beam_cache_ids,   // inplace
-                             const paddle::Tensor &beam_hyps,        // inplace
-                             const paddle::Tensor &beam_hyps_score,  // inplace
-                             const paddle::Tensor &beam_finished,    // inplace
-                             const paddle::Tensor &beam_width,
-                             const paddle::Tensor &beam_group_num,
-                             const paddle::Tensor &length_penalty,
-                             const paddle::Tensor &diversity_penalty,
-                             bool fuse_softmax,
-                             bool early_stop) {
+std::vector<paddle::Tensor> BeamSearchSoftmax(
+    const paddle::Tensor &logits,
+    const paddle::Tensor &seq_lens,
+    const paddle::Tensor &stop_flags,  // inplace
+    const paddle::Tensor &end_ids,
+    const paddle::Tensor &step_ids,
+    const paddle::Tensor &max_dec_lens,
+    const paddle::Tensor &block_tables,     // inplace
+    const paddle::Tensor &cum_scores,       // inplace
+    const paddle::Tensor &beam_cache_ids,   // inplace
+    const paddle::Tensor &beam_hyps,        // inplace
+    const paddle::Tensor &beam_hyps_score,  // inplace
+    const paddle::Tensor &beam_finished,    // inplace
+    const paddle::Tensor &beam_width,
+    const paddle::Tensor &beam_group_num,
+    const paddle::Tensor &length_penalty,
+    const paddle::Tensor &diversity_penalty,
+    bool fuse_softmax,
+    bool early_stop) {
   std::vector<int64_t> logits_shape = logits.shape();
   // logits_shape
   auto cu_stream = logits.stream();
@@ -1380,43 +1381,43 @@ std::vector<paddle::Tensor> BeamSearchSoftmax(const paddle::Tensor &logits,
   const int end_ids_len = end_ids.dims()[0];
   const int beam_group_size = beam_width_scalar / beam_group_num_scalar;
 
-  auto next_tokens = paddle::full({logits_shape[0], 1}, 0,  end_ids.type(),
-                                 paddle::GPUPlace());
+  auto next_tokens =
+      paddle::full({logits_shape[0], 1}, 0, end_ids.type(), paddle::GPUPlace());
 
-  auto parent_ids = paddle::full({logits_shape[0], 1}, 0,  end_ids.type(),
-                                 paddle::GPUPlace());
+  auto parent_ids =
+      paddle::full({logits_shape[0], 1}, 0, end_ids.type(), paddle::GPUPlace());
 
-  auto cum_scores_ori = paddle::empty(cum_scores.shape(), logits.type(),
-                                 paddle::GPUPlace());
+  auto cum_scores_ori =
+      paddle::empty(cum_scores.shape(), logits.type(), paddle::GPUPlace());
 
-  auto beam_cache_ids_ori = paddle::empty(beam_cache_ids.shape(), end_ids.type(),
-                                 paddle::GPUPlace());
+  auto beam_cache_ids_ori =
+      paddle::empty(beam_cache_ids.shape(), end_ids.type(), paddle::GPUPlace());
 
-  auto block_tables_ori = paddle::empty(block_tables.shape(), end_ids.type(),
-                                 paddle::GPUPlace());
+  auto block_tables_ori =
+      paddle::empty(block_tables.shape(), end_ids.type(), paddle::GPUPlace());
   cudaMemcpyAsync(cum_scores_ori.mutable_data<float>(),
                   cum_scores.data<float>(),
-                  sizeof(float)*cum_scores.numel(),
+                  sizeof(float) * cum_scores.numel(),
                   cudaMemcpyDeviceToDevice,
                   cu_stream);
   cudaMemcpyAsync(beam_cache_ids_ori.mutable_data<int>(),
                   beam_cache_ids.data<int>(),
-                  sizeof(int)*beam_cache_ids.numel(),
+                  sizeof(int) * beam_cache_ids.numel(),
                   cudaMemcpyDeviceToDevice,
                   cu_stream);
   cudaMemcpyAsync(block_tables_ori.mutable_data<int>(),
                   block_tables.data<int>(),
-                  sizeof(int)*block_tables.numel(),
+                  sizeof(int) * block_tables.numel(),
                   cudaMemcpyDeviceToDevice,
                   cu_stream);
 
   const int tmp_size = batch_size * beam_group_size * beam_group_size * 2;
 
-  auto tmp_topk_id = paddle::full({tmp_size}, 0, end_ids.type(),
-                                 paddle::GPUPlace());
+  auto tmp_topk_id =
+      paddle::full({tmp_size}, 0, end_ids.type(), paddle::GPUPlace());
 
-  auto tmp_topk_val = paddle::full({tmp_size}, 0.0, logits.type(),
-                                 paddle::GPUPlace());
+  auto tmp_topk_val =
+      paddle::full({tmp_size}, 0.0, logits.type(), paddle::GPUPlace());
 
   BeamSearchParams<float> params;
   params.batch_size = batch_size;
@@ -1449,7 +1450,8 @@ std::vector<paddle::Tensor> BeamSearchSoftmax(const paddle::Tensor &logits,
   params.block_tables_out = const_cast<int *>(block_tables.data<int>());
   params.cum_scores_out = const_cast<float *>(cum_scores.data<float>());
   params.beam_hyps_out = const_cast<int *>(beam_hyps.data<int>());
-  params.beam_hyps_score_out = const_cast<float *>(beam_hyps_score.data<float>());
+  params.beam_hyps_score_out =
+      const_cast<float *>(beam_hyps_score.data<float>());
   params.beam_finished = const_cast<bool *>(beam_finished.data<bool>());
   params.stop_flags = const_cast<bool *>(stop_flags.data<bool>());
 
@@ -1470,8 +1472,8 @@ std::vector<paddle::Tensor> BeamSearchSoftmax(const paddle::Tensor &logits,
 
   const int workspace_size = tmp_id_val_size * 2 + tmp_stage1_to_stage2_size;
 
-  auto wsp_buffer_tensor = paddle::full({workspace_size}, 0, logits.type(),
-                                 paddle::GPUPlace());
+  auto wsp_buffer_tensor =
+      paddle::full({workspace_size}, 0, logits.type(), paddle::GPUPlace());
 
   params.tmp_ids = reinterpret_cast<int *>(wsp_buffer_tensor.data<float>());
   params.tmp_vals = wsp_buffer_tensor.data<float>() + tmp_id_val_size;
@@ -1480,11 +1482,9 @@ std::vector<paddle::Tensor> BeamSearchSoftmax(const paddle::Tensor &logits,
   for (int beam_group_idx = 0; beam_group_idx < beam_group_num_scalar;
        ++beam_group_idx) {
     if (beam_group_num_scalar == 1) {
-      invokeTopkSoftMax<float, false>(
-          &params, beam_group_idx, cu_stream);
+      invokeTopkSoftMax<float, false>(&params, beam_group_idx, cu_stream);
     } else {
-      invokeTopkSoftMax<float, true>(
-          &params, beam_group_idx, cu_stream);
+      invokeTopkSoftMax<float, true>(&params, beam_group_idx, cu_stream);
     }
   }
   updateBeamSearchParams<float>(&params, cu_stream);
@@ -1492,54 +1492,66 @@ std::vector<paddle::Tensor> BeamSearchSoftmax(const paddle::Tensor &logits,
 }
 
 std::vector<std::vector<int64_t>> BeamSearchSoftmaxShape(
-                             const std::vector<int64_t> &logits,
-                             const std::vector<int64_t> &seq_lens,
-                             const std::vector<int64_t> &stop_flags,       // inplace
-                             const std::vector<int64_t> &end_ids,
-                             const std::vector<int64_t> &step_ids,
-                             const std::vector<int64_t> &max_dec_lens,
-                             const std::vector<int64_t> &block_tables,     // inplace
-                             const std::vector<int64_t> &cum_scores,       // inplace
-                             const std::vector<int64_t> &beam_cache_ids,   // inplace
-                             const std::vector<int64_t> &beam_hyps,        // inplace
-                             const std::vector<int64_t> &beam_hyps_score,  // inplace
-                             const std::vector<int64_t> &beam_finished,    // inplace
-                             const std::vector<int64_t> &beam_width,
-                             const std::vector<int64_t> &beam_group_num,
-                             const std::vector<int64_t> &length_penalty,
-                             const std::vector<int64_t> &diversity_penalty) {
-    std::vector<int64_t> next_tokens = {logits[0],1};
-    std::vector<int64_t> parent_ids = {logits[0],1};
-    return {next_tokens,parent_ids};
+    const std::vector<int64_t> &logits,
+    const std::vector<int64_t> &seq_lens,
+    const std::vector<int64_t> &stop_flags,  // inplace
+    const std::vector<int64_t> &end_ids,
+    const std::vector<int64_t> &step_ids,
+    const std::vector<int64_t> &max_dec_lens,
+    const std::vector<int64_t> &block_tables,     // inplace
+    const std::vector<int64_t> &cum_scores,       // inplace
+    const std::vector<int64_t> &beam_cache_ids,   // inplace
+    const std::vector<int64_t> &beam_hyps,        // inplace
+    const std::vector<int64_t> &beam_hyps_score,  // inplace
+    const std::vector<int64_t> &beam_finished,    // inplace
+    const std::vector<int64_t> &beam_width,
+    const std::vector<int64_t> &beam_group_num,
+    const std::vector<int64_t> &length_penalty,
+    const std::vector<int64_t> &diversity_penalty) {
+  std::vector<int64_t> next_tokens = {logits[0], 1};
+  std::vector<int64_t> parent_ids = {logits[0], 1};
+  return {next_tokens, parent_ids};
 }
 
 std::vector<paddle::DataType> BeamSearchSoftmaxDtype(
-                             const paddle::DataType &logits,
-                             const paddle::DataType &seq_lens,
-                             const paddle::DataType &stop_flags,       // inplace
-                             const paddle::DataType &end_ids,
-                             const paddle::DataType &step_ids,
-                             const paddle::DataType &max_dec_lens,
-                             const paddle::DataType &block_tables,     // inplace
-                             const paddle::DataType &cum_scores,       // inplace
-                             const paddle::DataType &beam_cache_ids,   // inplace
-                             const paddle::DataType &beam_hyps,        // inplace
-                             const paddle::DataType &beam_hyps_score,  // inplace
-                             const paddle::DataType &beam_finished,    // inplace
-                             const paddle::DataType &beam_width,
-                             const paddle::DataType &beam_group_num,
-                             const paddle::DataType &length_penalty,
-                             const paddle::DataType &diversity_penalty) {
-    return {paddle::DataType::INT32, paddle::DataType::INT32};
+    const paddle::DataType &logits,
+    const paddle::DataType &seq_lens,
+    const paddle::DataType &stop_flags,  // inplace
+    const paddle::DataType &end_ids,
+    const paddle::DataType &step_ids,
+    const paddle::DataType &max_dec_lens,
+    const paddle::DataType &block_tables,     // inplace
+    const paddle::DataType &cum_scores,       // inplace
+    const paddle::DataType &beam_cache_ids,   // inplace
+    const paddle::DataType &beam_hyps,        // inplace
+    const paddle::DataType &beam_hyps_score,  // inplace
+    const paddle::DataType &beam_finished,    // inplace
+    const paddle::DataType &beam_width,
+    const paddle::DataType &beam_group_num,
+    const paddle::DataType &length_penalty,
+    const paddle::DataType &diversity_penalty) {
+  return {paddle::DataType::INT32, paddle::DataType::INT32};
 }
 
 PD_BUILD_STATIC_OP(beam_search_softmax)
-    .Inputs({"logits", "seq_lens", "stop_flags", "end_ids", "step_ids", "max_dec_lens", "block_tables"
-    , "cum_scores", "beam_cache_ids", "beam_hyps", "beam_hyps_score", "beam_finished"
-    , "beam_width", "beam_group_num", "length_penalty", "diversity_penalty"})
+    .Inputs({"logits",
+             "seq_lens",
+             "stop_flags",
+             "end_ids",
+             "step_ids",
+             "max_dec_lens",
+             "block_tables",
+             "cum_scores",
+             "beam_cache_ids",
+             "beam_hyps",
+             "beam_hyps_score",
+             "beam_finished",
+             "beam_width",
+             "beam_group_num",
+             "length_penalty",
+             "diversity_penalty"})
     .Outputs({"next_tokens", "parent_ids"})
-    .Attrs({"fuse_softmax: bool",
-            "early_stop: bool"})
+    .Attrs({"fuse_softmax: bool", "early_stop: bool"})
     .SetKernelFn(PD_KERNEL(BeamSearchSoftmax))
     .SetInferShapeFn(PD_INFER_SHAPE(BeamSearchSoftmaxShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(BeamSearchSoftmaxDtype));
