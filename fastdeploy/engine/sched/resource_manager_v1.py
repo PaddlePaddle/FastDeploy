@@ -805,11 +805,20 @@ class ResourceManagerV1(ResourceManager):
                             llm_logger.debug(
                                 f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                             )
-                            request.block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(
-                                    self.config.cache_config.enc_dec_block_num, request.request_id
-                                )
+                            decode_extend_blocks = self.cache_manager.allocate_gpu_blocks(
+                                self.config.cache_config.enc_dec_block_num, request.request_id
                             )
+                            if self.enable_head_wise_kv_cache:
+                                if not hasattr(request, "block_tables_3d") or not request.block_tables_3d:
+                                    request.block_tables_3d = []
+                                for head_idx, head_blocks in enumerate(decode_extend_blocks):
+                                    if head_idx < len(request.block_tables_3d):
+                                        request.block_tables_3d[head_idx].extend(head_blocks)
+                                    else:
+                                        request.block_tables_3d.append(head_blocks)
+                                request.block_tables = request.block_tables_3d[0] if request.block_tables_3d else []
+                            else:
+                                request.block_tables.extend(decode_extend_blocks)
                             # Prepare decoding task
                             scheduled_reqs.append(self._prepare_decode_task(request))
                         else:
@@ -841,6 +850,7 @@ class ResourceManagerV1(ResourceManager):
                     token_budget -= 1
                     if (
                         request.use_extend_tables
+                        and not self.enable_head_wise_kv_cache
                         and request.request_id not in self.using_extend_tables_req_id
                         and self.need_block_num_map[request.request_id].watch() > 0
                     ):

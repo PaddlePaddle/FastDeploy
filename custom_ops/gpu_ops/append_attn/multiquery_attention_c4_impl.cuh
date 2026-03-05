@@ -1326,7 +1326,6 @@ void MultiQueryAppendC4Attention(
                       const_cast<T *>(sinks.get().data<T>()))
                 : nullptr,
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-          use_head_wise,
           quant_max_bound,
           quant_min_bound,
           in_scale,
