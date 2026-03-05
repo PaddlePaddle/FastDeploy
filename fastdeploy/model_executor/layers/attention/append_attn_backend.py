@@ -379,12 +379,18 @@ class AppendAttentionBackend(AttentionBackend):
                     out_of_range_cnt = int((valid >= cache_id_capacity).sum())
                 sample_rows = bt_np[: min(4, bt_np.shape[0])].tolist()
 
+            seq_lens_this_time_list = forward_meta.seq_lens_this_time[:batch_size].numpy().tolist()
+            seq_lens_encoder_list = forward_meta.seq_lens_encoder[:batch_size].numpy().tolist()
+            seq_lens_decoder_list = forward_meta.seq_lens_decoder[:batch_size].numpy().tolist()
             logger.info(
                 f"[headwise kernel input] layer={layer.layer_id} q_heads={self.num_heads} kv_heads={self.kv_num_heads} "
                 f"group={self.num_heads // max(self.kv_num_heads, 1)} batch={batch_size} "
                 f"block_tables_3d_shape={block_tables_3d.shape if block_tables_3d is not None else None} "
                 f"expected_dim0={expected_dim0} block_tables_3d_dtype={block_tables_3d.dtype if block_tables_3d is not None else None} "
                 f"cache_k_shape={cache_k.shape} cache_id_capacity={cache_id_capacity} "
+                f"cache_quant_type={cache_quant_type_str} qkv_dtype={qkv.dtype} cache_dtype={cache_k.dtype} "
+                f"use_output={self.use_output} enc_block_q={self.encoder_block_shape_q} dec_block_q={self.decoder_block_shape_q} "
+                f"seq_lens_this_time={seq_lens_this_time_list} seq_lens_encoder={seq_lens_encoder_list} seq_lens_decoder={seq_lens_decoder_list} "
                 f"min_id={min_id} max_id={max_id} neg_count={neg_count} out_of_range_cnt={out_of_range_cnt} "
                 f"sample_rows={sample_rows}"
             )
