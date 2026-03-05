@@ -137,7 +137,7 @@ static int xpu2or3_wrapper(Context* ctx,
                            const int stop_seqs_max_len,
                            const int pre_ids_len) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  xpu3::plugin::speculate_set_stop_value_multi_seqs<<<ctx->ncluster(),
+  int32_t ret_xre = xpu3::plugin::speculate_set_stop_value_multi_seqs<<<ctx->ncluster(),
                                                       64,
                                                       ctx->xpu_stream>>>(
       stop_flags,
@@ -155,6 +155,7 @@ static int xpu2or3_wrapper(Context* ctx,
       stop_seqs_bs,
       stop_seqs_max_len,
       pre_ids_len);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

@@ -161,7 +161,7 @@ static int xpu3_wrapper(Context *ctx,
                         const bool prefill_one_step_stop) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   using XPU_TI = typename XPUIndexType<int64_t>::type;
-  xpu3::plugin::speculate_schedule_cache<<<1, 64, ctx->xpu_stream>>>(
+  int32_t ret_xre = xpu3::plugin::speculate_schedule_cache<<<1, 64, ctx->xpu_stream>>>(
       (const XPU_TI *)draft_tokens,
       block_tables,
       stop_flags,
@@ -185,6 +185,7 @@ static int xpu3_wrapper(Context *ctx,
       block_size,
       block_num_per_seq,
       prefill_one_step_stop);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

@@ -136,7 +136,7 @@ static int xpu3_wrapper(Context *ctx,
                         const int pre_id_length) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto recover_block_kernel = xpu3::plugin::speculate_recover_block;
-  recover_block_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  int32_t ret_xre = recover_block_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
       recover_block_list,  // [bsz]
       recover_len,
       stop_flags,
@@ -159,6 +159,7 @@ static int xpu3_wrapper(Context *ctx,
       block_num_per_seq,
       length,
       pre_id_length);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

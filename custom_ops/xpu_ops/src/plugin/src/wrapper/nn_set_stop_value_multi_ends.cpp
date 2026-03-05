@@ -100,7 +100,7 @@ static int xpu3_wrapper(Context *ctx,
   using XPU_TID = typename XPUIndexType<T>::type;
   auto set_stop_value_multi_ends =
       xpu3::plugin::set_stop_value_multi_ends<XPU_TID>;
-  set_stop_value_multi_ends<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  int32_t ret_xre = set_stop_value_multi_ends<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
       stop_flags,
       reinterpret_cast<XPU_TID *>(topk_ids),
       reinterpret_cast<XPU_TID *>(next_tokens),
@@ -110,6 +110,7 @@ static int xpu3_wrapper(Context *ctx,
       end_length,
       beam_search,
       prefill_one_step_stop);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

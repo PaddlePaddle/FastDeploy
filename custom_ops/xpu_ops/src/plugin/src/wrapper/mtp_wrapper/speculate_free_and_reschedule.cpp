@@ -101,7 +101,7 @@ static int xpu3_wrapper(Context *ctx,
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto speculate_free_and_reschedule =
       xpu3::plugin::speculate_free_and_reschedule;
-  speculate_free_and_reschedule<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  int32_t ret_xre = speculate_free_and_reschedule<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
       stop_flags,
       seq_lens_this_time,
       seq_lens_decoder,
@@ -123,6 +123,7 @@ static int xpu3_wrapper(Context *ctx,
       block_num_per_seq,
       max_decoder_block_num,
       max_draft_tokens);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

@@ -194,7 +194,7 @@ static int xpu3_wrapper(Context *ctx,
                         const int max_decoder_block_num) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto free_and_dispatch_block_kernel = xpu3::plugin::free_and_dispatch_block;
-  free_and_dispatch_block_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  int32_t ret_xre = free_and_dispatch_block_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
       stop_flags,
       seq_lens_this_time,
       seq_lens_decoder,
@@ -215,6 +215,7 @@ static int xpu3_wrapper(Context *ctx,
       block_size,
       block_num_per_seq,
       max_decoder_block_num);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

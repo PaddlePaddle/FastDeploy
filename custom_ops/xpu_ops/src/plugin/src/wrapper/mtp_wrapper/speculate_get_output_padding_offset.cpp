@@ -61,7 +61,7 @@ static int xpu2or3_wrapper(Context* ctx,
                            const int bsz,
                            const int max_seq_len) {
   ctx_guard RAII_GUARD(ctx);
-  xpu3::plugin::speculate_get_output_padding_offset<<<ctx->ncluster(),
+  int32_t ret_xre = xpu3::plugin::speculate_get_output_padding_offset<<<ctx->ncluster(),
                                                       64,
                                                       ctx->xpu_stream>>>(
       output_padding_offset,
@@ -70,6 +70,7 @@ static int xpu2or3_wrapper(Context* ctx,
       seq_lens_output,
       bsz,
       max_seq_len);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

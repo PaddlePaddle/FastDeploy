@@ -82,7 +82,7 @@ static int xpu2or3_wrapper(Context *ctx,
   ctx_guard RAII_GUARD(ctx);
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
 
-  xpu3::plugin::speculate_set_value_by_flag_and_id<<<ctx->ncluster(),
+  int32_t ret_xre = xpu3::plugin::speculate_set_value_by_flag_and_id<<<ctx->ncluster(),
                                                      64,
                                                      ctx->xpu_stream>>>(
       reinterpret_cast<XPU_INT64 *>(pre_ids_all),
@@ -95,6 +95,7 @@ static int xpu2or3_wrapper(Context *ctx,
       bs,
       length,
       max_draft_tokens);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

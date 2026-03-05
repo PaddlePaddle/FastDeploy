@@ -209,7 +209,7 @@ static int xpu3_wrapper(Context *ctx,
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto speculate_free_and_dispatch_block_kernel =
       xpu3::plugin::speculate_free_and_dispatch_block;
-  speculate_free_and_dispatch_block_kernel<<<ctx->ncluster(),
+  int32_t ret_xre = speculate_free_and_dispatch_block_kernel<<<ctx->ncluster(),
                                              64,
                                              ctx->xpu_stream>>>(
       stop_flags,
@@ -234,6 +234,7 @@ static int xpu3_wrapper(Context *ctx,
       block_num_per_seq,
       max_decoder_block_num,
       max_draft_tokens);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

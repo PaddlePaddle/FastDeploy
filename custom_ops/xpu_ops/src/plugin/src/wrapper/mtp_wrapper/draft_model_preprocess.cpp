@@ -240,7 +240,7 @@ static int xpu3_wrapper(api::Context* ctx,
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
 
   // NOTE: Don't change 16 to 64, because kernel use gsm
-  xpu3::plugin::draft_model_preprocess<<<1, 64, ctx->xpu_stream>>>(
+  int32_t ret_xre = xpu3::plugin::draft_model_preprocess<<<1, 64, ctx->xpu_stream>>>(
       reinterpret_cast<XPU_INT64*>(draft_tokens),
       reinterpret_cast<XPU_INT64*>(input_ids),
       stop_flags,
@@ -271,6 +271,7 @@ static int xpu3_wrapper(api::Context* ctx,
       truncate_first_token,
       splitwise_prefill,
       kvcache_scheduler_v1);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
