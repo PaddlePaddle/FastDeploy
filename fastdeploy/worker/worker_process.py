@@ -444,6 +444,7 @@ class PaddleDisWorkerProc:
         tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
         self.nnode = (tp_size + self.max_chips_per_node) // self.max_chips_per_node
+        self.max_occupied_batch_index = 0
         tp_rank = self.local_rank % tp_size
 
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
@@ -527,7 +528,7 @@ class PaddleDisWorkerProc:
                     self.exist_task_signal.value[0] == ExistTaskStatus.EXIST
                     or self.task_queue.read_finish_flag.get() == 1
                 ):
-                    req_dicts, control_reqs, max_occupied_batch_index = self.get_tasks()
+                    req_dicts, control_reqs = self.get_tasks()
                     # TODO: run control request async
                     if len(control_reqs) > 0:
                         logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
@@ -535,16 +536,16 @@ class PaddleDisWorkerProc:
                             self.run_control_method(control_req)
                             self._tp_barrier_wait() if tp_size > 1 else None
                 else:
-                    req_dicts, max_occupied_batch_index = None, 0
+                    req_dicts = []
                     if self.scheduler_config.splitwise_role == "prefill":
                         # Synchronize the signal for other workers
                         self._tp_barrier_wait() if tp_size > 1 else None
                         continue
             else:
-                req_dicts, max_occupied_batch_index = self.get_batch_sched_tasks()
+                req_dicts = self.get_batch_sched_tasks()
             if req_dicts:
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+                self.worker.preprocess_new_task(req_dicts, self.max_occupied_batch_index)
 
             if (
                 (not self.parallel_config.use_ep)
@@ -560,7 +561,7 @@ class PaddleDisWorkerProc:
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
-            self.worker.execute_model(req_dicts, max_occupied_batch_index)
+            self.worker.execute_model(req_dicts, self.max_occupied_batch_index)
 
             # Only v0 use this signal
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -571,7 +572,7 @@ class PaddleDisWorkerProc:
             self.infer_finished_signal.value[0] = 1
 
     def get_tasks(self):
-        req_dicts, control_reqs, max_occupied_batch_index = [], [], 0
+        req_dicts, control_reqs = [], []
         logger.info(f"Rank: {self.local_rank} Detected new requests.")
         self.infer_finished_signal.value[0] = 0
         tasks, read_finish = self.task_queue.get_tasks()
@@ -592,7 +593,7 @@ class PaddleDisWorkerProc:
             if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
                 control_reqs.append(req_dict[0])
             elif not req_dict[0].task_type.value == RequestType.IDLE.value:
-                max_occupied_batch_index = int(bsz)
+                self.max_occupied_batch_index = int(bsz)
                 req_dicts.extend(req_dict)
 
         # Count prefill requests in current batch
@@ -601,18 +602,18 @@ class PaddleDisWorkerProc:
         scheduled_request_ids = [req.request_id for req in req_dicts]
         logger.info(
             f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
-            f"max_occupied_batch_index: {max_occupied_batch_index}, "
+            f"max_occupied_batch_index: {self.max_occupied_batch_index}, "
             f"num_scheduled_requests: {num_scheduled_requests}, "
             f"scheduled_request_ids: {scheduled_request_ids}"
         )
 
-        return req_dicts, control_reqs, max_occupied_batch_index
+        return req_dicts, control_reqs
 
     def get_batch_sched_tasks(self):
         """
         Fetch tasks under batch scheduling.
         """
-        req_dicts, max_occupied_batch_index = [], 0
+        req_dicts = []
         while True:
             tasks, _ = self.task_queue.get_tasks()
             if tasks:
@@ -623,7 +624,7 @@ class PaddleDisWorkerProc:
         for req_dict, bsz in tasks:
             if not req_dict[0].task_type.value == RequestType.IDLE.value:
                 # may be IDLE task only used for synchronization
-                max_occupied_batch_index = int(bsz)
+                self.max_occupied_batch_index = int(bsz)
                 req_dicts.extend(req_dict)
 
         # Count prefill requests in current batch
@@ -632,12 +633,12 @@ class PaddleDisWorkerProc:
         scheduled_request_ids = [req.request_id for req in req_dicts]
         logger.info(
             f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
-            f"max_occupied_batch_index: {max_occupied_batch_index}, "
+            f"max_occupied_batch_index: {self.max_occupied_batch_index}, "
             f"num_scheduled_requests: {num_scheduled_requests}, "
             f"scheduled_request_ids: {scheduled_request_ids}"
         )
 
-        return req_dicts, max_occupied_batch_index
+        return req_dicts
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
