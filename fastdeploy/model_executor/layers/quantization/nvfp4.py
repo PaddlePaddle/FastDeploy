@@ -169,7 +169,6 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
     ):
         # 因为模型存储是列存储的，所以这里需要not一下！
         extra_weight_attrs["output_dim"] = not extra_weight_attrs["output_dim"]
-        assert "weight_loader" in extra_weight_attrs, "must provide weight_loader"
         K = layer.weight_shape[0]
         N = layer.weight_shape[1]
         # 因为模型的存储时候权重是[N,K//2]
