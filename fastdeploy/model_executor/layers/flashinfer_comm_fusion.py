@@ -161,7 +161,9 @@ def flashinfer_allreduce_residual_rmsnorm(
 
     residual_out = paddle.empty_like(residual)
     norm_out = paddle.empty_like(input_tensor)
-
+    # support empty tensor
+    if input_tensor.shape[0] == 0:
+        return norm_out, residual_out
     _flashinfer_comm.trtllm_allreduce_fusion(
         allreduce_in=input_tensor,
         world_size=world_size,

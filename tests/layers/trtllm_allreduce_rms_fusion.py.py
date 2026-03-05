@@ -242,62 +242,6 @@ class TestFlashInferWorkspaceManager(unittest.TestCase):
         self.assertIsNone(self.manager.workspace_tensor)
 
 
-def run_tests():
+if __name__ == "__main__":
     """Run tests directly (called by subprocess after distributed launch)"""
     unittest.main(verbosity=2)
-
-
-def check_gpus(gpu_ids):
-    """Check whether the specified GPUs are available, raise error if not"""
-    import paddle
-
-    if not paddle.is_compiled_with_cuda():
-        raise RuntimeError("Paddle is not compiled with CUDA support, cannot use GPU")
-
-    available_count = paddle.device.cuda.device_count()
-    if available_count == 0:
-        raise RuntimeError("No available GPU detected")
-
-    missing = [gid for gid in gpu_ids if gid >= available_count]
-    if missing:
-        raise RuntimeError(
-            f"Required GPU {missing}, but only {available_count} GPU(s) detected (index 0~{available_count - 1})"
-        )
-
-    print(f"GPU check passed: required {gpu_ids}, {available_count} GPU(s) available")
-
-
-def run_distributed():
-    """Launch multi-GPU distributed test via paddle.distributed.launch as subprocess"""
-    import os
-    import subprocess
-    import sys
-
-    gpu_ids = [0, 1]
-    check_gpus(gpu_ids)
-
-    gpus_str = ",".join(str(g) for g in gpu_ids)
-    script_path = os.path.abspath(__file__)
-    cmd = [
-        sys.executable,
-        "-m",
-        "paddle.distributed.launch",
-        f"--gpus={gpus_str}",
-        script_path,
-        "--run-tests",
-    ]
-    print(f"Launching distributed test: {' '.join(cmd)}")
-    result = subprocess.run(cmd, cwd=os.path.dirname(script_path))
-    sys.exit(result.returncode)
-
-
-if __name__ == "__main__":
-    import sys
-
-    if "--run-tests" in sys.argv:
-        # Launched by paddle.distributed.launch, run tests directly
-        sys.argv.remove("--run-tests")
-        run_tests()
-    else:
-        # Default entry: launch distributed test as subprocess
-        run_distributed()
