@@ -208,14 +208,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.cudagraph_capture_sizes_prefill = list(reversed(self.graph_opt_config.cudagraph_capture_sizes_prefill))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
         self.cudagraph_only_prefill = self.graph_opt_config.cudagraph_only_prefill
-        if self.enable_head_wise_kv_cache and self.use_cudagraph:
-            # Head-wise block_tables_3d is still dynamically rebuilt per step.
-            # Running this path under CUDA Graph can replay stale pointers/shapes.
-            logger.warning(
-                "[headwise] Disable CUDA Graph because head-wise KV cache has dynamic block_tables_3d."
-            )
-            self.use_cudagraph = False
-            self.graph_opt_config.use_cudagraph = False
 
         # Initialize input batch
         self.share_inputs = InputBatch(self.fd_config)
