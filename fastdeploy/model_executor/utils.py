@@ -14,10 +14,10 @@
 # limitations under the License.
 """
 
-import os
-import re
 import importlib
 import importlib.util
+import os
+import re
 from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
