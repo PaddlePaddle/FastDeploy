@@ -15,9 +15,12 @@
 """
 
 import contextlib
+import logging
 from dataclasses import dataclass
 
 import paddle
+
+logger = logging.getLogger(__name__)
 import pynvml
 
 from fastdeploy.platforms import current_platform
@@ -66,15 +69,18 @@ class GPUMemoryChecker:
         debug_title: str = "",
     ):
         """Print debug info"""
-        print(
-            f"\n{debug_title}:",
-            f"\n\tDevice Total memory: {self.gpu_memory_info.total}",
-            f"\n\tDevice Used memory: {self.gpu_memory_info.used}",
-            f"\n\tDevice Free memory: {self.gpu_memory_info.free}",
-            f"\n\tPaddle max memory Reserved: {self.paddle_memory_info.max_reserved}",
-            f"\n\tPaddle max memory Allocated: {self.paddle_memory_info.max_allocated}",
-            f"\n\tPaddle memory Reserved: {self.paddle_memory_info.current_reserved}",
-            f"\n\tPaddle memory Allocated: {self.paddle_memory_info.current_reserved}",
+        logger.debug(
+            "%s:\n\tDevice Total memory: %s\n\tDevice Used memory: %s\n\tDevice Free memory: %s"
+            "\n\tPaddle max memory Reserved: %s\n\tPaddle max memory Allocated: %s"
+            "\n\tPaddle memory Reserved: %s\n\tPaddle memory Allocated: %s",
+            debug_title,
+            self.gpu_memory_info.total,
+            self.gpu_memory_info.used,
+            self.gpu_memory_info.free,
+            self.paddle_memory_info.max_reserved,
+            self.paddle_memory_info.max_allocated,
+            self.paddle_memory_info.current_reserved,
+            self.paddle_memory_info.current_reserved,
         )
 
     def get_gpu_memory_info(self):

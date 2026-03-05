@@ -122,7 +122,7 @@ class MultimodalPartParser:
                 if retry_cnt >= max_retries:
                     api_server_logger.error(f"HTTP GET failed: {e}. Max retries reached")
                     raise
-                api_server_logger.info(f"HTTP GET failed: {e}. Start retry {retry_cnt}")
+                api_server_logger.info("HTTP GET failed: %s. Start retry %s", e, retry_cnt)
                 time.sleep(delay)
                 delay *= backoff_factor
 

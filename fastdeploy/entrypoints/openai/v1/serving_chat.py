@@ -302,7 +302,7 @@ class OpenAIServingChat(OpenAiServingBase):
             max_tokens = request.max_completion_tokens or request.max_tokens
             choice_completion_tokens = response_ctx.choice_completion_tokens_dict[output.index]
             choice.finish_reason = self._calc_finish_reason(request_output, max_tokens, choice_completion_tokens)
-            api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
+            api_server_logger.debug("Chat Streaming response last send: %s", chunk.model_dump_json())
 
         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
         if request_output.finished and response_ctx.remain_choices == 0:
@@ -339,7 +339,7 @@ class OpenAIServingChat(OpenAiServingBase):
         res = ChatCompletionResponse(
             id=ctx.request_id, model=request.model, choices=choices, created=ctx.created_time, usage=response_ctx.usage
         )
-        api_server_logger.info(f"Chat response: {res.model_dump_json()}")
+        api_server_logger.debug("Chat response: %s", res.model_dump_json())
         return res
 
     async def _create_chat_completion_choice(

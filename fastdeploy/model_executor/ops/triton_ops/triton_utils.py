@@ -15,6 +15,7 @@
 """
 
 import inspect
+import logging
 import os
 import re
 import sys
@@ -24,6 +25,8 @@ import triton
 from paddle.base.framework import OpProtoHolder
 
 from fastdeploy import envs
+
+logger = logging.getLogger(__name__)
 
 compile_file = triton.__path__[0] + "/tools/compile.py"
 link_file = triton.__path__[0] + "/tools/link.py"
@@ -660,7 +663,7 @@ class KernelInterface:
             generated_dir = envs.FD_TRITON_KERNEL_CACHE_DIR
             if generated_dir is None:
                 generated_dir = f"/tmp/triton_cache/rank{tp_rank}"
-            print("the kernel cache dir is:", generated_dir)
+            logger.debug("the kernel cache dir is: %s", generated_dir)
             assert generated_dir is not None, (
                 "TRITON_KERNEL_CACHE_DIR is None, please set it such as "
                 "export TRITON_KERNEL_CACHE_DIR=/tmp/triton_cache "
@@ -702,7 +705,7 @@ class KernelInterface:
             so_path = find_so_path(generated_dir, python_package_name)
 
             if so_path is None:
-                print("== we do not find so_path, we need to compile it")
+                logger.debug("== we do not find so_path, we need to compile it")
                 with open(paddle_custom_op_file_path, "w") as f:
                     f.write(
                         SubstituteTemplate(
@@ -754,7 +757,7 @@ class KernelInterface:
                     codegen_command = aot_template.format(
                         **config,
                     )
-                    print(codegen_command)
+                    logger.debug("codegen command: %s", codegen_command)
                     codegen_commands.append(codegen_command)
                 multi_process_do(codegen_commands)
 
@@ -771,7 +774,7 @@ class KernelInterface:
 
             if op_name not in OpProtoHolder.instance().op_proto_map.keys():
                 so_path = find_so_path(generated_dir, python_package_name)
-                print("== we find so_path: ", so_path)
+                logger.debug("== we find so_path: %s", so_path)
                 assert so_path is not None
                 paddle.utils.cpp_extension.load_op_meta_info_and_register_op(so_path)
 

@@ -252,10 +252,16 @@ class TokenProcessor:
                     "Request=%s, InputToken=%s, CachedDetail=%s, OutputToken=%s, "
                     "TokenRatio=%.2f, TTFT=%.2f, E2E=%.2f, IsPrefill=%s, "
                     "RecoveryStop=%s, PreemptedCount=%s",
-                    task_id, task.prompt_token_ids_len, cached_detail,
-                    self.tokens_counter[task_id], token_ratio, ttft,
-                    e2e_time, is_prefill, recovery_stop,
-                    getattr(task.metrics, 'preempted_count', 0)
+                    task_id,
+                    task.prompt_token_ids_len,
+                    cached_detail,
+                    self.tokens_counter[task_id],
+                    token_ratio,
+                    ttft,
+                    e2e_time,
+                    is_prefill,
+                    recovery_stop,
+                    getattr(task.metrics, "preempted_count", 0),
                 )
 
                 main_process_metrics.request_token_ratio.observe(token_ratio)
@@ -532,8 +538,7 @@ class TokenProcessor:
                         result.error_code = 400
                         result.error_message = f"{task_id} failed to {self.prefill_result_status[task_id]}"
                     llm_logger.debug(
-                        "wait for sending cache, request_id: %s, cost seconds: %.5f",
-                        task_id, time.time() - start_time
+                        "wait for sending cache, request_id: %s, cost seconds: %.5f", task_id, time.time() - start_time
                     )
                     result.metrics.send_request_output_to_decode_time = time.time()
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
@@ -952,10 +957,17 @@ class TokenProcessor:
                         "Request=%s, InputToken=%s, CachedDetail=%s, OutputToken=%s, "
                         "TokenRatio=%.2f, TTFT=%.2f, TTFT_S=%.2f, E2E=%.2f, "
                         "IsPrefill=%s, RecoveryStop=%s, PreemptedCount=%s",
-                        task_id, task.prompt_token_ids_len, cached_detail,
-                        self.tokens_counter[task_id], token_ratio, ttft, ttft_s,
-                        e2e_time, is_prefill, recovery_stop,
-                        getattr(task.metrics, 'preempted_count', 0)
+                        task_id,
+                        task.prompt_token_ids_len,
+                        cached_detail,
+                        self.tokens_counter[task_id],
+                        token_ratio,
+                        ttft,
+                        ttft_s,
+                        e2e_time,
+                        is_prefill,
+                        recovery_stop,
+                        getattr(task.metrics, "preempted_count", 0),
                     )
 
                     main_process_metrics.request_token_ratio.observe(token_ratio)

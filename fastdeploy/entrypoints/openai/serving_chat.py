@@ -98,7 +98,7 @@ class OpenAIServingChat:
         else:
             self.master_ip = "0.0.0.0"
             self.is_master_ip = True
-        api_server_logger.info(f"master ip: {self.master_ip}")
+        api_server_logger.info("master ip: %s", self.master_ip)
 
     def _check_master(self):
         return self.engine_client.is_master or self.is_master_ip
@@ -129,7 +129,7 @@ class OpenAIServingChat:
                 await self.engine_client.semaphore.acquire()
             else:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-            api_server_logger.info(f"current {self.engine_client.semaphore.status()}")
+            api_server_logger.debug("current %s", self.engine_client.semaphore.status())
 
             if request.request_id is not None:
                 request_id = request.request_id
@@ -141,7 +141,7 @@ class OpenAIServingChat:
                 request_id = f"chatcmpl-{uuid.uuid4()}"
             tracing.trace_req_start(rid=request_id, trace_content=request.trace_context, role="FastDeploy")
             del request.trace_context
-            api_server_logger.info(f"create chat completion request: {request_id}")
+            api_server_logger.debug("create chat completion request: %s", request_id)
             prompt_tokens = None
             max_tokens = None
             try:
@@ -252,7 +252,7 @@ class OpenAIServingChat:
             choices=[],
             model=model_name,
         )
-        api_server_logger.info(f"create chat completion request: {request_id}")
+        api_server_logger.debug("create chat completion request: %s", request_id)
 
         try:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
@@ -370,7 +370,7 @@ class OpenAIServingChat:
                                     completion_tokens_details=CompletionTokenUsageInfo(reasoning_tokens=0),
                                 )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
-                            api_server_logger.info(f"Chat Streaming response send_idx 0: {chunk.model_dump_json()}")
+                            api_server_logger.debug("Chat Streaming response send_idx 0: %s", chunk.model_dump_json())
                         first_iteration = False
 
                     output = res["outputs"]
@@ -489,7 +489,7 @@ class OpenAIServingChat:
                         chunk.choices = choices
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         if res["finished"]:
-                            api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
+                            api_server_logger.debug("Chat Streaming response last send: %s", chunk.model_dump_json())
                         choices = []
 
             if include_usage:
@@ -528,7 +528,7 @@ class OpenAIServingChat:
             tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
-            api_server_logger.info(f"release {request_id} {self.engine_client.semaphore.status()}")
+            api_server_logger.debug("release %s %s", request_id, self.engine_client.semaphore.status())
             yield "data: [DONE]\n\n"
 
     async def chat_completion_full_generator(
@@ -695,7 +695,7 @@ class OpenAIServingChat:
             tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
-            api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
+            api_server_logger.debug("release %s", self.engine_client.semaphore.status())
 
         num_prompt_tokens = len(prompt_token_ids)
         num_generated_tokens = sum(previous_num_tokens)
@@ -722,7 +722,7 @@ class OpenAIServingChat:
             choices=choices,
             usage=usage,
         )
-        api_server_logger.info(f"Chat response: {res.model_dump_json()}")
+        api_server_logger.debug("Chat response: %s", res.model_dump_json())
         return res
 
     async def _create_chat_completion_choice(

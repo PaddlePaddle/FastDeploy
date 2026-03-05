@@ -76,7 +76,7 @@ class OpenAiServingBase(OpenAIServing):
             self.master_ip = "0.0.0.0"
             self.is_master_ip = True
         self.eoi_token_id = 101032
-        api_server_logger.info(f"master ip: {self.master_ip}")
+        api_server_logger.info("master ip: %s", self.master_ip)
 
     @override
     def _check_master(self) -> bool:

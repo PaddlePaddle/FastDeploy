@@ -312,7 +312,7 @@ class EngineClient:
                 )
             else:
                 request_id = task.get("request_id", "unknown")
-                obj_logger.info(f"\n{'='*60} OBJGRAPH DEBUG [request_id={request_id}] {'='*60}")
+                obj_logger.debug("\n%s OBJGRAPH DEBUG [request_id=%s] %s", "=" * 60, request_id, "=" * 60)
                 # 打印内存占用
                 if not _has_psutil:
                     obj_logger.warning(
@@ -321,18 +321,18 @@ class EngineClient:
                 else:
                     process = psutil.Process()
                     rss_memory = process.memory_info().rss / 1024**3
-                    obj_logger.info(f"Process Memory (RSS): {rss_memory:.2f} GB")
+                    obj_logger.debug("Process Memory (RSS): %.2f GB", rss_memory)
                 obj_logger.info("Object growth statistics:")
                 growth_data = objgraph.growth(limit=20)
                 for item in growth_data:
                     if len(item) == 3:
                         obj_type, current_count, growth = item
-                        obj_logger.info(f"  {obj_type:30s} {current_count:8d} +{growth}")
+                        obj_logger.debug("  %-30s %8d +%s", obj_type, current_count, growth)
                     elif len(item) == 2:
                         obj_type, count = item
-                        obj_logger.info(f"  {obj_type:30s} +{count}")
+                        obj_logger.debug("  %-30s +%s", obj_type, count)
                     else:
-                        obj_logger.info(f"  {item}")
+                        obj_logger.debug("  %s", item)
 
         task["metrics"]["preprocess_start_time"] = time.time()
         request_id = task.get("request_id").split("_")[0]
@@ -359,7 +359,7 @@ class EngineClient:
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
                 task["messages"] = None
-            api_server_logger.info(f"task['max_tokens']:{task['max_tokens']}")
+            api_server_logger.debug("task['max_tokens']:%s", task["max_tokens"])
             main_process_metrics.request_params_max_tokens.observe(task["max_tokens"])
             main_process_metrics.prompt_tokens_total.inc(input_ids_len)
             main_process_metrics.request_prompt_tokens.observe(input_ids_len)
@@ -592,7 +592,7 @@ class EngineClient:
         return True, ""
 
     async def run_control_method(self, request: ControlRequest):
-        api_server_logger.info(f"Start Run Control Method: {request}")
+        api_server_logger.debug("Start Run Control Method: %s", request)
         self.zmq_client.send_json(request.to_dict())
         request_id = request.request_id
         dealer, response_queue = await self.connection_manager.get_connection(request_id)
@@ -601,7 +601,7 @@ class EngineClient:
             # todo: support user specified timeout. default 600s is enough for most control cases
             response = await asyncio.wait_for(response_queue.get(), timeout=600)
             response = ControlResponse.from_dict(response[0])
-            api_server_logger.info(f"End Run Control Method: {response}")
+            api_server_logger.debug("End Run Control Method: %s", response)
             return response
         except asyncio.TimeoutError:
             error_response = ControlResponse(request_id, 500, "Timeout waiting for control method response")
@@ -827,7 +827,7 @@ class EngineClient:
             return content, status_code
 
         action = request_dict.get("action", "")
-        api_server_logger.info(f"redundant_expert: rearrange_experts recv request, action {action}")
+        api_server_logger.debug("redundant_expert: rearrange_experts recv request, action %s", action)
         if action == "":
             # action: start rearrange experts
             # params: {'user': 'xxx', 'passwd': 'xxx', 'ips': ['10.54.99.77:8000', '10.54.99.77:8300']}
@@ -995,7 +995,7 @@ class EngineClient:
 
     async def abort(self, request_id, n=1) -> None:
         if envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE:
-            api_server_logger.info(f"abort request_id:{request_id}")
+            api_server_logger.info("abort request_id:%s", request_id)
             if n <= 0:
                 api_server_logger.warning("Abort function called with non-positive n: %d. No requests aborted.", n)
                 return

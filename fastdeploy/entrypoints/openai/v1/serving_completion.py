@@ -271,9 +271,9 @@ class OpenAIServingCompletion(OpenAiServingBase):
                 choice.finish_reason = self._calc_finish_reason(
                     request_output, request.max_tokens, choice_completion_tokens
                 )
-                api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
+                api_server_logger.debug("Completion Streaming response last send: %s", chunk.model_dump_json())
             if send_idx == 0 and not request.return_token_ids:
-                api_server_logger.info(f"Completion Streaming response send_idx 0: {chunk.model_dump_json()}")
+                api_server_logger.debug("Completion Streaming response send_idx 0: %s", chunk.model_dump_json())
             yield f"data: {chunk.model_dump_json()}\n\n"
             if request_output.finished and response_ctx.remain_choices == 0:
                 if include_usage:
@@ -321,7 +321,7 @@ class OpenAIServingCompletion(OpenAiServingBase):
                 choices=choices,
                 usage=response_ctx.usage,
             )
-            api_server_logger.info(f"Completion response: {res.model_dump_json()}")
+            api_server_logger.debug("Completion response: %s", res.model_dump_json())
             return res
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)

@@ -114,7 +114,7 @@ def init_engine(args: argparse.Namespace):
     if llm_engine is not None:
         return llm_engine
 
-    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}")
+    api_server_logger.info("FastDeploy LLM API server starting... %s", os.getpid())
     engine_args = EngineArgs.from_cli_args(args)
     engine = LLMEngine.from_engine_args(engine_args)
     if not engine.start(api_server_pid=os.getpid()):
@@ -144,7 +144,7 @@ class BatchProgressTracker:
         if self._total > 0:
             log_interval = min(100, max(self._total // 10, 1))
             if self._completed - self._last_log_count >= log_interval:
-                console_logger.info(f"Progress: {self._completed}/{self._total} requests completed")
+                console_logger.info("Progress: %s/%s requests completed", self._completed, self._total)
                 self._last_log_count = self._completed
 
     def pbar(self) -> tqdm:
@@ -398,7 +398,7 @@ async def setup_engine_and_handlers(args: Namespace) -> Tuple[EngineClient, Open
         args.tokenizer = args.model
 
     pid = determine_process_id()
-    console_logger.info(f"Process ID: {pid}")
+    console_logger.info("Process ID: %s", pid)
 
     model_paths = create_model_paths(args)
     chat_template = load_chat_template(args.chat_template, args.model)
@@ -429,7 +429,7 @@ async def run_batch(
     max_concurrency = (concurrency + workers - 1) // workers
     semaphore = asyncio.Semaphore(max_concurrency)
 
-    console_logger.info(f"concurrency: {concurrency}, workers: {workers}, max_concurrency: {max_concurrency}")
+    console_logger.info("concurrency: %s, workers: %s, max_concurrency: %s", concurrency, workers, max_concurrency)
 
     tracker = BatchProgressTracker()
     console_logger.info("Reading batch from %s...", args.input_file)
@@ -474,7 +474,7 @@ async def run_batch(
 
     success_count = sum(1 for r in responses if r.error is None)
     error_count = len(responses) - success_count
-    console_logger.info(f"Batch processing completed: {success_count} success, {error_count} errors")
+    console_logger.info("Batch processing completed: %s success, %s errors", success_count, error_count)
 
     await write_file(args.output_file, responses, args.output_tmp_dir)
     console_logger.info("Results written to output file")
@@ -485,7 +485,7 @@ async def main(args: argparse.Namespace):
     try:
         if args.workers is None:
             args.workers = max(min(int(args.max_num_seqs // 32), 8), 1)
-        console_logger.info(f"Workers: {args.workers}")
+        console_logger.info("Workers: %s", args.workers)
         args.model = retrive_model_from_server(args.model, args.revision)
 
         if args.tool_parser_plugin:

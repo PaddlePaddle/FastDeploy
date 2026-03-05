@@ -77,7 +77,7 @@ class OpenAIServingCompletion:
             self.master_ip = "0.0.0.0"
             self.is_master_ip = True
         self._is_process_response_dict_async = None
-        api_server_logger.info(f"master ip: {self.master_ip}")
+        api_server_logger.info("master ip: %s", self.master_ip)
 
     def _check_master(self):
         return self.engine_client.is_master or self.is_master_ip
@@ -110,7 +110,7 @@ class OpenAIServingCompletion:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"
         else:
             request_id = f"cmpl-{uuid.uuid4()}"
-        api_server_logger.info(f"Initialize request {request_id}: {request}")
+        api_server_logger.debug("Initialize request %s: %s", request_id, request)
         tracing.trace_req_start(rid=request_id, trace_content=request.trace_context, role="FastDeploy")
         del request.trace_context
         request_prompt_ids = None
@@ -155,7 +155,7 @@ class OpenAIServingCompletion:
             request_prompts = request_prompt_ids
 
         num_choices = len(request_prompts) * (1 if request.n is None else request.n)
-        api_server_logger.info(f"Start preprocessing request: req_id={request_id}), num_choices={num_choices}")
+        api_server_logger.debug("Start preprocessing request: req_id=%s, num_choices=%s", request_id, num_choices)
         prompt_batched_token_ids = []
         prompt_tokens_list = []
         max_tokens_list = []
@@ -370,7 +370,7 @@ class OpenAIServingCompletion:
                 prompt_tokens_list=prompt_tokens_list,
                 max_tokens_list=max_tokens_list,
             )
-            api_server_logger.info(f"Completion response: {res.model_dump_json()}")
+            api_server_logger.debug("Completion response: %s", res.model_dump_json())
             return res
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
@@ -642,7 +642,7 @@ class OpenAIServingCompletion:
                                 metrics=res["metrics"] if request.collect_metrics else None,
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
-                        api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
+                        api_server_logger.debug("Completion Streaming response last send: %s", chunk.model_dump_json())
 
         except asyncio.CancelledError as e:
             await self.engine_client.abort(f"{request_id}_0", num_choices)

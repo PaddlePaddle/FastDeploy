@@ -16,12 +16,15 @@
 
 import importlib
 import inspect
+import logging
 import os
 import re
 import sys
 
 import paddle
 import triton
+
+logger = logging.getLogger(__name__)
 
 from .triton_utils import (
     SubstituteTemplate,
@@ -203,7 +206,7 @@ class KernelInterface:
             tp_rank = paddle.distributed.get_rank()
 
             generated_dir = os.getenv("TRITON_KERNEL_CACHE_DIR", f"/tmp/triton_cache/rank{tp_rank}")
-            print("the kernel cache dir is:", generated_dir)
+            logger.debug("the kernel cache dir is: %s", generated_dir)
             generated_dir = f"{generated_dir}/{op_name}"
             os.makedirs(generated_dir, exist_ok=True)
 
@@ -240,7 +243,7 @@ class KernelInterface:
             so_path = find_so_path(generated_dir, python_package_name)
 
             if so_path is None:
-                print("== we do not find so_path, we need to compile it")
+                logger.debug("== we do not find so_path, we need to compile it")
                 with open(paddle_custom_op_file_path, "w") as f:
                     f.write(
                         SubstituteTemplate(
@@ -290,7 +293,7 @@ class KernelInterface:
                     codegen_command = aot_template.format(
                         **config,
                     )
-                    print(codegen_command)
+                    logger.debug("codegen command: %s", codegen_command)
                     codegen_commands.append(codegen_command)
                 multi_process_do(codegen_commands)
 
@@ -307,7 +310,7 @@ class KernelInterface:
 
             # so_path have be found!
             so_path = find_so_path(generated_dir, python_package_name)
-            print("== we find so_path: ", so_path)
+            logger.debug("== we find so_path: %s", so_path)
             assert so_path is not None
             dir_path = os.path.dirname(so_path)
             sys.path.append(dir_path)

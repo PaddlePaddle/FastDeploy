@@ -251,7 +251,7 @@ class ZmqOpenAIServing(OpenAIServing):
         request_dicts = self._request_to_batch_dicts(ctx)
         ctx.preprocess_requests = request_dicts
         for request_dict in request_dicts:
-            api_server_logger.debug("batch add request_id: %s, request: %s", request_dict['request_id'], request_dict)
+            api_server_logger.debug("batch add request_id: %s, request: %s", request_dict["request_id"], request_dict)
             await self.engine_client.format_and_add_data(request_dict)
 
     def _process_chat_template_kwargs(self, request_dict):

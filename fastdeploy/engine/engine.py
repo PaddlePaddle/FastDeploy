@@ -194,7 +194,8 @@ class LLMEngine:
                 envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[0]
         llm_logger.debug(
             "ZMQ ports: recv=%s, send=%s",
-            envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT,
+            envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT,
+            envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT,
         )
 
         if api_server_pid is not None:
@@ -340,7 +341,7 @@ class LLMEngine:
         request.metrics.preprocess_end_time = time.time()
         request.metrics.scheduler_recv_req_time = time.time()
         self.engine.scheduler.put_requests([request])
-        llm_logger.debug("Cache task with request_id (%s)", request.get('request_id'))
+        llm_logger.debug("Cache task with request_id (%s)", request.get("request_id"))
         llm_logger.debug(f"cache task: {request}")
 
     def _worker_processes_ready(self):

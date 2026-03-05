@@ -702,8 +702,13 @@ class ParallelConfig:
         logger.info(
             "data_parallel_size: %d, tensor_parallel_size: %d, expert_parallel_size: %d, "
             "data_parallel_rank: %d, tensor_parallel_rank: %d, expert_parallel_rank: %d, tp_group: %s",
-            self.data_parallel_size, self.tensor_parallel_size, self.expert_parallel_size,
-            self.data_parallel_rank, self.tensor_parallel_rank, self.expert_parallel_rank, self.tp_group,
+            self.data_parallel_size,
+            self.tensor_parallel_size,
+            self.expert_parallel_size,
+            self.data_parallel_rank,
+            self.tensor_parallel_rank,
+            self.expert_parallel_rank,
+            self.tp_group,
         )
 
     def print(self):

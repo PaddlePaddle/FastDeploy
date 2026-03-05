@@ -492,9 +492,10 @@ class GlobalScheduler:
                 )
                 serialized_requests += [(lucky_request_queue_name, element) for element in elements]
                 scheduler_logger.debug(
-                    "Scheduler %s has stolen some requests from another lucky one. "
-                    "(name=%s num=%d)",
-                    self.name, lucky, len(serialized_requests),
+                    "Scheduler %s has stolen some requests from another lucky one. " "(name=%s num=%d)",
+                    self.name,
+                    lucky,
+                    len(serialized_requests),
                 )
             else:
                 exist_num = self.client.exists(self._instance_name(lucky))
@@ -520,7 +521,8 @@ class GlobalScheduler:
             if scheduler_name != self.name:
                 scheduler_logger.debug(
                     "Scheduler %s has stolen a request from another scheduler. (name=%s)",
-                    self.name, scheduler_name,
+                    self.name,
+                    scheduler_name,
                 )
 
         long_partial_requests = 0
@@ -605,7 +607,9 @@ class GlobalScheduler:
                 )
 
         if len(requests) > 0:
-            scheduler_logger.debug("Scheduler has pulled some request: %s", [request.request_id for request in requests])
+            scheduler_logger.debug(
+                "Scheduler has pulled some request: %s", [request.request_id for request in requests]
+            )
         return requests
 
     def _put_results_worker(self, tasks: List[Task]):
@@ -861,7 +865,9 @@ class GlobalScheduler:
                 self.shard = self._get_hash_slot(self.name) % self.load_shards_num
 
         scheduler_logger.info(
-            "Scheduler has reload config, "
-            "load_shards_num(%s => %s) shard(%s => %s)",
-            old_load_shards_num, self.load_shards_num, old_shard, self.shard,
+            "Scheduler has reload config, " "load_shards_num(%s => %s) shard(%s => %s)",
+            old_load_shards_num,
+            self.load_shards_num,
+            old_shard,
+            self.shard,
         )

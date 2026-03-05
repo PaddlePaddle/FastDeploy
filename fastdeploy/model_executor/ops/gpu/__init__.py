@@ -13,9 +13,12 @@
 # limitations under the License.
 """fastdeploy gpu ops"""
 
+import logging
 import sys
 
 from fastdeploy.import_ops import import_custom_ops
+
+logger = logging.getLogger(__name__)
 
 PACKAGE = "fastdeploy.model_executor.ops.gpu"
 
@@ -29,7 +32,7 @@ def decide_module():
     # to support all hardware platforms (NVIDIA, ILUVATAR, HPU, etc.)
     prop = paddle.device.get_device_properties()
     sm_version = prop.major * 10 + prop.minor
-    print(f"current sm_version={sm_version}")
+    logger.debug("current sm_version=%s", sm_version)
 
     curdir = os.path.dirname(os.path.abspath(__file__))
     sm_version_path = os.path.join(curdir, f"fastdeploy_ops_{sm_version}")
@@ -42,7 +45,7 @@ module_path = ".fastdeploy_ops"
 try:
     module_path = decide_module()
 except Exception as e:
-    print(f"decide_module error, load custom_ops from .fastdeploy_ops: {e}")
+    logger.warning("decide_module error, load custom_ops from .fastdeploy_ops: %s", e)
     pass
 import_custom_ops(PACKAGE, module_path, globals())
 

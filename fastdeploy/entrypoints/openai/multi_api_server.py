@@ -149,7 +149,7 @@ def main():
     parser.add_argument("--args", nargs=argparse.REMAINDER, help="remaining arguments are passed to api_server.py")
     args = parser.parse_args()
 
-    logger.info("Launching MultiAPIServer with command: %s", ' '.join(sys.argv))
+    logger.info("Launching MultiAPIServer with command: %s", " ".join(sys.argv))
 
     device_count = 0
     if current_platform.is_cuda():

@@ -16,7 +16,11 @@
 
 from __future__ import annotations
 
+import logging
+
 import paddle
+
+logger = logging.getLogger(__name__)
 
 paddle.enable_compat(scope={"flash_mla"})  # Enable torch proxy before importing flash_mla
 import math
@@ -294,13 +298,13 @@ class MLAAttentionBackend(AttentionBackend):
             is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
             if is_current_sm_supported and is_paddle_supported:
                 self.flash_attn_func = flash_attention_v3_varlen
-                print("The current platform supports Flash Attention V3.")
+                logger.info("The current platform supports Flash Attention V3.")
                 self.flash_attn_kwargs = {"softmax_scale": self.attn_softmax_scale}
             else:
                 self.flash_attn_func = flash_attn_unpadded
                 self.flash_attn_kwargs = {"scale": self.attn_softmax_scale, "training": False}
-                print(
-                    "The current platform does not support Flash Attention V3, so Flash Attention V2 will be used instead."
+                logger.info(
+                    "The current platform does not support Flash Attention V3, using Flash Attention V2 instead."
                 )
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):

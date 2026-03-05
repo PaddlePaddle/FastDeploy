@@ -408,7 +408,7 @@ class LLM:
             list[dict[int, Logprob]]: One dict per request, mapping token ID to Logprob.
         """
         try:
-            llm_logger.info(f"filter logprobs, topk_logprobs: {topk_logprobs}")
+            llm_logger.debug("filter logprobs, topk_logprobs: %s", topk_logprobs)
             if not logprobs_lists.logprob_token_ids:
                 llm_logger.warning("Empty logprob_token_ids in LogprobsLists")
                 return None

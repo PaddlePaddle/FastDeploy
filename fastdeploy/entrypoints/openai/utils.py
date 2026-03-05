@@ -97,7 +97,7 @@ class DealerConnectionManager:
         self.running = True
         for index in range(self.max_connections):
             await self._add_connection(index)
-        api_server_logger.info(f"Started {self.max_connections} connections, pid {self.pid}")
+        api_server_logger.info("Started %s connections, pid %s", self.max_connections, self.pid)
 
     async def _add_connection(self, index):
         """create a new connection and start listening task"""

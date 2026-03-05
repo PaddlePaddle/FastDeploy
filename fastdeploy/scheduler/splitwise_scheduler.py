@@ -119,7 +119,7 @@ class SplitWiseScheduler:
         """
         Start APIScheduler and InferScheduler backup threads
         """
-        logger.info(f"Scheduler Start With: role:{role}, host:{host}, disaggregated:{disaggregated}")
+        logger.info("Scheduler Start With: role:%s, host:%s, disaggregated:%s", role, host, disaggregated)
         self.infer.start(role, host, disaggregated)
         self.scheduler.start()
 
@@ -611,7 +611,7 @@ class APIScheduler:
                     break
                 blur_idx = idx
             node = random.choice(nodes[: blur_idx + 1])
-            logger.info(f"Schedule Req {req.request_id}(len:{req.prompt_token_ids_len}) to {node}")
+            logger.debug("Schedule Req %s(len:%s) to %s", req.request_id, req.prompt_token_ids_len, node)
             return node
 
         if role == "prefill" or role == "mixed":
@@ -727,7 +727,7 @@ class InferScheduler:
             version_parts[1] >= 2 if version_parts[0] == 6 else True
         ), f"Redis version {redis_version} too low. Please upgrade to Redis 6.2+ to support batch RPOP operations."
 
-        logger.info(f"Redis version {redis_version} detected. Using native batch RPOP.")
+        logger.info("Redis version %s detected. Using native batch RPOP.", redis_version)
 
     def start(self, role, host, disaggregated):
         """
@@ -805,7 +805,7 @@ class InferScheduler:
                     req = pickle.loads(req_str)
                     group = req.get("group", "")
                     writer_idx = select_writer(req)
-                    logger.info(f"Infer Scheduler Get Req: {req.request_id} writer idx {writer_idx}")
+                    logger.debug("Infer Scheduler Get Req: %s writer idx %s", req.request_id, writer_idx)
                     req.request_id = f"{req.request_id}#{writer_idx}#{group}"
                     if self.role == "prefill" or self.role == "mixed":
                         self.reqs_queue.append(req)
@@ -884,7 +884,7 @@ class InferScheduler:
         for result in results:
             if result.error_code != 200 or result.finished:
                 self.node.finish_req(result.request_id)
-                logger.info(f"{result.request_id} finished, node load is {self.node.load}")
+                logger.debug("%s finished, node load is %s", result.request_id, self.node.load)
 
             req_ids.add(result.request_id)
 

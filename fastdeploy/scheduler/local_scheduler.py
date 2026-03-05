@@ -300,7 +300,9 @@ class LocalScheduler:
             scheduler_logger.debug(f"Scheduler has put all just-pulled request into the queue: {len(batch_ids)}")
 
         if len(requests) > 0:
-            scheduler_logger.debug("Scheduler has pulled some request: %s", [request.request_id for request in requests])
+            scheduler_logger.debug(
+                "Scheduler has pulled some request: %s", [request.request_id for request in requests]
+            )
 
         return requests
 

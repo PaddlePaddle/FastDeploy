@@ -14,10 +14,13 @@
 # limitations under the License.
 """
 
+import logging
 from collections.abc import Iterable
 from typing import TypeVar
 
 import paddle
+
+logger = logging.getLogger(__name__)
 import paddle.nn as nn
 
 from fastdeploy.config import ModelConfig
@@ -72,7 +75,7 @@ def _load_dense_weights(linear: nn.Linear, folder: str, model_config: "ModelConf
                     bias_loader(linear.bias, state_dict[bias_key].astype(paddle.float32))
                 return True
     except Exception as e:
-        print(f"Failed to load :{e}")
+        logger.warning("Failed to load adapter weight: %s", e)
         return False
     return False
 
