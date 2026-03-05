@@ -159,50 +159,50 @@ struct DefaultDequantGemm<ElementA,
                           GatherB,
                           ScatterD,
                           PermuteDLayout> {
-    static_assert(platform::is_same<LayoutC, layout::RowMajor>::value ||
-                      platform::is_same<LayoutC, layout::AffineRankN<2>>::value,
-                  "Epilogue in the kernel level must be row major");
+  static_assert(platform::is_same<LayoutC, layout::RowMajor>::value ||
+                    platform::is_same<LayoutC, layout::AffineRankN<2>>::value,
+                "Epilogue in the kernel level must be row major");
 
-    /// Define the threadblock-scoped matrix multiply-accumulate
-    using Mma = typename cutlass::gemm::threadblock::DefaultMma<
-        ElementA,
-        LayoutA,
-        kAlignmentA,
-        ElementB,
-        LayoutB,
-        kAlignmentB,
-        ElementAccumulator,
-        LayoutC,
-        arch::OpClassTensorOp,
-        arch::Sm80,
-        ThreadblockShape,
-        WarpShape,
-        InstructionShape,
-        Stages,
-        Operator,
-        false,
-        SharedMemoryClear,
-        GatherA,
-        GatherB>::ThreadblockMma;
+  /// Define the threadblock-scoped matrix multiply-accumulate
+  using Mma =
+      typename cutlass::gemm::threadblock::DefaultMma<ElementA,
+                                                      LayoutA,
+                                                      kAlignmentA,
+                                                      ElementB,
+                                                      LayoutB,
+                                                      kAlignmentB,
+                                                      ElementAccumulator,
+                                                      LayoutC,
+                                                      arch::OpClassTensorOp,
+                                                      arch::Sm80,
+                                                      ThreadblockShape,
+                                                      WarpShape,
+                                                      InstructionShape,
+                                                      Stages,
+                                                      Operator,
+                                                      false,
+                                                      SharedMemoryClear,
+                                                      GatherA,
+                                                      GatherB>::ThreadblockMma;
 
-    static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
 
-    /// Define the epilogue
-    using RegularEpilogue =
-        typename epilogue::threadblock::DequantEpilogueTensorOp<
-            ThreadblockShape,
-            typename Mma::Operator,
-            kPartitionsK,
-            EpilogueOutputOp,
-            EpilogueOutputOp::kCount,
-            ScatterD,
-            PermuteDLayout>::Epilogue;
+  /// Define the epilogue
+  using RegularEpilogue =
+      typename epilogue::threadblock::DequantEpilogueTensorOp<
+          ThreadblockShape,
+          typename Mma::Operator,
+          kPartitionsK,
+          EpilogueOutputOp,
+          EpilogueOutputOp::kCount,
+          ScatterD,
+          PermuteDLayout>::Epilogue;
 
-    using Epilogue = RegularEpilogue;
+  using Epilogue = RegularEpilogue;
 
-    /// Define the kernel-level GEMM operator.
-    using GemmKernel =
-        kernel::Gemm<Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+  /// Define the kernel-level GEMM operator.
+  using GemmKernel =
+      kernel::Gemm<Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
 
 template <
@@ -340,49 +340,49 @@ struct DefaultDequantGemmUniversal<
     PermuteDLayout,
     typename platform::enable_if<
         !cutlass::is_complex<ElementAccumulator>::value>::type> {
-    using DefaultGemmKernel =
-        typename kernel::DefaultDequantGemm<ElementA,
-                                            LayoutA,
-                                            kAlignmentA,
-                                            ElementB,
-                                            LayoutB,
-                                            kAlignmentB,
-                                            ElementC,
-                                            LayoutC,
-                                            ElementAccumulator,
-                                            OperatorClass,
-                                            ArchTag,
-                                            ThreadblockShape,
-                                            WarpShape,
-                                            InstructionShape,
-                                            EpilogueOutputOp,
-                                            ThreadblockSwizzle,
-                                            Stages,
-                                            true,
-                                            Operator,
-                                            SharedMemoryClear,
-                                            GatherA,
-                                            GatherB,
-                                            ScatterD,
-                                            PermuteDLayout>::GemmKernel;
+  using DefaultGemmKernel =
+      typename kernel::DefaultDequantGemm<ElementA,
+                                          LayoutA,
+                                          kAlignmentA,
+                                          ElementB,
+                                          LayoutB,
+                                          kAlignmentB,
+                                          ElementC,
+                                          LayoutC,
+                                          ElementAccumulator,
+                                          OperatorClass,
+                                          ArchTag,
+                                          ThreadblockShape,
+                                          WarpShape,
+                                          InstructionShape,
+                                          EpilogueOutputOp,
+                                          ThreadblockSwizzle,
+                                          Stages,
+                                          true,
+                                          Operator,
+                                          SharedMemoryClear,
+                                          GatherA,
+                                          GatherB,
+                                          ScatterD,
+                                          PermuteDLayout>::GemmKernel;
 
-    /// Universal kernel without StreamkFeature member type
-    template <class SwizzleT, class Enable = void>
-    class SelectBase
-        : public kernel::GemmUniversal<typename DefaultGemmKernel::Mma,
-                                       typename DefaultGemmKernel::Epilogue,
-                                       SwizzleT> {};
+  /// Universal kernel without StreamkFeature member type
+  template <class SwizzleT, class Enable = void>
+  class SelectBase
+      : public kernel::GemmUniversal<typename DefaultGemmKernel::Mma,
+                                     typename DefaultGemmKernel::Epilogue,
+                                     SwizzleT> {};
 
-    /// Universal kernel with StreamkFeature member type
-    template <class SwizzleT>
-    class SelectBase<SwizzleT, typename SwizzleT::StreamkFeature>
-        : public kernel::GemmUniversalStreamk<
-              typename DefaultGemmKernel::Mma,
-              typename DefaultGemmKernel::Epilogue,
-              SwizzleT> {};
+  /// Universal kernel with StreamkFeature member type
+  template <class SwizzleT>
+  class SelectBase<SwizzleT, typename SwizzleT::StreamkFeature>
+      : public kernel::GemmUniversalStreamk<
+            typename DefaultGemmKernel::Mma,
+            typename DefaultGemmKernel::Epilogue,
+            SwizzleT> {};
 
-    /// Select kernel by ThreadblockSwizzle's support for StreamkFeature
-    using GemmKernel = SelectBase<ThreadblockSwizzle>;
+  /// Select kernel by ThreadblockSwizzle's support for StreamkFeature
+  using GemmKernel = SelectBase<ThreadblockSwizzle>;
 };
 
 template <typename Mma_,  ///! Threadblock-scoped matrix multiply-accumulate
@@ -390,431 +390,413 @@ template <typename Mma_,  ///! Threadblock-scoped matrix multiply-accumulate
           typename ThreadblockSwizzle_  ///! Threadblock swizzling function
           >
 struct GemmWithEpilogueVisitorDequant {
-    public:
-    using Mma = Mma_;
-    using Epilogue = Epilogue_;
-    using EpilogueVisitor = typename Epilogue::Visitor;
-    using ThreadblockSwizzle = ThreadblockSwizzle_;
+ public:
+  using Mma = Mma_;
+  using Epilogue = Epilogue_;
+  using EpilogueVisitor = typename Epilogue::Visitor;
+  using ThreadblockSwizzle = ThreadblockSwizzle_;
 
-    using ElementA = typename Mma::IteratorA::Element;
-    using LayoutA = typename Mma::IteratorA::Layout;
-    using TensorRefA = TensorRef<ElementA, LayoutA>;
+  using ElementA = typename Mma::IteratorA::Element;
+  using LayoutA = typename Mma::IteratorA::Layout;
+  using TensorRefA = TensorRef<ElementA, LayoutA>;
 
-    using ElementB = typename Mma::IteratorB::Element;
-    using LayoutB = typename Mma::IteratorB::Layout;
-    using TensorRefB = TensorRef<ElementB, LayoutB>;
+  using ElementB = typename Mma::IteratorB::Element;
+  using LayoutB = typename Mma::IteratorB::Layout;
+  using TensorRefB = TensorRef<ElementB, LayoutB>;
 
-    using ElementC = typename EpilogueVisitor::ElementOutput;
-    using LayoutC = typename Epilogue::Layout;
-    using TensorRefC = TensorRef<ElementC, LayoutC>;
+  using ElementC = typename EpilogueVisitor::ElementOutput;
+  using LayoutC = typename Epilogue::Layout;
+  using TensorRefC = TensorRef<ElementC, LayoutC>;
 
-    using ElementScale = typename EpilogueVisitor::AlphaScaleElementType;
-    using LayoutScale = cutlass::layout::RowMajor;
-    using TensorRefScale = TensorRef<ElementScale, LayoutScale>;
+  using ElementScale = typename EpilogueVisitor::AlphaScaleElementType;
+  using LayoutScale = cutlass::layout::RowMajor;
+  using TensorRefScale = TensorRef<ElementScale, LayoutScale>;
 
-    static ComplexTransform const kTransformA = Mma::kTransformA;
-    static ComplexTransform const kTransformB = Mma::kTransformB;
-    using Operator = typename Mma::Operator;
+  static ComplexTransform const kTransformA = Mma::kTransformA;
+  static ComplexTransform const kTransformB = Mma::kTransformB;
+  using Operator = typename Mma::Operator;
 
-    using OperatorClass = typename Mma::Operator::OperatorClass;
-    using ThreadblockShape = typename Mma::Shape;
-    using WarpShape = typename Mma::Operator::Shape;
-    using InstructionShape = typename Mma::Policy::Operator::InstructionShape;
-    using ArchTag = typename Mma::ArchTag;
+  using OperatorClass = typename Mma::Operator::OperatorClass;
+  using ThreadblockShape = typename Mma::Shape;
+  using WarpShape = typename Mma::Operator::Shape;
+  using InstructionShape = typename Mma::Policy::Operator::InstructionShape;
+  using ArchTag = typename Mma::ArchTag;
 
-    static int const kStages = Mma::kStages;
-    static int const kAlignmentA = Mma::IteratorA::AccessType::kElements;
-    static int const kAlignmentB = Mma::IteratorB::AccessType::kElements;
-    static int const kAlignmentC = EpilogueVisitor::kElementsPerAccess;
+  static int const kStages = Mma::kStages;
+  static int const kAlignmentA = Mma::IteratorA::AccessType::kElements;
+  static int const kAlignmentB = Mma::IteratorB::AccessType::kElements;
+  static int const kAlignmentC = EpilogueVisitor::kElementsPerAccess;
 
-    /// Warp count (concept: GemmShape)
-    using WarpCount = typename Mma::WarpCount;
-    static int const kThreadCount = 32 * WarpCount::kCount;
+  /// Warp count (concept: GemmShape)
+  using WarpCount = typename Mma::WarpCount;
+  static int const kThreadCount = 32 * WarpCount::kCount;
 
-    /// Split-K preserves splits that are 128b aligned
-    static int const kSplitKAlignment = const_max(
-        128 / sizeof_bits<ElementA>::value, 128 / sizeof_bits<ElementB>::value);
+  /// Split-K preserves splits that are 128b aligned
+  static int const kSplitKAlignment = const_max(
+      128 / sizeof_bits<ElementA>::value, 128 / sizeof_bits<ElementB>::value);
 
+  //
+  // Structures
+  //
+
+  /// Argument structure
+  struct Arguments {
     //
-    // Structures
-    //
-
-    /// Argument structure
-    struct Arguments {
-        //
-        // Data members
-        //
-
-        GemmUniversalMode mode;
-        GemmCoord problem_size;
-
-        TensorRefA ref_A;
-        TensorRefB ref_B;
-        TensorRefC ref_C;
-        TensorRefC ref_D;
-        TensorRefScale ref_scale;
-
-        typename EpilogueVisitor::Arguments epilogue_visitor;
-
-        //
-        // Methods
-        //
-
-        Arguments() : mode(GemmUniversalMode::kGemm) {}
-
-        /// constructs an arguments structure
-        Arguments(GemmUniversalMode mode_,
-                  GemmCoord problem_size_,
-                  TensorRefA ref_A_,
-                  TensorRefB ref_B_,
-                  TensorRefC ref_C_,
-                  TensorRefC ref_D_,
-                  TensorRefScale ref_scale_,
-                  typename EpilogueVisitor::Arguments epilogue_visitor_)
-            : mode(mode_),
-              problem_size(problem_size_),
-              ref_A(ref_A_),
-              ref_B(ref_B_),
-              ref_C(ref_C_),
-              ref_D(ref_D_),
-              ref_scale(ref_scale_),
-              epilogue_visitor(epilogue_visitor_) {}
-    };
-
-    //
-    // Structure for precomputing values in host memory and passing to kernels
+    // Data members
     //
 
-    /// Parameters structure
-    struct Params {
-        cutlass::gemm::GemmCoord problem_size;
-        cutlass::gemm::GemmCoord grid_tiled_shape;
-        int swizzle_log_tile;
+    GemmUniversalMode mode;
+    GemmCoord problem_size;
 
-        typename Mma::IteratorA::Params params_A;
-        typename Mma::IteratorB::Params params_B;
-        typename EpilogueVisitor::OutputTileIterator::Params params_C;
-        typename EpilogueVisitor::OutputTileIterator::Params params_D;
-        typename EpilogueVisitor::ScaleTileIterator::Params params_scale;
+    TensorRefA ref_A;
+    TensorRefB ref_B;
+    TensorRefC ref_C;
+    TensorRefC ref_D;
+    TensorRefScale ref_scale;
 
-        GemmUniversalMode mode;
-        int gemm_k_size;
+    typename EpilogueVisitor::Arguments epilogue_visitor;
 
-        void *ptr_A;
-        void *ptr_B;
-        ElementC *ptr_C;
-        ElementC *ptr_D;
-        typename EpilogueVisitor::AlphaScaleElementType *ptr_dequant_scale;
-
-        typename EpilogueVisitor::Params epilogue_visitor;
-
-        //
-        // Methods
-        //
-
-        CUTLASS_HOST_DEVICE
-        Params()
-            : swizzle_log_tile(0),
-              params_A(0),
-              params_B(0),
-              params_C(0),
-              params_D(0),
-              params_scale(0),
-              gemm_k_size(0),
-              mode(cutlass::gemm::GemmUniversalMode::kGemm),
-              ptr_A(nullptr),
-              ptr_B(nullptr),
-              ptr_C(nullptr),
-              ptr_D(nullptr),
-              ptr_dequant_scale(nullptr) {}
-
-        explicit Params(Arguments const &args)
-            : problem_size(args.problem_size),
-              swizzle_log_tile(0),
-              params_A(args.ref_A.layout()),
-              params_B(args.ref_B.layout()),
-              params_C(args.ref_C.layout()),
-              params_D(args.ref_D.layout()),
-              mode(args.mode),
-              gemm_k_size(args.problem_size.k()),
-              ptr_A(args.ref_A.data()),
-              ptr_B(args.ref_B.data()),
-              ptr_C(args.ref_C.data()),
-              ptr_D(args.ref_D.data()),
-              ptr_dequant_scale(args.ref_scale.data()),
-              epilogue_visitor(args.epilogue_visitor) {
-            ThreadblockSwizzle threadblock_swizzle;
-
-            grid_tiled_shape =
-                threadblock_swizzle.get_tiled_shape(args.problem_size,
-                                                    {ThreadblockShape::kM,
-                                                     ThreadblockShape::kN,
-                                                     ThreadblockShape::kK},
-                                                    1);
-
-            if (args.mode == GemmUniversalMode::kGemm ||
-                args.mode == GemmUniversalMode::kGemmSplitKParallel) {
-                int const kAlignK =
-                    const_max(const_max(128 / sizeof_bits<ElementA>::value,
-                                        128 / sizeof_bits<ElementB>::value),
-                              1);
-
-                gemm_k_size =
-                    round_up(ceil_div(args.problem_size.k(), 1), kAlignK);
-
-                if (gemm_k_size) {
-                    grid_tiled_shape.k() =
-                        ceil_div(args.problem_size.k(), gemm_k_size);
-                }
-            }
-
-            swizzle_log_tile =
-                threadblock_swizzle.get_log_tile(grid_tiled_shape);
-        }
-    };
-
-    /// Shared memory storage structure
-    union SharedStorage {
-        typename Mma::SharedStorage main_loop;
-
-        struct {
-            typename Epilogue::SharedStorage epilogue;
-            typename EpilogueVisitor::SharedStorage visitor;
-        } epilogue;
-    };
-
-    public:
     //
     // Methods
     //
 
-    CUTLASS_DEVICE
-    GemmWithEpilogueVisitorDequant() {}
+    Arguments() : mode(GemmUniversalMode::kGemm) {}
 
-    /// Determines whether kernel satisfies alignment
-    static Status can_implement(cutlass::gemm::GemmCoord const &problem_size) {
-        CUTLASS_TRACE_HOST("GemmWithEpilogueVisitorDequant::can_implement()");
+    /// constructs an arguments structure
+    Arguments(GemmUniversalMode mode_,
+              GemmCoord problem_size_,
+              TensorRefA ref_A_,
+              TensorRefB ref_B_,
+              TensorRefC ref_C_,
+              TensorRefC ref_D_,
+              TensorRefScale ref_scale_,
+              typename EpilogueVisitor::Arguments epilogue_visitor_)
+        : mode(mode_),
+          problem_size(problem_size_),
+          ref_A(ref_A_),
+          ref_B(ref_B_),
+          ref_C(ref_C_),
+          ref_D(ref_D_),
+          ref_scale(ref_scale_),
+          epilogue_visitor(epilogue_visitor_) {}
+  };
 
-        static int const kAlignmentA = Mma::IteratorA::AccessType::kElements;
-        static int const kAlignmentB = Mma::IteratorB::AccessType::kElements;
-        static int const kAlignmentC =
-            Epilogue::OutputTileIterator::kElementsPerAccess;
+  //
+  // Structure for precomputing values in host memory and passing to kernels
+  //
 
-        bool isAMisaligned = false;
-        bool isBMisaligned = false;
-        bool isCMisaligned = false;
+  /// Parameters structure
+  struct Params {
+    cutlass::gemm::GemmCoord problem_size;
+    cutlass::gemm::GemmCoord grid_tiled_shape;
+    int swizzle_log_tile;
 
-        if (platform::is_same<LayoutA, layout::RowMajor>::value) {
-            isAMisaligned = problem_size.k() % kAlignmentA;
-        } else if (platform::is_same<LayoutA, layout::ColumnMajor>::value) {
-            isAMisaligned = problem_size.m() % kAlignmentA;
-        } else if (platform::is_same<
-                       LayoutA,
-                       layout::ColumnMajorInterleaved<32>>::value ||
-                   platform::is_same<
-                       LayoutA,
-                       layout::ColumnMajorInterleaved<64>>::value) {
-            isAMisaligned = problem_size.k() % kAlignmentA;
+    typename Mma::IteratorA::Params params_A;
+    typename Mma::IteratorB::Params params_B;
+    typename EpilogueVisitor::OutputTileIterator::Params params_C;
+    typename EpilogueVisitor::OutputTileIterator::Params params_D;
+    typename EpilogueVisitor::ScaleTileIterator::Params params_scale;
+
+    GemmUniversalMode mode;
+    int gemm_k_size;
+
+    void *ptr_A;
+    void *ptr_B;
+    ElementC *ptr_C;
+    ElementC *ptr_D;
+    typename EpilogueVisitor::AlphaScaleElementType *ptr_dequant_scale;
+
+    typename EpilogueVisitor::Params epilogue_visitor;
+
+    //
+    // Methods
+    //
+
+    CUTLASS_HOST_DEVICE
+    Params()
+        : swizzle_log_tile(0),
+          params_A(0),
+          params_B(0),
+          params_C(0),
+          params_D(0),
+          params_scale(0),
+          gemm_k_size(0),
+          mode(cutlass::gemm::GemmUniversalMode::kGemm),
+          ptr_A(nullptr),
+          ptr_B(nullptr),
+          ptr_C(nullptr),
+          ptr_D(nullptr),
+          ptr_dequant_scale(nullptr) {}
+
+    explicit Params(Arguments const &args)
+        : problem_size(args.problem_size),
+          swizzle_log_tile(0),
+          params_A(args.ref_A.layout()),
+          params_B(args.ref_B.layout()),
+          params_C(args.ref_C.layout()),
+          params_D(args.ref_D.layout()),
+          mode(args.mode),
+          gemm_k_size(args.problem_size.k()),
+          ptr_A(args.ref_A.data()),
+          ptr_B(args.ref_B.data()),
+          ptr_C(args.ref_C.data()),
+          ptr_D(args.ref_D.data()),
+          ptr_dequant_scale(args.ref_scale.data()),
+          epilogue_visitor(args.epilogue_visitor) {
+      ThreadblockSwizzle threadblock_swizzle;
+
+      grid_tiled_shape = threadblock_swizzle.get_tiled_shape(
+          args.problem_size,
+          {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK},
+          1);
+
+      if (args.mode == GemmUniversalMode::kGemm ||
+          args.mode == GemmUniversalMode::kGemmSplitKParallel) {
+        int const kAlignK =
+            const_max(const_max(128 / sizeof_bits<ElementA>::value,
+                                128 / sizeof_bits<ElementB>::value),
+                      1);
+
+        gemm_k_size = round_up(ceil_div(args.problem_size.k(), 1), kAlignK);
+
+        if (gemm_k_size) {
+          grid_tiled_shape.k() = ceil_div(args.problem_size.k(), gemm_k_size);
         }
+      }
 
-        if (platform::is_same<LayoutB, layout::RowMajor>::value) {
-            isBMisaligned = problem_size.n() % kAlignmentB;
-        } else if (platform::is_same<LayoutB, layout::ColumnMajor>::value) {
-            isBMisaligned = problem_size.k() % kAlignmentB;
-        } else if (platform::is_same<LayoutB,
-                                     layout::RowMajorInterleaved<32>>::value ||
-                   platform::is_same<LayoutB,
-                                     layout::RowMajorInterleaved<64>>::value) {
-            isBMisaligned = problem_size.k() % kAlignmentB;
-        }
+      swizzle_log_tile = threadblock_swizzle.get_log_tile(grid_tiled_shape);
+    }
+  };
 
-        if (platform::is_same<LayoutC, layout::RowMajor>::value) {
-            isCMisaligned = problem_size.n() % kAlignmentC;
-        } else if (platform::is_same<LayoutC, layout::ColumnMajor>::value) {
-            isCMisaligned = problem_size.m() % kAlignmentC;
-        } else if (platform::is_same<
-                       LayoutC,
-                       layout::ColumnMajorInterleaved<32>>::value ||
-                   platform::is_same<
-                       LayoutC,
-                       layout::ColumnMajorInterleaved<64>>::value) {
-            isCMisaligned = problem_size.n() % kAlignmentC;
-        }
+  /// Shared memory storage structure
+  union SharedStorage {
+    typename Mma::SharedStorage main_loop;
 
-        if (isAMisaligned) {
-            CUTLASS_TRACE_HOST(
-                "  returning kErrorMisalignedOperand for A operand");
-            return Status::kErrorMisalignedOperand;
-        }
+    struct {
+      typename Epilogue::SharedStorage epilogue;
+      typename EpilogueVisitor::SharedStorage visitor;
+    } epilogue;
+  };
 
-        if (isBMisaligned) {
-            CUTLASS_TRACE_HOST(
-                "  returning kErrorMisalignedOperand for B operand");
-            return Status::kErrorMisalignedOperand;
-        }
+ public:
+  //
+  // Methods
+  //
 
-        if (isCMisaligned) {
-            CUTLASS_TRACE_HOST(
-                "  returning kErrorMisalignedOperand for C operand");
-            return Status::kErrorMisalignedOperand;
-        }
+  CUTLASS_DEVICE
+  GemmWithEpilogueVisitorDequant() {}
 
-        CUTLASS_TRACE_HOST("  returning kSuccess");
+  /// Determines whether kernel satisfies alignment
+  static Status can_implement(cutlass::gemm::GemmCoord const &problem_size) {
+    CUTLASS_TRACE_HOST("GemmWithEpilogueVisitorDequant::can_implement()");
 
-        return Status::kSuccess;
+    static int const kAlignmentA = Mma::IteratorA::AccessType::kElements;
+    static int const kAlignmentB = Mma::IteratorB::AccessType::kElements;
+    static int const kAlignmentC =
+        Epilogue::OutputTileIterator::kElementsPerAccess;
+
+    bool isAMisaligned = false;
+    bool isBMisaligned = false;
+    bool isCMisaligned = false;
+
+    if (platform::is_same<LayoutA, layout::RowMajor>::value) {
+      isAMisaligned = problem_size.k() % kAlignmentA;
+    } else if (platform::is_same<LayoutA, layout::ColumnMajor>::value) {
+      isAMisaligned = problem_size.m() % kAlignmentA;
+    } else if (platform::is_same<LayoutA,
+                                 layout::ColumnMajorInterleaved<32>>::value ||
+               platform::is_same<LayoutA,
+                                 layout::ColumnMajorInterleaved<64>>::value) {
+      isAMisaligned = problem_size.k() % kAlignmentA;
     }
 
-    static Status can_implement(Arguments const &args) {
-        return can_implement(args.problem_size);
+    if (platform::is_same<LayoutB, layout::RowMajor>::value) {
+      isBMisaligned = problem_size.n() % kAlignmentB;
+    } else if (platform::is_same<LayoutB, layout::ColumnMajor>::value) {
+      isBMisaligned = problem_size.k() % kAlignmentB;
+    } else if (platform::is_same<LayoutB,
+                                 layout::RowMajorInterleaved<32>>::value ||
+               platform::is_same<LayoutB,
+                                 layout::RowMajorInterleaved<64>>::value) {
+      isBMisaligned = problem_size.k() % kAlignmentB;
     }
+
+    if (platform::is_same<LayoutC, layout::RowMajor>::value) {
+      isCMisaligned = problem_size.n() % kAlignmentC;
+    } else if (platform::is_same<LayoutC, layout::ColumnMajor>::value) {
+      isCMisaligned = problem_size.m() % kAlignmentC;
+    } else if (platform::is_same<LayoutC,
+                                 layout::ColumnMajorInterleaved<32>>::value ||
+               platform::is_same<LayoutC,
+                                 layout::ColumnMajorInterleaved<64>>::value) {
+      isCMisaligned = problem_size.n() % kAlignmentC;
+    }
+
+    if (isAMisaligned) {
+      CUTLASS_TRACE_HOST("  returning kErrorMisalignedOperand for A operand");
+      return Status::kErrorMisalignedOperand;
+    }
+
+    if (isBMisaligned) {
+      CUTLASS_TRACE_HOST("  returning kErrorMisalignedOperand for B operand");
+      return Status::kErrorMisalignedOperand;
+    }
+
+    if (isCMisaligned) {
+      CUTLASS_TRACE_HOST("  returning kErrorMisalignedOperand for C operand");
+      return Status::kErrorMisalignedOperand;
+    }
+
+    CUTLASS_TRACE_HOST("  returning kSuccess");
+
+    return Status::kSuccess;
+  }
+
+  static Status can_implement(Arguments const &args) {
+    return can_implement(args.problem_size);
+  }
 
 #define SPLIT_K_ENABLED 1
 
-    /// Executes one GEMM
-    CUTLASS_DEVICE
-    void operator()(Params const &params,
-                    SharedStorage &shared_storage) {  // NOLINT
-        // Compute threadblock location
-        ThreadblockSwizzle threadblock_swizzle;
+  /// Executes one GEMM
+  CUTLASS_DEVICE
+  void operator()(Params const &params,
+                  SharedStorage &shared_storage) {  // NOLINT
+    // Compute threadblock location
+    ThreadblockSwizzle threadblock_swizzle;
 
-        cutlass::gemm::GemmCoord threadblock_tile_offset =
-            threadblock_swizzle.get_tile_offset(params.swizzle_log_tile);
+    cutlass::gemm::GemmCoord threadblock_tile_offset =
+        threadblock_swizzle.get_tile_offset(params.swizzle_log_tile);
 
-        // Early exit if CTA is out of range
+    // Early exit if CTA is out of range
 
-        if (params.grid_tiled_shape.m() <= threadblock_tile_offset.m() ||
-            params.grid_tiled_shape.n() <= threadblock_tile_offset.n()) {
-            return;
-        }
+    if (params.grid_tiled_shape.m() <= threadblock_tile_offset.m() ||
+        params.grid_tiled_shape.n() <= threadblock_tile_offset.n()) {
+      return;
+    }
 
-        int offset_k = 0;
-        int problem_size_k = params.problem_size.k();
+    int offset_k = 0;
+    int problem_size_k = params.problem_size.k();
 
-        ElementA *ptr_A = static_cast<ElementA *>(params.ptr_A);
-        ElementB *ptr_B = static_cast<ElementB *>(params.ptr_B);
+    ElementA *ptr_A = static_cast<ElementA *>(params.ptr_A);
+    ElementB *ptr_B = static_cast<ElementB *>(params.ptr_B);
 
 #if SPLIT_K_ENABLED
-        //
-        // Fetch pointers based on mode.
-        //
-        if (params.mode == GemmUniversalMode::kGemm ||
-            params.mode == GemmUniversalMode::kGemmSplitKParallel) {
-            if (threadblock_tile_offset.k() + 1 < params.grid_tiled_shape.k()) {
-                problem_size_k =
-                    (threadblock_tile_offset.k() + 1) * params.gemm_k_size;
-            }
+    //
+    // Fetch pointers based on mode.
+    //
+    if (params.mode == GemmUniversalMode::kGemm ||
+        params.mode == GemmUniversalMode::kGemmSplitKParallel) {
+      if (threadblock_tile_offset.k() + 1 < params.grid_tiled_shape.k()) {
+        problem_size_k = (threadblock_tile_offset.k() + 1) * params.gemm_k_size;
+      }
 
-            offset_k = threadblock_tile_offset.k() * params.gemm_k_size;
-        }
+      offset_k = threadblock_tile_offset.k() * params.gemm_k_size;
+    }
 #endif
 
-        // Compute initial location in logical coordinates
-        cutlass::MatrixCoord tb_offset_A{
-            threadblock_tile_offset.m() * Mma::Shape::kM,
-            offset_k,
-        };
+    // Compute initial location in logical coordinates
+    cutlass::MatrixCoord tb_offset_A{
+        threadblock_tile_offset.m() * Mma::Shape::kM,
+        offset_k,
+    };
 
-        cutlass::MatrixCoord tb_offset_B{
-            offset_k, threadblock_tile_offset.n() * Mma::Shape::kN};
+    cutlass::MatrixCoord tb_offset_B{
+        offset_k, threadblock_tile_offset.n() * Mma::Shape::kN};
 
-        // Compute position within threadblock
-        int thread_idx = threadIdx.x;
+    // Compute position within threadblock
+    int thread_idx = threadIdx.x;
 
-        // Construct iterators to A and B operands
-        typename Mma::IteratorA iterator_A(
-            params.params_A,
-            ptr_A,
-            {params.problem_size.m(), problem_size_k},
-            thread_idx,
-            tb_offset_A);
+    // Construct iterators to A and B operands
+    typename Mma::IteratorA iterator_A(
+        params.params_A,
+        ptr_A,
+        {params.problem_size.m(), problem_size_k},
+        thread_idx,
+        tb_offset_A);
 
-        typename Mma::IteratorB iterator_B(
-            params.params_B,
-            ptr_B,
-            {problem_size_k, params.problem_size.n()},
-            thread_idx,
-            tb_offset_B);
+    typename Mma::IteratorB iterator_B(
+        params.params_B,
+        ptr_B,
+        {problem_size_k, params.problem_size.n()},
+        thread_idx,
+        tb_offset_B);
 
-        // Broadcast the warp_id computed by lane 0 to ensure dependent code
-        // is compiled as warp-uniform.
-        int warp_idx = __shfl_sync(0xffffffff, threadIdx.x / 32, 0);
+    // Broadcast the warp_id computed by lane 0 to ensure dependent code
+    // is compiled as warp-uniform.
+    int warp_idx = __shfl_sync(0xffffffff, threadIdx.x / 32, 0);
 
-        int lane_idx = threadIdx.x % 32;
+    int lane_idx = threadIdx.x % 32;
 
-        //
-        // Main loop
-        //
+    //
+    // Main loop
+    //
 
-        // Construct thread-scoped matrix multiply
-        Mma mma(shared_storage.main_loop, thread_idx, warp_idx, lane_idx);
+    // Construct thread-scoped matrix multiply
+    Mma mma(shared_storage.main_loop, thread_idx, warp_idx, lane_idx);
 
-        typename Mma::FragmentC accumulators;
+    typename Mma::FragmentC accumulators;
 
-        accumulators.clear();
+    accumulators.clear();
 
-        // Compute threadblock-scoped matrix multiply-add
-        int gemm_k_iterations =
-            (problem_size_k - offset_k + Mma::Shape::kK - 1) / Mma::Shape::kK;
+    // Compute threadblock-scoped matrix multiply-add
+    int gemm_k_iterations =
+        (problem_size_k - offset_k + Mma::Shape::kK - 1) / Mma::Shape::kK;
 
-        // Compute threadblock-scoped matrix multiply-add
-        mma(gemm_k_iterations,
-            accumulators,
-            iterator_A,
-            iterator_B,
-            accumulators);
+    // Compute threadblock-scoped matrix multiply-add
+    mma(gemm_k_iterations, accumulators, iterator_A, iterator_B, accumulators);
 
-        //
-        // Masked tile iterators constructed from members
-        //
+    //
+    // Masked tile iterators constructed from members
+    //
 
-        threadblock_tile_offset =
-            threadblock_swizzle.get_tile_offset(params.swizzle_log_tile);
+    threadblock_tile_offset =
+        threadblock_swizzle.get_tile_offset(params.swizzle_log_tile);
 
-        // assume identity swizzle
-        MatrixCoord threadblock_offset(
-            threadblock_tile_offset.m() * Mma::Shape::kM,
-            threadblock_tile_offset.n() * Mma::Shape::kN);
+    // assume identity swizzle
+    MatrixCoord threadblock_offset(
+        threadblock_tile_offset.m() * Mma::Shape::kM,
+        threadblock_tile_offset.n() * Mma::Shape::kN);
 
-        int block_idx =
-            threadblock_tile_offset.m() +
-            threadblock_tile_offset.n() * params.grid_tiled_shape.m();
+    int block_idx = threadblock_tile_offset.m() +
+                    threadblock_tile_offset.n() * params.grid_tiled_shape.m();
 
-        //
-        // Construct the epilogue visitor
-        //
+    //
+    // Construct the epilogue visitor
+    //
 
-        EpilogueVisitor epilogue_visitor(params.epilogue_visitor,
-                                         shared_storage.epilogue.visitor,
-                                         params.problem_size.mn(),
-                                         thread_idx,
-                                         warp_idx,
-                                         lane_idx,
-                                         params.params_C,
-                                         params.params_D,
-                                         params.params_scale,
-                                         params.ptr_C,
-                                         params.ptr_D,
-                                         params.ptr_dequant_scale,
-                                         threadblock_offset,
-                                         blockIdx.y * params.problem_size.m());
+    EpilogueVisitor epilogue_visitor(params.epilogue_visitor,
+                                     shared_storage.epilogue.visitor,
+                                     params.problem_size.mn(),
+                                     thread_idx,
+                                     warp_idx,
+                                     lane_idx,
+                                     params.params_C,
+                                     params.params_D,
+                                     params.params_scale,
+                                     params.ptr_C,
+                                     params.ptr_D,
+                                     params.ptr_dequant_scale,
+                                     threadblock_offset,
+                                     blockIdx.y * params.problem_size.m());
 
-        if (params.mode == GemmUniversalMode::kGemm) {
-            // Indicate which position in a serial reduction the output operator
-            // is currently updating
-            epilogue_visitor.set_k_partition(threadblock_tile_offset.k(),
-                                             params.grid_tiled_shape.k());
-        } else if (params.mode == GemmUniversalMode::kBatched ||
-                   params.mode == GemmUniversalMode::kArray) {
-            epilogue_visitor.set_batch_index(threadblock_tile_offset.k());
-        }
-
-        // Construct the epilogue
-        Epilogue epilogue(
-            shared_storage.epilogue.epilogue, thread_idx, warp_idx, lane_idx);
-
-        // Execute the epilogue operator to update the destination tensor.
-        epilogue(epilogue_visitor, accumulators);
+    if (params.mode == GemmUniversalMode::kGemm) {
+      // Indicate which position in a serial reduction the output operator
+      // is currently updating
+      epilogue_visitor.set_k_partition(threadblock_tile_offset.k(),
+                                       params.grid_tiled_shape.k());
+    } else if (params.mode == GemmUniversalMode::kBatched ||
+               params.mode == GemmUniversalMode::kArray) {
+      epilogue_visitor.set_batch_index(threadblock_tile_offset.k());
     }
+
+    // Construct the epilogue
+    Epilogue epilogue(
+        shared_storage.epilogue.epilogue, thread_idx, warp_idx, lane_idx);
+
+    // Execute the epilogue operator to update the destination tensor.
+    epilogue(epilogue_visitor, accumulators);
+  }
 };
 }  // namespace kernel
 }  // namespace gemm
@@ -830,286 +812,284 @@ template <typename ThreadblockShape_,
           typename ElementwiseFunctor_,
           bool UseMasking_ = false>
 class DequantEpilogueVisitor {
-    public:
-    using ThreadblockShape = ThreadblockShape_;
-    static int const kThreadCount = ThreadCount;
+ public:
+  using ThreadblockShape = ThreadblockShape_;
+  static int const kThreadCount = ThreadCount;
 
-    using ScaleTileIterator = ScaleTileIterator_;
-    using OutputTileIterator = OutputTileIterator_;
-    using ElementwiseFunctor = ElementwiseFunctor_;
+  using ScaleTileIterator = ScaleTileIterator_;
+  using OutputTileIterator = OutputTileIterator_;
+  using ElementwiseFunctor = ElementwiseFunctor_;
 
-    static int const kIterations = OutputTileIterator::kIterations;
-    static int const kElementsPerAccess =
-        OutputTileIterator::kElementsPerAccess;
+  static int const kIterations = OutputTileIterator::kIterations;
+  static int const kElementsPerAccess = OutputTileIterator::kElementsPerAccess;
 
-    using ElementOutput = typename OutputTileIterator::Element;
-    using LayoutOutput = cutlass::layout::RowMajor;
-    using ElementAccumulator = ElementAccumulator_;
+  using ElementOutput = typename OutputTileIterator::Element;
+  using LayoutOutput = cutlass::layout::RowMajor;
+  using ElementAccumulator = ElementAccumulator_;
 
-    using AlphaScaleElementType = typename ScaleTileIterator::Element;
+  using AlphaScaleElementType = typename ScaleTileIterator::Element;
 
-    using ElementCompute = ElementCompute_;
-    using AccumulatorFragment = Array<ElementAccumulator, kElementsPerAccess>;
-    using ComputeFragment = Array<ElementCompute_, kElementsPerAccess>;
-    using OutputVector = Array<ElementOutput, kElementsPerAccess>;
+  using ElementCompute = ElementCompute_;
+  using AccumulatorFragment = Array<ElementAccumulator, kElementsPerAccess>;
+  using ComputeFragment = Array<ElementCompute_, kElementsPerAccess>;
+  using OutputVector = Array<ElementOutput, kElementsPerAccess>;
 
-    static int const kThreadsPerRow =
-        OutputTileIterator::ThreadMap::Detail::kAccessWidth;
-    static bool const kHasMultiStepsInRow =
-        (OutputTileIterator::ThreadMap::Iterations::kColumn > 1);
+  static int const kThreadsPerRow =
+      OutputTileIterator::ThreadMap::Detail::kAccessWidth;
+  static bool const kHasMultiStepsInRow =
+      (OutputTileIterator::ThreadMap::Iterations::kColumn > 1);
 
-    /// Argument structure
-    struct Arguments {
-        typename ElementwiseFunctor::Params elementwise;
+  /// Argument structure
+  struct Arguments {
+    typename ElementwiseFunctor::Params elementwise;
 
-        //
-        // Methods
-        //
+    //
+    // Methods
+    //
 
-        explicit Arguments(typename ElementwiseFunctor::Params elementwise_)
-            : elementwise(elementwise_) {}
-    };
+    explicit Arguments(typename ElementwiseFunctor::Params elementwise_)
+        : elementwise(elementwise_) {}
+  };
 
-    struct Params {
-        typename ElementwiseFunctor::Params elementwise;
-        //
-        // Methods
-        //
-        CUTLASS_HOST_DEVICE
-        Params() {}
+  struct Params {
+    typename ElementwiseFunctor::Params elementwise;
+    //
+    // Methods
+    //
+    CUTLASS_HOST_DEVICE
+    Params() {}
 
-        CUTLASS_HOST_DEVICE
-        explicit Params(Arguments const &args)
-            : elementwise(args.elementwise) {}
-    };
+    CUTLASS_HOST_DEVICE
+    explicit Params(Arguments const &args) : elementwise(args.elementwise) {}
+  };
 
-    /// Shared storage
-    struct SharedStorage {};
+  /// Shared storage
+  struct SharedStorage {};
 
-    private:
-    Params const &params_;
-    SharedStorage &shared_storage_;
-    MatrixCoord extent_;
-    MatrixCoord extent_real_;
-    ElementwiseFunctor elementwise_;
+ private:
+  Params const &params_;
+  SharedStorage &shared_storage_;
+  MatrixCoord extent_;
+  MatrixCoord extent_real_;
+  ElementwiseFunctor elementwise_;
 
-    AlphaScaleElementType *ptr_dequant_scale_;
-    ScaleTileIterator iterator_dequant_scale_;
-    OutputTileIterator iterator_C_;
-    OutputTileIterator iterator_D_;
+  AlphaScaleElementType *ptr_dequant_scale_;
+  ScaleTileIterator iterator_dequant_scale_;
+  OutputTileIterator iterator_C_;
+  OutputTileIterator iterator_D_;
 
-    AlphaScaleElementType element_alpha_row_ = 1.0f;
-    AlphaScaleElementType element_alpha_col_ = 1.0f;
-    typename ScaleTileIterator::Fragment fragment_dequant_scale_;
-    typename OutputTileIterator::Fragment fragment_C_;
-    typename OutputTileIterator::Fragment fragment_D_;
+  AlphaScaleElementType element_alpha_row_ = 1.0f;
+  AlphaScaleElementType element_alpha_col_ = 1.0f;
+  typename ScaleTileIterator::Fragment fragment_dequant_scale_;
+  typename OutputTileIterator::Fragment fragment_C_;
+  typename OutputTileIterator::Fragment fragment_D_;
 
-    ElementAccumulator beta_;
+  ElementAccumulator beta_;
 
-    int column_offset_;
+  int column_offset_;
 
-    MatrixCoord thread_offset_;
+  MatrixCoord thread_offset_;
 
-    public:
-    CUTLASS_DEVICE
-    DequantEpilogueVisitor(
-        Params const &params,
-        SharedStorage &shared_storage,  // NOLINT
-        cutlass::MatrixCoord const &problem_size,
-        int thread_idx,
-        int warp_idx,
-        int lane_idx,
-        typename OutputTileIterator::Params params_C,
-        typename OutputTileIterator::Params params_D,
-        typename ScaleTileIterator::Params params_dequant_scale,
-        typename OutputTileIterator::Element *ptr_C,
-        typename OutputTileIterator::Element *ptr_D,
-        AlphaScaleElementType *ptr_dequant_scale,
-        cutlass::MatrixCoord const &threadblock_offset =
-            cutlass::MatrixCoord(0, 0),
-        int column_offset = 0,
-        cutlass::MatrixCoord const &problem_size_real = cutlass::MatrixCoord(0,
-                                                                             0))
-        : params_(params),
-          shared_storage_(shared_storage),
-          extent_(problem_size),
-          elementwise_(params.elementwise),
-          ptr_dequant_scale_(ptr_dequant_scale),
-          iterator_dequant_scale_(params_dequant_scale,
-                                  ptr_dequant_scale,
-                                  problem_size,
-                                  thread_idx,
-                                  threadblock_offset),
-          iterator_C_(
-              params_C, ptr_C, problem_size, thread_idx, threadblock_offset),
-          iterator_D_(
-              params_D, ptr_D, problem_size, thread_idx, threadblock_offset),
-          extent_real_(problem_size_real) {
-        beta_ = (params.elementwise.beta_ptr ? *params.elementwise.beta_ptr
-                                             : params.elementwise.beta);
+ public:
+  CUTLASS_DEVICE
+  DequantEpilogueVisitor(
+      Params const &params,
+      SharedStorage &shared_storage,  // NOLINT
+      cutlass::MatrixCoord const &problem_size,
+      int thread_idx,
+      int warp_idx,
+      int lane_idx,
+      typename OutputTileIterator::Params params_C,
+      typename OutputTileIterator::Params params_D,
+      typename ScaleTileIterator::Params params_dequant_scale,
+      typename OutputTileIterator::Element *ptr_C,
+      typename OutputTileIterator::Element *ptr_D,
+      AlphaScaleElementType *ptr_dequant_scale,
+      cutlass::MatrixCoord const &threadblock_offset = cutlass::MatrixCoord(0,
+                                                                            0),
+      int column_offset = 0,
+      cutlass::MatrixCoord const &problem_size_real = cutlass::MatrixCoord(0,
+                                                                           0))
+      : params_(params),
+        shared_storage_(shared_storage),
+        extent_(problem_size),
+        elementwise_(params.elementwise),
+        ptr_dequant_scale_(ptr_dequant_scale),
+        iterator_dequant_scale_(params_dequant_scale,
+                                ptr_dequant_scale,
+                                problem_size,
+                                thread_idx,
+                                threadblock_offset),
+        iterator_C_(
+            params_C, ptr_C, problem_size, thread_idx, threadblock_offset),
+        iterator_D_(
+            params_D, ptr_D, problem_size, thread_idx, threadblock_offset),
+        extent_real_(problem_size_real) {
+    beta_ = (params.elementwise.beta_ptr ? *params.elementwise.beta_ptr
+                                         : params.elementwise.beta);
 
-        if (beta_ == ElementAccumulator()) {
-            iterator_C_.clear_mask();
-        }
+    if (beta_ == ElementAccumulator()) {
+      iterator_C_.clear_mask();
+    }
+  }
+
+  /// Helper to indicate split-K behavior
+  CUTLASS_DEVICE
+  void set_k_partition(
+      int split_k_index,     ///< Index of this threadblock within
+                             ///< split-K partitioned scheme
+      int split_k_slices) {  ///< Total number of split-K slices
+  }
+
+  /// Called to set the batch index
+  CUTLASS_DEVICE
+  void set_batch_index(int batch_idx) {}
+
+  /// Called at the start of the epilogue just before iterating over
+  /// accumulator slices
+  CUTLASS_DEVICE
+  void begin_epilogue() {
+    iterator_dequant_scale_.load(fragment_dequant_scale_);
+  }
+
+  /// Called at the start of one step before starting accumulator exchange
+  CUTLASS_DEVICE
+  void begin_step(int step_idx) {
+    fragment_D_.clear();
+    fragment_C_.clear();
+
+    iterator_C_.load(fragment_C_);
+    ++iterator_C_;
+  }
+
+  /// Called at the start of a row
+  CUTLASS_DEVICE
+  void begin_row(int row_idx) {
+    // Clear accumulators for max and sum when starting a whole row
+  }
+
+  /// Called after accumulators have been exchanged for each accumulator
+  /// vector
+  CUTLASS_DEVICE
+  void visit(int iter_idx,
+             int row_idx,
+             int column_idx,
+             int frag_idx,
+             AccumulatorFragment const &accum) {
+    NumericArrayConverter<ElementCompute,
+                          ElementAccumulator,
+                          kElementsPerAccess>
+        source_converter;
+
+    ComputeFragment result = source_converter(accum);
+
+    // printf("start_row:%d start_col:%d\niter_idx: %d, row_idx: %d,
+    // column_idx: %d, frag_idx: %d, i: %d, item: %f\n",
+    // iterator_D_.thread_start_row(), iterator_D_.thread_start_column(),
+    // iter_idx, row_idx, column_idx, frag_idx, i, result[i]);
+
+    ComputeFragment alpha_col =
+        reinterpret_cast<ComputeFragment *>(&fragment_dequant_scale_)[frag_idx];
+    result = per_token_channel_scale_accumulator_(
+        result, alpha_col, element_alpha_row_);
+
+    // printf("%d %e\n", accum[0], result[0]);
+    // scale_accumulator_(result, alpha_row_vector[0]); //TODO(mseznec)
+
+    // if (elementwise_.kScale ==
+    // cutlass::epilogue::thread::ScaleType::OnlyAlphaScaling) {
+    //   result = source_converter(elementwise_(result));
+    // } else {
+    //   result = source_converter(elementwise_(result, source_vector));
+    // }
+
+    // Convert to the output
+    NumericArrayConverter<ElementOutput, ElementCompute, kElementsPerAccess>
+        output_converter;
+    OutputVector &output =
+        reinterpret_cast<OutputVector *>(&fragment_D_)[frag_idx];
+    output = output_converter(result);
+  }
+
+  /// Called at the end of a row
+  CUTLASS_DEVICE
+  void end_row(int row_idx) {
+    /* using ConvertSumOutput = cutlass::NumericConverter<ElementSum,
+     * ElementSoftmaxCompute>; */
+    /* using ConvertNormOutput = cutlass::NumericConverter<ElementNorm,
+     * ElementSoftmaxCompute>; */
+
+    /* ConvertSumOutput   convert_sum_output; */
+    /* ConvertNormOutput  convert_norm_output; */
+
+    /* Compute accumulate sum only in the last step */
+    /* accum_sum_ = warp_reduce_sum_(accum_sum_); */
+
+    /* bool is_first_thread_in_tile = ((threadIdx.x % kThreadsPerRow) == 0);
+     */
+    /* bool row_guard = thread_offset_.row() < extent_.row(); */
+    /* bool is_write_thread = row_guard && is_first_thread_in_tile; */
+
+    /* int block_batch = blockIdx.z; */
+
+    /* ElementNorm *curr_ptr_max = ptr_Max_ + thread_offset_.row() +
+     * column_offset_ + block_batch * params_.batch_stride_Max; */
+    /* ElementSum *curr_ptr_sum = ptr_Sum_ + thread_offset_.row() +
+     * column_offset_ + block_batch * params_.batch_stride_Sum; */
+
+    /* arch::global_store<ElementNorm, sizeof(ElementNorm)>( */
+    /*           convert_norm_output(accum_max_), */
+    /*           (void *)curr_ptr_max, */
+    /*           is_write_thread); */
+
+    /* arch::global_store<ElementSum, sizeof(ElementSum)>( */
+    /*           convert_sum_output(accum_sum_), */
+    /*           (void *)curr_ptr_sum, */
+    /*           is_write_thread); */
+
+    // Clear accumulators for max and sum when finishing a whole row
+    /* clear_accum_(); */
+  }
+
+  /// Called after all accumulator elements have been visited
+  CUTLASS_DEVICE
+  void end_step(int step_idx) {
+    iterator_D_.store(fragment_D_);
+    ++iterator_D_;
+  }
+
+  /// Called after all steps have been completed
+  CUTLASS_DEVICE
+  void end_epilogue() {}
+
+ private:
+  CUTLASS_DEVICE
+  ComputeFragment per_token_channel_scale_accumulator_(
+      ComputeFragment const &accum,
+      ComputeFragment const &scale_col,
+      AlphaScaleElementType const &scale_row) {
+    ComputeFragment result;
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < ComputeFragment::kElements; ++i) {
+      result[i] = accum[i] * (scale_col[i] * scale_row);
     }
 
-    /// Helper to indicate split-K behavior
-    CUTLASS_DEVICE
-    void set_k_partition(
-        int split_k_index,     ///< Index of this threadblock within
-                               ///< split-K partitioned scheme
-        int split_k_slices) {  ///< Total number of split-K slices
+    return result;
+  }
+
+  CUTLASS_DEVICE
+  ComputeFragment per_token_scale_accumulator_(
+      ComputeFragment const &accum,
+      AlphaScaleElementType const &scale_col,
+      AlphaScaleElementType const &scale_row) {
+    ComputeFragment result;
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < ComputeFragment::kElements; ++i) {
+      result[i] = accum[i] * (scale_col * scale_row);
     }
 
-    /// Called to set the batch index
-    CUTLASS_DEVICE
-    void set_batch_index(int batch_idx) {}
-
-    /// Called at the start of the epilogue just before iterating over
-    /// accumulator slices
-    CUTLASS_DEVICE
-    void begin_epilogue() {
-        iterator_dequant_scale_.load(fragment_dequant_scale_);
-    }
-
-    /// Called at the start of one step before starting accumulator exchange
-    CUTLASS_DEVICE
-    void begin_step(int step_idx) {
-        fragment_D_.clear();
-        fragment_C_.clear();
-
-        iterator_C_.load(fragment_C_);
-        ++iterator_C_;
-    }
-
-    /// Called at the start of a row
-    CUTLASS_DEVICE
-    void begin_row(int row_idx) {
-        // Clear accumulators for max and sum when starting a whole row
-    }
-
-    /// Called after accumulators have been exchanged for each accumulator
-    /// vector
-    CUTLASS_DEVICE
-    void visit(int iter_idx,
-               int row_idx,
-               int column_idx,
-               int frag_idx,
-               AccumulatorFragment const &accum) {
-        NumericArrayConverter<ElementCompute,
-                              ElementAccumulator,
-                              kElementsPerAccess>
-            source_converter;
-
-        ComputeFragment result = source_converter(accum);
-
-        // printf("start_row:%d start_col:%d\niter_idx: %d, row_idx: %d,
-        // column_idx: %d, frag_idx: %d, i: %d, item: %f\n",
-        // iterator_D_.thread_start_row(), iterator_D_.thread_start_column(),
-        // iter_idx, row_idx, column_idx, frag_idx, i, result[i]);
-
-        ComputeFragment alpha_col = reinterpret_cast<ComputeFragment *>(
-            &fragment_dequant_scale_)[frag_idx];
-        result = per_token_channel_scale_accumulator_(
-            result, alpha_col, element_alpha_row_);
-
-        // printf("%d %e\n", accum[0], result[0]);
-        // scale_accumulator_(result, alpha_row_vector[0]); //TODO(mseznec)
-
-        // if (elementwise_.kScale ==
-        // cutlass::epilogue::thread::ScaleType::OnlyAlphaScaling) {
-        //   result = source_converter(elementwise_(result));
-        // } else {
-        //   result = source_converter(elementwise_(result, source_vector));
-        // }
-
-        // Convert to the output
-        NumericArrayConverter<ElementOutput, ElementCompute, kElementsPerAccess>
-            output_converter;
-        OutputVector &output =
-            reinterpret_cast<OutputVector *>(&fragment_D_)[frag_idx];
-        output = output_converter(result);
-    }
-
-    /// Called at the end of a row
-    CUTLASS_DEVICE
-    void end_row(int row_idx) {
-        /* using ConvertSumOutput = cutlass::NumericConverter<ElementSum,
-         * ElementSoftmaxCompute>; */
-        /* using ConvertNormOutput = cutlass::NumericConverter<ElementNorm,
-         * ElementSoftmaxCompute>; */
-
-        /* ConvertSumOutput   convert_sum_output; */
-        /* ConvertNormOutput  convert_norm_output; */
-
-        /* Compute accumulate sum only in the last step */
-        /* accum_sum_ = warp_reduce_sum_(accum_sum_); */
-
-        /* bool is_first_thread_in_tile = ((threadIdx.x % kThreadsPerRow) == 0);
-         */
-        /* bool row_guard = thread_offset_.row() < extent_.row(); */
-        /* bool is_write_thread = row_guard && is_first_thread_in_tile; */
-
-        /* int block_batch = blockIdx.z; */
-
-        /* ElementNorm *curr_ptr_max = ptr_Max_ + thread_offset_.row() +
-         * column_offset_ + block_batch * params_.batch_stride_Max; */
-        /* ElementSum *curr_ptr_sum = ptr_Sum_ + thread_offset_.row() +
-         * column_offset_ + block_batch * params_.batch_stride_Sum; */
-
-        /* arch::global_store<ElementNorm, sizeof(ElementNorm)>( */
-        /*           convert_norm_output(accum_max_), */
-        /*           (void *)curr_ptr_max, */
-        /*           is_write_thread); */
-
-        /* arch::global_store<ElementSum, sizeof(ElementSum)>( */
-        /*           convert_sum_output(accum_sum_), */
-        /*           (void *)curr_ptr_sum, */
-        /*           is_write_thread); */
-
-        // Clear accumulators for max and sum when finishing a whole row
-        /* clear_accum_(); */
-    }
-
-    /// Called after all accumulator elements have been visited
-    CUTLASS_DEVICE
-    void end_step(int step_idx) {
-        iterator_D_.store(fragment_D_);
-        ++iterator_D_;
-    }
-
-    /// Called after all steps have been completed
-    CUTLASS_DEVICE
-    void end_epilogue() {}
-
-    private:
-    CUTLASS_DEVICE
-    ComputeFragment per_token_channel_scale_accumulator_(
-        ComputeFragment const &accum,
-        ComputeFragment const &scale_col,
-        AlphaScaleElementType const &scale_row) {
-        ComputeFragment result;
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < ComputeFragment::kElements; ++i) {
-            result[i] = accum[i] * (scale_col[i] * scale_row);
-        }
-
-        return result;
-    }
-
-    CUTLASS_DEVICE
-    ComputeFragment per_token_scale_accumulator_(
-        ComputeFragment const &accum,
-        AlphaScaleElementType const &scale_col,
-        AlphaScaleElementType const &scale_row) {
-        ComputeFragment result;
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < ComputeFragment::kElements; ++i) {
-            result[i] = accum[i] * (scale_col * scale_row);
-        }
-
-        return result;
-    }
+    return result;
+  }
 };
 
 /// Epilogue operator
@@ -1140,231 +1120,226 @@ class DequantEpilogueWithVisitor
                           WarpTileIterator_,
                           Padding_,
                           FragmentsPerPartition> {
-    public:
-    using Visitor = Visitor_;
+ public:
+  using Visitor = Visitor_;
 
-    using Base = EpilogueBase<Shape_,
-                              typename WarpMmaOperator_::Shape,
-                              PartitionsK,
-                              AccumulatorFragmentIterator_,
-                              WarpTileIterator_,
-                              Padding_,
-                              FragmentsPerPartition>;
+  using Base = EpilogueBase<Shape_,
+                            typename WarpMmaOperator_::Shape,
+                            PartitionsK,
+                            AccumulatorFragmentIterator_,
+                            WarpTileIterator_,
+                            Padding_,
+                            FragmentsPerPartition>;
 
-    using Shape = Shape_;
-    using WarpMmaOperator = WarpMmaOperator_;
-    static int const kPartitionsK = PartitionsK;
+  using Shape = Shape_;
+  using WarpMmaOperator = WarpMmaOperator_;
+  static int const kPartitionsK = PartitionsK;
 
-    using AccumulatorFragmentIterator = AccumulatorFragmentIterator_;
-    using WarpTileIterator = WarpTileIterator_;
-    using SharedLoadIterator = SharedLoadIterator_;
-    using Padding = Padding_;
+  using AccumulatorFragmentIterator = AccumulatorFragmentIterator_;
+  using WarpTileIterator = WarpTileIterator_;
+  using SharedLoadIterator = SharedLoadIterator_;
+  using Padding = Padding_;
 
-    using Layout = layout::RowMajor;
-    using LongIndex = typename Layout::LongIndex;
+  using Layout = layout::RowMajor;
+  using LongIndex = typename Layout::LongIndex;
 
-    /// The complete warp-level accumulator tile
-    using AccumulatorTile = typename Base::AccumulatorTile;
+  /// The complete warp-level accumulator tile
+  using AccumulatorTile = typename Base::AccumulatorTile;
 
-    /// Accumulator element
-    using ElementAccumulator = typename WarpTileIterator::Element;
+  /// Accumulator element
+  using ElementAccumulator = typename WarpTileIterator::Element;
 
-    /// Output access size
-    static int const kElementsPerAccess = Visitor::kElementsPerAccess;
+  /// Output access size
+  static int const kElementsPerAccess = Visitor::kElementsPerAccess;
 
-    /// Tensor reference to sync tensor
-    using SyncTensorRef =
-        typename cutlass::TensorRef<int, cutlass::layout::PackedVectorLayout>;
+  /// Tensor reference to sync tensor
+  using SyncTensorRef =
+      typename cutlass::TensorRef<int, cutlass::layout::PackedVectorLayout>;
 
-    /// Array type used by output functor
-    using AccumulatorAccessType =
-        Array<typename WarpTileIterator::Element, kElementsPerAccess>;
+  /// Array type used by output functor
+  using AccumulatorAccessType =
+      Array<typename WarpTileIterator::Element, kElementsPerAccess>;
 
-    /// Number of warps
-    using WarpCount = typename Base::WarpCount;
+  /// Number of warps
+  using WarpCount = typename Base::WarpCount;
 
-    static int constexpr kSmemTiles = Base::kFragmentsPerIteration > 1
-                                          ? Base::kFragmentsPerIteration
-                                          : kPartitionsK;
-    static int constexpr kSmemPointerOffset =
-        Base::SharedStorage::StorageShape::kCount / kSmemTiles;
+  static int constexpr kSmemTiles = Base::kFragmentsPerIteration > 1
+                                        ? Base::kFragmentsPerIteration
+                                        : kPartitionsK;
+  static int constexpr kSmemPointerOffset =
+      Base::SharedStorage::StorageShape::kCount / kSmemTiles;
 
-    using SharedStorage = typename Base::SharedStorage;
+  using SharedStorage = typename Base::SharedStorage;
 
-    private:
-    /// Loads fragment from shared memory aligned with output tensor
-    SharedLoadIterator shared_load_iterator_;
+ private:
+  /// Loads fragment from shared memory aligned with output tensor
+  SharedLoadIterator shared_load_iterator_;
 
-    public:
-    /// Constructor
-    CUTLASS_DEVICE
-    DequantEpilogueWithVisitor(
-        SharedStorage &shared_storage,  ///< Shared storage object.  // NOLINT
-        int thread_idx,  ///< ID of a thread within the threadblock
-        int warp_idx,    ///< ID of warp within threadblock
-        int lane_idx     ///< Id of thread within warp
-        )
-        : Base(shared_storage, thread_idx, warp_idx, lane_idx),
-          shared_load_iterator_(shared_storage.reference(), thread_idx) {}
+ public:
+  /// Constructor
+  CUTLASS_DEVICE
+  DequantEpilogueWithVisitor(
+      SharedStorage &shared_storage,  ///< Shared storage object.  // NOLINT
+      int thread_idx,                 ///< ID of a thread within the threadblock
+      int warp_idx,                   ///< ID of warp within threadblock
+      int lane_idx                    ///< Id of thread within warp
+      )
+      : Base(shared_storage, thread_idx, warp_idx, lane_idx),
+        shared_load_iterator_(shared_storage.reference(), thread_idx) {}
 
-    /// Streams the result to global memory
-    CUTLASS_DEVICE
-    void operator()(
-        Visitor &visitor,  // NOLINT
-        AccumulatorTile const
-            &accumulators) {  ///< Threadblock tile coordinate in GEMM
-                              ///< (in units of threadblock tiles)
+  /// Streams the result to global memory
+  CUTLASS_DEVICE
+  void operator()(Visitor &visitor,  // NOLINT
+                  AccumulatorTile const
+                      &accumulators) {  ///< Threadblock tile coordinate in GEMM
+                                        ///< (in units of threadblock tiles)
 
-        visitor.begin_epilogue();
+    visitor.begin_epilogue();
 
-        //
-        // Iterator over warp-level accumulator fragment
-        //
+    //
+    // Iterator over warp-level accumulator fragment
+    //
 
-        AccumulatorFragmentIterator accum_fragment_iterator(accumulators);
+    AccumulatorFragmentIterator accum_fragment_iterator(accumulators);
 
-        //
-        // Iterate over accumulator tile
-        //
+    //
+    // Iterate over accumulator tile
+    //
 
 #pragma unroll(IterationsUnroll ? Visitor::kIterations : 1)
-        for (int iter_idx = 0; iter_idx < Visitor::kIterations; ++iter_idx) {
-            //
-            // Load the source
-            //
+    for (int iter_idx = 0; iter_idx < Visitor::kIterations; ++iter_idx) {
+      //
+      // Load the source
+      //
 
-            visitor.begin_step(iter_idx);
+      visitor.begin_step(iter_idx);
 
-            //
-            // Convert and store fragment
-            //
+      //
+      // Convert and store fragment
+      //
 
-            __syncthreads();
+      __syncthreads();
 
-            acc2smem_source_needed<cutlass::make_index_sequence<
-                Visitor::kIterations>>::push(iter_idx,
-                                             accum_fragment_iterator,
-                                             this->warp_tile_iterator_);
+      acc2smem_source_needed<cutlass::make_index_sequence<
+          Visitor::kIterations>>::push(iter_idx,
+                                       accum_fragment_iterator,
+                                       this->warp_tile_iterator_);
 
-            __syncthreads();
+      __syncthreads();
 
-            //
-            // Load fragments from shared memory
-            //
+      //
+      // Load fragments from shared memory
+      //
 
-            typename SharedLoadIterator::Fragment
-                aligned_accum_fragment[kPartitionsK];
+      typename SharedLoadIterator::Fragment
+          aligned_accum_fragment[kPartitionsK];
 
-            shared_load_iterator_.load(aligned_accum_fragment[0]);
+      shared_load_iterator_.load(aligned_accum_fragment[0]);
 
-            // If the number of k-slices is > 1 - perform a reduction amongst
-            // the k-slices if (kPartitionsK > 1) {
+      // If the number of k-slices is > 1 - perform a reduction amongst
+      // the k-slices if (kPartitionsK > 1) {
 
-            //   plus <typename SharedLoadIterator::Fragment> add_fragments;
+      //   plus <typename SharedLoadIterator::Fragment> add_fragments;
 
-            //   CUTLASS_PRAGMA_UNROLL
-            //   for ( int i = 1; i < kPartitionsK; ++i) {
-            //     shared_load_iterator_.add_pointer_offset(kSmemPointerOffset);
-            //     shared_load_iterator_.load(aligned_accum_fragment[i]);
-            //     aligned_accum_fragment[0] =
-            //     add_fragments(aligned_accum_fragment[0],
-            //     aligned_accum_fragment[i]);
-            //   }
+      //   CUTLASS_PRAGMA_UNROLL
+      //   for ( int i = 1; i < kPartitionsK; ++i) {
+      //     shared_load_iterator_.add_pointer_offset(kSmemPointerOffset);
+      //     shared_load_iterator_.load(aligned_accum_fragment[i]);
+      //     aligned_accum_fragment[0] =
+      //     add_fragments(aligned_accum_fragment[0],
+      //     aligned_accum_fragment[i]);
+      //   }
 
-            //   shared_load_iterator_.add_pointer_offset((1 - kPartitionsK) *
-            //   kSmemPointerOffset);
-            // }
+      //   shared_load_iterator_.add_pointer_offset((1 - kPartitionsK) *
+      //   kSmemPointerOffset);
+      // }
 
-            //
-            // Iterate over output fragments
-            //
+      //
+      // Iterate over output fragments
+      //
 
-            AccumulatorAccessType const *accum_frag_ptr =
-                reinterpret_cast<AccumulatorAccessType const *>(
-                    &aligned_accum_fragment[0]);
+      AccumulatorAccessType const *accum_frag_ptr =
+          reinterpret_cast<AccumulatorAccessType const *>(
+              &aligned_accum_fragment[0]);
 
-            int const kAccumulatorFragmentCount =
-                AccumulatorTile::kElements /
-                (Visitor::kIterations * AccumulatorAccessType::kElements);
+      int const kAccumulatorFragmentCount =
+          AccumulatorTile::kElements /
+          (Visitor::kIterations * AccumulatorAccessType::kElements);
 
-            CUTLASS_PRAGMA_UNROLL
-            for (int idx = 0; idx < kAccumulatorFragmentCount; ++idx) {
-                int row_idx =
-                    idx / SharedLoadIterator::ThreadMap::Iterations::kColumn;
-                int col_idx =
-                    idx % SharedLoadIterator::ThreadMap::Iterations::kColumn;
+      CUTLASS_PRAGMA_UNROLL
+      for (int idx = 0; idx < kAccumulatorFragmentCount; ++idx) {
+        int row_idx = idx / SharedLoadIterator::ThreadMap::Iterations::kColumn;
+        int col_idx = idx % SharedLoadIterator::ThreadMap::Iterations::kColumn;
 
-                // Start a new row of the output fragment
-                // if (!col_idx) {
-                //   visitor.begin_row(row_idx);
-                // }
+        // Start a new row of the output fragment
+        // if (!col_idx) {
+        //   visitor.begin_row(row_idx);
+        // }
 
-                visitor.visit(
-                    iter_idx, row_idx, col_idx, idx, accum_frag_ptr[idx]);
+        visitor.visit(iter_idx, row_idx, col_idx, idx, accum_frag_ptr[idx]);
 
-                // End the row of the output fragment
-                // if (col_idx + 1 ==
-                // SharedLoadIterator::ThreadMap::Iterations::kColumn) {
-                //   visitor.end_row(row_idx);
-                // }
-            }
+        // End the row of the output fragment
+        // if (col_idx + 1 ==
+        // SharedLoadIterator::ThreadMap::Iterations::kColumn) {
+        //   visitor.end_row(row_idx);
+        // }
+      }
 
-            //
-            // Conclude the step
-            //
+      //
+      // Conclude the step
+      //
 
-            visitor.end_step(iter_idx);
-        }
-
-        visitor.end_epilogue();
+      visitor.end_step(iter_idx);
     }
 
-    private:
-    template <class Seq>
-    struct acc2smem_source_needed;
+    visitor.end_epilogue();
+  }
 
-    template <size_t... Seq>
-    struct acc2smem_source_needed<cutlass::index_sequence<Seq...>> {
-        template <int Advance>
-        CUTLASS_DEVICE static void helper(
-            AccumulatorFragmentIterator accum_fragment_iterator,
-            WarpTileIterator &warp_tile_iterator) {  // NOLINT
-            CUTLASS_PRAGMA_UNROLL
-            for (int i = 0; i < Advance; i++) {
-                ++accum_fragment_iterator;
-            }
+ private:
+  template <class Seq>
+  struct acc2smem_source_needed;
 
-            typename AccumulatorFragmentIterator::Fragment accum_fragment;
-            accum_fragment_iterator.load(accum_fragment);
-            warp_tile_iterator.store(accum_fragment);
-        }
+  template <size_t... Seq>
+  struct acc2smem_source_needed<cutlass::index_sequence<Seq...>> {
+    template <int Advance>
+    CUTLASS_DEVICE static void helper(
+        AccumulatorFragmentIterator accum_fragment_iterator,
+        WarpTileIterator &warp_tile_iterator) {  // NOLINT
+      CUTLASS_PRAGMA_UNROLL
+      for (int i = 0; i < Advance; i++) {
+        ++accum_fragment_iterator;
+      }
 
-        CUTLASS_DEVICE
-        static void push(size_t pos,
-                         AccumulatorFragmentIterator const &iterator_begin,
-                         WarpTileIterator &warp_tile_iterator) {  // NOLINT
-            int dummy[] = {
-                (pos == Seq) &&
-                (helper<Seq>(iterator_begin, warp_tile_iterator), 0)...};
-        }
-    };
+      typename AccumulatorFragmentIterator::Fragment accum_fragment;
+      accum_fragment_iterator.load(accum_fragment);
+      warp_tile_iterator.store(accum_fragment);
+    }
+
+    CUTLASS_DEVICE
+    static void push(size_t pos,
+                     AccumulatorFragmentIterator const &iterator_begin,
+                     WarpTileIterator &warp_tile_iterator) {  // NOLINT
+      int dummy[] = {(pos == Seq) &&
+                     (helper<Seq>(iterator_begin, warp_tile_iterator), 0)...};
+    }
+  };
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 /// Helper to create an EpilogueWithVisitor from an existing epilogue
 template <typename Visitor_, typename Existing_, bool IterationsUnroll = true>
 struct DequantEpilogueWithVisitorFromExistingEpilogue {
-    using Epilogue = DequantEpilogueWithVisitor<
-        Visitor_,
-        typename Existing_::Shape,
-        typename Existing_::WarpMmaOperator,
-        Existing_::kPartitionsK,
-        typename Existing_::AccumulatorFragmentIterator,
-        typename Existing_::WarpTileIterator,
-        typename Existing_::SharedLoadIterator,
-        typename Existing_::Padding,
-        Existing_::kFragmentsPerIteration,
-        IterationsUnroll>;
+  using Epilogue = DequantEpilogueWithVisitor<
+      Visitor_,
+      typename Existing_::Shape,
+      typename Existing_::WarpMmaOperator,
+      Existing_::kPartitionsK,
+      typename Existing_::AccumulatorFragmentIterator,
+      typename Existing_::WarpTileIterator,
+      typename Existing_::SharedLoadIterator,
+      typename Existing_::Padding,
+      Existing_::kFragmentsPerIteration,
+      IterationsUnroll>;
 };
 
 }  // namespace threadblock
@@ -1386,236 +1361,235 @@ template <typename ElementA_,
           int AlignmentA_ = 128 / cutlass::sizeof_bits<ElementA_>::value,
           int AlignmentB_ = 128 / cutlass::sizeof_bits<ElementB_>::value>
 class GemmDequant {
-    public:
-    ///////////////////////////////////////////////////////////////////////////////////////////////
+ public:
+  ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    //
-    // Type definitions
-    //
+  //
+  // Type definitions
+  //
 
-    using ElementA = ElementA_;
-    using ElementB = ElementB_;
-    using ElementC = ElementC_;
-    using ElementCompute = ElementCompute_;
+  using ElementA = ElementA_;
+  using ElementB = ElementB_;
+  using ElementC = ElementC_;
+  using ElementCompute = ElementCompute_;
 
-    using LayoutA = LayoutA_;
-    using LayoutB = LayoutB_;
+  using LayoutA = LayoutA_;
+  using LayoutB = LayoutB_;
 
-    using EpilogueFunctorOp = EpilogueFunctorOp_;
+  using EpilogueFunctorOp = EpilogueFunctorOp_;
 
-    // These are mandatory layouts.
-    using LayoutC = cutlass::layout::RowMajor;
+  // These are mandatory layouts.
+  using LayoutC = cutlass::layout::RowMajor;
 
-    using TensorRefA = TensorRef<ElementA, LayoutA>;
-    using TensorRefB = TensorRef<ElementB, LayoutB>;
-    using TensorRefC = TensorRef<ElementC, LayoutC>;
+  using TensorRefA = TensorRef<ElementA, LayoutA>;
+  using TensorRefB = TensorRef<ElementB, LayoutB>;
+  using TensorRefC = TensorRef<ElementC, LayoutC>;
 
-    using ThreadblockShape = ThreadblockShape_;
-    using WarpShape = WarpShape_;
-    using InstructionShape = InstructionShape_;
+  using ThreadblockShape = ThreadblockShape_;
+  using WarpShape = WarpShape_;
+  using InstructionShape = InstructionShape_;
 
-    using OperatorClass = OperatorClass_;
-    using ArchTag = ArchTag_;
+  using OperatorClass = OperatorClass_;
+  using ArchTag = ArchTag_;
 
-    static int const kStages = kStages_;
-    static int const AlignmentA = AlignmentA_;
-    static int const AlignmentB = AlignmentB_;
+  static int const kStages = kStages_;
+  static int const AlignmentA = AlignmentA_;
+  static int const AlignmentB = AlignmentB_;
 
-    using ThreadblockSwizzle =
-        cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<8>;
+  using ThreadblockSwizzle =
+      cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<8>;
 
-    ///////////////////////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    // basic GEMM kernel
-    using DefaultGemmKernel =
-        typename cutlass::gemm::kernel::DefaultDequantGemmUniversal<
-            // using DefaultGemmKernel = typename
-            // cutlass::gemm::kernel::DefaultGemm<
-            ElementA,
-            LayoutA,
-            cutlass::ComplexTransform::kNone,
-            AlignmentA,
-            ElementB,
-            LayoutB,
-            cutlass::ComplexTransform::kNone,
-            AlignmentB,
-            ElementC,
-            LayoutC,
-            ElementCompute,
-            OperatorClass,
-            ArchTag,
-            ThreadblockShape,
-            WarpShape,
-            InstructionShape,
-            EpilogueFunctorOp,
-            ThreadblockSwizzle,
-            kStages,
-            cutlass::arch::OpMultiplyAddSaturate
-            // typename cutlass::gemm::device::DefaultGemmConfiguration<
-            //     OperatorClass, ArchTag, ElementA, ElementB, ElementC,
-            //     ElementCompute>::Operator,
-            // cutlass::gemm::SharedMemoryClearOption::kNone
-            >::GemmKernel;
+  // basic GEMM kernel
+  using DefaultGemmKernel =
+      typename cutlass::gemm::kernel::DefaultDequantGemmUniversal<
+          // using DefaultGemmKernel = typename
+          // cutlass::gemm::kernel::DefaultGemm<
+          ElementA,
+          LayoutA,
+          cutlass::ComplexTransform::kNone,
+          AlignmentA,
+          ElementB,
+          LayoutB,
+          cutlass::ComplexTransform::kNone,
+          AlignmentB,
+          ElementC,
+          LayoutC,
+          ElementCompute,
+          OperatorClass,
+          ArchTag,
+          ThreadblockShape,
+          WarpShape,
+          InstructionShape,
+          EpilogueFunctorOp,
+          ThreadblockSwizzle,
+          kStages,
+          cutlass::arch::OpMultiplyAddSaturate
+          // typename cutlass::gemm::device::DefaultGemmConfiguration<
+          //     OperatorClass, ArchTag, ElementA, ElementB, ElementC,
+          //     ElementCompute>::Operator,
+          // cutlass::gemm::SharedMemoryClearOption::kNone
+          >::GemmKernel;
 
-    ///////////////////////////////////////////////////////////////////////////////////////////////
-    using ElementEpilogueCompute = float;
-    using ElementEpilogueAcc = int32_t;
+  ///////////////////////////////////////////////////////////////////////////////////////////////
+  using ElementEpilogueCompute = float;
+  using ElementEpilogueAcc = int32_t;
 
-    using DequantScaleIterator =
-        cutlass::epilogue::threadblock::PredicatedTileIterator<
-            cutlass::epilogue::threadblock::OutputTileOptimalThreadMap<
-                typename DefaultGemmKernel::Epilogue::OutputTileIterator::
-                    ThreadMap::Shape,
-                typename DefaultGemmKernel::Epilogue::OutputTileIterator::
-                    ThreadMap::Count,
-                DefaultGemmKernel::Epilogue::OutputTileIterator::ThreadMap::
-                    kThreads,
-                DefaultGemmKernel::Epilogue::OutputTileIterator::
-                    kElementsPerAccess,
-                cutlass::sizeof_bits<ElementEpilogueCompute>::value>,
-            ElementEpilogueCompute>;
+  using DequantScaleIterator =
+      cutlass::epilogue::threadblock::PredicatedTileIterator<
+          cutlass::epilogue::threadblock::OutputTileOptimalThreadMap<
+              typename DefaultGemmKernel::Epilogue::OutputTileIterator::
+                  ThreadMap::Shape,
+              typename DefaultGemmKernel::Epilogue::OutputTileIterator::
+                  ThreadMap::Count,
+              DefaultGemmKernel::Epilogue::OutputTileIterator::ThreadMap::
+                  kThreads,
+              DefaultGemmKernel::Epilogue::OutputTileIterator::
+                  kElementsPerAccess,
+              cutlass::sizeof_bits<ElementEpilogueCompute>::value>,
+          ElementEpilogueCompute>;
 
-    // Epilogue visitor
-    using EpilogueVisitor =
-        typename cutlass::epilogue::threadblock::DequantEpilogueVisitor<
-            ThreadblockShape,
-            DefaultGemmKernel::kThreadCount,
-            DequantScaleIterator,
-            typename DefaultGemmKernel::Epilogue::OutputTileIterator,
-            ElementEpilogueAcc,
-            ElementEpilogueCompute,
-            EpilogueFunctorOp>;
+  // Epilogue visitor
+  using EpilogueVisitor =
+      typename cutlass::epilogue::threadblock::DequantEpilogueVisitor<
+          ThreadblockShape,
+          DefaultGemmKernel::kThreadCount,
+          DequantScaleIterator,
+          typename DefaultGemmKernel::Epilogue::OutputTileIterator,
+          ElementEpilogueAcc,
+          ElementEpilogueCompute,
+          EpilogueFunctorOp>;
 
-    using ElementScale = typename EpilogueVisitor::AlphaScaleElementType;
-    using LayoutScale = cutlass::layout::RowMajor;
-    using TensorRefScale = TensorRef<ElementScale, LayoutScale>;
+  using ElementScale = typename EpilogueVisitor::AlphaScaleElementType;
+  using LayoutScale = cutlass::layout::RowMajor;
+  using TensorRefScale = TensorRef<ElementScale, LayoutScale>;
 
-    /// Epilogue
-    using Epilogue = typename cutlass::epilogue::threadblock::
-        DequantEpilogueWithVisitorFromExistingEpilogue<
-            EpilogueVisitor,
-            typename DefaultGemmKernel::Epilogue>::Epilogue;
+  /// Epilogue
+  using Epilogue = typename cutlass::epilogue::threadblock::
+      DequantEpilogueWithVisitorFromExistingEpilogue<
+          EpilogueVisitor,
+          typename DefaultGemmKernel::Epilogue>::Epilogue;
 
-    // GEMM
-    using GemmKernel = gemm::kernel::GemmWithEpilogueVisitorDequant<
-        typename DefaultGemmKernel::Mma,
-        Epilogue,
-        ThreadblockSwizzle>;
+  // GEMM
+  using GemmKernel = gemm::kernel::GemmWithEpilogueVisitorDequant<
+      typename DefaultGemmKernel::Mma,
+      Epilogue,
+      ThreadblockSwizzle>;
 
-    public:
-    /// Arguments class
-    struct Arguments {
-        typename GemmKernel::Arguments gemm;
-        cutlass::gemm::GemmCoord extend;
-
-        //
-        // Methods
-        //
-        Arguments() : gemm(), extend() {}
-
-        Arguments(cutlass::gemm::GemmCoord problem_size,
-                  TensorRefA ref_A_,
-                  TensorRefB ref_B_,
-                  TensorRefC ref_C_,
-                  TensorRefC ref_D_,
-                  TensorRefScale ref_scale_,
-                  typename EpilogueFunctorOp::Params linear_scaling)
-            : gemm(cutlass::gemm::GemmUniversalMode::kGemm,
-                   problem_size,
-                   ref_A_,
-                   ref_B_,
-                   ref_C_,
-                   ref_D_,
-                   ref_scale_,
-                   typename EpilogueVisitor::Arguments(linear_scaling)),
-              extend(problem_size) {}
-    };
-
-    struct Params {
-        typename GemmKernel::Params gemm;
-        MatrixCoord extend;
-        //
-        // Methods
-        //
-        Params() {}
-
-        explicit Params(Arguments const &args)
-            : gemm(args.gemm),
-              extend(MatrixCoord(args.extend.m(), args.extend.n())) {}
-    };
-
-    public:
-    // Gemm
+ public:
+  /// Arguments class
+  struct Arguments {
+    typename GemmKernel::Arguments gemm;
+    cutlass::gemm::GemmCoord extend;
 
     //
     // Methods
     //
+    Arguments() : gemm(), extend() {}
 
-    private:
-    Params params_;
+    Arguments(cutlass::gemm::GemmCoord problem_size,
+              TensorRefA ref_A_,
+              TensorRefB ref_B_,
+              TensorRefC ref_C_,
+              TensorRefC ref_D_,
+              TensorRefScale ref_scale_,
+              typename EpilogueFunctorOp::Params linear_scaling)
+        : gemm(cutlass::gemm::GemmUniversalMode::kGemm,
+               problem_size,
+               ref_A_,
+               ref_B_,
+               ref_C_,
+               ref_D_,
+               ref_scale_,
+               typename EpilogueVisitor::Arguments(linear_scaling)),
+          extend(problem_size) {}
+  };
 
-    public:
-    /// Ctor
-    GemmDequant() {}
+  struct Params {
+    typename GemmKernel::Params gemm;
+    MatrixCoord extend;
+    //
+    // Methods
+    //
+    Params() {}
 
-    /// Initialize
-    Status initialize(Arguments const &args) {
-        params_ = Params(args);
+    explicit Params(Arguments const &args)
+        : gemm(args.gemm),
+          extend(MatrixCoord(args.extend.m(), args.extend.n())) {}
+  };
 
-        return cutlass::Status::kSuccess;
+ public:
+  // Gemm
+
+  //
+  // Methods
+  //
+
+ private:
+  Params params_;
+
+ public:
+  /// Ctor
+  GemmDequant() {}
+
+  /// Initialize
+  Status initialize(Arguments const &args) {
+    params_ = Params(args);
+
+    return cutlass::Status::kSuccess;
+  }
+
+  /// Run
+  Status run(cudaStream_t stream) {
+    //
+    // Launch the GEMM + max kernel
+    //
+
+    dim3 gemm_grid =
+        ThreadblockSwizzle().get_grid_shape(params_.gemm.grid_tiled_shape);
+    dim3 gemm_block(GemmKernel::kThreadCount, 1, 1);
+
+    int gemm_smem_size =
+        static_cast<int>(sizeof(typename GemmKernel::SharedStorage));
+
+    cudaError_t result;
+
+    if (gemm_smem_size >= (48 << 10)) {
+      result = cudaFuncSetAttribute(cutlass::Kernel<GemmKernel>,
+                                    cudaFuncAttributeMaxDynamicSharedMemorySize,
+                                    gemm_smem_size);
+
+      if (result != cudaSuccess) {
+        return Status::kErrorInternal;
+      }
     }
 
-    /// Run
-    Status run(cudaStream_t stream) {
-        //
-        // Launch the GEMM + max kernel
-        //
+    cutlass::Kernel<GemmKernel>
+        <<<gemm_grid, gemm_block, gemm_smem_size, stream>>>(params_.gemm);
 
-        dim3 gemm_grid =
-            ThreadblockSwizzle().get_grid_shape(params_.gemm.grid_tiled_shape);
-        dim3 gemm_block(GemmKernel::kThreadCount, 1, 1);
+    result = cudaGetLastError();
 
-        int gemm_smem_size =
-            static_cast<int>(sizeof(typename GemmKernel::SharedStorage));
-
-        cudaError_t result;
-
-        if (gemm_smem_size >= (48 << 10)) {
-            result = cudaFuncSetAttribute(
-                cutlass::Kernel<GemmKernel>,
-                cudaFuncAttributeMaxDynamicSharedMemorySize,
-                gemm_smem_size);
-
-            if (result != cudaSuccess) {
-                return Status::kErrorInternal;
-            }
-        }
-
-        cutlass::Kernel<GemmKernel>
-            <<<gemm_grid, gemm_block, gemm_smem_size, stream>>>(params_.gemm);
-
-        result = cudaGetLastError();
-
-        if (result != cudaSuccess) {
-            std::cerr << "gemm_with_dequant kernel error: "
-                      << cudaGetErrorString(result) << std::endl;
-            return cutlass::Status::kErrorInternal;
-        }
-
-        return cutlass::Status::kSuccess;
+    if (result != cudaSuccess) {
+      std::cerr << "gemm_with_dequant kernel error: "
+                << cudaGetErrorString(result) << std::endl;
+      return cutlass::Status::kErrorInternal;
     }
 
-    /// Function call operator
-    Status operator()(cudaStream_t stream = nullptr) { return run(stream); }
+    return cutlass::Status::kSuccess;
+  }
+
+  /// Function call operator
+  Status operator()(cudaStream_t stream = nullptr) { return run(stream); }
 };
 
 }  // namespace cutlass
 
 typedef struct {
-  void const* act;
-  void const* weight;
-  void const* scale;
-  void* output;
+  void const *act;
+  void const *weight;
+  void const *scale;
+  void *output;
   int32_t m, n, k;
   cudaStream_t stream;
 } GemmDequantParams;

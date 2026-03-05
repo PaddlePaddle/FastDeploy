@@ -1,6 +1,7 @@
 exclude: |
   (?x)^(
-    dockerfiles/.+
+    dockerfiles/.+|
+    custom_ops/third_party/.+
   )$
 default_install_hook_types:
   - pre-commit

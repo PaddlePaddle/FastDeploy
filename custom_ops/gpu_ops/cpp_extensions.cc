@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/extension.h"
+#include "pybind11/numpy.h"
 #include "pybind11/pybind11.h"
 namespace py = pybind11;
 
@@ -49,9 +50,19 @@ void cuda_host_free(uintptr_t ptr) {
   check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
 }
 
-paddle::Tensor GetStop(paddle::Tensor& not_need_stop);
-
-void SetStop(paddle::Tensor& not_need_stop, bool flag);
+paddle::Tensor CustomNumpyToTensor(py::array numpy_array,
+                                   paddle::Tensor tensor) {
+  py::buffer_info buf_info = numpy_array.request();
+  void* numpy_data = buf_info.ptr;
+  size_t data_size = buf_info.size * buf_info.itemsize;
+  auto stream = tensor.stream();
+  cudaMemcpyAsync((void*)(tensor.data()),
+                  numpy_data,
+                  data_size,
+                  cudaMemcpyHostToDevice,
+                  stream);
+  return tensor;
+}
 
 void FlashAttentionMask(const paddle::Tensor& q_input,
                         const paddle::Tensor& k_input,
@@ -1763,13 +1774,13 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_attn_mask_q", &get_attn_mask_q, "get_attn_mask_q function");
 
-  m.def("get_stop", &GetStop, "get_stop function");
-
-  m.def("set_stop", &SetStop, "set_stop function");
+  m.def("custom_numpy_to_tensor",
+        &CustomNumpyToTensor,
+        "custom_numpy_to_tensor function");
 
   m.def("radix_topk_ragged_transform",
-        &RadixTopkRaggedTransform,
-        "radix_topk_ragged_transform function");
+      &RadixTopkRaggedTransform,
+      "radix_topk_ragged_transform function");
 
   m.def("dsk_attn_write_cache", &DSMLAWriteCacheKernel, "dsk_attn_write_cache");
 

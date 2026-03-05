@@ -15,9 +15,9 @@
 """
 
 import logging
+import multiprocessing
 import threading
 import time
-from multiprocessing import Queue
 from typing import Dict, List, Optional
 
 from fastdeploy.engine.request import Request, RequestOutput
@@ -207,10 +207,10 @@ class DPScheduler:
             splitwise_role,
         )
 
-    def start(self, dp_rank: int, request_queues: List[Queue], result_queues: Queue):
+    def start(self, dp_rank: int):
         self.dp_rank = dp_rank
-        self.request_queues = request_queues
-        self.result_queues = result_queues
+        self.request_queues = multiprocessing.Queue()
+        self.result_queues = multiprocessing.Queue()
         self.scheduler_logger = get_logger("dpscheduler", f"dp_scheduler_rank{self.dp_rank}.log")
         self._scheduler.scheduler_logger = self.scheduler_logger
         threading.Thread(target=self._put_requests_to_local).start()
@@ -221,13 +221,13 @@ class DPScheduler:
         for request in requests:
             if not hasattr(request, "dp_rank"):
                 raise ValueError(f"Request object is missing the 'dp_rank' attribute: {request}")
-            self.request_queues[request.dp_rank].put(request)
+            self.request_queues.put(request)
             results.append((request.request_id, None))
         return results
 
     def _put_requests_to_local(self):
         while True:
-            request = self.request_queues[self.dp_rank].get()
+            request = self.request_queues.get()
             self.scheduler_logger.info(f"Recieve request from puller, request_id: {request.request_id}")
             self._scheduler.put_requests([request])
 
@@ -236,7 +236,7 @@ class DPScheduler:
             results = self._scheduler.get_results()
             if len(results) == 0:
                 continue
-            self.result_queues[self.dp_rank].put(results)
+            self.result_queues.put(results)
 
     def get_requests(
         self,
@@ -257,4 +257,4 @@ class DPScheduler:
         self._scheduler.put_results(results)
 
     def get_results(self) -> Dict[str, List[RequestOutput]]:
-        return self.result_queues[self.dp_rank].get()
+        return self.result_queues.get()
