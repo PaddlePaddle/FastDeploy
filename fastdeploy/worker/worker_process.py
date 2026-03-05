@@ -563,7 +563,7 @@ class PaddleDisWorkerProc:
 
             if (
                 not self.parallel_config.use_ep
-                and not current_platform.is_cuda()
+                and hasattr(self.worker.model_runner, "not_need_stop")
                 and not self.worker.model_runner.not_need_stop()
             ):
                 self._tp_barrier_wait() if tp_size > 1 else None
@@ -579,12 +579,11 @@ class PaddleDisWorkerProc:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
-            if hasattr(self.worker.model_runner, "current_launch_token_num"):
-                need_stop = self.worker.model_runner.current_launch_token_num == 0
-            else:
-                need_stop = not self.worker.model_runner.not_need_stop()
-
-            if not self.parallel_config.use_ep and current_platform.is_cuda() and need_stop:
+            if (
+                not self.parallel_config.use_ep
+                and hasattr(self.worker.model_runner, "current_launch_token_num")
+                and self.worker.model_runner.current_launch_token_num == 0
+            ):
                 self._tp_barrier_wait() if tp_size > 1 else None
                 time.sleep(0.001)
 
