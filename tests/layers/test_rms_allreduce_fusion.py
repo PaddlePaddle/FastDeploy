@@ -279,9 +279,12 @@ def run_distributed():
     gpus_str = ",".join(str(g) for g in gpu_ids)
     script_path = os.path.abspath(__file__)
     cmd = [
-        sys.executable, "-m", "paddle.distributed.launch",
+        sys.executable,
+        "-m",
+        "paddle.distributed.launch",
         f"--gpus={gpus_str}",
-        script_path, "--run-tests",
+        script_path,
+        "--run-tests",
     ]
     print(f"Launching distributed test: {' '.join(cmd)}")
     result = subprocess.run(cmd, cwd=os.path.dirname(script_path))
