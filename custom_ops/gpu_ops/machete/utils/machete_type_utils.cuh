@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/main/csrc/cutlass_extensions/vllm_numeric_conversion.cuh
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/main/csrc/cutlass_extensions/vllm_numeric_conversion.cuh
 #include "cutlass/bfloat16.h"
 #include "cutlass/half.h"
 #include "cuda_bf16.h"

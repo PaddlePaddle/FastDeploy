@@ -28,8 +28,8 @@
 #define MAX_BSZ 512
 
 struct msgdata {
-    long mtype;
-    int mtext[MAX_BSZ + 2];  // stop_flag, bsz, tokens
+  long mtype;
+  int mtext[MAX_BSZ + 2];  // stop_flag, bsz, tokens
 };
 
 void SaveOutMmsg(const paddle::Tensor& x,

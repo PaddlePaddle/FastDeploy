@@ -35,39 +35,39 @@ limitations under the License. */
 //       in the kernel layout details when doing weight only quantization.
 enum class CutlassTileConfig {
   // Signals that we should run heuristics do choose a config
-  Undefined, // 0
+  Undefined,  // 0
 
   // Signals that we should run heuristics do choose a config
-  ChooseWithHeuristic, // 1
+  ChooseWithHeuristic,  // 1
 
   // SiMT config
-  CtaShape128x128x8_WarpShape64x64x8, // 2
+  CtaShape128x128x8_WarpShape64x64x8,  // 2
 
   // TensorCore configs CTA_N = 128, CTA_K = 64
   // Warp configs for M=16
-  CtaShape16x128x64_WarpShape16x32x64, // 3
-  CtaShape16x256x64_WarpShape16x64x64, // 4
+  CtaShape16x128x64_WarpShape16x32x64,  // 3
+  CtaShape16x256x64_WarpShape16x64x64,  // 4
 
   // Warp configs for M=32
-  CtaShape32x128x64_WarpShape32x32x64, // 5
+  CtaShape32x128x64_WarpShape32x32x64,  // 5
 
   // Warp configs for M=64
-  CtaShape64x128x64_WarpShape32x64x64, // 6
-  CtaShape64x128x64_WarpShape64x32x64, // 7
+  CtaShape64x128x64_WarpShape32x64x64,  // 6
+  CtaShape64x128x64_WarpShape64x32x64,  // 7
 
   // Warp configs for M=128
-  CtaShape128x128x64_WarpShape64x32x64, // 8
-  CtaShape128x128x64_WarpShape128x32x64, // 9
+  CtaShape128x128x64_WarpShape64x32x64,   // 8
+  CtaShape128x128x64_WarpShape128x32x64,  // 9
 
   // configs for large M in encoder
-  CtaShape128x256x64_WarpShape64x64x64, // 10
-  CtaShape256x128x64_WarpShape64x64x64, // 11
+  CtaShape128x256x64_WarpShape64x64x64,  // 10
+  CtaShape256x128x64_WarpShape64x64x64,  // 11
 };
 
 enum class SplitKStyle {
-  NO_SPLIT_K, //0
-  SPLIT_K_SERIAL, //1
-  SPLIT_K_STREAM, //2
+  NO_SPLIT_K,      // 0
+  SPLIT_K_SERIAL,  // 1
+  SPLIT_K_STREAM,  // 2
   // SPLIT_K_PARALLEL // Not supported yet
 };
 
