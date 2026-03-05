@@ -728,6 +728,10 @@ class ResourceManagerV1(ResourceManager):
                         self.allocated_slots(request) - request.num_total_tokens
                         <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
                     ):
+                        next_block_num_to_allocate = max(min(self.config.cache_config.max_block_num_per_seq - len(request.block_tables), self.config.cache_config.enc_dec_block_num), 0)
+                        if next_block_num_to_allocate == 0:
+                            req_index += 1
+                            continue
                         # Allocation for next decoding blocks
                         if self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
                             llm_logger.debug(
