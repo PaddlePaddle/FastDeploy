@@ -414,7 +414,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 ffn_out,
                 m_indices,
             )
-            del ffn_in_x
             if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE:
                 tmp_ffn_out, out_probs = paddle.nn.functional.moe_unpermute(
                     hidden_states_unzipped=ffn_out,
