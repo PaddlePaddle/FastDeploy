@@ -179,6 +179,30 @@ def get_gencode_flags(archs):
     return flags
 
 
+def get_compile_parallelism():
+    """
+    Decide safe compile parallelism for both build workers and nvcc threads.
+    """
+    cpu_count = os.cpu_count() or 1
+
+    max_jobs_env = os.getenv("MAX_JOBS")
+    if max_jobs_env is not None:
+        try:
+            max_jobs = int(max_jobs_env)
+            if max_jobs < 1:
+                raise ValueError
+        except ValueError as exc:
+            raise ValueError(f"Invalid MAX_JOBS={max_jobs_env!r}, expected a positive integer.") from exc
+    else:
+        # Cap default build workers to avoid OOM in high-core CI runners.
+        max_jobs = min(cpu_count, 32)
+        os.environ["MAX_JOBS"] = str(max_jobs)
+
+    # Limit nvcc internal threads to avoid multiplying memory pressure.
+    nvcc_threads = min(max_jobs, 8)
+    return max_jobs, nvcc_threads
+
+
 def find_end_files(directory, end_str):
     """
     Find files with end str in directory.
@@ -372,8 +396,9 @@ elif paddle.is_compiled_with_cuda():
         "-Igpu_ops",
         "-Ithird_party/nlohmann_json/include",
     ]
-    worker_threads = os.cpu_count()
-    nvcc_compile_args += ["-t", str(worker_threads)]
+    max_jobs, nvcc_threads = get_compile_parallelism()
+    print(f"MAX_JOBS = {max_jobs}, nvcc -t = {nvcc_threads}")
+    nvcc_compile_args += ["-t", str(nvcc_threads)]
 
     nvcc_version = get_nvcc_version()
     print(f"nvcc_version = {nvcc_version}")

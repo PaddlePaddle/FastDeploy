@@ -1220,8 +1220,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("pre_cache_len_concat",
         &PreCacheLenConcat,
         "pre_cache len concat function");
-#endif
-#ifdef ENABLE_SM80_EXT_OPS
+
   /**
    * moe/fused_moe/fused_moe.cu
    * fused_moe
@@ -1474,8 +1473,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
 #ifdef ENABLE_SM80_EXT_OPS
   m.def("count_tokens_per_expert_func", &count_tokens_per_expert_func);
-#endif
-#ifdef ENABLE_SM80_EXT_OPS
+
   m.def("tritonmoe_preprocess_func", &tritonmoe_preprocess_kernel);
 
   m.def("MoeWna16MarlinGemmApi",
@@ -1548,7 +1546,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("input"),
         py::arg("scales"),
         py::arg("scale_ub"));
- #ifdef ENABLE_SM80_EXT_OPS
+#ifdef ENABLE_SM80_EXT_OPS
   m.def("decode_mla_write_cache",
         &DecodeMLAWriteCacheKernel,
         "decode_mla_write_cache function");
@@ -1556,17 +1554,17 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("prefill_mla_write_cache",
         &PrefillMLAWriteCacheKernel,
         "prefill_mla_write_cache function");
- #endif
+#endif
 
   m.def("fused_rotary_position_encoding",
         &FusedRotaryPositionEncoding,
         "fused_rotary_position_encoding function");
 
- #ifdef ENABLE_SM80_EXT_OPS
+#ifdef ENABLE_SM80_EXT_OPS
   m.def("multi_head_latent_attention",
         &MultiHeadLatentAttention,
         "multi_head_latent_attention function");
- #endif
+#endif
 
   m.def("noaux_tc", &NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
 
