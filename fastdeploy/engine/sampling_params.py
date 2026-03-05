@@ -20,7 +20,9 @@ import random
 from dataclasses import dataclass, fields
 from enum import Enum
 from typing import Any, List, Optional, TypeVar, Union
+
 import numpy as np
+
 from fastdeploy import envs
 
 T = TypeVar("T")
@@ -336,21 +338,20 @@ class SamplingParams:
 
         if self.bad_words_token_ids is not None:
             try:
-                np.array(
-                self.bad_words_token_ids, dtype="int64"
-            )
+                np.array(self.bad_words_token_ids, dtype="int64")
             except Exception:
-                raise TypeError(f"bad_words_token_ids must be an array of integers, but got {self.bad_words_token_ids}")
+                raise TypeError(
+                    f"bad_words_token_ids must be an array of integers, but got {self.bad_words_token_ids}"
+                )
 
         if self.stop_token_ids is not None:
             try:
-                np.array(
-                self.stop_token_ids, dtype="int64"
-            )
+                np.array(self.stop_token_ids, dtype="int64")
             except Exception:
-                raise TypeError(f"stop_token_ids must be an array of integers, and all sublists must have the same length, but got {self.stop_token_ids}")
-        
-        
+                raise TypeError(
+                    f"stop_token_ids must be an array of integers, and all sublists must have the same length, but got {self.stop_token_ids}"
+                )
+
             if self.stop_seqs_len is not None:
                 if len(self.stop_token_ids) != self.stop_seqs_len:
                     raise ValueError(
