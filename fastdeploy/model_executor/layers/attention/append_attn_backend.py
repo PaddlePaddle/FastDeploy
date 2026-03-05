@@ -359,7 +359,12 @@ class AppendAttentionBackend(AttentionBackend):
             )
 
         block_tables = forward_meta.block_tables_3d if self.enable_head_wise_kv_cache else forward_meta.block_tables
-        if self.enable_head_wise_kv_cache and self.head_wise_debug_log and self._head_wise_debug_log_count < 20:
+        if (
+            self.enable_head_wise_kv_cache
+            and self.head_wise_debug_log
+            and not getattr(forward_meta, "is_dummy_or_profile_run", False)
+            and self._head_wise_debug_log_count < 200
+        ):
             block_tables_3d = getattr(forward_meta, "block_tables_3d", None)
             batch_size = forward_meta.seq_lens_this_time.shape[0]
             expected_dim0 = batch_size * self.kv_num_heads
