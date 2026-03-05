@@ -156,6 +156,7 @@ def load_data_service():
     engine_args = EngineArgs.from_cli_args(args)
     config = engine_args.create_engine_config()
     api_server_logger.info(f"local_data_parallel_id: {config.parallel_config}")
+    api_server_logger.info(f"local_data_parallel_id: {config.parallel_config.local_data_parallel_id}")
     expert_service = ExpertService(config, config.parallel_config.local_data_parallel_id)
     if not expert_service.start(args.port, config.parallel_config.local_data_parallel_id):
         api_server_logger.error("Failed to initialize FastDeploy LLM expert service, service exit now!")
@@ -175,8 +176,9 @@ async def lifespan(app: FastAPI):
     uvicorn_access = logging.getLogger("uvicorn.access")
     uvicorn_access.handlers.clear()
 
-    # 使用 gunicorn 的格式
-    formatter = logging.Formatter("[%(asctime)s] [%(process)d] [INFO] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    formatter = logging.Formatter(
+        "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
+    )
 
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
@@ -668,7 +670,7 @@ def launch_api_server() -> None:
         "loglevel": "info",
         "graceful_timeout": args.timeout_graceful_shutdown,
         "timeout": args.timeout,
-        "control_socket_disable": True, 
+        "control_socket_disable": True,
     }
 
     try:

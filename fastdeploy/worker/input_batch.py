@@ -152,7 +152,7 @@ class InputBatch:
             self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32", device="cpu")
             self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool", device="cpu")
         else:
-            self.not_need_stop = paddle.full([1], False, dtype="bool").pin_memory()
+            self.not_need_stop = paddle.full([1], False, dtype="bool").cpu()
             self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
             self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
             self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").pin_memory()
@@ -184,8 +184,8 @@ class InputBatch:
             dtype="int64",
         )
         self.batch_id_per_token = paddle.full([max_num_seqs * self.max_chunk_tokens, 1], 0, dtype="int32")
-        self.cu_seqlens_q = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
-        self.cu_seqlens_k = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
+        self.cu_seqlens_q = paddle.full([max_num_seqs + 1], 0, dtype="int32")
+        self.cu_seqlens_k = paddle.full([max_num_seqs + 1], 0, dtype="int32")
 
         # Declare AttentionBackend buffers
         self.decoder_batch_ids = None

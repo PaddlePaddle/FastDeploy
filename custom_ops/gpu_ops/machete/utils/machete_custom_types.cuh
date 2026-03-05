@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/main/csrc/cutlass_extensions/vllm_custom_types.cuh
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/main/csrc/cutlass_extensions/vllm_custom_types.cuh
 #pragma once
 
 #include "cutlass/integer_subbyte.h"

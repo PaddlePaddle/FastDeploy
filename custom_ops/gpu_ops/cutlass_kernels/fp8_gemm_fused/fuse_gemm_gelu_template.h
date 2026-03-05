@@ -20,9 +20,14 @@
 #include "cutlass/gemm/device/gemm_universal.h"
 #include "cutlass/gemm/device/gemm_splitk_parallel.h"
 
-template <typename InputType, typename OutType,
-            typename ThreadBlockShape, typename WarpShape,
-            typename MMAShape, int Stages, bool hasbias, typename SM>
+template <typename InputType,
+          typename OutType,
+          typename ThreadBlockShape,
+          typename WarpShape,
+          typename MMAShape,
+          int Stages,
+          bool hasbias,
+          typename SM>
 bool dispatch_fuse_gemm_gelu(GemmEpilogueAllParams params) {
   using ElementInputA = typename std::conditional_t<
       std::is_same_v<InputType, phi::dtype::float8_e4m3fn>,
@@ -64,9 +69,8 @@ bool dispatch_fuse_gemm_gelu(GemmEpilogueAllParams params) {
   using ShapeMMAOp = MMAShape;  // <- MMA Op tile
 
   static constexpr auto ScaleType =
-              hasbias? cutlass::epilogue::thread::ScaleType::NoBetaScaling
-                       : cutlass::epilogue::thread::ScaleType::OnlyAlphaScaling;
-
+      hasbias ? cutlass::epilogue::thread::ScaleType::NoBetaScaling
+              : cutlass::epilogue::thread::ScaleType::OnlyAlphaScaling;
 
   // This code section describes how threadblocks are scheduled on GPU
   using SwizzleThreadBlock =
@@ -82,7 +86,7 @@ bool dispatch_fuse_gemm_gelu(GemmEpilogueAllParams params) {
       ElementAccumulator,  // <- data type of accumulator
       ElementComputeEpilogue,
       ScaleType>;  // <- data type for alpha/beta in linear
-                              // combination function
+                   // combination function
 
   // Number of pipelines you want to use
   constexpr int NumStages = Stages;
@@ -164,10 +168,15 @@ bool dispatch_fuse_gemm_gelu(GemmEpilogueAllParams params) {
   return true;
 }
 
-
-template <typename InputType, typename OutType,
-            typename ThreadBlockShape, typename WarpShape,
-            typename MMAShape, int Stages, int SplitK, bool hasbias, typename SM>
+template <typename InputType,
+          typename OutType,
+          typename ThreadBlockShape,
+          typename WarpShape,
+          typename MMAShape,
+          int Stages,
+          int SplitK,
+          bool hasbias,
+          typename SM>
 bool dispatch_fuse_gemm_split_k_gelu(GemmEpilogueAllParams params) {
   using ElementInputA = typename std::conditional_t<
       std::is_same_v<InputType, phi::dtype::float8_e4m3fn>,
@@ -209,9 +218,8 @@ bool dispatch_fuse_gemm_split_k_gelu(GemmEpilogueAllParams params) {
   using ShapeMMAOp = MMAShape;  // <- MMA Op tile
 
   static constexpr auto ScaleType =
-              hasbias? cutlass::epilogue::thread::ScaleType::NoBetaScaling
-                       : cutlass::epilogue::thread::ScaleType::OnlyAlphaScaling;
-
+      hasbias ? cutlass::epilogue::thread::ScaleType::NoBetaScaling
+              : cutlass::epilogue::thread::ScaleType::OnlyAlphaScaling;
 
   // This code section describes how threadblocks are scheduled on GPU
   using SwizzleThreadBlock =
@@ -227,7 +235,7 @@ bool dispatch_fuse_gemm_split_k_gelu(GemmEpilogueAllParams params) {
       ElementAccumulator,  // <- data type of accumulator
       ElementComputeEpilogue,
       ScaleType>;  // <- data type for alpha/beta in linear
-                              // combination function
+                   // combination function
 
   // Number of pipelines you want to use
   constexpr int NumStages = Stages;
@@ -309,10 +317,14 @@ bool dispatch_fuse_gemm_split_k_gelu(GemmEpilogueAllParams params) {
   return true;
 }
 
-
-template <typename InputType, typename OutType,
-            typename ThreadBlockShape, typename WarpShape,
-            typename MMAShape, int Stages, bool hasbias, typename SM>
+template <typename InputType,
+          typename OutType,
+          typename ThreadBlockShape,
+          typename WarpShape,
+          typename MMAShape,
+          int Stages,
+          bool hasbias,
+          typename SM>
 bool dispatch_fuse_gemm_split_k_gelu(GemmEpilogueAllParams params) {
   using ElementInputA = typename std::conditional_t<
       std::is_same_v<InputType, phi::dtype::float8_e4m3fn>,
@@ -354,8 +366,8 @@ bool dispatch_fuse_gemm_split_k_gelu(GemmEpilogueAllParams params) {
   using ShapeMMAOp = MMAShape;
 
   static constexpr auto ScaleType =
-              hasbias? cutlass::epilogue::thread::ScaleType::NoBetaScaling
-                       : cutlass::epilogue::thread::ScaleType::OnlyAlphaScaling;
+      hasbias ? cutlass::epilogue::thread::ScaleType::NoBetaScaling
+              : cutlass::epilogue::thread::ScaleType::OnlyAlphaScaling;
 
   using EpilogueOp = cutlass::epilogue::thread::LinearCombinationGELU<
       ElementOutput,  // <- data type of output matrix
@@ -367,50 +379,55 @@ bool dispatch_fuse_gemm_split_k_gelu(GemmEpilogueAllParams params) {
       ElementAccumulator,  // <- data type of accumulator
       ElementComputeEpilogue,
       ScaleType>;  // <- data type for alpha/beta in linear
-                              // combination function
+                   // combination function
 
   // Number of pipelines you want to use
   constexpr int NumStages = Stages;
 
-    using ConvertScaledOp = cutlass::epilogue::thread::Convert<
-        ElementAccumulator,
-        cutlass::gemm::device::DefaultGemmConfiguration<cutlass::arch::OpClassSimt, SmArch, ElementInputA, ElementInputB,
-                                    ElementAccumulator,
-                                    ElementAccumulator>::EpilogueOutputOp::kCount,
-        ElementAccumulator>;
+  using ConvertScaledOp = cutlass::epilogue::thread::Convert<
+      ElementAccumulator,
+      cutlass::gemm::device::DefaultGemmConfiguration<
+          cutlass::arch::OpClassSimt,
+          SmArch,
+          ElementInputA,
+          ElementInputB,
+          ElementAccumulator,
+          ElementAccumulator>::EpilogueOutputOp::kCount,
+      ElementAccumulator>;
 
-    /// Reduction operator
-    using ReductionOp = cutlass::reduction::thread::ReduceAdd<
-        ElementAccumulator, typename EpilogueOp::ElementAccumulator,
-        EpilogueOp::kCount>;
+  /// Reduction operator
+  using ReductionOp = cutlass::reduction::thread::ReduceAdd<
+      ElementAccumulator,
+      typename EpilogueOp::ElementAccumulator,
+      EpilogueOp::kCount>;
 
-    /// Threadblock-level swizzling operator
-    using ThreadblockSwizzle = cutlass::gemm::threadblock::GemmSplitKHorizontalThreadblockSwizzle;
+  /// Threadblock-level swizzling operator
+  using ThreadblockSwizzle =
+      cutlass::gemm::threadblock::GemmSplitKHorizontalThreadblockSwizzle;
 
-    /// Operation performed by GEMM
-    using Operator = cutlass::arch::OpMultiplyAddFastAccum;
+  /// Operation performed by GEMM
+  using Operator = cutlass::arch::OpMultiplyAddFastAccum;
 
-    using Gemm = cutlass::gemm::device::GemmSplitKParallel<ElementInputA,
-                                                        LayoutInputA,
-                                                        ElementInputB,
-                                                        LayoutInputB,
-                                                        ElementOutput,
-                                                        LayoutOutput,
-                                                        ElementAccumulator,
-                                                        MMAOp,
-                                                        SmArch,
-                                                        ShapeMMAThreadBlock,
-                                                        ShapeMMAWarp,
-                                                        ShapeMMAOp,
-                                                        EpilogueOp,
-                                                        ConvertScaledOp,
-                                                        ReductionOp,
-                                                        ThreadblockSwizzle,
-                                                        NumStages,
-                                                        kAlignmentA,
-                                                        kAlignmentB,
-                                                        Operator>;
-
+  using Gemm = cutlass::gemm::device::GemmSplitKParallel<ElementInputA,
+                                                         LayoutInputA,
+                                                         ElementInputB,
+                                                         LayoutInputB,
+                                                         ElementOutput,
+                                                         LayoutOutput,
+                                                         ElementAccumulator,
+                                                         MMAOp,
+                                                         SmArch,
+                                                         ShapeMMAThreadBlock,
+                                                         ShapeMMAWarp,
+                                                         ShapeMMAOp,
+                                                         EpilogueOp,
+                                                         ConvertScaledOp,
+                                                         ReductionOp,
+                                                         ThreadblockSwizzle,
+                                                         NumStages,
+                                                         kAlignmentA,
+                                                         kAlignmentB,
+                                                         Operator>;
 
   cutlass::gemm::GemmCoord problem_size =
       cutlass::gemm::GemmCoord{params.M, params.N, params.K};
@@ -421,15 +438,18 @@ bool dispatch_fuse_gemm_split_k_gelu(GemmEpilogueAllParams params) {
   // Split K dimension into 16 partitions
   int split_k_slices = params.split_k;
 
-  // Create a tuple of gemm kernel arguments. This is later passed as arguments to launch
-  // instantiated CUTLASS kernel
-  typename Gemm::Arguments arguments{problem_size,  // <- problem size of matrix multiplication
-                                     {reinterpret_cast<ElementInputA*>(const_cast<void*>(params.A)),params.lda},
-                                     {reinterpret_cast<ElementInputB*>(const_cast<void*>(params.B)),params.ldb},
-                                     {reinterpret_cast<ElementOutput*>(const_cast<void*>(params.bias)),0},
-                                     {reinterpret_cast<ElementOutput*>(params.D),params.ldd},
-                                     {alpha, beta},          // <- tuple of alpha and beta
-                                     split_k_slices};        // <- k-dimension split factor
+  // Create a tuple of gemm kernel arguments. This is later passed as arguments
+  // to launch instantiated CUTLASS kernel
+  typename Gemm::Arguments arguments{
+      problem_size,  // <- problem size of matrix multiplication
+      {reinterpret_cast<ElementInputA*>(const_cast<void*>(params.A)),
+       params.lda},
+      {reinterpret_cast<ElementInputB*>(const_cast<void*>(params.B)),
+       params.ldb},
+      {reinterpret_cast<ElementOutput*>(const_cast<void*>(params.bias)), 0},
+      {reinterpret_cast<ElementOutput*>(params.D), params.ldd},
+      {alpha, beta},    // <- tuple of alpha and beta
+      split_k_slices};  // <- k-dimension split factor
 
   Gemm gemm_op;
 

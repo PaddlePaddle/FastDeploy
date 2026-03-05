@@ -852,7 +852,7 @@ class SpeculativeSampler(nn.Layer):
                 share_inputs["seq_lens_encoder"][:real_bsz] != 0,
                 paddle.ones_like(share_inputs["seq_lens_encoder"][:real_bsz]),
                 share_inputs["seq_lens_this_time"],
-            )
+            ).flatten()
             share_inputs["batch_token_num"] = batch_token_num
             ori_cu_batch_token_offset = paddle.concat([paddle.to_tensor([0]), paddle.cumsum(batch_token_num)]).astype(
                 "int32"

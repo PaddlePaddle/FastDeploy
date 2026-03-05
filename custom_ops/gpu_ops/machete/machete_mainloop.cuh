@@ -56,10 +56,16 @@ using namespace cutlass::gemm;
 using namespace cutlass::gemm::collective;
 using namespace cutlass::gemm::collective::detail;
 
-template <class ElementATuple_, class GmemLayoutA, int AlignmentA,
-          class ElementB_, class GmemLayoutB, int AlignmentB,
-          class ElementAccumulator_, class TileShape_MNK,
-          class ClusterShape_MNK, class StageCountType,
+template <class ElementATuple_,
+          class GmemLayoutA,
+          int AlignmentA,
+          class ElementB_,
+          class GmemLayoutB,
+          int AlignmentB,
+          class ElementAccumulator_,
+          class TileShape_MNK,
+          class ClusterShape_MNK,
+          class StageCountType,
           class KernelScheduleType>
 struct MacheteCollectiveMma {
   using Schedule = KernelScheduleType;
@@ -100,7 +106,8 @@ struct MacheteCollectiveMma {
   using ElementMma = ElementB;
   using ElementATuple =
       cute::conditional_t<!cute::is_tuple<ElementATuple_>::value,
-                          cute::tuple<ElementA>, ElementATuple_>;
+                          cute::tuple<ElementA>,
+                          ElementATuple_>;
 
   static constexpr cute::GMMA::Major GmmaMajorA =
       gmma_rs_tag_to_major_A<layout::RowMajor>();
@@ -111,11 +118,16 @@ struct MacheteCollectiveMma {
   // instructions so we use 2 atoms along the M dim (one for each warpgroup)
   using AtomLayoutMNK = cute::conditional_t<
       cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperative>,
-      Layout<Shape<_2, _1, _1>>, Layout<Shape<_1, _1, _1>>>;
+      Layout<Shape<_2, _1, _1>>,
+      Layout<Shape<_1, _1, _1>>>;
 
   using TiledMma = decltype(cute::make_tiled_mma(
-      cute::GMMA::rs_op_selector<ElementMma, ElementMma, ElementAccumulator,
-                                 TileShape_MNK, GMMA::Major::K, GmmaMajorB>(),
+      cute::GMMA::rs_op_selector<ElementMma,
+                                 ElementMma,
+                                 ElementAccumulator,
+                                 TileShape_MNK,
+                                 GMMA::Major::K,
+                                 GmmaMajorB>(),
       AtomLayoutMNK{}));
 
  private:
@@ -148,8 +160,12 @@ struct MacheteCollectiveMma {
  public:
   static constexpr int PipelineStages =
       compute_stage_count_or_override_single_affine_transformed_input<
-          sm90_smem_capacity_bytes, ElementA, ElementB, ElementScale,
-          ElementZero, TileShape_MNK>(StageCountType{});
+          sm90_smem_capacity_bytes,
+          ElementA,
+          ElementB,
+          ElementScale,
+          ElementZero,
+          TileShape_MNK>(StageCountType{});
 
   struct DispatchPolicy {
     constexpr static int Stages = PipelineStages;
@@ -164,15 +180,18 @@ struct MacheteCollectiveMma {
 
   // ((T, V), (BlocksM, BlocksK), pipe) -> offset
   using SmemLayoutA = decltype(GmemLayoutA::TVbNbKL_to_offset(
-      make_shape(size<0>(TileShape_MNK{}), size<2>(TileShape_MNK{}),
+      make_shape(size<0>(TileShape_MNK{}),
+                 size<2>(TileShape_MNK{}),
                  Int<DispatchPolicy::Stages>{})));
 
   using SmemLayoutACopy = decltype(GmemLayoutA::TVbNbKL_to_offset_copy(
-      make_shape(size<0>(TileShape_MNK{}), size<2>(TileShape_MNK{}),
+      make_shape(size<0>(TileShape_MNK{}),
+                 size<2>(TileShape_MNK{}),
                  Int<DispatchPolicy::Stages>{})));
 
   using SmemLayoutAtomARowMajor =
-      decltype(rs_smem_selector<GmmaMajorA, ElementA,
+      decltype(rs_smem_selector<GmmaMajorA,
+                                ElementA,
                                 decltype(cute::get<0>(TileShape_MNK{})),
                                 decltype(cute::get<2>(TileShape_MNK{}))>());
 
@@ -180,7 +199,8 @@ struct MacheteCollectiveMma {
       Shape<decltype(cute::shape<0>(SmemLayoutAtomARowMajor{})), cute::Int<1>>>;
 
   using SmemLayoutAtomB =
-      decltype(rs_smem_selector<GmmaMajorB, ElementB,
+      decltype(rs_smem_selector<GmmaMajorB,
+                                ElementB,
                                 decltype(cute::get<1>(TileShape_MNK{})),
                                 decltype(cute::get<2>(TileShape_MNK{}))>());
 
@@ -192,7 +212,10 @@ struct MacheteCollectiveMma {
   //
   static_assert(is_static<TileShape_MNK>::value);
   static_assert(is_static<ClusterShape_MNK>::value);
-  static_assert(is_aligned<ElementA, AlignmentA, ElementB, AlignmentB,
+  static_assert(is_aligned<ElementA,
+                           AlignmentA,
+                           ElementB,
+                           AlignmentB,
                            tma_alignment_bytes>(),
                 "Should meet TMA alignment requirement\n");
 #ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
@@ -226,7 +249,8 @@ struct MacheteCollectiveMma {
   // code to compile when the scale is void.
   using NonVoidStrideScale =
       cute::conditional_t<cute::is_void_v<StrideScale>,
-                          cute::Stride<_1, int64_t, int64_t>, StrideScale>;
+                          cute::Stride<_1, int64_t, int64_t>,
+                          StrideScale>;
 
   static_assert((cutlass::gemm::detail::is_k_major<StrideA>()),
                 "The transformed matrix (A) must be K-major.");
@@ -254,10 +278,12 @@ struct MacheteCollectiveMma {
   static constexpr bool ConvertF32toTF32A = cute::is_same_v<float, ElementA>;
   static constexpr bool ConvertF32toTF32B = cute::is_same_v<float, ElementB>;
   using InternalElementA =
-      cute::conditional_t<ConvertF32toTF32A, tfloat32_t,
+      cute::conditional_t<ConvertF32toTF32A,
+                          tfloat32_t,
                           uint_bit_t<sizeof_bits_v<ElementA>>>;
   using InternalElementB =
-      cute::conditional_t<ConvertF32toTF32B, tfloat32_t,
+      cute::conditional_t<ConvertF32toTF32B,
+                          tfloat32_t,
                           uint_bit_t<sizeof_bits_v<ElementB>>>;
 
   using TransformA = cute::identity;
@@ -295,16 +321,19 @@ struct MacheteCollectiveMma {
   // Tile along modes in a way that maximizes the TMA box size
   using SmemLayoutB = decltype(tile_to_shape(
       SmemLayoutAtomB{},
-      make_shape(shape<1>(TileShape{}), shape<2>(TileShape{}),
+      make_shape(shape<1>(TileShape{}),
+                 shape<2>(TileShape{}),
                  Int<DispatchPolicy::Stages>{}),
       conditional_t<::cutlass::gemm::detail::is_major<0, StrideB>(),
-                    Step<_2, _1, _3>, Step<_1, _2, _3>>{}));
+                    Step<_2, _1, _3>,
+                    Step<_1, _2, _3>>{}));
 
   // It is assumed that the scales and zero-points share the same smem layout
-  using SmemLayoutScale = decltype(tile_to_shape(
-      SmemLayoutAtomScale{},
-      make_shape(shape<0>(ScaleTileShape{}), shape<1>(ScaleTileShape{}),
-                 Int<PipelineStages>{})));
+  using SmemLayoutScale =
+      decltype(tile_to_shape(SmemLayoutAtomScale{},
+                             make_shape(shape<0>(ScaleTileShape{}),
+                                        shape<1>(ScaleTileShape{}),
+                                        Int<PipelineStages>{})));
 
   // If A mn-layout and B mn-layout, transposing B matrix since WGMMA is k-major
   // only (e.g. tf32, fp32, fp8, int8).
@@ -331,10 +360,12 @@ struct MacheteCollectiveMma {
 
   using GmmaSmemLayoutB = decltype(tile_to_shape(
       SmemLayoutAtomB{},
-      make_shape(shape<1>(TileShape{}), shape<2>(TileShape{}),
+      make_shape(shape<1>(TileShape{}),
+                 shape<2>(TileShape{}),
                  Int<DispatchPolicy::Stages>{}),
       conditional_t<::cutlass::gemm::detail::is_major<0, StrideB>(),
-                    Step<_2, _1, _3>, Step<_1, _2, _3>>{}));
+                    Step<_2, _1, _3>,
+                    Step<_1, _2, _3>>{}));
 
   // These two restrictions are related, so we place the assertions together.
   // To relax them, we need to handle loading more than 1 row of scales for
@@ -436,25 +467,31 @@ struct MacheteCollectiveMma {
 
   using BTensor = decltype(make_tensor(
       get_logical_ptr(static_cast<InternalElementB const*>(nullptr)),
-      repeat_like(StrideB{}, int32_t(0)), StrideB{}));
+      repeat_like(StrideB{}, int32_t(0)),
+      StrideB{}));
   using ScaleTensor = decltype(make_tensor(
       get_logical_ptr(static_cast<NonVoidElementScale const*>(nullptr)),
-      repeat_like(NonVoidStrideScale{}, int32_t(0)), NonVoidStrideScale{}));
+      repeat_like(NonVoidStrideScale{}, int32_t(0)),
+      NonVoidStrideScale{}));
 
   using ZeroTensor = decltype(make_tensor(
       get_logical_ptr(static_cast<NonVoidElementZero const*>(nullptr)),
-      repeat_like(NonVoidStrideScale{}, int32_t(0)), NonVoidStrideScale{}));
+      repeat_like(NonVoidStrideScale{}, int32_t(0)),
+      NonVoidStrideScale{}));
 
   static constexpr auto make_tma_copy_A(ATensor tensor_a = ATensor{}) {
     return make_tma_copy<TmaElementA>(
-        GmemTiledCopyA{}, tensor_a, SmemLayoutACopy{}(_, _, cute::Int<0>{}),
+        GmemTiledCopyA{},
+        tensor_a,
+        SmemLayoutACopy{}(_, _, cute::Int<0>{}),
         shape(SmemLayoutACopy{}(_, _, cute::Int<0>{})),
         size<1>(ClusterShape{}));  // mcast along N mode for this M load, if any
   }
 
   static constexpr auto make_tma_copy_scale(
       ScaleTensor tensor_scale = ScaleTensor{}) {
-    return make_tma_copy(GmemTiledCopyScale{}, tensor_scale,
+    return make_tma_copy(GmemTiledCopyScale{},
+                         tensor_scale,
                          SmemLayoutScale{}(_, _, cute::Int<0>{}),
                          ScaleTileShape{},
                          _1{});  // mcast along N mode for this M load, if any
@@ -462,7 +499,8 @@ struct MacheteCollectiveMma {
 
   static constexpr auto make_tma_copy_zero(
       ZeroTensor tensor_zero = ZeroTensor{}) {
-    return make_tma_copy(GmemTiledCopyScale{}, tensor_zero,
+    return make_tma_copy(GmemTiledCopyScale{},
+                         tensor_zero,
                          SmemLayoutScale{}(_, _, cute::Int<0>{}),
                          ScaleTileShape{},
                          _1{});  // mcast along N mode for this M load, if any
@@ -470,7 +508,9 @@ struct MacheteCollectiveMma {
 
   static constexpr auto make_tma_copy_B(BTensor tensor_b = BTensor{}) {
     return make_tma_copy(
-        GmemTiledCopyB{}, tensor_b, SmemLayoutB{}(_, _, cute::Int<0>{}),
+        GmemTiledCopyB{},
+        tensor_b,
+        SmemLayoutB{}(_, _, cute::Int<0>{}),
         make_shape(shape<1>(TileShape{}), shape<2>(TileShape{})),
         size<0>(ClusterShape{}));  // mcast along M mode for this N load, if any
   }
@@ -560,7 +600,8 @@ struct MacheteCollectiveMma {
   //  to handle the prepacked layout
   template <class ProblemShape>
   static constexpr Params to_underlying_arguments(
-      ProblemShape const& problem_shape, Arguments const& args,
+      ProblemShape const& problem_shape,
+      Arguments const& args,
       void* workspace) {
     (void)workspace;
 
@@ -607,8 +648,12 @@ struct MacheteCollectiveMma {
                   KernelConversionMode == ConversionMode::ConvertAndScale ||
                   KernelConversionMode ==
                       ConversionMode::ConvertAndScaleWithZero) {
-      return {tma_load_a,    tma_load_b, tma_load_scale,
-              tma_load_zero, scale_k,    group_size};
+      return {tma_load_a,
+              tma_load_b,
+              tma_load_scale,
+              tma_load_zero,
+              scale_k,
+              group_size};
     } else {
       static_assert(cutlass::detail::dependent_false<KernelSchedule>,
                     "Conversion mode not handled in to_underlying_arguments.");
@@ -940,8 +985,10 @@ struct MacheteCollectiveMma {
   // Consumer Perspective
   template <class FrgTensorC>
   CUTLASS_DEVICE void mma(MainloopPipeline pipeline,
-                          PipelineState smem_pipe_read, FrgTensorC& accum,
-                          int k_tile_count, int thread_idx,
+                          PipelineState smem_pipe_read,
+                          FrgTensorC& accum,
+                          int k_tile_count,
+                          int thread_idx,
                           TensorStorage& shared_tensors,
                           Params const& mainloop_params) {
     static_assert(is_rmem<FrgTensorC>::value,
@@ -971,8 +1018,10 @@ struct MacheteCollectiveMma {
     // which can be thought of as:
     //   (T, MMA, (MMA_M, MMA_K), pipe) -> offset
     auto constexpr smem_A_mma_ =
-        make_layout(get<0, 0>(smem_A), get<0, 1, 0>(smem_A),
-                    zip(get<0, 1, 1>(smem_A), get<1>(smem_A)), get<2>(smem_A));
+        make_layout(get<0, 0>(smem_A),
+                    get<0, 1, 0>(smem_A),
+                    zip(get<0, 1, 1>(smem_A), get<1>(smem_A)),
+                    get<2>(smem_A));
     // flatten to:
     //   (T, MMA, MMA_M, MMA_K, pipe) -> offset
     auto constexpr smem_A_mma = smem_A_mma_(_, _, make_coord(_, _), _);
@@ -1007,7 +1056,8 @@ struct MacheteCollectiveMma {
 
     auto load_A_to_registers = [&](int read_stage) {
       copy(create_auto_vectorizing_copy<ElementA, decltype(A_CPY_VEC)>(),
-           tCsA(_, _, _, read_stage), tCrA_load(_, _, _));
+           tCsA(_, _, _, read_stage),
+           tCrA_load(_, _, _));
     };
 
     // Partition of thread -> shared and thread -> RF
@@ -1028,10 +1078,11 @@ struct MacheteCollectiveMma {
     auto convert_A = [&, a_vec = Int<CONVERSION_WIDTH>{}](int k_block,
                                                           int read_stage) {
       load_extra_info_to_registers(partitioned_extra_info,
-                                   copy_partitions_extra_info, k_block,
+                                   copy_partitions_extra_info,
+                                   k_block,
                                    read_stage);
-      transform_A_kblock(tCrA_load, a_vec, tCrA_mma, partitioned_extra_info,
-                         k_block);
+      transform_A_kblock(
+          tCrA_load, a_vec, tCrA_mma, partitioned_extra_info, k_block);
     };
 
     // We release buffers to producer warps(dma load) with some mmas in flight
@@ -1065,8 +1116,10 @@ struct MacheteCollectiveMma {
         }
         warpgroup_arrive();
         // (V,M) x (V,N) => (V,M,N)
-        cute::gemm(tiled_mma, tCrA_mma(_, _, k_block),
-                   tCrB(_, _, k_block, read_stage), accum);
+        cute::gemm(tiled_mma,
+                   tCrA_mma(_, _, k_block),
+                   tCrB(_, _, k_block, read_stage),
+                   accum);
         tiled_mma.accumulate_ = GMMA::ScaleOut::One;
         warpgroup_commit_batch();
       }
@@ -1103,8 +1156,10 @@ struct MacheteCollectiveMma {
       for (int k_block = 0; k_block < K_BLOCK_MAX; ++k_block) {
         warpgroup_arrive();
         // (V,M) x (V,N) => (V,M,N)
-        cute::gemm(tiled_mma, tCrA_mma(_, _, k_block),
-                   tCrB(_, _, k_block, read_stage), accum);
+        cute::gemm(tiled_mma,
+                   tCrA_mma(_, _, k_block),
+                   tCrB(_, _, k_block, read_stage),
+                   accum);
         tiled_mma.accumulate_ = GMMA::ScaleOut::One;
         warpgroup_commit_batch();
 
@@ -1149,8 +1204,10 @@ struct MacheteCollectiveMma {
       for (int k_block = 0; k_block < K_BLOCK_MAX; ++k_block) {
         warpgroup_arrive();
         // (V,M) x (V,N) => (V,M,N)
-        cute::gemm(tiled_mma, tCrA_mma(_, _, k_block),
-                   tCrB(_, _, k_block, read_stage), accum);
+        cute::gemm(tiled_mma,
+                   tCrA_mma(_, _, k_block),
+                   tCrB(_, _, k_block, read_stage),
+                   accum);
         tiled_mma.accumulate_ = GMMA::ScaleOut::One;
         warpgroup_commit_batch();
         warpgroup_wait<K_BLOCK_MAX - 1>();
@@ -1324,7 +1381,8 @@ struct MacheteCollectiveMma {
   template <class... Ts, class... Us>
   CUTLASS_DEVICE void load_extra_info_to_registers(
       cute::tuple<Ts...> const& partitioned_mma_extra_info,
-      cute::tuple<Us...> const& tiled_copy_and_views, int k_block,
+      cute::tuple<Us...> const& tiled_copy_and_views,
+      int k_block,
       int read_stage) {
     if (k_block == 0) {
       // We are starting a new k-tile so copy the scale
@@ -1334,7 +1392,8 @@ struct MacheteCollectiveMma {
         auto smem_tiled_copy_S = cute::get<0>(tiled_copy_and_views);
         auto tCrS_copy_view = cute::get<1>(tiled_copy_and_views);
         auto tCsS = cute::get<0>(partitioned_mma_extra_info);
-        copy(smem_tiled_copy_S, tCsS(_, _, k_block, read_stage),
+        copy(smem_tiled_copy_S,
+             tCsS(_, _, k_block, read_stage),
              tCrS_copy_view(_, _, k_block));
         if constexpr (KernelConversionMode == ConversionMode::ConvertAndScale) {
           // Nothing extra to do
@@ -1342,7 +1401,8 @@ struct MacheteCollectiveMma {
                              ConversionMode::ConvertAndScaleWithZero) {
           auto tCsZ = cute::get<2>(partitioned_mma_extra_info);
           auto tCrZ_copy_view = cute::get<2>(tiled_copy_and_views);
-          copy(smem_tiled_copy_S, tCsZ(_, _, k_block, read_stage),
+          copy(smem_tiled_copy_S,
+               tCsZ(_, _, k_block, read_stage),
                tCrZ_copy_view(_, _, k_block));
         } else {
           static_assert(cutlass::detail::dependent_false<KernelSchedule>,
@@ -1362,8 +1422,10 @@ struct MacheteCollectiveMma {
   // Utilities to transform A.
   template <class TCrA_load, int VectorWidthA, class TCrA_mma, class... Ts>
   CUTLASS_DEVICE void transform_A_kblock(
-      TCrA_load const& tCrA_load, cute::Int<VectorWidthA> vec_A,
-      TCrA_mma& tCrA_mma, cute::tuple<Ts...> const& partitioned_extra_info,
+      TCrA_load const& tCrA_load,
+      cute::Int<VectorWidthA> vec_A,
+      TCrA_mma& tCrA_mma,
+      cute::tuple<Ts...> const& partitioned_extra_info,
       int const k_block) {
     auto in = tCrA_load(_, _, k_block);
     auto out = tCrA_mma(_, _, k_block);
@@ -1385,12 +1447,13 @@ struct MacheteCollectiveMma {
       // float, which nvcc will not optimize to using vectorized fma
       // instructions (i.e. hfma.bf16_v2)
       if constexpr (std::is_same_v<ElementScale, cutlass::bfloat16_t>) {
-        cute::transform(
-            recast<nv_bfloat16>(converted_inputs), recast<nv_bfloat16>(scales),
-            recast<nv_bfloat16>(converted_inputs), cute::multiplies{});
-      } else {
-        cute::transform(converted_inputs, scales, converted_inputs,
+        cute::transform(recast<nv_bfloat16>(converted_inputs),
+                        recast<nv_bfloat16>(scales),
+                        recast<nv_bfloat16>(converted_inputs),
                         cute::multiplies{});
+      } else {
+        cute::transform(
+            converted_inputs, scales, converted_inputs, cute::multiplies{});
       }
 
       // Apply zeros if required
@@ -1403,9 +1466,12 @@ struct MacheteCollectiveMma {
         if constexpr (std::is_same_v<ElementScale, cutlass::bfloat16_t>) {
           cute::transform(recast<nv_bfloat16>(converted_inputs),
                           recast<nv_bfloat16>(converted_zeros),
-                          recast<nv_bfloat16>(converted_inputs), cute::plus{});
+                          recast<nv_bfloat16>(converted_inputs),
+                          cute::plus{});
         } else {
-          cute::transform(converted_inputs, converted_zeros, converted_inputs,
+          cute::transform(converted_inputs,
+                          converted_zeros,
+                          converted_inputs,
                           cute::plus{});
         }
       }
@@ -1421,7 +1487,9 @@ struct MacheteCollectiveMma {
   // Modified from upstream, should be kept the same when possible
   //   the main differences is that this version supports interleaved converts
   // Utilities for transforming the A operand prior to issuing tensorcore math.
-  template <typename IlvdBlkLayout, class EngineIn, class EngineOut,
+  template <typename IlvdBlkLayout,
+            class EngineIn,
+            class EngineOut,
             class TensorLayout,
             int ConversionVectorWidth = cosize_v<TensorLayout>>
   CUTLASS_DEVICE void convert_tensor(
@@ -1455,8 +1523,12 @@ struct MacheteCollectiveMma {
     constexpr cutlass::FloatRoundStyle RoundStyle =
         cutlass::FloatRoundStyle::round_to_nearest;
 
-    using Converter = cutlass::InterleavedNumericArrayConverter<
-        IlvdBlkLayout, DstType, SrcType, ConversionVectorWidth, RoundStyle>;
+    using Converter =
+        cutlass::InterleavedNumericArrayConverter<IlvdBlkLayout,
+                                                  DstType,
+                                                  SrcType,
+                                                  ConversionVectorWidth,
+                                                  RoundStyle>;
 
     constexpr int NumIterations = N / ConversionVectorWidth;
 

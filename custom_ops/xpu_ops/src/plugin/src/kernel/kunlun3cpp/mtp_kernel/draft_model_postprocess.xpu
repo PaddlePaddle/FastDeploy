@@ -109,7 +109,7 @@ __global__ void draft_model_postprocess(const int64_t* base_model_draft_tokens,
     }
     cur_row_to_all_clusetr = min(bsz - offset_loop, clusetr_limit_row);
     offset_cluster = 0;
-    //计算offset_cluster
+    // 计算offset_cluster
     for (int start_cluster = 0; start_cluster < cluster_id();
          start_cluster += 1) {
       offset_cluster += (rounddown_div(cur_row_to_all_clusetr, nclusters) +
