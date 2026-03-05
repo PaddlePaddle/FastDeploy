@@ -1349,6 +1349,14 @@ class GPUModelRunner(ModelRunnerBase):
         # Get kv cache dtype
         cache_type = self.model_config.dtype
         kv_cache_quant_type = None
+
+        # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
+        # To rationalize the allocation of kvcache.
+        from fastdeploy import envs
+
+        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
+        self.dsa_cache = envs.FD_ATTENTION_BACKEND == "DSA_ATTN"
+
         if (
             self.quant_config
             and hasattr(self.quant_config, "kv_cache_quant_type")
@@ -1356,11 +1364,21 @@ class GPUModelRunner(ModelRunnerBase):
         ):
             cache_type = "uint8"
             kv_cache_quant_type = self.quant_config.kv_cache_quant_type
-
         # Get kv cache shape
-        key_cache_shape, value_cache_shape, indexer_cache_shape = self.attn_backends[0].get_kv_cache_shape(
-            max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
-        )
+        if self.dsa_cache:
+            # Determine dsa cache quant type
+            kv_cache_quant_type = "uint8"
+            cache_type = "uint8"
+
+            # NOTE(changwenbin) Get dsa cache shape.
+            key_cache_shape, value_cache_shape, indexer_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+                max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
+            )
+        else:
+            key_cache_shape, value_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+                max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
+            )
+            indexer_cache_shape = []
         if kv_cache_quant_type == "block_wise_fp8":
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
@@ -1384,14 +1402,6 @@ class GPUModelRunner(ModelRunnerBase):
         logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
         cache_kvs_list = []
 
-        # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
-        # To rationalize the allocation of kvcache.
-        from fastdeploy import envs
-
-        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
-        self.dsa_cache = envs.FD_ATTENTION_BACKEND == "DSA_ATTN"
-        if self.dsa_cache:
-            cache_type = "uint8"
         for i in range(self.model_config.num_hidden_layers):
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
