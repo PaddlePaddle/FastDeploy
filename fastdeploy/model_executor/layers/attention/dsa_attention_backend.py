@@ -27,9 +27,6 @@ from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
     paddle.enable_compat(scope={"flash_mla"})
-    import flash_mla
-    from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
-
 
 from fastdeploy.model_executor.layers.attention.ops import (
     get_block_shape_and_split_kv_block,
@@ -341,6 +338,11 @@ class DSAAttentionBackend(AttentionBackend):
             )
 
         latent_cache = forward_meta.caches[2 * layer.layer_id] if hasattr(forward_meta, "caches") else None
+
+        if current_platform.is_cuda():
+            import flash_mla
+
+            from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
 
         if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
 

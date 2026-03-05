@@ -71,8 +71,7 @@ if current_platform.is_cuda():
         radix_topk_ragged_transform,
     )
 
-    paddle.enable_compat(scope={"flash_mla", "deep_gemm"})  # Enable torch proxy before importing flash_mla
-    import deep_gemm
+    paddle.enable_compat(scope={"deep_gemm"})
 
 
 class DeepSeekV3MLP(nn.Layer):
@@ -570,6 +569,8 @@ class Indexer(nn.Layer):
             forward_meta.batch_id_per_token,
             64,
         )
+
+        import deep_gemm
 
         if forward_meta.max_len_tensor_cpu[1]:
 
