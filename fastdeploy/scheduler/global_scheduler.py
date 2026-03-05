@@ -125,7 +125,7 @@ class GlobalScheduler:
         self.get_response_workers = threading.Thread(target=self._get_results_worker, daemon=True)
         self.get_response_workers.start()
 
-        scheduler_logger.info(f"Scheduler: name={self.name} redis_version={self.client.version}")
+        scheduler_logger.info("Scheduler: name=%s redis_version=%s", self.name, self.client.version)
 
     def _get_hash_slot(self, data: str) -> int:
         """
@@ -370,7 +370,7 @@ class GlobalScheduler:
                 rem_amount=0,
                 ttl=self.ttl,
             )
-            scheduler_logger.info(f"Scheduler has enqueued some requests: {requests}")
+            scheduler_logger.debug("Scheduler has enqueued some requests: %s", requests)
 
         if duplicate:
             scheduler_logger.warning(
@@ -491,15 +491,16 @@ class GlobalScheduler:
                     ttl=self.ttl,
                 )
                 serialized_requests += [(lucky_request_queue_name, element) for element in elements]
-                scheduler_logger.info(
-                    f"Scheduler {self.name} has stolen some requests from another lucky one. "
-                    f"(name={lucky} num={len(serialized_requests)})"
+                scheduler_logger.debug(
+                    "Scheduler %s has stolen some requests from another lucky one. "
+                    "(name=%s num=%d)",
+                    self.name, lucky, len(serialized_requests),
                 )
             else:
                 exist_num = self.client.exists(self._instance_name(lucky))
                 if exist_num == 0:
                     if self.client.zrem(extend_scheduler_load_table_name, lucky):
-                        scheduler_logger.info(f"Scheduler {lucky} has been removed")
+                        scheduler_logger.debug("Scheduler %s has been removed", lucky)
 
         # blocked read
         if len(serialized_requests) == 0:
@@ -517,8 +518,9 @@ class GlobalScheduler:
             self.client.zincrby(load_table_name, -1, scheduler_name, rem_amount=0, ttl=self.ttl)
             serialized_requests.append((request_queue_name, element[1]))
             if scheduler_name != self.name:
-                scheduler_logger.info(
-                    f"Scheduler {self.name} has stolen a request from another scheduler. (name={scheduler_name})"
+                scheduler_logger.debug(
+                    "Scheduler %s has stolen a request from another scheduler. (name=%s)",
+                    self.name, scheduler_name,
                 )
 
         long_partial_requests = 0

@@ -155,7 +155,7 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
     @override
     def _build_response(self, ctx: ServeContext, request_output: dict):
         """Generate final embedding response"""
-        api_server_logger.info(f"[{ctx.request_id}] Embedding RequestOutput received:{request_output}")
+        api_server_logger.debug("[%s] Embedding RequestOutput received: %s", ctx.request_id, request_output)
 
         base = PoolingRequestOutput.from_dict(request_output)
         embedding_res = EmbeddingRequestOutput.from_base(base)

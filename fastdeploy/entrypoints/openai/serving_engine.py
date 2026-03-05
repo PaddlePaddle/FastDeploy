@@ -76,7 +76,7 @@ class OpenAIServing(ABC, Generic[RequestT]):
         else:
             self.master_ip = "0.0.0.0"
         self.__semaphore = None
-        api_server_logger.info(f"master ip: {self.master_ip}")
+        api_server_logger.debug("master ip: %s", self.master_ip)
 
     def _get_semaphore(self) -> StatefulSemaphore:
         if self.__semaphore is None:
@@ -116,7 +116,7 @@ class OpenAIServing(ABC, Generic[RequestT]):
     def _release_semaphore(self, request_id: str) -> None:
         """Release engine client semaphore"""
         self._get_semaphore().release()
-        api_server_logger.info(f"Release request:{request_id} status:{self._get_semaphore().status()}")
+        api_server_logger.debug("Release request:%s status:%s", request_id, self._get_semaphore().status())
 
     def _create_error_response(
         self,
@@ -192,7 +192,7 @@ class OpenAIServing(ABC, Generic[RequestT]):
 
         request_id = self._generate_request_id(request)
         ctx.request_id = request_id
-        api_server_logger.info(f"Initialize request {request_id}: {request}")
+        api_server_logger.debug("Initialize request %s: %s", request_id, request)
 
         # Step 2: Semaphore acquisition
         if not await self._acquire_semaphore(request_id):
@@ -251,7 +251,7 @@ class ZmqOpenAIServing(OpenAIServing):
         request_dicts = self._request_to_batch_dicts(ctx)
         ctx.preprocess_requests = request_dicts
         for request_dict in request_dicts:
-            api_server_logger.info(f"batch add request_id: {request_dict['request_id']}, request: {request_dict}")
+            api_server_logger.debug("batch add request_id: %s, request: %s", request_dict['request_id'], request_dict)
             await self.engine_client.format_and_add_data(request_dict)
 
     def _process_chat_template_kwargs(self, request_dict):
@@ -317,7 +317,7 @@ class ZmqOpenAIServing(OpenAIServing):
     def _release_semaphore(self, request_id: str) -> None:
         """Release engine client semaphore"""
         self._get_semaphore().release()
-        api_server_logger.info(f"Release request:{request_id} status:{self._get_semaphore().status()}")
+        api_server_logger.debug("Release request:%s status:%s", request_id, self._get_semaphore().status())
 
     @override
     def _check_master(self) -> bool:

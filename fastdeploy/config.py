@@ -597,10 +597,10 @@ class ModelConfig:
         """
         Print all configuration information.
         """
-        logger.info("Model Configuration Information :")
+        logger.debug("Model Configuration Information:")
         for k, v in self.__dict__.items():
-            logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+            logger.debug("{:<20}:{:<6}{}".format(k, "", v))
+        logger.debug("=============================================================")
 
 
 class ParallelConfig:
@@ -700,7 +700,10 @@ class ParallelConfig:
             self.ep_group = dist.new_group(range(self.expert_parallel_size))
             dist.collective._set_custom_gid(None)
         logger.info(
-            f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
+            "data_parallel_size: %d, tensor_parallel_size: %d, expert_parallel_size: %d, "
+            "data_parallel_rank: %d, tensor_parallel_rank: %d, expert_parallel_rank: %d, tp_group: %s",
+            self.data_parallel_size, self.tensor_parallel_size, self.expert_parallel_size,
+            self.data_parallel_rank, self.tensor_parallel_rank, self.expert_parallel_rank, self.tp_group,
         )
 
     def print(self):
@@ -708,10 +711,10 @@ class ParallelConfig:
         print all config
 
         """
-        logger.info("Parallel Configuration Information :")
+        logger.debug("Parallel Configuration Information:")
         for k, v in self.__dict__.items():
-            logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+            logger.debug("{:<20}:{:<6}{}".format(k, "", v))
+        logger.debug("=============================================================")
 
 
 class SpeculativeConfig:
@@ -836,10 +839,10 @@ class SpeculativeConfig:
         print all config
 
         """
-        logger.info("Speculative Decoding Configuration Information :")
+        logger.debug("Speculative Decoding Configuration Information:")
         for k, v in self.__dict__.items():
-            logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+            logger.debug("{:<20}:{:<6}{}".format(k, "", v))
+        logger.debug("=============================================================")
 
     def check_legality_parameters(
         self,
@@ -1339,10 +1342,10 @@ class EPLBConfig:
         """
         Print all configuration information.
         """
-        logger.info("EPLB Configuration Information :")
+        logger.debug("EPLB Configuration Information:")
         for k, v in self.__dict__.items():
-            logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+            logger.debug("{:<20}:{:<6}{}".format(k, "", v))
+        logger.debug("=============================================================")
 
 
 class CacheConfig:
@@ -1516,10 +1519,10 @@ class CacheConfig:
         print all config
 
         """
-        logger.info("Cache Configuration Information :")
+        logger.debug("Cache Configuration Information:")
         for k, v in self.__dict__.items():
-            logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+            logger.debug("{:<20}:{:<6}{}".format(k, "", v))
+        logger.debug("=============================================================")
 
 
 class RouterConfig:
@@ -1586,19 +1589,19 @@ class CommitConfig:
                     elif line.startswith("CXX compiler version:"):
                         self.compiler_version = line.split(":")[1].strip()
         except FileNotFoundError:
-            logger.info(f"Warning: Version file not found at {file_path}")
+            logger.warning("Version file not found at %s", file_path)
         except Exception as e:
-            logger.info(f"Warning: Could not read version file - {e!s}")
+            logger.warning("Could not read version file: %s", e)
 
     def print(self):
         """
         print all config
 
         """
-        logger.info("Fasedeploy Commit Information :")
+        logger.debug("FastDeploy Commit Information:")
         for k, v in self.__dict__.items():
-            logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+            logger.debug("{:<20}:{:<6}{}".format(k, "", v))
+        logger.debug("=============================================================")
 
 
 class StructuredOutputsConfig:
@@ -2121,11 +2124,20 @@ class FDConfig:
         """
         print all config
         """
-        logger.info("=================== Configuration Information ===============")
+        logger.info(
+            "Configuration: model=%s, tp=%d, max_batch=%d, max_seq_len=%d, dtype=%s, device=%s",
+            self.model_config.model,
+            self.parallel_config.tensor_parallel_size,
+            self.scheduler_config.max_num_seqs,
+            self.model_config.max_model_len,
+            self.model_config.dtype,
+            self.parallel_config.device_ids,
+        )
+        logger.debug("=================== Configuration Information ===============")
         for k, v in self.__dict__.items():
             if k == "generation_config" and v is not None:
                 for gck, gcv in v.to_dict().items():
-                    logger.info("{:<20}:{:<6}{}".format(gck, "", gcv))
+                    logger.debug("{:<20}:{:<6}{}".format(gck, "", gcv))
             elif (
                 k == "cache_config"
                 or k == "model_config"
@@ -2136,8 +2148,8 @@ class FDConfig:
                 if v is not None:
                     v.print()
             else:
-                logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        logger.info("=============================================================")
+                logger.debug("{:<20}:{:<6}{}".format(k, "", v))
+        logger.debug("=============================================================")
 
     def init_cache_info(self):
         """
@@ -2171,7 +2183,7 @@ class FDConfig:
             "transfer_protocol": transfer_protocol,
             "tp_size": self.parallel_config.tensor_parallel_size,
         }
-        logger.info(f"register_info: {self.register_info}")
+        logger.debug("register_info: %s", self.register_info)
 
     def read_from_config(self):
         """

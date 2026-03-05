@@ -61,7 +61,7 @@ async def generate(request: dict):
     """
     generate stream api
     """
-    api_server_logger.info(f"Receive request: {request}")
+    api_server_logger.debug("Receive request: %s", request)
     stream = request.get("stream", 0)
 
     if not stream:
@@ -99,8 +99,8 @@ def launch_api_server(args) -> None:
     if not is_port_available(args.host, args.port):
         raise Exception(f"The parameter `port`:{args.port} is already in use.")
 
-    api_server_logger.info(f"launch Fastdeploy api server... port: {args.port}")
-    api_server_logger.info(f"args: {args.__dict__}")
+    api_server_logger.info("Launching FastDeploy API server on port %s", args.port)
+    api_server_logger.debug("Server args: %s", args.__dict__)
 
     if not init_app(args):
         api_server_logger.error("API Server launch failed.")

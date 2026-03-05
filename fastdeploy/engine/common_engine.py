@@ -72,7 +72,7 @@ from fastdeploy.utils import EngineError, console_logger, envs, get_logger, llm_
 
 try:
     TokenProcessor = load_token_processor_plugins()
-    llm_logger.info(f"TokenProcessor plugin {TokenProcessor} loaded")
+    llm_logger.debug("TokenProcessor plugin %s loaded", TokenProcessor)
 except:
     from fastdeploy.output.token_processor import TokenProcessor
 
@@ -108,7 +108,7 @@ class EngineService:
         for rank in range(tp_size):
             engine_worker_queue_port = self.cfg.parallel_config.local_engine_worker_queue_port
             name = f"ctrl_w2e_rank{rank+tp_size*dp_index}_{engine_worker_queue_port}"
-            self.llm_logger.info(f"Init Worker Control Output Queue: {name}(consumer)")
+            self.llm_logger.debug("Init Worker Control Output Queue: %s (consumer)", name)
             self._ctrl_worker_output_queues.append(FMQ().queue(name, "consumer"))
 
         self.scheduler = cfg.scheduler_config.scheduler()
@@ -136,7 +136,7 @@ class EngineService:
         self.start_worker_queue_service(start_queue)
 
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.cfg.parallel_config.local_engine_worker_queue_port)
-        self.llm_logger.info(f"INFERENCE_MSG_QUEUE_ID: {str(self.cfg.parallel_config.local_engine_worker_queue_port)}")
+        self.llm_logger.debug("INFERENCE_MSG_QUEUE_ID: %s", self.cfg.parallel_config.local_engine_worker_queue_port)
 
         self.split_connector = SplitwiseConnector(cfg, self.engine_worker_queue, self.resource_manager)
         self.token_processor = TokenProcessor(
@@ -283,7 +283,7 @@ class EngineService:
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
         current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
-        self.llm_logger.info(f"current_suffix: {current_suffix}")
+        self.llm_logger.debug("current_suffix: %s", current_suffix)
         exist_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
             name="exist_task_signal",
@@ -392,7 +392,7 @@ class EngineService:
 
         if self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0":
             if start_queue:
-                self.llm_logger.info(f"Starting engine worker queue server service at {address}")
+                self.llm_logger.debug("Starting engine worker queue server service at %s", address)
                 self.engine_worker_queue_server = EngineWorkerQueue(
                     address=address,
                     is_server=True,
@@ -410,8 +410,8 @@ class EngineService:
                     )
 
             if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
-                self.llm_logger.info(
-                    f"Starting engine cache queue server service at {self.cfg.cache_config.local_cache_queue_port}"
+                self.llm_logger.debug(
+                    "Starting engine cache queue server service at %s", self.cfg.cache_config.local_cache_queue_port
                 )
                 self.cache_task_queue = EngineCacheQueue(
                     address=(self.cfg.master_ip, self.cfg.cache_config.local_cache_queue_port),
@@ -507,7 +507,7 @@ class EngineService:
             self.split_connector.send_cache_info_to_prefill(tasks)
 
         if not is_decode:
-            self.llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
+            self.llm_logger.debug("Tasks are sent to engine, req_ids=%s", req_ids)
             for task in tasks:
                 if not getattr(task, "has_been_preempted_before", False):
                     task.metrics.inference_start_time = time.time()
@@ -965,8 +965,8 @@ class EngineService:
                         )
                     if self.cfg.scheduler_config.splitwise_role == "prefill":
                         self.resource_manager.add_request_in_p(tasks)
-                        self.llm_logger.info(
-                            f"P add requests into running queue: {[task.request_id for task in tasks]}"
+                        self.llm_logger.debug(
+                            "P add requests into running queue: %s", [task.request_id for task in tasks]
                         )
                     else:
                         for task in tasks:
@@ -1164,18 +1164,18 @@ class EngineService:
                     status_value = data.get("status", None)
                     if status_value is not None and status_value == RequestStatus.ABORT.value:
                         req_id = data["request_id"]
-                        self.llm_logger.info(f"Receive abort request, req_id: {req_id}")
+                        self.llm_logger.info(\"Receive abort request, req_id: %s\", req_id)
                         self.resource_manager.abort_req_ids_set.add(req_id)
                         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                             if req_id in self.resource_manager.requests:
                                 req = self.resource_manager.requests[req_id]
                                 task = self.resource_manager._prepare_preempt_task(req)
                                 self.engine_worker_queue.put_tasks(([task], self.resource_manager.real_bsz))
-                                self.llm_logger.info(f"put abort task in engine worker queue, req_id: {req_id}")
+                                self.llm_logger.debug("put abort task in engine worker queue, req_id: %s", req_id)
                             else:
                                 self.scheduler._recycle(req_id)
-                                self.llm_logger.info(
-                                    f"req_id:{req_id} has not been allocated any resources, recycled it in scheduler"
+                                self.llm_logger.debug(
+                                    "req_id:%s has not been allocated any resources, recycled it in scheduler", req_id
                                 )
                                 self.resource_manager.abort_req_ids_set.remove(req_id)
                         continue
@@ -1259,7 +1259,7 @@ class EngineService:
         request_id = control_req.request_id
 
         try:
-            self.llm_logger.info(f"START run control method {request_id}: {method}")
+            self.llm_logger.debug("START run control method %s: %s", request_id, method)
 
             handler_name = f"_control_{method}"
             handler = getattr(self, handler_name, None)
@@ -1270,7 +1270,7 @@ class EngineService:
                 return
 
             result = handler(control_req)
-            self.llm_logger.info(f"SUCCESS run control method {method}.")
+            self.llm_logger.debug("SUCCESS run control method %s", method)
             succ_result = ControlResponse(request_id, 200, "Success", result)
             self.send_response_server.send_response(request_id, [succ_result])
 
@@ -1319,7 +1319,7 @@ class EngineService:
             raise Exception(error_msg)
         running_reqs = self.resource_manager.preempted_all()
         if len(running_reqs) > 0:
-            self.llm_logger.info(f"Total {len(running_reqs)} requests need to be aborted.")
+            self.llm_logger.info("Total %d requests need to be aborted.", len(running_reqs))
             self.resource_manager.get_real_bsz()
             self.engine_worker_queue.put_tasks((running_reqs, self.resource_manager.real_bsz))
             self.resource_manager.wait_worker_inflight_requests_finish(timeout=60)
@@ -1329,7 +1329,7 @@ class EngineService:
 
         # abort inflight requests to user
         inflight_requests = self.scheduler.get_inflight_requests()
-        self.llm_logger.info(f"Start Abort Inflight Requests, total {len(inflight_requests)} waiting requests")
+        self.llm_logger.info("Start Abort Inflight Requests, total %d waiting requests", len(inflight_requests))
         for req in inflight_requests:
             self._send_error_response(req.request_id, "Request is aborted since LLM Engine is paused.")
         self.scheduler.reset()
@@ -1366,7 +1366,7 @@ class EngineService:
         Returns:
             dict: Dictionary containing pause status information, {'is_paused': bool}
         """
-        self.llm_logger.info(f"LLM Engine request generation is paused: {self.is_paused}")
+        self.llm_logger.debug("LLM Engine request generation is paused: %s", self.is_paused)
         with self._pause_cond:
             return {"is_paused": self.is_paused}
 
@@ -1418,12 +1418,12 @@ class EngineService:
                 raise Exception("Worker Update Weights Timeouted after 600s")
             response: ControlResponse = msg.payload
             if response.request_id != request_id:
-                self.llm_logger.info(f"ignore old control response from worker:{output_queue.name} {response}")
+                self.llm_logger.debug("ignore old control response from worker:%s %s", output_queue.name, response)
                 continue
             if response.error_code != 200:
-                self.llm_logger.info(f"Call Worker Failed: {output_queue.name} {response.error_message}")
+                self.llm_logger.debug("Call Worker Failed: %s %s", output_queue.name, response.error_message)
                 raise Exception(f"Call Worker error: {response.error_message}")
-            self.llm_logger.info(f"Call Worker Succeed: {output_queue.name} {response.result}")
+            self.llm_logger.debug("Call Worker Succeed: %s %s", output_queue.name, response.result)
             responses.append(response.result)
         return responses
 
@@ -1579,7 +1579,7 @@ class EngineService:
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                     if self.resource_manager.preallocate_resource_in_d(task):
                         task.metrics.decode_preallocate_req_time = time.time()
-                        self.llm_logger.info(f"Resource available, processing task {task.request_id}")
+                        self.llm_logger.debug("Resource available, processing task %s", task.request_id)
                         self.split_connector.send_cache_info_to_prefill([task])
                         self.llm_logger.debug(f"D has successfully sent cache infos for task {task.request_id}")
                         processed_indices.append(idx)
@@ -1652,7 +1652,7 @@ class EngineService:
                     if envs.FD_ENABLE_INTERNAL_ADAPTER:  # first token sent by D instance
                         self.scheduler.put_results([req_output])
                     self.resource_manager.add_prefilled_request(req_output)
-                    self.llm_logger.info(f"D has successfully added prefilled request, {request_id}")
+                    self.llm_logger.debug("D has successfully added prefilled request, %s", request_id)
 
         def decode_loop():
             while self.running:
@@ -1771,7 +1771,7 @@ class EngineService:
                 self.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
                 self.resource_manager.cache_manager.cache_ready_signal.clear()
                 for p in self.cache_manager_processes:
-                    self.llm_logger.info(f"Killing cache manager process {p.pid}")
+                    self.llm_logger.info("Killing cache manager process %s", p.pid)
                     try:
                         pgid = os.getpgid(p.pid)
                         os.killpg(pgid, signal.SIGTERM)
@@ -1801,7 +1801,7 @@ class EngineService:
             # Clean up other services
             if hasattr(self, "dp_processed"):
                 for p in self.dp_processed:
-                    self.llm_logger.info(f"Waiting for worker {p.pid} to exit")
+                    self.llm_logger.info("Waiting for worker %s to exit", p.pid)
                     p.join()
                 for p in self.dp_engine_worker_queue_server:
                     p.cleanup()
@@ -1970,14 +1970,14 @@ class EngineService:
 
         think_start_id = self.data_processor.tokenizer.get_vocab().get("<think>", -1)
         if think_start_id >= 0:
-            self.llm_logger.info(f"Get think_start_id {think_start_id} from vocab.")
+            self.llm_logger.debug("think_start_id=%s", think_start_id)
         else:
-            self.llm_logger.info("No <think> token found in vocabulary, the model can not do reasoning.")
+            self.llm_logger.debug("No <think> token found in vocabulary, the model can not do reasoning.")
         think_end_id = self.data_processor.tokenizer.get_vocab().get("</think>", -1)
         if think_end_id >= 0:
-            self.llm_logger.info(f"Get think_end_id {think_end_id} from vocab.")
+            self.llm_logger.debug("think_end_id=%s", think_end_id)
         else:
-            self.llm_logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
+            self.llm_logger.debug("No </think> token found in vocabulary, the model can not do reasoning.")
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
         if line_break_id < 0:
@@ -1996,7 +1996,7 @@ class EngineService:
                 else:
                     line_break_id = int(line_break_ids)
         if line_break_id >= 0:
-            self.llm_logger.info(f"Get line_break_id {line_break_id} from tokenizer.")
+            self.llm_logger.debug("line_break_id=%s", line_break_id)
 
         ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
@@ -2083,7 +2083,7 @@ class EngineService:
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
-        self.llm_logger.info(f"Launch worker service command: {pd_cmd}")
+        self.llm_logger.info("Launch worker service command: %s", pd_cmd)
         p = subprocess.Popen(
             pd_cmd,
             stdout=subprocess.PIPE,
@@ -2154,7 +2154,7 @@ class EngineService:
                     else:
                         address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
 
-                    self.llm_logger.info(f"dp start queue service {address}")
+                    self.llm_logger.debug("dp start queue service %s", address)
                     self.dp_engine_worker_queue_server.append(
                         EngineWorkerQueue(
                             address=address,

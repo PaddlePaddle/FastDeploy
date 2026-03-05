@@ -192,12 +192,13 @@ class LLMEngine:
                 envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT = envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS.split(",")[0]
             if envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS is not None:
                 envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[0]
-        llm_logger.info(
-            f"envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT:{envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT},envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT:{envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT}"
+        llm_logger.debug(
+            "ZMQ ports: recv=%s, send=%s",
+            envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT,
         )
 
         if api_server_pid is not None:
-            llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")
+            llm_logger.debug("Start zmq server, api_server_pid: %s", api_server_pid)
             self.engine.start_zmq_service(api_server_pid)
 
         # Worker launched
@@ -206,7 +207,7 @@ class LLMEngine:
             console_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
             return False
 
-        console_logger.info(f"Worker processes are launched with {time.time() - start_time} seconds.")
+        console_logger.info("Worker processes launched in %.1f seconds.", time.time() - start_time)
 
         # Print blocks number & max running requests to console
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -269,7 +270,7 @@ class LLMEngine:
             task.update(asdict(sampling_params))
         request = Request.from_dict(task)
         request.metrics.scheduler_recv_req_time = time.time()
-        llm_logger.info(f"Receive request {request}")
+        llm_logger.debug("Receive request: %s", request)
         if sampling_params is not None:
             if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
                 sampling_params.temperature = 1e-06
@@ -425,7 +426,7 @@ class LLMEngine:
             if hasattr(self.engine.resource_manager.cache_manager, "cache_ready_signal"):
                 self.engine.resource_manager.cache_manager.cache_ready_signal.clear()
             for p in self.cache_manager_processes:
-                llm_logger.info(f"Killing cache manager process {p.pid}")
+                llm_logger.debug("Killing cache manager process %s", p.pid)
                 try:
                     pgid = os.getpgid(p.pid)
                     os.killpg(pgid, signal.SIGTERM)
@@ -451,7 +452,7 @@ class LLMEngine:
 
         if hasattr(self, "dp_processed"):
             for p in self.dp_processed:
-                console_logger.info(f"Waiting for worker {p.pid} to exit")
+                console_logger.debug("Waiting for worker %s to exit", p.pid)
                 p.join()
             for p in self.dp_engine_worker_queue_server:
                 p.cleanup()
@@ -528,14 +529,14 @@ class LLMEngine:
 
         think_start_id = self.data_processor.tokenizer.get_vocab().get("<think>", -1)
         if think_start_id >= 0:
-            llm_logger.info(f"Get think_start_id {think_start_id} from vocab.")
+            llm_logger.debug("think_start_id=%s", think_start_id)
         else:
-            llm_logger.info("No <think> token found in vocabulary, the model can not do reasoning.")
+            llm_logger.debug("No <think> token found in vocabulary, the model can not do reasoning.")
         think_end_id = self.data_processor.tokenizer.get_vocab().get("</think>", -1)
         if think_end_id >= 0:
-            llm_logger.info(f"Get think_end_id {think_end_id} from vocab.")
+            llm_logger.debug("think_end_id=%s", think_end_id)
         else:
-            llm_logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
+            llm_logger.debug("No </think> token found in vocabulary, the model can not do reasoning.")
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
         if line_break_id < 0:
@@ -554,7 +555,7 @@ class LLMEngine:
                 else:
                     line_break_id = int(line_break_ids)
         if line_break_id >= 0:
-            llm_logger.info(f"Get line_break_id {line_break_id} from tokenizer.")
+            llm_logger.debug("line_break_id=%s", line_break_id)
         try:
             think_truncate_prompt_ids = self.data_processor.tokenizer.convert_tokens_to_ids(
                 self.data_processor.tokenizer.tokenize(self.data_processor.tokenizer.think_truncate_prompt)
@@ -563,7 +564,7 @@ class LLMEngine:
             think_truncate_prompt_ids = self.data_processor.tokenizer.convert_tokens_to_ids(
                 self.data_processor.tokenizer.tokenize(envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR)
             )
-        llm_logger.info(f"Get think_truncate_prompt_ids {think_truncate_prompt_ids} from tokenizer.")
+        llm_logger.debug("think_truncate_prompt_ids=%s", think_truncate_prompt_ids)
 
         ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
@@ -660,7 +661,7 @@ class LLMEngine:
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
-        llm_logger.info(f"Launch worker service command: {pd_cmd}")
+        llm_logger.info("Launch worker service command: %s", pd_cmd)
         p = subprocess.Popen(
             pd_cmd,
             stdout=subprocess.PIPE,
@@ -704,7 +705,7 @@ class LLMEngine:
         Yields:
             dict: The generated response.
         """
-        llm_logger.info(f"Starting generation for prompt: {prompts}")
+        llm_logger.debug("Starting generation for prompt: %s", prompts)
         try:
             req_id = self._format_and_add_data(prompts)
         except Exception as e:

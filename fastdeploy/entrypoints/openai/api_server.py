@@ -89,7 +89,7 @@ tracing.process_tracing_init()
 parser = make_arg_parser(FlexibleArgumentParser())
 args = parser.parse_args()
 
-console_logger.info(f"Number of api-server workers: {args.workers}.")
+console_logger.info("Number of API server workers: %d", args.workers)
 
 args.model = retrive_model_from_server(args.model, args.revision)
 chat_template = load_chat_template(args.chat_template, args.model)
@@ -124,7 +124,7 @@ def load_engine():
     if llm_engine is not None:
         return llm_engine
 
-    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}, port: {args.port}")
+    api_server_logger.info("FastDeploy LLM API server starting (pid=%s, port=%s)", os.getpid(), args.port)
     engine_args = EngineArgs.from_cli_args(args)
     if envs.FD_ENABLE_ASYNC_LLM:
         engine = AsyncLLM.from_engine_args(engine_args, pid=args.port)
@@ -152,11 +152,11 @@ def load_data_service():
     global llm_engine
     if llm_engine is not None:
         return llm_engine
-    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}, port: {args.port}")
+    api_server_logger.info("FastDeploy LLM API server starting (pid=%s, port=%s)", os.getpid(), args.port)
     engine_args = EngineArgs.from_cli_args(args)
     config = engine_args.create_engine_config()
-    api_server_logger.info(f"local_data_parallel_id: {config.parallel_config}")
-    api_server_logger.info(f"local_data_parallel_id: {config.parallel_config.local_data_parallel_id}")
+    api_server_logger.debug("parallel_config: %s", config.parallel_config)
+    api_server_logger.debug("local_data_parallel_id: %s", config.parallel_config.local_data_parallel_id)
     expert_service = ExpertService(config, config.parallel_config.local_data_parallel_id)
     if not expert_service.start(args.port, config.parallel_config.local_data_parallel_id):
         api_server_logger.error("Failed to initialize FastDeploy LLM expert service, service exit now!")
@@ -188,7 +188,7 @@ async def lifespan(app: FastAPI):
     if args.tokenizer is None:
         args.tokenizer = args.model
     pid = args.port
-    api_server_logger.info(f"{pid}")
+    api_server_logger.debug("PID: %s", pid)
 
     if args.served_model_name is not None:
         served_model_names = args.served_model_name
@@ -290,7 +290,7 @@ async def lifespan(app: FastAPI):
         from prometheus_client import multiprocess
 
         multiprocess.mark_process_dead(os.getpid())
-        api_server_logger.info(f"Closing metrics client pid: {pid}")
+        api_server_logger.debug("Closing metrics client pid: %s", pid)
     except Exception as e:
         api_server_logger.warning(f"exit error: {e}, {str(traceback.format_exc())}")
 
@@ -315,7 +315,7 @@ async def connection_manager():
         await asyncio.wait_for(connection_semaphore.acquire(), timeout=0.001)
         yield
     except asyncio.TimeoutError:
-        api_server_logger.info(f"Reach max request concurrency, semaphore status: {connection_semaphore.status()}")
+        api_server_logger.debug("Reach max request concurrency, semaphore status: %s", connection_semaphore.status())
         raise HTTPException(
             status_code=429, detail=f"Too many requests,current max concurrency is {args.max_concurrency}"
         )
@@ -520,7 +520,7 @@ async def create_completion(request: CompletionRequest, req: Request):
     """
     Create a completion for the provided prompt and parameters.
     """
-    api_server_logger.info(f"Completion Received request: {request.model_dump_json()}")
+    api_server_logger.debug("Completion received request: %s", request.model_dump_json())
     if envs.TRACES_ENABLE:
         if req.headers:
             headers = dict(req.headers)
@@ -658,8 +658,8 @@ def launch_api_server() -> None:
     if not is_port_available(args.host, args.port):
         raise Exception(f"The parameter `port`:{args.port} is already in use.")
 
-    api_server_logger.info(f"launch Fastdeploy api server... port: {args.port}")
-    api_server_logger.info(f"args: {args.__dict__}")
+    api_server_logger.info("Launching FastDeploy API server on port %s", args.port)
+    api_server_logger.debug("Server args: %s", args.__dict__)
     # fd_start_span("FD_START")
 
     # set control_socket_disable=True to avoid conflicts when running multiple instances
@@ -851,11 +851,11 @@ def main():
     api_server_logger.info("FastDeploy LLM engine initialized!\n")
     if args.metrics_port is not None and args.metrics_port != args.port:
         launch_metrics_server()
-        console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
+        console_logger.info("Launching metrics service at http://%s:%s/metrics", args.host, args.metrics_port)
     else:
-        console_logger.info(f"Launching metrics service at http://{args.host}:{args.port}/metrics")
-    console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
-    console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")
+        console_logger.info("Launching metrics service at http://%s:%s/metrics", args.host, args.port)
+    console_logger.info("Launching chat completion service at http://%s:%s/v1/chat/completions", args.host, args.port)
+    console_logger.info("Launching completion service at http://%s:%s/v1/completions", args.host, args.port)
 
     launch_worker_monitor()
     launch_controller_server()

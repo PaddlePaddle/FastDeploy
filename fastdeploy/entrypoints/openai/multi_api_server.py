@@ -50,7 +50,7 @@ def start_servers(
     else:
         controller_ports = [-1] * server_count
 
-    logger.info(f"Starting servers on ports: {ports} with args: {server_args} and metrics ports: {metrics_ports}")
+    logger.info("Starting servers on ports: %s with args: %s and metrics ports: %s", ports, server_args, metrics_ports)
     port_idx = {}
     for i in range(len(server_args)):
         if server_args[i] == "--engine-worker-queue-port":
@@ -66,7 +66,7 @@ def start_servers(
         port = find_free_ports(num_ports=server_count)
         server_args += ["--engine-worker-queue-port", ",".join(map(str, port))]
         port_idx["engine_worker_queue_port"] = len(server_args) - 1
-        logger.info(f"No --engine-worker-queue-port specified, using random ports: {port}")
+        logger.debug("No --engine-worker-queue-port specified, using random ports: %s", port)
     engine_worker_queue_port = server_args[port_idx["engine_worker_queue_port"]].split(",")
     if not check_param(engine_worker_queue_port, server_count):
         return
@@ -75,7 +75,7 @@ def start_servers(
         port = find_free_ports(num_ports=server_count)
         server_args += ["--cache-queue-port", ",".join(map(str, port))]
         port_idx["cache_queue_port"] = len(server_args) - 1
-        logger.info(f"No --cache-queue-port specified, using random ports: {port}")
+        logger.debug("No --cache-queue-port specified, using random ports: %s", port)
     cache_queue_port = server_args[port_idx["cache_queue_port"]].split(",")
     if not check_param(cache_queue_port, server_count):
         return
@@ -84,7 +84,7 @@ def start_servers(
         port = find_free_ports(num_ports=server_count)
         server_args += ["--pd-comm-port", ",".join(map(str, port))]
         port_idx["pd_comm_port"] = len(server_args) - 1
-        logger.info(f"No --pd-comm-port specified, using random ports: {port}")
+        logger.debug("No --pd-comm-port specified, using random ports: %s", port)
     pd_comm_port = server_args[port_idx["pd_comm_port"]].split(",")
     if not check_param(pd_comm_port, server_count):
         return
@@ -93,12 +93,12 @@ def start_servers(
         port = find_free_ports(num_ports=device_count)
         server_args += ["--rdma-comm-ports", ",".join(map(str, port))]
         port_idx["rdma_comm_ports"] = len(server_args) - 1
-        logger.info(f"No --rdma-comm-ports specified, using random ports: {port}")
+        logger.debug("No --rdma-comm-ports specified, using random ports: %s", port)
     rdma_comm_ports = server_args[port_idx["rdma_comm_ports"]].split(",")
     if not check_param(rdma_comm_ports, device_count):
         return
 
-    logger.info(f"Modified server_args: {server_args}")
+    logger.debug("Modified server_args: %s", server_args)
     processes = []
     for i in range(server_count):
         port = int(ports[i])
@@ -125,16 +125,16 @@ def start_servers(
         # 启动子进程
         proc = subprocess.Popen(cmd, env=env)
         processes.append(proc)
-        logger.info(f"Starting servers #{i+1} (PID: {proc.pid}) port: {port} | command: {' '.join(cmd)}")
+        logger.info("Starting server #%d (PID: %s) port: %s", i + 1, proc.pid, port)
 
     return processes
 
 
 def check_param(ports, num_servers):
-    logger.info(f"check param {ports}, {num_servers}")
+    logger.debug("check param %s, %s", ports, num_servers)
     assert len(ports) == num_servers, "Number of ports must match num-servers"
     for port in ports:
-        logger.info(f"check port {port}")
+        logger.debug("check port %s", port)
         if not is_port_available("0.0.0.0", int(port)):
             raise RuntimeError(f"Port {port} is not available.")
     return True
@@ -149,7 +149,7 @@ def main():
     parser.add_argument("--args", nargs=argparse.REMAINDER, help="remaining arguments are passed to api_server.py")
     args = parser.parse_args()
 
-    logger.info(f"Launching MultiAPIServer with command: {' '.join(sys.argv)}")
+    logger.info("Launching MultiAPIServer with command: %s", ' '.join(sys.argv))
 
     device_count = 0
     if current_platform.is_cuda():
