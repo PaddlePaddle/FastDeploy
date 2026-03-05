@@ -43,6 +43,7 @@ from fastdeploy.model_executor.layers.sample.ops import (
 )
 from fastdeploy.platforms import current_platform
 from fastdeploy.reasoning import ReasoningParser
+from fastdeploy.spec_decode import SpecMethod, VerifyStrategy
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 
 
@@ -628,6 +629,18 @@ class SpeculativeSampler(nn.Layer):
         self.line_break_id = fd_config.model_config.line_break_id
         self.enf_gen_phase_tag = fd_config.speculative_config.enf_gen_phase_tag
 
+        # Verify strategy derived from config (replaces env vars in CUDA kernel)
+        spec_config = fd_config.speculative_config
+        # Verify strategy enum: VerifyStrategy.TOPP/GREEDY/TARGET_MATCH
+        # Use .value (0/1/2) when passing to CUDA kernel
+        self.spec_method = spec_config.spec_method
+        self.verify_strategy = spec_config.verify_strategy
+        self.prefill_one_step_stop = fd_config.parallel_config.prefill_one_step_stop
+
+        # Accept policy from config (can be overridden by function parameters)
+        self.config_accept_all = spec_config.accept_policy == "accept_all"
+        self.config_reject_all = spec_config.accept_policy == "reject_all"
+
     def pre_process(self, skip_idx_list: List[int] = []):
         """pre process before running"""
         pass
@@ -740,7 +753,7 @@ class SpeculativeSampler(nn.Layer):
 
         return LogprobsTensors(indices, top_logprobs, token_ranks)
 
-    def forward_cuda(
+    def _verify_and_sample(
         self,
         logits: paddle.Tensor,
         sampling_metadata: SamplingMetadata,
@@ -748,10 +761,28 @@ class SpeculativeSampler(nn.Layer):
         share_inputs: List[paddle.Tensor],
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
-    ) -> paddle.Tensor:
-        """ """
+    ) -> SamplerOutput:
+        """
+        Verify draft tokens against target model output and produce final samples.
 
-        from fastdeploy.model_executor.ops.gpu import speculate_verify, top_p_candidates
+        This is the core speculative decoding logic that compares draft tokens
+        with target model predictions to determine acceptance/rejection.
+
+        Args:
+            logits: Target model output logits
+            sampling_metadata: Sampling parameters and metadata
+            max_model_len: Maximum model sequence length
+            share_inputs: Shared input tensors including draft_tokens, accept_tokens, etc.
+            accept_all_drafts: Force accept all draft tokens (debug mode)
+            reject_all_drafts: Force reject all draft tokens (debug mode)
+
+        Returns:
+            SamplerOutput with accepted tokens and metadata
+        """
+        from fastdeploy.model_executor.ops.gpu import (
+            top_p_candidates,
+            verify_draft_tokens,
+        )
 
         if sampling_metadata.token_ids_all is not None:
             token_ids_all = sampling_metadata.token_ids_all
@@ -795,54 +826,77 @@ class SpeculativeSampler(nn.Layer):
                 self.think_end_id,
                 self.line_break_id,
             )
-
         probs = F.softmax(logits)
 
-        top_p, top_k, topp_seed = padding_sampling_params(
-            sampling_metadata.top_p,
-            sampling_metadata.top_k,
-            sampling_metadata.seed,
-            share_inputs["seq_lens_this_time"],
-            share_inputs["seq_lens_encoder"],
-        )
-        _, sampled_token_ids = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, topp_seed=topp_seed)
+        # Prepare strategy-specific tensors
+        # TARGET_MATCH: needs target_tokens=sampled, candidates=None
+        # GREEDY: needs target_tokens=argmax, candidates=None
+        # TOPP: needs target_tokens=None, candidates=full top_p set
+        target_tokens, candidate_ids, candidate_scores, candidate_lens = None, None, None, None
 
-        verify_scores, verify_tokens, actual_candidate_len = top_p_candidates(
-            probs,
-            sampling_metadata.top_p,
-            share_inputs["batch_id_per_token_output"],
-            self.speculative_max_candidate_len,
-            max_model_len,
-        )
+        if self.verify_strategy == VerifyStrategy.TARGET_MATCH:
+            # Only TARGET_MATCH needs stochastic sampling
+            top_p, top_k, topp_seed = padding_sampling_params(
+                sampling_metadata.top_p,
+                sampling_metadata.top_k,
+                sampling_metadata.seed,
+                share_inputs["seq_lens_this_time"],
+                share_inputs["seq_lens_encoder"],
+            )
+            _, target_tokens = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, topp_seed=topp_seed)
+        elif self.verify_strategy == VerifyStrategy.GREEDY:
+            # GREEDY: deterministic argmax in target_tokens, no candidates needed
+            target_tokens = paddle.argmax(probs, axis=-1)
+        elif self.verify_strategy == VerifyStrategy.TOPP:  # TOPP
+            # TOPP: needs full candidate set, target_tokens unused
+            candidate_scores, candidate_ids, candidate_lens = top_p_candidates(
+                probs,
+                sampling_metadata.top_p,
+                share_inputs["batch_id_per_token_output"],
+                self.speculative_max_candidate_len,
+                max_model_len,
+            )
+        else:
+            raise ValueError(f"Unknown verify strategy: {self.verify_strategy}")
 
-        speculate_verify(
-            sampled_token_ids,
-            share_inputs["accept_tokens"],
-            share_inputs["accept_num"],
-            share_inputs["step_idx"],
+        # Accept policy: config default OR function parameter (OR logic)
+        final_accept_all = self.config_accept_all or accept_all_drafts
+        final_reject_all = self.config_reject_all or reject_all_drafts or self.speculative_benchmark_mode
+
+        verify_draft_tokens(
+            # Core I/O
+            share_inputs["accept_tokens"],  # step_output_ids
+            share_inputs["accept_num"],  # step_output_len
+            share_inputs["draft_tokens"],  # step_input_ids
+            # Target model outputs
+            target_tokens,
+            # Candidate set (strategy-dependent usage)
+            candidate_ids,
+            candidate_scores,
+            candidate_lens,
+            # Sampling params
+            sampling_metadata.top_p,
+            # Metadata
             share_inputs["stop_flags"],
             share_inputs["seq_lens_encoder"],
-            share_inputs["seq_lens_decoder"],
-            share_inputs[
-                "draft_tokens"
-            ],  # Both input and output, need to write the last 1 token accepted to position 0.
             share_inputs["seq_lens_this_time"],
-            verify_tokens,
-            verify_scores,
-            share_inputs["max_dec_len"],
             sampling_metadata.eos_token_ids,
             share_inputs["is_block_step"],
             share_inputs["cu_seqlens_q_output"],
-            actual_candidate_len,
-            share_inputs["actual_draft_token_num"],
-            sampling_metadata.top_p,
             share_inputs["reasoning_status"],
+            # Config
             max_model_len,
             self.speculative_verify_window,
-            True,  # enable_topp
-            (self.speculative_benchmark_mode or reject_all_drafts),
-            accept_all_drafts,
+            self.verify_strategy.value,
+            final_reject_all,
+            final_accept_all,
         )
+
+        logger.info("======after verify=======")
+        logger.info("accept_tokens: {}".format(share_inputs["accept_tokens"]))
+        logger.info("accept_num: {}".format(share_inputs["accept_num"]))
+        # logger.info("draft_tokens: {}".format(share_inputs["draft_tokens"]))
+        # logger.info("verify_strategy: {}".format(self.verify_strategy))
 
         num_logprobs = sampling_metadata.max_num_logprobs
         batch_token_num = None
@@ -895,6 +949,152 @@ class SpeculativeSampler(nn.Layer):
         )
 
         return sampler_output
+
+    def _normal_sample(
+        self,
+        logits: paddle.Tensor,
+        sampling_metadata: SamplingMetadata,
+        share_inputs: List[paddle.Tensor],
+    ) -> SamplerOutput:
+        """
+        Normal sampling without draft token verification.
+
+        Used by NAIVE mode: directly samples from target model output
+        and writes results to share_inputs["accept_tokens"]/["accept_num"].
+
+        Args:
+            logits: Target model output logits
+            sampling_metadata: Sampling parameters and metadata
+            share_inputs: Shared input tensors
+
+        Returns:
+            SamplerOutput with sampled tokens
+        """
+        probs = F.softmax(logits)
+
+        # Apply min_p sampling if configured
+        probs = min_p_sampling(probs, sampling_metadata.min_p, sampling_metadata.min_p_list)
+
+        # Sample tokens
+        _, next_tokens = top_k_top_p_sampling(
+            probs,
+            sampling_metadata.top_p,
+            sampling_metadata.top_k,
+            sampling_metadata.top_k_list,
+            topp_seed=sampling_metadata.seed,
+        )
+
+        # For NAIVE mode: write directly to accept_tokens/accept_num
+        # These are the same tensors used by speculative decoding path
+        # First reset all accept_num to 0, then set running sequences to 1
+        share_inputs["accept_tokens"][: next_tokens.shape[0], 0] = next_tokens.squeeze(-1)
+
+        # Handle logprobs if needed
+        logprobs_tensors = None
+        num_logprobs = sampling_metadata.max_num_logprobs
+        if num_logprobs is not None:
+            # Compute logprobs from logits
+            if self.logprobs_mode == "raw_logprobs":
+                logprobs = F.log_softmax(logits, axis=-1)
+            else:  # raw_logits
+                logprobs = logits.clone()
+            logprobs_tensors = self.gather_logprobs(logprobs, num_logprobs, token_ids=next_tokens.squeeze(-1))
+
+        return SamplerOutput(
+            sampled_token_ids=share_inputs["accept_tokens"],
+            logprobs_tensors=logprobs_tensors,
+            token_num_per_batch=share_inputs["accept_num"],
+            logits=logits,
+        )
+
+    def forward_cuda(
+        self,
+        logits: paddle.Tensor,
+        sampling_metadata: SamplingMetadata,
+        max_model_len: int,
+        share_inputs: List[paddle.Tensor],
+        accept_all_drafts: bool = False,
+        reject_all_drafts: bool = False,
+    ) -> SamplerOutput:
+        """
+        Forward pass for speculative sampling.
+
+        Routes between:
+        - NAIVE mode: Normal sampling without draft verification
+        - MTP/Ngram mode: Draft token verification + sampling
+
+        Args:
+            logits: Target model output logits
+            sampling_metadata: Sampling parameters and metadata
+            max_model_len: Maximum model sequence length
+            share_inputs: Shared input tensors
+            accept_all_drafts: Force accept all draft tokens (debug mode)
+            reject_all_drafts: Force reject all draft tokens (debug mode)
+
+        Returns:
+            SamplerOutput with sampled/accepted tokens
+        """
+        # Apply speculative penalty scores (shared path)
+
+        if sampling_metadata.token_ids_all is not None:
+            token_ids_all = sampling_metadata.token_ids_all
+            prompt_lens = sampling_metadata.prompt_lens
+        else:
+            token_ids_all = sampling_metadata.pre_token_ids
+            prompt_lens = sampling_metadata.fake_prompt_lens
+        logits = apply_speculative_penalty_multi_scores(
+            token_ids_all,
+            prompt_lens,
+            logits,
+            sampling_metadata.repetition_penalties,
+            sampling_metadata.frequency_penalties,
+            sampling_metadata.presence_penalties,
+            sampling_metadata.temperature,
+            sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
+            sampling_metadata.step_idx,
+            sampling_metadata.min_dec_lens,
+            sampling_metadata.eos_token_ids,
+            share_inputs["seq_lens_this_time"],
+            share_inputs["batch_id_per_token_output"],
+            share_inputs["cu_seqlens_q_output"],
+            max_model_len,
+        )
+
+        # Apply reasoning phase constraint if enabled
+        if self.enf_gen_phase_tag:
+            reasoning_phase_token_constraint(
+                logits,
+                sampling_metadata.pre_token_ids,
+                share_inputs["stop_flags"],
+                share_inputs["seq_lens_this_time"],
+                share_inputs["seq_lens_encoder"],
+                share_inputs["step_idx"],
+                share_inputs["reasoning_allowed_tokens"],
+                share_inputs["reasoning_status"],
+                share_inputs["batch_id_per_token_output"],
+                share_inputs["cu_seqlens_q_output"],
+                share_inputs["enable_thinking"],
+                self.think_end_id,
+                self.line_break_id,
+            )
+
+        # Route based on spec_method
+        if self.spec_method is None or self.spec_method == SpecMethod.NAIVE:
+            # NAIVE mode: Normal decoding without draft verification
+            # spec_method is None when speculative_decoding=False
+            # spec_method is NAIVE when using naive speculative mode
+            return self._normal_sample(logits, sampling_metadata, share_inputs)
+        else:
+            # MTP/Ngram mode: Verify draft tokens
+            return self._verify_and_sample(
+                logits,
+                sampling_metadata,
+                max_model_len,
+                share_inputs,
+                accept_all_drafts,
+                reject_all_drafts,
+            )
 
     def forward_xpu(
         self,
