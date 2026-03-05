@@ -37,11 +37,12 @@ for file in $TEST_FILES; do
     # Clean up previous logs
     rm -rf "${run_path}"/log* || true
     for f in "${run_path}"/*.log; do
-        [[ "$(basename "$f")" != "failed_tests.log" ]] && rm -f "$f"
+        [[ "$(basename "$f")" != "${failed_tests_file}" ]] && rm -f "$f"
     done
 
     # Run pytest with coverage for the current file
-    python -m coverage run -m pytest -c ${PYTEST_INI} "$file" -vv -s
+    # Set timeout to 600 seconds to avoid infinite loop
+    timeout 600 python -m coverage run -m pytest -c ${PYTEST_INI} "$file" -vv -s
     status=$?
     if [ "$status" -ne 0 ]; then
         echo "$file" >> "$failed_tests_file"
@@ -78,6 +79,8 @@ for file in $TEST_FILES; do
         server_logs=("${run_path}"/*.log)
         if [ "${#server_logs[@]}" -gt 0 ]; then
             for server_log in "${server_logs[@]}"; do
+                # skip failed_tests_file
+                [ "${server_log}" == "${failed_tests_file}" ] && continue
                 if [ -f "${server_log}" ]; then
                     echo
                     echo "---------------- ${server_log} (last 100 lines) ----------------"

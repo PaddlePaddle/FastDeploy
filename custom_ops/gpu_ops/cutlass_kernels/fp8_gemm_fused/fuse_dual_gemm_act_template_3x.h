@@ -28,60 +28,67 @@
 #include "cutlass_extensions/gemm/collective/collective_builder_gated.hpp"
 #include "cutlass_extensions/gemm/kernel/gemm_universal_gated.hpp"
 
-template <typename InputType, typename CTAShape, typename ClusterShape,
-          typename MainloopScheduleType, typename EpilogueScheduleType,
+template <typename InputType,
+          typename CTAShape,
+          typename ClusterShape,
+          typename MainloopScheduleType,
+          typename EpilogueScheduleType,
           typename TileSchedulerType = void,
-          template <class /* ElementCompute */> class Activation =
-              cutlass::epilogue::thread::SiLu,
+          template <class /* ElementCompute */>
+          class Activation = cutlass::epilogue::thread::SiLu,
           bool SwapAB = true>
 bool dispatch_dual_gemm_act_sm90(DualGemmEpilogueAllParams params) {
   using namespace cute;
   using ElementA = typename std::conditional_t<
       std::is_same_v<InputType, phi::dtype::float8_e4m3fn>,
-      cutlass::float_e4m3_t, cutlass::float_e5m2_t>;
-  using LayoutA = cutlass::layout::RowMajor; // Layout type for A matrix operand
+      cutlass::float_e4m3_t,
+      cutlass::float_e5m2_t>;
+  using LayoutA =
+      cutlass::layout::RowMajor;  // Layout type for A matrix operand
   static constexpr int AlignmentA =
       128 /
       cutlass::sizeof_bits<
-          ElementA>::value; // Memory access granularity/alignment of A
-                            // matrix in units of elements (up to 16 bytes)
+          ElementA>::value;  // Memory access granularity/alignment of A
+                             // matrix in units of elements (up to 16 bytes)
 
   // B matrix configuration
-  using ElementB = ElementA; // Element type for B matrix operand
+  using ElementB = ElementA;  // Element type for B matrix operand
   using LayoutB =
-      cutlass::layout::ColumnMajor; // Layout type for B matrix operand
+      cutlass::layout::ColumnMajor;  // Layout type for B matrix operand
   static constexpr int AlignmentB =
       128 /
       cutlass::sizeof_bits<
-          ElementB>::value; // Memory access granularity/alignment of B
-                            // matrix in units of elements (up to 16 bytes)
+          ElementB>::value;  // Memory access granularity/alignment of B
+                             // matrix in units of elements (up to 16 bytes)
 
-  using ElementC = ElementA; // Element type for C matrix operands
+  using ElementC = ElementA;  // Element type for C matrix operands
 
-  using LayoutC = cute::conditional_t<SwapAB, cutlass::layout::ColumnMajor,
+  using LayoutC = cute::conditional_t<SwapAB,
+                                      cutlass::layout::ColumnMajor,
                                       cutlass::layout::RowMajor>;
   static constexpr int AlignmentC =
       128 /
       cutlass::sizeof_bits<
-          ElementC>::value; // Memory access granularity/alignment of C matrices
-                            // in units of elements (up to 16 bytes)
+          ElementC>::value;  // Memory access granularity/alignment of C
+                             // matrices in units of elements (up to 16 bytes)
 
   // Output matrix configuration
-  using ElementOutput = ElementA; // Element type for output matrix operands
+  using ElementOutput = ElementA;  // Element type for output matrix operands
   // using LayoutOutput = cutlass::layout::RowMajor; // Layout type for output
   // matrix operands
-  using LayoutOutput = cute::conditional_t<SwapAB, cutlass::layout::ColumnMajor,
+  using LayoutOutput = cute::conditional_t<SwapAB,
+                                           cutlass::layout::ColumnMajor,
                                            cutlass::layout::RowMajor>;
   static constexpr int AlignmentOutput =
       128 / cutlass::sizeof_bits<ElementOutput>::value;
 
   // Multiply-accumulate blocking/pipelining details
-  using ElementAccumulator = float;    // Element type for internal accumulation
-  using ElementCompute = float;        // Element type for compute
-  using ArchTag = cutlass::arch::Sm90; // Tag indicating the minimum SM that
-                                       // supports the intended feature
-  using OperatorClass = cutlass::arch::OpClassTensorOp; // Operator class tag
-  using TileShape = CTAShape; // Threadblock-level tile size
+  using ElementAccumulator = float;  // Element type for internal accumulation
+  using ElementCompute = float;      // Element type for compute
+  using ArchTag = cutlass::arch::Sm90;  // Tag indicating the minimum SM that
+                                        // supports the intended feature
+  using OperatorClass = cutlass::arch::OpClassTensorOp;  // Operator class tag
+  using TileShape = CTAShape;  // Threadblock-level tile size
   using KernelSchedule = MainloopScheduleType;
   using EpilogueSchedule = EpilogueScheduleType;
   using TileScheduler = TileSchedulerType;
@@ -94,22 +101,46 @@ bool dispatch_dual_gemm_act_sm90(DualGemmEpilogueAllParams params) {
 
   using CollectiveEpilogue =
       typename cutlass::epilogue::collective::CollectiveBuilder<
-          ArchTag, OperatorClass, TileShape, ClusterShape, EpilogueTileType,
-          ElementAccumulator, ElementAccumulator, ElementC, LayoutC, AlignmentC,
-          ElementOutput, LayoutOutput, AlignmentOutput, EpilogueSchedule,
+          ArchTag,
+          OperatorClass,
+          TileShape,
+          ClusterShape,
+          EpilogueTileType,
+          ElementAccumulator,
+          ElementAccumulator,
+          ElementC,
+          LayoutC,
+          AlignmentC,
+          ElementOutput,
+          LayoutOutput,
+          AlignmentOutput,
+          EpilogueSchedule,
           FusionOperation>::CollectiveOp;
 
   using CollectiveMainloop =
       typename cutlass::gemm::collective::CollectiveBuilderGated<
-          ArchTag, OperatorClass, ElementA, LayoutA, AlignmentA, ElementB,
-          LayoutB, AlignmentB, ElementAccumulator, TileShape, ClusterShape,
+          ArchTag,
+          OperatorClass,
+          ElementA,
+          LayoutA,
+          AlignmentA,
+          ElementB,
+          LayoutB,
+          AlignmentB,
+          ElementAccumulator,
+          TileShape,
+          ClusterShape,
           cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(
               sizeof(typename CollectiveEpilogue::SharedStorage))>,
-          KernelSchedule, Activation, SwapAB>::CollectiveOp;
+          KernelSchedule,
+          Activation,
+          SwapAB>::CollectiveOp;
 
   using GemmKernel = cutlass::gemm::kernel::GemmUniversalGated<
-      Shape<int, int, int, int>, // Indicates ProblemShape
-      CollectiveMainloop, CollectiveEpilogue, TileScheduler>;
+      Shape<int, int, int, int>,  // Indicates ProblemShape
+      CollectiveMainloop,
+      CollectiveEpilogue,
+      TileScheduler>;
 
   using Gemm = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
 
@@ -141,7 +172,7 @@ bool dispatch_dual_gemm_act_sm90(DualGemmEpilogueAllParams params) {
       cutlass::gemm::GemmUniversalMode::kGemm,
       {arg_m, arg_n, params.K, params.batch_count},
       {ptr_A, stride_A, ptr_B0, ptr_B1, stride_B, params.scale0, params.scale1},
-      {{}, // epilogue.thread
+      {{},  // epilogue.thread
        nullptr,
        stride_C,
        reinterpret_cast<ElementOutput *>(params.D),

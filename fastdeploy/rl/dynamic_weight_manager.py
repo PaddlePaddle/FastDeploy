@@ -263,15 +263,22 @@ class DynamicWeightManager:
         if len(state_dict) == 0:
             raise ValueError(f"No parameter found in state dict {state_dict}")
         update_count = 0
-        for name, new_param in state_dict.items():
-            if name not in self.state_dict:
-                logger.debug(f"Ignoring unmatched {src_type} param: {name}")
-                continue
+        with paddle.no_grad():
+            for name, new_param in state_dict.items():
+                if name not in self.state_dict:
+                    logger.debug(f"Ignoring unmatched {src_type} param: {name}")
+                    continue
 
-            target_param = self.state_dict[name]
-            self._validate_parameter_match(name, new_param, target_param)
-            new_param._share_buffer_to(target_param)
-            update_count += 1
+                target_param = self.state_dict[name]
+                self._validate_parameter_match(name, new_param, target_param)
+                if new_param.stride() != target_param.stride():
+                    logger.warning(
+                        f"name:[{name}] target_param.stride():[{target_param.stride()}] != new_param.stride():[{new_param.stride()}]"
+                    )
+                    target_param[...] = new_param
+                else:
+                    new_param._share_buffer_to(target_param)
+                update_count += 1
         logger.info(f"🆗 Updated {update_count}/{len(state_dict)} parameters from {src_type} source")
 
     def _validate_parameter_match(self, name: str, src: paddle.Tensor, dst: paddle.Tensor):
