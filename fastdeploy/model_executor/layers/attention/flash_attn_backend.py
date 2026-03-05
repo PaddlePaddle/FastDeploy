@@ -390,6 +390,8 @@ class FlashAttentionBackend(AttentionBackend):
                         attn_mask_kv=forward_meta.attn_mask_offsets,
                         kv_token_num=forward_meta.kv_token_num_cpu[0].item(),
                     )
+                else:
+                    forward_meta.attn_mask_q = None
 
         use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 0
 
