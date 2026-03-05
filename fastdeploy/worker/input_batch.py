@@ -17,6 +17,7 @@
 import paddle
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     DeployModality,
@@ -102,6 +103,7 @@ class InputBatch:
         self.speculative_config: SpeculativeConfig = fd_config.speculative_config
         self.speculative_decoding = self.speculative_config.method is not None
         self.enable_mm = self.model_config.enable_mm
+        self.enable_head_wise_kv_cache = envs.FD_HEAD_WISE_KV_CACHE == 1
         self.enable_expert_parallel = fd_config.parallel_config.enable_expert_parallel
         self.index_to_batch_id = {}
         self.enable_pd_reorder = False
@@ -237,11 +239,17 @@ class InputBatch:
             self.model_config.max_model_len + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
         kv_num_heads = max(1, self.model_config.num_key_value_heads // self.fd_config.parallel_config.tensor_parallel_size)
+        self.kv_num_heads = kv_num_heads
+        self.pre_max_block_num = pre_max_block_num
         # In head-wise mode, block_tables needs to accommodate all heads
         block_tables_cols = pre_max_block_num * kv_num_heads
         self.block_tables = paddle.full([max_num_seqs, block_tables_cols], -1, dtype="int32")
-        # Head-wise KV cache: flattened [batch*kv_num_heads, max_blocks_per_head] (set dynamically)
-        self.block_tables_3d = None
+        # Head-wise KV cache table buffer.
+        # Keep this tensor shape fixed to make CUDA Graph replay safe.
+        if self.enable_head_wise_kv_cache:
+            self.block_tables_3d = paddle.full([max_num_seqs * kv_num_heads, pre_max_block_num], -1, dtype="int32")
+        else:
+            self.block_tables_3d = None
 
         # Initialize free list
         free_list = list(
@@ -606,6 +614,8 @@ class InputBatch:
 
             # Reset block tables
             fill_paddle_tensor(self, "block_tables", -1)
+            if self.block_tables_3d is not None:
+                fill_paddle_tensor(self, "block_tables_3d", -1)
 
             # Reset free list (requires special handling)
             free_list = list(

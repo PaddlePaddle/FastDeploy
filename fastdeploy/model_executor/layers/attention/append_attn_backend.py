@@ -399,7 +399,7 @@ class AppendAttentionBackend(AttentionBackend):
                 f"min_id={min_id} max_id={max_id} neg_count={neg_count} out_of_range_cnt={out_of_range_cnt} "
                 f"sample_rows={sample_rows}"
             )
-            if block_tables_3d is None or block_tables_3d.shape[0] != expected_dim0:
+            if block_tables_3d is None or block_tables_3d.shape[0] < expected_dim0:
                 logger.warning(
                     f"[headwise kernel input mismatch] layer={layer.layer_id} "
                     f"block_tables_3d_shape={block_tables_3d.shape if block_tables_3d is not None else None} "

@@ -1062,55 +1062,84 @@ class GPUModelRunner(ModelRunnerBase):
         if self.spec_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests, self.share_inputs.index_to_batch_id)
 
+    def _get_head_wise_block_tables_buffer(self) -> paddle.Tensor:
+        block_tables_3d = self.share_inputs.get("block_tables_3d", None)
+        if block_tables_3d is not None:
+            return block_tables_3d
+
+        # Fallback guard. InputBatch should already allocate this when head-wise mode is enabled.
+        max_num_seqs = self.scheduler_config.max_num_seqs
+        max_blocks_per_head = self.share_inputs["block_tables"].shape[1] // self.kv_num_heads
+        block_tables_3d = paddle.full([max_num_seqs * self.kv_num_heads, max_blocks_per_head], -1, dtype="int32")
+        self.share_inputs["block_tables_3d"] = block_tables_3d
+        return block_tables_3d
+
+    def _prepare_block_tables_3d_from_flat_tables(self, num_running_requests: int):
+        """
+        Build head-wise tables from flattened self.share_inputs["block_tables"] in-place.
+        Used in dummy/profile runs where Request objects are not available.
+        """
+        block_tables_3d = self._get_head_wise_block_tables_buffer()
+        block_tables_3d[:] = -1
+        if num_running_requests is None or num_running_requests <= 0:
+            return
+
+        flat_block_tables = self.share_inputs["block_tables"][:num_running_requests].numpy()
+        max_blocks_per_head = block_tables_3d.shape[1]
+        for b in range(num_running_requests):
+            valid_blocks = flat_block_tables[b][flat_block_tables[b] >= 0]
+            if valid_blocks.size == 0:
+                continue
+            blocks_per_head = int(valid_blocks.size) // self.kv_num_heads
+            if blocks_per_head <= 0:
+                continue
+            copy_len = min(blocks_per_head, max_blocks_per_head)
+            for h in range(self.kv_num_heads):
+                start = h * blocks_per_head
+                end = start + copy_len
+                if end <= valid_blocks.size:
+                    row_idx = b * self.kv_num_heads + h
+                    block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(valid_blocks[start:end], dtype="int32")
+
     def _prepare_block_tables_3d(self, num_running_requests: int):
         if not self.enable_head_wise_kv_cache:
             self.share_inputs["block_tables_3d"] = None
             return
+        block_tables_3d = self._get_head_wise_block_tables_buffer()
+        block_tables_3d[:] = -1
         if num_running_requests is None or num_running_requests <= 0:
-            self.share_inputs["block_tables_3d"] = None
             return
 
-        max_blocks_per_head = 0
+        max_blocks_per_head = block_tables_3d.shape[1]
         per_req_head_lens = []
-        cache_ids_per_req = []
         for b in range(num_running_requests):
             req = self.forward_batch_reqs_list[b]
             cache_ids_2d = getattr(req, "block_tables_3d", None) if req is not None else None
-            cache_ids_per_req.append(cache_ids_2d)
             if cache_ids_2d and len(cache_ids_2d) > 0:
                 head_lens = [len(head_ids) if head_ids is not None else 0 for head_ids in cache_ids_2d]
                 per_req_head_lens.append(head_lens)
-                max_blocks_per_head = max(max_blocks_per_head, len(cache_ids_2d[0]))
             else:
                 per_req_head_lens.append([])
 
-        if max_blocks_per_head == 0:
-            if self.head_wise_debug_log:
-                logger.info(f"[headwise _prepare_block_tables_3d] max_blocks_per_head=0, returning None")
-            self.share_inputs["block_tables_3d"] = None
-            return
-
-        rows = []
         for b in range(num_running_requests):
             req = self.forward_batch_reqs_list[b]
             cache_ids_2d = getattr(req, "block_tables_3d", None) if req is not None else None
             if cache_ids_2d is None:
-                rows.extend([[-1] * max_blocks_per_head for _ in range(self.kv_num_heads)])
                 if self.head_wise_debug_log:
-                    logger.info(f"[headwise _prepare_block_tables_3d] req {b}: cache_ids_2d=None, adding dummy rows")
+                    logger.info(f"[headwise _prepare_block_tables_3d] req {b}: cache_ids_2d=None, keep rows as -1")
                 continue
             for h in range(self.kv_num_heads):
                 if h >= len(cache_ids_2d) or cache_ids_2d[h] is None:
-                    row = []
+                    continue
                 else:
                     row = list(cache_ids_2d[h])
-                if len(row) < max_blocks_per_head:
-                    row.extend([-1] * (max_blocks_per_head - len(row)))
-                rows.append(row)
+                    copy_len = min(len(row), max_blocks_per_head)
+                    if copy_len > 0:
+                        row_idx = b * self.kv_num_heads + h
+                        block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(row[:copy_len], dtype="int32")
 
-        block_tables_3d = paddle.to_tensor(np.array(rows, dtype="int32"))
-        self.share_inputs["block_tables_3d"] = block_tables_3d
-        rows_np = np.array(rows, dtype="int32")
+        active_rows = block_tables_3d[: num_running_requests * self.kv_num_heads]
+        rows_np = active_rows.numpy()
         valid_ids = rows_np[rows_np >= 0]
         min_id = int(valid_ids.min()) if valid_ids.size > 0 else -1
         max_id = int(valid_ids.max()) if valid_ids.size > 0 else -1
@@ -1126,11 +1155,11 @@ class GPUModelRunner(ModelRunnerBase):
         )
         if should_log_prepare:
             logger.info(
-                f"[headwise _prepare_block_tables_3d] shape={block_tables_3d.shape} "
+                f"[headwise _prepare_block_tables_3d] shape={active_rows.shape} "
                 f"num_running_requests={num_running_requests} kv_num_heads={self.kv_num_heads} "
                 f"max_blocks_per_head={max_blocks_per_head} min_id={min_id} max_id={max_id} "
                 f"neg_count={neg_count} cache_id_capacity={cache_id_capacity} "
-                f"out_of_range_cnt={out_of_range_cnt} first_rows={rows[:min(4, len(rows))]}"
+                f"out_of_range_cnt={out_of_range_cnt} first_rows={rows_np[:min(4, len(rows_np))].tolist()}"
             )
         if self.head_wise_debug_log:
             self._head_wise_prepare_log_count += 1
@@ -1238,7 +1267,7 @@ class GPUModelRunner(ModelRunnerBase):
     def _dummy_prefill_inputs(self, input_length_list: List[int], max_dec_len_list: List[int], block_num: int):
         """Set dummy prefill inputs to share_inputs"""
         batch_size = len(input_length_list)
-        headwise_rows = []
+        self.share_inputs["block_tables"][:, :] = -1
         for i in range(batch_size):
             idx = i
             input_length = input_length_list[i]
@@ -1268,16 +1297,11 @@ class GPUModelRunner(ModelRunnerBase):
                 # Expand block_tables to include all heads
                 block_ids = np.arange(base, base + self.kv_num_heads * block_num, 1)
                 self.share_inputs["block_tables"][idx, :len(block_ids)] = block_ids
-                # block_tables_3d will be [bsz * kv_num_heads, max_blocks_per_head]
-                for h in range(self.kv_num_heads):
-                    headwise_rows.append(np.arange(base + h * block_num, base + (h + 1) * block_num, 1))
             else:
                 self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                     idx * block_num, (idx + 1) * block_num, 1
                 )
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
-        if self.enable_head_wise_kv_cache:
-            self.share_inputs["block_tables_3d"] = paddle.to_tensor(np.array(headwise_rows, dtype="int32"))
 
     def _prepare_inputs(self, cached_token_num=-1, cached_real_bsz=-1, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
@@ -1303,47 +1327,16 @@ class GPUModelRunner(ModelRunnerBase):
         if self.enable_head_wise_kv_cache:
             if is_dummy_or_profile_run:
                 # In dummy/profile run, construct block_tables_3d from block_tables
-                # Use the full batch size from seq_lens_this_time shape, not the number of active requests
                 num_running_requests = int((self.share_inputs["seq_lens_this_time"] > 0).sum().item())
+                self._prepare_block_tables_3d_from_flat_tables(num_running_requests)
                 if num_running_requests > 0:
-                    # Get the batch size from the shape of seq_lens_this_time
-                    batch_size = self.share_inputs["seq_lens_this_time"].shape[0]
-                    block_tables = self.share_inputs["block_tables"][:batch_size].numpy()
-                    headwise_rows = []
-                    for b in range(batch_size):
-                        # block_tables[b] has format [kv_num_heads * max_blocks_per_head]
-                        # Need to split it into per-head blocks
-                        b_row = block_tables[b]
-                        # Filter out -1 values to get actual blocks per head
-                        valid_blocks = b_row[b_row >= 0]
-                        # In head-wise mode, block_tables are ordered as [head0_blocks, head1_blocks, ...]
-                        blocks_per_head = len(valid_blocks) // self.kv_num_heads
-                        if blocks_per_head == 0:
-                            # No valid blocks, add dummy rows
-                            for h in range(self.kv_num_heads):
-                                headwise_rows.append([-1])
-                            continue
-                        for h in range(self.kv_num_heads):
-                            # Each head gets its own set of block IDs
-                            head_start = h * blocks_per_head
-                            head_end = (h + 1) * blocks_per_head
-                            row = list(valid_blocks[head_start:head_end])
-                            headwise_rows.append(row)
-                    # Determine max_blocks_per_head for padding
-                    max_blocks_per_head = max([len(row) for row in headwise_rows]) if headwise_rows else 0
-                    # Pad rows to max_blocks_per_head
-                    padded_rows = []
-                    for row in headwise_rows:
-                        if len(row) < max_blocks_per_head:
-                            row = row + [-1] * (max_blocks_per_head - len(row))
-                        padded_rows.append(row)
-                    self.share_inputs["block_tables_3d"] = paddle.to_tensor(
-                        np.array(padded_rows, dtype="int32")
-                    )
+                    rows_np = self.share_inputs["block_tables_3d"][
+                        : num_running_requests * self.kv_num_heads
+                    ].numpy()
                     logger.info(
-                        f"[headwise dummy run] block_tables_3d shape={self.share_inputs['block_tables_3d'].shape} "
-                        f"max_blocks_per_head={max_blocks_per_head} "
-                        f"first_rows={self.share_inputs['block_tables_3d'].numpy()[:min(4, len(padded_rows))].tolist() if len(padded_rows) > 0 else []}"
+                        f"[headwise dummy run] block_tables_3d shape={rows_np.shape} "
+                        f"max_blocks_per_head={self.share_inputs['block_tables_3d'].shape[1]} "
+                        f"first_rows={rows_np[:min(4, len(rows_np))].tolist() if len(rows_np) > 0 else []}"
                     )
             else:
                 # In real run, use forward_batch_reqs_list
@@ -1495,6 +1488,10 @@ class GPUModelRunner(ModelRunnerBase):
             routing_replay_table = self.routing_replay_manager.get_routing_table()
 
         num_running_requests = self.share_inputs["seq_lens_this_time"].shape[0]
+        block_tables_3d = self.share_inputs.get("block_tables_3d", None)
+        if self.enable_head_wise_kv_cache and block_tables_3d is not None:
+            active_rows = int(num_running_requests) * self.kv_num_heads
+            block_tables_3d = block_tables_3d[:active_rows, :]
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
@@ -1513,8 +1510,8 @@ class GPUModelRunner(ModelRunnerBase):
             batch_id_per_token=self.share_inputs["batch_id_per_token"],
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
-            block_tables=self.share_inputs["block_tables"][:num_running_requests],
-            block_tables_3d=self.share_inputs.get("block_tables_3d", None),
+            block_tables=self.share_inputs["block_tables"],
+            block_tables_3d=block_tables_3d,
             caches=self.share_inputs["caches"],
             encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
             encoder_tile_ids_per_batch=self.share_inputs["encoder_tile_ids_per_batch"],
