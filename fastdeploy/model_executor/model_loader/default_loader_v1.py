@@ -105,4 +105,5 @@ class DefaultModelLoaderV1(BaseModelLoader):
         self.load_weights(model, fd_config, enable_cache)
         if need_memory_reconstruction(fd_config):
             reconstruct_memory(model)
+        print(model.state_dict())
         return model

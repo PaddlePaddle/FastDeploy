@@ -268,6 +268,13 @@ class XPUMoEMethod(MoEMethodBase):
                         default_initializer=paddle.nn.initializer.Constant(0),
                     ),
                 )
+                set_weight_attrs(
+                    getattr(layer, self.added_scale_attrs[0]),
+                    {
+                        "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 0, "up": 0},
+                        "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                    },
+                )
                 setattr(
                     layer,
                     self.added_scale_attrs[1],
@@ -276,6 +283,13 @@ class XPUMoEMethod(MoEMethodBase):
                         dtype=self.scale_dtype,
                         default_initializer=paddle.nn.initializer.Constant(0),
                     ),
+                )
+                set_weight_attrs(
+                    getattr(layer, self.added_scale_attrs[1]),
+                    {
+                        "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 0, "up": 0},
+                        "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                    },
                 )
 
             if self.moe_quant_type in ["w8a8", "w4a8"]:
@@ -386,17 +400,23 @@ class XPUMoEMethod(MoEMethodBase):
             hadamard_block_size = getattr(layer.moe_quant_config, "hadamard_block_size", 128)
         else:
             hadamard_block_size = -1
+        w1 = getattr(layer, self.added_weight_attrs[0])
+        w2 = getattr(layer, self.added_weight_attrs[1])
+        in_scale_1 = ffn1_x_scale
+        in_scale_2 = getattr(layer, self.added_in_scale_attrs[1], None)
+        w_scale_1 = getattr(layer, self.added_scale_attrs[0], None)
+        w_scale_2 = getattr(layer, self.added_scale_attrs[1], None)
         ffn_out = moe_expert_ffn(
             ffn1_x,
             token_num_lod,
-            getattr(layer, self.added_weight_attrs[0]),
-            getattr(layer, self.added_weight_attrs[1]),
+            w1,
+            w2,
             None,
             None,
-            ffn1_x_scale,
-            getattr(layer, self.added_in_scale_attrs[1], None),
-            getattr(layer, self.added_scale_attrs[0], None),
-            getattr(layer, self.added_scale_attrs[1], None),
+            in_scale_1,
+            in_scale_2,
+            w_scale_1,
+            w_scale_2,
             None,
             None,
             self.xpu_moe_quant_type,
@@ -415,9 +435,16 @@ class XPUMoEMethod(MoEMethodBase):
         """
         Apply the EP prefill method.
         """
+        import sys, time as _time
+        _t0 = _time.time()
+        print(f"[DEBUG apply_ep_prefill] START x.shape={x.shape}, quant={self.xpu_moe_quant_type}", flush=True, file=sys.stderr)
+
         gate_out = gate(x.cast("float32"))
+        print(f"[DEBUG apply_ep_prefill] gate done, gate_out.shape={gate_out.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+        print(f"[DEBUG apply_ep_prefill] moe_select done, topk_idx.shape={topk_idx.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         # 2. Dynamic compute blockwise quantization scales
         if "a_tokenwise_int8" in self.xpu_moe_quant_type:
@@ -427,6 +454,7 @@ class XPUMoEMethod(MoEMethodBase):
             x_scale = None
 
         # 3. EP Dispatch
+        print(f"[DEBUG apply_ep_prefill] calling EP dispatch...", flush=True, file=sys.stderr)
         (
             recv_x,
             recv_topk_idx,
@@ -440,6 +468,7 @@ class XPUMoEMethod(MoEMethodBase):
             topk_weights,
             x_scale=x_scale,
         )
+        print(f"[DEBUG apply_ep_prefill] EP dispatch done, recv_num_tokens={recv_num_tokens_per_expert_list}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
@@ -448,53 +477,66 @@ class XPUMoEMethod(MoEMethodBase):
 
         # 4. Compute ffn
         token_all_num = sum(recv_num_tokens_per_expert_list)
-        if "a_expertwise_int8" in self.xpu_moe_quant_type:
-            moe_dispatch_scale = getattr(layer, self.added_in_scale_attrs[0])
-        elif "a_tokenwise_int8" in self.xpu_moe_quant_type:
-            moe_dispatch_scale = recv_x_scales
-        else:
-            moe_dispatch_scale = None
-        (
-            permute_input,
-            permute_indices_per_token,
-            token_num_lod,
-            dst_weights,
-            ffn1_x_scale_per_token,
-        ) = ep_moe_expert_dispatch(
-            recv_x,
-            recv_topk_idx,
-            recv_topk_weights,
-            moe_dispatch_scale,
-            recv_num_tokens_per_expert_list,
-            token_all_num,
-            self.moe_quant_type,
-        )
+        print(f"[DEBUG apply_ep_prefill] token_all_num={token_all_num}, recv_x type={type(recv_x)}, recv_x.shape={recv_x.shape if hasattr(recv_x,'shape') else 'N/A'}", flush=True, file=sys.stderr)
+        if token_all_num > 0:
+            if "a_expertwise_int8" in self.xpu_moe_quant_type:
+                moe_dispatch_scale = getattr(layer, self.added_in_scale_attrs[0])
+            elif "a_tokenwise_int8" in self.xpu_moe_quant_type:
+                moe_dispatch_scale = recv_x_scales
+            else:
+                moe_dispatch_scale = None
+            (
+                permute_input,
+                permute_indices_per_token,
+                token_num_lod,
+                dst_weights,
+                ffn1_x_scale_per_token,
+            ) = ep_moe_expert_dispatch(
+                recv_x,
+                recv_topk_idx,
+                recv_topk_weights,
+                moe_dispatch_scale,
+                recv_num_tokens_per_expert_list,
+                token_all_num,
+                self.moe_quant_type,
+            )
+            print(f"[DEBUG apply_ep_prefill] ep_moe_expert_dispatch done, permute_input.shape={permute_input.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
-        if "a_expertwise_int8" in self.xpu_moe_quant_type or "a_tokenwise_int8" in self.xpu_moe_quant_type:
-            ffn1_x_scale = ffn1_x_scale_per_token
-        else:
-            ffn1_x_scale = None
-        ffn_out = self.compute_ffn(
-            layer,
-            permute_input,
-            ffn1_x_scale,
-            token_num_lod,
-            token_all_num,
-        )
+            if "a_expertwise_int8" in self.xpu_moe_quant_type or "a_tokenwise_int8" in self.xpu_moe_quant_type:
+                ffn1_x_scale = ffn1_x_scale_per_token
+            else:
+                ffn1_x_scale = None
+            print(f"[DEBUG apply_ep_prefill] calling compute_ffn...", flush=True, file=sys.stderr)
+            ffn_out = self.compute_ffn(
+                layer,
+                permute_input,
+                ffn1_x_scale,
+                token_num_lod,
+                token_all_num,
+            )
+            print(f"[DEBUG apply_ep_prefill] compute_ffn done, ffn_out.shape={ffn_out.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
-        recv_topk_weights_bf16 = recv_topk_weights.astype("bfloat16")
-        tmp_ffn_out = ep_moe_expert_combine(
-            ffn_out,
-            permute_indices_per_token,
-            recv_topk_weights_bf16,
-            permute_indices_per_token.shape[0],
-            ffn_out.shape[0],
-            ffn_out.shape[1],
-            permute_indices_per_token.shape[1],
-        )
+            recv_topk_weights_bf16 = recv_topk_weights.astype("bfloat16")
+            tmp_ffn_out = ep_moe_expert_combine(
+                ffn_out,
+                permute_indices_per_token,
+                recv_topk_weights_bf16,
+                permute_indices_per_token.shape[0],
+                ffn_out.shape[0],
+                ffn_out.shape[1],
+                permute_indices_per_token.shape[1],
+            )
+        else:
+            # No tokens received after dispatch: skip local FFN computation
+            tmp_ffn_out = paddle.zeros(
+                [0, layer.hidden_size], dtype=x.dtype
+            )
+            print(f"[DEBUG apply_ep_prefill] token_all_num==0, skipped local FFN", flush=True, file=sys.stderr)
 
         # 5. EP combine
+        print(f"[DEBUG apply_ep_prefill] calling EP combine, tmp_ffn_out.shape={tmp_ffn_out.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
         tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        print(f"[DEBUG apply_ep_prefill] EP combine done, result.shape={tmp_ffn_out.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
         return tmp_ffn_out

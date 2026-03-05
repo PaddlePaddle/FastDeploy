@@ -214,15 +214,48 @@ class XPUKVCacheMethodBase(QuantMethodBase):
             if self.cache_quant_config.has_zero_point:
                 self.load_zp(layer, state_dict)
 
+    def _process_single_scale(self, layer, scale_attr, out_scale_attr):
+        """
+        Process a single k or v scale after v1 loader loads it.
+        Replicates the v0 load_scale logic: raw_scale -> quantization scale + dequantization out_scale.
+        Recreates the parameter to fix shape changed by v1 loader's copy_.
+        """
+        scale_param = getattr(layer, scale_attr)
+        if not scale_param._is_initialized():
+            return
+
+        raw_scale = scale_param.cast("float32").reshape_([-1])
+
+        if self.cache_quant_config.quant_type == KvCacheQuantzationTypes.INT8:
+            quant_scale = self.cache_quant_config.max_bound / raw_scale
+            out_scale = raw_scale
+        else:
+            raise NotImplementedError(f"{self.cache_quant_config.quant_type} is not implemented")
+
+        # v1 loader's copy_ may have changed parameter shape (e.g. [1024] -> [1,8,1,128]),
+        # so we must recreate the parameter with the correct flat shape.
+        scale_shape = list(raw_scale.shape)
+
+        scale_param.value().get_tensor()._clear()
+        delattr(layer, scale_attr)
+        new_param = layer.create_parameter(
+            shape=scale_shape,
+            dtype=paddle.get_default_dtype(),
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        setattr(layer, scale_attr, new_param)
+        new_param.copy_(paddle.cast(quant_scale, paddle.get_default_dtype()), False)
+
+        # out_scale was not loaded by v1, its shape is still correct
+        getattr(layer, out_scale_attr).set_value(out_scale)
+
     def process_weights_after_loading(self, layer: nn.Layer):
         """
         use for loader v1
         """
-        # cache_k_out_scale is the reciprocal of cache_k_scale
-        if layer.cache_k_scale._is_initialized():
-            layer.cache_k_out_scale.set_value(1 / layer.cache_k_scale)  # cache_k_out_scale
-        if layer.cache_v_scale._is_initialized():
-            layer.cache_v_out_scale.set_value(1 / layer.cache_v_scale)
+        # v1 loader calls this per-weight, so k and v scales must be handled independently.
+        self._process_single_scale(layer, "cache_k_scale", "cache_k_out_scale")
+        self._process_single_scale(layer, "cache_v_scale", "cache_v_out_scale")
 
     def apply(self, layer):
         """

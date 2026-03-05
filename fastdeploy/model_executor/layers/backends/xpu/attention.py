@@ -170,6 +170,12 @@ class XPUAttentionBackend(AttentionBackend):
         """
         forward_mixed
         """
+        import sys, time as _time
+        _t0 = _time.time()
+        _bs = qkv.shape[0] if qkv is not None else 0
+        if _bs > 0:
+            print(f"[DEBUG XPUAttnBackend.forward_mixed] layer={layer.layer_id} START qkv.shape={qkv.shape if qkv is not None else None}", flush=True, file=sys.stderr)
+
         metadata = self.attention_metadata
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
@@ -192,6 +198,15 @@ class XPUAttentionBackend(AttentionBackend):
             k_norm_weight = None
         # draft model not use rope3d now
         use_rope3d = self.rope_3d and not forward_meta.is_draft
+        if _bs > 0:
+            print(f"[DEBUG XPUAttnBackend.forward_mixed] layer={layer.layer_id} before block_attn: "
+                  f"num_heads={layer.num_heads} kv_num_heads={layer.kv_num_heads} head_dim={layer.head_dim} "
+                  f"cache_k_scale={cache_k_scale is not None} cache_v_scale={cache_v_scale is not None} "
+                  f"cache_k_out_scale={cache_k_out_scale is not None} cache_v_out_scale={cache_v_out_scale is not None} "
+                  f"block_tables.shape={metadata.block_tables.shape if metadata.block_tables is not None else None} "
+                  f"rotary_embs.shape={metadata.rotary_embs.shape if metadata.rotary_embs is not None else None} "
+                  f"elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+
         res = block_attn(
             qkv,
             forward_meta.caches[2 * layer.layer_id],
@@ -232,5 +247,8 @@ class XPUAttentionBackend(AttentionBackend):
             layer.use_neox_rotary_style,
             use_rope3d,
         )
+
+        if _bs > 0:
+            print(f"[DEBUG XPUAttnBackend.forward_mixed] layer={layer.layer_id} block_attn DONE res.shape={res.shape} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         return res

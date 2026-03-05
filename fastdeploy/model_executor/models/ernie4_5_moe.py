@@ -275,6 +275,7 @@ class Ernie4_5_MoE(nn.Layer):
 class Ernie4_5_Attention(nn.Layer):
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str) -> None:
         super().__init__()
+        self._debug_layer_id = layer_id
 
         self.qkv_proj = QKVParallelLinear(
             fd_config=fd_config,
@@ -305,14 +306,30 @@ class Ernie4_5_Attention(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
     ):
+        import sys, time as _time
+        _t0 = _time.time()
+        _bs = hidden_states.shape[0]
+        _layer_id = getattr(self, '_debug_layer_id', '?')
+        if _bs > 0:
+            print(f"[DEBUG Attn L{_layer_id}] START hidden.shape={hidden_states.shape} dtype={hidden_states.dtype}", flush=True, file=sys.stderr)
+
         qkv_out = self.qkv_proj(hidden_states)
+        if _bs > 0:
+            paddle.device.synchronize()
+            print(f"[DEBUG Attn L{_layer_id}] qkv_proj SYNC OK shape={qkv_out.shape} dtype={qkv_out.dtype} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         attn_out = self.attn(
             qkv=qkv_out,
             forward_meta=forward_meta,
         )
+        if _bs > 0:
+            paddle.device.synchronize()
+            print(f"[DEBUG Attn L{_layer_id}] attn SYNC OK shape={attn_out.shape} dtype={attn_out.dtype} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         output = self.o_proj(attn_out)
+        if _bs > 0:
+            paddle.device.synchronize()
+            print(f"[DEBUG Attn L{_layer_id}] o_proj SYNC OK shape={output.shape} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         return output
 
@@ -326,6 +343,11 @@ class Ernie4_5_DecoderLayer(nn.Layer):
     ) -> None:
         super().__init__()
         layer_id = int(prefix.split(sep=".")[-1])
+        self._layer_id = layer_id
+        self._is_moe_layer = (
+            getattr(fd_config.model_config, "moe_num_experts", None) is not None
+            and layer_id >= fd_config.model_config.moe_layer_start_index
+        )
 
         self.self_attn = Ernie4_5_Attention(
             fd_config=fd_config,
@@ -382,24 +404,43 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None,
     ):
+        import sys, time as _time
+        _layer_t0 = _time.time()
+        _lid = getattr(self, '_layer_id', -1)
+        _is_moe = getattr(self, '_is_moe_layer', False)
+        if hidden_states.shape[0] > 0:
+            print(f"[DEBUG DecoderLayer] layer {_lid} START hidden.shape={hidden_states.shape} is_moe={_is_moe}", flush=True, file=sys.stderr)
+
         hidden_states, residual = self.input_layernorm(
             hidden_states, residual_input=residual, forward_meta=forward_meta
         )
+
+        if hidden_states.shape[0] > 0:
+            print(f"[DEBUG DecoderLayer] layer {_lid} layernorm done, calling self_attn, elapsed={_time.time()-_layer_t0:.4f}s", flush=True, file=sys.stderr)
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
 
+        if hidden_states.shape[0] > 0:
+            print(f"[DEBUG DecoderLayer] layer {_lid} self_attn done, elapsed={_time.time()-_layer_t0:.4f}s", flush=True, file=sys.stderr)
+
         hidden_states, residual = self.post_attention_layernorm(
             hidden_states,
             residual,
         )
 
+        if hidden_states.shape[0] > 0:
+            print(f"[DEBUG DecoderLayer] layer {_lid} calling mlp (is_moe={_is_moe}), elapsed={_time.time()-_layer_t0:.4f}s", flush=True, file=sys.stderr)
+
         hidden_states = self.mlp(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
+
+        if hidden_states.shape[0] > 0:
+            print(f"[DEBUG DecoderLayer] layer {_lid} DONE, elapsed={_time.time()-_layer_t0:.4f}s", flush=True, file=sys.stderr)
 
         return hidden_states, residual
 
@@ -542,6 +583,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         )
         self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
 
+        self._moe_start = fd_config.model_config.moe_layer_start_index
+        self._num_layers = fd_config.model_config.num_hidden_layers
+
     @classmethod
     def name(self):
         return "Ernie4_5_MoeForCausalLM"
@@ -597,6 +641,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("attn.cache_k_scale", "cachek_matmul.in_scale", None, None),
             ("attn.cache_v_scale", "cachev_matmul.in_scale", None, None),
             ("up_gate_proj_in_scale", "up_gate_proj.in_scale", None, None),
+            ("down_proj_in_scale", "down_proj.in_scale", None, None),
         ]
 
         expert_params_mapping = []
@@ -636,6 +681,13 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         for loaded_weight_name, loaded_weight in weights_iterator:
             logger.debug(f"Loading weight: {loaded_weight_name}")
             loaded_weight_name = loaded_weight_name.replace("model", "ernie")
+            # Map checkpoint suffixes to FD naming convention.
+            # This is needed because rename_offline_ckpt_suffix_to_fd_suffix is bypassed
+            # when is_checkpoint_bf16=True (e.g. MixQuantConfig with w4a8).
+            if loaded_weight_name.endswith(".activation_scale"):
+                loaded_weight_name = loaded_weight_name[: -len(".activation_scale")] + ".in_scale"
+            elif loaded_weight_name.endswith(".quant_weight"):
+                loaded_weight_name = loaded_weight_name[: -len(".quant_weight")] + ".weight"
             for param_name, weight_name, exp_id, shard_id, is_moe in all_param_mapping:
                 loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe)
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
@@ -659,6 +711,14 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             sig = inspect.signature(weight_loader)
             if "expert_id" in sig.parameters:
                 weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
+            elif expert_id is not None:
+                # Expert param without expert_id-aware weight_loader (e.g., XPU w4a8 backend).
+                # Directly write loaded_weight to the correct expert index.
+                if not param._is_initialized():
+                    param.initialize()
+                expert_id_offset = self.fd_config.parallel_config.num_experts_start_offset
+                local_idx = expert_id - expert_id_offset
+                param[local_idx] = loaded_weight
             else:
                 weight_loader(param, loaded_weight, shard_id)
 
@@ -682,15 +742,18 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         """
         empty_input_forward
         """
+        import sys, time as _time
+        _t0 = _time.time()
+        print(f"[DEBUG empty_input_forward] START moe_start={self._moe_start}, num_layers={self._num_layers}", flush=True, file=sys.stderr)
         fake_hidden_states = paddle.empty(
             shape=[0, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
-        for i in range(
-            self.fd_config.model_config.moe_layer_start_index,
-            self.fd_config.model_config.num_hidden_layers,
-        ):
+        for i in range(self._moe_start, self._num_layers):
+            print(f"[DEBUG empty_input_forward] layer {i} starting, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
             self.ernie.layers[i].mlp.experts(fake_hidden_states, self.ernie.layers[i].mlp.gate, forward_meta)
+            print(f"[DEBUG empty_input_forward] layer {i} done, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+        print(f"[DEBUG empty_input_forward] ALL DONE, total={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
     def forward(
         self,
@@ -699,7 +762,6 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
     ):
         ids_remove_padding = inputs["ids_remove_padding"]
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
-
         return hidden_states
 
     def clear_grpah_opt_backend(self):
