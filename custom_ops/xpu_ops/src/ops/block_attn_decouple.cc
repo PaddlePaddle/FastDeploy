@@ -33,26 +33,7 @@
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
-XPU_DECLARE_BOOL(fmt_write_cache_completed_signal, false);
-XPU_DECLARE_BOOL(use_pd_disaggregation_per_chunk, false);
-
 namespace xftblock = baidu::xpu::xftblock;
-
-template <typename TC, typename TS>
-struct SplitRopeTypeTrait {
-  using E_Scale = TS;
-  using D_Scale = TS;
-};
-template <>
-struct SplitRopeTypeTrait<bfloat16, bfloat16> {
-  using E_Scale = bfloat16;
-  using D_Scale = float;
-};
-template <>
-struct SplitRopeTypeTrait<int8_t, bfloat16> {
-  using E_Scale = bfloat16;
-  using D_Scale = bfloat16;
-};
 
 /**
  * q shape: [token_num, (num_heads + 2 * kv_num_heads) * head_dim]
@@ -101,8 +82,6 @@ std::vector<paddle::Tensor> BlockAttnDecoupleKernel(
   using XPU_XType = typename XPUTypeTrait<TX>::Type;
   using XPU_CType = typename XPUTypeTrait<TC>::Type;
   using XPU_SType = typename XPUTypeTrait<TS>::Type;
-  using E_Scale = typename SplitRopeTypeTrait<XPU_CType, XPU_SType>::E_Scale;
-  using D_Scale = typename SplitRopeTypeTrait<XPU_CType, XPU_SType>::D_Scale;
   typedef TX data_t;
   typedef TC cdata_t;
   typedef TS sdata_t;

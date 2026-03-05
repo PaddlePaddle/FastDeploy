@@ -36,8 +36,6 @@
 XPU_DECLARE_BOOL(fmt_write_cache_completed_signal, false);
 XPU_DECLARE_BOOL(use_pd_disaggregation_per_chunk, false);
 
-XPU_DECLARE_BOOL(enable_split_kv_cache, false);
-
 namespace xftblock = baidu::xpu::xftblock;
 
 template <typename TC, typename TS>
@@ -317,119 +315,72 @@ std::vector<paddle::Tensor> SplitRopeKVCacheKernel(
               rope_3d);
       PD_CHECK(ret == api::SUCCESS, "split_neox_cache_kv_encoder failed.");
     } else {
-      if (FLAGS_enable_split_kv_cache) {
-        auto q_enc_split_tensor =
-            paddle::empty({total_enc_len, hidden_dim}, qkv.type(), qkv.place());
-        auto k_enc_split_tensor =
-            paddle::empty({total_enc_len, kv_num_heads * head_dim}, qkv.type(), qkv.place());
-        // buf tensor
-        xftblock::Tensor q_enc_split_xft_tensor(q_enc_split_tensor.data(), KV_BUF_TYPE, {total_enc_len, hidden_dim});
-        xftblock::Tensor k_enc_split_xft_tensor(k_enc_split_tensor.data(), KV_BUF_TYPE, {total_enc_len, kv_num_heads * head_dim});
-        xftblock::Tensor qkv_enc_xft_tensor(const_cast<void*>(qkv.data()), KV_BUF_TYPE, qkv.shape());
-        ret = xftblock::split_qkv_block<XPU_XType>(
-          &xctx,
-          &qkv_enc_xft_tensor,
-          &q_enc_split_xft_tensor,
-          &k_enc_split_xft_tensor,
-          &v_enc_xft_tensor,
-          total_enc_len,
-          hidden_dim / head_dim,
-          kv_num_heads,
-          head_dim);
-        PD_CHECK(ret == api::SUCCESS, "split_qkv_block failed.");
-        
-        ret = infer_ops::vsl_rotary_embedding_gptj<XPU_XType, float, int32_t>(
-          xpu_ctx->x_context(),
-          reinterpret_cast<const XPU_XType*>(q_enc_split_tensor.data()),
-          reinterpret_cast<const XPU_XType*>(k_enc_split_tensor.data()),
-          reinterpret_cast<const float*>(rotary_embs.data<float>()),
-          const_cast<XPU_XType*>(reinterpret_cast<const XPU_XType*>(q_enc_tensor.data())),
-          const_cast<XPU_XType*>(reinterpret_cast<const XPU_XType*>(k_enc_tensor.data())),
-          vsl.usual_lod_vp,
-          param.batch_size,
-          rope_max_seqlen,
-          param.head_num,
-          param.head_dim,
-          "BLHD",
-          prefix_lens_vp,
-          "NORMAL",
-          param.kv_head_num,
-          false);
-        PD_CHECK(ret == api::SUCCESS, "vsl_rotary_embedding_gptj failed.");
+      auto q_enc_split_tensor =
+          paddle::empty({total_enc_len, hidden_dim}, qkv.type(), qkv.place());
+      auto k_enc_split_tensor =
+          paddle::empty({total_enc_len, kv_num_heads * head_dim}, qkv.type(), qkv.place());
+      // buf tensor
+      xftblock::Tensor q_enc_split_xft_tensor(q_enc_split_tensor.data(), KV_BUF_TYPE, {total_enc_len, hidden_dim});
+      xftblock::Tensor k_enc_split_xft_tensor(k_enc_split_tensor.data(), KV_BUF_TYPE, {total_enc_len, kv_num_heads * head_dim});
+      xftblock::Tensor qkv_enc_xft_tensor(const_cast<void*>(qkv.data()), KV_BUF_TYPE, qkv.shape());
+      ret = xftblock::split_qkv_block<XPU_XType>(
+        &xctx,
+        &qkv_enc_xft_tensor,
+        &q_enc_split_xft_tensor,
+        &k_enc_split_xft_tensor,
+        &v_enc_xft_tensor,
+        total_enc_len,
+        hidden_dim / head_dim,
+        kv_num_heads,
+        head_dim);
+      PD_CHECK(ret == api::SUCCESS, "split_qkv_block failed.");
+      
+      ret = infer_ops::vsl_rotary_embedding_gptj<XPU_XType, float, int32_t>(
+        xpu_ctx->x_context(),
+        reinterpret_cast<const XPU_XType*>(q_enc_split_tensor.data()),
+        reinterpret_cast<const XPU_XType*>(k_enc_split_tensor.data()),
+        reinterpret_cast<const float*>(rotary_embs.data<float>()),
+        const_cast<XPU_XType*>(reinterpret_cast<const XPU_XType*>(q_enc_tensor.data())),
+        const_cast<XPU_XType*>(reinterpret_cast<const XPU_XType*>(k_enc_tensor.data())),
+        vsl.usual_lod_vp,
+        param.batch_size,
+        rope_max_seqlen,
+        param.head_num,
+        param.head_dim,
+        "BLHD",
+        prefix_lens_vp,
+        "NORMAL",
+        param.kv_head_num,
+        false);
+      PD_CHECK(ret == api::SUCCESS, "vsl_rotary_embedding_gptj failed.");
 
-        // write to cache
-        ret = infer_ops::reshape_and_cached_lod<float16, float16, int32_t>(
-          xpu_ctx->x_context(),
-          reinterpret_cast<const float16*>(k_enc_tensor.data()),
-          reinterpret_cast<const float16*>(v_enc_tensor.data()),
-          const_cast<float16*>(reinterpret_cast<const float16*>(key_cache.data())),
-          const_cast<float16*>(reinterpret_cast<const float16*>(value_cache.data())),
-          block_tables.data<int>(),
-          vsl.usual_lod_vp,
-          prefix_lens_vp,
-          vsl.slot_mapping_vp,
-          param.batch_size,
-          param.kv_head_num,
-          param.head_dim,
-          rope_max_seqlen,
-          block_size,
-          max_block_per_seq,
-          "BLHD",
-          "HLD",
-          nullptr,
-          nullptr,
-          nullptr,
-          nullptr,
-          nullptr,
-          nullptr
-        );
-        PD_CHECK(ret == api::SUCCESS, "reshape_and_cached_lod failed.");
-      }
-      else {
-        ret = infer_ops::split_rope_cache_kv_encoder<XPU_XType,
-                                                    float,
-                                                    XPU_CType,
-                                                    int,
-                                                    E_Scale>(
-            xpu_ctx->x_context(),
-            reinterpret_cast<const XPU_XType*>(qkv.data<data_t>()),  // qkv
-            reinterpret_cast<const float*>(
-                rotary_embs.data<float>()),  // rotary_pos_emb
-            reinterpret_cast<const int*>(
-                block_tables.data<int>()),  // block_table
-            q_enc_xft_tensor.data<XPU_XType>(),
-            k_enc_xft_tensor.data<XPU_XType>(),
-            v_enc_xft_tensor.data<XPU_XType>(),
-            const_cast<XPU_CType*>(
-                reinterpret_cast<const XPU_CType*>(key_cache.data<cdata_t>())),
-            const_cast<XPU_CType*>(
-                reinterpret_cast<const XPU_CType*>(value_cache.data<cdata_t>())),
-            vsl.usual_lod_vp,     // seq_lod
-            vsl.slot_mapping_vp,  // real_batch
-            prefix_lens_vp,       // start_tokens
-            param.batch_size,     // batch_size
-            1,                    // emb_batch_size
-            rope_max_seqlen,      // max_seqlen
-            param.head_num,
-            param.kv_head_num,
-            param.head_dim,
-            param.max_batch_size,
-            block_size,
-            max_block_per_seq,
-            "BLHD",
-            "HLD",
-            pos_emb_type,
-            nullptr,        // k_cache_scale_inv - use for per head
-            nullptr,        // v_cache_scale_inv - use for per head
-            quant_k_scale,  // intx_k_pc_scale
-            quant_v_scale,  // intx_v_pc_scale
-            quant_k_zp,     // intx_k_pc_zero
-            quant_v_zp,     // intx_v_pc_zero
-            q_norm_weight_data,
-            k_norm_weight_data,
-            rope_3d);
-        PD_CHECK(ret == api::SUCCESS, "split_rope_cache_kv_encoder failed.");
-      }
+      // write to cache
+      ret = infer_ops::reshape_and_cached_lod<float16, float16, int32_t>(
+        xpu_ctx->x_context(),
+        reinterpret_cast<const float16*>(k_enc_tensor.data()),
+        reinterpret_cast<const float16*>(v_enc_tensor.data()),
+        const_cast<float16*>(reinterpret_cast<const float16*>(key_cache.data())),
+        const_cast<float16*>(reinterpret_cast<const float16*>(value_cache.data())),
+        block_tables.data<int>(),
+        vsl.usual_lod_vp,
+        prefix_lens_vp,
+        vsl.slot_mapping_vp,
+        param.batch_size,
+        param.kv_head_num,
+        param.head_dim,
+        rope_max_seqlen,
+        block_size,
+        max_block_per_seq,
+        "BLHD",
+        "HLD",
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr
+      );
+      PD_CHECK(ret == api::SUCCESS, "reshape_and_cached_lod failed.");
     }
 
     // pd split

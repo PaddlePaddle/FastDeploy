@@ -373,8 +373,10 @@ class XPUAttentionBackend(AttentionBackend):
             q_norm_weight = None
             k_norm_weight = None
 
-        # func = block_attn
-        func = self.decouple_block_attn
+        if os.getenv("enable_split_kv_cache", None) is not None:
+            func = self.decouple_block_attn
+        else:
+            func = block_attn
         res = func(
             qkv,
             forward_meta.caches[2 * layer.layer_id],
