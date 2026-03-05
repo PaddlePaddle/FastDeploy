@@ -47,8 +47,9 @@ def setup_logging(log_dir=None, config_file=None):
     Path(log_dir).mkdir(parents=True, exist_ok=True)
 
     # 从环境变量获取日志级别和备份数量
-    is_debug = int(getattr(envs, "FD_DEBUG", 0))
-    FASTDEPLOY_LOGGING_LEVEL = "DEBUG" if is_debug else "INFO"
+    log_level = getattr(envs, "FD_LOG_LEVEL", "INFO")
+    FASTDEPLOY_LOGGING_LEVEL = log_level
+    is_debug = FASTDEPLOY_LOGGING_LEVEL == "DEBUG"
     backup_count = int(getattr(envs, "FD_LOG_BACKUP_COUNT", 7))
 
     # 定义日志输出格式
@@ -122,7 +123,7 @@ def setup_logging(log_dir=None, config_file=None):
             # 默认日志记录器,全局共享
             "fastdeploy": {
                 "level": "DEBUG",
-                "handlers": ["error_file", "default_file", "error_archive", "default_archive"],
+                "handlers": ["console", "error_file", "default_file", "error_archive", "default_archive"],
                 "propagate": False,
             }
         },

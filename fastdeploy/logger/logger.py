@@ -105,17 +105,17 @@ class FastDeployLogger:
         if not os.path.exists(log_dir):
             os.makedirs(log_dir, exist_ok=True)
 
-        is_debug = int(envs.FD_DEBUG)
+        # Use FD_LOG_LEVEL for unified log level control (falls back to FD_DEBUG)
+        log_level_str = getattr(envs, "FD_LOG_LEVEL", "INFO")
+        log_level = getattr(logging, log_level_str.upper(), logging.INFO)
+
         # logger = logging.getLogger(name)
         # Use namespace for isolation to avoid logger overwrite and confusion issues, for compatibility with original interface
         legacy_name = f"legacy.{name}"
         logger = logging.getLogger(legacy_name)
 
         # Set log level
-        if is_debug:
-            logger.setLevel(level=logging.DEBUG)
-        else:
-            logger.setLevel(level=logging.INFO)
+        logger.setLevel(level=log_level)
 
         # Set formatter
         formatter = CustomFormatter(
@@ -170,17 +170,17 @@ class FastDeployLogger:
         if not os.path.exists(log_dir):
             os.makedirs(log_dir, exist_ok=True)
 
-        is_debug = envs.FD_DEBUG
+        # Use FD_LOG_LEVEL for unified log level control (falls back to FD_DEBUG)
+        log_level_str = getattr(envs, "FD_LOG_LEVEL", "INFO")
+        log_level = getattr(logging, log_level_str.upper(), logging.INFO)
+
         # logger = logging.getLogger(name)
         # Use namespace for isolation to avoid logger overwrite and confusion issues, for compatibility with original interface
         legacy_name = f"legacy.{name}"
         logger = logging.getLogger(legacy_name)
 
         # Set log level
-        if is_debug:
-            logger.setLevel(level=logging.DEBUG)
-        else:
-            logger.setLevel(level=logging.INFO)
+        logger.setLevel(level=log_level)
 
         # Set formatter - use standard format for both file and console (no color)
         formatter = logging.Formatter(

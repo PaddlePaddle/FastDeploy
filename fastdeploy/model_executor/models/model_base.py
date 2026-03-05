@@ -26,7 +26,10 @@ from fastdeploy.config import (
     iter_architecture_defaults,
     try_match_architecture_defaults,
 )
+from fastdeploy.logger import get_logger
 from fastdeploy.model_executor.models.interfaces_base import get_default_pooling_type
+
+logger = get_logger(__name__)
 
 
 class ModelCategory(IntFlag):
@@ -106,7 +109,7 @@ def _try_inspect_model_cls(
     try:
         return model.inspect_model_cls()
     except Exception:
-        print("Error in inspecting model architecture '%s'", model_arch)
+        logger.error("Error in inspecting model architecture '%s'", model_arch)
         return None
 
 
@@ -139,7 +142,7 @@ class ModelRegistry:
         try:
             return self.models[architecture].load_model_cls()
         except Exception as e:
-            print(f"Failed to load model {architecture}: {e}")
+            logger.error("Failed to load model %s: %s", architecture, e)
             return None
 
     @lru_cache(maxsize=128)
@@ -149,7 +152,7 @@ class ModelRegistry:
         try:
             return self.models[model_arch].inspect_model_cls()
         except Exception as e:
-            print(f"Failed to inspect model {model_arch}: {e}")
+            logger.error("Failed to inspect model %s: %s", model_arch, e)
             return None
 
     def _normalize_arch(self, architecture: str, model_config: ModelConfig) -> str:
@@ -271,7 +274,7 @@ class ModelRegistry:
                 if fallback_backend is not None:
                     model_info = self._try_inspect_model_cls(fallback_backend)
                     if model_info is not None:
-                        print(f"Using PaddleFormers backend as fallback for {model_info.architecture}")
+                        logger.info("Using PaddleFormers backend as fallback for %s", model_info.architecture)
                         return (model_info, model_info.architecture)
 
         return self._raise_for_unsupported(architectures)
