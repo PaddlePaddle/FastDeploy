@@ -1,4 +1,4 @@
-[English](../../best_practices/DeepSeek-V3-V3.1.md)
+[English](../../best_practices/DeepSeek-V3.md)
 
 # DeepSeek-V3/V3.1 模型
 
@@ -36,4 +36,67 @@ python -m fastdeploy.entrypoints.openai.api_server \
   --no-enable-prefix-caching \
   --quantization wint4
 
+```
+
+**示例2：** H800上16卡部署 blockwise_fp8 模型16K上下文的服务
+
+```shell
+MODEL_PATH=/models/DeepSeek-V3.2-Exp-BF16
+
+export FD_DISABLE_CHUNKED_PREFILL=1
+export FD_ATTENTION_BACKEND="MLA_ATTN"
+export FLAGS_flash_attn_version=3
+
+# 暂时只支持 tp_size为8，ep_size 为 16的 配置
+
+
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export FD_ENABLE_MULTI_API_SERVER=1
+python -m fastdeploy.entrypoints.openai.multi_api_server \
+       --ports "9811" \
+       --num-servers 1 \
+       --args --model "$model_path" \
+       --ips "10.95.247.24,10.95.244.147" \
+       --no-enable-prefix-caching \
+       --quantization block_wise_fp8 \
+       --disable-sequence-parallel-moe \
+       --tensor-parallel-size 8 \
+       --num-gpu-blocks-override 1024 \
+       --data-parallel-size 2 \
+       --max-model-len 16384 \
+       --enable-expert-parallel \
+       --max-num-seqs 20 \
+       --graph-optimization-config '{"use_cudagraph":true}' \
+
+```
+
+**示例3：** H800上16卡部署 blockwise_fp8 模型16K上下文的服务
+
+这个例子中支持使用FlashMLA算子做MLA的计算
+
+```shell
+MODEL_PATH=/models/DeepSeek-V3.2-Exp-BF16
+
+export FD_DISABLE_CHUNKED_PREFILL=1
+export FD_ATTENTION_BACKEND="MLA_ATTN"
+export FLAGS_flash_attn_version=3
+export USE_FLASH_MLA=1
+
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export FD_ENABLE_MULTI_API_SERVER=1
+python -m fastdeploy.entrypoints.openai.multi_api_server \
+       --ports "9811,9812,9813,9814,9815,9816,9817,9818" \
+       --num-servers 8 \
+       --args --model "$model_path" \
+       --ips "10.95.246.220,10.95.230.91" \
+       --no-enable-prefix-caching \
+       --quantization block_wise_fp8 \
+       --disable-sequence-parallel-moe \
+       --tensor-parallel-size 1 \
+       --num-gpu-blocks-override 1024 \
+       --data-parallel-size 16 \
+       --max-model-len 16384 \
+       --enable-expert-parallel \
+       --max-num-seqs 20 \
+       --graph-optimization-config '{"use_cudagraph":true}' \
 ```

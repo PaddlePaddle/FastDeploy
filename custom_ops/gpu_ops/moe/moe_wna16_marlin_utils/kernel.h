@@ -1,6 +1,6 @@
 
 #ifndef MARLIN_NAMESPACE_NAME
-  #define MARLIN_NAMESPACE_NAME marlin_moe_wna16
+#define MARLIN_NAMESPACE_NAME marlin_moe_wna16
 #endif
 #include "moe/moe_wna16_marlin_utils/marlin.cuh"
 #include "moe/moe_wna16_marlin_utils/marlin_dtypes.cuh"
@@ -22,7 +22,8 @@
 
 namespace MARLIN_NAMESPACE_NAME {
 template <typename scalar_t,  // compute dtype, half or nv_float16
-          const MARLIN_NAMESPACE_NAME::ScalarTypeId w_type_id,  // weight ScalarType id
+          const MARLIN_NAMESPACE_NAME::ScalarTypeId w_type_id,  // weight
+                                                                // ScalarType id
           const int threads,          // number of threads in a threadblock
           const int thread_m_blocks,  // number of 16x16 blocks in the m
                                       // dimension (batchsize) of the

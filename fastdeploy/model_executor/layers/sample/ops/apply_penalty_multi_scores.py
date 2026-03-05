@@ -14,15 +14,15 @@
 # limitations under the License.
 """
 
+from typing import Optional
+
 import paddle
 
 from fastdeploy.platforms import current_platform
 
 
 def apply_penalty_multi_scores(
-    pre_token_ids: paddle.Tensor,
-    prompt_ids: paddle.Tensor,
-    prompt_lens: paddle.Tensor,
+    token_ids_all: paddle.Tensor,
     logits: paddle.Tensor,
     repetition_penalties: paddle.Tensor,
     frequency_penalties: paddle.Tensor,
@@ -30,9 +30,11 @@ def apply_penalty_multi_scores(
     temperature: paddle.Tensor,
     bad_words_token_ids: paddle.Tensor,
     bad_words_token_len: paddle.Tensor,
+    prompt_lens: paddle.Tensor,
     step_idx: paddle.Tensor,
     min_dec_lens: paddle.Tensor,
     eos_token_ids: paddle.Tensor,
+    pre_token_ids: Optional[paddle.Tensor] = None,  # used in dcu, xpu, gcu, intel_hpu
 ) -> paddle.Tensor:
     """
     apply_penalty_multi_scores
@@ -41,9 +43,7 @@ def apply_penalty_multi_scores(
         from fastdeploy.model_executor.ops.gpu import get_token_penalty_multi_scores
 
         logits = get_token_penalty_multi_scores(
-            pre_token_ids,
-            prompt_ids,
-            prompt_lens,
+            token_ids_all,
             logits,
             repetition_penalties,
             frequency_penalties,
@@ -51,6 +51,7 @@ def apply_penalty_multi_scores(
             temperature,
             bad_words_token_ids,
             bad_words_token_len,
+            prompt_lens,
             step_idx,
             min_dec_lens,
             eos_token_ids,
@@ -59,15 +60,15 @@ def apply_penalty_multi_scores(
         from fastdeploy.model_executor.ops.gpu import get_token_penalty_multi_scores
 
         logits = get_token_penalty_multi_scores(
-            pre_token_ids,
-            prompt_ids,
-            prompt_lens,
+            token_ids_all,
             logits,
             repetition_penalties,
             frequency_penalties,
             presence_penalties,
             temperature,
             bad_words_token_ids,
+            bad_words_token_len,
+            prompt_lens,
             step_idx,
             min_dec_lens,
             eos_token_ids,
@@ -93,9 +94,7 @@ def apply_penalty_multi_scores(
         )
 
         logits = get_token_penalty_multi_scores(
-            pre_token_ids,
-            prompt_ids,
-            prompt_lens,
+            token_ids_all,
             logits,
             repetition_penalties,
             frequency_penalties,
@@ -103,6 +102,7 @@ def apply_penalty_multi_scores(
             temperature,
             bad_words_token_ids,
             bad_words_token_len,
+            prompt_lens,
             step_idx,
             min_dec_lens,
             eos_token_ids,
@@ -126,9 +126,7 @@ def apply_penalty_multi_scores(
         from fastdeploy.model_executor.ops.gpu import get_token_penalty_multi_scores
 
         logits = get_token_penalty_multi_scores(
-            pre_token_ids,
-            prompt_ids,
-            prompt_lens,
+            token_ids_all,
             logits,
             repetition_penalties,
             frequency_penalties,
@@ -136,6 +134,7 @@ def apply_penalty_multi_scores(
             temperature,
             bad_words_token_ids,
             bad_words_token_len,
+            prompt_lens,
             step_idx,
             min_dec_lens,
             eos_token_ids,
@@ -164,7 +163,8 @@ def apply_penalty_multi_scores(
 
 
 def apply_speculative_penalty_multi_scores(
-    pre_token_ids: paddle.Tensor,
+    token_ids_all: paddle.Tensor,
+    prompt_lens: paddle.Tensor,
     logits: paddle.Tensor,
     repetition_penalties: paddle.Tensor,
     frequency_penalties: paddle.Tensor,
@@ -179,6 +179,7 @@ def apply_speculative_penalty_multi_scores(
     batch_id_per_token_output: paddle.Tensor,
     cu_seqlens_q_output: paddle.Tensor,
     max_len: int,
+    pre_token_ids: Optional[paddle.Tensor] = None,  # used in xpu
 ):
     """
     apply_speculative_penalty_multi_scores
@@ -189,7 +190,8 @@ def apply_speculative_penalty_multi_scores(
         )
 
         speculate_get_token_penalty_multi_scores(
-            pre_token_ids,
+            token_ids_all,
+            prompt_lens,
             logits,
             repetition_penalties,
             frequency_penalties,
@@ -236,7 +238,8 @@ def apply_speculative_penalty_multi_scores(
 
 def reasoning_phase_token_constraint(
     logits: paddle.Tensor,
-    pre_token_ids: paddle.Tensor,
+    token_ids_all: paddle.Tensor,
+    prompt_lens: paddle.Tensor,
     stop_flags: paddle.Tensor,
     seq_lens_this_time: paddle.Tensor,
     seq_lens_encoder: paddle.Tensor,
@@ -257,7 +260,8 @@ def reasoning_phase_token_constraint(
 
         reasoning_phase_token_constraint(
             logits,
-            pre_token_ids,
+            token_ids_all,
+            prompt_lens,
             stop_flags,
             seq_lens_this_time,
             seq_lens_encoder,

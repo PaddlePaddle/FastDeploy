@@ -14,15 +14,20 @@
 
 #include <iostream>
 
-#include "fp8_common.h" // NOLINT
+#include "fp8_common.h"  // NOLINT
 #include "fp8_gemm_fused/fp8_fp8_gemm_scale_bias_act.h"
 #include "fp8_gemm_fused/fuse_block_gemm_act_template_3x.h"
 
 std::vector<paddle::Tensor> cutlass_fp8_fp8_half_block_gemm_fused(
-    const paddle::Tensor &x, const paddle::Tensor &y,
-    const paddle::Tensor &x_scale, const paddle::Tensor &y_scale,
-    const paddle::optional<paddle::Tensor> &bias, bool trans_x, bool trans_y,
-    std::string output_dtype, std::string activation_type) {
+    const paddle::Tensor &x,
+    const paddle::Tensor &y,
+    const paddle::Tensor &x_scale,
+    const paddle::Tensor &y_scale,
+    const paddle::optional<paddle::Tensor> &bias,
+    bool trans_x,
+    bool trans_y,
+    std::string output_dtype,
+    std::string activation_type) {
   paddle::Tensor out;
   void *out_ptr = nullptr;
   const void *x_ptr = nullptr;
@@ -122,7 +127,7 @@ std::vector<paddle::Tensor> cutlass_fp8_fp8_half_block_gemm_fused(
                                   K,           lda,         ldb,
                                   ldd,         batch_count, place,
                                   stream,      sm_version,
-                                  0.01, // for leaky_relu
+                                  0.01,  // for leaky_relu
                                   bias_data,   bias_dims,   fuse_gemm_config,
                                   0,           nullptr,     nullptr,
                                   x_scale_ptr, y_scale_ptr};
@@ -133,26 +138,34 @@ std::vector<paddle::Tensor> cutlass_fp8_fp8_half_block_gemm_fused(
 }
 
 std::vector<std::vector<int64_t>> CutlassFp8Fp8HalfBlockGemmFusedInferShape(
-    const std::vector<int64_t> &x_shape, const std::vector<int64_t> &y_shape,
+    const std::vector<int64_t> &x_shape,
+    const std::vector<int64_t> &y_shape,
     const std::vector<int64_t> &x_scale_shape,
     const std::vector<int64_t> &y_scale_shape,
-    const paddle::optional<std::vector<int64_t>> &bias_shape, bool trans_x,
+    const paddle::optional<std::vector<int64_t>> &bias_shape,
+    bool trans_x,
     bool trans_y) {
-  PADDLE_ENFORCE_EQ(x_shape.size(), y_shape.size(),
+  PADDLE_ENFORCE_EQ(x_shape.size(),
+                    y_shape.size(),
                     phi::errors::InvalidArgument(
                         "The rank of input X and Y should be equal, but "
                         "received X's rank is %d, Y's rank is %d.",
-                        x_shape.size(), y_shape.size()));
-  PADDLE_ENFORCE_EQ(x_shape.size(), x_scale_shape.size(),
+                        x_shape.size(),
+                        y_shape.size()));
+  PADDLE_ENFORCE_EQ(x_shape.size(),
+                    x_scale_shape.size(),
                     phi::errors::InvalidArgument(
                         "The rank of input X and X_scale should be equal, but "
                         "received X's rank is %d, X_scale's rank is %d.",
-                        x_shape.size(), x_scale_shape.size()));
-  PADDLE_ENFORCE_EQ(y_shape.size(), y_scale_shape.size(),
+                        x_shape.size(),
+                        x_scale_shape.size()));
+  PADDLE_ENFORCE_EQ(y_shape.size(),
+                    y_scale_shape.size(),
                     phi::errors::InvalidArgument(
                         "The rank of input Y and Y_scale should be equal, but "
                         "received Y's rank is %d, Y_scale's rank is %d.",
-                        y_shape.size(), y_scale_shape.size()));
+                        y_shape.size(),
+                        y_scale_shape.size()));
   int rank = x_shape.size();
   int M = 0;
   int N = 0;
@@ -186,25 +199,32 @@ std::vector<std::vector<int64_t>> CutlassFp8Fp8HalfBlockGemmFusedInferShape(
 }
 
 std::vector<paddle::DataType> CutlassFp8Fp8HalfBlockGemmFusedInferDtype(
-    const paddle::DataType &x_type, const paddle::DataType &y_type,
-    const paddle::DataType &x_scale_type, const paddle::DataType &y_scale_type,
-    const paddle::optional<paddle::DataType> &bias_type, bool trans_x,
-    bool trans_y, std::string output_dtype) {
+    const paddle::DataType &x_type,
+    const paddle::DataType &y_type,
+    const paddle::DataType &x_scale_type,
+    const paddle::DataType &y_scale_type,
+    const paddle::optional<paddle::DataType> &bias_type,
+    bool trans_x,
+    bool trans_y,
+    std::string output_dtype) {
   paddle::DataType data_type;
   if (output_dtype == "bfloat16")
     data_type = paddle::DataType::BFLOAT16;
   else if (output_dtype == "float16")
     data_type = paddle::DataType::FLOAT16;
   else
-    PD_THROW("cutlass_fp8_fp8_half_block_gemm only support bfloat16 and "
-             "float16 output");
+    PD_THROW(
+        "cutlass_fp8_fp8_half_block_gemm only support bfloat16 and "
+        "float16 output");
   return {data_type};
 }
 
 PD_BUILD_STATIC_OP(cutlass_fp8_fp8_half_block_gemm_fused)
     .Inputs({"x", "y", "x_sacle", "y_scale", paddle::Optional("bias")})
-    .Attrs({"transpose_x: bool", "transpose_y: bool",
-            "output_dtype: std::string", "act: std::string"})
+    .Attrs({"transpose_x: bool",
+            "transpose_y: bool",
+            "output_dtype: std::string",
+            "act: std::string"})
     .Outputs({"out"})
     .SetKernelFn(PD_KERNEL(cutlass_fp8_fp8_half_block_gemm_fused))
     .SetInferShapeFn(PD_INFER_SHAPE(CutlassFp8Fp8HalfBlockGemmFusedInferShape))

@@ -61,8 +61,8 @@ elif current_platform.is_maca():
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
-        speculate_get_seq_lens_output,
         speculate_limit_thinking_content_length,
+        speculate_pre_process,
         speculate_save_output,
         speculate_save_output_topk,
         speculate_set_stop_value_multi_seqs,
@@ -85,7 +85,7 @@ else:
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
-        speculate_get_seq_lens_output,
+        speculate_pre_process,
         speculate_save_output,
         speculate_save_output_topk,
         speculate_set_value_by_flags_and_idx,
@@ -152,6 +152,7 @@ def pre_process(
             cu_seqlens_k,
             None,
             None,
+            None,
         )
     # Remove padding
     if speculative_decoding:
@@ -160,27 +161,12 @@ def pre_process(
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = get_padding_offset(input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, token_num_cpu)
-
-        # compute each batch's output token num
-        seq_lens_output = speculate_get_seq_lens_output(
-            seq_lens_this_time,
-            seq_lens_encoder,
-            seq_lens_decoder,
+            cu_seqlens_q_output,
+            batch_id_per_token_output,
+            real_output_token_num,
+        ) = speculate_pre_process(
+            token_num_cpu, input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, seq_lens_decoder
         )
-        if isinstance(seq_lens_output, list):
-            seq_lens_output = seq_lens_output[0]
-        output_token_num = paddle.sum(seq_lens_output)
-
-        useless_input_ids = input_ids
-        _, batch_id_per_token_output, cu_seqlens_q_output, _ = get_padding_offset(
-            useless_input_ids,
-            seq_lens_output,
-            None,
-            None,
-            output_token_num.item(),
-        )
-
     return (
         ids_remove_padding,
         batch_id_per_token,
@@ -188,6 +174,7 @@ def pre_process(
         cu_seqlens_k,
         cu_seqlens_q_output,
         batch_id_per_token_output,
+        real_output_token_num,
     )
 
 
@@ -281,7 +268,8 @@ def post_process_normal(
             model_output.seq_lens_this_time,
             model_output.eos_token_id,
             model_output.next_tokens,
-            model_output.pre_ids,
+            model_output.token_ids_all,
+            model_output.prompt_lens,
             model_output.step_idx,
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
@@ -417,7 +405,8 @@ def post_process_specualate(
     speculate_set_stop_value_multi_seqs(
         model_output.accept_tokens,
         model_output.accept_num,
-        model_output.pre_ids,
+        model_output.token_ids_all,
+        model_output.prompt_lens,
         model_output.step_idx,
         model_output.stop_flags,
         model_output.seq_lens_this_time,
@@ -495,10 +484,11 @@ def post_process_specualate(
                 save_each_rank,
             )
 
-    # Update pre_ids through accept tokens
+    # Update token_ids_all through accept tokens
 
     speculate_set_value_by_flags_and_idx(
-        model_output.pre_ids,
+        model_output.token_ids_all,
+        model_output.prompt_lens,
         model_output.accept_tokens,
         model_output.accept_num,
         model_output.stop_flags,

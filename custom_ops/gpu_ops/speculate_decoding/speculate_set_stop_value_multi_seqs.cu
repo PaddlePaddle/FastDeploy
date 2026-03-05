@@ -22,7 +22,8 @@
 __global__ void spec_set_value_by_stop_seqs(bool *stop_flags,
                                             int64_t *accept_tokens,
                                             int *accept_nums,
-                                            const int64_t *pre_ids,
+                                            const int64_t *token_ids_all,
+                                            const int64_t *prompt_lens,
                                             const int64_t *step_idx,
                                             const int64_t *stop_seqs,
                                             const int *stop_seqs_len,
@@ -33,7 +34,7 @@ __global__ void spec_set_value_by_stop_seqs(bool *stop_flags,
                                             const int stop_seqs_bs,
                                             const int stop_seqs_max_len,
                                             const int64_t *min_tokens,
-                                            const int pre_ids_len) {
+                                            const int max_model_len) {
   const int bid = blockIdx.x;
   const int tid = threadIdx.x;
   if (tid >= stop_seqs_bs) return;
@@ -43,7 +44,8 @@ __global__ void spec_set_value_by_stop_seqs(bool *stop_flags,
     const int64_t *stop_seq_now = stop_seqs +
                                   bid * stop_seqs_max_len * stop_seqs_bs +
                                   tid * stop_seqs_max_len;
-    const int64_t *pre_ids_now = pre_ids + bid * pre_ids_len;
+    const int64_t *pre_ids_now =
+        token_ids_all + bid * max_model_len + prompt_lens[bid];
     int64_t *accept_tokens_now = accept_tokens + bid * accept_tokens_len;
     const int accept_num = accept_nums[bid];
     const int64_t step_idx_now = step_idx[bid];
@@ -137,7 +139,8 @@ __global__ void spec_set_value_by_stop_seqs(bool *stop_flags,
 
 void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
                                const paddle::Tensor &accept_num,
-                               const paddle::Tensor &pre_ids,
+                               const paddle::Tensor &token_ids_all,
+                               const paddle::Tensor &prompt_lens,
                                const paddle::Tensor &step_idx,
                                const paddle::Tensor &stop_flags,
                                const paddle::Tensor &seq_lens,
@@ -154,7 +157,7 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
   int bs_now = shape[0];
   int stop_seqs_bs = stop_seqs_shape[1];
   int stop_seqs_max_len = stop_seqs_shape[2];
-  int pre_ids_len = pre_ids.shape()[1];
+  int max_model_len = token_ids_all.shape()[1];
   int accept_tokens_len = accept_tokens.shape()[1];
 
   int block_size = (stop_seqs_bs + 31) / 32 * 32;
@@ -162,7 +165,8 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
       const_cast<bool *>(stop_flags.data<bool>()),
       const_cast<int64_t *>(accept_tokens.data<int64_t>()),
       const_cast<int *>(accept_num.data<int>()),
-      pre_ids.data<int64_t>(),
+      token_ids_all.data<int64_t>(),
+      prompt_lens.data<int64_t>(),
       step_idx.data<int64_t>(),
       stop_seqs.data<int64_t>(),
       stop_seqs_len.data<int>(),
@@ -173,13 +177,14 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
       stop_seqs_bs,
       stop_seqs_max_len,
       min_tokens.data<int64_t>(),
-      pre_ids_len);
+      max_model_len);
 }
 
 PD_BUILD_STATIC_OP(speculate_set_stop_value_multi_seqs)
     .Inputs({"accept_tokens",
              "accept_num",
-             "pre_ids",
+             "token_ids_all",
+             "prompt_lens",
              "step_idx",
              "stop_flags",
              "seq_lens",

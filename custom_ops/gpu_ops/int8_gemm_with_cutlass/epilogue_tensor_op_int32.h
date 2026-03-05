@@ -98,17 +98,17 @@ template <typename ElementOutput,
           typename InstructionShape,
           typename ThreadMap>
 struct DefaultIteratorsTensorOp {
-    using WarpTileIterator =
-        cutlass::epilogue::warp::TileIteratorTensorOp<WarpShape,
-                                                      InstructionShape,
-                                                      ElementAccumulator,
-                                                      layout::RowMajor>;
+  using WarpTileIterator =
+      cutlass::epilogue::warp::TileIteratorTensorOp<WarpShape,
+                                                    InstructionShape,
+                                                    ElementAccumulator,
+                                                    layout::RowMajor>;
 
-    using SharedLoadIterator =
-        cutlass::epilogue::threadblock::SharedLoadIterator<ThreadMap,
-                                                           ElementAccumulator>;
+  using SharedLoadIterator =
+      cutlass::epilogue::threadblock::SharedLoadIterator<ThreadMap,
+                                                         ElementAccumulator>;
 
-    static int const kFragmentsPerIteration = 1;
+  static int const kFragmentsPerIteration = 1;
 };
 
 /// Partial specialization for half <= int32_t x 8 epilogues avoids shared
@@ -124,16 +124,16 @@ struct DefaultIteratorsTensorOp<cutlass::half_t,
                                 WarpShape,
                                 InstructionShape,
                                 ThreadMap> {
-    using WarpTileIterator =
-        cutlass::epilogue::warp::TileIteratorTensorOp<WarpShape,
-                                                      InstructionShape,
-                                                      int32_t,
-                                                      layout::RowMajor>;
+  using WarpTileIterator =
+      cutlass::epilogue::warp::TileIteratorTensorOp<WarpShape,
+                                                    InstructionShape,
+                                                    int32_t,
+                                                    layout::RowMajor>;
 
-    using SharedLoadIterator =
-        cutlass::epilogue::threadblock::SharedLoadIterator<ThreadMap, int32_t>;
+  using SharedLoadIterator =
+      cutlass::epilogue::threadblock::SharedLoadIterator<ThreadMap, int32_t>;
 
-    static int const kFragmentsPerIteration = 1;
+  static int const kFragmentsPerIteration = 1;
 };
 
 /// Partial specialization for bfloat16_t <= int32_t x 8 epilogues avoids shared
@@ -149,16 +149,16 @@ struct DefaultIteratorsTensorOp<cutlass::bfloat16_t,
                                 WarpShape,
                                 InstructionShape,
                                 ThreadMap> {
-    using WarpTileIterator =
-        cutlass::epilogue::warp::TileIteratorTensorOp<WarpShape,
-                                                      InstructionShape,
-                                                      int32_t,
-                                                      layout::RowMajor>;
+  using WarpTileIterator =
+      cutlass::epilogue::warp::TileIteratorTensorOp<WarpShape,
+                                                    InstructionShape,
+                                                    int32_t,
+                                                    layout::RowMajor>;
 
-    using SharedLoadIterator =
-        cutlass::epilogue::threadblock::SharedLoadIterator<ThreadMap, int32_t>;
+  using SharedLoadIterator =
+      cutlass::epilogue::threadblock::SharedLoadIterator<ThreadMap, int32_t>;
 
-    static int const kFragmentsPerIteration = 1;
+  static int const kFragmentsPerIteration = 1;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -174,162 +174,153 @@ struct DefaultIteratorsTensorOp<cutlass::bfloat16_t,
 template <typename ThreadMap_  ///< Thread map (concept: OutputTileThreadMap)
           >
 class SharedLoadIteratorMixed<ThreadMap_, int32_t, 32, 16, 8, 8> {
-    public:
-    using ThreadMap = ThreadMap_;
-    using Shape = typename ThreadMap::Shape;
+ public:
+  using ThreadMap = ThreadMap_;
+  using Shape = typename ThreadMap::Shape;
 
-    using Element = int32_t;
+  using Element = int32_t;
 
-    using Layout = layout::RowMajor;
-    using TensorRef = TensorRef<Element, Layout>;
-    using ConstTensorRef = typename TensorRef::ConstTensorRef;
+  using Layout = layout::RowMajor;
+  using TensorRef = TensorRef<Element, Layout>;
+  using ConstTensorRef = typename TensorRef::ConstTensorRef;
 
-    using Index = typename Layout::Index;
-    using LongIndex = typename Layout::LongIndex;
-    using TensorCoord = MatrixCoord;
+  using Index = typename Layout::Index;
+  using LongIndex = typename Layout::LongIndex;
+  using TensorCoord = MatrixCoord;
 
-    static int const kElementsPerAccess = ThreadMap::kElementsPerAccess;
+  static int const kElementsPerAccess = ThreadMap::kElementsPerAccess;
 
-    static int const kAlignment =
-        ThreadMap::kElementsPerAccess * sizeof_bits<Element>::value / 8;
+  static int const kAlignment =
+      ThreadMap::kElementsPerAccess * sizeof_bits<Element>::value / 8;
 
-    static int const kThreads = ThreadMap::kThreads;
+  static int const kThreads = ThreadMap::kThreads;
 
-    /// Fragment object
-    using Fragment =
-        Array<Element,
-              ThreadMap::Iterations::kColumn * ThreadMap::Iterations::kRow *
-                  ThreadMap::Iterations::kGroup *
-                  ThreadMap::Iterations::kCluster *
-                  ThreadMap::kElementsPerAccess>;
+  /// Fragment object
+  using Fragment =
+      Array<Element,
+            ThreadMap::Iterations::kColumn * ThreadMap::Iterations::kRow *
+                ThreadMap::Iterations::kGroup *
+                ThreadMap::Iterations::kCluster *
+                ThreadMap::kElementsPerAccess>;
 
-    /// Memory access size
-    using AccessType =
-        AlignedArray<Element, ThreadMap::kElementsPerAccess, kAlignment>;
+  /// Memory access size
+  using AccessType =
+      AlignedArray<Element, ThreadMap::kElementsPerAccess, kAlignment>;
 
-    /// Vector type used for SMEM loads
-    using LoadType = AlignedArray<Element,
-                                  const_min(128 / sizeof_bits<Element>::value,
-                                            ThreadMap::kElementsPerAccess),
-                                  const_min(16, kAlignment)>;
+  /// Vector type used for SMEM loads
+  using LoadType = AlignedArray<Element,
+                                const_min(128 / sizeof_bits<Element>::value,
+                                          ThreadMap::kElementsPerAccess),
+                                const_min(16, kAlignment)>;
 
-    static int const kLoadsPerAccess =
-        AccessType::kElements / LoadType::kElements;
+  static int const kLoadsPerAccess =
+      AccessType::kElements / LoadType::kElements;
 
-    private:
-    //
-    // Data members
-    //
+ private:
+  //
+  // Data members
+  //
 
-    /// Byte-level pointer
-    LoadType const *pointers_[kLoadsPerAccess];
+  /// Byte-level pointer
+  LoadType const *pointers_[kLoadsPerAccess];
 
-    /// Stride along adjacent rows in units of LoadType
-    int stride_;
+  /// Stride along adjacent rows in units of LoadType
+  int stride_;
 
-    public:
-    //
-    // Methods
-    //
+ public:
+  //
+  // Methods
+  //
 
-    /// Constructor
-    CUTLASS_DEVICE
-    SharedLoadIteratorMixed(TensorRef ref, int thread_idx)
-        : stride_((ref.stride(0) / LoadType::kElements)) {
-        TensorCoord thread_offset = ThreadMap::initial_offset(thread_idx);
+  /// Constructor
+  CUTLASS_DEVICE
+  SharedLoadIteratorMixed(TensorRef ref, int thread_idx)
+      : stride_((ref.stride(0) / LoadType::kElements)) {
+    TensorCoord thread_offset = ThreadMap::initial_offset(thread_idx);
 
-        // Initialize pointers
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < kLoadsPerAccess; ++i) {
-            pointers_[i] = reinterpret_cast<LoadType const *>(ref.data());
+    // Initialize pointers
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kLoadsPerAccess; ++i) {
+      pointers_[i] = reinterpret_cast<LoadType const *>(ref.data());
 
-            int col_idx =
-                (thread_offset.column() / kElementsPerAccess) * kLoadsPerAccess;
-            int bank_offset =
-                (col_idx * static_cast<int>(sizeof(LoadType)) / 128) %
-                kLoadsPerAccess;
+      int col_idx =
+          (thread_offset.column() / kElementsPerAccess) * kLoadsPerAccess;
+      int bank_offset = (col_idx * static_cast<int>(sizeof(LoadType)) / 128) %
+                        kLoadsPerAccess;
 
-            col_idx += (bank_offset + i) % kLoadsPerAccess;
+      col_idx += (bank_offset + i) % kLoadsPerAccess;
 
-            pointers_[i] += thread_offset.row() * stride_ + col_idx;
-        }
+      pointers_[i] += thread_offset.row() * stride_ + col_idx;
     }
+  }
 
-    /// Adds a pointer offset in units of Element
-    CUTLASS_HOST_DEVICE
-    void add_pointer_offset(LongIndex pointer_offset) {
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < kLoadsPerAccess; ++i) {
-            pointers_[i] += pointer_offset / LoadType::kElements;
-        }
+  /// Adds a pointer offset in units of Element
+  CUTLASS_HOST_DEVICE
+  void add_pointer_offset(LongIndex pointer_offset) {
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kLoadsPerAccess; ++i) {
+      pointers_[i] += pointer_offset / LoadType::kElements;
     }
+  }
 
-    CUTLASS_DEVICE
-    void add_tile_offset(TensorCoord const &offset) {
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < kLoadsPerAccess; ++i) {
-            pointers_[i] +=
-                offset.row() * Shape::kRow * stride_ +
-                offset.column() * Shape::kColumn / LoadType::kElements;
-        }
+  CUTLASS_DEVICE
+  void add_tile_offset(TensorCoord const &offset) {
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < kLoadsPerAccess; ++i) {
+      pointers_[i] += offset.row() * Shape::kRow * stride_ +
+                      offset.column() * Shape::kColumn / LoadType::kElements;
     }
+  }
 
-    /// Loads a fragment from memory
-    CUTLASS_DEVICE
-    void load_with_pointer_offset(Fragment &frag,  // NOLINT
-                                  Index pointer_offset) const {
+  /// Loads a fragment from memory
+  CUTLASS_DEVICE
+  void load_with_pointer_offset(Fragment &frag,  // NOLINT
+                                Index pointer_offset) const {
+    CUTLASS_PRAGMA_UNROLL
+    for (int cluster = 0; cluster < ThreadMap::Iterations::kCluster;
+         ++cluster) {
+      CUTLASS_PRAGMA_UNROLL
+      for (int group = 0; group < ThreadMap::Iterations::kGroup; ++group) {
         CUTLASS_PRAGMA_UNROLL
-        for (int cluster = 0; cluster < ThreadMap::Iterations::kCluster;
-             ++cluster) {
+        for (int row = 0; row < ThreadMap::Iterations::kRow; ++row) {
+          int row_ptr_offset = row * ThreadMap::Delta::kRow * stride_ +
+                               group * ThreadMap::Delta::kGroup * stride_ +
+                               cluster * ThreadMap::Delta::kCluster * stride_ +
+                               pointer_offset / LoadType::kElements;
+
+          int frag_row_idx =
+              (row + ThreadMap::Iterations::kRow *
+                         (group + ThreadMap::Iterations::kGroup * cluster));
+
+          LoadType *frag_ptr = reinterpret_cast<LoadType *>(&frag);
+
+          CUTLASS_PRAGMA_UNROLL
+          for (int column = 0; column < ThreadMap::Iterations::kColumn;
+               ++column) {
+            int frag_idx =
+                frag_row_idx * ThreadMap::Iterations::kColumn + column;
+
             CUTLASS_PRAGMA_UNROLL
-            for (int group = 0; group < ThreadMap::Iterations::kGroup;
-                 ++group) {
-                CUTLASS_PRAGMA_UNROLL
-                for (int row = 0; row < ThreadMap::Iterations::kRow; ++row) {
-                    int row_ptr_offset =
-                        row * ThreadMap::Delta::kRow * stride_ +
-                        group * ThreadMap::Delta::kGroup * stride_ +
-                        cluster * ThreadMap::Delta::kCluster * stride_ +
-                        pointer_offset / LoadType::kElements;
+            for (int v = 0; v < kLoadsPerAccess; ++v) {
+              int vector_idx = (column * ThreadMap::Delta::kColumn /
+                                kElementsPerAccess * kLoadsPerAccess);
 
-                    int frag_row_idx =
-                        (row +
-                         ThreadMap::Iterations::kRow *
-                             (group + ThreadMap::Iterations::kGroup * cluster));
+              LoadType const *memory_pointer = pointers_[v] + row_ptr_offset;
 
-                    LoadType *frag_ptr = reinterpret_cast<LoadType *>(&frag);
-
-                    CUTLASS_PRAGMA_UNROLL
-                    for (int column = 0;
-                         column < ThreadMap::Iterations::kColumn;
-                         ++column) {
-                        int frag_idx =
-                            frag_row_idx * ThreadMap::Iterations::kColumn +
-                            column;
-
-                        CUTLASS_PRAGMA_UNROLL
-                        for (int v = 0; v < kLoadsPerAccess; ++v) {
-                            int vector_idx =
-                                (column * ThreadMap::Delta::kColumn /
-                                 kElementsPerAccess * kLoadsPerAccess);
-
-                            LoadType const *memory_pointer =
-                                pointers_[v] + row_ptr_offset;
-
-                            frag_ptr[frag_idx * kLoadsPerAccess + v] =
-                                memory_pointer[vector_idx];
-                        }
-                    }
-                }
+              frag_ptr[frag_idx * kLoadsPerAccess + v] =
+                  memory_pointer[vector_idx];
             }
+          }
         }
+      }
     }
+  }
 
-    /// Loads a fragment
-    CUTLASS_DEVICE
-    void load(Fragment &frag) const {  // NOLINT
-        load_with_pointer_offset(frag, 0);
-    }
+  /// Loads a fragment
+  CUTLASS_DEVICE
+  void load(Fragment &frag) const {  // NOLINT
+    load_with_pointer_offset(frag, 0);
+  }
 };
 
 template <typename Shape_,
@@ -340,89 +331,88 @@ template <typename Shape_,
           bool ScatterD = false,
           typename PermuteDLayout = layout::NoPermute>
 struct DequantEpilogueTensorOp {
-    using Shape = Shape_;
-    using WarpMmaTensorOp = WarpMmaTensorOp_;
-    static int const kPartitionsK = PartitionsK;
-    using OutputOp = OutputOp_;
-    static int const kElementsPerAccess = ElementsPerAccess;
+  using Shape = Shape_;
+  using WarpMmaTensorOp = WarpMmaTensorOp_;
+  static int const kPartitionsK = PartitionsK;
+  using OutputOp = OutputOp_;
+  static int const kElementsPerAccess = ElementsPerAccess;
 
-    using ElementOutput = typename OutputOp::ElementOutput;
-    using LayoutC = typename WarpMmaTensorOp::LayoutC;
-    using ElementAccumulator = typename WarpMmaTensorOp::ElementC;
+  using ElementOutput = typename OutputOp::ElementOutput;
+  using LayoutC = typename WarpMmaTensorOp::LayoutC;
+  using ElementAccumulator = typename WarpMmaTensorOp::ElementC;
 
-    //
-    // Thread map
-    //
+  //
+  // Thread map
+  //
 
-    using OutputTileThreadMap =
-        typename cutlass::epilogue::threadblock::DefaultThreadMapTensorOp<
-            Shape,
-            typename WarpMmaTensorOp::Shape,
-            kPartitionsK,
-            ElementOutput,
-            kElementsPerAccess>::Type;
+  using OutputTileThreadMap =
+      typename cutlass::epilogue::threadblock::DefaultThreadMapTensorOp<
+          Shape,
+          typename WarpMmaTensorOp::Shape,
+          kPartitionsK,
+          ElementOutput,
+          kElementsPerAccess>::Type;
 
-    static bool const UseCUDAStore =
-        platform::is_same<ElementOutput, double>::value;
+  static bool const UseCUDAStore =
+      platform::is_same<ElementOutput, double>::value;
 
-    using OutputTileIterator =
-        cutlass::epilogue::threadblock::PredicatedTileIterator<
-            OutputTileThreadMap,
-            ElementOutput,
-            ScatterD,
-            PermuteDLayout,
-            UseCUDAStore>;
+  using OutputTileIterator =
+      cutlass::epilogue::threadblock::PredicatedTileIterator<
+          OutputTileThreadMap,
+          ElementOutput,
+          ScatterD,
+          PermuteDLayout,
+          UseCUDAStore>;
 
-    using AccumulatorFragmentIterator = typename platform::conditional<
-        is_complex<ElementOutput>::value,
-        cutlass::epilogue::warp::FragmentIteratorComplexTensorOp<
-            typename WarpMmaTensorOp::Shape,
-            typename WarpMmaTensorOp::Policy::Operator::Shape,
-            typename WarpMmaTensorOp::Policy::Operator::ElementC,
-            typename WarpMmaTensorOp::Policy::Operator::FragmentC,
-            LayoutC>,
-        cutlass::epilogue::warp::FragmentIteratorTensorOp<
-            typename WarpMmaTensorOp::Shape,
-            typename WarpMmaTensorOp::Policy::Operator::Shape,
-            typename WarpMmaTensorOp::Policy::Operator::ElementC,
-            typename WarpMmaTensorOp::Policy::Operator::FragmentC,
-            LayoutC>>::type;
+  using AccumulatorFragmentIterator = typename platform::conditional<
+      is_complex<ElementOutput>::value,
+      cutlass::epilogue::warp::FragmentIteratorComplexTensorOp<
+          typename WarpMmaTensorOp::Shape,
+          typename WarpMmaTensorOp::Policy::Operator::Shape,
+          typename WarpMmaTensorOp::Policy::Operator::ElementC,
+          typename WarpMmaTensorOp::Policy::Operator::FragmentC,
+          LayoutC>,
+      cutlass::epilogue::warp::FragmentIteratorTensorOp<
+          typename WarpMmaTensorOp::Shape,
+          typename WarpMmaTensorOp::Policy::Operator::Shape,
+          typename WarpMmaTensorOp::Policy::Operator::ElementC,
+          typename WarpMmaTensorOp::Policy::Operator::FragmentC,
+          LayoutC>>::type;
 
-    /// Support several implementations depending on structure of epilogue
-    using DefaultIterators = detail::DefaultIteratorsTensorOp<
-        ElementOutput,
-        ElementAccumulator,
-        kElementsPerAccess,
-        Shape,
-        typename WarpMmaTensorOp::Shape,
-        typename WarpMmaTensorOp::Policy::Operator::Shape,
-        typename OutputTileThreadMap::CompactedThreadMap>;
+  /// Support several implementations depending on structure of epilogue
+  using DefaultIterators = detail::DefaultIteratorsTensorOp<
+      ElementOutput,
+      ElementAccumulator,
+      kElementsPerAccess,
+      Shape,
+      typename WarpMmaTensorOp::Shape,
+      typename WarpMmaTensorOp::Policy::Operator::Shape,
+      typename OutputTileThreadMap::CompactedThreadMap>;
 
-    using WarpTileIterator = typename DefaultIterators::WarpTileIterator;
-    using SharedLoadIterator = typename DefaultIterators::SharedLoadIterator;
+  using WarpTileIterator = typename DefaultIterators::WarpTileIterator;
+  using SharedLoadIterator = typename DefaultIterators::SharedLoadIterator;
 
-    /// Hard-coded padding elements added
-    using Padding =
-        cutlass::MatrixShape<0,
-                             64 / sizeof_bits<ElementAccumulator>::value * 4>;
+  /// Hard-coded padding elements added
+  using Padding =
+      cutlass::MatrixShape<0, 64 / sizeof_bits<ElementAccumulator>::value * 4>;
 
-    static int const kFragmentsPerIteration =
-        (kPartitionsK == 1 ? DefaultIterators::kFragmentsPerIteration : 1);
+  static int const kFragmentsPerIteration =
+      (kPartitionsK == 1 ? DefaultIterators::kFragmentsPerIteration : 1);
 
-    //
-    // Define the epilogue
-    //
-    using Epilogue =
-        cutlass::epilogue::threadblock::Epilogue<Shape,
-                                                 WarpMmaTensorOp,
-                                                 kPartitionsK,
-                                                 OutputTileIterator,
-                                                 AccumulatorFragmentIterator,
-                                                 WarpTileIterator,
-                                                 SharedLoadIterator,
-                                                 OutputOp,
-                                                 Padding,
-                                                 kFragmentsPerIteration>;
+  //
+  // Define the epilogue
+  //
+  using Epilogue =
+      cutlass::epilogue::threadblock::Epilogue<Shape,
+                                               WarpMmaTensorOp,
+                                               kPartitionsK,
+                                               OutputTileIterator,
+                                               AccumulatorFragmentIterator,
+                                               WarpTileIterator,
+                                               SharedLoadIterator,
+                                               OutputOp,
+                                               Padding,
+                                               kFragmentsPerIteration>;
 };
 
 }  // namespace threadblock

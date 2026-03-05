@@ -1171,6 +1171,10 @@ class EngineService:
                             request = Request.from_dict(data)
                         request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.requests_number.inc()
+                        trace_carrier = data.get("trace_carrier")
+                        if trace_carrier:
+                            request_id = data["request_id"].split("_")[0]
+                            tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_QUEUE_START, data["request_id"], data.get("user", ""))
@@ -2046,6 +2050,7 @@ class EngineService:
             "disable_sequence_parallel_moe": self.cfg.parallel_config.disable_sequence_parallel_moe,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
+            "moe_gate_fp32": self.cfg.model_config.moe_gate_fp32,
             "enable_entropy": self.cfg.model_config.enable_entropy,
             "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
         }
@@ -2111,19 +2116,11 @@ class EngineService:
 
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
-        request_queues_for_dp_ipc = None
-        result_queue_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
             self.scheduler.start(role, host_ip, self.cfg.register_info)
         elif self.cfg.scheduler_config.name == "dp":
-            request_queues_for_dp_ipc = []
-            result_queue_for_dp_ipc = multiprocessing.Queue()
-            for i in range(self.cfg.parallel_config.data_parallel_size):
-                request_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.scheduler.start(
                 self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
-                request_queues_for_dp_ipc,
-                result_queue_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:

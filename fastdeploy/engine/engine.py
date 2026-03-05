@@ -640,6 +640,7 @@ class LLMEngine:
             "disable_sequence_parallel_moe": self.cfg.parallel_config.disable_sequence_parallel_moe,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
+            "moe_gate_fp32": self.cfg.model_config.moe_gate_fp32,
             "shutdown_comm_group_if_worker_idle": self.cfg.parallel_config.shutdown_comm_group_if_worker_idle,
             "enable_entropy": self.cfg.model_config.enable_entropy,
             "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
@@ -774,20 +775,11 @@ class LLMEngine:
 
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
-        request_queues_for_dp_ipc = None
-        result_queues_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
             self.engine.scheduler.start(role, host_ip, self.cfg.register_info)
         elif self.cfg.scheduler_config.name == "dp":
-            request_queues_for_dp_ipc = []
-            result_queues_for_dp_ipc = []
-            for i in range(self.cfg.parallel_config.data_parallel_size):
-                request_queues_for_dp_ipc.append(multiprocessing.Queue())
-                result_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.engine.scheduler.start(
                 self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
-                request_queues_for_dp_ipc,
-                result_queues_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
@@ -825,8 +817,6 @@ class LLMEngine:
                                 cfg,
                                 i,
                                 None,
-                                request_queues_for_dp_ipc,
-                                result_queues_for_dp_ipc,
                             ),
                         )
                     )

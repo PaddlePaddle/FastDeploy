@@ -501,6 +501,11 @@ class EngineArgs:
     Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
+    moe_gate_fp32: bool = False
+    """
+    Flag to specify the dtype of gate as FP32. Default is False (Using model default dtype).
+    """
+
     logits_processors: Optional[List[str]] = None
     """
     A list of FQCNs (Fully Qualified Class Names) of logits processors supported by the service.
@@ -908,6 +913,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.lm_head_fp32,
             help="Specify the dtype of lm_head weight as float32.",
+        )
+        model_group.add_argument(
+            "--moe-gate-fp32",
+            action="store_true",
+            default=EngineArgs.moe_gate_fp32,
+            help="Specify the dtype of gate weight as float32.",
         )
         model_group.add_argument(
             "--logits-processors",
@@ -1436,7 +1447,7 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                if current_platform.is_maca():
+                if current_platform.is_maca() or current_platform.is_iluvatar():
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
