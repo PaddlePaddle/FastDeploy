@@ -191,7 +191,7 @@ class LocalScheduler:
 
             self.ids += valid_ids
             self.requests_not_empty.notify_all()
-        scheduler_logger.info(f"Scheduler has enqueued some requests: {valid_ids}")
+        scheduler_logger.debug("Scheduler has enqueued some requests: %s", valid_ids)
 
         if len(duplicated_ids) > 0:
             scheduler_logger.warning(f"Scheduler has received some duplicated requests: {duplicated_ids}")
@@ -300,7 +300,7 @@ class LocalScheduler:
             scheduler_logger.debug(f"Scheduler has put all just-pulled request into the queue: {len(batch_ids)}")
 
         if len(requests) > 0:
-            scheduler_logger.info(f"Scheduler has pulled some request: {[request.request_id for request in requests]}")
+            scheduler_logger.debug("Scheduler has pulled some request: %s", [request.request_id for request in requests])
 
         return requests
 
@@ -316,7 +316,7 @@ class LocalScheduler:
 
         finished_responses = [response.request_id for response in responses if response.finished]
         if len(finished_responses) > 0:
-            scheduler_logger.info(f"Scheduler has received some finished responses: {finished_responses}")
+            scheduler_logger.debug("Scheduler has received some finished responses: %s", finished_responses)
 
         with self.mutex:
             self.batch_responses_per_step.append([response.raw for response in responses])
@@ -381,7 +381,7 @@ class LocalScheduler:
 
                 if finished:
                     self._recycle(request_id)
-                    scheduler_logger.info(f"Scheduler has pulled a finished response: {[request_id]}")
+                    scheduler_logger.debug("Scheduler has pulled a finished response: %s", [request_id])
 
             if results:
                 scheduler_logger.debug(f"get responses, {results}")

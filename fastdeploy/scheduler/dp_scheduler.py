@@ -58,7 +58,7 @@ class DPLocalScheduler(LocalScheduler):
 
         finished_responses = [response.request_id for response in responses if response.finished]
         if len(finished_responses) > 0:
-            self.scheduler_logger.info(f"Scheduler has received some finished responses: {finished_responses}")
+            self.scheduler_logger.debug("Scheduler has received some finished responses: %s", finished_responses)
 
         with self.mutex:
             self.batch_responses_per_step.append([response.raw for response in responses])
@@ -179,8 +179,8 @@ class DPLocalScheduler(LocalScheduler):
                 )
 
         if len(requests) > 0:
-            self.scheduler_logger.info(
-                f"Scheduler has pulled some request: {[request.request_id for request in requests]}"
+            self.scheduler_logger.debug(
+                "Scheduler has pulled some request: %s", [request.request_id for request in requests]
             )
 
         return requests
@@ -228,7 +228,7 @@ class DPScheduler:
     def _put_requests_to_local(self):
         while True:
             request = self.request_queues.get()
-            self.scheduler_logger.info(f"Receive request from puller, request_id: {request.request_id}")
+            self.scheduler_logger.debug("Receive request from puller, request_id: %s", request.request_id)
             self._scheduler.put_requests([request])
 
     def _get_response_from_local(self):

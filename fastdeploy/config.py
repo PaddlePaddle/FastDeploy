@@ -378,9 +378,9 @@ class ModelConfig:
             if not hasattr(self, key.lower()):
                 if os.getenv(key, None):
                     value = eval(os.getenv(key))
-                    logger.info(f"Get parameter `{key}` = {value} from environment.")
+                    logger.info("Get parameter `%s` = %s from environment.", key, value)
                 else:
-                    logger.info(f"Parameter `{key}` will use default value {value}.")
+                    logger.info("Parameter `%s` will use default value %s.", key, value)
                 setattr(self, key.lower(), value)
 
         reset_config_value("COMPRESSION_RATIO", 1.0)
@@ -679,7 +679,7 @@ class ParallelConfig:
             and self.expert_parallel_size > 1
             and self.tensor_parallel_size > 1
         )
-        logger.info(f"use_sequence_parallel_moe: {self.use_sequence_parallel_moe}")
+        logger.debug("use_sequence_parallel_moe: %s", self.use_sequence_parallel_moe)
 
     def set_communicate_group(self):
         # different tp group id
@@ -1493,7 +1493,7 @@ class CacheConfig:
             block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
             self.total_block_num = block_num * number_of_tasks
             self.prefill_kvcache_block_num = self.total_block_num
-            logger.info(f"Doing profile, the total_block_num:{self.total_block_num}")
+            logger.info("Doing profile, the total_block_num: %d", self.total_block_num)
 
     def reset(self, num_gpu_blocks):
         """
@@ -2194,7 +2194,7 @@ class FDConfig:
             if hasattr(cls, key):
                 value = getattr(cls, key)
                 setattr(cls, value_name, value)
-                logger.info(f"Reset parameter {value_name} = {value} from configuration.")
+                logger.info("Reset parameter %s = %s from configuration.", value_name, value)
 
         reset_value(self.cache_config, "block_size", "infer_model_block_size")
         reset_value(

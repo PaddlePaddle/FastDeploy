@@ -598,14 +598,14 @@ class GlobalScheduler:
                     ttl=self.ttl,
                 )
 
-            scheduler_logger.info(f"Scheduler has put remaining request into the queue: {len(remaining_request)}")
+            scheduler_logger.debug("Scheduler has put remaining request into the queue: %d", len(remaining_request))
             if len(requests) == 0:
                 scheduler_logger.debug(
                     f"Scheduler has put all just-pulled request into the queue: {len(remaining_request)}"
                 )
 
         if len(requests) > 0:
-            scheduler_logger.info(f"Scheduler has pulled some request: {[request.request_id for request in requests]}")
+            scheduler_logger.debug("Scheduler has pulled some request: %s", [request.request_id for request in requests])
         return requests
 
     def _put_results_worker(self, tasks: List[Task]):
@@ -666,7 +666,7 @@ class GlobalScheduler:
                 self.local_response_not_empty.notify_all()
 
         if len(finished_request_ids) > 0:
-            scheduler_logger.info(f"Scheduler has received some finished responses: {finished_request_ids}")
+            scheduler_logger.debug("Scheduler has received some finished responses: %s", finished_request_ids)
 
         for response_queue_name, responses in stolen_responses.items():
             self.client.rpush(response_queue_name, *responses, ttl=self.ttl)
@@ -795,7 +795,7 @@ class GlobalScheduler:
 
                 if finished:
                     del self.local_responses[request_id]
-                    scheduler_logger.info(f"Scheduler has pulled a finished response: {[request_id]}")
+                    scheduler_logger.debug("Scheduler has pulled a finished response: %s", [request_id])
             return results
 
     def reset(self):
@@ -862,6 +862,6 @@ class GlobalScheduler:
 
         scheduler_logger.info(
             "Scheduler has reload config, "
-            f"load_shards_num({old_load_shards_num} => {self.load_shards_num}) "
-            f"shard({old_shard} => {self.shard})"
+            "load_shards_num(%s => %s) shard(%s => %s)",
+            old_load_shards_num, self.load_shards_num, old_shard, self.shard,
         )

@@ -101,7 +101,7 @@ class OpenAIServing(ABC, Generic[RequestT]):
     async def _acquire_semaphore(self, request_id: str) -> bool:
         """Acquire engine client semaphore with timeout"""
         try:
-            api_server_logger.info(f"Acquire request:{request_id} status:{self._get_semaphore().status()}")
+            api_server_logger.debug("Acquire request:%s status:%s", request_id, self._get_semaphore().status())
             if self.max_waiting_time < 0:
                 await self._get_semaphore().acquire()
             else:
@@ -301,7 +301,7 @@ class ZmqOpenAIServing(OpenAIServing):
     async def _acquire_semaphore(self, request_id: str) -> bool:
         """Acquire engine client semaphore with timeout"""
         try:
-            api_server_logger.info(f"Acquire request:{request_id} status:{self._get_semaphore().status()}")
+            api_server_logger.debug("Acquire request:%s status:%s", request_id, self._get_semaphore().status())
             if self.max_waiting_time < 0:
                 await self._get_semaphore().acquire()
             else:

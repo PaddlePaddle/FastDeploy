@@ -340,7 +340,7 @@ class LLMEngine:
         request.metrics.preprocess_end_time = time.time()
         request.metrics.scheduler_recv_req_time = time.time()
         self.engine.scheduler.put_requests([request])
-        llm_logger.info(f"Cache task with request_id ({request.get('request_id')})")
+        llm_logger.debug("Cache task with request_id (%s)", request.get('request_id'))
         llm_logger.debug(f"cache task: {request}")
 
     def _worker_processes_ready(self):
@@ -800,7 +800,7 @@ class LLMEngine:
                     else:
                         address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
 
-                    llm_logger.info(f"dp start queue service {address}")
+                    llm_logger.info("dp start queue service %s", address)
                     self.dp_engine_worker_queue_server.append(
                         EngineWorkerQueue(
                             address=address,

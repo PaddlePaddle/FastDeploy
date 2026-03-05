@@ -1164,7 +1164,7 @@ class EngineService:
                     status_value = data.get("status", None)
                     if status_value is not None and status_value == RequestStatus.ABORT.value:
                         req_id = data["request_id"]
-                        self.llm_logger.info(\"Receive abort request, req_id: %s\", req_id)
+                        self.llm_logger.info("Receive abort request, req_id: %s", req_id)
                         self.resource_manager.abort_req_ids_set.add(req_id)
                         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                             if req_id in self.resource_manager.requests:
