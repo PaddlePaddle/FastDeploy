@@ -892,12 +892,6 @@ class SpeculativeSampler(nn.Layer):
             final_accept_all,
         )
 
-        logger.info("======after verify=======")
-        logger.info("accept_tokens: {}".format(share_inputs["accept_tokens"]))
-        logger.info("accept_num: {}".format(share_inputs["accept_num"]))
-        # logger.info("draft_tokens: {}".format(share_inputs["draft_tokens"]))
-        # logger.info("verify_strategy: {}".format(self.verify_strategy))
-
         num_logprobs = sampling_metadata.max_num_logprobs
         batch_token_num = None
         if num_logprobs is not None:
