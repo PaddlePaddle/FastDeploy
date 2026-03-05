@@ -1,9 +1,24 @@
+"""
+# Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 from typing import Optional, Tuple
 
 import paddle
 import paddle.distributed as dist
 
-# from sglang.srt.distributed import get_tensor_model_parallel_world_size
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.utils import has_flashinfer
 from fastdeploy.utils import get_logger
@@ -13,15 +28,21 @@ logger = get_logger("flashinfer", "flashinfer.log")
 _flashinfer_comm = None
 _workspace_manager = None
 
-# fd_config.parallel_config.tensor_parallel_size
 
-if has_flashinfer():
-    try:
-        paddle.compat.enable_torch_proxy(scope={"flashinfer"})
-        import flashinfer.comm as comm
-        _flashinfer_comm = comm
-    except ImportError:
-        logger.warning("flashinfer.comm is not available, falling back to standard " "implementation")
+def _get_flashinfer_comm():
+    """Lazily import flashinfer.comm to avoid side effects at module load time."""
+    global _flashinfer_comm
+    if _flashinfer_comm is not None:
+        return _flashinfer_comm
+    if has_flashinfer():
+        try:
+            with paddle.use_compat_guard(enable=True, scope={"flashinfer"}):
+                import flashinfer.comm as comm
+
+                _flashinfer_comm = comm
+        except ImportError:
+            logger.warning("flashinfer.comm is not available, falling back to standard " "implementation")
+    return _flashinfer_comm
 
 
 class FlashInferWorkspaceManager:
@@ -45,7 +66,8 @@ class FlashInferWorkspaceManager:
         if self.initialized and self.world_size == world_size:
             return
 
-        if _flashinfer_comm is None:
+        comm = _get_flashinfer_comm()
+        if comm is None:
             logger.warning("FlashInfer comm not available, skipping workspace " "initialization")
             return
 
@@ -70,7 +92,9 @@ class FlashInferWorkspaceManager:
         """Clean up workspace"""
         if self.initialized and self.ipc_handles is not None:
             try:
-                _flashinfer_comm.trtllm_destroy_ipc_workspace_for_all_reduce(self.ipc_handles, group=dist.get_group())
+                comm = _get_flashinfer_comm()
+                if comm is not None:
+                    comm.trtllm_destroy_ipc_workspace_for_all_reduce(self.ipc_handles, group=dist.get_group())
             except Exception as e:
                 logger.warning(f"Failed to cleanup FlashInfer workspace: {e}")
             finally:
@@ -86,7 +110,8 @@ def ensure_workspace_initialized(
     fd_config: FDConfig, max_token_num: int = 2048, hidden_dim: int = 4096, use_fp32_lamport: bool = False
 ):
     """Ensure workspace is initialized"""
-    if not has_flashinfer() or _flashinfer_comm is None:
+    comm = _get_flashinfer_comm()
+    if not has_flashinfer() or comm is None:
         return False
 
     assert fd_config is not None
@@ -114,28 +139,16 @@ def flashinfer_allreduce_residual_rmsnorm(
     residual: paddle.Tensor,
     weight: paddle.Tensor,
     eps: float = 1e-6,
-    max_token_num: int = 4096,
+    max_token_num: int = 2048,
     use_oneshot: Optional[bool] = None,
     trigger_completion_at_end: bool = False,
     fp32_acc: bool = False,
 ) -> Tuple[paddle.Tensor, paddle.Tensor]:
     """
     Use FlashInfer's fused allreduce + residual + RMS norm operation
-
-    Args:
-        input_tensor: Input tensor that needs allreduce
-        residual: Residual tensor
-        weight: RMS norm weight
-        eps: RMS norm epsilon
-        max_token_num: Maximum token number
-        use_oneshot: Whether to use oneshot mode
-        trigger_completion_at_end: Whether to trigger completion at end
-        fp32_acc: Whether to use fp32 precision
-
-    Returns:
-        Tuple[paddle.Tensor, paddle.Tensor]: (norm_output, residual_output)
     """
-    if not has_flashinfer() or _flashinfer_comm is None:
+    comm = _get_flashinfer_comm()
+    if not has_flashinfer() or comm is None:
         logger.debug("FlashInfer not available, falling back to standard " "implementation")
         return None, None
 
@@ -160,8 +173,10 @@ def flashinfer_allreduce_residual_rmsnorm(
 
     residual_out = paddle.empty_like(residual)
     norm_out = paddle.empty_like(input_tensor)
-
-    _flashinfer_comm.trtllm_allreduce_fusion(
+    # support empty tensor
+    if input_tensor.shape[0] == 0:
+        return norm_out, residual_out
+    comm.trtllm_allreduce_fusion(
         allreduce_in=input_tensor,
         world_size=world_size,
         world_rank=dist.get_rank(),
@@ -172,7 +187,7 @@ def flashinfer_allreduce_residual_rmsnorm(
         use_oneshot=use_oneshot,
         trigger_completion_at_end=trigger_completion_at_end,
         fp32_acc=fp32_acc,
-        pattern_code=(_flashinfer_comm.AllReduceFusionPattern.kARResidualRMSNorm),
+        pattern_code=(comm.AllReduceFusionPattern.kARResidualRMSNorm),
         allreduce_out=None,
         residual_in=residual,
         residual_out=residual_out,
@@ -185,21 +200,6 @@ def flashinfer_allreduce_residual_rmsnorm(
         layout_code=None,
     )
 
-    return norm_out, residual_out
-
-
-def fake_flashinfer_allreduce_residual_rmsnorm(
-    input_tensor: paddle.Tensor,
-    residual: paddle.Tensor,
-    weight: paddle.Tensor,
-    eps: float = 1e-6,
-    max_token_num: int = 16384,
-    use_oneshot: Optional[bool] = None,
-    trigger_completion_at_end: bool = False,
-    fp32_acc: bool = False,
-) -> Tuple[paddle.Tensor, paddle.Tensor]:
-    residual_out = paddle.empty_like(residual)
-    norm_out = paddle.empty_like(input_tensor)
     return norm_out, residual_out
 
 
