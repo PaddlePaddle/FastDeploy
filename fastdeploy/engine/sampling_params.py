@@ -350,6 +350,7 @@ class SamplingParams:
             except Exception:
                 raise TypeError(f"stop_token_ids must be an array of integers, and all sublists must have the same length, but got {self.stop_token_ids}")
         
+        
             if self.stop_seqs_len is not None:
                 if len(self.stop_token_ids) != self.stop_seqs_len:
                     raise ValueError(
