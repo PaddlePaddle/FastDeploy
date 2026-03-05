@@ -124,6 +124,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.local_rank = local_rank
         self.device_id = device_id
         self.enable_head_wise_kv_cache = envs.FD_HEAD_WISE_KV_CACHE == 1
+        self.head_wise_debug_log = bool(int(os.getenv("FD_HEAD_WISE_KV_LOG", "0")))
+        self._head_wise_debug_log_count = 0
         self.kv_num_heads = max(
             1,
             int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
@@ -1058,13 +1060,18 @@ class GPUModelRunner(ModelRunnerBase):
             return
 
         max_blocks_per_head = 0
+        per_req_head_lens = []
         cache_ids_per_req = []
         for b in range(num_running_requests):
             req = self.forward_batch_reqs_list[b]
             cache_ids_2d = getattr(req, "block_tables_3d", None) if req is not None else None
             cache_ids_per_req.append(cache_ids_2d)
             if cache_ids_2d and len(cache_ids_2d) > 0:
+                head_lens = [len(head_ids) if head_ids is not None else 0 for head_ids in cache_ids_2d]
+                per_req_head_lens.append(head_lens)
                 max_blocks_per_head = max(max_blocks_per_head, len(cache_ids_2d[0]))
+            else:
+                per_req_head_lens.append([])
 
         if max_blocks_per_head == 0:
             logger.info(f"[headwise _prepare_block_tables_3d] max_blocks_per_head=0, returning None")
@@ -1080,20 +1087,39 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info(f"[headwise _prepare_block_tables_3d] req {b}: cache_ids_2d=None, adding dummy rows")
                 continue
             for h in range(self.kv_num_heads):
-                row = list(cache_ids_2d[h])
+                if h >= len(cache_ids_2d) or cache_ids_2d[h] is None:
+                    row = []
+                else:
+                    row = list(cache_ids_2d[h])
                 if len(row) < max_blocks_per_head:
                     row.extend([-1] * (max_blocks_per_head - len(row)))
                 rows.append(row)
 
         block_tables_3d = paddle.to_tensor(np.array(rows, dtype="int32"))
         self.share_inputs["block_tables_3d"] = block_tables_3d
+        rows_np = np.array(rows, dtype="int32")
+        valid_ids = rows_np[rows_np >= 0]
+        min_id = int(valid_ids.min()) if valid_ids.size > 0 else -1
+        max_id = int(valid_ids.max()) if valid_ids.size > 0 else -1
+        neg_count = int((rows_np < 0).sum())
+
+        cache_id_capacity = -1
+        if self.share_inputs.get("caches") and len(self.share_inputs["caches"]) > 0:
+            cache_id_capacity = int(self.share_inputs["caches"][0].shape[0])
+        out_of_range_cnt = int((valid_ids >= cache_id_capacity).sum()) if cache_id_capacity > 0 else 0
+
         logger.info(
             f"[headwise _prepare_block_tables_3d] shape={block_tables_3d.shape} "
-            f"num_running_requests={num_running_requests} "
-            f"kv_num_heads={self.kv_num_heads} "
-            f"max_blocks_per_head={max_blocks_per_head} "
-            f"first_rows={rows[:min(4, len(rows))]}"
+            f"num_running_requests={num_running_requests} kv_num_heads={self.kv_num_heads} "
+            f"max_blocks_per_head={max_blocks_per_head} min_id={min_id} max_id={max_id} "
+            f"neg_count={neg_count} cache_id_capacity={cache_id_capacity} "
+            f"out_of_range_cnt={out_of_range_cnt} first_rows={rows[:min(4, len(rows))]}"
         )
+        if self.head_wise_debug_log and self._head_wise_debug_log_count < 20:
+            logger.info(
+                f"[headwise _prepare_block_tables_3d details] per_req_head_lens={per_req_head_lens[:num_running_requests]}"
+            )
+            self._head_wise_debug_log_count += 1
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         raise NotImplementedError("GPUs only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")

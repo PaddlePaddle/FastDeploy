@@ -162,6 +162,8 @@ class AppendAttentionBackend(AttentionBackend):
         self.window_attn_skip_freq: int = getattr(fd_config.model_config, "window_attn_skip_freq", 0)
         self.head_wise_swa_ratio: float = getattr(fd_config.model_config, "head_wise_swa_ratio", 0.0)
         self.enable_head_wise_kv_cache: bool = envs.FD_HEAD_WISE_KV_CACHE == 1
+        self.head_wise_debug_log: bool = bool(int(os.getenv("FD_HEAD_WISE_KV_LOG", "0")))
+        self._head_wise_debug_log_count: int = 0
 
         if self.head_wise_swa_ratio > 0.0:
             self.head_wise_full_hidden = int((1 - self.head_wise_swa_ratio) * self.num_heads * self.head_dim)
@@ -357,17 +359,47 @@ class AppendAttentionBackend(AttentionBackend):
             )
 
         block_tables = forward_meta.block_tables_3d if self.enable_head_wise_kv_cache else forward_meta.block_tables
-        if self.enable_head_wise_kv_cache:
+        if self.enable_head_wise_kv_cache and self.head_wise_debug_log and self._head_wise_debug_log_count < 20:
             block_tables_3d = getattr(forward_meta, "block_tables_3d", None)
             batch_size = forward_meta.seq_lens_this_time.shape[0]
+            expected_dim0 = batch_size * self.kv_num_heads
+            cache_id_capacity = int(cache_k.shape[0]) if len(cache_k.shape) > 0 else -1
+            min_id = -1
+            max_id = -1
+            neg_count = 0
+            out_of_range_cnt = 0
+            sample_rows = []
+            if block_tables_3d is not None:
+                bt_np = block_tables_3d.numpy()
+                valid = bt_np[bt_np >= 0]
+                min_id = int(valid.min()) if valid.size > 0 else -1
+                max_id = int(valid.max()) if valid.size > 0 else -1
+                neg_count = int((bt_np < 0).sum())
+                if cache_id_capacity > 0:
+                    out_of_range_cnt = int((valid >= cache_id_capacity).sum())
+                sample_rows = bt_np[: min(4, bt_np.shape[0])].tolist()
+
             logger.info(
-                f"[headwise dbg] q_heads={self.num_heads} kv_heads={self.kv_num_heads} "
-                f"group={self.num_heads // max(self.kv_num_heads, 1)} "
-                f"block_tables_3d={block_tables_3d.shape if block_tables_3d is not None else None} "
-                f"batch={batch_size} cache_k={cache_k.shape} "
-                f"expected_block_tables_3d_dim0={batch_size * self.kv_num_heads} "
-                f"block_tables_3d_dtype={block_tables_3d.dtype if block_tables_3d is not None else None}"
+                f"[headwise kernel input] layer={layer.layer_id} q_heads={self.num_heads} kv_heads={self.kv_num_heads} "
+                f"group={self.num_heads // max(self.kv_num_heads, 1)} batch={batch_size} "
+                f"block_tables_3d_shape={block_tables_3d.shape if block_tables_3d is not None else None} "
+                f"expected_dim0={expected_dim0} block_tables_3d_dtype={block_tables_3d.dtype if block_tables_3d is not None else None} "
+                f"cache_k_shape={cache_k.shape} cache_id_capacity={cache_id_capacity} "
+                f"min_id={min_id} max_id={max_id} neg_count={neg_count} out_of_range_cnt={out_of_range_cnt} "
+                f"sample_rows={sample_rows}"
             )
+            if block_tables_3d is None or block_tables_3d.shape[0] != expected_dim0:
+                logger.warning(
+                    f"[headwise kernel input mismatch] layer={layer.layer_id} "
+                    f"block_tables_3d_shape={block_tables_3d.shape if block_tables_3d is not None else None} "
+                    f"expected_dim0={expected_dim0}"
+                )
+            if out_of_range_cnt > 0:
+                logger.error(
+                    f"[headwise kernel input invalid] layer={layer.layer_id} "
+                    f"found {out_of_range_cnt} cache ids >= cache_id_capacity({cache_id_capacity})"
+                )
+            self._head_wise_debug_log_count += 1
         if self.use_output:
             quant_max_bound = getattr(layer, "quant_max_bound", 0.0)
             cache_quant_type = getattr(layer, "cache_quant_type_str", "none")
