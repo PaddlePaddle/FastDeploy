@@ -69,14 +69,22 @@ int rebuild_hidden_states(Context* ctx,
                           const int* position_map,
                           T* output,
                           int dim_embed,
-                          int elem_cnt) {
+                          int elem_cnt,
+                          int output_token_num) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(ctx, "rebuild_hidden_states", T);
-  WRAPPER_DUMP_PARAM5(ctx, input, position_map, output, dim_embed, elem_cnt);
+  WRAPPER_DUMP_PARAM6(
+      ctx, input, position_map, output, dim_embed, elem_cnt, output_token_num);
   WRAPPER_DUMP(ctx);
 
   WRAPPER_ASSERT_GT(ctx, dim_embed, 0);
   WRAPPER_ASSERT_GT(ctx, elem_cnt, 0);
+  WRAPPER_ASSERT_GT(ctx, output_token_num, 0);
+
+  int input_token_num = elem_cnt / dim_embed;
+  WRAPPER_CHECK_PTR(ctx, T, elem_cnt, input);
+  WRAPPER_CHECK_PTR(ctx, int, input_token_num, position_map);
+  WRAPPER_CHECK_PTR(ctx, T, output_token_num * dim_embed, output);
 
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper<T>(
@@ -90,11 +98,11 @@ int rebuild_hidden_states(Context* ctx,
 }
 
 template int rebuild_hidden_states(
-    Context*, const bfloat16*, const int*, bfloat16*, int, int);
+    Context*, const bfloat16*, const int*, bfloat16*, int, int, int);
 template int rebuild_hidden_states(
-    Context*, const float*, const int*, float*, int, int);
+    Context*, const float*, const int*, float*, int, int, int);
 template int rebuild_hidden_states(
-    Context*, const float16*, const int*, float16*, int, int);
+    Context*, const float16*, const int*, float16*, int, int, int);
 }  // namespace plugin
 }  // namespace api
 }  // namespace xpu

@@ -281,8 +281,12 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             if self.model_format != "torch":
                 process_weight_transpose(layer, "weight")
                 process_weight_transpose(layer, "weight_scale_inv")
-            else:
-                return
+            if self.quant_config.deepgemm_scale_ue8m0:
+                new_weight_scale_inv = paddle.empty(
+                    layer.weight_scale_inv.shape[::-1], dtype=layer.weight_scale_inv.dtype
+                )
+                new_weight_scale_inv = new_weight_scale_inv.transpose([1, 0])
+                layer.weight_scale_inv.data = new_weight_scale_inv
 
     def process_loaded_weights(self, layer, weights) -> None:
         weight_tensor = weights.transpose([1, 0])

@@ -26,4 +26,5 @@ BinPackParameters: false
 BinPackArguments: false
 IncludeBlocks: Preserve
 IncludeIsMainSourceRegex: (\.cu)$
+SortIncludes: false
 ...

@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/c3x/scaled_mm_sm90_fp8.cu
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/c3x/scaled_mm_sm90_fp8.cu
 
 // clang-format will break include orders
 // clang-format off
@@ -9,7 +10,8 @@
 
 namespace fastdeploy {
 
-void cutlass_scaled_mm_sm90_fp8(paddle::Tensor &out, paddle::Tensor const &a,
+void cutlass_scaled_mm_sm90_fp8(paddle::Tensor &out,
+                                paddle::Tensor const &a,
                                 paddle::Tensor const &b,
                                 paddle::Tensor const &a_scales,
                                 paddle::Tensor const &b_scales,
@@ -17,7 +19,8 @@ void cutlass_scaled_mm_sm90_fp8(paddle::Tensor &out, paddle::Tensor const &a,
   PD_CHECK(a_scales.is_contiguous() && b_scales.is_contiguous());
   if (bias) {
     PD_CHECK(bias->dtype() == out.dtype(),
-             "currently bias dtype must match output dtype ", out.dtype());
+             "currently bias dtype must match output dtype ",
+             out.dtype());
     return cutlass_scaled_mm_sm90_fp8_epilogue<c3x::ScaledEpilogueBias>(
         out, a, b, a_scales, b_scales, *bias);
   } else {
@@ -25,4 +28,4 @@ void cutlass_scaled_mm_sm90_fp8(paddle::Tensor &out, paddle::Tensor const &a,
         out, a, b, a_scales, b_scales);
   }
 }
-} // namespace fastdeploy
+}  // namespace fastdeploy

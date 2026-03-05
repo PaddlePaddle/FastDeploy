@@ -138,8 +138,7 @@ class InputBatch:
         self.min_dec_len = paddle.full([max_num_seqs, 1], self.model_config.min_length, dtype="int64")
         self.max_dec_len = paddle.full([max_num_seqs, 1], self.model_config.max_model_len, dtype="int64")
         self.seq_lens_this_time_buffer = paddle.full([max_num_seqs], 0, dtype="int32")
-        if self.enable_expert_parallel:
-            self.seq_lens_this_time = paddle.full([max_num_seqs], 0, dtype="int32")
+        self.seq_lens_this_time = paddle.full([max_num_seqs], 0, dtype="int32")
         self.seq_lens_encoder = paddle.full([max_num_seqs], 0, dtype="int32")
         self.seq_lens_decoder = paddle.full([max_num_seqs], 0, dtype="int32")
         self.step_seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -152,7 +151,7 @@ class InputBatch:
             self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32", device="cpu")
             self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool", device="cpu")
         else:
-            self.not_need_stop = paddle.full([1], False, dtype="bool").pin_memory()
+            self.not_need_stop = paddle.full([1], False, dtype="bool").cpu()
             self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
             self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
             self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").pin_memory()
@@ -534,8 +533,7 @@ class InputBatch:
 
             # Reset sequence length related buffers
             fill_paddle_tensor(self, "seq_lens_this_time_buffer", 0)
-            if self.enable_expert_parallel:
-                fill_paddle_tensor(self, "seq_lens_this_time", 0)
+            fill_paddle_tensor(self, "seq_lens_this_time", 0)
             fill_paddle_tensor(self, "seq_lens_encoder", 0)
             fill_paddle_tensor(self, "seq_lens_decoder", 0)
             fill_paddle_tensor(self, "step_seq_lens_encoder", 0)
@@ -731,7 +729,15 @@ class ProposerInputBatch(InputBatch):
             dtype="bfloat16",
         )
 
-        self.rope_emb = paddle.clone(self.target_model_input_batch["rope_emb"])
+        tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
+
+        self.rope_emb = get_rope(
+            rotary_dim=self.model_config.head_dim,
+            position_ids=tmp_position_ids,
+            base=self.model_config.rope_theta,
+            model_config=self.model_config,
+            partial_rotary_factor=self.model_config.partial_rotary_factor,
+        )
 
         # self.caches = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
@@ -951,35 +957,14 @@ class ProposerInputBatch(InputBatch):
             fill_paddle_tensor(self, "target_hidden_states", 0)
 
             # Reset rope embedding by recreating with default position_ids
-            if self.enable_mm:
-                head_dim = self.model_config.head_dim
-                if "qwen" in self.model_config.model_type or "paddleocr" in self.model_config.model_type:
-                    rope_head_dim = head_dim
-                else:
-                    rope_head_dim = head_dim // 2
-
-                self.rope_emb = paddle.full(
-                    shape=[
-                        self.scheduler_config.max_num_seqs,
-                        2,
-                        1,
-                        self.model_config.max_model_len,
-                        1,
-                        rope_head_dim,
-                    ],
-                    fill_value=0,
-                    dtype="float32",
-                )
-                self.image_features = None
-                self.image_features_list = None
-            else:
-                self.rope_emb = get_rope(
-                    rotary_dim=self.model_config.head_dim,
-                    position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
-                    base=self.model_config.rope_theta,
-                    model_config=self.model_config,
-                    partial_rotary_factor=self.model_config.partial_rotary_factor,
-                )
+            tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
+            self.rope_emb = get_rope(
+                rotary_dim=self.model_config.head_dim,
+                position_ids=tmp_position_ids,
+                base=self.model_config.rope_theta,
+                model_config=self.model_config,
+                partial_rotary_factor=self.model_config.partial_rotary_factor,
+            )
 
             # Reset generation hyperparameters from the main model
             self.top_p = self.target_model_input_batch["top_p"]

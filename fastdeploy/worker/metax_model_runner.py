@@ -62,10 +62,8 @@ from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
 from fastdeploy.model_executor.ops.gpu import (
-    get_stop,
     recover_decode_task,
     set_data_ipc,
-    set_stop,
     set_value_by_flags_and_idx,
     share_external_data,
     speculate_schedule_cache,
@@ -123,6 +121,10 @@ class MetaxModelRunner(ModelRunnerBase):
         self.forward_batch_reqs_list: list[Request] = [None for _ in range(self.scheduler_config.max_num_seqs)]
         self.cache_kvs_map: dict = {}
         self.exist_prefill_flag = False
+
+        if self.speculative_decoding:
+            self._real_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
+            self.output_token_num_event = paddle.device.cuda.Event()
 
         # VL model config:
         if self.enable_mm:
@@ -880,7 +882,7 @@ class MetaxModelRunner(ModelRunnerBase):
 
         self._process_mm_features(req_dicts)
         if has_prefill_task or has_decode_task:
-            set_stop(self.share_inputs["not_need_stop"], True)
+            self.share_inputs["not_need_stop"][0] = True
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
         if self.speculative_method in ["mtp"]:
@@ -963,7 +965,7 @@ class MetaxModelRunner(ModelRunnerBase):
 
             self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
 
-        set_stop(self.share_inputs["not_need_stop"], True)
+        self.share_inputs["not_need_stop"][0] = True
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
 
@@ -1139,6 +1141,7 @@ class MetaxModelRunner(ModelRunnerBase):
             cu_seqlens_k,
             cu_seqlens_q_output,
             batch_id_per_token_output,
+            real_output_token_num,
         ) = pre_process(
             token_num_cpu,
             self.share_inputs["input_ids"],
@@ -1159,6 +1162,9 @@ class MetaxModelRunner(ModelRunnerBase):
         if self.speculative_decoding:
             self.share_inputs["cu_seqlens_q_output"].copy_(cu_seqlens_q_output, False)
             self.share_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
+
+            self._real_output_token_num_host.copy_(real_output_token_num, False)
+            self.output_token_num_event.record()
 
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
@@ -1756,13 +1762,19 @@ class MetaxModelRunner(ModelRunnerBase):
                 self._dummy_pooler_run(model_output, model_output)
                 break
             else:
+                if self.speculative_decoding:
+                    self.output_token_num_event.synchronize()
+                    real_num = int(self._real_output_token_num_host)
+                    real_batch_id_per_token_output = self.share_inputs["batch_id_per_token_output"][:real_num]
+                else:
+                    real_batch_id_per_token_output = None
                 hidden_states = rebuild_padding(
                     model_output,
                     self.share_inputs["cu_seqlens_q"],
                     self.share_inputs["seq_lens_this_time"],
                     self.share_inputs["seq_lens_decoder"],
                     self.share_inputs["seq_lens_encoder"],
-                    (self.share_inputs["batch_id_per_token_output"] if self.speculative_decoding else None),
+                    real_batch_id_per_token_output,
                     (self.share_inputs["cu_seqlens_q_output"] if self.speculative_decoding else None),
                 )
                 self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
@@ -2052,6 +2064,11 @@ class MetaxModelRunner(ModelRunnerBase):
         num_running_requests: int = None,
     ) -> None:
 
+        if self.speculative_decoding:
+            self.output_token_num_event.synchronize()
+            real_num = int(self._real_output_token_num_host)
+            real_batch_id_per_token_output = self.share_inputs["batch_id_per_token_output"][:real_num]
+
         prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
         if self.is_pooling_model:
             pooler_output = self._pool(model_output, num_running_requests)
@@ -2110,7 +2127,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_this_time"],
                 self.share_inputs["seq_lens_decoder"],
                 self.share_inputs["seq_lens_encoder"],
-                (self.share_inputs["batch_id_per_token_output"] if self.speculative_decoding else None),
+                (real_batch_id_per_token_output if self.speculative_decoding else None),
                 (self.share_inputs["cu_seqlens_q_output"] if self.speculative_decoding else None),
             )
 
@@ -2470,7 +2487,7 @@ class MetaxModelRunner(ModelRunnerBase):
 
     def not_need_stop(self) -> bool:
         """Stop decoding if the tensor meets the termination condition"""
-        return get_stop(self.share_inputs["not_need_stop"]).item()
+        return self.share_inputs["not_need_stop"][0]
 
     def clear_cache(self, profile=False):
         """Clear cached data from shared inputs and forward metadata"""
