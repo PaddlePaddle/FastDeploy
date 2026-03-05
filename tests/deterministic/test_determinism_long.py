@@ -32,6 +32,22 @@ import os
 
 import pytest
 
+try:
+    import paddle.device.cuda as _paddle_cuda
+except Exception:
+    _paddle_cuda = None
+
+try:
+    from fastdeploy.logger.deterministic_logger import (
+        _read_logits_md5_file,
+        _reset_logits_md5_file,
+    )
+except Exception:
+    _read_logits_md5_file = None
+    _reset_logits_md5_file = None
+
+from conftest import env_override
+
 pytestmark = pytest.mark.gpu
 
 
@@ -42,10 +58,10 @@ def _is_high_performance_gpu():
     Uses compute capability as proxy for performance.
     H800 has compute capability 9.0, so GPUs with 9.0 or higher are considered high performance.
     """
+    if _paddle_cuda is None:
+        return False
     try:
-        import paddle.device.cuda
-
-        props = paddle.device.cuda.get_device_properties(0)
+        props = _paddle_cuda.get_device_properties(0)
 
         # Compute capability comparison
         # H800: 9.0, H100: 9.0, H200: 9.0+, B100/B200: 10.0
@@ -61,14 +77,6 @@ def _is_high_performance_gpu():
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
-DEFAULT_MODEL_DIR = "./models"
-MODEL_NAME = "Qwen2-7B-Instruct"
-
-_ENV_CUDA_VISIBLE_DEVICES = "CUDA_VISIBLE_DEVICES"
-_ENV_FD_DETERMINISTIC_MODE = "FD_DETERMINISTIC_MODE"
-_ENV_FD_CUSTOM_AR_MAX_SIZE_MB = "FD_CUSTOM_AR_MAX_SIZE_MB"
-_ENV_FLAGS_MAX_PARTITION_SIZE = "FLAGS_max_partition_size"
 
 # Use smallest chunk_size (64) to maximize num_chunks and increase
 # sensitivity to partition_kv non-determinism. With chunk_size=64:
@@ -100,51 +108,19 @@ _MAX_TOKENS_LONG = 512
 @pytest.fixture(scope="module", autouse=True)
 def _module_env():
     """Set env vars BEFORE importing fastdeploy (must happen first)."""
-    old_cuda = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES)
-    old_det = os.environ.get(_ENV_FD_DETERMINISTIC_MODE)
-    old_ar = os.environ.get(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB)
-    old_partition_size = os.environ.get(_ENV_FLAGS_MAX_PARTITION_SIZE)
+    with env_override(
+        {
+            "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES", "0,1,2,3"),
+            "FD_DETERMINISTIC_MODE": "1",
+            "FD_CUSTOM_AR_MAX_SIZE_MB": os.environ.get("FD_CUSTOM_AR_MAX_SIZE_MB", "57"),
+            "FLAGS_max_partition_size": _CHUNK_SIZE_FOR_TEST,
+        }
+    ):
+        # Lazy import: env vars must be set before importing fastdeploy
+        global LLM, SamplingParams  # noqa: PLW0603
+        from fastdeploy import LLM, SamplingParams
 
-    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0,1,2,3")
-    os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
-    os.environ[_ENV_FD_CUSTOM_AR_MAX_SIZE_MB] = os.environ.get(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB, "57")
-    os.environ[_ENV_FLAGS_MAX_PARTITION_SIZE] = _CHUNK_SIZE_FOR_TEST
-
-    global LLM, SamplingParams  # noqa: PLW0603
-    from fastdeploy import LLM, SamplingParams
-
-    yield
-
-    if old_cuda is None:
-        os.environ.pop(_ENV_CUDA_VISIBLE_DEVICES, None)
-    else:
-        os.environ[_ENV_CUDA_VISIBLE_DEVICES] = old_cuda
-    if old_det is None:
-        os.environ.pop(_ENV_FD_DETERMINISTIC_MODE, None)
-    else:
-        os.environ[_ENV_FD_DETERMINISTIC_MODE] = old_det
-    if old_ar is None:
-        os.environ.pop(_ENV_FD_CUSTOM_AR_MAX_SIZE_MB, None)
-    else:
-        os.environ[_ENV_FD_CUSTOM_AR_MAX_SIZE_MB] = old_ar
-    if old_partition_size is None:
-        os.environ.pop(_ENV_FLAGS_MAX_PARTITION_SIZE, None)
-    else:
-        os.environ[_ENV_FLAGS_MAX_PARTITION_SIZE] = old_partition_size
-
-
-@pytest.fixture(autouse=True)
-def _reset_deterministic_mode():
-    """Ensure every test starts with deterministic mode ON."""
-    os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
-    yield
-    os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
-
-
-@pytest.fixture(scope="module")
-def model_path():
-    model_dir = os.getenv("MODEL_PATH", DEFAULT_MODEL_DIR)
-    return os.path.join(model_dir, MODEL_NAME)
+        yield
 
 
 @pytest.fixture(scope="module")
@@ -174,9 +150,9 @@ def _generate_text(llm, prompt, sp):
 
 def _collect_logits_hashes():
     """Read and clear the per-step logits MD5 hashes written by the worker process."""
+    if _read_logits_md5_file is None:
+        return []
     try:
-        from fastdeploy.logger.deterministic_logger import _read_logits_md5_file
-
         return _read_logits_md5_file()
     except Exception:
         return []
@@ -184,9 +160,9 @@ def _collect_logits_hashes():
 
 def _reset_logits_hashes():
     """Reset the logits MD5 hash file before a new generate run."""
+    if _reset_logits_md5_file is None:
+        return
     try:
-        from fastdeploy.logger.deterministic_logger import _reset_logits_md5_file
-
         _reset_logits_md5_file()
     except Exception:
         pass
@@ -347,35 +323,32 @@ def test_long_sequence_determinism_basic(llm):
     not _is_high_performance_gpu(),
     reason="Test only runs on GPUs with performance >= H800 (compute capability >= 9.0)",
 )
-def test_long_sequence_multiple_lengths(llm):
+@pytest.mark.parametrize(
+    "max_tokens,min_expected,desc",
+    [
+        (400, 100, "~1200 total (~19 chunks)"),
+        (1280, 200, "~2000 total (~32 chunks)"),
+        (2200, 300, "~3000 total (~47 chunks)"),
+    ],
+    ids=["19_chunks", "32_chunks", "47_chunks"],
+)
+def test_long_sequence_multiple_lengths(llm, max_tokens, min_expected, desc):
     """
     Test determinism across sequence lengths that cross the chunk boundary.
 
-    With FLAGS_max_partition_size=64 (chunk_size=64), we test:
-    - ~1200 tokens: 19 chunks
-    - ~2000 tokens: 32 chunks
-    - ~3000 tokens: 47 chunks
+    With FLAGS_max_partition_size=64 (chunk_size=64), we test various chunk counts.
 
     Note: min_expected is set conservatively because the model may stop early
     due to EOS. The key test is determinism, not exact token count.
     """
-    test_configs = [
-        {"max_tokens": 400, "min_expected": 100, "desc": "~1200 total (~19 chunks)"},
-        {"max_tokens": 1280, "min_expected": 200, "desc": "~2000 total (~32 chunks)"},
-        {"max_tokens": 2200, "min_expected": 300, "desc": "~3000 total (~47 chunks)"},
-    ]
-
-    for config in test_configs:
-        sp = SamplingParams(
-            temperature=0.7,
-            top_p=0.95,
-            max_tokens=config["max_tokens"],
-            seed=42,
-        )
-        _, token_ids = _assert_deterministic(llm, _LONG_PROMPT, sp, runs=5)
-        assert (
-            len(token_ids) >= config["min_expected"]
-        ), f"{config['desc']}: expected >= {config['min_expected']} tokens, got {len(token_ids)}"
+    sp = SamplingParams(
+        temperature=0.7,
+        top_p=0.95,
+        max_tokens=max_tokens,
+        seed=42,
+    )
+    _, token_ids = _assert_deterministic(llm, _LONG_PROMPT, sp, runs=5)
+    assert len(token_ids) >= min_expected, f"{desc}: expected >= {min_expected} tokens, got {len(token_ids)}"
 
 
 def test_long_sequence_batch_invariance(llm):
