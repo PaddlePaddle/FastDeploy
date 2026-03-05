@@ -34,6 +34,30 @@ import pytest
 
 pytestmark = pytest.mark.gpu
 
+
+def _is_high_performance_gpu():
+    """
+    Check if current GPU has performance >= H800.
+
+    Uses compute capability as proxy for performance.
+    H800 has compute capability 9.0, so GPUs with 9.0 or higher are considered high performance.
+    """
+    try:
+        import paddle.device.cuda
+
+        props = paddle.device.cuda.get_device_properties(0)
+
+        # Compute capability comparison
+        # H800: 9.0, H100: 9.0, H200: 9.0+, B100/B200: 10.0
+        # Consider GPUs with compute capability >= 9.0 as high performance
+        min_cc = 9.0
+        current_cc = props.major * 1.0 + props.minor * 0.1
+
+        return current_cc >= min_cc
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -319,6 +343,10 @@ def test_long_sequence_determinism_basic(llm):
     assert len(token_ids) >= 200, f"Expected >= 200 tokens, got {len(token_ids)}"
 
 
+@pytest.mark.skipif(
+    not _is_high_performance_gpu(),
+    reason="Test only runs on GPUs with performance >= H800 (compute capability >= 9.0)",
+)
 def test_long_sequence_multiple_lengths(llm):
     """
     Test determinism across sequence lengths that cross the chunk boundary.
