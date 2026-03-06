@@ -419,7 +419,6 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
 
         self.weight_scale_dtype = paddle.float8_e4m3fn
         self.weight_dtype = paddle.uint8
-        self.added_scale_attrs = ["up_gate_proj_weight_scale", "down_proj_weight_scale"]
         up_gate_proj_weight_name = self.added_weight_attrs[0]
         down_proj_weight_name = self.added_weight_attrs[1]
         up_gate_proj_scale_name = self.added_scale_attrs[0]
