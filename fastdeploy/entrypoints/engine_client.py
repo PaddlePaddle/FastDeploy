@@ -340,6 +340,9 @@ class EngineClient:
         try:
             chat_template_kwargs = task.get("chat_template_kwargs") or {}
             chat_template_kwargs.update({"chat_template": task.get("chat_template")})
+            reasoning_effort = task.get("reasoning_effort")
+            if reasoning_effort is not None:
+                chat_template_kwargs["reasoning_effort"] = reasoning_effort
             task["chat_template_kwargs"] = chat_template_kwargs
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
@@ -459,6 +462,12 @@ class EngineClient:
                 data["reasoning_max_tokens"] = data["max_tokens"]
                 api_server_logger.warning(
                     f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to {data['max_tokens']}"
+                )
+            if data.get("reasoning_effort") is not None:
+                data["reasoning_max_tokens"] = None
+                api_server_logger.warning(
+                    f"req_id: {data['request_id']}, reasoning_max_tokens and reasoning_effort are both set, "
+                    f"enable_thinking will be disabled."
                 )
 
         if data.get("response_max_tokens") is not None:
