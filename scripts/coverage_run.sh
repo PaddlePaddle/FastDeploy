@@ -80,7 +80,7 @@ for file in $TEST_FILES; do
         if [ "${#server_logs[@]}" -gt 0 ]; then
             for server_log in "${server_logs[@]}"; do
                 # skip failed_tests_file
-                [ "${server_log}" == "${failed_tests_file}" ] && continue
+                [[ "$(basename "$server_log")" == "$failed_tests_file" ]] && continue
                 if [ -f "${server_log}" ]; then
                     echo
                     echo "---------------- ${server_log} (last 100 lines) ----------------"
