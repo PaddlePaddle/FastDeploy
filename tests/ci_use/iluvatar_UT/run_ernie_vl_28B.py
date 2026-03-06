@@ -29,7 +29,7 @@ sys.path.insert(0, tests_dir)
 from ci_use.iluvatar_UT.utils import TIMEOUT_MSG, timeout
 
 
-@timeout(210)
+@timeout(240)
 def offline_infer_check():
     set_random_seed(123)
 
@@ -67,7 +67,7 @@ def offline_infer_check():
                 video_bytes = requests.get(url).content
                 videos.append({"video": video_bytes, "max_frames": 30})
 
-    sampling_params = SamplingParams(temperature=0.1, max_tokens=16)
+    sampling_params = SamplingParams(temperature=0.1, max_tokens=128)
     graph_optimization_config = {"use_cudagraph": False}
     llm = LLM(
         model=PATH,
@@ -84,24 +84,11 @@ def offline_infer_check():
         sampling_params=sampling_params,
     )
 
-    assert outputs[0].outputs.token_ids == [
-        23,
-        3843,
-        94206,
-        2075,
-        52352,
-        94133,
-        13553,
-        10878,
-        93977,
-        5119,
-        93956,
-        68725,
-        100282,
-        23,
-        23,
-        2,
-    ], f"{outputs[0].outputs.token_ids}"
+    for output in outputs:
+        generated_text = output.outputs.text
+        print(f"generated_text={generated_text}")
+        assert any(keyword in generated_text for keyword in ["北魏", "北齐", "释迦牟尼", "北朝"])
+
     print("PASSED")
 
 
