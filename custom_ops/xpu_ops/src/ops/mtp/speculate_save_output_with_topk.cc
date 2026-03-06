@@ -110,7 +110,7 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
               << std::endl;
 #endif
   }
-  static key_t key = ftok("./", msg_queue_id);
+  static key_t key = ftok("/dev/shm", msg_queue_id);
   static int msgid = msgget(key, IPC_CREAT | 0666);
 #ifdef SPECULATE_SAVE_WITH_OUTPUT_DEBUG
   std::cout << "save_output_key: " << key << std::endl;
