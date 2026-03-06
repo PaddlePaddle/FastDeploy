@@ -327,7 +327,6 @@ class Ernie4_5Processor(BaseDataProcessor):
             full_text = previous_texts + delta_text
             response_dict["outputs"]["text"] = full_text
             if self.reasoning_parser:
-                response_dict["outputs"]["enable_parser"] = True
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
                     full_text,
                     response_dict,
@@ -338,7 +337,6 @@ class Ernie4_5Processor(BaseDataProcessor):
                 reasoning_tokens = self.tokenizer.tokenize(reasoning_content)
                 response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
             if self.tool_parser_obj:
-                response_dict["outputs"]["enable_parser"] = True
                 tool_parser = self.tool_parser_obj(self.tokenizer)
                 tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
                 if tool_call_info.tools_called:
