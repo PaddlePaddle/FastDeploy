@@ -136,11 +136,15 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
 
       // Write history to token_ids_all
       if (cur_step_idx > 0 && output_len > 0) {
-        int64_t *token_ids_all_now =
-            &token_ids_all[batch_id * max_model_len + prompt_lens[batch_id]];
-        int64_t *output_ids = &step_output_ids[batch_id * max_step_tokens];
-        for (int i = 0; i < output_len; i++) {
-          token_ids_all_now[cur_step_idx - i] = output_ids[output_len - 1 - i];
+        // Bounds check: highest write index is prompt_lens + cur_step_idx
+        if (prompt_lens[batch_id] + cur_step_idx < max_model_len) {
+          int64_t *token_ids_all_now =
+              &token_ids_all[batch_id * max_model_len + prompt_lens[batch_id]];
+          int64_t *output_ids = &step_output_ids[batch_id * max_step_tokens];
+          for (int i = 0; i < output_len; i++) {
+            token_ids_all_now[cur_step_idx - i] =
+                output_ids[output_len - 1 - i];
+          }
         }
       }
 

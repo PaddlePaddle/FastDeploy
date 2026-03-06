@@ -76,7 +76,6 @@ class SpecMethod(str, Enum):
     MTP = "mtp"
     NGRAM = "ngram_match"
     SUFFIX = "suffix"
-    EAGLE = "eagle"
 
     def create_proposer(self, fd_config, **kwargs) -> Optional["Proposer"]:
         """Factory method: create the appropriate Proposer for this method.

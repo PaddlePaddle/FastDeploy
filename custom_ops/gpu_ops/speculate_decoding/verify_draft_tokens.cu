@@ -194,6 +194,7 @@ __global__ void verify_draft_tokens(
     const int *reasoning_status,
     // Dimensions and config
     const int max_bsz,
+    const int real_bsz,
     const int max_step_tokens,
     const int end_length,
     const int max_seq_len,
@@ -209,6 +210,8 @@ __global__ void verify_draft_tokens(
   // Initialize step_output_len to 0 for ALL slots
   if (bid < max_bsz) {
     step_output_len[bid] = 0;
+  } else {
+    return;
   }
 
   if (bid >= real_bsz || is_block_step[bid] || stop_flags[bid]) return;
@@ -360,6 +363,7 @@ void VerifyDraftTokens(
     bool reject_all,
     bool accept_all) {
   auto bsz = step_output_ids.shape()[0];
+  auto real_bsz = seq_len_this_time.shape()[0];
   auto max_step_tokens = step_input_ids.shape()[1];
   auto end_length = end_tokens.shape()[0];
   // max_candidate_len: 1 if candidate_ids not provided, else from shape
@@ -440,7 +444,8 @@ void VerifyDraftTokens(
       cu_seqlens_q_output.data<int>(),
       reasoning_status.data<int>(),
       // Dimensions and config
-      bsz,  // max_bsz
+      bsz,       // max_bsz
+      real_bsz,  // real_bsz
       max_step_tokens,
       end_length,
       max_seq_len,
