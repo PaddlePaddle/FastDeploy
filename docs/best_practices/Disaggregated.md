@@ -4,14 +4,13 @@
 
 This document provides a comprehensive guide to FastDeploy's PD (Prefill-Decode) disaggregated deployment solution, covering both single-machine and cross-machine deployment modes with support for Tensor Parallelism (TP), Data Parallelism (DP), and Expert Parallelism (EP).
 
-
 ## 1. Deployment Overview and Environment Preparation
 
 This guide demonstrates deployment practices using the ERNIE-4.5-300B-A47B-Paddle model on H100 80GB GPUs. Below are the minimum GPU requirements for different deployment configurations:
 
 **Single-Machine Deployment (8 GPUs, Single Node)**
 
-| Configuration | TP | DP | EP | GPUs Required | 
+| Configuration | TP | DP | EP | GPUs Required |
 |---------|----|----|----|---------|
 | TP4DP1 | 4 | 1 | - | 8 |
 | TP1DP4EP | 1 | 4 | ✓ | 8 |
@@ -20,9 +19,9 @@ This guide demonstrates deployment practices using the ERNIE-4.5-300B-A47B-Paddl
 
 | Configuration | TP | DP | EP | GPUs Required |
 |---------|----|----|----|---------|
-| TP8DP1 | 8 | 1 | - | 16 | 
-| TP4DP2 | 4 | 2 | - | 16 | 
-| TP1DP8EP | 1 | 8 | ✓ | 16 | 
+| TP8DP1 | 8 | 1 | - | 16 |
+| TP4DP2 | 4 | 2 | - | 16 |
+| TP1DP8EP | 1 | 8 | ✓ | 16 |
 
 **Important Notes**:
 1. **Quantization**: All configurations above use WINT4 quantization, specified via `--quantization wint4`
@@ -254,8 +253,6 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 
 **Note**: Please replace `<PREFILL_MACHINE_IP>` with the actual IP address of the Prefill machine.
 
-
-
 ## 4. Sending Test Requests
 
 ```bash
@@ -269,7 +266,6 @@ curl -X POST "http://localhost:8109/v1/chat/completions" \
   "stream": false
 }'
 ```
-
 
 ## 5. Frequently Asked Questions (FAQ)
 
