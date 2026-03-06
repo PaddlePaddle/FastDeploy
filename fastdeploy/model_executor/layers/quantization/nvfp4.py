@@ -53,6 +53,8 @@ def _process_scale_interleaved(scales):
     assert cols % 4 == 0
     padded_scales = padded_scales.reshape(batches, rows // 128, 4, 32, cols // 4, 4)
     padded_scales = padded_scales.transpose([0, 1, 4, 3, 2, 5])
+    # [batches, rows // 128, cols // 4, 32, 4, 4]
+
     padded_scales = padded_scales.contiguous().to(paddle.device.get_device())
     padded_scales = (
         padded_scales.reshape(M_padded, K_padded) if scale_dim == 2 else padded_scales.reshape(B, M_padded, K_padded)
