@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include "maca_version.h"
 #include "mctlass/numeric_conversion.h"
 #include "mctlassEx/mctlassEx.h"
 
@@ -152,11 +151,7 @@ class McMoeGemmRunner {
             MCTLASS_EX_CONTIGUOUS_GROUPED_ALGO_DEFAULT;
     mctlassExContiguousGroupedDesc_t contiguous_group_desc;
     mctlassExContiguousGroupedDescCreate(&contiguous_group_desc,
-#if MACA_VERSION_GT(3, 3, 2, 0)
                                          const_cast<int*>(ptrSegInd),
-#else
-                                         ptrSegInd,
-#endif
                                          nullptr,
                                          ptrMNumTilesInd,
                                          1);

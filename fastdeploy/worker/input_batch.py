@@ -459,7 +459,7 @@ class InputBatch:
             swap_data(self.accept_num, i1, i2)
             swap_data(self.draft_tokens, i1, i2)
             swap_data(self.actual_draft_token_num, i1, i2)
-            if current_platform.is_cuda():
+            if current_platform.is_cuda() or current_platform.is_maca():
                 swap_data(self.cu_seqlens_q_output, i1, i2)
             else:
                 swap_data(self.cu_seqlens_q_output, i1, i2)
@@ -771,7 +771,9 @@ class ProposerInputBatch(InputBatch):
         self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.not_need_stop_device = paddle.to_tensor([False], dtype="bool")
-        if current_platform.is_cuda() or current_platform.is_xpu():
+        self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+        self.not_need_stop_device = paddle.to_tensor([False], dtype="bool")
+        if current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_xpu():
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
             if "token_ids_all" in self.target_model_input_batch:
