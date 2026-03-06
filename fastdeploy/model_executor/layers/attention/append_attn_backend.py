@@ -50,6 +50,8 @@ from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attent
     build_kv_indices_from_block_tables,
     build_unified_kv_indices,
     extend_attention_fwd_unified,
+    pre_cache_len_concat_triton,
+    triton_cumsum_with_zero_prefix,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 from fastdeploy.platforms import current_platform
@@ -304,12 +306,7 @@ class AppendAttentionBackend(AttentionBackend):
         seq_lens_this_time = forward_meta.seq_lens_this_time
         prefix_lens = forward_meta.prefix_lens[:bs].astype("int32")
         extend_seq_lens = seq_lens_this_time[:bs]
-        qo_indptr = paddle.concat(
-            [
-                paddle.zeros([1], dtype="int32"),
-                paddle.cumsum(extend_seq_lens).astype("int32"),
-            ]
-        )
+        qo_indptr = triton_cumsum_with_zero_prefix(extend_seq_lens, bs)
 
         prefix_kv_indptr, prefix_kv_indices = build_kv_indices_from_block_tables(
             forward_meta.block_tables,
@@ -327,16 +324,8 @@ class AppendAttentionBackend(AttentionBackend):
             total_kv_len=total_prefix_len + total_extend_len,
         )
 
-        extend_start_loc = (
-            paddle.concat(
-                [
-                    paddle.zeros([1], dtype="int32"),
-                    paddle.cumsum(extend_seq_lens[:-1]).astype("int32"),
-                ]
-            )
-            if bs > 1
-            else paddle.zeros([1], dtype="int32")
-        )
+        # extend_start_loc is the exclusive prefix sum = qo_indptr[:bs]
+        extend_start_loc = qo_indptr[:bs]
 
         extend_kv_indices = paddle.empty([max(total_extend_len, 1)], dtype="int32")
         if bs > 0 and total_extend_len > 0:
@@ -466,19 +455,40 @@ class AppendAttentionBackend(AttentionBackend):
         cache_v_scales = getattr(layer, "cache_v_scale", None)
 
         # --- Step 1: Prepare metadata for gqa_rope_write_cache ---
-        (
-            cu_seqlens_k,
-            pre_cache_batch_ids,
-            pre_cache_tile_ids_per_batch,
-            pre_cache_num_blocks_cpu,
-            kv_token_num_cpu,
-        ) = pre_cache_len_concat(
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.seq_lens_this_time,
-            forward_meta.max_len_tensor_cpu[2],
-            self.block_size,
-        )
+        # Use Triton GPU-only version when CUDA Graph is active (no D2H copy).
+        # CPU scalars come from forward_meta (pre-computed outside capture region).
+        if forward_meta.step_use_cudagraph:
+            bsz = forward_meta.seq_lens_this_time.shape[0]
+            max_dec_len = int(forward_meta.max_len_tensor_cpu[2])
+            max_tile_per_bs = (max_dec_len + self.block_size - 1) // self.block_size
+            cu_seqlens_k, pre_cache_batch_ids, pre_cache_tile_ids_per_batch = pre_cache_len_concat_triton(
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                bsz,
+                self.block_size,
+                max_tile_per_bs,
+            )
+            # Build CPU tensors directly (no D2H copy), needed by gqa_rope_write_cache C++ op
+            pre_cache_num_blocks_cpu = paddle.to_tensor(
+                [forward_meta.deter_pre_cache_num_blocks], dtype="int32", place=paddle.CPUPlace()
+            )
+            kv_token_num = forward_meta.deter_kv_token_num
+        else:
+            (
+                cu_seqlens_k,
+                pre_cache_batch_ids,
+                pre_cache_tile_ids_per_batch,
+                pre_cache_num_blocks_cpu,
+                kv_token_num_cpu,
+            ) = pre_cache_len_concat(
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                forward_meta.max_len_tensor_cpu[2],
+                self.block_size,
+            )
+            kv_token_num = kv_token_num_cpu[0].item()
 
         # --- Step 2: RoPE + KV cache write (no attention) ---
         # DIAG: log gqa_rope_write_cache metadata for Layer 0
@@ -523,7 +533,7 @@ class AppendAttentionBackend(AttentionBackend):
             getattr(layer, "cache_k_zp", None),
             getattr(layer, "cache_v_zp", None),
             metadata.kv_signal_data_list[layer.layer_id],
-            kv_token_num_cpu[0].item(),
+            kv_token_num,
             self.max_seq_len,
             getattr(layer, "rms_norm_eps", 1e-6),
             layer.use_neox_rotary_style,

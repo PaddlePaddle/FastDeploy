@@ -1313,6 +1313,8 @@ class GPUModelRunner(ModelRunnerBase):
         # These .item() calls are safe here because we are outside the graph capture region.
         if envs.FD_DETERMINISTIC_MODE:
             slt = self.share_inputs["seq_lens_this_time"]
+            sle = self.share_inputs["seq_lens_encoder"]
+            sld = self.share_inputs["seq_lens_decoder"]
             dbs = int((slt > 0).sum().item())
             self.forward_meta.deter_bs = dbs
             if dbs > 0:
@@ -1320,6 +1322,19 @@ class GPUModelRunner(ModelRunnerBase):
                 self.forward_meta.deter_total_extend_len = int(paddle.sum(extend).item())
                 self.forward_meta.deter_max_extend_len = int(paddle.max(extend).item())
                 self.forward_meta.deter_total_prefix_len = int(paddle.sum(prefix_lens[:dbs]).item())
+                # Pre-compute pre_cache_len_concat CPU outputs (replaces D2H copy in C++ op)
+                sle_np = sle[:dbs].numpy()
+                sld_np = sld[:dbs].numpy()
+                slt_np = slt[:dbs].numpy()
+                block_size = self.cache_config.block_size
+                kv_token_num = 0
+                num_blocks = 0
+                for bid in range(dbs):
+                    cache_len = int(sld_np[bid]) if int(sle_np[bid]) > 0 else 0
+                    kv_token_num += cache_len + int(slt_np[bid])
+                    num_blocks += (cache_len + block_size - 1) // block_size
+                self.forward_meta.deter_kv_token_num = kv_token_num
+                self.forward_meta.deter_pre_cache_num_blocks = num_blocks
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:

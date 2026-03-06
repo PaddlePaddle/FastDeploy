@@ -13,6 +13,8 @@ from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attent
     _scatter_extend_kv_indices_kernel,
     build_kv_indices_from_block_tables,
     build_kv_indices_from_block_tables_ref,
+    pre_cache_len_concat_ref,
+    pre_cache_len_concat_triton,
 )
 
 # ---------------------------------------------------------------------------
@@ -297,3 +299,99 @@ class TestDeterministicBuildTritonIndicesE2E:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-x"])
+
+
+# ---------------------------------------------------------------------------
+# Test: pre_cache_len_concat_triton vs pre_cache_len_concat_ref
+# ---------------------------------------------------------------------------
+
+
+class TestPreCacheLenConcat:
+    """Compare Triton GPU-only pre_cache_len_concat vs Python reference."""
+
+    @pytest.mark.parametrize("block_size", [16, 64, 128])
+    @pytest.mark.parametrize(
+        "bsz, enc_list, dec_list, qlen_list",
+        [
+            # Pure decode: all enc=0, so cache_len=0 for all
+            (3, [0, 0, 0], [50, 100, 200], [1, 1, 1]),
+            # Pure prefill: enc>0, cache_len = dec (chunked prefill)
+            (2, [10, 20], [0, 0], [10, 20]),
+            # Mixed: some prefill, some decode
+            (4, [10, 0, 5, 0], [32, 100, 64, 200], [10, 1, 5, 1]),
+            # Single batch
+            (1, [1], [128], [1]),
+            # All zero enc/dec (edge case)
+            (3, [0, 0, 0], [0, 0, 0], [5, 3, 7]),
+            # Large cache_len spanning many blocks
+            (2, [1, 1], [512, 1024], [32, 64]),
+            # Single token decode
+            (5, [0, 0, 0, 0, 0], [10, 20, 30, 40, 50], [1, 1, 1, 1, 1]),
+            # Mixed zero and non-zero enc
+            (4, [5, 0, 0, 10], [100, 0, 50, 200], [5, 1, 1, 10]),
+        ],
+    )
+    def test_matches_ref(self, block_size, bsz, enc_list, dec_list, qlen_list):
+        """Triton pre_cache_len_concat must exactly match the reference."""
+        seq_lens_encoder = paddle.to_tensor(enc_list, dtype="int32")
+        seq_lens_decoder = paddle.to_tensor(dec_list, dtype="int32")
+        seq_lens_this_time = paddle.to_tensor(qlen_list, dtype="int32")
+
+        max_dec = max(dec_list) if dec_list else 0
+        max_tile_per_bs = max((max_dec + block_size - 1) // block_size, 1)
+
+        # Reference
+        cu_ref, batch_ids_ref, tile_ids_ref = pre_cache_len_concat_ref(
+            seq_lens_encoder,
+            seq_lens_decoder,
+            seq_lens_this_time,
+            bsz,
+            block_size,
+            max_tile_per_bs,
+        )
+
+        # Triton
+        cu_tri, batch_ids_tri, tile_ids_tri = pre_cache_len_concat_triton(
+            seq_lens_encoder,
+            seq_lens_decoder,
+            seq_lens_this_time,
+            bsz,
+            block_size,
+            max_tile_per_bs,
+        )
+
+        # cu_seqlens_k must match exactly
+        np.testing.assert_array_equal(cu_tri.numpy(), cu_ref.numpy(), err_msg="cu_seqlens_k mismatch")
+
+        # Compute total gridx from reference to know valid range of batch_ids/tile_ids
+        gridx = 0
+        for bid in range(bsz):
+            enc = enc_list[bid]
+            dec = dec_list[bid]
+            cache_len = dec if enc > 0 else 0
+            gridx += (cache_len + block_size - 1) // block_size
+
+        if gridx > 0:
+            np.testing.assert_array_equal(
+                batch_ids_tri[:gridx].numpy(),
+                batch_ids_ref[:gridx].numpy(),
+                err_msg="batch_ids mismatch",
+            )
+            np.testing.assert_array_equal(
+                tile_ids_tri[:gridx].numpy(),
+                tile_ids_ref[:gridx].numpy(),
+                err_msg="tile_ids mismatch",
+            )
+
+    def test_empty_batch(self):
+        """Edge case: bsz=0 should produce cu_seqlens_k=[0]."""
+        cu, _, _ = pre_cache_len_concat_triton(
+            paddle.to_tensor([], dtype="int32"),
+            paddle.to_tensor([], dtype="int32"),
+            paddle.to_tensor([], dtype="int32"),
+            0,
+            64,
+            1,
+        )
+        assert cu.shape == [1]
+        assert int(cu[0].item()) == 0

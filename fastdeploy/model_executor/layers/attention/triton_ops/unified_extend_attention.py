@@ -27,6 +27,41 @@ import triton
 import triton.language as tl
 
 # ---------------------------------------------------------------------------
+# Triton cumsum (CUDA Graph compatible, replaces paddle.cumsum / thrust)
+# ---------------------------------------------------------------------------
+
+
+@triton.jit
+def _cumsum_with_zero_prefix_kernel(input_ptr, output_ptr, n, BLOCK: tl.constexpr):
+    """
+    output[0] = 0, output[1:n+1] = cumsum(input[0:n]).
+    Single program, handles n <= BLOCK.
+    """
+    tl.store(output_ptr, 0)
+    idx = tl.arange(0, BLOCK)
+    mask = idx < n
+    val = tl.load(input_ptr + idx, mask=mask, other=0).to(tl.int32)
+    cumval = tl.cumsum(val, axis=0)
+    tl.store(output_ptr + 1 + idx, cumval, mask=mask)
+
+
+def triton_cumsum_with_zero_prefix(x, n=None):
+    """
+    Triton replacement for: paddle.concat([zeros([1], int32), cumsum(x).astype(int32)])
+    Returns int32 tensor of shape [n+1].  CUDA Graph capture compatible.
+    """
+    if n is None:
+        n = x.shape[0]
+    out = paddle.empty([n + 1], dtype="int32")
+    if n == 0:
+        out[0:1] = paddle.zeros([1], dtype="int32")
+        return out
+    BLOCK = triton.next_power_of_2(n)
+    _cumsum_with_zero_prefix_kernel[(1,)](x, out, n, BLOCK=BLOCK)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Index building utilities
 # ---------------------------------------------------------------------------
 
@@ -85,19 +120,14 @@ def build_unified_kv_indices(
 ):
     """
     Build unified KV indices from prefix and extend parts.
-    Uses paddle.cumsum for indptr (host-side), Triton kernel for index copy.
+    Uses Triton cumsum (CUDA Graph compatible) for indptr, Triton kernel for index copy.
 
     Returns:
         (unified_kv_indptr, unified_kv_indices, prefix_lens)
     """
     prefix_lens = prefix_kv_indptr[1 : bs + 1] - prefix_kv_indptr[:bs]
     unified_lens = prefix_lens + extend_seq_lens[:bs]
-    unified_kv_indptr = paddle.concat(
-        [
-            paddle.zeros([1], dtype="int32"),
-            paddle.cumsum(unified_lens).astype("int32"),
-        ]
-    )
+    unified_kv_indptr = triton_cumsum_with_zero_prefix(unified_lens, bs)
 
     total_len = prefix_kv_indices.shape[0] + extend_kv_indices.shape[0]
     unified_kv_indices = paddle.empty([total_len], dtype="int32")
@@ -178,24 +208,9 @@ def _scatter_extend_kv_indices_kernel(
 def build_kv_indices_from_block_tables(block_tables, seq_lens, block_size, bs, total_kv_len=None):
     """
     Convert FastDeploy's block_tables to flat token-level KV indices.
-
-    Args:
-        block_tables: [bs, max_blocks_per_seq], maps (seq, block_idx) -> physical_block_id
-        seq_lens: [bs], total KV length per sequence (prefix + extend)
-        block_size: tokens per block
-        bs: batch size
-        total_kv_len: optional pre-computed sum(seq_lens[:bs]) to avoid .item() during CUDA Graph capture
-
-    Returns:
-        kv_indptr: [bs+1] int32, CSR indptr
-        kv_indices: [total_kv_len] int32, flat token indices into paged cache
+    CUDA Graph capture compatible (uses Triton cumsum, no thrust).
     """
-    kv_indptr = paddle.concat(
-        [
-            paddle.zeros([1], dtype="int32"),
-            paddle.cumsum(seq_lens[:bs]).astype("int32"),
-        ]
-    )
+    kv_indptr = triton_cumsum_with_zero_prefix(seq_lens[:bs], bs)
     if total_kv_len is None:
         total_kv_len = int(paddle.sum(seq_lens[:bs]).item())
     kv_indices = paddle.empty([max(total_kv_len, 1)], dtype="int32")
@@ -241,6 +256,152 @@ def build_kv_indices_from_block_tables_ref(block_tables, seq_lens, block_size, b
         kv_indices[start : start + slen] = block_ids * block_size + offsets
 
     return kv_indptr, kv_indices
+
+
+# ---------------------------------------------------------------------------
+# Triton pre_cache_len_concat (CUDA Graph compatible, GPU-only)
+# ---------------------------------------------------------------------------
+
+
+@triton.jit
+def _pre_cache_cu_seqlens_kernel(
+    seq_lens_encoder_ptr,
+    seq_lens_decoder_ptr,
+    seq_lens_this_time_ptr,
+    cu_seqlens_k_ptr,
+    cache_len_ptr,
+    loop_times_ptr,
+    bsz,
+    block_size: tl.constexpr,
+    BLOCK_BSZ: tl.constexpr,
+):
+    """
+    Compute cu_seqlens_k, cache_len, and loop_times per batch.
+    Single program, vectorized over bsz.
+    """
+    tl.store(cu_seqlens_k_ptr, 0)
+    bid = tl.arange(0, BLOCK_BSZ)
+    mask = bid < bsz
+
+    enc = tl.load(seq_lens_encoder_ptr + bid, mask=mask, other=0)
+    dec = tl.load(seq_lens_decoder_ptr + bid, mask=mask, other=0)
+    qlen = tl.load(seq_lens_this_time_ptr + bid, mask=mask, other=0)
+
+    cache_len = tl.where(enc > 0, dec, 0)
+    total_per_batch = cache_len + qlen
+
+    cu_cumsum = tl.cumsum(total_per_batch, axis=0)
+    tl.store(cu_seqlens_k_ptr + 1 + bid, cu_cumsum, mask=mask)
+    tl.store(cache_len_ptr + bid, cache_len, mask=mask)
+
+    lt = (cache_len + block_size - 1) // block_size
+    tl.store(loop_times_ptr + bid, lt, mask=mask)
+
+
+@triton.jit
+def _pre_cache_scatter_kernel(
+    loop_times_ptr,
+    gridx_offset_ptr,
+    batch_ids_ptr,
+    tile_ids_per_batch_ptr,
+    BLOCK: tl.constexpr,
+):
+    """
+    Scatter batch_ids and tile_ids for one batch.
+    One program per batch (grid = bsz).
+    """
+    bid = tl.program_id(0)
+    lt = tl.load(loop_times_ptr + bid)
+    offset = tl.load(gridx_offset_ptr + bid)
+
+    for off in range(0, lt, BLOCK):
+        idx = off + tl.arange(0, BLOCK)
+        m = idx < lt
+        tl.store(batch_ids_ptr + offset + idx, bid, mask=m)
+        tl.store(tile_ids_per_batch_ptr + offset + idx, idx, mask=m)
+
+
+def pre_cache_len_concat_triton(
+    seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, bsz, block_size, max_tile_size_per_bs
+):
+    """
+    GPU-only Triton replacement for pre_cache_len_concat C++ op.
+    No D2H copy — CUDA Graph capture compatible.
+
+    Two-phase approach:
+      Phase 1: Vectorized kernel computes cu_seqlens_k, cache_len, loop_times
+      Phase 2: Per-batch scatter kernel writes batch_ids and tile_ids
+
+    Returns:
+        cu_seqlens_k: [bsz+1] int32, GPU
+        batch_ids: [bsz * max_tile_size_per_bs] int32, GPU
+        tile_ids_per_batch: [bsz * max_tile_size_per_bs] int32, GPU
+    """
+    cu_seqlens_k = paddle.empty([bsz + 1], dtype="int32")
+    out_size = max(bsz * max_tile_size_per_bs, 1)
+    batch_ids = paddle.empty([out_size], dtype="int32")
+    tile_ids = paddle.empty([out_size], dtype="int32")
+
+    if bsz > 0:
+        BLOCK_BSZ = triton.next_power_of_2(bsz)
+        cache_len_buf = paddle.empty([bsz], dtype="int32")
+        loop_times_buf = paddle.empty([bsz], dtype="int32")
+
+        # Phase 1: compute cu_seqlens_k, cache_len, loop_times
+        _pre_cache_cu_seqlens_kernel[(1,)](
+            seq_lens_encoder,
+            seq_lens_decoder,
+            seq_lens_this_time,
+            cu_seqlens_k,
+            cache_len_buf,
+            loop_times_buf,
+            bsz=bsz,
+            block_size=block_size,
+            BLOCK_BSZ=BLOCK_BSZ,
+        )
+
+        # Phase 2: compute gridx_offset (exclusive prefix sum) and scatter
+        gridx_offset = triton_cumsum_with_zero_prefix(loop_times_buf, bsz)  # [bsz+1]
+        _pre_cache_scatter_kernel[(bsz,)](
+            loop_times_buf,
+            gridx_offset,
+            batch_ids,
+            tile_ids,
+            BLOCK=128,
+        )
+    else:
+        cu_seqlens_k[0:1] = paddle.zeros([1], dtype="int32")
+
+    return cu_seqlens_k, batch_ids, tile_ids
+
+
+def pre_cache_len_concat_ref(
+    seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, bsz, block_size, max_tile_size_per_bs
+):
+    """
+    Reference (Python for-loop) implementation of pre_cache_len_concat.
+    Uses .item() — NOT CUDA Graph compatible. Kept for validation.
+    """
+    cu_seqlens_k = paddle.zeros([bsz + 1], dtype="int32")
+    batch_ids = paddle.empty([max(bsz * max_tile_size_per_bs, 1)], dtype="int32")
+    tile_ids = paddle.empty([max(bsz * max_tile_size_per_bs, 1)], dtype="int32")
+
+    gridx = 0
+    total_tokens = 0
+    for bid in range(bsz):
+        enc = int(seq_lens_encoder[bid].item())
+        dec = int(seq_lens_decoder[bid].item())
+        qlen = int(seq_lens_this_time[bid].item())
+        cache_len = dec if enc > 0 else 0
+        loop_times = (cache_len + block_size - 1) // block_size
+        for tile_id in range(loop_times):
+            batch_ids[gridx] = bid
+            tile_ids[gridx] = tile_id
+            gridx += 1
+        total_tokens += cache_len + qlen
+        cu_seqlens_k[bid + 1] = total_tokens
+
+    return cu_seqlens_k, batch_ids, tile_ids
 
 
 # ---------------------------------------------------------------------------

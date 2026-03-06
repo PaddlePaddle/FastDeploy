@@ -158,6 +158,9 @@ class ForwardMeta:
     deter_total_extend_len: int = 0  # = int(sum(seq_lens_this_time[:bs]))
     deter_max_extend_len: int = 0  # = int(max(seq_lens_this_time[:bs]))
     deter_total_prefix_len: int = 0  # = int(sum(prefix_lens[:bs]))
+    # Pre-computed CPU values for pre_cache_len_concat (replaces D2H copy in C++ op)
+    deter_kv_token_num: int = 0  # = sum(cache_len + q_len) per batch
+    deter_pre_cache_num_blocks: int = 0  # = sum(ceil(cache_len / block_size)) per batch
 
     # chunked MoE related
     moe_num_chunk: int = 1
