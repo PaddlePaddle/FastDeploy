@@ -53,6 +53,7 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.platforms import current_platform
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
 
 if current_platform.is_iluvatar():
@@ -78,17 +79,6 @@ else:
         unset_data_ipc,
     )
 
-from fastdeploy.model_executor.pre_and_post_process import (
-    async_set_value,
-    post_process,
-    pre_process,
-    rebuild_padding,
-    save_output_normal,
-)
-
-if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
-    from fastdeploy.spec_decode import SpecMethod
-
 import zmq
 
 from fastdeploy import envs
@@ -100,6 +90,13 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
+from fastdeploy.model_executor.pre_and_post_process import (
+    async_set_value,
+    post_process,
+    pre_process,
+    rebuild_padding,
+    save_output_normal,
+)
 from fastdeploy.output.pooler import PoolerOutput
 from fastdeploy.worker.model_runner_base import (
     DistributedOut,
@@ -1716,8 +1713,8 @@ class GPUModelRunner(ModelRunnerBase):
                     step_use_cudagraph=self.forward_meta.step_use_cudagraph,
                     is_dummy_run=True,
                 )
-            # elif self.spec_method == SpecMethod.NAIVE:
-            #     pass
+            elif self.spec_method == SpecMethod.NAIVE:
+                pass
             else:
                 self.proposer.prepare_dummy_speculative_drafts(share_inputs=self.share_inputs, batch_size=batch_size)
         return sampler_output
@@ -2079,7 +2076,21 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
+        logger.info("===================Target Model Input ======================")
+        logger.info(f"T seq_lens_this_time: {self.forward_meta.seq_lens_this_time}")
+        logger.info(f'T seq_lens_encoder: {self.share_inputs["seq_lens_encoder"],}')
+        logger.info(f'T seq_lens_decoder: {self.share_inputs["seq_lens_decoder"],}')
+        logger.info(f'T stop_flags: {self.share_inputs["stop_flags"],}')
+        logger.info(f'T step_idx: {self.share_inputs["step_idx"],}')
+        # logger.info(f'T attn_mask_offsets: {self.forward_meta.attn_mask_offsets}')
+        # logger.info(f'T attn_mask_offsets_decoder: {self.share_inputs["attn_mask_offsets_decoder"]}')
+        logger.info(f'T ids_remove_padding: {self.share_inputs["ids_remove_padding"]}')
+        logger.info(f'T input_ids: {self.share_inputs["input_ids"][:, :40]}')
 
+        if self.proposer is not None:
+            logger.info(f'T draft_tokens: {self.share_inputs["draft_tokens"],}')
+
+        logger.info("===================FIn Input ======================")
         # 3. Execute model
         if self.enable_mm:
             model_output = self.model(
@@ -2322,6 +2333,8 @@ class GPUModelRunner(ModelRunnerBase):
             # For naive mode: seq_lens_this_time is already reset to 1 inside
             # unified_update_model_status kernel. For MTP/Ngram, the proposer
             # will overwrite it with (draft_count + 1) below.
+            # logger.info(f'T accept_num: {self.share_inputs["accept_num"]}')
+            # logger.info(f'T accept_tokens: {self.share_inputs["accept_tokens"]}')
 
             if self.speculative_decoding and self.proposer is not None:
                 if self.spec_method == SpecMethod.MTP:

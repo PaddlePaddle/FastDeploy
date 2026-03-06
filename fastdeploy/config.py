@@ -33,6 +33,7 @@ from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.transformer_utils.config import get_pooling_config
 from fastdeploy.utils import (
     ceil_div,
@@ -959,10 +960,10 @@ class SpeculativeConfig:
             ],
             SpecMethod.NAIVE: [
                 {
-                    "check": lambda: self.num_speculative_tokens == 1,
-                    "message": f"NAIVE mode requires num_speculative_tokens == 1, "
-                    f"but got {self.num_speculative_tokens}. Resetting to 1.",
-                    "auto_fix": lambda: setattr(self, "num_speculative_tokens", 1),
+                    "check": lambda: self.num_speculative_tokens == 0,
+                    "message": f"NAIVE mode requires num_speculative_tokens == 0, "
+                    f"but got {self.num_speculative_tokens}. Resetting to 0.",
+                    "auto_fix": lambda: setattr(self, "num_speculative_tokens", 0),
                 }
             ],
         }
@@ -1819,7 +1820,10 @@ class FDConfig:
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
-        if self.speculative_config is not None and self.speculative_config.method in ["mtp", "suffix"]:
+        if self.speculative_config is not None and self.speculative_config.method in [
+            SpecMethod.MTP,
+            SpecMethod.SUFFIX,
+        ]:
             max_capture_shape = self.scheduler_config.max_num_seqs * (
                 self.speculative_config.num_speculative_tokens + 1
             )
@@ -1847,7 +1851,7 @@ class FDConfig:
                 max_capture_shape_prefill=max_capture_shape_prefill,
                 dec_token_per_query_per_step=dec_token_per_query_per_step,
             )
-        if self.speculative_config is not None and self.speculative_config.method in ["mtp", "suffix"]:
+        if self.speculative_config is not None:
             real_bsz_to_captured_size = {}
             for capture_size in self.graph_opt_config.cudagraph_capture_sizes:
                 dummy_batch_size = int(capture_size / (self.speculative_config.num_speculative_tokens + 1))
@@ -2050,7 +2054,7 @@ class FDConfig:
             )
 
         # adjust speculative config
-        if self.speculative_config is not None and self.speculative_config.method == "mtp":
+        if self.speculative_config is not None and self.speculative_config.method == SpecMethod.MTP:
             if self.scheduler_config.splitwise_role == "prefill":
                 self.speculative_config.num_speculative_tokens = 1
                 self.speculative_config.num_model_steps = 1

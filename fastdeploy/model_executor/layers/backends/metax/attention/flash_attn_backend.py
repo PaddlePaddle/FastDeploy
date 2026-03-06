@@ -34,6 +34,7 @@ from fastdeploy.model_executor.layers.backends.metax.attention.flash_attention_i
 from fastdeploy.model_executor.ops.gpu import cache_kv_with_rope
 from fastdeploy.model_executor.ops.gpu import merge_qkv as merge_qkv_cu
 from fastdeploy.model_executor.ops.gpu import split_qkv as split_qkv_cu
+from fastdeploy.spec_decode import SpecMethod
 
 
 @dataclass
@@ -106,7 +107,7 @@ class FlashAttentionBackend(AttentionBackend):
         self.use_speculate: bool = self.speculative_method is not None
         self.speculate_max_draft_token_num: int = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
+        self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
         self.encoder_block_shape_q: int = encoder_block_shape_q
         self.decoder_block_shape_q: int = decoder_block_shape_q
 

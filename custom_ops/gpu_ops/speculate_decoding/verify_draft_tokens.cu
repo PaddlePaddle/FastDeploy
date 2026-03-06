@@ -216,8 +216,7 @@ __global__ void verify_draft_tokens(
     step_output_len[bid] = 0;
   }
 
-  if (is_block_step[bid] || bid >= real_bsz) return;
-  if (stop_flags[bid]) return;
+  if (bid >= real_bsz || is_block_step[bid] || stop_flags[bid]) return;
 
   const int start_token_id = cu_seqlens_q_output[bid];
   // Pointers are strategy-dependent (may be nullptr for unused params)
@@ -329,9 +328,6 @@ phase1_done:
         break;
       case 2:  // TARGET_MATCH — target model's sampled token
         output_token = target_tokens_now[i];
-        break;
-      default:
-        output_token = candidate_ids_now[i * max_candidate_len];
         break;
     }
     step_output_ids[bid * max_step_tokens + i] = output_token;

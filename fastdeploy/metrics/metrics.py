@@ -36,6 +36,7 @@ from fastdeploy.metrics.prometheus_multiprocess_setup import (
     setup_multiprocess_prometheus,
 )
 from fastdeploy.metrics.stats import ZMQMetricsStats
+from fastdeploy.spec_decode import SpecMethod
 
 
 class SimpleCollector(Collector):
@@ -668,7 +669,7 @@ class MetricsManager:
                 "kwargs": {},
             },
         }
-        if speculative_method == "mtp":
+        if speculative_method == SpecMethod.MTP:
             self.SPECULATIVE_METRICS["spec_decode_efficiency"] = {
                 "type": Gauge,
                 "name": "fastdeploy:spec_decode_efficiency",

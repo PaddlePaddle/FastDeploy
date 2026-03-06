@@ -62,7 +62,7 @@ from fastdeploy.model_executor.xpu_pre_and_post_process import (
     xpu_pre_process,
     xpu_process_output,
 )
-from fastdeploy.spec_decode import MTPProposer
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.utils import get_logger
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
@@ -727,7 +727,7 @@ class XPUModelRunner(ModelRunnerBase):
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
@@ -876,7 +876,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
                 request, "temp_scaled_logprobs", False
             )
@@ -1433,7 +1433,7 @@ class XPUModelRunner(ModelRunnerBase):
             block_num=block_num,
         )
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
                 batch_size=batch_size,
@@ -1450,17 +1450,16 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Init speculative proposer
         """
-        if self.speculative_method == "ngram":
+        if self.speculative_method == SpecMethod.NGRAM:
             # xpu not support ngram proposer now
-            # self.proposer = NgramProposer(self.fd_config)
             self.proposer = None
-        elif self.speculative_method == "mtp":
-            self.proposer = MTPProposer(
+        elif self.speculative_method == SpecMethod.MTP:
+            self.proposer = self.speculative_method.create_proposer(
                 self.fd_config,
-                self.get_model(),
-                self.local_rank,
-                self.device_id,
-                self.share_inputs,
+                main_model=self.get_model(),
+                local_rank=self.local_rank,
+                device_id=self.device_id,
+                share_inputs=self.share_inputs,
             )
         else:
             self.proposer = None
@@ -1631,7 +1630,7 @@ class XPUModelRunner(ModelRunnerBase):
             )
 
             skip_save_output = is_dummy_run or (
-                self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill"
+                self.speculative_config.method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill"
             )
 
             if self.speculative_decoding:
@@ -1657,7 +1656,7 @@ class XPUModelRunner(ModelRunnerBase):
                 )
 
             # 6. Draft model propose
-            if self.speculative_method == "mtp":
+            if self.speculative_method == SpecMethod.MTP:
                 self.proposer.run(full_hidden_states=model_output)
 
             # 7. Updata 'infer_seed' and step_paddle()
@@ -1711,7 +1710,7 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         self.num_gpu_blocks = self.cache_config.total_block_num
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
         self.initialize_kv_cache(profile=True)
 
@@ -1733,7 +1732,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
 
