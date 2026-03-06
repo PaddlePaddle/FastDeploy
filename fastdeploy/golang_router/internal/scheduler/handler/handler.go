@@ -127,9 +127,9 @@ func SelectWorker(ctx context.Context, workers []string, message string, workerT
 	}
 
 	if workerType == "prefill" {
-		logger.Info("select worker (prefill): %s, tokens: %d", selectWorkerURL, tokens)
+		logger.Info("select worker (prefill): %s, tokens: %d", selectWorkerURL, tokens, ctx)
 	} else {
-		logger.Info("select worker (%s): %s, count: %d", workerType, selectWorkerURL, count)
+		logger.Info("select worker (%s): %s, count: %d", workerType, selectWorkerURL, count, ctx)
 	}
 
 	return selectWorkerURL, nil

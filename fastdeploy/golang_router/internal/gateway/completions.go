@@ -245,7 +245,7 @@ func readPrefillRecv(ctx context.Context, url string, isStream bool, message str
 				scheduler_handler.ReleasePrefillTokens(ctx, url, message)
 				released = true
 
-				logger.Debug("[prefill] first chunk received, release scheduler url=%s", url)
+				logger.Info("[prefill] first chunk received, release counter url=%s", url, ctx)
 			}
 		}
 
@@ -258,6 +258,14 @@ func readPrefillRecv(ctx context.Context, url string, isStream bool, message str
 			logger.Debug("[prefill] copy error: %v", err)
 		}
 	}
+}
+
+func getRequestID(ctx context.Context, rawReq map[string]any) string {
+	// If user didn't provide request_id, generate one
+	if _, ok := rawReq["request_id"]; !ok {
+		rawReq["request_id"] = newRequestID()
+	}
+	return rawReq["request_id"].(string)
 }
 
 // ChatCompletions implements request forwarding to actual large model inference service
@@ -300,9 +308,14 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 	)
 
 	if isSplitwise {
+		requestID := getRequestID(ctx, rawReq)
+		ctx = context.WithValue(ctx, logger.RequestIDKey, requestID)
+		c.Request = c.Request.WithContext(ctx)
+
 		// PD mode: select instances for Prefill/Decode separately
 		message = extractor(rawReq)
 
+		logger.Info("Parsing completed; starting worker selection.", ctx)
 		prefillURL, decodeURL, err = manager.SelectWorkerPair(ctx, message)
 		if err != nil {
 			c.Writer.WriteHeader(http.StatusBadGateway)
@@ -325,11 +338,6 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 
 		rawReq["disaggregate_info"] = disagg
 
-		// If user didn't provide request_id, generate one
-		if _, ok := rawReq["request_id"]; !ok {
-			rawReq["request_id"] = newRequestID()
-		}
-
 		// Re-encode request body and send to P and D
 		requestBodyData, err = json.Marshal(rawReq)
 		if err != nil {
@@ -345,6 +353,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		c.Writer.Header().Set("X-Router-Prefill-URL", prefillURL)
 		c.Writer.Header().Set("X-Router-Decode-URL", decodeURL)
 	} else {
+		logger.Info("Parsing completed; starting worker selection.", ctx)
 		// Non-PD mode: use Mixed instance
 		dest, err := manager.SelectWorker(ctx, "")
 		if err != nil {
@@ -377,12 +386,13 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 	if isSplitwise {
 		backendResp, err = PostToPD(c, decodeURL, prefillURL, requestBodyData, isStream, message, completionEndpoint)
 	} else {
-		backendResp, err = GetClientWithRetry(c, requestBodyData, destURL)
+		backendResp, err = GetClientWithRetry(c, requestBodyData, destURL, completionEndpoint)
 	}
 
 	if err != nil {
 		c.Writer.WriteHeader(http.StatusBadGateway)
 		c.Writer.Write([]byte(`{"error": "Failed to connect to backend service"}`))
+		logger.Info("Request completed with an error.", ctx)
 		return
 	}
 	defer backendResp.Body.Close()
@@ -429,19 +439,21 @@ func redirect(c *gin.Context, isStream bool, backendResp *http.Response) {
 		// Compatible with non-stream response
 		io.Copy(c.Writer, backendResp.Body)
 	}
+	logger.Info("Request completed successfully.", c.Request.Context())
 }
 
 // GetClientWithRetry adds retry
-func GetClientWithRetry(c *gin.Context, bodyBytes []byte, destUrl string) (
+func GetClientWithRetry(c *gin.Context, bodyBytes []byte, destUrl string, completionEndpoint string) (
 	backendResp *http.Response, err error) {
 	// Five retries
 	maxRetry := 3
 	for i := 0; i < maxRetry; i++ {
 		// If creating request fails, it's network connection error, check if selected node is elastic resource, if so, delete it
-		backendResp, err = GetClient(c, destUrl, "chat/completions", bodyBytes)
+		backendResp, err = GetClient(c, destUrl, completionEndpoint, bodyBytes)
 		if err == nil { // Return latest bucketsize
 			return backendResp, nil
 		}
+		logger.Info("Request failed, retrying...", c.Request.Context())
 	}
 	return nil, err
 }
