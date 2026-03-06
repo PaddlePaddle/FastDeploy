@@ -16,6 +16,7 @@
 
 from .append_attention import append_attention, append_attention_with_output
 from .flash_mask_attention import flash_mask_attention
+from .flash_attn_v4 import flash_attn_v4
 from .get_attn_mask_q import get_attn_mask_q
 from .get_block_shape_and_split_kv_block import get_block_shape_and_split_kv_block
 from .gqa_rope_write_cache import gqa_rope_write_cache
@@ -34,5 +35,6 @@ __all__ = [
     "pre_cache_len_concat",
     "init_kv_signal_per_query",
     "flash_mask_attention",
+    "flash_attn_v4",
     "get_attn_mask_q",
 ]

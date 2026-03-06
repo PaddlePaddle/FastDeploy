@@ -31,6 +31,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.attention.ops import (
     append_attention,
     flash_mask_attention,
+    flash_attn_v4,
     get_block_shape_and_split_kv_block,
     gqa_rope_write_cache,
     init_kv_signal_per_query,
@@ -50,6 +51,8 @@ if current_platform.is_cuda():
 else:
     merge_prefill_decode_output = None
 
+from fastdeploy.model_executor.utils import get_sm_version
+sm_version = get_sm_version()
 
 @dataclass
 class FlashMaskAttentionMetadata(AttentionMetadata):
@@ -277,19 +280,30 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 self.rope_3d,
             )
 
-            flash_mask_attention(
-                q,
-                k,
-                v,
-                forward_meta.cu_seqlens_q,
-                forward_meta.attn_cu_seqlens_k,
-                forward_meta.seq_lens_encoder,
-                res_encoder,
-                forward_meta.attn_mask_offsets,
-                self.num_heads,
-                self.kv_num_heads,
-                self.head_dim,
-            )
+            if sm_version >= 100:
+                flash_attn_v4(
+                    q,
+                    k,
+                    v,
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.attn_cu_seqlens_k,
+                    res_encoder,
+                    forward_meta.attn_mask_offsets
+                )
+            else:
+                flash_mask_attention(
+                    q,
+                    k,
+                    v,
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.attn_cu_seqlens_k,
+                    forward_meta.seq_lens_encoder,
+                    res_encoder,
+                    forward_meta.attn_mask_offsets,
+                    self.num_heads,
+                    self.kv_num_heads,
+                    self.head_dim,
+                )
 
         res_decoder = append_attention(
             qkv,
