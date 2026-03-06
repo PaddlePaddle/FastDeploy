@@ -153,7 +153,7 @@ def llm(model_path, _module_env):
         model=model_path,
         tensor_parallel_size=int(os.getenv("TP_SIZE", "4")),
         max_model_len=8192,
-        enable_prefix_caching=False,
+        enable_prefix_caching=os.getenv("ENABLE_PREFIX_CACHING", "0") == "1",
         graph_optimization_config={"use_cudagraph": os.getenv("USE_CUDAGRAPH", "0") == "1"},
     )
     yield instance

@@ -354,6 +354,23 @@ class AppendAttentionBackend(AttentionBackend):
         max_extend_len = int(paddle.max(extend_seq_lens).item())
         return qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len
 
+    @staticmethod
+    def _diag_md5(tensor, n=16):
+        """Quick MD5 for diagnostics (first n hex chars)."""
+        import hashlib
+
+        data = tensor.cpu().numpy().tobytes()
+        return hashlib.md5(data).hexdigest()[:n]
+
+    @staticmethod
+    def _diag_cache_block_md5(cache_k, block_tables, seq_idx, block_idx, block_size):
+        """MD5 of a specific KV cache block."""
+        import hashlib
+
+        blk_id = int(block_tables[seq_idx][block_idx].item())
+        data = cache_k[blk_id].cpu().numpy().tobytes()
+        return hashlib.md5(data).hexdigest()[:16]
+
     def _deterministic_forward(self, qkv, cache_k, cache_v, layer, forward_meta, metadata):
         """
         Unified deterministic path for ALL tokens (prefill + decode).
@@ -388,7 +405,21 @@ class AppendAttentionBackend(AttentionBackend):
         )
 
         # --- Step 2: RoPE + KV cache write (no attention) ---
-        q_roped, _, _, _ = gqa_rope_write_cache(
+        # DIAG: log gqa_rope_write_cache metadata for Layer 0
+        if layer.layer_id == 0:
+            from fastdeploy.utils import get_logger as _gl
+
+            _wlog = _gl("worker_process", "worker_process.log")
+            _wlog.info(f"[DIAG-ROPE] cu_seqlens_q={forward_meta.cu_seqlens_q.cpu().numpy().tolist()}")
+            _wlog.info(f"[DIAG-ROPE] cu_seqlens_k={cu_seqlens_k.cpu().numpy().tolist()}")
+            _wlog.info(f"[DIAG-ROPE] seq_lens_this_time={forward_meta.seq_lens_this_time.cpu().numpy().tolist()}")
+            _wlog.info(f"[DIAG-ROPE] seq_lens_encoder={forward_meta.seq_lens_encoder.cpu().numpy().tolist()}")
+            _wlog.info(f"[DIAG-ROPE] seq_lens_decoder={forward_meta.seq_lens_decoder.cpu().numpy().tolist()}")
+            _wlog.info(
+                f"[DIAG-ROPE] rotary_embs shape={list(forward_meta.rotary_embs.shape)} md5={self._diag_md5(forward_meta.rotary_embs[-57:])}"
+            )
+            _wlog.info(f"[DIAG-ROPE] block_tables[0]={forward_meta.block_tables[0, :15].cpu().numpy().tolist()}")
+        q_roped, _k_flat, _v_flat, _qkv_out = gqa_rope_write_cache(
             qkv,
             cache_k,
             cache_v,
@@ -424,6 +455,46 @@ class AppendAttentionBackend(AttentionBackend):
         )
         # q_roped: [token_nums, num_heads, head_dim] with RoPE already applied
 
+        # --- DIAG: Layer 0 — 4 return values + paged cache ---
+        if layer.layer_id == 0:
+            from fastdeploy.utils import get_logger as _gl
+
+            _wlog = _gl("worker_process", "worker_process.log")
+            enc = int(forward_meta.seq_lens_encoder[0].item())
+            dec = int(forward_meta.seq_lens_decoder[0].item())
+            _n = min(57, qkv.shape[0])
+            _wlog.info(f"[DIAG-L0] enc={enc} dec={dec} token_num={qkv.shape[0]} kv_token_num={_k_flat.shape[0]}")
+            # Input QKV: all new tokens
+            _wlog.info(f"[DIAG-L0] qkv[-1] md5={self._diag_md5(qkv[-1:])}")
+            _wlog.info(f"[DIAG-L0] qkv[-{_n}:] md5={self._diag_md5(qkv[-_n:])}")
+            # Return value 1: q_roped (RoPE'd Q)
+            _wlog.info(f"[DIAG-L0] q_roped[-1] md5={self._diag_md5(q_roped[-1:])}")
+            _wlog.info(f"[DIAG-L0] q_roped[-{_n}:] md5={self._diag_md5(q_roped[-_n:])}")
+            # Return value 2: _k_flat (flat K buffer, shape [kv_token_num, kv_heads, head_dim])
+            _wlog.info(f"[DIAG-L0] _k_flat shape={list(_k_flat.shape)} _k_flat[-1] md5={self._diag_md5(_k_flat[-1:])}")
+            _wlog.info(f"[DIAG-L0] _k_flat[-{_n}:] md5={self._diag_md5(_k_flat[-_n:])}")
+            # Return value 4: _qkv_out (RoPE'd full QKV, same shape as input qkv)
+            _wlog.info(
+                f"[DIAG-L0] _qkv_out shape={list(_qkv_out.shape)} _qkv_out[-1] md5={self._diag_md5(_qkv_out[-1:])}"
+            )
+            _wlog.info(f"[DIAG-L0] _qkv_out[-{_n}:] md5={self._diag_md5(_qkv_out[-_n:])}")
+            # Paged cache: block 12 valid entries
+            bt = forward_meta.block_tables
+            total_kv = enc + dec
+            num_blocks_used = (total_kv + self.block_size - 1) // self.block_size
+            last_bi = num_blocks_used - 1
+            last_blk = int(bt[0][last_bi].item())
+            valid_n = total_kv - last_bi * self.block_size
+            _wlog.info(
+                f"[DIAG-L0] cache_k last_block blk_idx={last_bi} blk_id={last_blk} "
+                f"valid={valid_n}/{self.block_size} "
+                f"valid_md5={self._diag_md5(cache_k[last_blk, :, :valid_n, :])}"
+            )
+            # Also check block 0 and 11 for prefix consistency
+            _wlog.info(f"[DIAG-L0] cache_k blk0 md5={self._diag_md5(cache_k[int(bt[0][0].item())])}")
+            if num_blocks_used > 11:
+                _wlog.info(f"[DIAG-L0] cache_k blk11 md5={self._diag_md5(cache_k[int(bt[0][11].item())])}")
+
         # --- Step 3: Triton unified attention for all tokens (prefill + decode) ---
         (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
             self._deterministic_build_triton_indices(forward_meta)
@@ -446,6 +517,12 @@ class AppendAttentionBackend(AttentionBackend):
             max_extend_len,
             self.causal,
         ).reshape([-1, self.num_heads * self.head_dim])
+
+        # --- DIAG: Layer 0 attention output ---
+        if layer.layer_id == 0:
+            _wlog.info(f"[DIAG-L0] prefix_lens={prefix_lens.cpu().numpy().tolist()} extend_len={max_extend_len}")
+            _wlog.info(f"[DIAG-L0] attn_out[-1] md5={self._diag_md5(res[-1:])}")
+            _wlog.info(f"[DIAG-L0] attn_out_all md5={self._diag_md5(res)}")
 
         return res
 
