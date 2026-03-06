@@ -1405,10 +1405,10 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(self.model_config.num_hidden_layers):
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
-            key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device}"
+            key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
             if value_cache_shape:
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                value_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device}"
+                value_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
             elif indexer_cache_shape:
                 indexer_cache_name = f"indexer_caches_{i}_rank{local_rank}.device{self.device_id}"
             if create_cache_tensor:
