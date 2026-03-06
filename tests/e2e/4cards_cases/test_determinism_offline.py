@@ -112,6 +112,28 @@ def test_deterministic_different_batch_sizes(llm):
         assert outputs[0].outputs.text == baseline, f"Batch size {bs} differs from bs=1"
 
 
+def test_deterministic_batch_invariance(llm):
+    """Target prompt produces identical output regardless of batch position."""
+    prompt = "What kind of programming language is Python?"
+    sp = SamplingParams(temperature=0.5, max_tokens=40, seed=456)
+
+    baseline, _ = _generate_text(llm, prompt, sp)
+
+    batch_configs = [
+        [prompt, "Filler question 1"],
+        ["Filler question 2", prompt, "Filler question 3"],
+        ["Filler question 4", "Filler question 5", prompt],
+        ["Filler 6", "Filler 7", "Filler 8", prompt],
+    ]
+
+    for i, batch in enumerate(batch_configs):
+        outputs = llm.generate(batch, sp)
+        idx = batch.index(prompt)
+        assert (
+            outputs[idx].outputs.text == baseline
+        ), f"Batch config {i} (pos {idx}): result differs from single-request baseline"
+
+
 # ===================== Sampling-parameter combinations =====================
 
 
