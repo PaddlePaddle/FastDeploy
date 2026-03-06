@@ -23,12 +23,13 @@ Key requirements:
 2. Recommended: KV length >= 2048 to ensure num_chunks >= 2
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0,1,2,3 pytest tests/deterministic/test_determinism_long.py -v
+    CUDA_VISIBLE_DEVICES=0,1,2,3 pytest tests/e2e/4cards_cases/test_determinism_long.py -v
 """
 
 import gc
 import itertools
 import os
+from contextlib import contextmanager
 
 import pytest
 
@@ -46,9 +47,39 @@ except Exception:
     _read_logits_md5_file = None
     _reset_logits_md5_file = None
 
-from conftest import env_override
-
 pytestmark = pytest.mark.gpu
+
+DEFAULT_MODEL_DIR = "./models"
+MODEL_NAME = "Qwen2-7B-Instruct"
+
+
+@contextmanager
+def env_override(mapping):
+    """Temporarily set env vars, restoring original values on exit."""
+    old = {k: os.environ.get(k) for k in mapping}
+    os.environ.update(mapping)
+    try:
+        yield
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+@pytest.fixture(scope="module")
+def model_path():
+    model_dir = os.getenv("MODEL_PATH", DEFAULT_MODEL_DIR)
+    return os.path.join(model_dir, MODEL_NAME)
+
+
+@pytest.fixture(autouse=True)
+def _reset_deterministic_mode():
+    """Ensure every test starts with deterministic mode ON."""
+    os.environ["FD_DETERMINISTIC_MODE"] = "1"
+    yield
+    os.environ["FD_DETERMINISTIC_MODE"] = "1"
 
 
 def _is_high_performance_gpu():
