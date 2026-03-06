@@ -232,7 +232,7 @@ func readPrefillRecv(ctx context.Context, url string, isStream bool, message str
 			if !released {
 				scheduler_handler.Release(ctx, url)
 				scheduler_handler.ReleasePrefillTokens(ctx, url, message)
-				logger.Debug("[prefill] release in defer (fallback) url=%s", url)
+				logger.Debug(ctx, "[prefill] release in defer (fallback) url=%s", url)
 			}
 		}()
 
@@ -245,17 +245,17 @@ func readPrefillRecv(ctx context.Context, url string, isStream bool, message str
 				scheduler_handler.ReleasePrefillTokens(ctx, url, message)
 				released = true
 
-				logger.Info("[prefill] first chunk received, release counter url=%s", url, ctx)
+				logger.Info(ctx, "[prefill] first chunk received, release counter url=%s", url)
 			}
 		}
 
 		if err := scanner.Err(); err != nil {
-			logger.Debug("[prefill] scanner error: %v", err)
+			logger.Debug(ctx, "[prefill] scanner error: %v", err)
 		}
 	} else {
 		_, err := io.Copy(io.Discard, backendResp.Body)
 		if err != nil {
-			logger.Debug("[prefill] copy error: %v", err)
+			logger.Debug(ctx, "[prefill] copy error: %v", err)
 		}
 	}
 }
@@ -315,7 +315,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		// PD mode: select instances for Prefill/Decode separately
 		message = extractor(rawReq)
 
-		logger.Info("Parsing completed; starting worker selection.", ctx)
+		logger.Info(ctx, "Parsing completed; starting worker selection.")
 		prefillURL, decodeURL, err = manager.SelectWorkerPair(ctx, message)
 		if err != nil {
 			c.Writer.WriteHeader(http.StatusBadGateway)
@@ -353,7 +353,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		c.Writer.Header().Set("X-Router-Prefill-URL", prefillURL)
 		c.Writer.Header().Set("X-Router-Decode-URL", decodeURL)
 	} else {
-		logger.Info("Parsing completed; starting worker selection.", ctx)
+		logger.Info(ctx, "Parsing completed; starting worker selection.")
 		// Non-PD mode: use Mixed instance
 		dest, err := manager.SelectWorker(ctx, "")
 		if err != nil {
@@ -392,7 +392,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 	if err != nil {
 		c.Writer.WriteHeader(http.StatusBadGateway)
 		c.Writer.Write([]byte(`{"error": "Failed to connect to backend service"}`))
-		logger.Info("Request completed with an error.", ctx)
+		logger.Info(ctx, "Request completed with an error.")
 		return
 	}
 	defer backendResp.Body.Close()
@@ -433,13 +433,13 @@ func redirect(c *gin.Context, isStream bool, backendResp *http.Response) {
 		}
 
 		if err := scanner.Err(); err != nil {
-			logger.Error("scanner error: %v", err)
+			logger.Error(c.Request.Context(), "scanner error: %v", err)
 		}
 	} else {
 		// Compatible with non-stream response
 		io.Copy(c.Writer, backendResp.Body)
 	}
-	logger.Info("Request completed successfully.", c.Request.Context())
+	logger.Info(c.Request.Context(), "Request completed successfully.")
 }
 
 // GetClientWithRetry adds retry
@@ -453,7 +453,7 @@ func GetClientWithRetry(c *gin.Context, bodyBytes []byte, destUrl string, comple
 		if err == nil { // Return latest bucketsize
 			return backendResp, nil
 		}
-		logger.Info("Request failed, retrying...", c.Request.Context())
+		logger.Info(c.Request.Context(), "Request failed, retrying...")
 	}
 	return nil, err
 }

@@ -57,45 +57,42 @@ func CloseLogFile() {
 	}
 }
 
-func requestIDPrefix(v []interface{}) (string, []interface{}) {
-    if len(v) > 0 {
-        if ctx, ok := v[len(v)-1].(context.Context); ok {
-            v = v[:len(v)-1]
-            if rid, ok := ctx.Value(RequestIDKey).(string); ok && rid != "" {
-                return "[request_id:" + rid + "] ", v
-            }
-            return "[request_id:null] ", v
-        }
-    }
-    return "", v
+func contextPrefix(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if rid, ok := ctx.Value(RequestIDKey).(string); ok && rid != "" {
+		return "[request_id:" + rid + "] "
+	}
+	return "[request_id:null] "
 }
 
 // Info logs informational messages
-func Info(format string, v ...interface{}) {
-    if level == "debug" || level == "info" {
-        prefix, args := requestIDPrefix(v)
-        infoLogger.Printf(prefix+format, args...)
-    }
+func Info(ctx context.Context, format string, v ...interface{}) {
+	if level == "debug" || level == "info" {
+		prefix := contextPrefix(ctx)
+		infoLogger.Printf(prefix+format, v...)
+	}
 }
 
 // Error logs error messages
-func Error(format string, v ...interface{}) {
-    prefix, args := requestIDPrefix(v)
-    errorLogger.Printf(prefix+format, args...)
+func Error(ctx context.Context, format string, v ...interface{}) {
+	prefix := contextPrefix(ctx)
+	errorLogger.Printf(prefix+format, v...)
 }
 
 // Warn logs warning messages
-func Warn(format string, v ...interface{}) {
+func Warn(ctx context.Context, format string, v ...interface{}) {
 	if level == "debug" || level == "info" || level == "warn" {
-		prefix, args := requestIDPrefix(v)
-        warnLogger.Printf(prefix+format, args...)
+		prefix := contextPrefix(ctx)
+		warnLogger.Printf(prefix+format, v...)
 	}
 }
 
 // Debug logs debug messages
-func Debug(format string, v ...interface{}) {
+func Debug(ctx context.Context, format string, v ...interface{}) {
 	if level == "debug" {
-        prefix, args := requestIDPrefix(v)
-        debugLogger.Printf(prefix+format, args...)
+		prefix := contextPrefix(ctx)
+		debugLogger.Printf(prefix+format, v...)
 	}
 }
