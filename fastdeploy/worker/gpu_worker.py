@@ -25,7 +25,6 @@ from paddle import nn
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
-from fastdeploy.platforms import current_platform
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
 from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed
@@ -59,7 +58,7 @@ class GpuWorker(WorkerBase):
         """
         Initialize device and construct model runner
         """
-        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.max_chips_per_node = 8
         if self.device_config.device_type == "cuda" and paddle.device.is_compiled_with_cuda():
             # Set environment variable
             self.device_ids = self.parallel_config.device_ids.split(",")
