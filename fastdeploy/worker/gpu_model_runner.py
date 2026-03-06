@@ -1309,6 +1309,18 @@ class GPUModelRunner(ModelRunnerBase):
         # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
         self.forward_meta.is_dummy_or_profile_run = is_dummy_or_profile_run
 
+        # Pre-compute CPU scalars for deterministic mode + CUDA Graph compatibility.
+        # These .item() calls are safe here because we are outside the graph capture region.
+        if envs.FD_DETERMINISTIC_MODE:
+            slt = self.share_inputs["seq_lens_this_time"]
+            dbs = int((slt > 0).sum().item())
+            self.forward_meta.deter_bs = dbs
+            if dbs > 0:
+                extend = slt[:dbs]
+                self.forward_meta.deter_total_extend_len = int(paddle.sum(extend).item())
+                self.forward_meta.deter_max_extend_len = int(paddle.max(extend).item())
+                self.forward_meta.deter_total_prefix_len = int(paddle.sum(prefix_lens[:dbs]).item())
+
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)

@@ -151,6 +151,14 @@ class ForwardMeta:
     # Routing Replay table buffer
     routing_replay_table: Optional[paddle.Tensor] = None
 
+    # Pre-computed CPU scalars for deterministic mode + CUDA Graph compatibility.
+    # Computed in gpu_model_runner.initialize_forward_meta() (outside graph capture region)
+    # so that _deterministic_build_triton_indices never calls .item() on GPU tensors.
+    deter_bs: int = 0  # = int((seq_lens_this_time > 0).sum())
+    deter_total_extend_len: int = 0  # = int(sum(seq_lens_this_time[:bs]))
+    deter_max_extend_len: int = 0  # = int(max(seq_lens_this_time[:bs]))
+    deter_total_prefix_len: int = 0  # = int(sum(prefix_lens[:bs]))
+
     # chunked MoE related
     moe_num_chunk: int = 1
     max_moe_num_chunk: int = 1

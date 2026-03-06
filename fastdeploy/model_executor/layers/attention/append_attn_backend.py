@@ -46,6 +46,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
+    _scatter_extend_kv_indices_kernel,
     build_kv_indices_from_block_tables,
     build_unified_kv_indices,
     extend_attention_fwd_unified,
@@ -287,6 +288,7 @@ class AppendAttentionBackend(AttentionBackend):
     def _deterministic_build_triton_indices(self, forward_meta):
         """
         Build unified KV indices for Triton attention from block_tables.
+        CUDA Graph compatible: all .item() replaced by pre-computed CPU scalars + Triton kernels.
 
         Handles ALL sequences in the batch (both prefill and decode):
         - Prefill sequences: extend_len = seq_lens_this_time (= seq_lens_encoder)
@@ -294,9 +296,12 @@ class AppendAttentionBackend(AttentionBackend):
 
         Returns: (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len)
         """
-        seq_lens_this_time = forward_meta.seq_lens_this_time
-        bs = int((seq_lens_this_time > 0).sum().item())
+        bs = forward_meta.deter_bs
+        total_extend_len = forward_meta.deter_total_extend_len
+        max_extend_len = forward_meta.deter_max_extend_len
+        total_prefix_len = forward_meta.deter_total_prefix_len
 
+        seq_lens_this_time = forward_meta.seq_lens_this_time
         prefix_lens = forward_meta.prefix_lens[:bs].astype("int32")
         extend_seq_lens = seq_lens_this_time[:bs]
         qo_indptr = paddle.concat(
@@ -311,9 +316,80 @@ class AppendAttentionBackend(AttentionBackend):
             prefix_lens,
             self.block_size,
             bs,
+            total_kv_len=total_prefix_len,
         )
         total_seq_lens = prefix_lens + extend_seq_lens
         all_kv_indptr, all_kv_indices = build_kv_indices_from_block_tables(
+            forward_meta.block_tables,
+            total_seq_lens,
+            self.block_size,
+            bs,
+            total_kv_len=total_prefix_len + total_extend_len,
+        )
+
+        extend_start_loc = (
+            paddle.concat(
+                [
+                    paddle.zeros([1], dtype="int32"),
+                    paddle.cumsum(extend_seq_lens[:-1]).astype("int32"),
+                ]
+            )
+            if bs > 1
+            else paddle.zeros([1], dtype="int32")
+        )
+
+        extend_kv_indices = paddle.empty([max(total_extend_len, 1)], dtype="int32")
+        if bs > 0 and total_extend_len > 0:
+            _scatter_extend_kv_indices_kernel[(bs,)](
+                all_kv_indices,
+                all_kv_indptr,
+                prefix_lens,
+                extend_start_loc,
+                extend_seq_lens,
+                extend_kv_indices,
+                BLOCK=128,
+            )
+
+        unified_kv_indptr, unified_kv_indices, _ = build_unified_kv_indices(
+            prefix_kv_indptr,
+            prefix_kv_indices,
+            extend_start_loc,
+            extend_seq_lens,
+            extend_kv_indices,
+            bs,
+        )
+
+        return qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len
+
+    def _deterministic_build_triton_indices_ref(self, forward_meta):
+        """
+        Reference implementation (Python for-loop + .item()).
+        NOT compatible with CUDA Graph capture — kept for correctness validation.
+        """
+        seq_lens_this_time = forward_meta.seq_lens_this_time
+        bs = int((seq_lens_this_time > 0).sum().item())
+
+        prefix_lens = forward_meta.prefix_lens[:bs].astype("int32")
+        extend_seq_lens = seq_lens_this_time[:bs]
+        qo_indptr = paddle.concat(
+            [
+                paddle.zeros([1], dtype="int32"),
+                paddle.cumsum(extend_seq_lens).astype("int32"),
+            ]
+        )
+
+        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
+            build_kv_indices_from_block_tables_ref,
+        )
+
+        prefix_kv_indptr, prefix_kv_indices = build_kv_indices_from_block_tables_ref(
+            forward_meta.block_tables,
+            prefix_lens,
+            self.block_size,
+            bs,
+        )
+        total_seq_lens = prefix_lens + extend_seq_lens
+        all_kv_indptr, all_kv_indices = build_kv_indices_from_block_tables_ref(
             forward_meta.block_tables,
             total_seq_lens,
             self.block_size,
@@ -406,7 +482,8 @@ class AppendAttentionBackend(AttentionBackend):
 
         # --- Step 2: RoPE + KV cache write (no attention) ---
         # DIAG: log gqa_rope_write_cache metadata for Layer 0
-        if layer.layer_id == 0:
+        # Enable with: export FD_DIAG_ATTN=1
+        if os.environ.get("FD_DIAG_ATTN", "0") == "1" and layer.layer_id == 0:
             from fastdeploy.utils import get_logger as _gl
 
             _wlog = _gl("worker_process", "worker_process.log")
@@ -456,7 +533,8 @@ class AppendAttentionBackend(AttentionBackend):
         # q_roped: [token_nums, num_heads, head_dim] with RoPE already applied
 
         # --- DIAG: Layer 0 — 4 return values + paged cache ---
-        if layer.layer_id == 0:
+        # Enable with: export FD_DIAG_ATTN=1
+        if os.environ.get("FD_DIAG_ATTN", "0") == "1" and layer.layer_id == 0:
             from fastdeploy.utils import get_logger as _gl
 
             _wlog = _gl("worker_process", "worker_process.log")
@@ -519,7 +597,8 @@ class AppendAttentionBackend(AttentionBackend):
         ).reshape([-1, self.num_heads * self.head_dim])
 
         # --- DIAG: Layer 0 attention output ---
-        if layer.layer_id == 0:
+        # Enable with: export FD_DIAG_ATTN=1
+        if os.environ.get("FD_DIAG_ATTN", "0") == "1" and layer.layer_id == 0:
             _wlog.info(f"[DIAG-L0] prefix_lens={prefix_lens.cpu().numpy().tolist()} extend_len={max_extend_len}")
             _wlog.info(f"[DIAG-L0] attn_out[-1] md5={self._diag_md5(res[-1:])}")
             _wlog.info(f"[DIAG-L0] attn_out_all md5={self._diag_md5(res)}")

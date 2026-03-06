@@ -116,7 +116,66 @@ def build_unified_kv_indices(
     return unified_kv_indptr, unified_kv_indices, prefix_lens
 
 
-def build_kv_indices_from_block_tables(block_tables, seq_lens, block_size, bs):
+@triton.jit
+def _build_kv_indices_kernel(
+    block_tables_ptr,
+    seq_lens_ptr,
+    kv_indptr_ptr,
+    kv_indices_ptr,
+    block_size: tl.constexpr,
+    max_blocks_per_seq,
+    BLOCK: tl.constexpr,
+):
+    """
+    Build flat token-level KV indices from block_tables.
+    One program per sequence.
+    For token at position t in sequence s:
+      physical_index = block_tables[s, t // block_size] * block_size + t % block_size
+    """
+    seq_id = tl.program_id(0)
+    slen = tl.load(seq_lens_ptr + seq_id)
+    dst_start = tl.load(kv_indptr_ptr + seq_id)
+
+    row_base = seq_id * max_blocks_per_seq
+
+    for off in range(0, slen, BLOCK):
+        t = off + tl.arange(0, BLOCK)
+        mask = t < slen
+        block_idx = t // block_size
+        in_block_off = t % block_size
+        blk_id = tl.load(block_tables_ptr + row_base + block_idx, mask=mask, other=0)
+        idx = blk_id * block_size + in_block_off
+        tl.store(kv_indices_ptr + dst_start + t, idx, mask=mask)
+
+
+@triton.jit
+def _scatter_extend_kv_indices_kernel(
+    all_kv_indices_ptr,
+    all_kv_indptr_ptr,
+    prefix_lens_ptr,
+    extend_start_loc_ptr,
+    extend_seq_lens_ptr,
+    out_ptr,
+    BLOCK: tl.constexpr,
+):
+    """
+    Scatter extend KV indices from all_kv_indices into a contiguous extend buffer.
+    One program per sequence. Copies the extend portion (skipping prefix) of each sequence.
+    """
+    seq_id = tl.program_id(0)
+    elen = tl.load(extend_seq_lens_ptr + seq_id)
+    plen = tl.load(prefix_lens_ptr + seq_id)
+    src_start = tl.load(all_kv_indptr_ptr + seq_id) + plen
+    dst_start = tl.load(extend_start_loc_ptr + seq_id)
+
+    for off in range(0, elen, BLOCK):
+        idx = off + tl.arange(0, BLOCK)
+        mask = idx < elen
+        val = tl.load(all_kv_indices_ptr + src_start + idx, mask=mask, other=0)
+        tl.store(out_ptr + dst_start + idx, val, mask=mask)
+
+
+def build_kv_indices_from_block_tables(block_tables, seq_lens, block_size, bs, total_kv_len=None):
     """
     Convert FastDeploy's block_tables to flat token-level KV indices.
 
@@ -125,6 +184,7 @@ def build_kv_indices_from_block_tables(block_tables, seq_lens, block_size, bs):
         seq_lens: [bs], total KV length per sequence (prefix + extend)
         block_size: tokens per block
         bs: batch size
+        total_kv_len: optional pre-computed sum(seq_lens[:bs]) to avoid .item() during CUDA Graph capture
 
     Returns:
         kv_indptr: [bs+1] int32, CSR indptr
@@ -136,11 +196,40 @@ def build_kv_indices_from_block_tables(block_tables, seq_lens, block_size, bs):
             paddle.cumsum(seq_lens[:bs]).astype("int32"),
         ]
     )
+    if total_kv_len is None:
+        total_kv_len = int(paddle.sum(seq_lens[:bs]).item())
+    kv_indices = paddle.empty([max(total_kv_len, 1)], dtype="int32")
+
+    if bs > 0 and total_kv_len > 0:
+        max_blocks_per_seq = block_tables.shape[1]
+        _build_kv_indices_kernel[(bs,)](
+            block_tables,
+            seq_lens,
+            kv_indptr,
+            kv_indices,
+            block_size,
+            max_blocks_per_seq,
+            BLOCK=128,
+        )
+
+    return kv_indptr, kv_indices
+
+
+def build_kv_indices_from_block_tables_ref(block_tables, seq_lens, block_size, bs):
+    """
+    Reference (Python for-loop) implementation of build_kv_indices_from_block_tables.
+    Uses .item() for GPU→CPU transfers — NOT compatible with CUDA Graph capture.
+    Kept for correctness validation against the Triton version.
+    """
+    kv_indptr = paddle.concat(
+        [
+            paddle.zeros([1], dtype="int32"),
+            paddle.cumsum(seq_lens[:bs]).astype("int32"),
+        ]
+    )
     total_kv_len = int(paddle.sum(seq_lens[:bs]).item())
     kv_indices = paddle.empty([max(total_kv_len, 1)], dtype="int32")
 
-    # Build flat indices: for token at position t in sequence s,
-    # its physical location = block_tables[s, t // block_size] * block_size + t % block_size
     for s in range(bs):
         slen = int(seq_lens[s].item())
         if slen == 0:

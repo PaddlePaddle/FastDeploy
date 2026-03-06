@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from functools import partial
 
@@ -132,7 +133,8 @@ class Qwen2Attention(nn.Layer):
     ):
         """ """
         # DIAG: log RMSNorm output (= QKV input) for layer 0
-        if self.attn.layer_id == 0:
+        # Enable with: export FD_DIAG_EMB=1
+        if os.environ.get("FD_DIAG_EMB", "0") == "1" and self.attn.layer_id == 0:
             import hashlib
 
             from fastdeploy.utils import get_logger as _gl
@@ -292,17 +294,19 @@ class Qwen2Model(nn.Layer):
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         # --- DIAG: embedding output for prefix cache debugging ---
-        import hashlib
+        # Enable with: export FD_DIAG_EMB=1 (disabled by default to avoid breaking CUDA Graph capture)
+        if os.environ.get("FD_DIAG_EMB", "0") == "1":
+            import hashlib
 
-        from fastdeploy.utils import get_logger as _gl
+            from fastdeploy.utils import get_logger as _gl
 
-        _wlog = _gl("worker_process", "worker_process.log")
-        enc = int(forward_meta.seq_lens_encoder[0].item())
-        dec = int(forward_meta.seq_lens_decoder[0].item())
-        _md5 = lambda t: hashlib.md5(t.cpu().numpy().tobytes()).hexdigest()[:16]
-        _wlog.info(
-            f"[DIAG-EMB] enc={enc} dec={dec} shape={list(hidden_states.shape)} emb[-1]={_md5(hidden_states[-1:])} emb[-57:]={_md5(hidden_states[-min(57, hidden_states.shape[0]):])}"
-        )
+            _wlog = _gl("worker_process", "worker_process.log")
+            enc = int(forward_meta.seq_lens_encoder[0].item())
+            dec = int(forward_meta.seq_lens_decoder[0].item())
+            _md5 = lambda t: hashlib.md5(t.cpu().numpy().tobytes()).hexdigest()[:16]
+            _wlog.info(
+                f"[DIAG-EMB] enc={enc} dec={dec} shape={list(hidden_states.shape)} emb[-1]={_md5(hidden_states[-1:])} emb[-57:]={_md5(hidden_states[-min(57, hidden_states.shape[0]):])}"
+            )
 
         residual = None
 
