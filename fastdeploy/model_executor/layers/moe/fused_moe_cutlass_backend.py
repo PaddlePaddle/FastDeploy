@@ -97,7 +97,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 token_nums_per_expert,
                 getattr(layer, self.added_weight_attrs[0]),
                 getattr(layer, self.added_weight_attrs[1]),
-                # None,
                 (layer.up_gate_proj_bias if hasattr(layer, "up_gate_proj_bias") else None),
                 (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
                 (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
@@ -105,6 +104,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 expert_idx_per_token,
                 self.moe_quant_type,
                 used_in_ep_low_latency,
+                layer.fd_config.model_config.moe_phase.phase,
             )
         else:
             ffn_out_without_down_proj_bias = fastdeploy.model_executor.ops.gpu.moe_expert_ffn(

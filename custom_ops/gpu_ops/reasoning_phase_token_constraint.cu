@@ -63,12 +63,13 @@
 //
 // ================================================================
 __global__ void update_reasoning_status_kernel(
-    const bool* stop_flags,       // [bs]
-    const int* seq_lens_encoder,  // [bs]
-    const int64_t* step_idx,      // [bs]
-    const int64_t* pre_ids,       // [bs, max_seq_len]
-    const bool* enable_thinking,  // [bs]
-    int32_t* reasoning_status,    // [bs]
+    const bool* stop_flags,        // [bs]
+    const int* seq_lens_encoder,   // [bs]
+    const int64_t* step_idx,       // [bs]
+    const int64_t* token_ids_all,  // [bs, max_seq_len]
+    const int64_t* prompt_lens,    // [bs]
+    const bool* enable_thinking,   // [bs]
+    int32_t* reasoning_status,     // [bs]
     int32_t bs,
     int32_t max_seq_len,
     int64_t think_end_id,
@@ -80,7 +81,8 @@ __global__ void update_reasoning_status_kernel(
   if (stop_flags[tid] || status == 3) return;
 
   int64_t cur_step = step_idx[tid];
-  const int64_t* pre_ids_now = pre_ids + tid * max_seq_len;
+  const int64_t* pre_ids_now =
+      token_ids_all + tid * max_seq_len + prompt_lens[tid];
   int64_t t0 = (cur_step >= 0) ? pre_ids_now[cur_step] : -1;
   int64_t t1 = (cur_step >= 1) ? pre_ids_now[cur_step - 1] : -1;
   int64_t t2 = (cur_step >= 2) ? pre_ids_now[cur_step - 2] : -1;
@@ -168,7 +170,8 @@ __global__ void apply_token_enforce_generation_scores_kernel(
 template <paddle::DataType D>
 void reasoning_phase_token_constraint(
     const paddle::Tensor& logits,  // inplace output
-    const paddle::Tensor& pre_ids,
+    const paddle::Tensor& token_ids_all,
+    const paddle::Tensor& prompt_lens,
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_encoder,
@@ -189,7 +192,7 @@ void reasoning_phase_token_constraint(
   int bs = seq_lens_this_time.shape()[0];
   int token_num = logits.shape()[0];
   int vocab_size = logits.shape()[1];
-  int max_seq_len = pre_ids.shape()[1];
+  int max_seq_len = token_ids_all.shape()[1];
   int allowed_tokens_len = allowed_tokens.shape()[0];
 
   // ------------------------------------------------
@@ -204,7 +207,8 @@ void reasoning_phase_token_constraint(
       stop_flags.data<bool>(),
       seq_lens_encoder.data<int>(),
       step_idx.data<int64_t>(),
-      pre_ids.data<int64_t>(),
+      token_ids_all.data<int64_t>(),
+      prompt_lens.data<int64_t>(),
       enable_thinking.data<bool>(),
       const_cast<int32_t*>(reasoning_status.data<int32_t>()),
       bs,
@@ -241,7 +245,8 @@ void reasoning_phase_token_constraint(
 
 void ReasoningPhaseTokenConstraint(
     const paddle::Tensor& logits,
-    const paddle::Tensor& pre_ids,
+    const paddle::Tensor& token_ids_all,
+    const paddle::Tensor& prompt_lens,
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_encoder,
@@ -257,7 +262,8 @@ void ReasoningPhaseTokenConstraint(
     case paddle::DataType::FLOAT16:
       return reasoning_phase_token_constraint<paddle::DataType::FLOAT16>(
           logits,
-          pre_ids,
+          token_ids_all,
+          prompt_lens,
           stop_flags,
           seq_lens_this_time,
           seq_lens_encoder,
@@ -272,7 +278,8 @@ void ReasoningPhaseTokenConstraint(
     case paddle::DataType::BFLOAT16:
       return reasoning_phase_token_constraint<paddle::DataType::BFLOAT16>(
           logits,
-          pre_ids,
+          token_ids_all,
+          prompt_lens,
           stop_flags,
           seq_lens_this_time,
           seq_lens_encoder,
@@ -287,7 +294,8 @@ void ReasoningPhaseTokenConstraint(
     case paddle::DataType::FLOAT32:
       return reasoning_phase_token_constraint<paddle::DataType::FLOAT32>(
           logits,
-          pre_ids,
+          token_ids_all,
+          prompt_lens,
           stop_flags,
           seq_lens_this_time,
           seq_lens_encoder,
@@ -309,7 +317,8 @@ void ReasoningPhaseTokenConstraint(
 // ================================================================
 PD_BUILD_STATIC_OP(reasoning_phase_token_constraint)
     .Inputs({"logits",
-             "pre_ids",
+             "token_ids_all",
+             "prompt_lens",
              "stop_flags",
              "seq_lens_this_time",
              "seq_lens_encoder",

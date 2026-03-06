@@ -42,13 +42,10 @@ struct softmax_state_t {
     }
   }
 
-  __device__ __forceinline__ softmax_state_t() {
-    init();
-  }
+  __device__ __forceinline__ softmax_state_t() { init(); }
 
-  __device__ __forceinline__ void merge(const AlignedVector<T, vec_size>& other_o,
-                                        T other_m,
-                                        T other_d) {
+  __device__ __forceinline__ void merge(
+      const AlignedVector<T, vec_size>& other_o, T other_m, T other_d) {
     // using kType = typename cascade_attn_nv_type2_traits<T>::type;
     T m_prev = m, d_prev = d;
     m = m_prev > other_m ? m_prev : other_m;
@@ -63,13 +60,11 @@ struct softmax_state_t {
   }
 
   __device__ __forceinline__ void normalize() {
-
 #pragma unroll
     for (size_t i = 0; i < vec_size; ++i) {
       o[i] /= d;
     }
   }
-
 };
 
 template <size_t vec_size, typename T, uint32_t num_tiles = 0>
@@ -102,65 +97,79 @@ struct softmax_state_ts {
     }
   }
 
-  __device__ __forceinline__ softmax_state_ts() {
-    init();
-  }
+  __device__ __forceinline__ softmax_state_ts() { init(); }
 
   __device__ __forceinline__ void normalize(const uint32_t tile_id) {
-
 #pragma unroll
     for (size_t i = 0; i < vec_size; i++) {
       o[tile_id][i] /= d;
     }
   }
-
 };
 
-template <SharedMemFillMode fill_mode, uint32_t HEAD_DIM_QK, uint32_t vec_size, uint32_t NUM_VEC_PER_HEAD, uint32_t bdx, uint32_t BLOCK_SIZE, uint32_t CACHE_VEC_SIZE, typename CacheT>
-__device__ __forceinline__ void produce_kv(CacheT *smem,
-                                          CacheT *kv_base_gptr,
-                                          const int * block_table_smem,
-                                          const uint32_t seq_offset_gmem,
-                                          const uint32_t seq_offset_smem,
-                                          const uint32_t kv_head_idx,
-                                          const uint32_t kv_num_heads,
-                                          const uint32_t tidx,
-                                          const uint32_t chunk_start,
-                                          const uint32_t chunk_end) {
+template <SharedMemFillMode fill_mode,
+          uint32_t HEAD_DIM_QK,
+          uint32_t vec_size,
+          uint32_t NUM_VEC_PER_HEAD,
+          uint32_t bdx,
+          uint32_t BLOCK_SIZE,
+          uint32_t CACHE_VEC_SIZE,
+          typename CacheT>
+__device__ __forceinline__ void produce_kv(CacheT* smem,
+                                           CacheT* kv_base_gptr,
+                                           const int* block_table_smem,
+                                           const uint32_t seq_offset_gmem,
+                                           const uint32_t seq_offset_smem,
+                                           const uint32_t kv_head_idx,
+                                           const uint32_t kv_num_heads,
+                                           const uint32_t tidx,
+                                           const uint32_t chunk_start,
+                                           const uint32_t chunk_end) {
   int block_id = __ldg(&block_table_smem[seq_offset_gmem / BLOCK_SIZE]);
   if (block_id < 0) {
     block_id = 0;
   }
   const uint32_t block_offset = seq_offset_gmem % BLOCK_SIZE;
   // 8/16 T/int8 each time
-  const uint32_t k_offset_base = ((block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE + block_offset) * HEAD_DIM_QK;
+  const uint32_t k_offset_base =
+      ((block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE + block_offset) *
+      HEAD_DIM_QK;
   const uint32_t smem_offset_base = seq_offset_smem * HEAD_DIM_QK;
-  for(uint32_t vid = tidx; vid < NUM_VEC_PER_HEAD; vid += bdx) {
+  for (uint32_t vid = tidx; vid < NUM_VEC_PER_HEAD; vid += bdx) {
     pred_load<128, PrefetchMode::kPrefetch, fill_mode, CacheT>(
-      smem + smem_offset_base + vid * CACHE_VEC_SIZE,
-      kv_base_gptr + k_offset_base + vid * CACHE_VEC_SIZE,
-      seq_offset_gmem < chunk_end
-    );
+        smem + smem_offset_base + vid * CACHE_VEC_SIZE,
+        kv_base_gptr + k_offset_base + vid * CACHE_VEC_SIZE,
+        seq_offset_gmem < chunk_end);
   }
 }
 
-template <uint32_t vec_size, uint32_t NUM_VEC_PER_HEAD, uint32_t bdx, uint32_t bdy, uint32_t HEAD_DIM, uint32_t DEAL_EACH_TIME, uint32_t num_tile_v, typename T, typename CacheT>
-__device__ __forceinline__ void compute_qk(const T* cu_q_smem,
-                                           const CacheT* k_smem,
-                                           const uint32_t kv_idx_base,
-                                           const uint32_t stage_idx,
-                                           const uint32_t iter_base,
-                                           const uint32_t iter_bound,
-                                           const uint32_t tidx,
-                                           const uint32_t gid,
-                                           const float scale,
-                                           float *s,
-                                           softmax_state_ts<vec_size, T, num_tile_v>& st) {
+template <uint32_t vec_size,
+          uint32_t NUM_VEC_PER_HEAD,
+          uint32_t bdx,
+          uint32_t bdy,
+          uint32_t HEAD_DIM,
+          uint32_t DEAL_EACH_TIME,
+          uint32_t num_tile_v,
+          typename T,
+          typename CacheT>
+__device__ __forceinline__ void compute_qk(
+    const T* cu_q_smem,
+    const CacheT* k_smem,
+    const uint32_t kv_idx_base,
+    const uint32_t stage_idx,
+    const uint32_t iter_base,
+    const uint32_t iter_bound,
+    const uint32_t tidx,
+    const uint32_t gid,
+    const float scale,
+    float* s,
+    softmax_state_ts<vec_size, T, num_tile_v>& st) {
   const CacheT* smem;
   AlignedVector<T, vec_size> q_vec;
   AlignedVector<T, vec_size> k_vec;
   float m_prev = st.m;
-  // smem = base_smem + (stage_idx * DEAL_EACH_TIME + zid * tile_size) * HEAD_DIM;
+  // smem = base_smem + (stage_idx * DEAL_EACH_TIME + zid * tile_size) *
+  // HEAD_DIM;
   smem = k_smem + stage_idx * DEAL_EACH_TIME * HEAD_DIM;
 #pragma unroll
   for (uint32_t j = 0; j < DEAL_EACH_TIME; ++j) {
@@ -171,7 +180,7 @@ __device__ __forceinline__ void compute_qk(const T* cu_q_smem,
         s[j] = 0.f;
       }
 #pragma unroll
-      for(uint32_t vid = tidx; vid < NUM_VEC_PER_HEAD; vid += bdx) {
+      for (uint32_t vid = tidx; vid < NUM_VEC_PER_HEAD; vid += bdx) {
         Load<T, vec_size>(cu_q_smem + vid * vec_size, &q_vec);
         Load<CacheT, vec_size>(smem + j * HEAD_DIM + vid * vec_size, &k_vec);
         for (uint32_t i = 0; i < vec_size; ++i) {
@@ -211,20 +220,29 @@ __device__ __forceinline__ void compute_qk(const T* cu_q_smem,
   }
 }
 
-template<uint32_t vec_size, uint32_t NUM_VEC_PER_HEAD, uint32_t bdx, uint32_t DEAL_EACH_TIME, uint32_t HEAD_DIM_QK, uint32_t num_tile, typename T, typename CacheT>
-__device__ __forceinline__ void compute_sv(const float *s,
-                                           const CacheT *base_v_smem,
-                                           const uint32_t stage_idx,
-                                           const uint32_t iter_base,
-                                           const uint32_t iter_bound,
-                                           const uint32_t tidx,
-                                           softmax_state_ts<vec_size, T, num_tile>& st) {
+template <uint32_t vec_size,
+          uint32_t NUM_VEC_PER_HEAD,
+          uint32_t bdx,
+          uint32_t DEAL_EACH_TIME,
+          uint32_t HEAD_DIM_QK,
+          uint32_t num_tile,
+          typename T,
+          typename CacheT>
+__device__ __forceinline__ void compute_sv(
+    const float* s,
+    const CacheT* base_v_smem,
+    const uint32_t stage_idx,
+    const uint32_t iter_base,
+    const uint32_t iter_bound,
+    const uint32_t tidx,
+    softmax_state_ts<vec_size, T, num_tile>& st) {
   const CacheT* v_smem;
   AlignedVector<T, vec_size> v_vec;
 #pragma unroll
   for (int j = 0; (j < DEAL_EACH_TIME) && (iter_base + j < iter_bound); ++j) {
-    v_smem = base_v_smem + stage_idx * DEAL_EACH_TIME * HEAD_DIM_QK + j * HEAD_DIM_QK;
-    for(uint32_t vid = tidx; vid < NUM_VEC_PER_HEAD; vid += bdx) {
+    v_smem = base_v_smem + stage_idx * DEAL_EACH_TIME * HEAD_DIM_QK +
+             j * HEAD_DIM_QK;
+    for (uint32_t vid = tidx; vid < NUM_VEC_PER_HEAD; vid += bdx) {
       Load<T, vec_size>(v_smem + vid * vec_size, &v_vec);
       uint32_t tile_id = vid / bdx;
 #pragma unroll

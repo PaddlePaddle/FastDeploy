@@ -21,9 +21,13 @@ from paddle.nn.functional import swiglu
 from paddle.nn.quant import weight_only_linear
 
 try:
-    from fastdeploy.model_executor.ops.iluvatar import w8a16_group_gemm
+    from fastdeploy.model_executor.ops.iluvatar import (
+        w8a16_group_gemm,
+        w8a16_group_gemv,
+    )
 except ImportError:
     w8a16_group_gemm = None
+    w8a16_group_gemv = None
 
 
 def group_gemm(
@@ -76,6 +80,15 @@ def group_gemm(
         )
 
 
+def _select_group_gemm_algo(moe_phase: str):
+    # if moe_phase == "decode":
+    if False:
+        group_gemm_func = w8a16_group_gemv
+    else:
+        group_gemm_func = w8a16_group_gemm
+    return group_gemm_func
+
+
 def iluvatar_moe_expert_ffn(
     permute_input: paddle.Tensor,
     tokens_expert_prefix_sum: paddle.Tensor,
@@ -88,6 +101,7 @@ def iluvatar_moe_expert_ffn(
     expert_idx_per_token: Optional[paddle.Tensor],
     quant_method: str,
     used_in_ep_low_latency: bool,
+    moe_phase: str,
 ):
     assert up_gate_proj_bias is None
     assert up_gate_proj_scale is not None
@@ -96,10 +110,8 @@ def iluvatar_moe_expert_ffn(
     assert expert_idx_per_token is None
     assert quant_method in ("weight_only_int8")
     assert not used_in_ep_low_latency
-    tokens_expert_prefix_sum_cpu = tokens_expert_prefix_sum.to("cpu")
-    ffn1_output = w8a16_group_gemm(
-        permute_input, up_gate_proj_weight, up_gate_proj_scale, tokens_expert_prefix_sum_cpu, -1
-    )
+    group_gemm_func = _select_group_gemm_algo(moe_phase)
+    ffn1_output = group_gemm_func(permute_input, up_gate_proj_weight, up_gate_proj_scale, tokens_expert_prefix_sum, -1)
     act_out = swiglu(ffn1_output)
-    output = w8a16_group_gemm(act_out, down_proj_weight, down_proj_scale, tokens_expert_prefix_sum_cpu, -1)
+    output = group_gemm_func(act_out, down_proj_weight, down_proj_scale, tokens_expert_prefix_sum, -1)
     return output

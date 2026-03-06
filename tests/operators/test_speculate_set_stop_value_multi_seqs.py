@@ -25,7 +25,8 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         self,
         accept_tokens,
         accept_num,
-        pre_ids,
+        token_ids_all,
+        prompt_lens,
         step_idx,
         stop_flags,
         seq_lens,
@@ -39,7 +40,8 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         speculate_set_stop_value_multi_seqs(
             accept_tokens_out,
             accept_num,
-            pre_ids,
+            token_ids_all,
+            prompt_lens,
             step_idx,
             stop_flags_out,
             seq_lens,
@@ -52,7 +54,8 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         return {
             "accept_tokens": accept_tokens.numpy(),
             "accept_num": accept_num.numpy(),
-            "pre_ids": pre_ids.numpy(),
+            "token_ids_all": token_ids_all.numpy(),
+            "prompt_lens": prompt_lens.numpy(),
             "step_idx": step_idx.numpy(),
             "stop_flags": stop_flags.numpy(),
             "output_accept_tokens": accept_tokens_out.numpy(),
@@ -69,13 +72,14 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
             dtype="int64",
         )
         accept_num = paddle.to_tensor([3, 4], dtype="int32")
-        pre_ids = paddle.to_tensor(
+        token_ids_all = paddle.to_tensor(
             [
                 [7, 8, 9, 3, 4, 5],  # batch 0
                 [7, 8, 9, 1, 2, 3],  # batch 1
             ],
             dtype="int64",
         )
+        prompt_lens = paddle.zeros([2, 1], dtype="int64")
 
         step_idx = paddle.to_tensor([6, 6], dtype="int64")
 
@@ -94,7 +98,8 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         gpu_results = self.run_op(
             accept_tokens,
             accept_num,
-            pre_ids,
+            token_ids_all,
+            prompt_lens,
             step_idx,
             stop_flags,
             seq_lens,
@@ -117,7 +122,8 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
             dtype="int64",
         )
         accept_num = paddle.to_tensor([3, 3], dtype="int32")
-        pre_ids = paddle.to_tensor([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]], dtype="int64")
+        token_ids_all = paddle.to_tensor([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]], dtype="int64")
+        prompt_lens = paddle.zeros([2, 1], dtype="int64")
         step_idx = paddle.to_tensor([8, 8], dtype="int64")
         stop_flags = paddle.to_tensor([False, False], dtype="bool")
         seq_lens = paddle.to_tensor([10, 10], dtype="int32")
@@ -130,7 +136,8 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         gpu_results = self.run_op(
             accept_tokens,
             accept_num,
-            pre_ids,
+            token_ids_all,
+            prompt_lens,
             step_idx,
             stop_flags,
             seq_lens,
@@ -147,13 +154,14 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         # Test case where only part of the sequence matches
         accept_tokens = paddle.to_tensor([[10, 20, 30, 0, 0]], dtype="int64")
         accept_num = paddle.to_tensor([3], dtype="int32")
-        pre_ids = paddle.to_tensor([[1, 2, 3, 4, 5]], dtype="int64")
+        token_ids_all = paddle.to_tensor([[1, 2, 3, 4, 5]], dtype="int64")
+        prompt_lens = paddle.zeros([1, 1], dtype="int64")
         step_idx = paddle.to_tensor([8], dtype="int64")
         stop_flags = paddle.to_tensor([False], dtype="bool")
         seq_lens = paddle.to_tensor([10], dtype="int32")
 
         stop_seqs = paddle.to_tensor(
-            [[5, 4, 99]],  # Only 5,4 matches (from pre_ids), 99 doesn't
+            [[5, 4, 99]],  # Only 5,4 matches (from token_ids_all), 99 doesn't
             dtype="int64",
         )
         stop_seqs_len = paddle.to_tensor([3], dtype="int32")
@@ -163,7 +171,8 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         gpu_results = self.run_op(
             accept_tokens,
             accept_num,
-            pre_ids,
+            token_ids_all,
+            prompt_lens,
             step_idx,
             stop_flags,
             seq_lens,
@@ -180,7 +189,8 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         # Test case where sequence is already stopped
         accept_tokens = paddle.to_tensor([[10, 20, 30, 0, 0]], dtype="int64")
         accept_num = paddle.to_tensor([3], dtype="int32")
-        pre_ids = paddle.to_tensor([[1, 2, 3, 4, 5]], dtype="int64")
+        token_ids_all = paddle.to_tensor([[1, 2, 3, 4, 5]], dtype="int64")
+        prompt_lens = paddle.zeros([1, 1], dtype="int64")
         step_idx = paddle.to_tensor([8], dtype="int64")
         stop_flags = paddle.to_tensor([True], dtype="bool")  # Already stopped
         seq_lens = paddle.to_tensor([10], dtype="int32")
@@ -193,7 +203,8 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         gpu_results = self.run_op(
             accept_tokens,
             accept_num,
-            pre_ids,
+            token_ids_all,
+            prompt_lens,
             step_idx,
             stop_flags,
             seq_lens,
@@ -213,10 +224,11 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
             dtype="int64",
         )
         accept_num = paddle.to_tensor([3], dtype="int32")
-        pre_ids = paddle.to_tensor(
+        token_ids_all = paddle.to_tensor(
             [[7, 8, 9, 3, 4, 5]],
             dtype="int64",
         )
+        prompt_lens = paddle.zeros([1, 1], dtype="int64")
         step_idx = paddle.to_tensor([6], dtype="int64")
         stop_flags = paddle.to_tensor([False], dtype="bool")
         seq_lens = paddle.to_tensor([6], dtype="int32")
@@ -231,7 +243,8 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         gpu_results = self.run_op(
             accept_tokens,
             accept_num,
-            pre_ids,
+            token_ids_all,
+            prompt_lens,
             step_idx,
             stop_flags,
             seq_lens,

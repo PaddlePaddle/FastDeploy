@@ -134,6 +134,7 @@ int compute_order(Context* ctx,
                   const int actual_draft_token_num,
                   const int input_token_num) {
   WRAPPER_CHECK_CTX(ctx);
+  WRAPPER_DUMP_FUNCTION_T1(ctx, "compute_order", int);
   WRAPPER_DUMP_PARAM5(ctx,
                       seq_lens_this_time,
                       seq_lens_encoder,
