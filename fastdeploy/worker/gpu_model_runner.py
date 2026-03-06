@@ -1327,7 +1327,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.enable_head_wise_kv_cache:
             if is_dummy_or_profile_run:
                 # In dummy/profile run, construct block_tables_3d from block_tables
-                num_running_requests = int((self.share_inputs["seq_lens_this_time"] > 0).sum().item())
+                num_running_requests = int(self.share_inputs["seq_lens_this_time"].shape[0])
                 self._prepare_block_tables_3d_from_flat_tables(num_running_requests)
                 if num_running_requests > 0:
                     rows_np = self.share_inputs["block_tables_3d"][
@@ -1340,7 +1340,7 @@ class GPUModelRunner(ModelRunnerBase):
                     )
             else:
                 # In real run, use forward_batch_reqs_list
-                num_running_requests = int((self.share_inputs["seq_lens_this_time"] > 0).sum().item())
+                num_running_requests = int(self.share_inputs["seq_lens_this_time"].shape[0])
                 self._prepare_block_tables_3d(num_running_requests)
         logprobs_reqs = [
             req
@@ -1445,9 +1445,39 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs.enable_pd_reorder = True
             self.share_inputs.condense()
             reorder_split_prefill_and_decode(input_batch=self.share_inputs)
+            self._sync_forward_batch_reqs_after_reorder()
             if self.speculative_decoding:
                 if self.spec_method == SpecMethod.MTP:
                     self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
+
+    def _sync_forward_batch_reqs_after_reorder(self) -> None:
+        """
+        Keep forward_batch_reqs_list aligned with current batch slots after PD reorder.
+
+        InputBatch reorder updates share_inputs tensors and index_to_batch_id mapping,
+        but forward_batch_reqs_list needs to be realigned explicitly.
+        """
+        index_to_batch_id = getattr(self.share_inputs, "index_to_batch_id", None)
+        if not index_to_batch_id:
+            return
+
+        list_cap = len(self.forward_batch_reqs_list)
+        req_by_batch_id = {}
+        for req in self.forward_batch_reqs_list:
+            if req is None:
+                continue
+            req_batch_id = getattr(req, "idx", None)
+            if req_batch_id is None:
+                continue
+            req_by_batch_id[req_batch_id] = req
+
+        aligned_reqs = [None for _ in range(list_cap)]
+        for slot_idx, batch_id in index_to_batch_id.items():
+            if slot_idx < 0 or slot_idx >= list_cap:
+                continue
+            aligned_reqs[slot_idx] = req_by_batch_id.get(batch_id)
+
+        self.forward_batch_reqs_list = aligned_reqs
 
     def load_model(self) -> None:
         """load or download model"""
