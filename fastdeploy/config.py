@@ -1614,6 +1614,17 @@ class CacheConfig:
             if any(t in self.cache_dtype.lower() for t in ["int4", "int8", "float4", "float8"]):
                 self.cache_dtype = "uint8"
 
+            # Adjust cache_dtype for hardware: V100 (SM70) does not support BF16
+            if current_platform.is_cuda() and self.cache_dtype in ("bfloat16", "bf16"):
+                from fastdeploy.platforms.cuda import CUDAPlatform
+
+                if not CUDAPlatform.supports_bf16():
+                    logger.info(
+                        f"Cache dtype adjusted from '{self.cache_dtype}' to 'float16' "
+                        f"(SM{CUDAPlatform.get_sm_version()} does not support BF16)."
+                    )
+                    self.cache_dtype = "float16"
+
             self.head_num = getattr(self.model_cfg, "num_key_value_heads", None) or getattr(
                 self.model_cfg, "num_attention_heads", None
             )
@@ -2403,6 +2414,17 @@ class FDConfig:
             "return_full_hidden_states",
         )
         reset_value(self.cache_config, "cache_dtype", "infer_model_dtype")
+
+        # Ensure cache_dtype is compatible with hardware after reset
+        if current_platform.is_cuda() and self.cache_config.cache_dtype in ("bfloat16", "bf16"):
+            from fastdeploy.platforms.cuda import CUDAPlatform
+
+            if not CUDAPlatform.supports_bf16():
+                logger.info(
+                    f"Cache dtype re-adjusted from '{self.cache_config.cache_dtype}' to 'float16' "
+                    f"after read_from_config (SM{CUDAPlatform.get_sm_version()} does not support BF16)."
+                )
+                self.cache_config.cache_dtype = "float16"
 
     def get_max_chunk_tokens(self, mm_max_tokens_per_item=None):
         """

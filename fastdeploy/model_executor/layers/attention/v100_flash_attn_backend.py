@@ -169,12 +169,12 @@ class V100FlashAttentionBackend(AttentionBackend):
         # Set dtype based on default dtype, prefer FP16 for V100
         default_dtype = paddle.get_default_dtype()
         if default_dtype == "bfloat16":
-            # V100 has limited BF16 support, warn user
+            # V100 does NOT support BF16 natively, force FP16
             logger.warning(
-                "BF16 dtype detected but V100 has limited BF16 support. " "Consider using FP16 for better performance."
+                "BF16 dtype detected but V100 (SM70) does not support BF16. " "Forcing FP16 for correctness."
             )
-            metadata._dtype = paddle.bfloat16
-            metadata._fuse_kernel_compute_dtype = "bf16"
+            metadata._dtype = paddle.float16
+            metadata._fuse_kernel_compute_dtype = "fp16"
         elif default_dtype == "float16":
             metadata._dtype = paddle.float16
             metadata._fuse_kernel_compute_dtype = "fp16"
