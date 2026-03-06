@@ -864,7 +864,9 @@ class ResourceManagerV1(ResourceManager):
                         def _allocate_decode_and_extend():
                             allocate_block_num = self.need_block_num_map[request.request_id].consume()
                             # Prepare decoding task
-                            decode_blocks = self.cache_manager.allocate_gpu_blocks(allocate_block_num, request.request_id)
+                            decode_blocks = self.cache_manager.allocate_gpu_blocks(
+                                allocate_block_num, request.request_id
+                            )
                             # In head-wise mode, allocate_gpu_blocks returns 2D cache_ids
                             if self.enable_head_wise_kv_cache:
                                 if not hasattr(request, "block_tables_3d") or not request.block_tables_3d:
@@ -1078,7 +1080,9 @@ class ResourceManagerV1(ResourceManager):
                                         else:
                                             request.block_tables_3d.append(head_blocks)
                                     # Update block_tables for backward compatibility
-                                    request.block_tables = request.block_tables_3d[0] if request.block_tables_3d else []
+                                    request.block_tables = (
+                                        request.block_tables_3d[0] if request.block_tables_3d else []
+                                    )
                                 else:
                                     request.block_tables.extend(extra_gpu_block_ids)
                             self.waiting.popleft()
@@ -1160,7 +1164,9 @@ class ResourceManagerV1(ResourceManager):
                                         else:
                                             request.block_tables_3d.append(head_blocks)
                                     # Update block_tables for backward compatibility
-                                    request.block_tables = request.block_tables_3d[0] if request.block_tables_3d else []
+                                    request.block_tables = (
+                                        request.block_tables_3d[0] if request.block_tables_3d else []
+                                    )
                                 else:
                                     request.block_tables.extend(extra_gpu_block_ids)
                             self.waiting.popleft()
@@ -1480,7 +1486,9 @@ class ResourceManagerV1(ResourceManager):
 
             else:
                 if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
-                    prealloc_blocks = self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks, request.request_id)
+                    prealloc_blocks = self.cache_manager.allocate_gpu_blocks(
+                        need_prealloc_prefill_blocks, request.request_id
+                    )
                     # In head-wise mode, allocate_gpu_blocks returns 2D cache_ids
                     if self.enable_head_wise_kv_cache:
                         request.block_tables_3d = prealloc_blocks
@@ -1588,7 +1596,7 @@ class ResourceManagerV1(ResourceManager):
                 if request.num_cached_blocks > 0 and request.num_cached_blocks < len(request.block_tables_3d[0]):
                     cache_ids_to_recycle = []
                     for head_ids in request.block_tables_3d:
-                        cache_ids_to_recycle.extend(head_ids[request.num_cached_blocks:])
+                        cache_ids_to_recycle.extend(head_ids[request.num_cached_blocks :])
                     self.cache_manager.recycle_gpu_blocks(cache_ids_to_recycle, request.request_id)
                 else:
                     # Recycle all cache_ids

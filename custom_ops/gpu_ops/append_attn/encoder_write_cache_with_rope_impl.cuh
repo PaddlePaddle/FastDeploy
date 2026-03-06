@@ -1172,9 +1172,9 @@ __global__ void cache_kernel(
 
     const uint32_t seq_block_idx = ori_seq_id / block_size;
     const int32_t *block_table_now =
-        block_tables +
-        ori_bi * (use_head_wise ? kv_num_heads * max_blocks_per_head
-                                : max_blocks_per_seq);
+        block_tables + ori_bi * (use_head_wise
+                                     ? kv_num_heads * max_blocks_per_head
+                                     : max_blocks_per_seq);
     const int32_t cache_id =
         use_head_wise
             ? block_table_now[hi * max_blocks_per_head + seq_block_idx]
@@ -1187,8 +1187,7 @@ __global__ void cache_kernel(
             ? (cache_id * block_size * head_size + block_offset * head_size +
                h_bias)
             : (cache_id * kv_num_heads * block_size * head_size +
-               hi * block_size * head_size + block_offset * head_size +
-               h_bias);
+               hi * block_size * head_size + block_offset * head_size + h_bias);
     const uint32_t ori_idx =
         token_idx * (num_heads + 2 * kv_num_heads) * head_size +
         num_heads * head_size + qkv_id * hidden_size + hi * head_size + h_bias;

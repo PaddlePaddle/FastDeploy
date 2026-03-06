@@ -75,10 +75,9 @@ __global__ void multi_query_append_attention_kernel(
   const uint32_t tile_id = tile_ids_per_batch[btid];
   const uint32_t num_rows_per_block = NUM_WARPS * num_frags_x * 16;
   const int *block_table_now =
-      block_table +
-      (use_head_wise ? (batch_id * kv_num_heads + kv_head_idx) *
-                           max_block_num_per_seq
-                     : batch_id * max_block_num_per_seq);
+      block_table + (use_head_wise ? (batch_id * kv_num_heads + kv_head_idx) *
+                                         max_block_num_per_seq
+                                   : batch_id * max_block_num_per_seq);
 
   // When cudagraph capture prefill, may launch more gridDim.x
   if (btid >= static_cast<uint32_t>(num_blocks_x_cpu)) {
@@ -215,8 +214,7 @@ __global__ void multi_query_append_attention_kernel(
   int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
   const uint32_t const_offset =
       (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
-      (wid * 4 + tid / 8) * kv_b_stride +
-      tid % 8 * num_elems_per_128b<T>();
+      (wid * 4 + tid / 8) * kv_b_stride + tid % 8 * num_elems_per_128b<T>();
   const T *cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
   const T *cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
 
@@ -491,10 +489,9 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   const uint32_t tile_id = tile_ids_per_batch[btid];
   const uint32_t num_rows_per_block = num_frags_x * 16;
   const int *block_table_now =
-      block_table +
-      (use_head_wise ? (batch_id * kv_num_heads + kv_head_idx) *
-                           max_block_num_per_seq
-                     : batch_id * max_block_num_per_seq);
+      block_table + (use_head_wise ? (batch_id * kv_num_heads + kv_head_idx) *
+                                         max_block_num_per_seq
+                                   : batch_id * max_block_num_per_seq);
 
   const uint32_t q_len = seq_lens[batch_id];
   const uint32_t kv_len = seq_lens_kv[batch_id] + q_len;
@@ -611,8 +608,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
   const uint32_t const_offset =
       (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
-      (wid * 4 + tid / 8) * kv_b_stride +
-      tid % 8 * num_elems_per_128b<T>();
+      (wid * 4 + tid / 8) * kv_b_stride + tid % 8 * num_elems_per_128b<T>();
   T *cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
   T *cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
 
@@ -884,9 +880,11 @@ void MultiQueryAppendAttention(
   auto kv_num_heads = meta_data.kv_num_heads;
   auto token_num = meta_data.token_nums;
   auto bsz = meta_data.batch_size;
-  // In head-wise mode, use max_blocks_per_head for block_table offset calculation
-  auto max_block_num_per_seq = meta_data.use_head_wise ? meta_data.max_blocks_per_head
-                                                      : meta_data.max_blocks_per_seq;
+  // In head-wise mode, use max_blocks_per_head for block_table offset
+  // calculation
+  auto max_block_num_per_seq = meta_data.use_head_wise
+                                   ? meta_data.max_blocks_per_head
+                                   : meta_data.max_blocks_per_seq;
 
   constexpr uint32_t num_warps = 4;
   constexpr uint32_t NUM_WARP_KV = num_warps / NUM_WARP_Q;

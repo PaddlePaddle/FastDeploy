@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
 import paddle
+from paddleformers.utils.log import logger
 
 from fastdeploy.model_executor.layers.attention.ops import (
     append_attention,
@@ -31,7 +32,6 @@ from fastdeploy.model_executor.layers.attention.ops import (
     init_signal_layerwise,
     open_shm_and_get_meta_signal,
 )
-from paddleformers.utils.log import logger
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta

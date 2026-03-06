@@ -325,9 +325,7 @@ class ResourceManager:
                     # 2. if prefill/decode disaggregation is enabled
                     if task.disaggregate_info is not None:
                         if self.enable_head_wise_kv_cache:
-                            raise NotImplementedError(
-                                "Head-wise KV cache does not support PD disaggregation yet."
-                            )
+                            raise NotImplementedError("Head-wise KV cache does not support PD disaggregation yet.")
                         task.disaggregate_info["block_tables"] = block_tables
                         if task.disaggregate_info["role"] == "prefill":
                             self.req_dict[task.request_id] = allocated_position

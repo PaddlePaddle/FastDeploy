@@ -888,14 +888,10 @@ class GPUModelRunner(ModelRunnerBase):
                         for head_tables in cache_ids_2d:
                             tables.extend(head_tables)
                         if self.head_wise_debug_log and _debug_logging_enabled():
-                            logger.debug(
-                                f"[headwise prefill] req {idx} cache_ids_2d={cache_ids_2d} tables={tables}"
-                            )
+                            logger.debug(f"[headwise prefill] req {idx} cache_ids_2d={cache_ids_2d} tables={tables}")
                     else:
                         tables = request.block_tables
-                    self.share_inputs["block_tables"][idx : idx + 1, :len(tables)] = np.array(
-                        tables, dtype="int32"
-                    )
+                    self.share_inputs["block_tables"][idx : idx + 1, : len(tables)] = np.array(tables, dtype="int32")
                 self.share_inputs["stop_flags"][idx : idx + 1] = False
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
                 self.share_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = length
@@ -975,10 +971,10 @@ class GPUModelRunner(ModelRunnerBase):
                         tables = request.block_tables
                     if current_platform.is_cuda():
                         async_set_value(
-                            self.share_inputs["block_tables"][idx : idx + 1, :len(tables)], tables
+                            self.share_inputs["block_tables"][idx : idx + 1, : len(tables)], tables
                         )
                     else:
-                        self.share_inputs["block_tables"][idx : idx + 1, :len(tables)] = np.array(
+                        self.share_inputs["block_tables"][idx : idx + 1, : len(tables)] = np.array(
                             tables, dtype="int32"
                         )
                 if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
@@ -1167,8 +1163,10 @@ class GPUModelRunner(ModelRunnerBase):
             cache_id_capacity = int(self.share_inputs["caches"][0].shape[0])
         out_of_range_cnt = int((valid_ids >= cache_id_capacity).sum()) if cache_id_capacity > 0 else 0
 
-        should_log_prepare = self.head_wise_debug_log and _debug_logging_enabled() and (
-            self._head_wise_prepare_log_count < 50 or self._head_wise_prepare_log_count % 100 == 0
+        should_log_prepare = (
+            self.head_wise_debug_log
+            and _debug_logging_enabled()
+            and (self._head_wise_prepare_log_count < 50 or self._head_wise_prepare_log_count % 100 == 0)
         )
         if should_log_prepare:
             logger.debug(
@@ -1313,7 +1311,7 @@ class GPUModelRunner(ModelRunnerBase):
                 base = idx * self.kv_num_heads * block_num
                 # Expand block_tables to include all heads
                 block_ids = np.arange(base, base + self.kv_num_heads * block_num, 1)
-                self.share_inputs["block_tables"][idx, :len(block_ids)] = block_ids
+                self.share_inputs["block_tables"][idx, : len(block_ids)] = block_ids
             else:
                 self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                     idx * block_num, (idx + 1) * block_num, 1
@@ -1347,9 +1345,7 @@ class GPUModelRunner(ModelRunnerBase):
                 num_running_requests = int(self.share_inputs["seq_lens_this_time"].shape[0])
                 self._prepare_block_tables_3d_from_flat_tables(num_running_requests)
                 if num_running_requests > 0:
-                    rows_np = self.share_inputs["block_tables_3d"][
-                        : num_running_requests * self.kv_num_heads
-                    ].numpy()
+                    rows_np = self.share_inputs["block_tables_3d"][: num_running_requests * self.kv_num_heads].numpy()
                     logger.debug(
                         f"[headwise dummy run] block_tables_3d shape={rows_np.shape} "
                         f"max_blocks_per_head={self.share_inputs['block_tables_3d'].shape[1]} "
