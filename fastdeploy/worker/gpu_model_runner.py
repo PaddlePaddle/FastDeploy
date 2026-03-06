@@ -977,8 +977,6 @@ class GPUModelRunner(ModelRunnerBase):
                         self.share_inputs["block_tables"][idx : idx + 1, : len(tables)] = np.array(
                             tables, dtype="int32"
                         )
-                if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
-                    has_decode_task = True
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
