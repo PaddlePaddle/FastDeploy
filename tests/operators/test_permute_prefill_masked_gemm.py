@@ -85,9 +85,10 @@ class TestPrefillPermuteToMaskedGemm(unittest.TestCase):
         max_token_num,
         topk,
         x_dtype=paddle.float8_e4m3fn,
-        scale_dtype=paddle.float32,
+        scale_dtype=paddle.int32,
         sparsity=0.3,
     ):
+
         if x_dtype == paddle.float8_e4m3fn:
             x_np = np.random.randn(num_tokens, hidden_size).astype(np.float32)
             x_np = np.clip(x_np, -448, 448)
@@ -100,7 +101,7 @@ class TestPrefillPermuteToMaskedGemm(unittest.TestCase):
             x = paddle.to_tensor(x_np)
 
         scale_np = np.random.rand(num_tokens, hidden_scale).astype(np.float32)
-        scale = paddle.to_tensor(scale_np).cast(scale_dtype)
+        scale = paddle.to_tensor(scale_np).cast(scale_dtype).contiguous()
 
         topk_ids_np = np.zeros((num_tokens, topk), dtype=np.int64)
         for i in range(num_tokens):
@@ -129,6 +130,8 @@ class TestPrefillPermuteToMaskedGemm(unittest.TestCase):
 
         x_ref_np = x.cast(paddle.float32).numpy()
         scale_ref_np = scale.numpy()
+
+
         expert_to_tokens, token_nums_ref = self._get_expected_tokens_per_expert(
             x=x_ref_np,
             scale=scale_ref_np,
@@ -296,6 +299,19 @@ class TestPrefillPermuteToMaskedGemm(unittest.TestCase):
             max_token_num=16384,
             topk=4,
             sparsity=0.3,
+        )
+
+
+    def test_very_large_tokens_with_fp32_scale(self):
+        self._run_and_verify(
+            num_tokens=65536,
+            hidden_size=7168,
+            hidden_scale=56,
+            num_local_experts=20,
+            max_token_num=16384,
+            topk=4,
+            sparsity=0.3,
+            scale_dtype=paddle.float32
         )
 
     def test_all_minus_one(self):

@@ -16,14 +16,14 @@
 
 constexpr int BLOCK_THREADS = 512;
 
-template <typename T, int VecSize, int TOP_K>
+template <typename T, typename ScaleT, int VecSize, int TOP_K>
 __global__ void PrefillPermuteToMaskedGemmKernel(
     T* __restrict__ permute_x,
-    float* __restrict__ permute_scale,
+    ScaleT* __restrict__ permute_scale,
     int32_t* __restrict__ permuted_indice_map,
     int32_t* __restrict__ token_nums_per_expert,
     const T* __restrict__ x,
-    const float* __restrict__ scale,
+    const ScaleT* __restrict__ scale,
     const int64_t* __restrict__ topk_ids,
     const int num_tokens,
     const int hidden,
@@ -74,9 +74,9 @@ __global__ void PrefillPermuteToMaskedGemmKernel(
         // Physical layout is [E, S, M], accessed as [E, M, S] via strides [S*M,
         // 1, M] So permute_scale[expert_idx, offset, s] -> physical addr:
         // expert_idx*(S*M) + offset + s*M
-        const float* src_scale =
+        const ScaleT* src_scale =
             scale + static_cast<int64_t>(token_idx) * hidden_scale;
-        float* dst_scale_base = permute_scale +
+        ScaleT* dst_scale_base = permute_scale +
                                 static_cast<int64_t>(expert_idx) *
                                     hidden_scale * max_tokens_per_expert +
                                 offset;
@@ -92,7 +92,7 @@ __global__ void PrefillPermuteToMaskedGemmKernel(
   }
 }
 
-template <paddle::DataType D, int TOP_K>
+template <paddle::DataType D, paddle::DataType ScaleD, int TOP_K>
 std::vector<paddle::Tensor> PrefillPermuteToMaskedGemmDispatch(
     const paddle::Tensor& x,
     const paddle::Tensor& scale,
@@ -100,8 +100,11 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemmDispatch(
     const int num_local_experts,
     const int max_token_num) {
   typedef PDTraits<D> traits_;
+  typedef PDTraits<ScaleD> scale_traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
+  typedef typename scale_traits_::DataType ScaleDataType_;
+  typedef typename scale_traits_::data_t scale_data_t;
 
   const int num_tokens = x.shape()[0];
   const int hidden = x.shape()[1];
@@ -123,7 +126,7 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemmDispatch(
                      {static_cast<int64_t>(hidden_scale) * max_token_num,
                       1,
                       static_cast<int64_t>(max_token_num)},
-                     paddle::DataType::FLOAT32,
+                     ScaleD,
                      place);
 
   auto permuted_indice_map =
@@ -151,14 +154,14 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemmDispatch(
   cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev);
   int num_blocks = sm_count * 2;
 
-  PrefillPermuteToMaskedGemmKernel<DataType_, VecSize, TOP_K>
+  PrefillPermuteToMaskedGemmKernel<DataType_, ScaleDataType_, VecSize, TOP_K>
       <<<num_blocks, BLOCK_THREADS, 0, stream>>>(
           reinterpret_cast<DataType_*>(permute_x.data<data_t>()),
-          permute_scale.data<float>(),
+          reinterpret_cast<ScaleDataType_*>(permute_scale.template data<scale_data_t>()),
           permuted_indice_map.data<int32_t>(),
           token_nums_per_expert.data<int32_t>(),
           reinterpret_cast<const DataType_*>(x.data<data_t>()),
-          scale.data<float>(),
+          reinterpret_cast<const ScaleDataType_*>(scale.template data<scale_data_t>()),
           topk_ids.data<int64_t>(),
           num_tokens,
           hidden,
@@ -176,26 +179,50 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
     const int max_token_num) {
   const int topk = topk_ids.shape()[1];
 
-#define DISPATCH_TOPK(DTYPE, TOPK_VAL)                          \
+#define DISPATCH_TOPK(DTYPE, SCALE_DTYPE, TOPK_VAL)                          \
   case TOPK_VAL:                                                \
-    return PrefillPermuteToMaskedGemmDispatch<DTYPE, TOPK_VAL>( \
+    return PrefillPermuteToMaskedGemmDispatch<DTYPE, SCALE_DTYPE, TOPK_VAL>( \
         x, scale, topk_ids, num_local_experts, max_token_num);
 
   switch (x.dtype()) {
     case paddle::DataType::FLOAT8_E4M3FN: {
-      switch (topk) {
-        DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, 4)
-        DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, 8)
-        default:
-          PD_THROW("Unsupported topk value, must be 4 or 8");
+      switch (scale.dtype()) {
+        case paddle::DataType::FLOAT32: {
+          switch (topk) {
+            DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::FLOAT32, 4)
+            DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::FLOAT32, 8)
+            default:
+              PD_THROW("Unsupported topk value, must be 4 or 8");
+          }
+        }
+        case paddle::DataType::INT32: {
+          switch (topk) {
+            DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::INT32, 4)
+            DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::INT32, 8)
+            default:
+              PD_THROW("Unsupported topk value, must be 4 or 8");
+          }
+        }
       }
     }
     case paddle::DataType::BFLOAT16: {
-      switch (topk) {
-        DISPATCH_TOPK(paddle::DataType::BFLOAT16, 4)
-        DISPATCH_TOPK(paddle::DataType::BFLOAT16, 8)
-        default:
-          PD_THROW("Unsupported topk value, must be 4 or 8");
+      switch (scale.dtype()) {
+        case paddle::DataType::FLOAT32: {
+          switch (topk) {
+            DISPATCH_TOPK(paddle::DataType::BFLOAT16, paddle::DataType::FLOAT32, 4)
+            DISPATCH_TOPK(paddle::DataType::BFLOAT16, paddle::DataType::FLOAT32, 8)
+            default:
+              PD_THROW("Unsupported topk value, must be 4 or 8");
+          }
+        }
+        case paddle::DataType::INT32: {
+          switch (topk) {
+            DISPATCH_TOPK(paddle::DataType::BFLOAT16, paddle::DataType::INT32, 4)
+            DISPATCH_TOPK(paddle::DataType::BFLOAT16, paddle::DataType::INT32, 8)
+            default:
+              PD_THROW("Unsupported topk value, must be 4 or 8");
+          }
+        }
       }
     }
     default:

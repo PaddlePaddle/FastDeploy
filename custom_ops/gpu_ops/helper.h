@@ -243,6 +243,13 @@ class PDTraits<paddle::DataType::FLOAT8_E4M3FN> {
   typedef __nv_fp8_e4m3 DataType;
   typedef paddle::float8_e4m3fn data_t;
 };
+
+template <>
+class PDTraits<paddle::DataType::INT32> {
+ public:
+  typedef int32_t DataType;
+  typedef int32_t data_t;
+};
 #endif
 
 template <typename T, int Size>
