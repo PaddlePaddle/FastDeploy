@@ -306,6 +306,25 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         assert request["tools"] == [1]
         # assert request["chat_template_kwargs"]["tools"] == [1]
 
+    async def test_add_request_with_reasoning_effort(self):
+        """Test add_requests with reasoning_effort parameter."""
+        request = {
+            "request_id": "test-request-id",
+            "chat_template_kwargs": {"enable_thinking": True},
+            "prompt_token_ids": [1],
+            "chat_template": "Hello",
+            "max_tokens": 20,
+            "reasoning_effort": "medium",
+            "metrics": {},
+        }
+
+        await self.engine_client.add_requests(request)
+        # Verify reasoning_effort is added to chat_template_kwargs
+        assert (
+            "reasoning_effort" in request["chat_template_kwargs"]
+        ), "'reasoning_effort' not found in 'chat_template_kwargs'"
+        assert request["chat_template_kwargs"]["reasoning_effort"] == "medium"
+
 
 class TestEngineClientValidParameters(unittest.TestCase):
     """Test cases for EngineClient.valid_parameters method"""
@@ -825,6 +844,24 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
             self.assertEqual(data["reasoning_max_tokens"], 50)
             mock_logger.warning.assert_called_once()
+
+    def test_valid_parameters_reasoning_max_tokens_with_reasoning_effort(self):
+        """Test valid_parameters when both reasoning_max_tokens and reasoning_effort are set."""
+        data = {
+            "max_tokens": 100,
+            "reasoning_max_tokens": 50,
+            "reasoning_effort": "medium",
+            "request_id": "test-id",
+        }
+
+        with patch("fastdeploy.entrypoints.engine_client.api_server_logger") as mock_logger:
+            self.engine_client.valid_parameters(data)
+
+            # When reasoning_effort is set, reasoning_max_tokens should be set to None
+            self.assertIsNone(data["reasoning_max_tokens"])
+            mock_logger.warning.assert_called_once()
+            warning_call = mock_logger.warning.call_args[0][0]
+            self.assertIn("reasoning_max_tokens and reasoning_effort are both set", warning_call)
 
     def test_valid_parameters_temperature_zero_adjustment(self):
         """Test valid_parameters adjusts zero temperature."""
