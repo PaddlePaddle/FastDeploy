@@ -716,7 +716,7 @@ class TestBuildKvIndicesExtended:
         assert kv_indices.tolist() == expected
 
     # C7: extend_start_loc bs=1 vs bs>1 branch
-    def test_c7_extend_start_loc_branches(self):
+    def test_c7_extend_start_loc_bs1(self):
         from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
             build_unified_kv_indices,
         )
@@ -738,6 +738,37 @@ class TestBuildKvIndicesExtended:
         )
         assert unified_indptr.tolist() == [0, 5]
         assert unified_indices[:5].tolist() == [10, 11, 12, 20, 21]
+
+    def test_c7_extend_start_loc_bs_gt1(self):
+        """bs>1 branch: extend_start_loc built via cumsum."""
+        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
+            build_unified_kv_indices,
+        )
+
+        # bs=3
+        prefix_kv_indptr = paddle.to_tensor([0, 2, 5, 5], dtype="int32")
+        prefix_kv_indices = paddle.to_tensor([10, 11, 20, 21, 22], dtype="int32")
+        extend_seq_lens = paddle.to_tensor([3, 2, 4], dtype="int32")
+        # cumsum of extend: [0, 3, 5]
+        extend_start_loc = paddle.to_tensor([0, 3, 5], dtype="int32")
+        extend_kv_indices = paddle.to_tensor([100, 101, 102, 200, 201, 300, 301, 302, 303], dtype="int32")
+
+        unified_indptr, unified_indices, plens = build_unified_kv_indices(
+            prefix_kv_indptr,
+            prefix_kv_indices,
+            extend_start_loc,
+            extend_seq_lens,
+            extend_kv_indices,
+            bs=3,
+        )
+        assert plens.tolist() == [2, 3, 0]
+        # seq0: prefix[10,11] + extend[100,101,102] = 5
+        # seq1: prefix[20,21,22] + extend[200,201] = 5
+        # seq2: prefix[] + extend[300,301,302,303] = 4
+        assert unified_indptr.tolist() == [0, 5, 10, 14]
+        assert unified_indices[:5].tolist() == [10, 11, 100, 101, 102]
+        assert unified_indices[5:10].tolist() == [20, 21, 22, 200, 201]
+        assert unified_indices[10:14].tolist() == [300, 301, 302, 303]
 
     # C8: Large batch stress test (bs=32)
     def test_c8_large_batch_stress(self):
@@ -1111,10 +1142,11 @@ class TestUnifiedAttentionExtended:
             cache_v[phys_block, :, offset, :] = v_flat[t]
 
         # Build indices using physical blocks
-        kv_indices = paddle.empty([q_len], dtype="int32")
+        kv_indices_list = []
         for t in range(q_len):
-            phys_block = physical_blocks[t // block_size]
-            kv_indices[t] = phys_block * block_size + t % block_size
+            phys_block = int(physical_blocks[t // block_size])
+            kv_indices_list.append(phys_block * block_size + t % block_size)
+        kv_indices = paddle.to_tensor(kv_indices_list, dtype="int32")
 
         qo_indptr = paddle.to_tensor([0, q_len], dtype="int32")
         kv_indptr = paddle.to_tensor([0, q_len], dtype="int32")

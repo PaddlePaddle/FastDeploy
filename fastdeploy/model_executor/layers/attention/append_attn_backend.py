@@ -26,9 +26,11 @@ from fastdeploy.model_executor.layers.attention.ops import (
     append_attention,
     append_attention_with_output,
     get_block_shape_and_split_kv_block,
+    gqa_rope_write_cache,
     init_kv_signal_per_query,
     init_signal_layerwise,
     open_shm_and_get_meta_signal,
+    pre_cache_len_concat,
 )
 
 if TYPE_CHECKING:
@@ -43,8 +45,21 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
     AttentionMetadata,
 )
+from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
+    build_kv_indices_from_block_tables,
+    build_unified_kv_indices,
+    extend_attention_fwd_unified,
+)
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 from fastdeploy.platforms import current_platform
+from fastdeploy.utils import get_logger
+
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import merge_prefill_decode_output
+else:
+    merge_prefill_decode_output = None
+
+logger = get_logger("append_attn_backend", "append_attn_backend.log")
 
 
 @dataclass
@@ -269,6 +284,171 @@ class AppendAttentionBackend(AttentionBackend):
         value_cache_shape = key_cache_shape
         return key_cache_shape, value_cache_shape
 
+    def _deterministic_build_triton_indices(self, forward_meta):
+        """
+        Build unified KV indices for Triton attention from block_tables.
+
+        Handles ALL sequences in the batch (both prefill and decode):
+        - Prefill sequences: extend_len = seq_lens_this_time (= seq_lens_encoder)
+        - Decode sequences: extend_len = seq_lens_this_time (= 1)
+
+        Returns: (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len)
+        """
+        seq_lens_this_time = forward_meta.seq_lens_this_time
+        bs = int((seq_lens_this_time > 0).sum().item())
+
+        prefix_lens = forward_meta.prefix_lens[:bs].astype("int32")
+        extend_seq_lens = seq_lens_this_time[:bs]
+        qo_indptr = paddle.concat(
+            [
+                paddle.zeros([1], dtype="int32"),
+                paddle.cumsum(extend_seq_lens).astype("int32"),
+            ]
+        )
+
+        prefix_kv_indptr, prefix_kv_indices = build_kv_indices_from_block_tables(
+            forward_meta.block_tables,
+            prefix_lens,
+            self.block_size,
+            bs,
+        )
+        total_seq_lens = prefix_lens + extend_seq_lens
+        all_kv_indptr, all_kv_indices = build_kv_indices_from_block_tables(
+            forward_meta.block_tables,
+            total_seq_lens,
+            self.block_size,
+            bs,
+        )
+
+        extend_start_loc = (
+            paddle.concat(
+                [
+                    paddle.zeros([1], dtype="int32"),
+                    paddle.cumsum(extend_seq_lens[:-1]).astype("int32"),
+                ]
+            )
+            if bs > 1
+            else paddle.zeros([1], dtype="int32")
+        )
+
+        total_extend_len = int(paddle.sum(extend_seq_lens).item())
+        extend_kv_indices = paddle.empty([max(total_extend_len, 1)], dtype="int32")
+        for s in range(bs):
+            plen = int(prefix_lens[s].item())
+            elen = int(extend_seq_lens[s].item())
+            if elen == 0:
+                continue
+            src_start = int(all_kv_indptr[s].item()) + plen
+            dst_start = int(extend_start_loc[s].item())
+            extend_kv_indices[dst_start : dst_start + elen] = all_kv_indices[src_start : src_start + elen]
+
+        unified_kv_indptr, unified_kv_indices, _ = build_unified_kv_indices(
+            prefix_kv_indptr,
+            prefix_kv_indices,
+            extend_start_loc,
+            extend_seq_lens,
+            extend_kv_indices,
+            bs,
+        )
+
+        max_extend_len = int(paddle.max(extend_seq_lens).item())
+        return qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len
+
+    def _deterministic_forward(self, qkv, cache_k, cache_v, layer, forward_meta, metadata):
+        """
+        Unified deterministic path for ALL tokens (prefill + decode).
+
+        Uses the same pattern as FlashAttentionBackend:
+          1. pre_cache_len_concat + gqa_rope_write_cache → RoPE + KV cache write (all tokens)
+          2. Triton unified attention → split-invariant attention over paged cache (all tokens)
+
+        All tokens (prefill and decode) go through the same Triton kernel,
+        eliminating path divergence and the need for merge_prefill_decode_output.
+        """
+        norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
+        q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
+        k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
+
+        cache_k_scales = getattr(layer, "cache_k_scale", None)
+        cache_v_scales = getattr(layer, "cache_v_scale", None)
+
+        # --- Step 1: Prepare metadata for gqa_rope_write_cache ---
+        (
+            cu_seqlens_k,
+            pre_cache_batch_ids,
+            pre_cache_tile_ids_per_batch,
+            pre_cache_num_blocks_cpu,
+            kv_token_num_cpu,
+        ) = pre_cache_len_concat(
+            forward_meta.seq_lens_encoder,
+            forward_meta.seq_lens_decoder,
+            forward_meta.seq_lens_this_time,
+            forward_meta.max_len_tensor_cpu[2],
+            self.block_size,
+        )
+
+        # --- Step 2: RoPE + KV cache write (no attention) ---
+        q_roped, _, _, _ = gqa_rope_write_cache(
+            qkv,
+            cache_k,
+            cache_v,
+            forward_meta.cu_seqlens_q,
+            cu_seqlens_k,
+            forward_meta.rotary_embs,
+            forward_meta.seq_lens_this_time,
+            forward_meta.seq_lens_encoder,
+            forward_meta.seq_lens_decoder,
+            forward_meta.batch_id_per_token,
+            forward_meta.block_tables,
+            forward_meta.kv_batch_ids,
+            forward_meta.kv_tile_ids_per_batch,
+            forward_meta.kv_num_blocks_x_cpu,
+            pre_cache_batch_ids,
+            pre_cache_tile_ids_per_batch,
+            pre_cache_num_blocks_cpu,
+            q_norm_weight,
+            k_norm_weight,
+            cache_k_scales,
+            cache_v_scales,
+            getattr(layer, "cache_k_out_scale", None),
+            getattr(layer, "cache_v_out_scale", None),
+            getattr(layer, "cache_k_zp", None),
+            getattr(layer, "cache_v_zp", None),
+            metadata.kv_signal_data_list[layer.layer_id],
+            kv_token_num_cpu[0].item(),
+            self.max_seq_len,
+            getattr(layer, "rms_norm_eps", 1e-6),
+            layer.use_neox_rotary_style,
+            getattr(layer, "cache_quant_type_str", "none"),
+            self.rope_3d,
+        )
+        # q_roped: [token_nums, num_heads, head_dim] with RoPE already applied
+
+        # --- Step 3: Triton unified attention for all tokens (prefill + decode) ---
+        (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
+            self._deterministic_build_triton_indices(forward_meta)
+        )
+
+        token_nums = q_roped.shape[0]
+        o = paddle.zeros([token_nums, self.num_heads, self.head_dim], dtype=q_roped.dtype)
+        res = extend_attention_fwd_unified(
+            q_roped,
+            o,
+            cache_k,
+            cache_v,
+            qo_indptr,
+            unified_kv_indptr,
+            unified_kv_indices,
+            prefix_lens,
+            self.num_heads,
+            self.kv_num_heads,
+            self.head_dim,
+            max_extend_len,
+            self.causal,
+        ).reshape([-1, self.num_heads * self.head_dim])
+
+        return res
+
     def forward_mixed(
         self,
         q: paddle.Tensor,
@@ -284,6 +464,10 @@ class AppendAttentionBackend(AttentionBackend):
         forward_mixed
         """
         metadata = self.attention_metadata
+
+        # Deterministic mode: unified path for ALL tokens (prefill + decode),
+        # bypasses append_attention entirely. No per-layer GPU→CPU sync needed.
+        use_deterministic = envs.FD_DETERMINISTIC_MODE
 
         # - PaddleFormers fallback: rope_already_applied=True -> use identity RoPE (cos=1, sin=0)
         rope_already_applied = getattr(forward_meta, "rope_already_applied", False)
@@ -325,7 +509,6 @@ class AppendAttentionBackend(AttentionBackend):
             cache_v_scales = getattr(layer, "cache_v_scale", None)
 
         if layer.layer_id == 0:
-            # print(forward_meta.seq_lens_this_time)
             get_block_shape_and_split_kv_block(
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
@@ -347,6 +530,16 @@ class AppendAttentionBackend(AttentionBackend):
                 self.group_size,
                 self.block_size,
             )
+
+        # Deterministic mode: unified path (gqa_rope_write_cache + Triton attention for all tokens).
+        # Normal path is completely untouched below.
+        if use_deterministic and self.use_output:
+            raise NotImplementedError(
+                "Deterministic mode does not support output quantization (use_output=True) yet. "
+                "Please enable full_cuda_graph or disable FD_DETERMINISTIC_MODE."
+            )
+        if use_deterministic:
+            return self._deterministic_forward(qkv, cache_k, cache_v, layer, forward_meta, metadata)
 
         if self.use_output:
             quant_max_bound = getattr(layer, "quant_max_bound", 0.0)

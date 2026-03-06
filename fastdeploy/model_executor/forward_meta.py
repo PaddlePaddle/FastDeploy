@@ -140,6 +140,8 @@ class ForwardMeta:
 
     # Pre-cache length
     pre_caches_length: int = 0
+    # Prefix cache lens per sequence (for deterministic mode with prefix caching)
+    prefix_lens: Optional[paddle.Tensor] = None
     # Block tables
     block_tables: Optional[paddle.Tensor] = None
     # KV caches

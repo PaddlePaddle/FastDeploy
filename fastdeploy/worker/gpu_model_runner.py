@@ -1237,6 +1237,11 @@ class GPUModelRunner(ModelRunnerBase):
         routing_replay_table = None
         if self.routing_replay_manager is not None:
             routing_replay_table = self.routing_replay_manager.get_routing_table()
+
+        # Calculate prefix_lens from seq_lens_decoder
+        # In prefix caching mode, seq_lens_decoder represents cached prefix length for prefill requests
+        prefix_lens = self.share_inputs["seq_lens_decoder"].clone()
+
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
@@ -1264,6 +1269,7 @@ class GPUModelRunner(ModelRunnerBase):
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             routing_replay_table=routing_replay_table,
+            prefix_lens=prefix_lens,
         )
 
         dist_status = self.collect_distributed_status()
