@@ -118,14 +118,16 @@ static int xpu3_wrapper(Context *ctx,
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto get_padding_offset = xpu3::plugin::get_padding_offset;
   auto remove_padding = xpu3::plugin::remove_padding;
-  int32_t ret_xre = get_padding_offset<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(padding_offset,
-                                                               cum_offsets_out,
-                                                               cu_seqlens_q,
-                                                               cu_seqlens_k,
-                                                               cum_offsets,
-                                                               seq_lens,
-                                                               max_seq_len,
-                                                               bs);
+  int32_t ret_xre =
+      get_padding_offset<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+          padding_offset,
+          cum_offsets_out,
+          cu_seqlens_q,
+          cu_seqlens_k,
+          cum_offsets,
+          seq_lens,
+          max_seq_len,
+          bs);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   ret_xre = remove_padding<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
       reinterpret_cast<XPU_INT64 *>(x_remove_padding),

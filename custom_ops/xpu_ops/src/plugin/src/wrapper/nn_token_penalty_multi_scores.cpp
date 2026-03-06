@@ -203,15 +203,18 @@ static int xpu3_wrapper(Context *ctx,
   int ret = api::constant<int>(ctx, repeat_times, bs * length, 0);
   WRAPPER_ASSERT_SUCCESS(ctx, ret);
 
-  int32_t ret_xre = update_repeat_times_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
-      reinterpret_cast<const XPU_INT64 *>(pre_ids),
-      reinterpret_cast<const XPU_INT64 *>(cur_len),
-      repeat_times,
-      bs,
-      length,
-      length_id);
+  int32_t ret_xre =
+      update_repeat_times_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+          reinterpret_cast<const XPU_INT64 *>(pre_ids),
+          reinterpret_cast<const XPU_INT64 *>(cur_len),
+          repeat_times,
+          bs,
+          length,
+          length_id);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
-  ret_xre = min_length_logits_process_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  ret_xre = min_length_logits_process_kernel<<<ctx->ncluster(),
+                                               64,
+                                               ctx->xpu_stream>>>(
       logits,
       reinterpret_cast<const XPU_INT64 *>(cur_len),
       reinterpret_cast<const XPU_INT64 *>(min_len),
@@ -221,15 +224,17 @@ static int xpu3_wrapper(Context *ctx,
       length_id,
       end_length);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
-  ret_xre = update_value_by_repeat_times_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
-      repeat_times,
-      penalty_scores,
-      frequency_scores,
-      presence_scores,
-      temperatures,
-      logits,
-      bs,
-      length);
+  ret_xre =
+      update_value_by_repeat_times_kernel<<<ctx->ncluster(),
+                                            64,
+                                            ctx->xpu_stream>>>(repeat_times,
+                                                               penalty_scores,
+                                                               frequency_scores,
+                                                               presence_scores,
+                                                               temperatures,
+                                                               logits,
+                                                               bs,
+                                                               length);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
 
   if (bad_words && length_bad_words > 0) {

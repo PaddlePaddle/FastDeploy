@@ -193,7 +193,8 @@ int xpu3_wrapper_input_scale(api::Context *ctx,
                              int64_t m,
                              int64_t n) {
   auto func = xpu3::plugin::quant2d_per_channel_cluster<TX, TSCALE, TY>;
-  int32_t ret_xre = func<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(x, scale, y, m, n);
+  int32_t ret_xre =
+      func<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(x, scale, y, m, n);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
@@ -231,7 +232,8 @@ int xpu3_wrapper_output_scale(api::Context *ctx,
       func = xpu3::plugin::quant2d_per_channel_cached<TX, TSCALE, TY, 32>;
     }
   }
-  int32_t ret_xre = func<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(x, y, scale, m, n);
+  int32_t ret_xre =
+      func<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(x, y, scale, m, n);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
@@ -247,7 +249,8 @@ int xpu3_wrapper_output_scale(api::Context *ctx,
                               int64_t m,
                               int64_t n) {
   auto func = xpu3::plugin::quant2d_per_channel_bign<TX, TSCALE, TY>;
-  int32_t ret_xre = func<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(x, y, scale, m, n);
+  int32_t ret_xre =
+      func<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(x, y, scale, m, n);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }

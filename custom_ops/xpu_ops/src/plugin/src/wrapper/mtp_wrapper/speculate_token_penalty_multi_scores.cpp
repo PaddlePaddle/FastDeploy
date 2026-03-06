@@ -267,18 +267,21 @@ static int xpu3_wrapper(Context* ctx,
   int ret = api::constant<int>(ctx, repeat_times, token_num * length, 0);
   WRAPPER_ASSERT_SUCCESS(ctx, ret);
 
-  int32_t ret_xre = update_repeat_times_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
-      reinterpret_cast<const XPU_INT64*>(pre_ids),
-      reinterpret_cast<const XPU_INT64*>(cur_len),
-      repeat_times,
-      output_padding_offset,
-      bs,
-      length,
-      length_id,
-      token_num,
-      max_seq_len);
+  int32_t ret_xre =
+      update_repeat_times_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+          reinterpret_cast<const XPU_INT64*>(pre_ids),
+          reinterpret_cast<const XPU_INT64*>(cur_len),
+          repeat_times,
+          output_padding_offset,
+          bs,
+          length,
+          length_id,
+          token_num,
+          max_seq_len);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
-  ret_xre = min_length_logits_process_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  ret_xre = min_length_logits_process_kernel<<<ctx->ncluster(),
+                                               64,
+                                               ctx->xpu_stream>>>(
       logits,
       reinterpret_cast<const XPU_INT64*>(cur_len),
       reinterpret_cast<const XPU_INT64*>(min_len),
@@ -292,7 +295,9 @@ static int xpu3_wrapper(Context* ctx,
       token_num,
       max_seq_len);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
-  ret_xre = update_value_by_repeat_times_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  ret_xre = update_value_by_repeat_times_kernel<<<ctx->ncluster(),
+                                                  64,
+                                                  ctx->xpu_stream>>>(
       repeat_times,
       penalty_scores,
       frequency_scores,
