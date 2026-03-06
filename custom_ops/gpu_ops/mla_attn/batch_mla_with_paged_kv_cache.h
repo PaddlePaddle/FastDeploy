@@ -37,14 +37,21 @@ template <typename T>
 void BatchMLAWithPagedKVCacheKernel(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& q,  // [token_num, q_head_num, head_dim]
-    const paddle::Tensor& latent_cache,  // [max_block_num, q_head_num, block_size, head_dim]
+    const paddle::Tensor&
+        latent_cache,  // [max_block_num, q_head_num, block_size, head_dim]
     const paddle::optional<paddle::Tensor>& attn_mask,
-    const paddle::optional<paddle::Tensor>& cache_k_scale,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& cache_v_scale,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& cache_k_zp,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& cache_v_zp,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& shift_bias,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_k_scale,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_v_scale,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_k_zp,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_v_zp,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        shift_bias,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        smooth_weight,  // [num_kv_heads, head_dim]
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& cu_seqlens_q,

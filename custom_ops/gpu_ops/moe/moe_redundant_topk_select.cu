@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 // Ignore CUTLASS warnings about type punning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
@@ -27,35 +26,42 @@
 using namespace phi;
 
 template <typename T>
-void moe_redundant_topk_select_kernel(const T* input,
-                            const T* bias,
-                            T* output,
-                            T* softmax,
-                            const int* expert_id_to_ep_rank_array,
-                            const int* expert_in_rank_num_list,
-                            int* tokens_per_expert_stats_list,
-                            int64_t* indices,
-                            int64_t* indices_tmp,
-                            int* source_row,
-                            T* softmax_max_prob,
-                            const int64_t num_rows,
-                            const int64_t num_experts,
-                            const int64_t k,
-                            const int redundant_ep_rank_num_plus_one,
-                            cudaStream_t stream,
-                            const bool apply_norm_weight = false,
-                            const bool enable_softmax_top_k_fused = false
-                          ) {
+void moe_redundant_topk_select_kernel(
+    const T* input,
+    const T* bias,
+    T* output,
+    T* softmax,
+    const int* expert_id_to_ep_rank_array,
+    const int* expert_in_rank_num_list,
+    int* tokens_per_expert_stats_list,
+    int64_t* indices,
+    int64_t* indices_tmp,
+    int* source_row,
+    T* softmax_max_prob,
+    const int64_t num_rows,
+    const int64_t num_experts,
+    const int64_t k,
+    const int redundant_ep_rank_num_plus_one,
+    cudaStream_t stream,
+    const bool apply_norm_weight = false,
+    const bool enable_softmax_top_k_fused = false) {
   static constexpr int WARPS_PER_TB = 4;
 
-  #define LAUNCH_TOPK_GATING_SOFTMAX_HELPER(N)                                   \
-  case N: {                                                                    \
-    topk_gating_softmax_launcher_helper<T, N, WARPS_PER_TB>(                   \
-        input, bias, output, indices, source_row, num_rows, num_experts, k, stream); \
-    break;                                                                     \
+#define LAUNCH_TOPK_GATING_SOFTMAX_HELPER(N)                             \
+  case N: {                                                              \
+    topk_gating_softmax_launcher_helper<T, N, WARPS_PER_TB>(input,       \
+                                                            bias,        \
+                                                            output,      \
+                                                            indices,     \
+                                                            source_row,  \
+                                                            num_rows,    \
+                                                            num_experts, \
+                                                            k,           \
+                                                            stream);     \
+    break;                                                               \
   }
   int64_t tem_num_experts = num_experts;
-  if(bias != nullptr || apply_norm_weight)  tem_num_experts = 0;
+  if (bias != nullptr || apply_norm_weight) tem_num_experts = 0;
   switch (tem_num_experts) {
     LAUNCH_TOPK_GATING_SOFTMAX_HELPER(2)
     LAUNCH_TOPK_GATING_SOFTMAX_HELPER(4)
@@ -70,60 +76,60 @@ void moe_redundant_topk_select_kernel(const T* input,
       static constexpr int TPB = 256;
       const auto config_topk = Get1DBlocksAnd2DGridsMoe(num_rows);
       if (!enable_softmax_top_k_fused) {
-          moe_softmax<T, TPB><<<config_topk.block_per_grid, TPB, 0, stream>>>(
-              input, softmax, num_experts, num_rows);
-          if (apply_norm_weight) {
-            moe_redundant_top_k_normed<T, TPB>
-            <<<config_topk.block_per_grid, TPB, k * sizeof(T), stream>>>(softmax,
-                                                             bias,
-                                                             expert_id_to_ep_rank_array,
-                                                             expert_in_rank_num_list,
-                                                             tokens_per_expert_stats_list,
-                                                             output,
-                                                             indices,
-                                                             indices_tmp,
-                                                             source_row,
-                                                             num_experts,
-                                                             k,
-                                                             num_rows,
-                                                             redundant_ep_rank_num_plus_one);
-          } else {
-            moe_top_k<T, TPB>
-                <<<config_topk.block_per_grid, TPB, 0, stream>>>(softmax,
-                                                                  bias,
-                                                                  output,
-                                                                  indices,
-                                                                  source_row,
-                                                                  num_experts,
-                                                                  k,
-                                                                  num_rows);
-          }
+        moe_softmax<T, TPB><<<config_topk.block_per_grid, TPB, 0, stream>>>(
+            input, softmax, num_experts, num_rows);
+        if (apply_norm_weight) {
+          moe_redundant_top_k_normed<T, TPB>
+              <<<config_topk.block_per_grid, TPB, k * sizeof(T), stream>>>(
+                  softmax,
+                  bias,
+                  expert_id_to_ep_rank_array,
+                  expert_in_rank_num_list,
+                  tokens_per_expert_stats_list,
+                  output,
+                  indices,
+                  indices_tmp,
+                  source_row,
+                  num_experts,
+                  k,
+                  num_rows,
+                  redundant_ep_rank_num_plus_one);
+        } else {
+          moe_top_k<T, TPB>
+              <<<config_topk.block_per_grid, TPB, 0, stream>>>(softmax,
+                                                               bias,
+                                                               output,
+                                                               indices,
+                                                               source_row,
+                                                               num_experts,
+                                                               k,
+                                                               num_rows);
+        }
+      } else {
+        assert(k <= TPB);
+        if (apply_norm_weight) {
+          moe_softmax_top_k_fused<T, TPB, true>
+              <<<config_topk.block_per_grid, TPB, k * sizeof(T), stream>>>(
+                  input,
+                  bias,
+                  output,
+                  indices,
+                  source_row,
+                  num_experts,
+                  k,
+                  num_rows);
+        } else {
+          moe_softmax_top_k_fused<T, TPB, false>
+              <<<config_topk.block_per_grid, TPB, 0, stream>>>(input,
+                                                               bias,
+                                                               output,
+                                                               indices,
+                                                               source_row,
+                                                               num_experts,
+                                                               k,
+                                                               num_rows);
+        }
       }
-      else {
-          assert(k<=TPB);
-          if (apply_norm_weight) {
-            moe_softmax_top_k_fused<T, TPB, true>
-                <<<config_topk.block_per_grid, TPB, k * sizeof(T), stream>>>(input,
-                                                                 bias,
-                                                                 output,
-                                                                 indices,
-                                                                 source_row,
-                                                                 num_experts,
-                                                                 k,
-                                                                 num_rows);
-          } else {
-            moe_softmax_top_k_fused<T, TPB, false>
-                <<<config_topk.block_per_grid, TPB, 0, stream>>>(input,
-                                                                  bias,
-                                                                  output,
-                                                                  indices,
-                                                                  source_row,
-                                                                  num_experts,
-                                                                  k,
-                                                                  num_rows);
-          }
-      }
-
     }
   }
 }
@@ -195,24 +201,25 @@ std::vector<paddle::Tensor> MoERedundantTopKSelectKernel(
     softmax_out_ = nullptr;
   }
 
-  moe_redundant_topk_select_kernel<float>(gating_logits.data<float>(),
-                                bias ? bias.get().data<float>() : nullptr,
-                                topk_weights.data<float>(),
-                                softmax_out_,
-                                expert_id_to_ep_rank_array.data<int>(),
-                                expert_in_rank_num_list.data<int>(),
-                                tokens_per_expert_stats_list.data<int>(),
-                                topk_ids_data,
-                                topk_ids_tmp_data,
-                                source_rows_,
-                                softmax_max_prob,
-                                num_rows,
-                                expert_num,
-                                moe_topk,
-                                redundant_ep_rank_num_plus_one,
-                                stream,
-                                apply_norm_weight,
-                                enable_softmax_top_k_fused);
+  moe_redundant_topk_select_kernel<float>(
+      gating_logits.data<float>(),
+      bias ? bias.get().data<float>() : nullptr,
+      topk_weights.data<float>(),
+      softmax_out_,
+      expert_id_to_ep_rank_array.data<int>(),
+      expert_in_rank_num_list.data<int>(),
+      tokens_per_expert_stats_list.data<int>(),
+      topk_ids_data,
+      topk_ids_tmp_data,
+      source_rows_,
+      softmax_max_prob,
+      num_rows,
+      expert_num,
+      moe_topk,
+      redundant_ep_rank_num_plus_one,
+      stream,
+      apply_norm_weight,
+      enable_softmax_top_k_fused);
   return {topk_ids, topk_weights};
 }
 
@@ -235,8 +242,7 @@ std::vector<std::vector<int64_t>> MoERedundantTopKSelectKernelInferShape(
   }
   const int num_rows = token_rows;
 
-  return {{num_rows, moe_topk},
-          {num_rows, moe_topk}};
+  return {{num_rows, moe_topk}, {num_rows, moe_topk}};
 }
 
 std::vector<paddle::DataType> MoERedundantTopKSelectKernelInferDtype(
@@ -249,18 +255,22 @@ std::vector<paddle::DataType> MoERedundantTopKSelectKernelInferDtype(
     const bool apply_norm_weight,
     const bool enable_softmax_top_k_fused,
     const int redundant_ep_rank_num_plus_one) {
-  return {paddle::DataType::INT64,
-          paddle::DataType::FLOAT32};
+  return {paddle::DataType::INT64, paddle::DataType::FLOAT32};
 }
 
-
 PD_BUILD_STATIC_OP(moe_redundant_topk_select)
-    .Inputs({"gating_logits", "expert_id_to_ep_rank_array", "expert_in_rank_num_list", "tokens_per_expert_stats_list", paddle::Optional("bias")})
-    .Outputs({"topk_ids",
-              "topk_weights",
-              "tokens_per_expert_stats_list_out"})
-    .Attrs({"moe_topk:int", "apply_norm_weight:bool", "enable_softmax_top_k_fused:bool", "redundant_ep_rank_num_plus_one:int"})
-    .SetInplaceMap({{"tokens_per_expert_stats_list", "tokens_per_expert_stats_list_out"}})
+    .Inputs({"gating_logits",
+             "expert_id_to_ep_rank_array",
+             "expert_in_rank_num_list",
+             "tokens_per_expert_stats_list",
+             paddle::Optional("bias")})
+    .Outputs({"topk_ids", "topk_weights", "tokens_per_expert_stats_list_out"})
+    .Attrs({"moe_topk:int",
+            "apply_norm_weight:bool",
+            "enable_softmax_top_k_fused:bool",
+            "redundant_ep_rank_num_plus_one:int"})
+    .SetInplaceMap({{"tokens_per_expert_stats_list",
+                     "tokens_per_expert_stats_list_out"}})
     .SetKernelFn(PD_KERNEL(MoERedundantTopKSelectKernel))
     .SetInferShapeFn(PD_INFER_SHAPE(MoERedundantTopKSelectKernelInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(MoERedundantTopKSelectKernelInferDtype));

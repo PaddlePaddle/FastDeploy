@@ -7,8 +7,10 @@ namespace MARLIN_NAMESPACE_NAME {
 template <int const num_threads, int const num_bits, bool const has_perm>
 __global__ void gptq_marlin_repack_kernel(
     uint32_t const* __restrict__ b_q_weight_ptr,
-    uint32_t const* __restrict__ perm_ptr, uint32_t* __restrict__ out_ptr,
-    int size_k, int size_n) {
+    uint32_t const* __restrict__ perm_ptr,
+    uint32_t* __restrict__ out_ptr,
+    int size_k,
+    int size_n) {
   constexpr int pack_factor = 32 / num_bits;
 
   int k_tiles = size_k / tile_k_size;
@@ -224,7 +226,8 @@ __global__ void gptq_marlin_repack_kernel(
     while (n_tile_id < n_tiles) {
 #pragma unroll
       for (int pipe = 0; pipe < repack_stages; pipe++) {
-        fetch_to_shared((pipe + repack_stages - 1) % repack_stages, k_tile_id,
+        fetch_to_shared((pipe + repack_stages - 1) % repack_stages,
+                        k_tile_id,
                         n_tile_id + pipe + repack_stages - 1);
         repack_tile(pipe, k_tile_id, n_tile_id + pipe);
         wait_for_stage();
@@ -234,85 +237,83 @@ __global__ void gptq_marlin_repack_kernel(
   }
 }
 
-}  // namespace marlin
+}  // namespace MARLIN_NAMESPACE_NAME
 
-#define CALL_IF(NUM_BITS, HAS_PERM)                                         \
-  else if (num_bits == NUM_BITS && has_perm == HAS_PERM) {                  \
-    cudaFuncSetAttribute(                                                   \
-        MARLIN_NAMESPACE_NAME::gptq_marlin_repack_kernel<MARLIN_NAMESPACE_NAME::repack_threads, NUM_BITS, \
-                                          HAS_PERM>,                        \
-        cudaFuncAttributeMaxDynamicSharedMemorySize, max_shared_mem);       \
-    MARLIN_NAMESPACE_NAME::gptq_marlin_repack_kernel<MARLIN_NAMESPACE_NAME::repack_threads, NUM_BITS,     \
-                                      HAS_PERM>                             \
-        <<<blocks, MARLIN_NAMESPACE_NAME::repack_threads, max_shared_mem, stream>>>(       \
-            b_q_weight_ptr, perm_ptr, out_ptr, size_k, size_n);             \
+#define CALL_IF(NUM_BITS, HAS_PERM)                                        \
+  else if (num_bits == NUM_BITS && has_perm == HAS_PERM) {                 \
+    cudaFuncSetAttribute(MARLIN_NAMESPACE_NAME::gptq_marlin_repack_kernel< \
+                             MARLIN_NAMESPACE_NAME::repack_threads,        \
+                             NUM_BITS,                                     \
+                             HAS_PERM>,                                    \
+                         cudaFuncAttributeMaxDynamicSharedMemorySize,      \
+                         max_shared_mem);                                  \
+    MARLIN_NAMESPACE_NAME::gptq_marlin_repack_kernel<                      \
+        MARLIN_NAMESPACE_NAME::repack_threads,                             \
+        NUM_BITS,                                                          \
+        HAS_PERM>                                                          \
+        <<<blocks,                                                         \
+           MARLIN_NAMESPACE_NAME::repack_threads,                          \
+           max_shared_mem,                                                 \
+           stream>>>(b_q_weight_ptr, perm_ptr, out_ptr, size_k, size_n);   \
   }
 
-std::vector<paddle::Tensor> gptq_marlin_repack(paddle::Tensor& b_q_weight, paddle::Tensor& perm,
-                                 int64_t size_k, int64_t size_n,
-                                 int64_t num_bits) {
+std::vector<paddle::Tensor> gptq_marlin_repack(paddle::Tensor& b_q_weight,
+                                               paddle::Tensor& perm,
+                                               int64_t size_k,
+                                               int64_t size_n,
+                                               int64_t num_bits) {
   // Verify compatibility with marlin tile of 16x64
-  PADDLE_ENFORCE(
-      size_k % MARLIN_NAMESPACE_NAME::tile_k_size == 0,
-      "size_k = ", size_k,
-      " is not divisible by tile_k_size = ",
-      MARLIN_NAMESPACE_NAME::tile_k_size);
+  PADDLE_ENFORCE(size_k % MARLIN_NAMESPACE_NAME::tile_k_size == 0,
+                 "size_k = ",
+                 size_k,
+                 " is not divisible by tile_k_size = ",
+                 MARLIN_NAMESPACE_NAME::tile_k_size);
 
-  PADDLE_ENFORCE(
-      size_n % MARLIN_NAMESPACE_NAME::tile_n_size == 0,
-      "size_n = ", size_n,
-      " is not divisible by tile_n_size = ",
-      MARLIN_NAMESPACE_NAME::tile_n_size);
+  PADDLE_ENFORCE(size_n % MARLIN_NAMESPACE_NAME::tile_n_size == 0,
+                 "size_n = ",
+                 size_n,
+                 " is not divisible by tile_n_size = ",
+                 MARLIN_NAMESPACE_NAME::tile_n_size);
 
-  PADDLE_ENFORCE(
-      num_bits == 4 || num_bits == 8,
-      "num_bits must be 4 or 8. Got = ", num_bits);
+  PADDLE_ENFORCE(num_bits == 4 || num_bits == 8,
+                 "num_bits must be 4 or 8. Got = ",
+                 num_bits);
 
   int const pack_factor = 32 / num_bits;
 
   // Verify B
   // shape checks
-  PADDLE_ENFORCE(
-      (size_k / pack_factor) == b_q_weight.dims()[0],
-      "Shape mismatch: b_q_weight.size(0) = ", b_q_weight.dims()[0]);
+  PADDLE_ENFORCE((size_k / pack_factor) == b_q_weight.dims()[0],
+                 "Shape mismatch: b_q_weight.size(0) = ",
+                 b_q_weight.dims()[0]);
 
-  PADDLE_ENFORCE(
-      b_q_weight.dims()[1] == size_n,
-      "Shape mismatch: b_q_weight.size(1) = ", b_q_weight.dims()[1],
-      ", expected size_n = ", size_n);
+  PADDLE_ENFORCE(b_q_weight.dims()[1] == size_n,
+                 "Shape mismatch: b_q_weight.size(1) = ",
+                 b_q_weight.dims()[1],
+                 ", expected size_n = ",
+                 size_n);
 
-    // Verify device and strides
-    PADDLE_ENFORCE(
-        b_q_weight.is_gpu(),
-        "b_q_weight is not on GPU");
+  // Verify device and strides
+  PADDLE_ENFORCE(b_q_weight.is_gpu(), "b_q_weight is not on GPU");
 
-    PADDLE_ENFORCE(
-        b_q_weight.is_contiguous(),
-        "b_q_weight is not contiguous");
+  PADDLE_ENFORCE(b_q_weight.is_contiguous(), "b_q_weight is not contiguous");
 
-    PADDLE_ENFORCE(
-        b_q_weight.dtype() == phi::DataType::INT32,
-        "b_q_weight type is not kInt");
+  PADDLE_ENFORCE(b_q_weight.dtype() == phi::DataType::INT32,
+                 "b_q_weight type is not kInt");
 
-    PADDLE_ENFORCE(
-        perm.is_gpu(),
-        "perm is not on GPU");
+  PADDLE_ENFORCE(perm.is_gpu(), "perm is not on GPU");
 
-    PADDLE_ENFORCE(
-        perm.is_contiguous(),
-        "perm is not contiguous");
+  PADDLE_ENFORCE(perm.is_contiguous(), "perm is not contiguous");
 
-    PADDLE_ENFORCE(
-        perm.dtype() == phi::DataType::INT32,
-        "perm type is not kInt");
+  PADDLE_ENFORCE(perm.dtype() == phi::DataType::INT32, "perm type is not kInt");
 
   // Alloc buffers
   // const at::cuda::OptionalCUDAGuard device_guard(device_of(b_q_weight));
-  paddle::Tensor out = paddle::empty(
-      {size_k / MARLIN_NAMESPACE_NAME::tile_size, size_n * MARLIN_NAMESPACE_NAME::tile_size / pack_factor},
-      b_q_weight.dtype(),
-      b_q_weight.place());
-
+  paddle::Tensor out =
+      paddle::empty({size_k / MARLIN_NAMESPACE_NAME::tile_size,
+                     size_n * MARLIN_NAMESPACE_NAME::tile_size / pack_factor},
+                    b_q_weight.dtype(),
+                    b_q_weight.place());
 
   // Detect if there is act_order
   bool has_perm = perm.dims()[0] != 0;
@@ -330,13 +331,11 @@ std::vector<paddle::Tensor> gptq_marlin_repack(paddle::Tensor& b_q_weight, paddl
   cudaDeviceGetAttribute(&blocks, cudaDevAttrMultiProcessorCount, dev);
 
   int max_shared_mem = 0;
-  cudaDeviceGetAttribute(&max_shared_mem,
-                         cudaDevAttrMaxSharedMemoryPerBlockOptin, dev);
+  cudaDeviceGetAttribute(
+      &max_shared_mem, cudaDevAttrMaxSharedMemoryPerBlockOptin, dev);
   // TORCH_CHECK(max_shared_mem > 0);
   PADDLE_ENFORCE(
-    max_shared_mem > 0,
-    "max_shared_mem must be > 0. Got = ", max_shared_mem);
-
+      max_shared_mem > 0, "max_shared_mem must be > 0. Got = ", max_shared_mem);
 
   if (false) {
   }
@@ -347,11 +346,11 @@ std::vector<paddle::Tensor> gptq_marlin_repack(paddle::Tensor& b_q_weight, paddl
   else {
     // TORCH_CHECK(false, "Unsupported repack config: num_bits = ", num_bits,
     //             ", has_perm = ", has_perm);
-    PADDLE_ENFORCE(
-        false,
-        "Unsupported repack config: num_bits = ", num_bits,
-        ", has_perm = ", has_perm);
-
+    PADDLE_ENFORCE(false,
+                   "Unsupported repack config: num_bits = ",
+                   num_bits,
+                   ", has_perm = ",
+                   has_perm);
   }
 
   return {out};
@@ -360,9 +359,5 @@ std::vector<paddle::Tensor> gptq_marlin_repack(paddle::Tensor& b_q_weight, paddl
 PD_BUILD_STATIC_OP(gptq_marlin_repack)
     .Inputs({"b_q_weight", "perm"})
     .Outputs({"out"})
-    .Attrs({
-        "size_k: int64_t",
-        "size_n: int64_t",
-        "num_bits: int64_t"
-    })
+    .Attrs({"size_k: int64_t", "size_n: int64_t", "num_bits: int64_t"})
     .SetKernelFn(PD_KERNEL(gptq_marlin_repack));

@@ -160,11 +160,11 @@ struct BaseMoeProblemVisitor {
 
   CUTLASS_HOST_DEVICE
   cutlass::gemm::GemmCoord problem_size(int idx) const {
-
     int64_t gemm_m = 0;
 
     if (params.total_rows < 0) {
-      const int64_t prev_problem_row = idx == 0 ? 0 : params.last_row_for_problem[idx - 1];
+      const int64_t prev_problem_row =
+          idx == 0 ? 0 : params.last_row_for_problem[idx - 1];
       const int64_t current_problem_row = params.last_row_for_problem[idx];
       gemm_m = current_problem_row - prev_problem_row;
     } else {

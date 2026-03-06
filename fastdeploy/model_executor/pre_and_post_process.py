@@ -101,6 +101,7 @@ else:
         speculate_step_reschedule,
         limit_thinking_content_length,
         speculate_limit_thinking_content_length,
+        custom_numpy_to_tensor,
     )
 
 from fastdeploy.model_executor.entropy_utils import (
@@ -113,6 +114,37 @@ from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferD
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
+
+if current_platform.is_cuda():
+
+    def async_set_value(tgt, src):
+        if isinstance(src, (int, float, bool)):
+            src = paddle.full(tgt.shape, fill_value=src, dtype=tgt.dtype)
+        elif isinstance(src, (list, np.array)):
+            dtype_str = str(tgt.dtype).split(".")[1]
+            if isinstance(src, list):
+                src = np.array(src, dtype=dtype_str if dtype_str != "bfloat16" else "float32")
+            if str(src.dtype) != dtype_str:
+                srt_tensor = paddle.empty(tgt.shape, dtype=str(src.dtype))
+                src = custom_numpy_to_tensor(src, srt_tensor)
+            else:
+                return custom_numpy_to_tensor(src, tgt)
+        elif isinstance(src, paddle.Tensor):
+            pass
+        else:
+            raise ValueError("async_set_value unsupported src type: {}".format(type(src)))
+        if src.shape != tgt.shape:
+            src = src.reshape(tgt.shape)
+        if src.dtype != tgt.dtype:
+            src = src.cast(tgt.dtype)
+        if src.place != tgt.place:
+            src = src.to(tgt.place)
+        tgt.copy_(src, blocking=False)
+
+else:
+
+    def async_set_value(*args, **kwargs):
+        raise RuntimeError("async_set_value is only available on CUDA")
 
 
 def pre_process(
@@ -870,7 +902,7 @@ def post_process_pooling(
             )
             update_inputs_v1(
                 model_output.stop_flags,
-                model_output.not_need_stop,
+                model_output.not_need_stop_device,
                 model_output.seq_lens_this_time,
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,

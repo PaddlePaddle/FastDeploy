@@ -33,10 +33,9 @@ namespace gemm {
 namespace kernel {
 
 template <typename Mma_,  ///! Threadblock-scoped matrix multiply-accumulate
-          typename Epilogue_,           ///! Epilogue
+          typename Epilogue_,            ///! Epilogue
           typename ThreadblockSwizzle_,  ///! Threadblock swizzling function
-          GroupScheduleMode GroupScheduleMode_
-          >
+          GroupScheduleMode GroupScheduleMode_>
 struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
  public:
   using Mma = Mma_;
@@ -98,10 +97,10 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
   static bool const kTransposed = false;
 
   using ProblemVisitor = GemmMoeProblemVisitor<ThreadblockShape,
-                                              kGroupScheduleMode,
-                                              kThreadCount,
-                                              kThreadCount,
-                                              kTransposed>;
+                                               kGroupScheduleMode,
+                                               kThreadCount,
+                                               kThreadCount,
+                                               kTransposed>;
 
   //
   // Structures
@@ -206,7 +205,6 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
                                       ElementC,
                                       LayoutA,
                                       LayoutB> {
-
     using ParamsBase = UniversalParamsBase<ThreadblockSwizzle,
                                            ThreadblockShape,
                                            ElementA,
@@ -225,7 +223,6 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
     typename EpilogueVisitor::ScaleTileIterator::Params params_alpha_row;
     typename EpilogueVisitor::OutputTileIterator::Params params_C;
     typename EpilogueVisitor::OutputTileIterator::Params params_D;
-
 
     void* ptr_A;
     void* ptr_B;
@@ -248,7 +245,11 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
     CUTLASS_HOST_DEVICE
     Params() = default;
 
-    Params(Arguments const& args, int device_sms, int sm_occupancy, void* workspace = nullptr, int tile_count=0)
+    Params(Arguments const& args,
+           int device_sms,
+           int sm_occupancy,
+           void* workspace = nullptr,
+           int tile_count = 0)
         : ParamsBase(args, device_sms, sm_occupancy),
           problem_visitor(args.total_rows_before_expert,
                           args.total_rows,
@@ -274,7 +275,7 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
           ptr_D(args.ref_D.data()),
           batch_stride_A(args.batch_stride_A),
           batch_stride_B(args.batch_stride_B),
-          epilogue_visitor(args.epilogue_visitor) { }
+          epilogue_visitor(args.epilogue_visitor) {}
   };
 
   /// Shared memory storage structure
@@ -298,7 +299,8 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
 
   /// Determines whether kernel satisfies alignment
   static Status can_implement(cutlass::gemm::GemmCoord const& problem_size) {
-    CUTLASS_TRACE_HOST("MoeW4A8GemmWithEpilogueVisitorInterleavedNf4::can_implement()");
+    CUTLASS_TRACE_HOST(
+        "MoeW4A8GemmWithEpilogueVisitorInterleavedNf4::can_implement()");
 
     static int const kAlignmentA = Mma::IteratorA::AccessType::kElements;
     static int const kAlignmentB = Mma::IteratorB::AccessType::kElements;
@@ -332,7 +334,7 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
     }
 
     if (platform::is_same<LayoutC, layout::RowMajor>::value) {
-         isCMisaligned  = problem_size.n() % kAlignmentC;
+      isCMisaligned = problem_size.n() % kAlignmentC;
     } else if (platform::is_same<LayoutC, layout::ColumnMajor>::value) {
       isCMisaligned = problem_size.m() % kAlignmentC;
     } else if (platform::is_same<LayoutC,
@@ -381,89 +383,92 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
   /// Executes one GEMM
   CUTLASS_DEVICE
   void operator()(Params const& params, SharedStorage& shared_storage) {
+    using ElementA = typename Mma::IteratorA::Element;
+    using LayoutA = typename Mma::IteratorA::Layout;
+    using ElementB = typename Mma::IteratorB::Element;
+    using LayoutB = typename Mma::IteratorB::Layout;
 
-      using ElementA = typename Mma::IteratorA::Element;
-      using LayoutA = typename Mma::IteratorA::Layout;
-      using ElementB = typename Mma::IteratorB::Element;
-      using LayoutB = typename Mma::IteratorB::Layout;
+    static constexpr int kInterleave =
+        Mma::IteratorB::Shape::kRow / Mma::Shape::kK;
+    static_assert(platform::is_same<LayoutB, layout::RowMajor>::value &&
+                          kInterleave == 1 ||
+                      platform::is_same<LayoutB, layout::ColumnMajor>::value &&
+                          kInterleave >= 1,
+                  "B must be row major/col major OR col major interleaved.");
 
-      static constexpr int kInterleave =
-          Mma::IteratorB::Shape::kRow / Mma::Shape::kK;
-      static_assert(
-          platform::is_same<LayoutB, layout::RowMajor>::value &&
-                  kInterleave == 1 ||
-              platform::is_same<LayoutB, layout::ColumnMajor>::value &&
-                  kInterleave >= 1,
-          "B must be row major/col major OR col major interleaved.");
+    //
+    // Problem visitor.
+    //
+    ProblemVisitor problem_visitor(
+        params.problem_visitor, shared_storage.problem_visitor, blockIdx.x);
+    const int64_t gemm_k = params.problem_visitor.gemm_k;
+    const int64_t gemm_n = params.problem_visitor.gemm_n;
+    int64_t bytes_per_expert_matrix =
+        (gemm_k * gemm_n / 8) * cutlass::sizeof_bits<ElementB>::value;
 
-      //
-      // Problem visitor.
-      //
-      ProblemVisitor problem_visitor(
-          params.problem_visitor, shared_storage.problem_visitor, blockIdx.x);
-      const int64_t gemm_k = params.problem_visitor.gemm_k;
-      const int64_t gemm_n = params.problem_visitor.gemm_n;
-      int64_t bytes_per_expert_matrix =
-          (gemm_k * gemm_n / 8) * cutlass::sizeof_bits<ElementB>::value;
-
-      // Outer 'persistent' loop to iterate over tiles
-      while (problem_visitor.next_tile()) {
+    // Outer 'persistent' loop to iterate over tiles
+    while (problem_visitor.next_tile()) {
       // // Compute threadblock location
       ThreadblockSwizzle threadblock_swizzle;
 
       cutlass::gemm::GemmCoord threadblock_tile_offset =
           threadblock_swizzle.get_tile_offset(params.swizzle_log_tile);
 
-        GemmCoord problem_size = problem_visitor.problem_size();
-        int32_t problem_idx = problem_visitor.problem_index();
-        int32_t cta_idx = int32_t(problem_visitor.threadblock_idx());
+      GemmCoord problem_size = problem_visitor.problem_size();
+      int32_t problem_idx = problem_visitor.problem_index();
+      int32_t cta_idx = int32_t(problem_visitor.threadblock_idx());
 
-        GemmCoord grid_shape = problem_visitor.grid_shape(problem_size);
+      GemmCoord grid_shape = problem_visitor.grid_shape(problem_size);
 
-        cutlass::MatrixCoord threadblock_offset(
-            int(cta_idx / grid_shape.n()) * Mma::Shape::kM,  // NOLINT
-            int(cta_idx % grid_shape.n()) * Mma::Shape::kN  // NOLINT
-            );
+      cutlass::MatrixCoord threadblock_offset(
+          int(cta_idx / grid_shape.n()) * Mma::Shape::kM,  // NOLINT
+          int(cta_idx % grid_shape.n()) * Mma::Shape::kN   // NOLINT
+      );
 
-        // if (threadIdx.x == 0) {
-        //   printf("%d-%d-%d problem_size: %d, %d problem_idx: %d, cta_idx: %d\n", blockIdx.x,blockIdx.y,blockIdx.z, problem_size.m(), problem_size.n(), problem_idx, cta_idx);
-        // }
+      // if (threadIdx.x == 0) {
+      //   printf("%d-%d-%d problem_size: %d, %d problem_idx: %d, cta_idx:
+      //   %d\n", blockIdx.x,blockIdx.y,blockIdx.z, problem_size.m(),
+      //   problem_size.n(), problem_idx, cta_idx);
+      // }
 
-        // Load element pointers. Exchange pointers and strides if working on
-        // the transpose
-        int64_t rows_to_jump = 0;
-        if (params.problem_visitor.total_rows < 0) {
-          rows_to_jump = problem_idx == 0 ? 0 : params.problem_visitor.last_row_for_problem[problem_idx - 1];
-        } else {
-          rows_to_jump = problem_idx * (params.problem_visitor.total_rows / params.problem_visitor.problem_count);
-        }
+      // Load element pointers. Exchange pointers and strides if working on
+      // the transpose
+      int64_t rows_to_jump = 0;
+      if (params.problem_visitor.total_rows < 0) {
+        rows_to_jump =
+            problem_idx == 0
+                ? 0
+                : params.problem_visitor.last_row_for_problem[problem_idx - 1];
+      } else {
+        rows_to_jump = problem_idx * (params.problem_visitor.total_rows /
+                                      params.problem_visitor.problem_count);
+      }
 
-        ElementA* ptr_A =
-            reinterpret_cast<ElementA*>(params.ptr_A) + rows_to_jump * gemm_k;
-        typename LayoutA::LongIndex ldm_A = gemm_k;
+      ElementA* ptr_A =
+          reinterpret_cast<ElementA*>(params.ptr_A) + rows_to_jump * gemm_k;
+      typename LayoutA::LongIndex ldm_A = gemm_k;
 
-        char* byte_ptr_B = ((char*)params.ptr_B) +                 // NOLINT
-                           problem_idx * bytes_per_expert_matrix;  // NOLINT
-        ElementB* ptr_B = reinterpret_cast<ElementB*>(byte_ptr_B);
-        typename LayoutB::LongIndex ldm_B =
-            platform::is_same<layout::RowMajor, LayoutB>::value
-                ? gemm_n
-                : gemm_k * kInterleave;
-
+      char* byte_ptr_B = ((char*)params.ptr_B) +                 // NOLINT
+                         problem_idx * bytes_per_expert_matrix;  // NOLINT
+      ElementB* ptr_B = reinterpret_cast<ElementB*>(byte_ptr_B);
+      typename LayoutB::LongIndex ldm_B =
+          platform::is_same<layout::RowMajor, LayoutB>::value
+              ? gemm_n
+              : gemm_k * kInterleave;
 
       int offset_k = 0;
       int problem_size_k = params.problem_size.k();
 
-
-  // Maybe need to modify? Author zhengzekang.
-  #if SPLIT_K_ENABLED
+// Maybe need to modify? Author zhengzekang.
+#if SPLIT_K_ENABLED
       //
       // Fetch pointers based on mode.
       //
       if (params.mode == GemmUniversalMode::kGemm ||
           params.mode == GemmUniversalMode::kGemmSplitKParallel) {
         if (threadblock_tile_offset.k() + 1 < params.grid_tiled_shape.k()) {
-          problem_size_k = (threadblock_tile_offset.k() + 1) * params.gemm_k_size;
+          problem_size_k =
+              (threadblock_tile_offset.k() + 1) * params.gemm_k_size;
         }
         offset_k = threadblock_tile_offset.k() * params.gemm_k_size;
       } else if (params.mode == GemmUniversalMode::kBatched) {
@@ -475,17 +480,19 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
         ptr_B = static_cast<ElementB* const*>(
             params.ptr_B)[threadblock_tile_offset.k()];
       }
-  #endif
-    // if(threadIdx.x==0){
-    //     printf("##### block: %d-%d-%d, offset_k:%d, threadblock_tile_offset.m-n-k():%d-%d-%d, params.gemm_k_size:%d \n",
-    //             blockIdx.x, blockIdx.y, blockIdx.z,
-    //             offset_k,
-    //             threadblock_tile_offset.m(),
-    //             threadblock_tile_offset.n(),
-    //             threadblock_tile_offset.k(),
-    //             params.gemm_k_size
-    //             );
-    //   }
+#endif
+      // if(threadIdx.x==0){
+      //     printf("##### block: %d-%d-%d, offset_k:%d,
+      //     threadblock_tile_offset.m-n-k():%d-%d-%d, params.gemm_k_size:%d
+      //     \n",
+      //             blockIdx.x, blockIdx.y, blockIdx.z,
+      //             offset_k,
+      //             threadblock_tile_offset.m(),
+      //             threadblock_tile_offset.n(),
+      //             threadblock_tile_offset.k(),
+      //             params.gemm_k_size
+      //             );
+      //   }
 
       // Compute initial location in logical coordinates
       cutlass::MatrixCoord tb_offset_A{
@@ -493,21 +500,18 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
           0,
       };
 
-
       cutlass::MatrixCoord tb_offset_B{
-          0,
-          threadblock_offset.column() / kInterleave};
+          0, threadblock_offset.column() / kInterleave};
 
       // Compute position within threadblock
       int thread_idx = threadIdx.x;
 
       // Construct iterators to A and B operands
-      typename Mma::IteratorA iterator_A(
-          params.params_A,
-          ptr_A,
-          {problem_size.m(), problem_size_k},
-          thread_idx,
-          tb_offset_A);
+      typename Mma::IteratorA iterator_A(params.params_A,
+                                         ptr_A,
+                                         {problem_size.m(), problem_size_k},
+                                         thread_idx,
+                                         tb_offset_A);
 
       typename Mma::IteratorB iterator_B(
           params.params_B,
@@ -516,13 +520,11 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
           thread_idx,
           tb_offset_B);
       typename Mma::IteratorNF4LookUpTable iterator_nf4_look_up_table =
-        Mma::IteratorNF4LookUpTable(
-          params.params_nf4_look_up_table,
-        params.ref_nf4_look_up_table.data(),
-          {0,16},
-          threadIdx.x,
-          {0,0}
-        );
+          Mma::IteratorNF4LookUpTable(params.params_nf4_look_up_table,
+                                      params.ref_nf4_look_up_table.data(),
+                                      {0, 16},
+                                      threadIdx.x,
+                                      {0, 0});
 
       // Broadcast the warp_id computed by lane 0 to ensure dependent code
       // is compiled as warp-uniform.
@@ -542,9 +544,14 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
 
       // Compute threadblock-scoped matrix multiply-add
       int gemm_k_iterations =
-          (problem_size_k  + Mma::Shape::kK - 1) / Mma::Shape::kK;
+          (problem_size_k + Mma::Shape::kK - 1) / Mma::Shape::kK;
       // Compute threadblock-scoped matrix multiply-add
-      mma(gemm_k_iterations, accumulators, iterator_A, iterator_B, iterator_nf4_look_up_table, accumulators);
+      mma(gemm_k_iterations,
+          accumulators,
+          iterator_A,
+          iterator_B,
+          iterator_nf4_look_up_table,
+          accumulators);
       // if(threadIdx.x==0){
       //   printf("##### block: %d-%d-%d, offset-m-n-k:%d-%d-%d \n",
       //           blockIdx.x, blockIdx.y, blockIdx.z,
@@ -560,44 +567,54 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
       threadblock_tile_offset =
           threadblock_swizzle.get_tile_offset(params.swizzle_log_tile);
 
-        ElementC* ptr_C =
-            reinterpret_cast<ElementC*>(params.ptr_C) + rows_to_jump * gemm_n;
-        ElementC* ptr_D =
-            reinterpret_cast<ElementC*>(params.ptr_D) + rows_to_jump * gemm_n;
+      ElementC* ptr_C =
+          reinterpret_cast<ElementC*>(params.ptr_C) + rows_to_jump * gemm_n;
+      ElementC* ptr_D =
+          reinterpret_cast<ElementC*>(params.ptr_D) + rows_to_jump * gemm_n;
 
-      using Element_scale = typename EpilogueVisitor::ScaleTileIterator::Element;
-      Element_scale* ptr_alpha_row = params.ptr_alpha_row == nullptr ? params.ptr_alpha_row : reinterpret_cast<Element_scale*>(params.ptr_alpha_row) + rows_to_jump;
-      Element_scale* ptr_alpha_col = reinterpret_cast<Element_scale*>(params.ptr_alpha_col) + problem_idx * params.problem_size.n();
+      using Element_scale =
+          typename EpilogueVisitor::ScaleTileIterator::Element;
+      Element_scale* ptr_alpha_row =
+          params.ptr_alpha_row == nullptr
+              ? params.ptr_alpha_row
+              : reinterpret_cast<Element_scale*>(params.ptr_alpha_row) +
+                    rows_to_jump;
+      Element_scale* ptr_alpha_col =
+          reinterpret_cast<Element_scale*>(params.ptr_alpha_col) +
+          problem_idx * params.problem_size.n();
       // if (threadIdx.x == 0)
-      // printf("##### block: %d-%d-%d, ptr_alpha_row:%p,(%f) ptr_alpha_col:%p,(%f)\n", blockIdx.x, blockIdx.y, blockIdx.z, ptr_alpha_row, static_cast<float>(*ptr_alpha_row), ptr_alpha_col, static_cast<float>(*ptr_alpha_col));
+      // printf("##### block: %d-%d-%d, ptr_alpha_row:%p,(%f)
+      // ptr_alpha_col:%p,(%f)\n", blockIdx.x, blockIdx.y, blockIdx.z,
+      // ptr_alpha_row, static_cast<float>(*ptr_alpha_row), ptr_alpha_col,
+      // static_cast<float>(*ptr_alpha_col));
       //
       // Construct the epilogue visitor
       //
 
       EpilogueVisitor epilogue_visitor(params.epilogue_visitor,
-                                     shared_storage.epilogue.visitor,
-                                     problem_size.mn(),
-                                     thread_idx,
-                                     warp_idx,
-                                     lane_idx,
-                                     params.params_alpha_col,
-                                     params.params_C,
-                                     params.params_D,
-                                     params.quant_mode,
-                                     ptr_alpha_row,
-                                     ptr_alpha_col,
-                                     ptr_C,
-                                     ptr_D,
-                                     threadblock_offset,
-                                     blockIdx.y * params.problem_size.m());
+                                       shared_storage.epilogue.visitor,
+                                       problem_size.mn(),
+                                       thread_idx,
+                                       warp_idx,
+                                       lane_idx,
+                                       params.params_alpha_col,
+                                       params.params_C,
+                                       params.params_D,
+                                       params.quant_mode,
+                                       ptr_alpha_row,
+                                       ptr_alpha_col,
+                                       ptr_C,
+                                       ptr_D,
+                                       threadblock_offset,
+                                       blockIdx.y * params.problem_size.m());
 
       if (params.mode == GemmUniversalMode::kGemm) {
         // Indicate which position in a serial reduction the output operator is
         // currently updating
         epilogue_visitor.set_k_partition(threadblock_tile_offset.k(),
-                                        params.grid_tiled_shape.k());
+                                         params.grid_tiled_shape.k());
       } else if (params.mode == GemmUniversalMode::kBatched ||
-                params.mode == GemmUniversalMode::kArray) {
+                 params.mode == GemmUniversalMode::kArray) {
         epilogue_visitor.set_batch_index(threadblock_tile_offset.k());
       }
 
@@ -608,9 +625,9 @@ struct MoeW4A8GemmWithEpilogueVisitorInterleavedNf4 {
       // Execute the epilogue operator to update the destination tensor.
       epilogue(epilogue_visitor, accumulators);
 
-        // Next tile
-        problem_visitor.advance(gridDim.x);
-      }
+      // Next tile
+      problem_visitor.advance(gridDim.x);
+    }
   }
 };
 
