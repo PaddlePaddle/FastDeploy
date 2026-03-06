@@ -16,6 +16,7 @@
 
 import asyncio
 import inspect
+import json
 import os
 import re
 import time
@@ -344,6 +345,7 @@ class EngineClient:
             if reasoning_effort is not None:
                 chat_template_kwargs["reasoning_effort"] = reasoning_effort
             task["chat_template_kwargs"] = chat_template_kwargs
+            self.process_messages(task.get("messages", []))
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
@@ -1014,3 +1016,33 @@ class EngineClient:
                 self._send_task(data)
 
             api_server_logger.info("Aborted request(s) %s.", ",".join(request_ids))
+
+    def process_messages(self, messages):
+        for message in messages:
+            if message.get("role") == "assistant" and "tool_calls" in message:
+                tool_calls = message.get("tool_calls")
+                if not isinstance(tool_calls, list):
+                    continue
+
+                if len(tool_calls) == 0:
+                    # Drop empty tool_calls to keep templates on the normal assistant path.
+                    message.pop("tool_calls", None)
+                    continue
+
+                for item in tool_calls:
+                    # Skip if item is not a dict or doesn't have "function" key
+                    if not isinstance(item, dict) or "function" not in item:
+                        continue
+                    function_info = item["function"]
+                    if not isinstance(function_info, dict):
+                        continue
+                    # if arguments is None or empty string, set to {}
+                    arguments = function_info.get("arguments")
+                    if arguments is None or arguments == "":
+                        function_info["arguments"] = {}
+                    elif isinstance(arguments, str):
+                        try:
+                            function_info["arguments"] = json.loads(arguments)
+                        except json.JSONDecodeError:
+                            # Keep original string if it's not valid JSON
+                            pass
