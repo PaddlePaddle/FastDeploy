@@ -1361,7 +1361,7 @@ class ResourceManagerV1(ResourceManager):
             request.output_token_ids.append(request_output.outputs.token_ids[0])
             request.num_cached_tokens = request_output.num_cached_tokens
             if (
-                self.config.speculative_config.spec_method == SpecMethod.MTP
+                self.config.speculative_config.method == SpecMethod.MTP
                 and self.config.scheduler_config.splitwise_role == "decode"
             ):
                 request.draft_token_ids = copy.deepcopy(request_output.outputs.draft_token_ids)

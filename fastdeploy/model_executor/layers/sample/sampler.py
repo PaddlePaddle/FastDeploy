@@ -633,7 +633,7 @@ class SpeculativeSampler(nn.Layer):
         spec_config = fd_config.speculative_config
         # Verify strategy enum: VerifyStrategy.TOPP/GREEDY/TARGET_MATCH
         # Use .value (0/1/2) when passing to CUDA kernel
-        self.spec_method = spec_config.spec_method
+        self.spec_method = spec_config.method
         self.verify_strategy = spec_config.verify_strategy
         self.prefill_one_step_stop = fd_config.parallel_config.prefill_one_step_stop
 

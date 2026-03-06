@@ -135,7 +135,7 @@ class XPUModelRunner(ModelRunnerBase):
                 self.encoder_cache = None
 
         self.device_id = device_id
-        self.speculative_method = self.fd_config.speculative_config.spec_method
+        self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
 
         # used by SamplingMetadata
@@ -1630,8 +1630,7 @@ class XPUModelRunner(ModelRunnerBase):
             )
 
             skip_save_output = is_dummy_run or (
-                self.speculative_config.spec_method == SpecMethod.MTP
-                and self.scheduler_config.splitwise_role == "prefill"
+                self.speculative_config.method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill"
             )
 
             if self.speculative_decoding:

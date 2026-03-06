@@ -430,7 +430,7 @@ class HPUModelRunner(ModelRunnerBase):
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
-        self.speculative_method = self.fd_config.speculative_config.spec_method
+        self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         # This measurement_mode only works in BF16 mode!
         self.measurement_mode = True if envs.FD_HPU_MEASUREMENT_MODE == "1" else False

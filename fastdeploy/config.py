@@ -788,7 +788,6 @@ class SpeculativeConfig:
         """Initialize all config options from class defaults."""
         for key, value in self._DEFAULTS.items():
             setattr(self, key, value)
-        self.spec_method = None  # Will be set during validation
 
     def _apply_user_args(self, args: Dict[str, Any]):
         """Apply user-provided arguments."""
@@ -822,14 +821,14 @@ class SpeculativeConfig:
         """
         Convert string configs to enums and validate all parameters.
         """
-        # Parse spec_method from string to enum using the new from_string method
+        # Convert method from string to SpecMethod enum
         if self.method is not None:
             from fastdeploy.spec_decode import SpecMethod
 
-            self.spec_method = SpecMethod.from_string(self.method)
+            self.method = SpecMethod.from_string(self.method)
 
             # Set method-specific computed values
-            if self.spec_method == SpecMethod.MTP:
+            if self.method == SpecMethod.MTP:
                 self.num_extra_cache_layer = 1
 
         # Run validation (includes dependency validation)
@@ -886,7 +885,7 @@ class SpeculativeConfig:
                 m.value for m in SpecMethod
             ], f"speculative method only support {[m.value for m in SpecMethod]} now, but get {self.method}."
 
-            if self.spec_method != SpecMethod.NAIVE:
+            if self.method != SpecMethod.NAIVE:
                 assert (
                     self.num_speculative_tokens >= 1 and self.num_speculative_tokens <= 5
                 ), f"num_speculative_tokens only support in range[1, 5], but get {self.num_speculative_tokens}."
@@ -894,7 +893,7 @@ class SpeculativeConfig:
                     self.num_model_steps >= 1 and self.num_model_steps <= 5
                 ), f"num_model_steps only support in range[1, 5], but get {self.num_model_steps}."
 
-            if self.spec_method == SpecMethod.MTP:
+            if self.method == SpecMethod.MTP:
                 if self.num_speculative_tokens < self.num_model_steps:
                     logger.warning(
                         f"Get num_model_steps > num_speculative_tokens. Reset num_speculative_tokens to {self.num_model_steps}"
@@ -968,8 +967,8 @@ class SpeculativeConfig:
             ],
         }
 
-        if self.spec_method in constraints:
-            method_constraints = constraints[self.spec_method]
+        if self.method in constraints:
+            method_constraints = constraints[self.method]
             for constraint in method_constraints:
                 if not constraint["check"]():
                     if constraint["auto_fix"] is not None:
@@ -1820,7 +1819,7 @@ class FDConfig:
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
-        if self.speculative_config is not None and self.speculative_config.spec_method in [
+        if self.speculative_config is not None and self.speculative_config.method in [
             SpecMethod.MTP,
             SpecMethod.SUFFIX,
         ]:
@@ -2054,7 +2053,7 @@ class FDConfig:
             )
 
         # adjust speculative config
-        if self.speculative_config is not None and self.speculative_config.spec_method == SpecMethod.MTP:
+        if self.speculative_config is not None and self.speculative_config.method == SpecMethod.MTP:
             if self.scheduler_config.splitwise_role == "prefill":
                 self.speculative_config.num_speculative_tokens = 1
                 self.speculative_config.num_model_steps = 1

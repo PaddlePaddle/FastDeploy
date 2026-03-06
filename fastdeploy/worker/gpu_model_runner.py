@@ -121,7 +121,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
-        self.spec_method = self.fd_config.speculative_config.spec_method
+        self.spec_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.spec_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
