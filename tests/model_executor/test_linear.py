@@ -58,6 +58,7 @@ def make_fd_config(
             expert_parallel_size=1,
             tp_group=None,
             use_sequence_parallel_moe=use_sequence_parallel_moe,
+            enable_flashinfer_allreduce_fusion=False,
         ),
         scheduler_config=SimpleNamespace(splitwise_role=splitwise_role, max_num_seqs=1),
         load_config=SimpleNamespace(
