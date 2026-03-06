@@ -15,6 +15,7 @@
 """
 
 import copy
+import logging
 import os
 import queue
 import time
@@ -869,9 +870,10 @@ class GPUModelRunner(ModelRunnerBase):
                         tables = []
                         for head_tables in cache_ids_2d:
                             tables.extend(head_tables)
-                        logger.info(
-                            f"[headwise prefill] req {idx} cache_ids_2d={cache_ids_2d} tables={tables}"
-                        )
+                        if self.head_wise_debug_log and logger.isEnabledFor(logging.DEBUG):
+                            logger.debug(
+                                f"[headwise prefill] req {idx} cache_ids_2d={cache_ids_2d} tables={tables}"
+                            )
                     else:
                         tables = request.block_tables
                     self.share_inputs["block_tables"][idx : idx + 1, :len(tables)] = np.array(
@@ -1125,8 +1127,8 @@ class GPUModelRunner(ModelRunnerBase):
             req = self.forward_batch_reqs_list[b]
             cache_ids_2d = getattr(req, "block_tables_3d", None) if req is not None else None
             if cache_ids_2d is None:
-                if self.head_wise_debug_log:
-                    logger.info(f"[headwise _prepare_block_tables_3d] req {b}: cache_ids_2d=None, keep rows as -1")
+                if self.head_wise_debug_log and logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f"[headwise _prepare_block_tables_3d] req {b}: cache_ids_2d=None, keep rows as -1")
                 continue
             for h in range(self.kv_num_heads):
                 if h >= len(cache_ids_2d) or cache_ids_2d[h] is None:
@@ -1150,11 +1152,11 @@ class GPUModelRunner(ModelRunnerBase):
             cache_id_capacity = int(self.share_inputs["caches"][0].shape[0])
         out_of_range_cnt = int((valid_ids >= cache_id_capacity).sum()) if cache_id_capacity > 0 else 0
 
-        should_log_prepare = self.head_wise_debug_log and (
+        should_log_prepare = self.head_wise_debug_log and logger.isEnabledFor(logging.DEBUG) and (
             self._head_wise_prepare_log_count < 50 or self._head_wise_prepare_log_count % 100 == 0
         )
         if should_log_prepare:
-            logger.info(
+            logger.debug(
                 f"[headwise _prepare_block_tables_3d] shape={active_rows.shape} "
                 f"num_running_requests={num_running_requests} kv_num_heads={self.kv_num_heads} "
                 f"max_blocks_per_head={max_blocks_per_head} min_id={min_id} max_id={max_id} "
@@ -1168,8 +1170,8 @@ class GPUModelRunner(ModelRunnerBase):
                 f"[headwise _prepare_block_tables_3d invalid] out_of_range_cnt={out_of_range_cnt}, "
                 f"cache_id_capacity={cache_id_capacity}, min_id={min_id}, max_id={max_id}"
             )
-        if self.head_wise_debug_log and self._head_wise_debug_log_count < 20:
-            logger.info(
+        if self.head_wise_debug_log and logger.isEnabledFor(logging.DEBUG) and self._head_wise_debug_log_count < 20:
+            logger.debug(
                 f"[headwise _prepare_block_tables_3d details] per_req_head_lens={per_req_head_lens[:num_running_requests]}"
             )
             self._head_wise_debug_log_count += 1
@@ -1333,7 +1335,7 @@ class GPUModelRunner(ModelRunnerBase):
                     rows_np = self.share_inputs["block_tables_3d"][
                         : num_running_requests * self.kv_num_heads
                     ].numpy()
-                    logger.info(
+                    logger.debug(
                         f"[headwise dummy run] block_tables_3d shape={rows_np.shape} "
                         f"max_blocks_per_head={self.share_inputs['block_tables_3d'].shape[1]} "
                         f"first_rows={rows_np[:min(4, len(rows_np))].tolist() if len(rows_np) > 0 else []}"

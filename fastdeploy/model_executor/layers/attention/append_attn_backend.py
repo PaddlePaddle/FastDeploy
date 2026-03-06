@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
@@ -362,6 +363,7 @@ class AppendAttentionBackend(AttentionBackend):
         if (
             self.enable_head_wise_kv_cache
             and self.head_wise_debug_log
+            and logger.isEnabledFor(logging.DEBUG)
             and not getattr(forward_meta, "is_dummy_or_profile_run", False)
             and self._head_wise_debug_log_count < 200
         ):
@@ -387,7 +389,7 @@ class AppendAttentionBackend(AttentionBackend):
             seq_lens_this_time_list = forward_meta.seq_lens_this_time[:batch_size].numpy().tolist()
             seq_lens_encoder_list = forward_meta.seq_lens_encoder[:batch_size].numpy().tolist()
             seq_lens_decoder_list = forward_meta.seq_lens_decoder[:batch_size].numpy().tolist()
-            logger.info(
+            logger.debug(
                 f"[headwise kernel input] layer={layer.layer_id} q_heads={self.num_heads} kv_heads={self.kv_num_heads} "
                 f"group={self.num_heads // max(self.kv_num_heads, 1)} batch={batch_size} "
                 f"block_tables_3d_shape={block_tables_3d.shape if block_tables_3d is not None else None} "
