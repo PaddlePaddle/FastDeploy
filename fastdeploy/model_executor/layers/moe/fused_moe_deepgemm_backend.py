@@ -120,7 +120,7 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
     else:
         ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
             ffn_out,
-            using_pow2_scale=not disable_ue8m0_cast or fastdeploy.envs.TI_CONSIST_FP8_QUANT_WITH_POW2SCALE,
+            using_pow2_scale=not disable_ue8m0_cast or fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
             using_ue8m0_scale=not disable_ue8m0_cast,
         )
         ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
@@ -286,8 +286,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         else:
             x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
                 x,
-                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0
-                or fastdeploy.envs.TI_CONSIST_FP8_QUANT_WITH_POW2SCALE,
+                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0 or fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
                 output_scale_transpose=self.quant_config.deepgemm_scale_ue8m0,
                 using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
             )
@@ -391,7 +390,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             # swiglu
             ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
 
-            if fastdeploy.envs.TI_CONSIST_MOE_PROB_IN_ADVANCE:
+            if fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE:
                 ffn_out = (ffn_out * dst_weights.unsqueeze(-1)).cast(paddle.bfloat16)
 
             # down_proj
@@ -404,7 +403,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
                     ffn_out,
                     using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0
-                    or fastdeploy.envs.TI_CONSIST_FP8_QUANT_WITH_POW2SCALE,
+                    or fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
                     using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
                 )
                 ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
@@ -432,7 +431,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     total_zipped_tokens=recv_x.shape[0],
                     num_experts=layer.num_local_experts,
                     # use_mix_precision =False,
-                    using_weighted_combine=not fastdeploy.envs.TI_CONSIST_MOE_PROB_IN_ADVANCE,
+                    using_weighted_combine=not fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE,
                 )
 
             else:
@@ -578,8 +577,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
             recv_x, recv_x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
                 x,
-                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0
-                or fastdeploy.envs.TI_CONSIST_FP8_QUANT_WITH_POW2SCALE,
+                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0 or fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
                 output_scale_transpose=self.quant_config.deepgemm_scale_ue8m0,
                 using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
             )
@@ -643,7 +641,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             getattr(layer, self.added_scale_attrs[1]),
             self.quant_config.weight_block_size[0],
             disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
-            dst_weights=dst_weights if fastdeploy.envs.TI_CONSIST_MOE_PROB_IN_ADVANCE else None,
+            dst_weights=dst_weights if fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE else None,
         )
 
         # prmt back per rank
@@ -655,7 +653,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 token_prob_unzipped=dst_weights,
                 total_zipped_tokens=recv_x.shape[0],
                 num_experts=layer.num_experts,
-                using_weighted_combine=not fastdeploy.envs.TI_CONSIST_MOE_PROB_IN_ADVANCE,
+                using_weighted_combine=not fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE,
             )
         else:
             tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(

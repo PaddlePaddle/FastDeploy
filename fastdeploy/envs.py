@@ -230,8 +230,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
-    "TI_CONSIST_FP8_QUANT_WITH_POW2SCALE": lambda: bool(int(os.getenv("TI_CONSIST_FP8_QUANT_WITH_POW2SCALE", "0"))),
-    "TI_CONSIST_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("TI_CONSIST_MOE_PROB_IN_ADVANCE", "0"))),
+    "FD_FP8_QUANT_WITH_POW2SCALE": lambda: bool(int(os.getenv("FD_FP8_QUANT_WITH_POW2SCALE", "0"))),
+    "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
 }
 
 
