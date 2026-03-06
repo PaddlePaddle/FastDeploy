@@ -406,15 +406,11 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             layer.hidden_size,
             layer.moe_intermediate_size // 2,
         ]
-        self.up_gate_proj_scale_shape = [
-            layer.num_local_experts,
-            layer.moe_intermediate_size * 2,
-            layer.hidden_size // self.quant_config.group_size,
+        self.up_gate_proj_scale_shape = self.up_gate_proj_weight_shape[0:2] + [
+            layer.hidden_size // self.quant_config.group_size
         ]
-        self.down_proj_scale_shape = [
-            layer.num_local_experts,
-            layer.hidden_size,
-            layer.moe_intermediate_size // self.quant_config.group_size,
+        self.down_proj_scale_shape = self.down_proj_weight_shape[0:2] + [
+            layer.moe_intermediate_size // self.quant_config.group_size
         ]
 
         self.weight_scale_dtype = paddle.float8_e4m3fn
