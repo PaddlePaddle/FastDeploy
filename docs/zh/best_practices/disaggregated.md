@@ -39,7 +39,7 @@
 
 ### 1.2 部署拓扑结构
 
-**单机部署拓扑（TP1DP4EP）**
+**单机部署拓扑**
 
 ```
 ┌──────────────────────────────┐
@@ -58,7 +58,7 @@
 └──────────────────────────────┘
 ```
 
-**跨机部署拓扑（TP1DP8EP）**
+**跨机部署拓扑**
 
 ```
 ┌─────────────────────┐                      ┌─────────────────────┐
@@ -84,12 +84,12 @@
 ### 2.1 测试场景与并行度配置
 
 本章节演示的测试场景为 **TP1DP4EP** 配置：
-- **张量并行度（TP）**：1 —— 每张 GPU 独立加载完整模型参数
-- **数据并行度（DP）**：4 —— 4 张 GPU 组成一个数据并行组，共 4 个实例
-- **专家并行（EP）**：启用 —— MoE 层的专家网络分布在不同 GPU 上并行计算
+- **张量并行度（TP）**：2 —— 每2张 GPU 独立加载完整模型参数
+- **数据并行度（DP）**：2 —— 2 张 GPU 组成一个数据并行组
+- **专家并行（EP）**：不启用 
 
 **若需测试其他并行度配置，请按以下方式调整参数：**
-1. **TP 调整**：修改 `--tensor-parallel-size`
+1. **TP 调整**：修改 `--tensor-parallel-size`，注意：ERNIE-4.5-300B模型在不开启EP时，TP至少大于2才可以加载在单张卡上。
 2. **DP 调整**：修改 `--data-parallel-size`，同时确保 `--ports` 和 `--num-servers` 与 DP 保持一致
 3. **EP 开关**：添加或移除 `--enable-expert-parallel`
 4. **GPU 分配**：通过 `CUDA_VISIBLE_DEVICES` 控制 Prefill 和 Decode 实例使用的 GPU
@@ -117,9 +117,8 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --cache-transfer-protocol "rdma,ipc" \
     --router "0.0.0.0:8109" \
     --quantization wint4 \
-    --tensor-parallel-size 1 \
-    --data-parallel-size 4 \
-    --enable-expert-parallel \
+    --tensor-parallel-size 2 \
+    --data-parallel-size 2 \
     --max-model-len 8192 \
     --max-num-seqs 64 \
     --num-gpu-blocks-override 1024
@@ -138,9 +137,8 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --cache-transfer-protocol "rdma,ipc" \
     --router "0.0.0.0:8109" \
     --quantization wint4 \
-    --tensor-parallel-size 1 \
-    --data-parallel-size 4 \
-    --enable-expert-parallel \
+    --tensor-parallel-size 2 \
+    --data-parallel-size 2 \
     --max-model-len 8192 \
     --max-num-seqs 64 \
     --num-gpu-blocks-override 1024
@@ -157,7 +155,6 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 | `--quantization` | 量化策略（wint4/wint8/fp8 等） |
 | `--tensor-parallel-size` | 张量并行度（TP） |
 | `--data-parallel-size` | 数据并行度（DP） |
-| `--enable-expert-parallel` | 开启专家并行（EP） |
 | `--max-model-len` | 最大序列长度 |
 | `--max-num-seqs` | 最大并发序列数 |
 | `--num-gpu-blocks-override` | GPU KV Cache 块数量覆盖值 |
@@ -177,7 +174,7 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 本章节演示的测试场景为 **TP1DP8EP** 跨机配置（共 16 张 GPU）：
 - **张量并行度（TP）**：1
 - **数据并行度（DP）**：8 —— 每机 8 张 GPU，共 8 个 Prefill 实例和 8 个 Decode 实例
-- **专家并行（EP）**：启用
+- **专家并行（EP）**：启用—— MoE 层的共享专家分布在8张 GPU 上并行计算
 
 **若需测试其他跨机并行度配置，请按以下方法调整参数：**
 1. **机器间通信**：确保两机之间 RDMA 网络连通，Prefill 机器需配置 `KVCACHE_RDMA_NICS` 环境变量

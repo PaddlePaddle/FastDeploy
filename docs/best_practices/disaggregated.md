@@ -84,12 +84,12 @@ For model downloads, please check the [Supported Models List](https://paddlepadd
 ### 2.1 Test Scenarios and Parallelism Configuration
 
 This chapter demonstrates the **TP1DP4EP** configuration test scenario:
-- **Tensor Parallelism (TP)**: 1 — Each GPU independently loads complete model parameters
-- **Data Parallelism (DP)**: 4 — 4 GPUs form a data parallelism group, totaling 4 instances
-- **Expert Parallelism (EP)**: Enabled — MoE layer expert networks are distributed across different GPUs for parallel computation
+- **Tensor Parallelism (TP)**: 2 — Each 2 GPUs independently load complete model parameters
+- **Data Parallelism (DP)**: 2 — 2 GPUs form a data parallelism group
+- **Expert Parallelism (EP)**: Not enabled
 
 **To test other parallelism configurations, adjust parameters as follows:**
-1. **TP Adjustment**: Modify `--tensor-parallel-size`
+1. **TP Adjustment**: Modify `--tensor-parallel-size`, note: ERNIE-4.5-300B model requires TP ≥ 2 to load on a single GPU when EP is not enabled
 2. **DP Adjustment**: Modify `--data-parallel-size`, ensuring `--ports` and `--num-servers` remain consistent with DP
 3. **EP Toggle**: Add or remove `--enable-expert-parallel`
 4. **GPU Allocation**: Control GPUs used by Prefill and Decode instances via `CUDA_VISIBLE_DEVICES`
@@ -117,9 +117,8 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --cache-transfer-protocol "rdma,ipc" \
     --router "0.0.0.0:8109" \
     --quantization wint4 \
-    --tensor-parallel-size 1 \
-    --data-parallel-size 4 \
-    --enable-expert-parallel \
+    --tensor-parallel-size 2 \
+    --data-parallel-size 2 \
     --max-model-len 8192 \
     --max-num-seqs 64 \
     --num-gpu-blocks-override 1024
@@ -138,9 +137,8 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --cache-transfer-protocol "rdma,ipc" \
     --router "0.0.0.0:8109" \
     --quantization wint4 \
-    --tensor-parallel-size 1 \
-    --data-parallel-size 4 \
-    --enable-expert-parallel \
+    --tensor-parallel-size 2 \
+    --data-parallel-size 2 \
     --max-model-len 8192 \
     --max-num-seqs 64 \
     --num-gpu-blocks-override 1024
@@ -157,7 +155,6 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 | `--quantization` | Quantization strategy (wint4/wint8/fp8, etc.) |
 | `--tensor-parallel-size` | Tensor parallelism degree (TP) |
 | `--data-parallel-size` | Data parallelism degree (DP) |
-| `--enable-expert-parallel` | Enable Expert Parallelism (EP) |
 | `--max-model-len` | Maximum sequence length |
 | `--max-num-seqs` | Maximum concurrent sequences |
 | `--num-gpu-blocks-override` | GPU KV Cache block count override |
@@ -177,7 +174,7 @@ Cross-machine PD disaggregation deploys Prefill and Decode instances on differen
 This chapter demonstrates the **TP1DP8EP** cross-machine configuration (16 GPUs total):
 - **Tensor Parallelism (TP)**: 1
 - **Data Parallelism (DP)**: 8 — 8 GPUs per machine, totaling 8 Prefill instances and 8 Decode instances
-- **Expert Parallelism (EP)**: Enabled
+- **Expert Parallelism (EP)**: Enabled — MoE layer shared experts are distributed across 8 GPUs for parallel computation
 
 **To test other cross-machine parallelism configurations, adjust parameters as follows:**
 1. **Inter-Machine Communication**: Ensure RDMA network connectivity between machines; Prefill machine needs `KVCACHE_RDMA_NICS` environment variable configured
@@ -266,7 +263,7 @@ curl -X POST "http://localhost:8109/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
-    {"role": "user", "content": "Hello, please introduce yourself."}
+    {"role": "user", "content": "你好，请介绍一下自己。"}
   ],
   "max_tokens": 100,
   "stream": false
