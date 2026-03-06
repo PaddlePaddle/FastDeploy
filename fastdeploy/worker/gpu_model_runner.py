@@ -1076,8 +1076,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
-        if self.enable_head_wise_kv_cache:
-            self._prepare_block_tables_3d(num_running_requests)
         if self.spec_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests, self.share_inputs.index_to_batch_id)
 
