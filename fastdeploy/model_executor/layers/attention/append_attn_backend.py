@@ -50,6 +50,22 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.spec_decode import SpecMethod
 
 
+def _debug_logging_enabled() -> bool:
+    for candidate in (logger, getattr(logger, "logger", None), getattr(logger, "_logger", None)):
+        if candidate is None:
+            continue
+        is_enabled_for = getattr(candidate, "isEnabledFor", None)
+        if callable(is_enabled_for):
+            try:
+                return bool(is_enabled_for(logging.DEBUG))
+            except Exception:
+                continue
+        level = getattr(candidate, "level", None)
+        if isinstance(level, int):
+            return level <= logging.DEBUG
+    return False
+
+
 @dataclass
 class AppendAttentionMetadata(AttentionMetadata):
     """
@@ -363,7 +379,7 @@ class AppendAttentionBackend(AttentionBackend):
         if (
             self.enable_head_wise_kv_cache
             and self.head_wise_debug_log
-            and logger.isEnabledFor(logging.DEBUG)
+            and _debug_logging_enabled()
             and not getattr(forward_meta, "is_dummy_or_profile_run", False)
             and self._head_wise_debug_log_count < 200
         ):

@@ -58,6 +58,23 @@ from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.utils import print_gpu_memory_use
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
 
+
+def _debug_logging_enabled() -> bool:
+    for candidate in (logger, getattr(logger, "logger", None), getattr(logger, "_logger", None)):
+        if candidate is None:
+            continue
+        is_enabled_for = getattr(candidate, "isEnabledFor", None)
+        if callable(is_enabled_for):
+            try:
+                return bool(is_enabled_for(logging.DEBUG))
+            except Exception:
+                continue
+        level = getattr(candidate, "level", None)
+        if isinstance(level, int):
+            return level <= logging.DEBUG
+    return False
+
+
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
         recover_decode_task,
@@ -870,7 +887,7 @@ class GPUModelRunner(ModelRunnerBase):
                         tables = []
                         for head_tables in cache_ids_2d:
                             tables.extend(head_tables)
-                        if self.head_wise_debug_log and logger.isEnabledFor(logging.DEBUG):
+                        if self.head_wise_debug_log and _debug_logging_enabled():
                             logger.debug(
                                 f"[headwise prefill] req {idx} cache_ids_2d={cache_ids_2d} tables={tables}"
                             )
@@ -1127,7 +1144,7 @@ class GPUModelRunner(ModelRunnerBase):
             req = self.forward_batch_reqs_list[b]
             cache_ids_2d = getattr(req, "block_tables_3d", None) if req is not None else None
             if cache_ids_2d is None:
-                if self.head_wise_debug_log and logger.isEnabledFor(logging.DEBUG):
+                if self.head_wise_debug_log and _debug_logging_enabled():
                     logger.debug(f"[headwise _prepare_block_tables_3d] req {b}: cache_ids_2d=None, keep rows as -1")
                 continue
             for h in range(self.kv_num_heads):
@@ -1152,7 +1169,7 @@ class GPUModelRunner(ModelRunnerBase):
             cache_id_capacity = int(self.share_inputs["caches"][0].shape[0])
         out_of_range_cnt = int((valid_ids >= cache_id_capacity).sum()) if cache_id_capacity > 0 else 0
 
-        should_log_prepare = self.head_wise_debug_log and logger.isEnabledFor(logging.DEBUG) and (
+        should_log_prepare = self.head_wise_debug_log and _debug_logging_enabled() and (
             self._head_wise_prepare_log_count < 50 or self._head_wise_prepare_log_count % 100 == 0
         )
         if should_log_prepare:
@@ -1170,7 +1187,7 @@ class GPUModelRunner(ModelRunnerBase):
                 f"[headwise _prepare_block_tables_3d invalid] out_of_range_cnt={out_of_range_cnt}, "
                 f"cache_id_capacity={cache_id_capacity}, min_id={min_id}, max_id={max_id}"
             )
-        if self.head_wise_debug_log and logger.isEnabledFor(logging.DEBUG) and self._head_wise_debug_log_count < 20:
+        if self.head_wise_debug_log and _debug_logging_enabled() and self._head_wise_debug_log_count < 20:
             logger.debug(
                 f"[headwise _prepare_block_tables_3d details] per_req_head_lens={per_req_head_lens[:num_running_requests]}"
             )
