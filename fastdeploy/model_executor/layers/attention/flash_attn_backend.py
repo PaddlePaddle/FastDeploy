@@ -245,11 +245,11 @@ class FlashAttentionBackend(AttentionBackend):
         self.encoder_block_shape_q: int = encoder_block_shape_q
         self.decoder_block_shape_q: int = decoder_block_shape_q
 
-        self.speculative_method = fd_config.speculative_config.method
+        self.speculative_method = fd_config.speculative_config.spec_method
         self.use_speculate = self.speculative_method is not None
         self.speculate_max_draft_token_num = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
+        self.num_layers_draft_model: int = int(fd_config.speculative_config.spec_method == SpecMethod.MTP)
 
         self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode
 

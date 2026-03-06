@@ -585,7 +585,7 @@ class TokenProcessor:
                 f" average accept len: {self.number_of_output_tokens / self.total_step}"
             )
 
-            if self.cfg.speculative_config.method == SpecMethod.MTP:
+            if self.cfg.speculative_config.spec_method == SpecMethod.MTP:
                 single_head_acceptance_rates = []
                 for i in range(1, self.cfg.speculative_config.num_speculative_tokens + 1):
                     if self.accept_token_num_per_head[i - 1] != 0:
@@ -1016,7 +1016,7 @@ class TokenProcessor:
         """Record metrics of speculative decoding"""
         if not hasattr(main_process_metrics, "spec_decode_draft_acceptance_rate"):
             main_process_metrics._init_speculative_metrics(
-                self.cfg.speculative_config.method,
+                self.cfg.speculative_config.spec_method,
                 self.cfg.speculative_config.num_speculative_tokens,
             )
 
@@ -1029,12 +1029,12 @@ class TokenProcessor:
         main_process_metrics.spec_decode_num_accepted_tokens_total.set(self.num_accepted_tokens)
         main_process_metrics.spec_decode_num_emitted_tokens_total.set(self.num_emitted_tokens)
 
-        if self.cfg.speculative_config.method == SpecMethod.NGRAM:
+        if self.cfg.speculative_config.spec_method == SpecMethod.NGRAM:
             main_process_metrics.spec_decode_draft_acceptance_rate.set(
                 self.num_accepted_tokens / self.num_emitted_tokens
             )
 
-        if self.cfg.speculative_config.method == SpecMethod.MTP:
+        if self.cfg.speculative_config.spec_method == SpecMethod.MTP:
             num_draft_tokens = len(real_accept_num) * self.cfg.speculative_config.num_speculative_tokens
             self.num_draft_tokens += num_draft_tokens
 

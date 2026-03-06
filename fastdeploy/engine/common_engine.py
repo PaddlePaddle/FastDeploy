@@ -564,7 +564,7 @@ class EngineService:
             cur_req.metrics = req_out.metrics
             cur_req.metrics.decode_inference_start_time = time.time()
             if (
-                self.cfg.speculative_config.method == SpecMethod.MTP
+                self.cfg.speculative_config.spec_method == SpecMethod.MTP
                 and self.cfg.scheduler_config.splitwise_role == "decode"
             ):
                 cur_req.draft_token_ids = copy.deepcopy(req_out.outputs.draft_token_ids)

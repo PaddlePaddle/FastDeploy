@@ -1820,7 +1820,7 @@ class FDConfig:
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
-        if self.speculative_config is not None and self.speculative_config.method in [
+        if self.speculative_config is not None and self.speculative_config.spec_method in [
             SpecMethod.MTP,
             SpecMethod.SUFFIX,
         ]:
@@ -2054,7 +2054,7 @@ class FDConfig:
             )
 
         # adjust speculative config
-        if self.speculative_config is not None and self.speculative_config.method == SpecMethod.MTP:
+        if self.speculative_config is not None and self.speculative_config.spec_method == SpecMethod.MTP:
             if self.scheduler_config.splitwise_role == "prefill":
                 self.speculative_config.num_speculative_tokens = 1
                 self.speculative_config.num_model_steps = 1

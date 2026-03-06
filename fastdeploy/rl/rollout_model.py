@@ -706,7 +706,7 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
         """
         super(Glm4MoeForCausalLMRL, self).__init__(fd_config)
         self.speculative_decoding = fd_config.speculative_config.method is not None
-        self.speculative_method = fd_config.speculative_config.method
+        self.speculative_method = fd_config.speculative_config.spec_method
 
         if self.speculative_decoding and self.speculative_method == SpecMethod.MTP:
             fd_config.parallel_config.tp_group = None

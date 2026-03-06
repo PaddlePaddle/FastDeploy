@@ -101,7 +101,7 @@ class MetaxModelRunner(ModelRunnerBase):
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
-        self.speculative_method = self.fd_config.speculative_config.method
+        self.speculative_method = self.fd_config.speculative_config.spec_method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
@@ -2230,7 +2230,10 @@ class MetaxModelRunner(ModelRunnerBase):
                 enable_pd_reorder=getattr(self.share_inputs, "enable_pd_reorder", False),
             )
 
-            if self.speculative_config.method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill":
+            if (
+                self.speculative_config.spec_method == SpecMethod.MTP
+                and self.scheduler_config.splitwise_role == "prefill"
+            ):
                 skip_save_output = True
             else:
                 skip_save_output = False

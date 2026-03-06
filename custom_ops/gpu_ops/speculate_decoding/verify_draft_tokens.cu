@@ -69,16 +69,10 @@ __device__ inline bool verify_one_topp(const int64_t *verify_tokens_row,
   return is_in(verify_tokens_row, draft_token, actual_cand_len);
 }
 
-// GREEDY: strict top-1 match (argmax)
-__device__ inline bool verify_one_greedy(const int64_t *verify_tokens_row,
-                                         int64_t draft_token) {
-  return verify_tokens_row[0] == draft_token;
-}
-
-// TARGET_MATCH: draft == target model's independently sampled token
-__device__ inline bool verify_one_target_match(int64_t sampled_token,
-                                               int64_t draft_token) {
-  return sampled_token == draft_token;
+// GREEDY / TARGET_MATCH: exact single-token match
+__device__ inline bool verify_one_match(int64_t target_token,
+                                        int64_t draft_token) {
+  return target_token == draft_token;
 }
 
 // ============================================================
@@ -147,9 +141,11 @@ __device__ inline int64_t topp_sampling_kernel(const int64_t *candidate_ids,
                                                curandState_t *curand_states,
                                                const int candidate_len,
                                                const float topp) {
-  const int tid = threadIdx.x;
+  // Use bid (blockIdx.x-based) index, not threadIdx.x — curand_states is
+  // allocated with size bsz, and each batch element uses one thread.
+  const int bid = blockIdx.x * blockDim.x + threadIdx.x;
   float sum_scores = 0.0f;
-  float rand_top_p = curand_uniform(curand_states + tid) * topp;
+  float rand_top_p = curand_uniform(curand_states + bid) * topp;
   for (int i = 0; i < candidate_len; i++) {
     sum_scores += candidate_scores[i];
     if (rand_top_p <= sum_scores) {
@@ -197,7 +193,6 @@ __global__ void verify_draft_tokens(
     const int *cu_seqlens_q_output,
     const int *reasoning_status,
     // Dimensions and config
-    const int real_bsz,
     const int max_bsz,
     const int max_step_tokens,
     const int end_length,
@@ -211,7 +206,7 @@ __global__ void verify_draft_tokens(
   int output_len_now = 1;
   bool stopped = false;
 
-  // Initialize step_output_len to 0 for ALL slots (including beyond real_bsz)
+  // Initialize step_output_len to 0 for ALL slots
   if (bid < max_bsz) {
     step_output_len[bid] = 0;
   }
@@ -285,12 +280,12 @@ __global__ void verify_draft_tokens(
         break;
       }
       case 1:  // GREEDY
-        accepted = verify_one_target_match(target_tokens_now[i],
-                                           step_input_ids_now[i + 1]);
+        accepted =
+            verify_one_match(target_tokens_now[i], step_input_ids_now[i + 1]);
         break;
       case 2:  // TARGET_MATCH
-        accepted = verify_one_target_match(target_tokens_now[i],
-                                           step_input_ids_now[i + 1]);
+        accepted =
+            verify_one_match(target_tokens_now[i], step_input_ids_now[i + 1]);
         break;
     }
 
@@ -365,7 +360,6 @@ void VerifyDraftTokens(
     bool reject_all,
     bool accept_all) {
   auto bsz = step_output_ids.shape()[0];
-  int real_bsz = seq_lens_this_time.shape()[0];
   auto max_step_tokens = step_input_ids.shape()[1];
   auto end_length = end_tokens.shape()[0];
   // max_candidate_len: 1 if candidate_ids not provided, else from shape
@@ -400,27 +394,28 @@ void VerifyDraftTokens(
   const int *candidate_lens_ptr =
       candidate_lens ? candidate_lens->data<int>() : nullptr;
 
-  // (Note) empty_input_forward will lead to candidate_ids being nullptr,
-  //        temporary don't check it.
-  // Validate parameters based on verify_strategy
-  // if (verify_strategy == 0 /* TOPP */) {
-  //   // TOPP requires candidate_ids, candidate_scores, candidate_lens
-  //   if (!candidate_ids_ptr || !candidate_scores_ptr || !candidate_lens_ptr) {
-  //     PD_THROW("verify_strategy=TOPP (0) requires candidate_ids,
-  //     candidate_scores, candidate_lens");
-  //   }
-  // } else if (verify_strategy == 1 /* GREEDY */) {
-  //   // GREEDY requires target_tokens (argmax)
-  //   if (!target_tokens_ptr) {
-  //     PD_THROW("verify_strategy=GREEDY (1) requires target_tokens (argmax)");
-  //   }
-  // } else if (verify_strategy == 2 /* TARGET_MATCH */) {
-  //   // TARGET_MATCH requires target_tokens (sampled)
-  //   if (!target_tokens_ptr) {
-  //     PD_THROW("verify_strategy=TARGET_MATCH (2) requires target_tokens
-  //     (sampled)");
-  //   }
-  // }
+  // Validate parameters based on verify_strategy.
+  // Note: empty_input_forward may lead to empty optional tensors — only
+  // validate when bsz > 0 (i.e. there are active sequences).
+  if (bsz > 0) {
+    if (verify_strategy == 0 /* TOPP */) {
+      if (!candidate_ids_ptr || !candidate_scores_ptr || !candidate_lens_ptr) {
+        PD_THROW(
+            "verify_strategy=TOPP (0) requires candidate_ids, "
+            "candidate_scores, candidate_lens");
+      }
+    } else if (verify_strategy == 1 /* GREEDY */) {
+      if (!target_tokens_ptr) {
+        PD_THROW("verify_strategy=GREEDY (1) requires target_tokens (argmax)");
+      }
+    } else if (verify_strategy == 2 /* TARGET_MATCH */) {
+      if (!target_tokens_ptr) {
+        PD_THROW(
+            "verify_strategy=TARGET_MATCH (2) requires target_tokens "
+            "(sampled)");
+      }
+    }
+  }
 
   verify_draft_tokens<<<1, BlockSize, 0, stream>>>(
       // Core I/O
@@ -445,7 +440,6 @@ void VerifyDraftTokens(
       cu_seqlens_q_output.data<int>(),
       reasoning_status.data<int>(),
       // Dimensions and config
-      real_bsz,
       bsz,  // max_bsz
       max_step_tokens,
       end_length,

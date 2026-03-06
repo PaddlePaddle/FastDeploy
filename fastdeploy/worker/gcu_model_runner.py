@@ -66,7 +66,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
-        self.speculative_method = self.fd_config.speculative_config.method
+        self.speculative_method = self.fd_config.speculative_config.spec_method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
 
@@ -1062,7 +1062,7 @@ class GCUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
         )
 
-        if self.speculative_config.method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill":
+        if self.speculative_config.spec_method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill":
             skip_save_output = True
         else:
             skip_save_output = False
