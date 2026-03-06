@@ -217,19 +217,17 @@ __global__ void draft_model_preprocess_kernel(
         }
       } else {  // decode generation
         if constexpr (KVCACHE_SCHEDULER_V1) {
-          // 3. try to recover mtp infer in V1 mode
+          // Recover MTP infer in V1 mode
           if (!base_model_is_block_step[tid] && is_block_step[tid]) {
             is_block_step[tid] = false;
           }
         }
         if (stop_flags[tid]) {
           stop_flags[tid] = false;
-          seq_lens_decoder[tid] =
-              base_model_seq_len_decoder - base_model_seq_len_this_time;
-          step_idx[tid] =
-              base_model_step_idx[tid] - base_model_seq_len_this_time;
+          seq_lens_decoder[tid] = base_model_seq_len_decoder - accept_num_now;
+          step_idx[tid] = base_model_step_idx[tid] - accept_num_now;
         } else {
-          // 2: Last base model generated token and first MTP token
+          // Last base model generated token and first MTP token
           int recompute_limit = max(base_model_seq_len_this_time - 2, 0);
           const int recompute_token_num_now =
               min(recompute_token_num[tid], recompute_limit);
