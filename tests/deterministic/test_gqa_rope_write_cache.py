@@ -549,33 +549,41 @@ class TestGqaRopeWriteCache:
         assert q_diff < ATOL, f"MQA Q RoPE mismatch: {q_diff}"
         assert k_diff < ATOL, f"MQA K RoPE mismatch: {k_diff}"
 
-    # B6: RoPE position consistency (cache miss vs cache hit)
+    # B6: RoPE position consistency (cache miss vs cache hit) — Q AND cache_k
     def test_b6_rope_position_consistency(self):
-        """Same raw Q at same position -> same RoPE result, regardless of cache miss/hit."""
-        num_heads, kv_num_heads, head_dim = 8, 8, 128
+        """Same raw QKV at same position -> same Q RoPE and same cache_k content,
+        regardless of cache miss (all tokens) vs cache hit (extend only + prefix offset).
+
+        This reproduces the exact scenario from test_prefix_caching_phase1:
+        - total_len=825, prefix_len=768, extend_len=57, block_size=64
+        """
+        num_heads, kv_num_heads, head_dim = 28, 4, 128
         block_size = 64
-        max_seq_len = 512
+        max_seq_len = 4096
+        total_len = 825
+        prefix_len = 768
+        extend_len = total_len - prefix_len  # 57
 
         rotary_embs = make_rotary_embs(max_seq_len, head_dim)
 
         paddle.seed(42)
         total_dim = (num_heads + 2 * kv_num_heads) * head_dim
-        qkv_all = paddle.randn([400, total_dim]).astype(COMPUTE_DTYPE)
+        qkv_all = paddle.randn([total_len, total_dim]).astype(COMPUTE_DTYPE)
 
         num_blocks = (max_seq_len + block_size - 1) // block_size
         block_tables = paddle.arange(num_blocks, dtype="int32").unsqueeze(0)
 
-        # Case A: cache miss, all 400 tokens, prefix=0
+        # Case A: cache miss — all 825 tokens, prefix=0
         cache_k_a = paddle.zeros([num_blocks, kv_num_heads, block_size, head_dim], dtype=COMPUTE_DTYPE)
         cache_v_a = paddle.zeros([num_blocks, kv_num_heads, block_size, head_dim], dtype=COMPUTE_DTYPE)
-        q_a, _, _, _ = call_gqa_rope_write_cache(
+        q_a, k_a, _, _ = call_gqa_rope_write_cache(
             qkv_all,
             cache_k_a,
             cache_v_a,
             block_tables,
-            paddle.to_tensor([400], dtype="int32"),
+            paddle.to_tensor([total_len], dtype="int32"),
             paddle.to_tensor([0], dtype="int32"),
-            paddle.to_tensor([400], dtype="int32"),
+            paddle.to_tensor([total_len], dtype="int32"),
             rotary_embs,
             num_heads,
             kv_num_heads,
@@ -584,17 +592,17 @@ class TestGqaRopeWriteCache:
             max_seq_len,
         )
 
-        # Case B: cache hit, last 16 tokens, prefix=384
+        # Case B: cache hit — last 57 tokens only, prefix=768
         cache_k_b = paddle.zeros([num_blocks, kv_num_heads, block_size, head_dim], dtype=COMPUTE_DTYPE)
         cache_v_b = paddle.zeros([num_blocks, kv_num_heads, block_size, head_dim], dtype=COMPUTE_DTYPE)
-        q_b, _, _, _ = call_gqa_rope_write_cache(
-            qkv_all[384:],
+        q_b, k_b, _, _ = call_gqa_rope_write_cache(
+            qkv_all[prefix_len:],
             cache_k_b,
             cache_v_b,
             block_tables,
-            paddle.to_tensor([16], dtype="int32"),
-            paddle.to_tensor([384], dtype="int32"),
-            paddle.to_tensor([16], dtype="int32"),
+            paddle.to_tensor([extend_len], dtype="int32"),
+            paddle.to_tensor([prefix_len], dtype="int32"),
+            paddle.to_tensor([extend_len], dtype="int32"),
             rotary_embs,
             num_heads,
             kv_num_heads,
@@ -603,11 +611,31 @@ class TestGqaRopeWriteCache:
             max_seq_len,
         )
 
-        # q_a[384:] and q_b should match (same raw Q, same position 384-399)
-        diff = paddle.abs(q_a[384:].astype("float32") - q_b.astype("float32"))
-        max_diff = float(diff.max().item())
-        print(f"\n[B6] RoPE consistency max_diff={max_diff:.6e}")
-        assert max_diff < 1e-6, f"RoPE position consistency FAILED: {max_diff}"
+        # 1) Q comparison: last 57 tokens should match
+        q_diff = float(paddle.max(paddle.abs(q_a[prefix_len:].astype("float32") - q_b.astype("float32"))).item())
+        print(f"\n[B6] Q RoPE consistency max_diff={q_diff:.6e}")
+        assert q_diff < 1e-6, f"Q RoPE position consistency FAILED: {q_diff}"
+
+        # 2) cache_k comparison: blocks for positions 768-824
+        #    Block 12 (positions 768-831) should contain tokens 768-824
+        blk_start = prefix_len // block_size  # 768/64 = 12
+        for blk_idx in range(blk_start, (total_len + block_size - 1) // block_size):
+            ck_a = cache_k_a[blk_idx]
+            ck_b = cache_k_b[blk_idx]
+            pos_start = blk_idx * block_size
+            pos_end = min(pos_start + block_size, total_len)
+            # Only compare positions that were written in both cases
+            if pos_start >= prefix_len:
+                offset_start = 0 if pos_start >= prefix_len else prefix_len - pos_start
+                offset_end = pos_end - pos_start
+                a_slice = ck_a[:, offset_start:offset_end, :]
+                b_slice = ck_b[:, offset_start:offset_end, :]
+                k_diff = float(paddle.max(paddle.abs(a_slice.astype("float32") - b_slice.astype("float32"))).item())
+                print(f"[B6] cache_k block {blk_idx} (pos {pos_start}-{pos_end-1}) max_diff={k_diff:.6e}")
+                assert k_diff == 0.0, (
+                    f"cache_k block {blk_idx} MISMATCH: max_diff={k_diff:.6e}. "
+                    f"cache miss vs cache hit wrote different K values for same positions!"
+                )
 
     # B7: head_dim=128 (kernel only reliably supports head_dim=128 with bfloat16)
     def test_b7_head_dim_128(self):

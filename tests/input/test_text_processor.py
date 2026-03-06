@@ -224,6 +224,7 @@ class DummyRequest:
         self.system = kwargs.get("system")
         self.sampling_params = SimpleNamespace(
             top_p=kwargs.get("top_p"),
+            top_k=kwargs.get("top_k", 0),
             temperature=kwargs.get("temperature"),
             repetition_penalty=kwargs.get("repetition_penalty"),
             frequency_penalty=kwargs.get("frequency_penalty"),
@@ -374,6 +375,7 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertEqual(processed["stop_token_ids"], [[4]])
         self.assertEqual(processed["stop_seqs_len"], [1])
         self.assertEqual(processed["temperature"], 1)
+        self.assertEqual(processed["top_k"], 1)
         self.assertAlmostEqual(processed["top_p"], 1e-5)
         self.assertEqual(processed["max_tokens"], 4)
 
@@ -405,6 +407,7 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertEqual(processed.sampling_params.stop_token_ids, [[4]])
         self.assertEqual(set(processed.sampling_params.bad_words_token_ids), {2, 3})
         self.assertEqual(processed.sampling_params.temperature, 1)
+        self.assertEqual(processed.sampling_params.top_k, 1)
         self.assertAlmostEqual(processed.sampling_params.top_p, 1e-5)
 
     def test_process_request_requires_prompt_or_messages(self):
