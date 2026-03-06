@@ -55,7 +55,6 @@ void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
   PADDLE_ENFORCE(head_dim == 128, "Unmatched shape");
   PADDLE_ENFORCE(batch_size > 0, "Unmatched shape");
   PADDLE_ENFORCE(batch_size == seq_len_encoder.dims()[0], "Unmatched shape");
-  PADDLE_ENFORCE(batch_size == cu_seq_k.dims()[0] - 1, "Unmatched shape");
 
   constexpr int kBlockM = 128;
   constexpr int kBlockN = 128;
