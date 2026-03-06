@@ -1019,7 +1019,7 @@ class EngineClient:
 
     def process_messages(self, messages):
         for message in messages:
-            if message.get("role") == "assistant" and "tool_calls" in message:
+            if message["role"] == "assistant" and "tool_calls" in message:
                 tool_calls = message.get("tool_calls")
                 if not isinstance(tool_calls, list):
                     continue
@@ -1030,19 +1030,9 @@ class EngineClient:
                     continue
 
                 for item in tool_calls:
-                    # Skip if item is not a dict or doesn't have "function" key
-                    if not isinstance(item, dict) or "function" not in item:
-                        continue
-                    function_info = item["function"]
-                    if not isinstance(function_info, dict):
-                        continue
                     # if arguments is None or empty string, set to {}
-                    arguments = function_info.get("arguments")
-                    if arguments is None or arguments == "":
-                        function_info["arguments"] = {}
-                    elif isinstance(arguments, str):
-                        try:
-                            function_info["arguments"] = json.loads(arguments)
-                        except json.JSONDecodeError:
-                            # Keep original string if it's not valid JSON
-                            pass
+                    if content := item["function"].get("arguments"):
+                        if not isinstance(content, (dict, list)):
+                            item["function"]["arguments"] = json.loads(content)
+                    else:
+                        item["function"]["arguments"] = {}
