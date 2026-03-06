@@ -1123,13 +1123,56 @@ class SpeculativeSampler(nn.Layer):
             (self.speculative_benchmark_mode or reject_all_drafts),
             accept_all_drafts,
         )
-        # TODO(chenhuan09): support return logprobs
-        token_ids = share_inputs["accept_tokens"]
+
+        num_logprobs = sampling_metadata.max_num_logprobs
+        logprobs_tensors = None
+        cu_batch_token_offset = None
+        if num_logprobs is not None:
+            from fastdeploy.model_executor.layers.sample.ops.speculate_logprob_utils import (
+                speculate_get_target_logits,
+            )
+
+            real_bsz = share_inputs["seq_lens_this_time"].shape[0]
+            batch_token_num = paddle.where(
+                share_inputs["seq_lens_encoder"][:real_bsz] != 0,
+                paddle.ones_like(share_inputs["seq_lens_encoder"][:real_bsz]),
+                share_inputs["seq_lens_this_time"],
+            ).flatten()
+            share_inputs["batch_token_num"] = batch_token_num
+            ori_cu_batch_token_offset = paddle.concat(
+                [paddle.to_tensor([0]), paddle.cumsum(batch_token_num)]
+            ).astype("int32")
+            cu_batch_token_offset = paddle.concat(
+                [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:real_bsz])]
+            ).astype("int32")
+            share_inputs["cu_batch_token_offset"] = cu_batch_token_offset
+            target_logits = paddle.empty(
+                [share_inputs["accept_num"][:real_bsz].sum(), logits.shape[1]], dtype=logits.dtype
+            )
+            speculate_get_target_logits(
+                target_logits,
+                logits,
+                cu_batch_token_offset,
+                ori_cu_batch_token_offset,
+                share_inputs["seq_lens_this_time"],
+                share_inputs["seq_lens_encoder"],
+                share_inputs["accept_num"],
+            )
+            if self.logprobs_mode == "raw_logprobs":
+                raw_logprobs = self.compute_logprobs(target_logits, sampling_metadata)
+            elif self.logprobs_mode == "raw_logits":
+                raw_logprobs = target_logits.clone()
+
+            idx = paddle.arange(share_inputs["accept_tokens"].shape[1], dtype="int32")
+            mask = idx < share_inputs["accept_num"].unsqueeze(1)
+            token_ids = paddle.masked_select(share_inputs["accept_tokens"], mask)
+            logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
+
         sampler_output = SamplerOutput(
-            sampled_token_ids=token_ids,
-            logprobs_tensors=None,
+            sampled_token_ids=share_inputs["accept_tokens"],
+            logprobs_tensors=logprobs_tensors,
             token_num_per_batch=share_inputs["accept_num"],
-            cu_batch_token_offset=None,
+            cu_batch_token_offset=cu_batch_token_offset,
         )
         return sampler_output
 
@@ -1352,6 +1395,18 @@ class MTPSampler(nn.Layer):
         share_inputs: List[paddle.Tensor],
     ) -> paddle.Tensor:
 
+        num_logprobs = sampling_metadata.max_num_logprobs
+        real_bsz = share_inputs["seq_lens_this_time"].shape[0]
+
+        if self.enable_draft_logprob and num_logprobs is not None and share_inputs["substep"] == 0:
+            real_token_num = share_inputs["batch_token_num"][:real_bsz].sum()
+            if self.logprobs_mode == "raw_logprobs":
+                raw_logprobs = self.compute_logprobs(
+                    share_inputs["draft_logits"][:real_token_num, :], sampling_metadata
+                )
+            elif self.logprobs_mode == "raw_logits":
+                raw_logprobs = share_inputs["draft_logits"][:real_token_num, :].clone()
+
         logits = apply_speculative_penalty_multi_scores(
             sampling_metadata.token_ids_all,
             sampling_metadata.prompt_lens,
@@ -1376,11 +1431,27 @@ class MTPSampler(nn.Layer):
         # TODO(chenhuan09): add support for logprobs
         token_ids = None
         logprobs_tensors = None
+        if self.enable_draft_logprob and num_logprobs is not None and share_inputs["substep"] == 0:
+            from fastdeploy.model_executor.layers.sample.ops.speculate_logprob_utils import (
+                speculate_insert_first_token,
+            )
+
+            token_ids = paddle.empty(real_token_num, dtype="int64")
+            speculate_insert_first_token(
+                token_ids,
+                share_inputs["accept_tokens"],
+                next_tokens,
+                share_inputs["cu_next_token_offset"],
+                share_inputs["cu_batch_token_offset"],
+                share_inputs["seq_lens_this_time"],
+                share_inputs["seq_lens_encoder"],
+            )
+            logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
 
         sampler_output = SamplerOutput(
             sampled_token_ids=token_ids,
             logprobs_tensors=logprobs_tensors,
-            token_num_per_batch=None,
-            cu_batch_token_offset=None,
+            token_num_per_batch=share_inputs["batch_token_num"][:real_bsz],
+            cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
         )
         return next_tokens, sampler_output

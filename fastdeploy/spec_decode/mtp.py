@@ -1124,7 +1124,12 @@ class MTPProposer(Proposer):
                     self.model_inputs,
                 )
 
-                if substep == 0 and sampler_output.logprobs_tensors is not None:
+                if (
+                    not is_dummy_run
+                    and self.parallel_config.tensor_parallel_rank == 0
+                    and substep == 0
+                    and sampler_output.logprobs_tensors is not None
+                ):
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
                     recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
                     recover_model_output_map = recover_batch_index_for_output(
