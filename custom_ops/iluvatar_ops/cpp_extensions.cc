@@ -49,10 +49,6 @@ void cuda_host_free(uintptr_t ptr) {
   check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
 }
 
-paddle::Tensor GetStop(paddle::Tensor& not_need_stop);
-
-void SetStop(paddle::Tensor& not_need_stop, bool flag);
-
 PYBIND11_MODULE(fastdeploy_ops, m) {
   /**
    * alloc_cache_pinned.cc
@@ -67,8 +63,4 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def(
       "cuda_host_free", &cuda_host_free, "Free pinned memory", py::arg("ptr"));
   py::register_exception<CudaError>(m, "CudaError");
-
-  m.def("get_stop", &GetStop, "get_stop function");
-
-  m.def("set_stop", &SetStop, "set_stop function");
 }

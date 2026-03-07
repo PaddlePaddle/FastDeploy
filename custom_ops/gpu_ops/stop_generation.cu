@@ -27,13 +27,13 @@
 #endif
 
 void set_flags(char *str_flags, bool *res, int length) {
-    for (int i = 0; i < length; i++) {
-        if (str_flags[i] == '0') {
-            res[i] = false;
-        } else {
-            res[i] = true;
-        }
+  for (int i = 0; i < length; i++) {
+    if (str_flags[i] == '0') {
+      res[i] = false;
+    } else {
+      res[i] = true;
     }
+  }
 }
 
 __global__ void set_value_by_flags(const bool *stop_flags,
@@ -41,14 +41,14 @@ __global__ void set_value_by_flags(const bool *stop_flags,
                                    bool *stop_flags_out,
                                    const int bs,
                                    const int64_t end_id) {
-    int tid = threadIdx.x;
-    if (tid < bs) {
-        topk_ids[tid] = stop_flags[tid] ? end_id : topk_ids[tid];
-        __syncthreads();
-        if (topk_ids[tid] == end_id) {
-            stop_flags_out[tid] = true;
-        }
+  int tid = threadIdx.x;
+  if (tid < bs) {
+    topk_ids[tid] = stop_flags[tid] ? end_id : topk_ids[tid];
+    __syncthreads();
+    if (topk_ids[tid] == end_id) {
+      stop_flags_out[tid] = true;
     }
+  }
 }
 
 __global__ void set_value_by_flags_both(const bool *flags,
@@ -57,93 +57,92 @@ __global__ void set_value_by_flags_both(const bool *flags,
                                         bool *stop_flags_out,
                                         const int bs,
                                         const int64_t end_id) {
-    int tid = threadIdx.x;
-    if (tid < bs) {
-        topk_ids[tid] = flags[tid] || stop_flags[tid] ? end_id : topk_ids[tid];
-        __syncthreads();
-        if (topk_ids[tid] == end_id) {
-            stop_flags_out[tid] = true;
-        }
+  int tid = threadIdx.x;
+  if (tid < bs) {
+    topk_ids[tid] = flags[tid] || stop_flags[tid] ? end_id : topk_ids[tid];
+    __syncthreads();
+    if (topk_ids[tid] == end_id) {
+      stop_flags_out[tid] = true;
     }
+  }
 }
 
 std::vector<paddle::Tensor> GetStopFlags(const paddle::Tensor &topk_ids,
                                          const paddle::Tensor &stop_flags,
                                          int64_t end_id,
                                          int64_t mode) {
-    // mode = 0, stop_generation and stop_flags
-    // mode = 1, just stop_generation
-    // mode = 2, just stop_flags
-    PD_CHECK(mode <= 2);
-    PD_CHECK(topk_ids.dtype() == paddle::DataType::INT64);
-    PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
-    auto cu_stream = topk_ids.stream();
-    std::vector<int64_t> shape = topk_ids.shape();
-    int64_t bs_now = shape[0];
-    auto topk_ids_out =
-        topk_ids.copy_to(topk_ids.place(), false);  // gpu -> gpu
-    auto stop_flags_out =
-        stop_flags.copy_to(stop_flags.place(), false);  // gpu -> gpu
-    if (mode == 0 || mode == 1) {
-        constexpr char *path =
-            "/root/paddlejob/workspace/env_run/lzy/ERNIE_ALL/"
-            "ERNIE3.0-fused-fp16/ops/test";
-        auto flags = paddle::full(
-            {bs_now, 1}, 1, paddle::DataType::BOOL, paddle::CPUPlace());
-        int fd = -1;
-        int ret = -1;
-        void *addr = nullptr;
-        fd = open(path, O_RDWR);
-        if (-1 == fd) {
-            perror("open error");
-        }
-        addr = mmap(NULL, bs_now, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        if (addr == MAP_FAILED) {
-            perror("mmap error");
-        }
-        close(fd);
-        set_flags((char *)addr, flags.data<bool>(), bs_now);
-        munmap(addr, bs_now);
-        auto flags_gpu = flags.copy_to(topk_ids.place(), false);  // cpu -> gpu
-        int block_size = (bs_now + 32 - 1) / 32 * 32;
-        if (mode == 0) {
-            set_value_by_flags_both<<<1, block_size, 0, cu_stream>>>(
-                flags_gpu.data<bool>(),
-                stop_flags.data<bool>(),
-                topk_ids_out.data<int64_t>(),
-                stop_flags_out.data<bool>(),
-                bs_now,
-                end_id);
-        } else {
-            set_value_by_flags<<<1, block_size, 0, cu_stream>>>(
-                flags_gpu.data<bool>(),
-                topk_ids_out.data<int64_t>(),
-                stop_flags_out.data<bool>(),
-                bs_now,
-                end_id);
-        }
-    } else if (mode == 2) {
-        int block_size = (bs_now + 32 - 1) / 32 * 32;
-        set_value_by_flags<<<1, block_size, 0, cu_stream>>>(
-            stop_flags.data<bool>(),
-            topk_ids_out.data<int64_t>(),
-            stop_flags_out.data<bool>(),
-            bs_now,
-            end_id);
+  // mode = 0, stop_generation and stop_flags
+  // mode = 1, just stop_generation
+  // mode = 2, just stop_flags
+  PD_CHECK(mode <= 2);
+  PD_CHECK(topk_ids.dtype() == paddle::DataType::INT64);
+  PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
+  auto cu_stream = topk_ids.stream();
+  std::vector<int64_t> shape = topk_ids.shape();
+  int64_t bs_now = shape[0];
+  auto topk_ids_out = topk_ids.copy_to(topk_ids.place(), false);  // gpu -> gpu
+  auto stop_flags_out =
+      stop_flags.copy_to(stop_flags.place(), false);  // gpu -> gpu
+  if (mode == 0 || mode == 1) {
+    constexpr char *path =
+        "/root/paddlejob/workspace/env_run/lzy/ERNIE_ALL/"
+        "ERNIE3.0-fused-fp16/ops/test";
+    auto flags = paddle::full(
+        {bs_now, 1}, 1, paddle::DataType::BOOL, paddle::CPUPlace());
+    int fd = -1;
+    int ret = -1;
+    void *addr = nullptr;
+    fd = open(path, O_RDWR);
+    if (-1 == fd) {
+      perror("open error");
     }
-    return {topk_ids_out, stop_flags_out};
+    addr = mmap(NULL, bs_now, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (addr == MAP_FAILED) {
+      perror("mmap error");
+    }
+    close(fd);
+    set_flags((char *)addr, flags.data<bool>(), bs_now);
+    munmap(addr, bs_now);
+    auto flags_gpu = flags.copy_to(topk_ids.place(), false);  // cpu -> gpu
+    int block_size = (bs_now + 32 - 1) / 32 * 32;
+    if (mode == 0) {
+      set_value_by_flags_both<<<1, block_size, 0, cu_stream>>>(
+          flags_gpu.data<bool>(),
+          stop_flags.data<bool>(),
+          topk_ids_out.data<int64_t>(),
+          stop_flags_out.data<bool>(),
+          bs_now,
+          end_id);
+    } else {
+      set_value_by_flags<<<1, block_size, 0, cu_stream>>>(
+          flags_gpu.data<bool>(),
+          topk_ids_out.data<int64_t>(),
+          stop_flags_out.data<bool>(),
+          bs_now,
+          end_id);
+    }
+  } else if (mode == 2) {
+    int block_size = (bs_now + 32 - 1) / 32 * 32;
+    set_value_by_flags<<<1, block_size, 0, cu_stream>>>(
+        stop_flags.data<bool>(),
+        topk_ids_out.data<int64_t>(),
+        stop_flags_out.data<bool>(),
+        bs_now,
+        end_id);
+  }
+  return {topk_ids_out, stop_flags_out};
 }
 
 std::vector<std::vector<int64_t>> GetStopFlagsInferShape(
     const std::vector<int64_t> &topk_ids_shape,
     const std::vector<int64_t> &stop_flags_shape) {
-    return {topk_ids_shape, stop_flags_shape};
+  return {topk_ids_shape, stop_flags_shape};
 }
 
 std::vector<paddle::DataType> GetStopFlagsInferDtype(
     const paddle::DataType &topk_ids_dtype,
     const paddle::DataType &stop_flags_dtype) {
-    return {topk_ids_dtype, stop_flags_dtype};
+  return {topk_ids_dtype, stop_flags_dtype};
 }
 
 PD_BUILD_STATIC_OP(set_stop_value)
