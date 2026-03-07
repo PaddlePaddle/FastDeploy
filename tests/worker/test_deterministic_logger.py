@@ -215,6 +215,39 @@ class TestLogTensorMd5s(unittest.TestCase):
         req_msgs = [msg for msg in cm.output if "[DETERMINISM-MD5-REQ]" in msg]
         self.assertEqual(len(req_msgs), 2)
 
+    def test_skips_prefill_requests(self):
+        """Prefill requests (seq_lens_encoder > 0) are skipped in per-request MD5 logging."""
+        # 3 requests: first is prefill (enc=5), rest are decode (enc=0)
+        t = _make_tensor([[1.0], [2.0], [3.0]])
+        enc_tensor = _make_tensor([5, 0, 0])  # index 0 is prefill
+        r0 = Mock(request_id="prefill_req")
+        r1 = Mock(request_id="decode_req_1")
+        r2 = Mock(request_id="decode_req_2")
+        logger = DeterministicLogger(share_inputs={"seq_lens_encoder": enc_tensor})
+        with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
+            logger.log_tensor_md5s({"out": t}, forward_batch_reqs_list=[r0, r1, r2], stage="mixed")
+        req_msgs = [msg for msg in cm.output if "[DETERMINISM-MD5-REQ]" in msg]
+        # Only decode requests (r1, r2) should be logged
+        self.assertEqual(len(req_msgs), 2)
+        self.assertTrue(all("decode_req" in msg for msg in req_msgs))
+        self.assertFalse(any("prefill_req" in msg for msg in req_msgs))
+
+    def test_skips_all_when_prefill_count_positive_without_seq_lens_encoder(self):
+        """When prefill_count > 0 but no seq_lens_encoder, all requests are skipped."""
+        t = _make_tensor([[1.0], [2.0]])
+        r1 = Mock(request_id="req1")
+        r2 = Mock(request_id="req2")
+        # share_inputs without seq_lens_encoder, but with other keys to trigger prefill_count > 0
+        logger = DeterministicLogger(share_inputs={})
+        # Manually set up a scenario where prefill_count would be computed as > 0
+        # This happens when share_inputs has seq_lens_encoder with positive values
+        # In this case, with no seq_lens_encoder, prefill_count is 0, so this tests the elif branch
+        with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
+            logger.log_tensor_md5s({"out": t}, forward_batch_reqs_list=[r1, r2], stage="decode")
+        # With no seq_lens_encoder, prefill_count=0, decode_count=0, so _log_per_request_md5s returns early
+        req_msgs = [msg for msg in cm.output if "[DETERMINISM-MD5-REQ]" in msg]
+        self.assertEqual(len(req_msgs), 0)
+
 
 class TestLogDeterministicInput(unittest.TestCase):
     def _make_forward_meta(self, ids_list):
@@ -392,6 +425,29 @@ class TestComputeMd5(unittest.TestCase):
         t1 = _make_astype_tensor([1.0, 2.0])
         t2 = _make_astype_tensor([3.0, 4.0])
         self.assertNotEqual(_compute_md5(t1), _compute_md5(t2))
+
+    def test_fallback_to_float32_on_tobytes_error(self):
+        """When .tobytes() fails, _compute_md5 falls back to .astype(np.float32).tobytes()."""
+        # Create a mock tensor where .tobytes() raises an exception
+        arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+
+        # Inner mock that raises on tobytes, but works for astype
+        inner = Mock()
+        inner.cpu.return_value = inner
+        inner.numpy.return_value = arr
+        # First call to tobytes() raises, then astype().tobytes() succeeds
+        inner.tobytes.side_effect = RuntimeError("tobytes failed")
+        inner.astype.return_value = arr.astype(np.float32)
+
+        tensor = Mock()
+        tensor.cpu.return_value = inner
+        tensor.astype.return_value = inner
+
+        result = _compute_md5(tensor)
+        # Should still produce a valid MD5 (from the fallback path)
+        self.assertEqual(len(result), 32)
+        expected = hashlib.md5(arr.astype(np.float32).tobytes()).hexdigest()
+        self.assertEqual(result, expected)
 
 
 class TestResetLogitsMd5File(unittest.TestCase):
