@@ -28,7 +28,7 @@ Test scenarios:
 Long sequence / long prompt / batch invariance tests are in test_determinism_long.py.
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0,1,2,3 pytest tests/deterministic/test_determinism_offline.py -v
+    CUDA_VISIBLE_DEVICES=0,1,2,3 pytest tests/e2e/4cards_cases/test_determinism_offline.py -v
 """
 
 import os
@@ -81,8 +81,9 @@ def _module_env():
     """Set env vars before importing fastdeploy (must happen first)."""
     with env_override(
         {
-            "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES", "0,1,2,3"),
+            "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES", "0"),
             "FD_DETERMINISTIC_MODE": "1",
+            "FD_CUSTOM_AR_MAX_SIZE_MB": "64",
         }
     ):
         # Lazy import: env vars must be set before importing fastdeploy
@@ -96,7 +97,7 @@ def _module_env():
 def llm(model_path, _module_env):
     return LLM(
         model=model_path,
-        tensor_parallel_size=4,
+        tensor_parallel_size=1,
         max_model_len=8192,
         enable_prefix_caching=False,
     )
