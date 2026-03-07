@@ -3,8 +3,8 @@
 #include "xpu/kernel/cluster_primitive.h"
 #include "xpu/kernel/cluster_primitive_template.h"
 // TODO()
-//#include "xpu/quant_xpu.h"
-//#include "xpu_plugin.h"
+// #include "xpu/quant_xpu.h"
+// #include "xpu_plugin.h"
 namespace xpu3 {
 namespace plugin {
 #define MAX_SM_SIZE 32768

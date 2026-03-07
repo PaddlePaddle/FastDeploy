@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/cutlass_extensions/epilogue/scaled_mm_epilogues_c2x.hpp
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/cutlass_extensions/epilogue/scaled_mm_epilogues_c2x.hpp
 
 #pragma once
 
@@ -24,31 +25,41 @@ using namespace cute;
  */
 template <typename ElementD, typename OutputTileThreadMap>
 struct ScaledEpilogueBase {
-protected:
+ protected:
   using Accum = cutlass::epilogue::threadblock::VisitorAccFetch;
 
   template <typename T>
   using ColOrScalarLoad =
       cutlass::epilogue::threadblock::VisitorColOrScalarBroadcast<
-          OutputTileThreadMap, T, Stride<Int<1>, Int<0>, Int<0>>>;
+          OutputTileThreadMap,
+          T,
+          Stride<Int<1>, Int<0>, Int<0>>>;
 
   template <typename T>
   using RowOrScalarLoad =
       cutlass::epilogue::threadblock::VisitorRowOrScalarBroadcast<
-          OutputTileThreadMap, T, Stride<Int<0>, Int<1>, Int<0>>>;
+          OutputTileThreadMap,
+          T,
+          Stride<Int<0>, Int<1>, Int<0>>>;
 
   template <typename T>
   using ColLoad = cutlass::epilogue::threadblock::VisitorColBroadcast<
-      OutputTileThreadMap, T, Stride<Int<1>, Int<0>, Int<0>>>;
+      OutputTileThreadMap,
+      T,
+      Stride<Int<1>, Int<0>, Int<0>>>;
 
   template <typename T>
   using RowLoad = cutlass::epilogue::threadblock::VisitorRowBroadcast<
-      OutputTileThreadMap, T, Stride<Int<0>, Int<1>, Int<0>>>;
+      OutputTileThreadMap,
+      T,
+      Stride<Int<0>, Int<1>, Int<0>>>;
 
   template <typename T>
   using RowOrZeroLoad =
       cutlass::epilogue::threadblock::VisitorRowOrZeroBroadcast<
-          OutputTileThreadMap, T, Stride<Int<0>, Int<1>, Int<0>>>;
+          OutputTileThreadMap,
+          T,
+          Stride<Int<0>, Int<1>, Int<0>>>;
 
   // This utility function constructs the arguments for the load descriptors
   // from a tensor. It can handle both row and column, as well as row/column or
@@ -56,15 +67,11 @@ protected:
   template <typename Descriptor, typename T>
   static auto args_from_tensor(paddle::Tensor const &tensor) {
     using Arguments = typename Descriptor::Arguments;
-    auto *data_ptr = static_cast<T *>(const_cast<void *>(
-        tensor.data()));
-     if constexpr (std::is_same_v<Descriptor,
-                                                     ColOrScalarLoad<T>> ||
-                                      std::is_same_v<Descriptor,
-                                                     RowOrScalarLoad<T>>) {
+    auto *data_ptr = static_cast<T *>(const_cast<void *>(tensor.data()));
+    if constexpr (std::is_same_v<Descriptor, ColOrScalarLoad<T>> ||
+                  std::is_same_v<Descriptor, RowOrScalarLoad<T>>) {
       return Arguments{data_ptr, tensor.numel() != 1};
-    }
-    else {
+    } else {
       // it would technically work but no use case as data_ptr is never nullptr
       static_assert(!std::is_same_v<Descriptor, RowOrZeroLoad<T>>);
       return Arguments{data_ptr};
@@ -102,24 +109,28 @@ protected:
 template <typename ElementD, typename OutputTileThreadMap>
 struct ScaledEpilogue
     : private ScaledEpilogueBase<ElementD, OutputTileThreadMap> {
-private:
+ private:
   using SUPER = ScaledEpilogueBase<ElementD, OutputTileThreadMap>;
   using Accum = typename SUPER::Accum;
   using ScaleA = typename SUPER::template ColOrScalarLoad<float>;
   using ScaleB = typename SUPER::template RowOrScalarLoad<float>;
 
   using Compute0 = cutlass::epilogue::threadblock::VisitorCompute<
-      cutlass::multiplies, float, float,
+      cutlass::multiplies,
+      float,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTCompute0 =
       cutlass::epilogue::threadblock::Sm80EVT<Compute0, ScaleB, Accum>;
 
   using Compute1 = cutlass::epilogue::threadblock::VisitorCompute<
-      cutlass::multiplies, ElementD, float,
+      cutlass::multiplies,
+      ElementD,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-public:
+ public:
   using EVTCompute =
       cutlass::epilogue::threadblock::Sm80EVT<Compute1, ScaleA, EVTCompute0>;
   using ArgumentType = typename EVTCompute::Arguments;
@@ -146,26 +157,30 @@ public:
 template <typename ElementD, typename OutputTileThreadMap>
 struct ScaledEpilogueBias
     : protected ScaledEpilogueBase<ElementD, OutputTileThreadMap> {
-protected:
+ protected:
   using SUPER = ScaledEpilogueBase<ElementD, OutputTileThreadMap>;
   using Accum = typename SUPER::Accum;
   using ScaleA = typename SUPER::template ColOrScalarLoad<float>;
   using ScaleB = typename SUPER::template RowOrScalarLoad<float>;
   using Bias = typename SUPER::template RowLoad<ElementD>;
   using Compute0 = cutlass::epilogue::threadblock::VisitorCompute<
-      cutlass::multiplies, float, float,
+      cutlass::multiplies,
+      float,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTCompute0 =
       cutlass::epilogue::threadblock::Sm80EVT<Compute0, ScaleB, Accum>;
 
   using Compute1 = cutlass::epilogue::threadblock::VisitorCompute<
-      cutlass::multiply_add, ElementD, float,
+      cutlass::multiply_add,
+      ElementD,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-public:
-  using EVTCompute = cutlass::epilogue::threadblock::Sm80EVT<Compute1, ScaleA,
-                                                             EVTCompute0, Bias>;
+ public:
+  using EVTCompute = cutlass::epilogue::threadblock::
+      Sm80EVT<Compute1, ScaleA, EVTCompute0, Bias>;
   using ArgumentType = typename EVTCompute::Arguments;
   static ArgumentType prepare_args(paddle::Tensor const &a_scales,
                                    paddle::Tensor const &b_scales,
@@ -190,7 +205,7 @@ public:
 template <typename ElementD, typename OutputTileThreadMap>
 struct ScaledEpilogueBiasAzp
     : protected ScaledEpilogueBase<ElementD, OutputTileThreadMap> {
-private:
+ private:
   using SUPER = ScaledEpilogueBase<ElementD, OutputTileThreadMap>;
   using Accum = typename SUPER::Accum;
   using ScaleA = typename SUPER::template ColOrScalarLoad<float>;
@@ -202,35 +217,40 @@ private:
 
   // Compute float(accum - azp_adj), both operands are int32_t
   using ComputeAzp = cutlass::epilogue::threadblock::VisitorCompute<
-      cutlass::minus, float, int32_t,
+      cutlass::minus,
+      float,
+      int32_t,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTComputeAzp =
       cutlass::epilogue::threadblock::Sm80EVT<ComputeAzp, Accum, AzpWithAdj>;
 
   using ComputeScaleB = cutlass::epilogue::threadblock::VisitorCompute<
-      cutlass::multiplies, float, float,
+      cutlass::multiplies,
+      float,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-  using EVTComputeScaleB =
-      cutlass::epilogue::threadblock::Sm80EVT<ComputeScaleB, ScaleB,
-                                              EVTComputeAzp>;
+  using EVTComputeScaleB = cutlass::epilogue::threadblock::
+      Sm80EVT<ComputeScaleB, ScaleB, EVTComputeAzp>;
 
   using ComputeScaleBiasA = cutlass::epilogue::threadblock::VisitorCompute<
-      cutlass::multiply_add, ElementD, float,
+      cutlass::multiply_add,
+      ElementD,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-public:
-  using EVTCompute =
-      cutlass::epilogue::threadblock::Sm80EVT<ComputeScaleBiasA, ScaleA,
-                                              EVTComputeScaleB, Bias>;
+ public:
+  using EVTCompute = cutlass::epilogue::threadblock::
+      Sm80EVT<ComputeScaleBiasA, ScaleA, EVTComputeScaleB, Bias>;
 
   using ArgumentType = typename EVTCompute::Arguments;
 
-  static ArgumentType
-  prepare_args(paddle::Tensor const &a_scales, paddle::Tensor const &b_scales,
-               paddle::Tensor const &azp_adj,
-               paddle::optional<paddle::Tensor> const &bias) {
+  static ArgumentType prepare_args(
+      paddle::Tensor const &a_scales,
+      paddle::Tensor const &b_scales,
+      paddle::Tensor const &azp_adj,
+      paddle::optional<paddle::Tensor> const &bias) {
     auto a_args = SUPER::template args_from_tensor<ScaleA, float>(a_scales);
     auto b_args = SUPER::template args_from_tensor<ScaleB, float>(b_scales);
     auto bias_args = SUPER::template args_from_tensor<Bias, ElementD>(bias);
@@ -257,7 +277,7 @@ public:
 template <typename ElementD, typename OutputTileThreadMap>
 struct ScaledEpilogueBiasAzpToken
     : protected ScaledEpilogueBase<ElementD, OutputTileThreadMap> {
-private:
+ private:
   using SUPER = ScaledEpilogueBase<ElementD, OutputTileThreadMap>;
   using Accum = typename SUPER::Accum;
   using ScaleA = typename SUPER::template ColOrScalarLoad<float>;
@@ -272,7 +292,9 @@ private:
 
   // Compute azp * azp_adj
   using ComputeAzp = cutlass::epilogue::threadblock::VisitorCompute<
-      cutlass::multiplies, int32_t, int32_t,
+      cutlass::multiplies,
+      int32_t,
+      int32_t,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTComputeAzp =
@@ -280,35 +302,41 @@ private:
 
   // Compute float(accum - azp*azp_adj), all operands are int32_t
   using ComputeAcc = cutlass::epilogue::threadblock::VisitorCompute<
-      cutlass::minus, float, int32_t,
+      cutlass::minus,
+      float,
+      int32_t,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
   using EVTComputeAcc =
       cutlass::epilogue::threadblock::Sm80EVT<ComputeAcc, Accum, EVTComputeAzp>;
 
   using ComputeScaleB = cutlass::epilogue::threadblock::VisitorCompute<
-      cutlass::multiplies, float, float,
+      cutlass::multiplies,
+      float,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-  using EVTComputeScaleB =
-      cutlass::epilogue::threadblock::Sm80EVT<ComputeScaleB, ScaleB,
-                                              EVTComputeAcc>;
+  using EVTComputeScaleB = cutlass::epilogue::threadblock::
+      Sm80EVT<ComputeScaleB, ScaleB, EVTComputeAcc>;
 
   using ComputeScaleBiasA = cutlass::epilogue::threadblock::VisitorCompute<
-      cutlass::multiply_add, ElementD, float,
+      cutlass::multiply_add,
+      ElementD,
+      float,
       cutlass::FloatRoundStyle::round_to_nearest>;
 
-public:
-  using EVTCompute =
-      cutlass::epilogue::threadblock::Sm80EVT<ComputeScaleBiasA, ScaleA,
-                                              EVTComputeScaleB, Bias>;
+ public:
+  using EVTCompute = cutlass::epilogue::threadblock::
+      Sm80EVT<ComputeScaleBiasA, ScaleA, EVTComputeScaleB, Bias>;
 
   using ArgumentType = typename EVTCompute::Arguments;
 
-  static ArgumentType
-  prepare_args(paddle::Tensor const &a_scales, paddle::Tensor const &b_scales,
-               paddle::Tensor const &azp_adj, paddle::Tensor const &azp,
-               paddle::optional<paddle::Tensor> const &bias) {
+  static ArgumentType prepare_args(
+      paddle::Tensor const &a_scales,
+      paddle::Tensor const &b_scales,
+      paddle::Tensor const &azp_adj,
+      paddle::Tensor const &azp,
+      paddle::optional<paddle::Tensor> const &bias) {
     auto a_args = SUPER::template args_from_tensor<ScaleA, float>(a_scales);
     auto b_args = SUPER::template args_from_tensor<ScaleB, float>(b_scales);
     auto bias_args = SUPER::template args_from_tensor<Bias, ElementD>(bias);
@@ -324,4 +352,4 @@ public:
   }
 };
 
-}; // namespace fastdeploy::c2x
+};  // namespace fastdeploy::c2x

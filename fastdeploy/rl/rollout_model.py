@@ -717,10 +717,10 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
             fd_config.parallel_config.ep_group = dist.get_group(
                 fd_config.parallel_config.data_parallel_size + envs.FD_TP_GROUP_GID_OFFSET
             )
-            self.fd_config.parallel_config.tp_group = dist.get_group(
+            self.mtp_fd_config.parallel_config.tp_group = dist.get_group(
                 fd_config.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
             )
-            self.fd_config.parallel_config.ep_group = dist.get_group(
+            self.mtp_fd_config.parallel_config.ep_group = dist.get_group(
                 fd_config.parallel_config.data_parallel_size + envs.FD_TP_GROUP_GID_OFFSET
             )
             self.update_mtp_config(self.mtp_fd_config)

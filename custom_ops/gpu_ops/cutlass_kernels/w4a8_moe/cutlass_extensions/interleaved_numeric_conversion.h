@@ -435,180 +435,197 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint4b_t, N> {
   result_type operator()(source_type const& s) { return convert(s); }
 };
 
-template<>
+template <>
 struct FastInterleavedAndBiasedNumericArrayConverter<int8_t, int8_t, 4> {
-    using result_type = Array<int8_t, 4>;
-    using source_type = Array<int8_t, 4>;
+  using result_type = Array<int8_t, 4>;
+  using source_type = Array<int8_t, 4>;
 
-    CUTLASS_DEVICE
-    static result_type convert(source_type const& source)
-    {
-        result_type result;
+  CUTLASS_DEVICE
+  static result_type convert(source_type const& source) {
+    result_type result;
 
-        uint32_t*      h   = reinterpret_cast<uint32_t*>(&result);
-        uint32_t const i8s = reinterpret_cast<uint32_t const&>(source);
+    uint32_t* h = reinterpret_cast<uint32_t*>(&result);
+    uint32_t const i8s = reinterpret_cast<uint32_t const&>(source);
 
-        // 3 2 1 0 -> 3 1 2 0
-        static constexpr uint32_t mask_for_elt     = 0x3120;
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[0]) : "r"(i8s), "r"(i8s), "n"(mask_for_elt));
+    // 3 2 1 0 -> 3 1 2 0
+    static constexpr uint32_t mask_for_elt = 0x3120;
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[0])
+                 : "r"(i8s), "r"(i8s), "n"(mask_for_elt));
 
-        // Author zhengzekang
-        uint8_t*  tmp  = reinterpret_cast<uint8_t*>(&result);
-        #pragma unroll
-        for(int i = 0; i < 4; i++){
-            result[i] = static_cast<int8_t>(static_cast<int32_t>(tmp[i]) - 128);
-        }
-        return result;
+    // Author zhengzekang
+    uint8_t* tmp = reinterpret_cast<uint8_t*>(&result);
+#pragma unroll
+    for (int i = 0; i < 4; i++) {
+      result[i] = static_cast<int8_t>(static_cast<int32_t>(tmp[i]) - 128);
     }
+    return result;
+  }
 
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s)
-    {
-        return convert(s);
-    }
+  CUTLASS_DEVICE
+  result_type operator()(source_type const& s) { return convert(s); }
 };
 
-
-template<>
+template <>
 struct FastInterleavedAndBiasedNumericArrayConverter<int8_t, int8_t, 8> {
-    using result_type = Array<int8_t, 8>;
-    using source_type = Array<int8_t, 8>;
+  using result_type = Array<int8_t, 8>;
+  using source_type = Array<int8_t, 8>;
 
-    CUTLASS_DEVICE
-    static result_type convert(source_type const& source)
-    {
-        result_type result;
+  CUTLASS_DEVICE
+  static result_type convert(source_type const& source) {
+    result_type result;
 
-        uint32_t*      h   = reinterpret_cast<uint32_t*>(&result);
-        const uint32_t * i8s = reinterpret_cast<const uint32_t*>(&source);
+    uint32_t* h = reinterpret_cast<uint32_t*>(&result);
+    const uint32_t* i8s = reinterpret_cast<const uint32_t*>(&source);
 
-        // 3 2 1 0 -> 3 1 2 0
-        static constexpr uint32_t mask_for_elt_1     = 0x7120;
-        static constexpr uint32_t mask_for_elt_2     = 0x3654;
+    // 3 2 1 0 -> 3 1 2 0
+    static constexpr uint32_t mask_for_elt_1 = 0x7120;
+    static constexpr uint32_t mask_for_elt_2 = 0x3654;
 
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[0]) : "r"(i8s[0]), "r"(i8s[1]), "n"(mask_for_elt_1));
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[1]) : "r"(i8s[0]), "r"(i8s[1]), "n"(mask_for_elt_2));
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[0])
+                 : "r"(i8s[0]), "r"(i8s[1]), "n"(mask_for_elt_1));
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[1])
+                 : "r"(i8s[0]), "r"(i8s[1]), "n"(mask_for_elt_2));
 
-        // Author zhengzekang
-        uint8_t*  tmp  = reinterpret_cast<uint8_t*>(&result);
-        #pragma unroll
-        for(int i = 0; i < 8; i++){
-            result[i] = static_cast<int8_t>(static_cast<int32_t>(tmp[i]) - 128);
-        }
-        return result;
+    // Author zhengzekang
+    uint8_t* tmp = reinterpret_cast<uint8_t*>(&result);
+#pragma unroll
+    for (int i = 0; i < 8; i++) {
+      result[i] = static_cast<int8_t>(static_cast<int32_t>(tmp[i]) - 128);
     }
+    return result;
+  }
 
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s)
-    {
-        return convert(s);
-    }
+  CUTLASS_DEVICE
+  result_type operator()(source_type const& s) { return convert(s); }
 };
 
-
-template<>
+template <>
 struct FastInterleavedAndBiasedNumericArrayConverter<int8_t, int8_t, 16> {
-    using result_type = Array<int8_t, 16>;
-    using source_type = Array<int8_t, 16>;
+  using result_type = Array<int8_t, 16>;
+  using source_type = Array<int8_t, 16>;
 
-    CUTLASS_DEVICE
-    static result_type convert(source_type const& source)
-    {
-        result_type result;
+  CUTLASS_DEVICE
+  static result_type convert(source_type const& source) {
+    result_type result;
 
-        uint32_t*      h   = reinterpret_cast<uint32_t*>(&result);
-        const uint32_t * i8s = reinterpret_cast<const uint32_t*>(&source);
+    uint32_t* h = reinterpret_cast<uint32_t*>(&result);
+    const uint32_t* i8s = reinterpret_cast<const uint32_t*>(&source);
 
-        // 3 2 1 0 -> 3 1 2 0
-        static constexpr uint32_t mask_for_elt_1     = 0x3120;
-        static constexpr uint32_t mask_for_elt_2     = 0x3120;
-        static constexpr uint32_t mask_for_elt_3     = 0x3120;
-        static constexpr uint32_t mask_for_elt_4     = 0x3120;
+    // 3 2 1 0 -> 3 1 2 0
+    static constexpr uint32_t mask_for_elt_1 = 0x3120;
+    static constexpr uint32_t mask_for_elt_2 = 0x3120;
+    static constexpr uint32_t mask_for_elt_3 = 0x3120;
+    static constexpr uint32_t mask_for_elt_4 = 0x3120;
 
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[0]) : "r"(i8s[0]), "r"(i8s[2]), "n"(mask_for_elt_1));
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[1]) : "r"(i8s[1]), "r"(i8s[3]), "n"(mask_for_elt_2));
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[2]) : "r"(i8s[2]), "r"(i8s[0]), "n"(mask_for_elt_3));
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[3]) : "r"(i8s[3]), "r"(i8s[1]), "n"(mask_for_elt_4));
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[0])
+                 : "r"(i8s[0]), "r"(i8s[2]), "n"(mask_for_elt_1));
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[1])
+                 : "r"(i8s[1]), "r"(i8s[3]), "n"(mask_for_elt_2));
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[2])
+                 : "r"(i8s[2]), "r"(i8s[0]), "n"(mask_for_elt_3));
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[3])
+                 : "r"(i8s[3]), "r"(i8s[1]), "n"(mask_for_elt_4));
 
-
-        // Author zhengzekang
-        uint8_t*  tmp  = reinterpret_cast<uint8_t*>(&result);
-        #pragma unroll
-        for(int i = 0; i < 16; i++){
-            result[i] = static_cast<int8_t>(static_cast<int32_t>(tmp[i]) - 128);
-        }
-
-        return result;
-
+    // Author zhengzekang
+    uint8_t* tmp = reinterpret_cast<uint8_t*>(&result);
+#pragma unroll
+    for (int i = 0; i < 16; i++) {
+      result[i] = static_cast<int8_t>(static_cast<int32_t>(tmp[i]) - 128);
     }
 
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s)
-    {
-        return convert(s);
-    }
+    return result;
+  }
+
+  CUTLASS_DEVICE
+  result_type operator()(source_type const& s) { return convert(s); }
 };
-template<int N>
+template <int N>
 struct FastInterleavedAndBiasedNumericArrayConverter<int8_t, int8_t, N> {
-    static constexpr int VEC_WIDTH = 4;
-    static_assert(N == 32,"N must be 32");
-    static_assert(!(N % VEC_WIDTH), "N must be multiple of 16.");
+  static constexpr int VEC_WIDTH = 4;
+  static_assert(N == 32, "N must be 32");
+  static_assert(!(N % VEC_WIDTH), "N must be multiple of 16.");
 
-    using result_type = Array<int8_t, N>;
-    using source_type = Array<int8_t, N>;
+  using result_type = Array<int8_t, N>;
+  using source_type = Array<int8_t, N>;
 
-    CUTLASS_DEVICE
-    static result_type convert(source_type const& source)
-    {
-        using scalar_result_type = typename result_type::Element;
-        using scalar_source_type = typename source_type::Element;
-        FastInterleavedAndBiasedNumericArrayConverter<scalar_result_type, scalar_source_type, VEC_WIDTH>
-            convert_vector_;
+  CUTLASS_DEVICE
+  static result_type convert(source_type const& source) {
+    using scalar_result_type = typename result_type::Element;
+    using scalar_source_type = typename source_type::Element;
+    FastInterleavedAndBiasedNumericArrayConverter<scalar_result_type,
+                                                  scalar_source_type,
+                                                  VEC_WIDTH>
+        convert_vector_;
 
-        result_type result;
-        using vec_result = Array<scalar_result_type, VEC_WIDTH>;
-        using vec_source = Array<scalar_source_type, VEC_WIDTH>;
+    result_type result;
+    using vec_result = Array<scalar_result_type, VEC_WIDTH>;
+    using vec_source = Array<scalar_source_type, VEC_WIDTH>;
 
-        vec_result*       result_ptr = reinterpret_cast<vec_result*>(&result);
-        vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
+    vec_result* result_ptr = reinterpret_cast<vec_result*>(&result);
+    vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
 
-        CUTLASS_PRAGMA_UNROLL
-        for (int32_t i = 0; i < N / VEC_WIDTH; ++i) {
-            result_ptr[i] = convert_vector_((source_ptr)[i]);
-        }
-        Array<int8_t, 8> temp_rearrange_array;
-        auto lane_idx_div4 = threadIdx.x%4;
+    CUTLASS_PRAGMA_UNROLL
+    for (int32_t i = 0; i < N / VEC_WIDTH; ++i) {
+      result_ptr[i] = convert_vector_((source_ptr)[i]);
+    }
+    Array<int8_t, 8> temp_rearrange_array;
+    auto lane_idx_div4 = threadIdx.x % 4;
 
-        CUTLASS_PRAGMA_UNROLL
-        for (int32_t i=0;i< N/8;++i){
-            uint32_t*       temp_rearrange_array_ptr = reinterpret_cast<uint32_t*>(&temp_rearrange_array);
-            uint32_t*       result_reg_ptr = reinterpret_cast<uint32_t*>(result_ptr)+i * 2;
-            temp_rearrange_array_ptr[0] = __shfl_xor_sync(0xFFFFFFFF,reinterpret_cast<uint32_t*>(result_reg_ptr)[0],3);
-            temp_rearrange_array_ptr[1] = __shfl_xor_sync(0xFFFFFFFF,reinterpret_cast<uint32_t*>(result_reg_ptr)[1],3);
-            if( lane_idx_div4==1 || lane_idx_div4==2 ){
-                result_reg_ptr[0]=temp_rearrange_array_ptr[0];
-                result_reg_ptr[1]=temp_rearrange_array_ptr[1];
-            }
-            temp_rearrange_array_ptr[0] = __shfl_xor_sync(0xFFFFFFFF,reinterpret_cast<uint32_t*>(result_reg_ptr)[0],2);
-            temp_rearrange_array_ptr[1] = __shfl_xor_sync(0xFFFFFFFF,reinterpret_cast<uint32_t*>(result_reg_ptr)[1],2);
-            if(lane_idx_div4<2){
-                asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(result_reg_ptr[0]) : "r"(result_reg_ptr[0]), "r"(temp_rearrange_array_ptr[0]), "n"(0x5410));
-                asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(result_reg_ptr[1]) : "r"(result_reg_ptr[1]), "r"(temp_rearrange_array_ptr[1]), "n"(0x5410));
-            }
-            else{
-                asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(result_reg_ptr[0]) : "r"(result_reg_ptr[0]), "r"(temp_rearrange_array_ptr[0]), "n"(0x3276));
-                asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(result_reg_ptr[1]) : "r"(result_reg_ptr[1]), "r"(temp_rearrange_array_ptr[1]), "n"(0x3276));
-            }
-        }
-
-        return result;
+    CUTLASS_PRAGMA_UNROLL
+    for (int32_t i = 0; i < N / 8; ++i) {
+      uint32_t* temp_rearrange_array_ptr =
+          reinterpret_cast<uint32_t*>(&temp_rearrange_array);
+      uint32_t* result_reg_ptr =
+          reinterpret_cast<uint32_t*>(result_ptr) + i * 2;
+      temp_rearrange_array_ptr[0] = __shfl_xor_sync(
+          0xFFFFFFFF, reinterpret_cast<uint32_t*>(result_reg_ptr)[0], 3);
+      temp_rearrange_array_ptr[1] = __shfl_xor_sync(
+          0xFFFFFFFF, reinterpret_cast<uint32_t*>(result_reg_ptr)[1], 3);
+      if (lane_idx_div4 == 1 || lane_idx_div4 == 2) {
+        result_reg_ptr[0] = temp_rearrange_array_ptr[0];
+        result_reg_ptr[1] = temp_rearrange_array_ptr[1];
+      }
+      temp_rearrange_array_ptr[0] = __shfl_xor_sync(
+          0xFFFFFFFF, reinterpret_cast<uint32_t*>(result_reg_ptr)[0], 2);
+      temp_rearrange_array_ptr[1] = __shfl_xor_sync(
+          0xFFFFFFFF, reinterpret_cast<uint32_t*>(result_reg_ptr)[1], 2);
+      if (lane_idx_div4 < 2) {
+        asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                     : "=r"(result_reg_ptr[0])
+                     : "r"(result_reg_ptr[0]),
+                       "r"(temp_rearrange_array_ptr[0]),
+                       "n"(0x5410));
+        asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                     : "=r"(result_reg_ptr[1])
+                     : "r"(result_reg_ptr[1]),
+                       "r"(temp_rearrange_array_ptr[1]),
+                       "n"(0x5410));
+      } else {
+        asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                     : "=r"(result_reg_ptr[0])
+                     : "r"(result_reg_ptr[0]),
+                       "r"(temp_rearrange_array_ptr[0]),
+                       "n"(0x3276));
+        asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                     : "=r"(result_reg_ptr[1])
+                     : "r"(result_reg_ptr[1]),
+                       "r"(temp_rearrange_array_ptr[1]),
+                       "n"(0x3276));
+      }
     }
 
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s)
-    {
-        return convert(s);
-    }
+    return result;
+  }
+
+  CUTLASS_DEVICE
+  result_type operator()(source_type const& s) { return convert(s); }
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
