@@ -363,7 +363,7 @@ void VerifyDraftTokens(
     bool reject_all,
     bool accept_all) {
   auto bsz = step_output_ids.shape()[0];
-  auto real_bsz = seq_len_this_time.shape()[0];
+  auto real_bsz = seq_lens_this_time.shape()[0];
   auto max_step_tokens = step_input_ids.shape()[1];
   auto end_length = end_tokens.shape()[0];
   // max_candidate_len: 1 if candidate_ids not provided, else from shape
