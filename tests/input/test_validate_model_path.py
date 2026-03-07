@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 import socket
 import tempfile
 import unittest
@@ -92,7 +93,7 @@ class TestValidateModelPath(unittest.TestCase):
 
         self.assertEqual(len(self._warnings), 1)
         self.assertIn("not a local directory or file", self._warnings[0])
-        self.assertIn("remote hub", self._warnings[0])
+        self.assertIn("huggingface hub", self._warnings[0])
 
     # ---- Non-local path + network unreachable ----
 
@@ -172,7 +173,59 @@ class TestValidateModelPath(unittest.TestCase):
             socket.create_connection = orig_create_conn
 
         self.assertEqual(len(self._warnings), 2)
-        self.assertIn("Cannot reach huggingface.co", self._warnings[1])
+        self.assertIn("Cannot reach", self._warnings[1])
+
+    # ---- Hub selection: DOWNLOAD_SOURCE=aistudio ----
+
+    def test_aistudio_hub_probes_correct_host(self):
+        """DOWNLOAD_SOURCE=aistudio should probe git.aistudio.baidu.com."""
+        self._patch_console_logger()
+        orig_create_conn = socket.create_connection
+        orig_env = os.environ.get("DOWNLOAD_SOURCE")
+
+        def fail_connect(*args, **kwargs):
+            raise OSError("Connection refused")
+
+        socket.create_connection = fail_connect
+        os.environ["DOWNLOAD_SOURCE"] = "aistudio"
+        try:
+            validate_model_path("some/model")
+        finally:
+            socket.create_connection = orig_create_conn
+            if orig_env is None:
+                os.environ.pop("DOWNLOAD_SOURCE", None)
+            else:
+                os.environ["DOWNLOAD_SOURCE"] = orig_env
+
+        self.assertEqual(len(self._warnings), 2)
+        self.assertIn("aistudio hub", self._warnings[0])
+        self.assertIn("Cannot reach git.aistudio.baidu.com", self._warnings[1])
+
+    # ---- Hub selection: DOWNLOAD_SOURCE=modelscope ----
+
+    def test_modelscope_hub_probes_correct_host(self):
+        """DOWNLOAD_SOURCE=modelscope should probe modelscope.cn."""
+        self._patch_console_logger()
+        orig_create_conn = socket.create_connection
+        orig_env = os.environ.get("DOWNLOAD_SOURCE")
+
+        def fail_connect(*args, **kwargs):
+            raise OSError("Connection refused")
+
+        socket.create_connection = fail_connect
+        os.environ["DOWNLOAD_SOURCE"] = "modelscope"
+        try:
+            validate_model_path("some/model")
+        finally:
+            socket.create_connection = orig_create_conn
+            if orig_env is None:
+                os.environ.pop("DOWNLOAD_SOURCE", None)
+            else:
+                os.environ["DOWNLOAD_SOURCE"] = orig_env
+
+        self.assertEqual(len(self._warnings), 2)
+        self.assertIn("modelscope hub", self._warnings[0])
+        self.assertIn("Cannot reach modelscope.cn", self._warnings[1])
 
 
 if __name__ == "__main__":
