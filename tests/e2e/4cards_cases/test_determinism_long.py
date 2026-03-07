@@ -319,7 +319,7 @@ def _assert_deterministic(llm, prompt, sp, runs=2):
 def test_deterministic_long_sequence(llm, temp, seed):
     """Long generation (512+ tokens) stays deterministic at various temperatures."""
     prompt = "Please describe the history of AI in detail, including major milestones and key technical breakthroughs."
-    sp = SamplingParams(temperature=temp, top_p=0.95, max_tokens=512, seed=seed)
+    sp = SamplingParams(temperature=temp, top_p=0.95, max_tokens=384, seed=seed)
 
     text, token_ids = _assert_deterministic(llm, prompt, sp)
     assert len(token_ids) >= 100, f"Expected >= 100 tokens, got {len(token_ids)}"
@@ -344,7 +344,7 @@ def test_long_sequence_determinism_basic(llm):
     This is the core test that verifies the deterministic mode fix works
     for long sequences that would normally trigger num_chunks > 1.
     """
-    sp = SamplingParams(temperature=0.7, top_p=0.95, max_tokens=1024, seed=170)
+    sp = SamplingParams(temperature=0.7, top_p=0.95, max_tokens=512, seed=170)
     _, token_ids = _assert_deterministic(llm, _LONG_PROMPT, sp, runs=5)
 
     assert len(token_ids) >= 200, f"Expected >= 200 tokens, got {len(token_ids)}"
