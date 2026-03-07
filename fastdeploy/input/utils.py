@@ -19,11 +19,40 @@ __all__ = [
     "MAX_IMAGE_DIMENSION",
 ]
 
+import os
+import socket
+from typing import Any, Callable, Dict, List, Tuple
+
+from fastdeploy.utils import console_logger
+
 IDS_TYPE_FLAG = {"text": 0, "image": 1, "video": 2, "audio": 3}
 
 MAX_IMAGE_DIMENSION = 9999999
 
-from typing import Any, Callable, Dict, List, Tuple
+
+def validate_model_path(model_name_or_path):
+    """
+    Validate model path before from_pretrained calls.
+    Give immediate feedback instead of letting users wait 50s+ for timeout.
+    """
+    if os.path.isdir(model_name_or_path) or os.path.isfile(model_name_or_path):
+        return  # Local path exists, no network needed
+
+    console_logger.warning(
+        f"Model path '{model_name_or_path}' is not a local directory or file, "
+        f"will try to download from remote hub."
+    )
+
+    # Quick connectivity check — fail fast instead of waiting 50s
+    try:
+        sock = socket.create_connection(("huggingface.co", 443), timeout=3)
+        sock.close()
+    except OSError:
+        console_logger.warning(
+            f"Cannot reach huggingface.co. If the model is stored locally, "
+            f"please check the path '{model_name_or_path}'. Otherwise check "
+            f"network/proxy settings or set HF_HUB_OFFLINE=1."
+        )
 
 
 def process_stop_token_ids(
