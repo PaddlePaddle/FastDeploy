@@ -1,0 +1,3 @@
+## 2025-02-12 - Fast dict serialization for slots=True dataclasses
+**Learning:** `dataclasses.asdict` is notably slow in hot code paths because it heavily relies on introspection, deep copies, and handling of complex inner datatypes dynamically. In high throughput inference engines, this adds severe overhead, especially for objects primarily composed of basic data structures. For instances declared with `slots=True`, `__dict__` doesn't exist natively.
+**Action:** Replace `asdict(obj)` with manual iterations over `obj.__slots__`, retrieving values via `getattr(obj, slot)`. Specific nested elements like `speculate_metrics` can fallback to `asdict` only when actually present.
