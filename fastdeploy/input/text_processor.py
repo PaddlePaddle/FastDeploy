@@ -23,7 +23,7 @@ from paddleformers.generation import GenerationConfig
 from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 
 from fastdeploy import envs
-from fastdeploy.input.utils import process_stop_token_ids, validate_model_path
+from fastdeploy.input.utils import process_stop_token_ids
 from fastdeploy.utils import data_processor_logger
 
 _SAMPLING_EPS = 1e-5
@@ -197,7 +197,6 @@ class DataProcessor(BaseDataProcessor):
         """
 
         self.model_name_or_path = model_name_or_path
-        validate_model_path(self.model_name_or_path)
 
         # Generation config
         try:
