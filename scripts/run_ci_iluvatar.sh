@@ -11,8 +11,8 @@ unset http_proxy
 unset https_proxy
 unset no_proxy
 
-export FD_LOG_DIR=/fdlog/$HOSTNAME
-echo "FD log will be saved into $FD_LOG_DIR"
+# export FD_LOG_DIR=/fdlog/$HOSTNAME
+# echo "FD log will be saved into $FD_LOG_DIR"
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 ln -sf /usr/local/bin/python3 /usr/local/bin/python
 function pip_install_with_retry() {

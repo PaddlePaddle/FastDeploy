@@ -716,7 +716,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                 loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             # Tensor parallelism splits the weight along the output_dim
-            if self.tp_size > 1 and output_dim is not None and not self.fd_config.load_config.is_pre_sharded:
+            if self.tp_size > 1 and not self.fd_config.load_config.is_pre_sharded:
                 block_size = self._get_shard_size_mapping(loaded_shard_id, head_dim)
                 shard_id = self.local_rank if loaded_shard_id == "q" else self.local_rank // self.num_kv_head_replicas
                 shard_offset = shard_id * block_size
