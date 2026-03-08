@@ -440,7 +440,7 @@ class EngineArgs:
     """
     SplitWise Use, Results Writer Batch Size
     """
-    enable_overlap_schedule: bool = False
+    enable_overlap_schedule: bool = True
     """
     Flag to enable overlapping schedule. Default is False (disabled).
     """
