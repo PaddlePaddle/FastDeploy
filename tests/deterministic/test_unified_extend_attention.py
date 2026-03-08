@@ -14,7 +14,8 @@ Test scenarios:
    long sequence (4096), large values, custom sm_scale
 5. Split invariance (core feature):
    cache miss vs hit produce identical output, GQA variant,
-   non-aligned prefix, multiple splits (6 different prefix lengths)
+   non-aligned prefix, multiple splits (6 different prefix lengths),
+   bfloat16 dtype, Qwen2.5-7B real-world config (28q/4kv, 825 tokens)
 6. Determinism: 5-10 runs bitwise identical, with/without prefix, GQA large batch
 7. Production-scale correctness: bs=19 SGLang-scale, seq=4096, mixed lengths, prefix
 8. Cross-validation: naive vs sdpa reference, triton vs sdpa (triple validation)
@@ -1053,24 +1054,29 @@ class TestSplitInvariance:
 
     @pytest.mark.gpu
     @pytest.mark.parametrize(
-        "total_len,prefix_a,prefix_b,num_q,num_kv,dim,blk,seed",
+        "total_len,prefix_a,prefix_b,num_q,num_kv,dim,blk,seed,dtype",
         [
-            (400, 0, 384, 4, 4, 128, 64, 42),  # basic: cache miss vs hit
-            (256, 0, 192, 8, 2, 128, 64, 123),  # GQA
-            (32, 0, 5, 4, 4, 64, 4, 42),  # non-aligned prefix
+            (400, 0, 384, 4, 4, 128, 64, 42, "float16"),  # basic: cache miss vs hit
+            (256, 0, 192, 8, 2, 128, 64, 123, "float16"),  # GQA
+            (32, 0, 5, 4, 4, 64, 4, 42, "float16"),  # non-aligned prefix
+            (825, 0, 768, 28, 4, 128, 64, 123, "bfloat16"),  # Qwen2.5-7B real-world cache hit
+            (128, 0, 64, 28, 4, 128, 64, 42, "bfloat16"),  # bf16 half prefix
+            (128, 0, 120, 28, 4, 128, 64, 42, "bfloat16"),  # bf16 mostly prefix
         ],
     )
-    def test_split_invariance_pairwise(self, total_len, prefix_a, prefix_b, num_q, num_kv, dim, blk, seed):
+    def test_split_invariance_pairwise(self, total_len, prefix_a, prefix_b, num_q, num_kv, dim, blk, seed, dtype):
         paddle.seed(seed)
-        q_all = paddle.randn([total_len, num_q, dim]).astype("float16")
-        k_all = paddle.randn([total_len, num_kv, dim]).astype("float16")
-        v_all = paddle.randn([total_len, num_kv, dim]).astype("float16")
+        q_all = paddle.randn([total_len, num_q, dim]).astype(dtype)
+        k_all = paddle.randn([total_len, num_kv, dim]).astype(dtype)
+        v_all = paddle.randn([total_len, num_kv, dim]).astype(dtype)
         out_a = self._run_with_split(q_all, k_all, v_all, total_len, prefix_a, blk, num_q, num_kv, dim)
         out_a_tail = out_a[prefix_b:]
         out_b = self._run_with_split(q_all, k_all, v_all, total_len, prefix_b, blk, num_q, num_kv, dim)
-        diff = paddle.abs(out_a_tail.astype("float32") - out_b.astype("float32"))
-        max_diff = float(diff.max().item())
-        assert max_diff < FP16_ATOL, f"Split invariance FAILED: max_diff={max_diff}"
+        out_a_f32 = out_a_tail.astype("float32").numpy()
+        out_b_f32 = out_b.astype("float32").numpy()
+        assert np.array_equal(out_a_f32, out_b_f32), (
+            f"Split invariance FAILED: not bit-identical, " f"max_diff={np.abs(out_a_f32 - out_b_f32).max()}"
+        )
 
     @pytest.mark.gpu
     def test_split_invariance_multiple_splits(self):
@@ -1086,10 +1092,12 @@ class TestSplitInvariance:
         for plen in prefix_lens_to_test:
             out = self._run_with_split(q_all, k_all, v_all, total_len, plen, blk, num_q, num_kv, dim)
             assert out.shape[0] >= extend_len
-            results.append(out[-extend_len:].astype("float32"))
+            results.append(out[-extend_len:].astype("float32").numpy())
         for i in range(1, len(results)):
-            max_diff = float(paddle.max(paddle.abs(results[0] - results[i])).item())
-            assert max_diff < FP16_ATOL, f"prefix={prefix_lens_to_test[i]} vs 0: max_diff={max_diff}"
+            assert np.array_equal(results[0], results[i]), (
+                f"prefix={prefix_lens_to_test[i]} vs 0: not bit-identical, "
+                f"max_diff={np.abs(results[0] - results[i]).max()}"
+            )
 
 
 # ===========================================================================
