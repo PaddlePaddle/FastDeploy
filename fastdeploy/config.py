@@ -1850,7 +1850,7 @@ class FDConfig:
                 max_capture_shape_prefill=max_capture_shape_prefill,
                 dec_token_per_query_per_step=dec_token_per_query_per_step,
             )
-        if self.speculative_config is not None:
+        if self.speculative_config is not None and self.speculative_config.method is not None:
             real_bsz_to_captured_size = {}
             for capture_size in self.graph_opt_config.cudagraph_capture_sizes:
                 dummy_batch_size = int(capture_size / (self.speculative_config.num_speculative_tokens + 1))
