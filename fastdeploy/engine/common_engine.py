@@ -1553,7 +1553,7 @@ class EngineService:
                                 else:
                                     new_contents.append(content)
                             if new_contents:
-                                batch_data.extend(new_contents)
+                                batch_data.append([request_id, new_contents])
 
                         # Send all request results together in one batch
                         if batch_data:
