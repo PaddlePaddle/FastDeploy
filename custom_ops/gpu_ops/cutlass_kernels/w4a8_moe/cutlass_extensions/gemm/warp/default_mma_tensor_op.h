@@ -122,10 +122,9 @@ struct DefaultMmaTensorOp<WarpShape_,
                                                       AccumulatorsInRowMajor>;
 };
 
-
-
-// Specialization for int8 int8 int32 gemm, we use instruction shape<16, 8, 32> for better performance.
-template<
+// Specialization for int8 int8 int32 gemm, we use instruction shape<16, 8, 32>
+// for better performance.
+template <
     /// Shape of one matrix production operation (concept: GemmShape)
     typename WarpShape_,
     /// Shape of one matrix production operation (concept: GemmShape)
@@ -152,48 +151,51 @@ struct DefaultMmaTensorOp<WarpShape_,
                           arch::OpMultiplyAddDequantizeInterleavedBToA,
                           PartitionsK,
                           AccumulatorsInRowMajor> {
-private:
-    // Shape for computing the FP16s
-    using ComputeInstructionShape = InstructionShape_;
+ private:
+  // Shape for computing the FP16s
+  using ComputeInstructionShape = InstructionShape_;
 
-    // Chosen so we get K=32.
-    static constexpr int LoadInstructionK = 32 * sizeof_bits<int8_t>::value / sizeof_bits<int8_t>::value;
+  // Chosen so we get K=32.
+  static constexpr int LoadInstructionK =
+      32 * sizeof_bits<int8_t>::value / sizeof_bits<int8_t>::value;
 
-    // Shape for loading the narrow data type from shared memory
-    using LoadInstructionShape = GemmShape<InstructionShape_::kM, InstructionShape_::kN, LoadInstructionK>;
+  // Shape for loading the narrow data type from shared memory
+  using LoadInstructionShape =
+      GemmShape<InstructionShape_::kM, InstructionShape_::kN, LoadInstructionK>;
 
-public:
-    using Policy = cutlass::gemm::warp::MmaTensorOpPolicy<cutlass::arch::Mma<InstructionShape_,
-                                                                             32,
-                                                                             int8_t,
-                                                                             cutlass::layout::RowMajor,
-                                                                             int8_t,
-                                                                             cutlass::layout::ColumnMajor,
-                                                                             int32_t,
-                                                                             cutlass::layout::RowMajor,
-                                                                            //  cutlass::layout::RowMajorTensorOpMultiplicandCrosswise<32,128>,
-                                                                             arch::OpMultiplyAdd>,
-                                                                             cutlass::MatrixShape<1, 1>>;
+ public:
+  using Policy = cutlass::gemm::warp::MmaTensorOpPolicy<
+      cutlass::arch::Mma<
+          InstructionShape_,
+          32,
+          int8_t,
+          cutlass::layout::RowMajor,
+          int8_t,
+          cutlass::layout::ColumnMajor,
+          int32_t,
+          cutlass::layout::RowMajor,
+          //  cutlass::layout::RowMajorTensorOpMultiplicandCrosswise<32,128>,
+          arch::OpMultiplyAdd>,
+      cutlass::MatrixShape<1, 1>>;
 
-    // Define the warp-level tensor op
-    using Type = cutlass::gemm::warp::MmaTensorOpComputeBWithF16<WarpShape_,
-                                                                 int8_t,
-                                                                 LayoutA,
-                                                                 int8_t,
-                                                                 LayoutB,
-                                                                 int32_t,
-                                                                 LayoutC,
-                                                                 Policy,
-                                                                 LoadInstructionShape,
-                                                                 PartitionsK,
-                                                                 AccumulatorsInRowMajor>;
+  // Define the warp-level tensor op
+  using Type =
+      cutlass::gemm::warp::MmaTensorOpComputeBWithF16<WarpShape_,
+                                                      int8_t,
+                                                      LayoutA,
+                                                      int8_t,
+                                                      LayoutB,
+                                                      int32_t,
+                                                      LayoutC,
+                                                      Policy,
+                                                      LoadInstructionShape,
+                                                      PartitionsK,
+                                                      AccumulatorsInRowMajor>;
 };
 
-
-
-
-// Specialization for int8 int8 int32 gemm, we use instruction shape<16, 8, 32> for better performance.
-template<
+// Specialization for int8 int8 int32 gemm, we use instruction shape<16, 8, 32>
+// for better performance.
+template <
     /// Shape of one matrix production operation (concept: GemmShape)
     typename WarpShape_,
     /// Shape of one matrix production operation (concept: GemmShape)
@@ -220,41 +222,46 @@ struct DefaultMmaTensorOp<WarpShape_,
                           arch::OpMultiplyAddDequantizeInterleavedBToA,
                           PartitionsK,
                           AccumulatorsInRowMajor> {
-private:
-    // Shape for computing the FP16s
-    using ComputeInstructionShape = InstructionShape_;
+ private:
+  // Shape for computing the FP16s
+  using ComputeInstructionShape = InstructionShape_;
 
-    // Chosen so we get K=64.
-    static constexpr int LoadInstructionK = 16 * sizeof_bits<int8_t>::value / sizeof_bits<cutlass::uint4b_t>::value;
+  // Chosen so we get K=64.
+  static constexpr int LoadInstructionK =
+      16 * sizeof_bits<int8_t>::value / sizeof_bits<cutlass::uint4b_t>::value;
 
-    // Shape for loading the narrow data type from shared memory
-    using LoadInstructionShape = GemmShape<InstructionShape_::kM, InstructionShape_::kN, LoadInstructionK>;
+  // Shape for loading the narrow data type from shared memory
+  using LoadInstructionShape =
+      GemmShape<InstructionShape_::kM, InstructionShape_::kN, LoadInstructionK>;
 
-public:
-    using Policy = cutlass::gemm::warp::MmaTensorOpPolicy<cutlass::arch::Mma<InstructionShape_,
-                                                                             32,
-                                                                             int8_t,
-                                                                             cutlass::layout::RowMajor,
-                                                                             int8_t,
-                                                                             cutlass::layout::ColumnMajor,
-                                                                             int32_t,
-                                                                             cutlass::layout::RowMajor,
-                                                                            //  cutlass::layout::RowMajorTensorOpMultiplicandCrosswise<32,128>,
-                                                                             arch::OpMultiplyAdd>,
-                                                                             cutlass::MatrixShape<1, 1>>;
+ public:
+  using Policy = cutlass::gemm::warp::MmaTensorOpPolicy<
+      cutlass::arch::Mma<
+          InstructionShape_,
+          32,
+          int8_t,
+          cutlass::layout::RowMajor,
+          int8_t,
+          cutlass::layout::ColumnMajor,
+          int32_t,
+          cutlass::layout::RowMajor,
+          //  cutlass::layout::RowMajorTensorOpMultiplicandCrosswise<32,128>,
+          arch::OpMultiplyAdd>,
+      cutlass::MatrixShape<1, 1>>;
 
-    // Define the warp-level tensor op
-    using Type = cutlass::gemm::warp::MmaTensorOpComputeBWithF16<WarpShape_,
-                                                                 int8_t,
-                                                                 LayoutA,
-                                                                 cutlass::uint4b_t,
-                                                                 LayoutB,
-                                                                 int32_t,
-                                                                 LayoutC,
-                                                                 Policy,
-                                                                 LoadInstructionShape,
-                                                                 PartitionsK,
-                                                                 AccumulatorsInRowMajor>;
+  // Define the warp-level tensor op
+  using Type =
+      cutlass::gemm::warp::MmaTensorOpComputeBWithF16<WarpShape_,
+                                                      int8_t,
+                                                      LayoutA,
+                                                      cutlass::uint4b_t,
+                                                      LayoutB,
+                                                      int32_t,
+                                                      LayoutC,
+                                                      Policy,
+                                                      LoadInstructionShape,
+                                                      PartitionsK,
+                                                      AccumulatorsInRowMajor>;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1364,6 +1364,12 @@ class XPUModelRunner(ModelRunnerBase):
         """
         max_dec_len = expected_decode_len + 1
         input_length = min(num_tokens // batch_size, self.model_config.max_model_len - max_dec_len)
+
+        # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
+        # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
+        if self.fd_config.parallel_config.enable_expert_parallel:
+            input_length = min(input_length, 32)
+
         block_num = (
             input_length + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
@@ -1634,7 +1640,7 @@ class XPUModelRunner(ModelRunnerBase):
                     sampler_output,
                     model_output_data,
                     self.share_inputs,
-                    self.parallel_config.data_parallel_size > 0,
+                    self.parallel_config.data_parallel_size > 1,
                     skip_save_output,
                 )
             else:
@@ -1644,7 +1650,7 @@ class XPUModelRunner(ModelRunnerBase):
                     share_inputs=self.share_inputs,
                     block_size=self.cache_config.block_size,
                     skip_save_output=skip_save_output,
-                    save_each_rank=self.parallel_config.data_parallel_size > 0,
+                    save_each_rank=self.parallel_config.data_parallel_size > 1,
                     async_output_queue=self.async_output_queue,
                     think_end_id=self.model_config.think_end_id,
                     line_break_id=self.model_config.line_break_id,
@@ -1710,7 +1716,11 @@ class XPUModelRunner(ModelRunnerBase):
         self.initialize_kv_cache(profile=True)
 
         self._dummy_run(
-            num_tokens=int(self.scheduler_config.max_num_batched_tokens),
+            num_tokens=(
+                self.scheduler_config.max_num_seqs
+                if self.scheduler_config.splitwise_role == "decode"
+                else self.scheduler_config.max_num_batched_tokens
+            ),
             batch_size=min(self.scheduler_config.max_num_seqs, 1),
         )
 

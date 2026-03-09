@@ -24,6 +24,13 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_gcu():
     from fastdeploy.model_executor.ops.gcu import top_p_sampling as gcu_top_p_sampling
 
+_DETERMINISTIC_RNG_SEED = 42
+
+
+def _reset_cuda_generator_for_determinism():
+    """Reset CUDA generator to fixed seed so global RNG offset is always 0."""
+    paddle.framework.core.default_cuda_generator(0).manual_seed(_DETERMINISTIC_RNG_SEED)
+
 
 def top_k_top_p_sampling(
     x: paddle.Tensor,
@@ -61,6 +68,14 @@ def top_k_top_p_sampling(
 
     """
     top_p_class = envs.FD_SAMPLING_CLASS.lower()
+
+    # In deterministic mode, reset CUDA generator offset before sampling.
+    # paddle.tensor.top_p_sampling uses the global GPU generator offset even
+    # when topp_seed is provided, causing RNG drift across generate() calls.
+    # Resetting to a fixed seed ensures the offset is always 0, making
+    # topp_seed the sole source of per-request randomness.
+    if envs.FD_DETERMINISTIC_MODE:
+        _reset_cuda_generator_for_determinism()
 
     if top_p_class == "air":
         _, ids = air_top_p_sampling(x, top_p, threshold, topp_seed, seed=seed, k=k, mode=mode)

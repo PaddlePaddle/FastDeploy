@@ -44,56 +44,63 @@ namespace cutlass {
 namespace gemm {
 namespace kernel {
 
-template<typename InAType, typename IntBType, typename OutType, typename arch, typename Enable = void>
-struct Int8Nf4GemmArchTraits {
-};
+template <typename InAType,
+          typename IntBType,
+          typename OutType,
+          typename arch,
+          typename Enable = void>
+struct Int8Nf4GemmArchTraits {};
 
-template<typename arch>
+template <typename arch>
 struct Int8Nf4GemmArchTraits<float, float, float, arch> {
-    static constexpr int Stages = 2;
-    using OperatorClass         = cutlass::arch::OpClassSimt;
-    using AccType               = float;
-    using LayoutB               = cutlass::layout::RowMajor;
+  static constexpr int Stages = 2;
+  using OperatorClass = cutlass::arch::OpClassSimt;
+  using AccType = float;
+  using LayoutB = cutlass::layout::RowMajor;
 
-    static constexpr int ElementsPerAccessA = 1;
-    static constexpr int ElementsPerAccessB = 1;
-    static constexpr int ElementsPerAccessC = 1;
-    static constexpr int ThreadblockK       = 8;
-    using InstructionShape                  = cutlass::gemm::GemmShape<1, 1, 1>;
+  static constexpr int ElementsPerAccessA = 1;
+  static constexpr int ElementsPerAccessB = 1;
+  static constexpr int ElementsPerAccessC = 1;
+  static constexpr int ThreadblockK = 8;
+  using InstructionShape = cutlass::gemm::GemmShape<1, 1, 1>;
 
-    using Operator = cutlass::arch::OpMultiplyAdd;
+  using Operator = cutlass::arch::OpMultiplyAdd;
 };
 
 // ======================= Ampere Traits ==============================
-template<typename IntAType, typename IntBType, typename OutType>
-struct Int8Nf4GemmArchTraits<IntAType,
-                          IntBType,
-                          OutType,
-                          cutlass::arch::Sm80,
-                          typename cutlass::platform::enable_if<
-                            cutlass::platform::is_same<IntBType, int8_t>::value ||
-                            cutlass::platform::is_same<IntBType, cutlass::uint4b_t>::value>::type> {
-private:
-    using LayoutDetails = LayoutDetailsB<IntBType, cutlass::arch::Sm80>;
+template <typename IntAType, typename IntBType, typename OutType>
+struct Int8Nf4GemmArchTraits<
+    IntAType,
+    IntBType,
+    OutType,
+    cutlass::arch::Sm80,
+    typename cutlass::platform::enable_if<
+        cutlass::platform::is_same<IntBType, int8_t>::value ||
+        cutlass::platform::is_same<IntBType, cutlass::uint4b_t>::value>::type> {
+ private:
+  using LayoutDetails = LayoutDetailsB<IntBType, cutlass::arch::Sm80>;
 
-public:
-    static constexpr int ThreadblockK = LayoutDetails::ThreadblockK;
+ public:
+  static constexpr int ThreadblockK = LayoutDetails::ThreadblockK;
 
-    using OperatorClass = cutlass::arch::OpClassTensorOp;
-    using AccType       = int32_t;
-    using LayoutB       = typename LayoutDetails::Layout;
+  using OperatorClass = cutlass::arch::OpClassTensorOp;
+  using AccType = int32_t;
+  using LayoutB = typename LayoutDetails::Layout;
 
-    static constexpr int ElementsPerAccessA = 128 / cutlass::sizeof_bits<IntAType>::value;
-    static constexpr int ElementsPerAccessB = LayoutDetails::ElementsPerAccess;
-    static constexpr int ElementsPerAccessC = 128 / cutlass::sizeof_bits<OutType>::value;
-    // static_assert(cutlass::platform::is_same<InType, int8_t>::value,
-    //               "input type must be int8_t");
-    // static_assert((ElementsPerAccessA == 16), "=====");
-    // static_assert((ElementsPerAccessB == 16), "=====");
-    // static_assert((ElementsPerAccessC == 8), "=====");
-    using InstructionShape                  = cutlass::gemm::GemmShape<16, 8, 32>;
-    // using InstructionShape                  = cutlass::gemm::GemmShape<16, 8, 16>;
-    using Operator = typename LayoutDetails::Operator;
+  static constexpr int ElementsPerAccessA =
+      128 / cutlass::sizeof_bits<IntAType>::value;
+  static constexpr int ElementsPerAccessB = LayoutDetails::ElementsPerAccess;
+  static constexpr int ElementsPerAccessC =
+      128 / cutlass::sizeof_bits<OutType>::value;
+  // static_assert(cutlass::platform::is_same<InType, int8_t>::value,
+  //               "input type must be int8_t");
+  // static_assert((ElementsPerAccessA == 16), "=====");
+  // static_assert((ElementsPerAccessB == 16), "=====");
+  // static_assert((ElementsPerAccessC == 8), "=====");
+  using InstructionShape = cutlass::gemm::GemmShape<16, 8, 32>;
+  // using InstructionShape                  = cutlass::gemm::GemmShape<16, 8,
+  // 16>;
+  using Operator = typename LayoutDetails::Operator;
 };
 
 }  // namespace kernel

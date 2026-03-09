@@ -70,7 +70,7 @@ class TestMTPProposer(unittest.TestCase):
             "prompt_lens": paddle.zeros([2, 1], dtype="int64"),
             "step_idx": paddle.zeros([2, 1], dtype="int64"),
             "stop_flags": paddle.zeros([2, 1], dtype="bool"),
-            "pre_ids": paddle.zeros([2, 2048], dtype="int64"),
+            "token_ids_all": paddle.zeros([2, 2048], dtype="int64"),
             "cu_seqlens_q_output": paddle.zeros([3], dtype="int32"),
             "batch_id_per_token_output": paddle.zeros([2], dtype="int32"),
             "ids_remove_padding": paddle.zeros([2], dtype="int64"),

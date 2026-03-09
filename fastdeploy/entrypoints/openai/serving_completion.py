@@ -375,8 +375,8 @@ class OpenAIServingCompletion:
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
         finally:
-            tracing.trace_req_finish(request_id)
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
+            tracing.trace_req_finish(request_id)
             self.engine_client.semaphore.release()
             if dealer is not None:
                 await self.engine_client.connection_manager.cleanup_request(request_id)
@@ -652,9 +652,8 @@ class OpenAIServingCompletion:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
             yield f"data: {ErrorResponse(error=ErrorInfo(message=str(e), code='400', type=ErrorType.INTERNAL_ERROR)).model_dump_json(exclude_unset=True)}\n\n"
         finally:
-
-            tracing.trace_req_finish(request_id)
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
+            tracing.trace_req_finish(request_id)
             del request
             if dealer is not None:
                 await self.engine_client.connection_manager.cleanup_request(request_id)

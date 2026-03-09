@@ -32,7 +32,6 @@ from fastdeploy.model_executor.ops.xpu import (
     moe_topk_select,
     quant2d_per_token,
     weight_quantize_xpu,
-    xpu_moe_layer,
 )
 from fastdeploy.model_executor.utils import (
     TensorTracker,
@@ -302,35 +301,7 @@ class XPUMoEMethod(MoEMethodBase):
         layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
         layer.down_proj_weight.set_value(stacked_down_proj_weights)
 
-    def apply_tp_fused_op(
-        self,
-        layer: nn.Layer,
-        x: paddle.Tensor,
-        gate: nn.Layer,
-        topk_ids_hookfunc: Callable = None,
-    ) -> paddle.Tensor:
-        """
-        Apply TP Fused Op.
-        """
-        fused_moe_out = xpu_moe_layer(
-            x,
-            gate.weight.transpose([1, 0]),
-            layer.gate_correction_bias,
-            layer.up_gate_proj_weight,
-            layer.down_proj_weight,
-            None,  # up_gate_proj bias
-            None,  # down_proj bias
-            getattr(layer, self.added_scale_attrs[0], None),
-            getattr(layer, self.added_scale_attrs[1], None),
-            getattr(layer, self.added_in_scale_attrs[0], None),
-            self.moe_quant_type,
-            layer.top_k,
-            False,  # moe group, used in deepseek
-        )
-
-        return fused_moe_out
-
-    def apply_tp_scatter_op(
+    def apply_tp(
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
@@ -399,23 +370,6 @@ class XPUMoEMethod(MoEMethodBase):
         )
 
         return tmp_ffn_out
-
-    def apply_tp(
-        self,
-        layer: nn.Layer,
-        x: paddle.Tensor,
-        gate: nn.Layer,
-        topk_ids_hookfunc: Callable = None,
-    ) -> paddle.Tensor:
-        """
-        apply tp
-        """
-        if self.moe_quant_type in ["w16a16"]:
-            fused_moe_out = self.apply_tp_fused_op(layer, x, gate)
-        else:
-            fused_moe_out = self.apply_tp_scatter_op(layer, x, gate)
-
-        return fused_moe_out
 
     def compute_ffn(
         self,

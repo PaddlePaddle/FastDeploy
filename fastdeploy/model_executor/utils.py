@@ -266,9 +266,8 @@ def process_final_after_loading(model, fd_config: FDConfig):
                 if hasattr(quant_method, "process_weights_after_loading"):
                     quant_method.process_weights_after_loading(sublayer)
                 continue
-        if not hasattr(sublayer, "process_weights_after_loading"):
-            continue
-        sublayer.process_weights_after_loading()
+        if hasattr(sublayer, "process_weights_after_loading"):
+            sublayer.process_weights_after_loading()
 
 
 def free_tensor(tensor):

@@ -376,7 +376,7 @@ class LLMEngine:
                 create=True,
             )
 
-        # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
+        # launched_expert_service_signal: Used to sense whether each expert_service is started successfully
         if self.cfg.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
@@ -775,20 +775,11 @@ class LLMEngine:
 
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
-        request_queues_for_dp_ipc = None
-        result_queues_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
             self.engine.scheduler.start(role, host_ip, self.cfg.register_info)
         elif self.cfg.scheduler_config.name == "dp":
-            request_queues_for_dp_ipc = []
-            result_queues_for_dp_ipc = []
-            for i in range(self.cfg.parallel_config.data_parallel_size):
-                request_queues_for_dp_ipc.append(multiprocessing.Queue())
-                result_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.engine.scheduler.start(
                 self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
-                request_queues_for_dp_ipc,
-                result_queues_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
@@ -826,8 +817,6 @@ class LLMEngine:
                                 cfg,
                                 i,
                                 None,
-                                request_queues_for_dp_ipc,
-                                result_queues_for_dp_ipc,
                             ),
                         )
                     )
