@@ -1540,7 +1540,7 @@ class TestFastDeployBatch(unittest.TestCase):
 
     def test_completions(self):
         """测试正常的批量chat请求"""
-        return_code, contents, proc = self.run_fastdeploy_command(INPUT_BATCH, port="2235")
+        return_code, contents, proc = self.run_fastdeploy_command(INPUT_BATCH, port=str(FD_CACHE_QUEUE_PORT))
         print(f"进程输出: {return_code}")
 
         self.assertEqual(return_code, 0, f"进程返回非零码: {return_code}, 进程信息: {proc}")

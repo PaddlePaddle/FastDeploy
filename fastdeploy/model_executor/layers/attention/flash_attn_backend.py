@@ -55,9 +55,11 @@ from fastdeploy.model_executor.utils import get_sm_version
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
+import os
+
+from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 
-paddle.compat.enable_torch_proxy(scope={"cutlass"})
 flashmask_attention_v4 = None
 
 if current_platform.is_cuda():
@@ -65,7 +67,6 @@ if current_platform.is_cuda():
 else:
     merge_prefill_decode_output = None
 
-import os
 
 FLASH_ATTN_VERSION = None
 
@@ -79,6 +80,7 @@ def init_flash_attn_version():
         sm_version = get_sm_version()
         if sm_version >= 100:
             try:
+                paddle.compat.enable_torch_proxy(scope={"cutlass"})
                 from flash_mask.cute.interface import flashmask_attention as fa4
 
                 global flashmask_attention_v4
@@ -97,6 +99,14 @@ def init_flash_attn_version():
                 logger.info("The current platform only support Flash Attention V2.")
     else:
         logger.info("Only support CUDA version flash attention.")
+
+
+def _is_deterministic_mode():
+    """Check if FD_DETERMINISTIC_MODE is enabled."""
+    return envs.FD_DETERMINISTIC_MODE
+
+
+init_flash_attn_version()
 
 
 def flash_attn_func(
@@ -118,6 +128,7 @@ def flash_attn_func(
         init_flash_attn_version()
     if version is None:
         version = FLASH_ATTN_VERSION
+
     if version == 4:
         assert (
             flashmask_attention_v4 is not None
@@ -255,6 +266,8 @@ class FlashAttentionBackend(AttentionBackend):
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
             fd_config.model_config, "use_3d_rope", False
         )
+        if fd_config.speculative_config.model_type != "main":
+            self.rope_3d = False
         # Note(ZKK): here must be consistent with append_attn_backend.py
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
         if FLASH_ATTN_VERSION is None:

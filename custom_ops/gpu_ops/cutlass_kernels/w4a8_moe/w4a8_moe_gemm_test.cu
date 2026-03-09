@@ -43,26 +43,31 @@ limitations under the License. */
 #include "nvToolsExt.h"
 #endif
 
-const uint32_t colors[] = {0xff00ff00, 0xff0000ff, 0xffffff00, 0xffff00ff,
-                           0xff00ffff, 0xffff0000, 0xffffffff};
+const uint32_t colors[] = {0xff00ff00,
+                           0xff0000ff,
+                           0xffffff00,
+                           0xffff00ff,
+                           0xff00ffff,
+                           0xffff0000,
+                           0xffffffff};
 const int num_colors = sizeof(colors) / sizeof(uint32_t);
 
 using CutlassTileConfig = CutlassTileConfig;
 using SplitKStyle = SplitKStyle;
 using CutlassGemmConfig = CutlassGemmConfig;
 
-#define PUSH_RANGE(name, cid)                                                  \
-  {                                                                            \
-    int color_id = cid;                                                        \
-    color_id = color_id % num_colors;                                          \
-    nvtxEventAttributes_t eventAttrib = {0};                                   \
-    eventAttrib.version = NVTX_VERSION;                                        \
-    eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;                          \
-    eventAttrib.colorType = NVTX_COLOR_ARGB;                                   \
-    eventAttrib.color = colors[color_id];                                      \
-    eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII;                         \
-    eventAttrib.message.ascii = name;                                          \
-    nvtxRangePushEx(&eventAttrib);                                             \
+#define PUSH_RANGE(name, cid)                          \
+  {                                                    \
+    int color_id = cid;                                \
+    color_id = color_id % num_colors;                  \
+    nvtxEventAttributes_t eventAttrib = {0};           \
+    eventAttrib.version = NVTX_VERSION;                \
+    eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;  \
+    eventAttrib.colorType = NVTX_COLOR_ARGB;           \
+    eventAttrib.color = colors[color_id];              \
+    eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII; \
+    eventAttrib.message.ascii = name;                  \
+    nvtxRangePushEx(&eventAttrib);                     \
   }
 #define POP_RANGE nvtxRangePop();
 #else
@@ -79,7 +84,9 @@ using CutlassGemmConfig = CutlassGemmConfig;
 // }
 
 template <typename T>
-static void PrintMatrix(const T *mat_d, int num, std::string name,
+static void PrintMatrix(const T *mat_d,
+                        int num,
+                        std::string name,
                         int numOfCols) {
   std::vector<T> tmp(num);
   cudaMemcpy(tmp.data(), mat_d, sizeof(T) * num, cudaMemcpyDeviceToHost);
@@ -104,17 +111,17 @@ static void PrintMatrix(const T *mat_d, int num, std::string name,
 
 uint as_uint(const float x) { return *(uint *)&x; }
 uint16_t ConvertFloat2Half(const float x) {
-  const uint b = as_uint(x) + 0x00001000; // round-to-nearest-even: add last
-                                          // bit after truncated mantissa
-  const uint e = (b & 0x7F800000) >> 23;  // exponent
-  const uint m = b & 0x007FFFFF; // mantissa; in line below: 0x007FF000 =
-                                 // 0x00800000-0x00001000 = decimal indicator
-                                 // flag - initial rounding
+  const uint b = as_uint(x) + 0x00001000;  // round-to-nearest-even: add last
+                                           // bit after truncated mantissa
+  const uint e = (b & 0x7F800000) >> 23;   // exponent
+  const uint m = b & 0x007FFFFF;  // mantissa; in line below: 0x007FF000 =
+                                  // 0x00800000-0x00001000 = decimal indicator
+                                  // flag - initial rounding
   return (b & 0x80000000) >> 16 |
          (e > 112) * ((((e - 112) << 10) & 0x7C00) | m >> 13) |
          ((e < 113) & (e > 101)) *
              ((((0x007FF000 + m) >> (125 - e)) + 1) >> 1) |
-         (e > 143) * 0x7FFF; // sign : normalized : denormalized : saturate
+         (e > 143) * 0x7FFF;  // sign : normalized : denormalized : saturate
 }
 
 inline float fp32_from_bits(uint32_t w) {
@@ -274,7 +281,9 @@ float CPUHalfConvert2Float(const uint16_t h) {
   return fp32_from_bits(result);
 }
 
-static void PrintHalfMatrix(const int16_t *mat_d, int num, std::string name,
+static void PrintHalfMatrix(const int16_t *mat_d,
+                            int num,
+                            std::string name,
                             int numOfCols) {
   std::vector<int16_t> tmp(num);
   cudaMemcpy(tmp.data(), mat_d, sizeof(int16_t) * num, cudaMemcpyDeviceToHost);
@@ -296,7 +305,9 @@ static void PrintHalfMatrix(const int16_t *mat_d, int num, std::string name,
 }
 
 template <typename T>
-static void PrintMatrixCPU(const T *mat, int num, std::string name,
+static void PrintMatrixCPU(const T *mat,
+                           int num,
+                           std::string name,
                            int numOfCols) {
   std::ofstream outfile;
   outfile.open(name + ".txt", std::ios::out);
@@ -315,7 +326,9 @@ static void PrintMatrixCPU(const T *mat, int num, std::string name,
   outfile.close();
 }
 
-static void PrintMatrixCPU_int4(const int8_t *mat, int num, std::string name,
+static void PrintMatrixCPU_int4(const int8_t *mat,
+                                int num,
+                                std::string name,
                                 int numOfCols) {
   std::ofstream outfile;
   outfile.open(name + ".txt", std::ios::out);
@@ -333,7 +346,9 @@ static void PrintMatrixCPU_int4(const int8_t *mat, int num, std::string name,
   outfile.close();
 }
 template <typename T>
-static void PrintHalfMatrixCPU(const T *mat, int num, std::string name,
+static void PrintHalfMatrixCPU(const T *mat,
+                               int num,
+                               std::string name,
                                int numOfCols) {
   std::ofstream outfile;
   outfile.open(name + ".txt", std::ios::out);
@@ -349,8 +364,8 @@ static void PrintHalfMatrixCPU(const T *mat, int num, std::string name,
 }
 
 template <typename T, typename outputT>
-void naive_matmul(const T *a, const T *b, outputT *c, size_t m, size_t n,
-                  size_t k) {
+void naive_matmul(
+    const T *a, const T *b, outputT *c, size_t m, size_t n, size_t k) {
   for (int ik = 0; ik < k; ik++) {
     for (int im = 0; im < m; im++) {
       for (int in = 0; in < n; in++) {
@@ -361,13 +376,17 @@ void naive_matmul(const T *a, const T *b, outputT *c, size_t m, size_t n,
 }
 
 template <typename T, typename outputT, typename ScaleType = uint16_t>
-void naive_matmul_fused_dequantize_nf4(const T *a, const T *b,
+void naive_matmul_fused_dequantize_nf4(const T *a,
+                                       const T *b,
                                        const ScaleType *col_scale,
                                        const ScaleType *row_scale,
                                        const int32_t *nf4_look_up_table,
-                                       outputT *c, size_t num_experts,
+                                       outputT *c,
+                                       size_t num_experts,
                                        int64_t *total_rows_before_experts,
-                                       size_t total_rows, size_t n, size_t k) {
+                                       size_t total_rows,
+                                       size_t n,
+                                       size_t k) {
   // PrintMatrixCPU<T>(
   //     a, total_rows * k, "naive_matmul_a", k);
   // PrintMatrixCPU<T>(
@@ -442,10 +461,15 @@ void naive_matmul_fused_dequantize_nf4(const T *a, const T *b,
 }
 
 // Author (zhengzekang): we use float to monitor half matmul in CPU.
-void CheckHalfDiff(int16_t *device_res, float *host_result, size_t elem_cnt,
-                   float atol, float rtol) {
+void CheckHalfDiff(int16_t *device_res,
+                   float *host_result,
+                   size_t elem_cnt,
+                   float atol,
+                   float rtol) {
   std::vector<int16_t> device_data(elem_cnt);
-  cudaMemcpy(device_data.data(), device_res, sizeof(int16_t) * elem_cnt,
+  cudaMemcpy(device_data.data(),
+             device_res,
+             sizeof(int16_t) * elem_cnt,
              cudaMemcpyDeviceToHost);
 
   for (size_t i = 0; i < elem_cnt; i++) {
@@ -459,7 +483,10 @@ void CheckHalfDiff(int16_t *device_res, float *host_result, size_t elem_cnt,
       printf(
           "Here in Idx: %d, CUDA result is: %f, Host result is: %f, absolute "
           "diff val is: %f \n",
-          i, device_res_val, host_res_val, absolute_diff);
+          i,
+          device_res_val,
+          host_res_val,
+          absolute_diff);
       return;
     }
   }
@@ -508,11 +535,11 @@ CutlassGemmConfig GetGemmConfig(int token_nums,
   // gemm_config_tuple:[m,n,k,tile_config,split_k_style,split_k_factor,stages]
   for (int i = 0; i < len_of_gemm_config_tuple; i += 7) {
     gemm_config.tile_config =
-        CutlassTileConfig(gemm_config_tuple[i + 3]); // tile_config
+        CutlassTileConfig(gemm_config_tuple[i + 3]);  // tile_config
     gemm_config.split_k_style =
-        SplitKStyle(gemm_config_tuple[i + 4]);             // split_k_style
-    gemm_config.split_k_factor = gemm_config_tuple[i + 5]; // split_k_factor
-    gemm_config.stages = gemm_config_tuple[i + 6];         // stages
+        SplitKStyle(gemm_config_tuple[i + 4]);              // split_k_style
+    gemm_config.split_k_factor = gemm_config_tuple[i + 5];  // split_k_factor
+    gemm_config.stages = gemm_config_tuple[i + 6];          // stages
     // make sure we have at least one tuned config
     if (token_nums <= gemm_config_tuple[i + 0]) {
       break;
@@ -522,7 +549,8 @@ CutlassGemmConfig GetGemmConfig(int token_nums,
 }
 
 template <typename T, typename U = T>
-void get_tensor_from_file(const std::string file_path, int64_t numel,
+void get_tensor_from_file(const std::string file_path,
+                          int64_t numel,
                           T *tensor_ptr) {
   std::fstream datafile;
   datafile.open(file_path, std::ios_base::in | std::ios_base::out);
@@ -641,7 +669,7 @@ int main(int argc, char *argv[]) {
   auto mixed_gemm_runner = W4A8MoeGemmRunner<half, int8_t, cutlass::uint4b_t>();
 
   // int mixgemm_max_size = std::max(m, k);
-  int mixgemm_workspace_size_bytes = 1 * 1024 * 1024 * 1024; // 1G workspace
+  int mixgemm_workspace_size_bytes = 1 * 1024 * 1024 * 1024;  // 1G workspace
   std::cout << "mixgemm_workspace_size_bytes: " << mixgemm_workspace_size_bytes
             << std::endl;
   char *mixgemm_workspace_data;
@@ -663,8 +691,8 @@ int main(int argc, char *argv[]) {
       }
     } else {
       std::cout << "get a data from: " << a_data_file << std::endl;
-      get_tensor_from_file<int8_t, int32_t>(a_data_file, total_rows * k,
-                                            a_int.data());
+      get_tensor_from_file<int8_t, int32_t>(
+          a_data_file, total_rows * k, a_int.data());
     }
     // PrintMatrixCPU<int8_t>(a_int.data(),total_rows*k,"a_int8_cpu",n);
   }
@@ -752,7 +780,8 @@ int main(int argc, char *argv[]) {
         // PrintMatrixCPU_int4(packed_b_int.data(),num_experts*k*n,"w4a8_packed_b_int4",n);
         permute_B_rows_for_mixed_gemm_int4<4>(
             b_int_processed.data() + ie * k * n / 2,
-            packed_b_int.data() + ie * k * n / 2, std::vector<size_t>{k, n},
+            packed_b_int.data() + ie * k * n / 2,
+            std::vector<size_t>{k, n},
             (int64_t)80);
 
         // PrintMatrixCPU_int4(b_int_processed.data(),num_experts*k*n,"w4a8_permuted_int4",n);
@@ -820,8 +849,8 @@ int main(int argc, char *argv[]) {
         // }
       }
     } else {
-      get_tensor_from_file<float>(row_scale_data_file, total_rows,
-                                  row_scale_float.data());
+      get_tensor_from_file<float>(
+          row_scale_data_file, total_rows, row_scale_float.data());
     }
     // PrintMatrixCPU<float>(row_scale_float.data(),total_rows,"row_scale_float_cpu",total_rows);
   }
@@ -839,8 +868,8 @@ int main(int argc, char *argv[]) {
         // }
       }
     } else {
-      get_tensor_from_file<float>(col_scale_data_file, num_experts * n,
-                                  col_scale_float.data());
+      get_tensor_from_file<float>(
+          col_scale_data_file, num_experts * n, col_scale_float.data());
     }
     // PrintMatrixCPU<float>(col_scale_float.data(),num_experts*n,"col_scale_float_cpu",n);
   }
@@ -878,21 +907,35 @@ int main(int argc, char *argv[]) {
   cudaMalloc(&d_col_scale_half, num_experts * n * sizeof(uint16_t));
   cudaMalloc(&d_nf4_look_up_table, 4 * sizeof(uint32_t));
   cudaMalloc(&d_total_rows_before_experts, num_experts * sizeof(int64_t));
-  cudaMemcpy(d_a_int, a_int.data(), total_rows * k * sizeof(int8_t),
+  cudaMemcpy(d_a_int,
+             a_int.data(),
+             total_rows * k * sizeof(int8_t),
              cudaMemcpyHostToDevice);
-  cudaMemcpy(d_b_int, b_int_processed_3.data(),
-             num_experts * k * n / 2 * sizeof(int8_t), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_b_int,
+             b_int_processed_3.data(),
+             num_experts * k * n / 2 * sizeof(int8_t),
+             cudaMemcpyHostToDevice);
 
-  cudaMemcpy(d_row_scale_half, row_scale_half.data(),
-             total_rows * sizeof(uint16_t), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_col_scale_half, col_scale_half.data(),
-             num_experts * n * sizeof(uint16_t), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_nf4_look_up_table, nf4_look_up_table_compress.data(),
-             4 * sizeof(uint32_t), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_c_int, c_half.data(), total_rows * n * sizeof(uint16_t),
+  cudaMemcpy(d_row_scale_half,
+             row_scale_half.data(),
+             total_rows * sizeof(uint16_t),
              cudaMemcpyHostToDevice);
-  cudaMemcpy(d_total_rows_before_experts, total_rows_before_experts.data(),
-             num_experts * sizeof(int64_t), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_col_scale_half,
+             col_scale_half.data(),
+             num_experts * n * sizeof(uint16_t),
+             cudaMemcpyHostToDevice);
+  cudaMemcpy(d_nf4_look_up_table,
+             nf4_look_up_table_compress.data(),
+             4 * sizeof(uint32_t),
+             cudaMemcpyHostToDevice);
+  cudaMemcpy(d_c_int,
+             c_half.data(),
+             total_rows * n * sizeof(uint16_t),
+             cudaMemcpyHostToDevice);
+  cudaMemcpy(d_total_rows_before_experts,
+             total_rows_before_experts.data(),
+             num_experts * sizeof(int64_t),
+             cudaMemcpyHostToDevice);
 
   cudaDeviceSynchronize();
   cudaError_t result = cudaGetLastError();
@@ -908,7 +951,9 @@ int main(int argc, char *argv[]) {
   std::cout << "=== do warm up for " << kWarmTime << " times" << std::endl;
   auto test_config =
       CutlassGemmConfig{CutlassTileConfig::CtaShape64x128x64_WarpShape64x32x64,
-                        SplitKStyle::NO_SPLIT_K, 1, 5};
+                        SplitKStyle::NO_SPLIT_K,
+                        1,
+                        5};
   std::cout << "=== do warm up end" << std::endl;
   for (int i = 0; i < kWarmTime; i++) {
     printf("warm up %d\n", i);
@@ -920,9 +965,16 @@ int main(int argc, char *argv[]) {
         reinterpret_cast<const half *>(d_row_scale_half),
         reinterpret_cast<const int32_t *>(d_nf4_look_up_table),
         reinterpret_cast<half *>(d_c_int),
-        reinterpret_cast<int64_t *>(d_total_rows_before_experts), -1,
-        total_rows, n, k, mixgemm_workspace_data, mixgemm_workspace_size_bytes,
-        num_experts, 0, test_config);
+        reinterpret_cast<int64_t *>(d_total_rows_before_experts),
+        -1,
+        total_rows,
+        n,
+        k,
+        mixgemm_workspace_data,
+        mixgemm_workspace_size_bytes,
+        num_experts,
+        0,
+        test_config);
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
       std::cout << "error: " << cudaGetErrorString(err) << std::endl;
@@ -1012,7 +1064,6 @@ int main(int argc, char *argv[]) {
             cudaEventCreate(&end);
             cudaEventRecord(begin, 0);
             for (int i = 0; i < kTestTime; ++i) {
-
               mixed_gemm_runner.moe_gemm(
                   reinterpret_cast<const int8_t *>(d_a_int),
                   reinterpret_cast<const cutlass::uint4b_t *>((void *)d_b_int),
@@ -1021,9 +1072,15 @@ int main(int argc, char *argv[]) {
                   reinterpret_cast<const half *>(d_row_scale_half),
                   reinterpret_cast<const int32_t *>(d_nf4_look_up_table),
                   reinterpret_cast<half *>(d_c_int),
-                  reinterpret_cast<int64_t *>(d_total_rows_before_experts), -1,
-                  total_rows, n, k, mixgemm_workspace_data,
-                  mixgemm_workspace_size_bytes, num_experts, 0,
+                  reinterpret_cast<int64_t *>(d_total_rows_before_experts),
+                  -1,
+                  total_rows,
+                  n,
+                  k,
+                  mixgemm_workspace_data,
+                  mixgemm_workspace_size_bytes,
+                  num_experts,
+                  0,
                   test_gemm_config);
             }
             cudaEventRecord(end, 0);
@@ -1149,37 +1206,58 @@ int main(int argc, char *argv[]) {
   if (do_check) {
     std::cout << "=== do accuracy check " << std::endl;
     cudaMemset(d_c_int, 0, total_rows * n * sizeof(uint16_t));
-    PrintHalfMatrix(static_cast<int16_t *>(d_c_int), total_rows * n,
-                    "CUDA_c_dequantize_fp16_output_before_gemm", n);
+    PrintHalfMatrix(static_cast<int16_t *>(d_c_int),
+                    total_rows * n,
+                    "CUDA_c_dequantize_fp16_output_before_gemm",
+                    n);
 
     mixed_gemm_runner.moe_gemm(
         reinterpret_cast<const int8_t *>(d_a_int),
         reinterpret_cast<const cutlass::uint4b_t *>((void *)d_b_int),
         cutlass::epilogue::QuantMode::PerChannelQuant,
         reinterpret_cast<const half *>(d_col_scale_half),
-        nullptr, // reinterpret_cast<const half*>(d_row_scale_half),
-        nullptr, // reinterpret_cast<const int32_t*>(d_nf4_look_up_table),
+        nullptr,  // reinterpret_cast<const half*>(d_row_scale_half),
+        nullptr,  // reinterpret_cast<const int32_t*>(d_nf4_look_up_table),
         reinterpret_cast<half *>(d_c_int),
-        reinterpret_cast<int64_t *>(d_total_rows_before_experts), -1,
-        total_rows, n, k, mixgemm_workspace_data, mixgemm_workspace_size_bytes,
-        num_experts, 0);
+        reinterpret_cast<int64_t *>(d_total_rows_before_experts),
+        -1,
+        total_rows,
+        n,
+        k,
+        mixgemm_workspace_data,
+        mixgemm_workspace_size_bytes,
+        num_experts,
+        0);
     cudaDeviceSynchronize();
     // PrintMatrix<int32_t>(reinterpret_cast<const
     // int32_t*>(d_nf4_look_up_table),4,"d_nf4_look_up_table",1);
     printf("##### d_nf4_look_up_table address: %p \n", d_nf4_look_up_table);
 
     naive_matmul_fused_dequantize_nf4<int8_t, float, float>(
-        a_int.data(), b_int.data(), col_scale_float.data(),
-        nullptr, // row_scale_float.data(),
-        nullptr, // nf4_look_up_table.data(),
-        c_float.data(), num_experts, total_rows_before_experts.data(),
-        total_rows, n, k);
-    PrintMatrixCPU<float>(c_float.data(), total_rows * n,
-                          "CPU_c_fake_fp16_dequantize_output_base", n);
-    PrintHalfMatrix(static_cast<int16_t *>(d_c_int), total_rows * n,
-                    "CUDA_c_dequantize_fp16_output", n);
-    CheckHalfDiff(static_cast<int16_t *>(d_c_int), c_float.data(),
-                  total_rows * n, 1e-4, 1e-2);
+        a_int.data(),
+        b_int.data(),
+        col_scale_float.data(),
+        nullptr,  // row_scale_float.data(),
+        nullptr,  // nf4_look_up_table.data(),
+        c_float.data(),
+        num_experts,
+        total_rows_before_experts.data(),
+        total_rows,
+        n,
+        k);
+    PrintMatrixCPU<float>(c_float.data(),
+                          total_rows * n,
+                          "CPU_c_fake_fp16_dequantize_output_base",
+                          n);
+    PrintHalfMatrix(static_cast<int16_t *>(d_c_int),
+                    total_rows * n,
+                    "CUDA_c_dequantize_fp16_output",
+                    n);
+    CheckHalfDiff(static_cast<int16_t *>(d_c_int),
+                  c_float.data(),
+                  total_rows * n,
+                  1e-4,
+                  1e-2);
   }
 
   // if(kTestTime > 0){

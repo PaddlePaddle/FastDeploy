@@ -724,6 +724,8 @@ inline bool getBoolEnv(char const *name) {
 }
 
 bool getEnvEnablePDL();
+bool getEnvDeterministicMode();
+bool getEnvDeterministicDebug();
 
 #ifndef PADDLE_WITH_COREX
 template <typename KernelFn, typename... Args>
