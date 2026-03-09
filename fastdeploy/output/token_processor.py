@@ -393,7 +393,7 @@ class TokenProcessor:
                     batch_result = self._process_batch_output_use_zmq(receive_datas)
                     self.postprocess(batch_result)
             except Exception as e:
-                llm_logger.error(f"Recieve message:{receive_datas}, error:{e}")
+                llm_logger.error(f"Receive message:{receive_datas}, error:{e}")
                 continue
 
     def process_sampling_results(self):
@@ -753,7 +753,7 @@ class TokenProcessor:
             tracing.trace_set_proc_propagate_context(rid, trace_carrier, ts)
             if self.cfg.speculative_config.method:
                 self._record_speculative_decoding_accept_num_per_request(task_id, accept_num[i])
-                if accept_num[i] == PREEMPTED_TOKEN_ID:  # in MTP, meas preemption has happend in worker
+                if accept_num[i] == PREEMPTED_TOKEN_ID:  # in MTP, means preemption has happened in worker
                     llm_logger.info(f"sync preemption for request_id {task_id} done.")
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.abort_req_ids_set:
