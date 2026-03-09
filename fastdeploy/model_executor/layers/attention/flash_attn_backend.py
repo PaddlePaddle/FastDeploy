@@ -55,6 +55,9 @@ from fastdeploy.model_executor.utils import get_sm_version
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
+import os
+
+from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 
 flashmask_attention_v4 = None
@@ -64,7 +67,6 @@ if current_platform.is_cuda():
 else:
     merge_prefill_decode_output = None
 
-import os
 
 FLASH_ATTN_VERSION = None
 
@@ -99,6 +101,11 @@ def init_flash_attn_version():
         logger.info("Only support CUDA version flash attention.")
 
 
+def _is_deterministic_mode():
+    """Check if FD_DETERMINISTIC_MODE is enabled."""
+    return envs.FD_DETERMINISTIC_MODE
+
+
 init_flash_attn_version()
 
 
@@ -121,6 +128,7 @@ def flash_attn_func(
         init_flash_attn_version()
     if version is None:
         version = FLASH_ATTN_VERSION
+
     if version == 4:
         assert (
             flashmask_attention_v4 is not None
