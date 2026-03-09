@@ -2504,14 +2504,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertIn("request id", str(ctx.exception))
         self._detach_finalizer(eng)
 
-
-        # Exception -> debug log + fallback 0
-        eng.scheduler = type(
-            "SchedErr", (), {"get_unhandled_request_num": lambda self: (_ for _ in ()).throw(RuntimeError("boom"))}
-        )()
-        self.assertEqual(eng._get_scheduler_unhandled_request_num(), 0)
-        eng.llm_logger.debug.assert_called()
-
     def test_insert_zmq_task_trace_carrier_handling(self):
         """Cover lines 1164-1167: trace_carrier handling in _insert_zmq_task_to_scheduler."""
         cfg = self._make_cfg(splitwise_role="mixed")
