@@ -791,6 +791,8 @@ class SpeculativeConfig:
 
     def _apply_user_args(self, args: Dict[str, Any]):
         """Apply user-provided arguments."""
+        if args is None:
+            return
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -814,7 +816,7 @@ class SpeculativeConfig:
         for env_var, (config_key, env_value) in self._ENV_OVERRIDES.items():
             if os.environ.get(env_var, "0") == "1":
                 # Only apply if user didn't explicitly set this config
-                if config_key not in user_args:
+                if user_args is None or config_key not in user_args:
                     setattr(self, config_key, env_value)
 
     def _convert_and_validate(self):

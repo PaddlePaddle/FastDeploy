@@ -30,14 +30,16 @@ from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
 from fastdeploy.model_executor.layers.sample.early_stopper import (
     get_early_stopper_cls_from_stragegy,
 )
-from fastdeploy.model_executor.layers.sample.logprobs import batched_count_greater_than
+from fastdeploy.model_executor.layers.sample.logprobs import (
+    batched_count_greater_than,
+    build_output_logprobs,
+)
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores,
     apply_speculative_penalty_multi_scores,
     min_p_sampling,
     reasoning_phase_token_constraint,
-    speculate_get_target_logits,
     speculate_insert_first_token,
     top_k_top_p_sampling,
 )
@@ -756,6 +758,7 @@ class SpeculativeSampler(nn.Layer):
     def _verify_and_sample(
         self,
         logits: paddle.Tensor,
+        probs: paddle.Tensor,
         sampling_metadata: SamplingMetadata,
         max_model_len: int,
         share_inputs: List[paddle.Tensor],
@@ -769,7 +772,8 @@ class SpeculativeSampler(nn.Layer):
         with target model predictions to determine acceptance/rejection.
 
         Args:
-            logits: Target model output logits
+            logits: Target model raw logits
+            probs: Target model softmax output
             sampling_metadata: Sampling parameters and metadata
             max_model_len: Maximum model sequence length
             share_inputs: Shared input tensors including draft_tokens, accept_tokens, etc.
@@ -783,50 +787,6 @@ class SpeculativeSampler(nn.Layer):
             top_p_candidates,
             verify_draft_tokens,
         )
-
-        if sampling_metadata.token_ids_all is not None:
-            token_ids_all = sampling_metadata.token_ids_all
-            prompt_lens = sampling_metadata.prompt_lens
-        else:
-            token_ids_all = sampling_metadata.pre_token_ids
-            prompt_lens = sampling_metadata.fake_prompt_lens
-        logits = apply_speculative_penalty_multi_scores(
-            token_ids_all,
-            prompt_lens,
-            logits,
-            sampling_metadata.repetition_penalties,
-            sampling_metadata.frequency_penalties,
-            sampling_metadata.presence_penalties,
-            sampling_metadata.temperature,
-            sampling_metadata.bad_words_token_ids,
-            sampling_metadata.bad_words_token_len,
-            sampling_metadata.step_idx,
-            sampling_metadata.min_dec_lens,
-            sampling_metadata.eos_token_ids,
-            share_inputs["seq_lens_this_time"],
-            share_inputs["batch_id_per_token_output"],
-            share_inputs["cu_seqlens_q_output"],
-            max_model_len,
-        )
-
-        if self.enf_gen_phase_tag:
-            reasoning_phase_token_constraint(
-                logits,
-                token_ids_all,
-                prompt_lens,
-                share_inputs["stop_flags"],
-                share_inputs["seq_lens_this_time"],
-                share_inputs["seq_lens_encoder"],
-                share_inputs["step_idx"],
-                share_inputs["reasoning_allowed_tokens"],
-                share_inputs["reasoning_status"],
-                share_inputs["batch_id_per_token_output"],
-                share_inputs["cu_seqlens_q_output"],
-                share_inputs["enable_thinking"],
-                self.think_end_id,
-                self.line_break_id,
-            )
-        probs = F.softmax(logits)
 
         # Prepare strategy-specific tensors
         # TARGET_MATCH: needs target_tokens=sampled, candidates=None
@@ -892,61 +852,17 @@ class SpeculativeSampler(nn.Layer):
             final_accept_all,
         )
 
-        num_logprobs = sampling_metadata.max_num_logprobs
-        batch_token_num = None
-        if num_logprobs is not None:
-            real_bsz = share_inputs["seq_lens_this_time"].shape[0]
-            batch_token_num = paddle.where(
-                share_inputs["seq_lens_encoder"][:real_bsz] != 0,
-                paddle.ones_like(share_inputs["seq_lens_encoder"][:real_bsz]),
-                share_inputs["seq_lens_this_time"],
-            ).flatten()
-            share_inputs["batch_token_num"] = batch_token_num
-            ori_cu_batch_token_offset = paddle.concat([paddle.to_tensor([0]), paddle.cumsum(batch_token_num)]).astype(
-                "int32"
-            )
-            cu_batch_token_offset = paddle.concat(
-                [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:real_bsz])]
-            ).astype("int32")
-            share_inputs["cu_batch_token_offset"] = cu_batch_token_offset
-            target_logits = paddle.empty(
-                [share_inputs["accept_num"][:real_bsz].sum(), logits.shape[1]], dtype=logits.dtype
-            )
-            speculate_get_target_logits(
-                target_logits,
-                logits,
-                cu_batch_token_offset,
-                ori_cu_batch_token_offset,
-                share_inputs["seq_lens_this_time"],
-                share_inputs["seq_lens_encoder"],
-                share_inputs["accept_num"],
-            )
-            if self.logprobs_mode == "raw_logprobs":
-                raw_logprobs = self.compute_logprobs(target_logits, sampling_metadata)
-            elif self.logprobs_mode == "raw_logits":
-                raw_logprobs = target_logits.clone()
-
-        logprobs_tensors = None
-        if num_logprobs is not None:
-            token_ids = share_inputs["accept_tokens"]
-            idx = paddle.arange(share_inputs["accept_tokens"].shape[1], dtype="int32")
-            mask = idx < share_inputs["accept_num"].unsqueeze(1)
-            token_ids = paddle.masked_select(share_inputs["accept_tokens"], mask)
-            logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
-
-        sampler_output = SamplerOutput(
+        return SamplerOutput(
             sampled_token_ids=share_inputs["accept_tokens"],
-            logprobs_tensors=logprobs_tensors,
+            logprobs_tensors=None,
             token_num_per_batch=share_inputs["accept_num"],
-            cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
             logits=logits,
         )
-
-        return sampler_output
 
     def _normal_sample(
         self,
         logits: paddle.Tensor,
+        probs: paddle.Tensor,
         sampling_metadata: SamplingMetadata,
         share_inputs: List[paddle.Tensor],
     ) -> SamplerOutput:
@@ -957,15 +873,14 @@ class SpeculativeSampler(nn.Layer):
         and writes results to share_inputs["accept_tokens"]/["accept_num"].
 
         Args:
+            probs: Target model softmax output
             logits: Target model output logits
             sampling_metadata: Sampling parameters and metadata
             share_inputs: Shared input tensors
 
         Returns:
-            SamplerOutput with sampled tokens
+            SamplerOutput with sampled tokens (no logprobs; logprobs are computed in forward_cuda)
         """
-        probs = F.softmax(logits)
-
         # Apply min_p sampling if configured
         probs = min_p_sampling(probs, sampling_metadata.min_p, sampling_metadata.min_p_list)
 
@@ -979,24 +894,11 @@ class SpeculativeSampler(nn.Layer):
         )
 
         # For NAIVE mode: write directly to accept_tokens/accept_num
-        # These are the same tensors used by speculative decoding path
-        # First reset all accept_num to 0, then set running sequences to 1
         share_inputs["accept_tokens"][: next_tokens.shape[0], 0] = next_tokens.squeeze(-1)
-
-        # Handle logprobs if needed
-        logprobs_tensors = None
-        num_logprobs = sampling_metadata.max_num_logprobs
-        if num_logprobs is not None:
-            # Compute logprobs from logits
-            if self.logprobs_mode == "raw_logprobs":
-                logprobs = F.log_softmax(logits, axis=-1)
-            else:  # raw_logits
-                logprobs = logits.clone()
-            logprobs_tensors = self.gather_logprobs(logprobs, num_logprobs, token_ids=next_tokens.squeeze(-1))
 
         return SamplerOutput(
             sampled_token_ids=share_inputs["accept_tokens"],
-            logprobs_tensors=logprobs_tensors,
+            logprobs_tensors=None,
             token_num_per_batch=share_inputs["accept_num"],
             logits=logits,
         )
@@ -1073,22 +975,37 @@ class SpeculativeSampler(nn.Layer):
                 self.line_break_id,
             )
 
+        probs = F.softmax(logits)
+
         # Route based on spec_method
-        if self.spec_method is None or self.spec_method == SpecMethod.NAIVE:
-            # NAIVE mode: Normal decoding without draft verification
-            # spec_method is None when speculative_decoding=False
-            # spec_method is NAIVE when using naive speculative mode
-            return self._normal_sample(logits, sampling_metadata, share_inputs)
+        is_naive = self.spec_method is None or self.spec_method == SpecMethod.NAIVE
+        if is_naive:
+            sampler_output = self._normal_sample(logits, probs, sampling_metadata, share_inputs)
         else:
-            # MTP/Ngram mode: Verify draft tokens
-            return self._verify_and_sample(
+            sampler_output = self._verify_and_sample(
                 logits,
+                probs,
                 sampling_metadata,
                 max_model_len,
                 share_inputs,
                 accept_all_drafts,
                 reject_all_drafts,
             )
+
+        # Build logprobs via unified path (outside of sampling logic)
+        if sampling_metadata.max_num_logprobs is not None:
+            logprobs_tensors, cu_batch_token_offset = build_output_logprobs(
+                logits,
+                sampling_metadata,
+                share_inputs,
+                is_naive=is_naive,
+                logprobs_mode=self.logprobs_mode,
+                compute_logprobs_fn=self.compute_logprobs,
+            )
+            sampler_output.logprobs_tensors = logprobs_tensors
+            if cu_batch_token_offset is not None:
+                sampler_output.cu_batch_token_offset = cu_batch_token_offset
+        return sampler_output
 
     def forward_xpu(
         self,

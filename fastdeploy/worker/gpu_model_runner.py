@@ -2076,21 +2076,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
-        logger.info("===================Target Model Input ======================")
-        logger.info(f"T seq_lens_this_time: {self.forward_meta.seq_lens_this_time}")
-        logger.info(f'T seq_lens_encoder: {self.share_inputs["seq_lens_encoder"],}')
-        logger.info(f'T seq_lens_decoder: {self.share_inputs["seq_lens_decoder"],}')
-        logger.info(f'T stop_flags: {self.share_inputs["stop_flags"],}')
-        logger.info(f'T step_idx: {self.share_inputs["step_idx"],}')
-        # logger.info(f'T attn_mask_offsets: {self.forward_meta.attn_mask_offsets}')
-        # logger.info(f'T attn_mask_offsets_decoder: {self.share_inputs["attn_mask_offsets_decoder"]}')
-        logger.info(f'T ids_remove_padding: {self.share_inputs["ids_remove_padding"]}')
-        logger.info(f'T input_ids: {self.share_inputs["input_ids"][:, :40]}')
-
-        if self.proposer is not None:
-            logger.info(f'T draft_tokens: {self.share_inputs["draft_tokens"],}')
-
-        logger.info("===================FIn Input ======================")
         # 3. Execute model
         if self.enable_mm:
             model_output = self.model(
@@ -2329,12 +2314,10 @@ class GPUModelRunner(ModelRunnerBase):
             if self.guided_backend is not None and sampler_output is not None:
                 self.sampler.post_process(sampler_output.sampled_token_ids)
 
-            # 6. Speculative decode — proposer run (method="naive" has proposer=None, skip)
+            # 6. Speculative decode -- proposer run (method="naive" has proposer=None, skip)
             # For naive mode: seq_lens_this_time is already reset to 1 inside
             # unified_update_model_status kernel. For MTP/Ngram, the proposer
             # will overwrite it with (draft_count + 1) below.
-            # logger.info(f'T accept_num: {self.share_inputs["accept_num"]}')
-            # logger.info(f'T accept_tokens: {self.share_inputs["accept_tokens"]}')
 
             if self.speculative_decoding and self.proposer is not None:
                 if self.spec_method == SpecMethod.MTP:

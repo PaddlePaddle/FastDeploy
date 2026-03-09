@@ -17,6 +17,7 @@
 from unittest.mock import Mock
 
 import paddle
+import pytest
 
 from fastdeploy.config import (
     CacheConfig,
@@ -32,6 +33,22 @@ from fastdeploy.model_executor.layers.sample.sampler import (
     SpeculativeSampler,
     padding_sampling_params,
 )
+
+
+@pytest.fixture(autouse=True)
+def _ensure_triton_fallback(monkeypatch):
+    """Ensure batched_count_greater_than uses the non-triton fallback.
+
+    When test_sampler.py runs before this file in the same pytest session,
+    it installs a triton stub (triton.jit = lambda fn: fn) at module level,
+    which permanently turns count_greater_kernel into a plain function that
+    is not subscriptable.  Monkeypatching the logprobs module to use the
+    non-triton fallback avoids the resulting TypeError.
+    """
+    monkeypatch.setattr(
+        "fastdeploy.model_executor.layers.sample.logprobs.batched_count_greater_than",
+        lambda x, y: (x >= y).sum(-1),
+    )
 
 
 def _create_fake_logits(batch_size: int, vocab_size: int) -> paddle.Tensor:
