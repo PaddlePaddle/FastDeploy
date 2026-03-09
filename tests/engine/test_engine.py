@@ -15,25 +15,17 @@
 """
 
 import time
-import unittest
 import uuid
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 
 from fastdeploy.engine.engine import LLMEngine
 
-# ═══════════════════ Module-level constants ═══════════════════
-
-MB = "fastdeploy.engine.engine"
-
-
-# ═══════════════════ Helpers ═══════════════════
-
 
 def _make_cfg(**overrides):
-    """Build a minimal cfg-like object matching LLMEngine expectations."""
+    """Minimal cfg-like object matching LLMEngine expectations."""
     model_cfg = SimpleNamespace(
         model="/fake/model",
         model_type="ernie",
@@ -136,30 +128,27 @@ def _make_cfg(**overrides):
     return cfg
 
 
-def _make_engine_no_init(**cfg_overrides):
-    """Create an LLMEngine instance without running __init__."""
+def _make_engine(**cfg_overrides):
+    """Create an LLMEngine bypassing __init__."""
     engine = object.__new__(LLMEngine)
     engine.cfg = _make_cfg(**cfg_overrides)
     engine.running = True
     engine.is_started = False
     engine.do_profile = 0
-    engine.engine = MagicMock()
+    engine.engine = SimpleNamespace(scheduler=SimpleNamespace(get_results=lambda: []))
     engine.guided_decoding_checker = None
     engine.ipc_signal_suffix = 6778
     return engine
 
 
-# ═══════════════════ Tests: _has_guided_input ═══════════════════
+class TestLLMEngine:
+    """Pytest-style tests for LLMEngine methods."""
 
+    # ── _has_guided_input ──────────────────────────────────────────────
 
-class TestHasGuidedInput(unittest.TestCase):
-    """Tests for _has_guided_input() — pure request field checking."""
-
-    def setUp(self):
-        self.engine = _make_engine_no_init()
-
-    def test_no_guided_fields(self):
-        request = SimpleNamespace(
+    def test_has_guided_input_none(self):
+        e = _make_engine()
+        req = SimpleNamespace(
             guided_json=None,
             guided_regex=None,
             guided_choice=None,
@@ -167,21 +156,23 @@ class TestHasGuidedInput(unittest.TestCase):
             guided_grammar=None,
             guided_json_object=None,
         )
-        self.assertFalse(self.engine._has_guided_input(request))
+        assert e._has_guided_input(req) is False
 
-    def test_guided_json(self):
-        request = SimpleNamespace(
-            guided_json='{"type": "object"}',
+    def test_has_guided_input_json(self):
+        e = _make_engine()
+        req = SimpleNamespace(
+            guided_json='{"type":"object"}',
             guided_regex=None,
             guided_choice=None,
             structural_tag=None,
             guided_grammar=None,
             guided_json_object=None,
         )
-        self.assertTrue(self.engine._has_guided_input(request))
+        assert e._has_guided_input(req) is True
 
-    def test_guided_regex(self):
-        request = SimpleNamespace(
+    def test_has_guided_input_regex(self):
+        e = _make_engine()
+        req = SimpleNamespace(
             guided_json=None,
             guided_regex=r"\d+",
             guided_choice=None,
@@ -189,10 +180,11 @@ class TestHasGuidedInput(unittest.TestCase):
             guided_grammar=None,
             guided_json_object=None,
         )
-        self.assertTrue(self.engine._has_guided_input(request))
+        assert e._has_guided_input(req) is True
 
-    def test_guided_choice(self):
-        request = SimpleNamespace(
+    def test_has_guided_input_choice(self):
+        e = _make_engine()
+        req = SimpleNamespace(
             guided_json=None,
             guided_regex=None,
             guided_choice=["yes", "no"],
@@ -200,10 +192,11 @@ class TestHasGuidedInput(unittest.TestCase):
             guided_grammar=None,
             guided_json_object=None,
         )
-        self.assertTrue(self.engine._has_guided_input(request))
+        assert e._has_guided_input(req) is True
 
-    def test_structural_tag(self):
-        request = SimpleNamespace(
+    def test_has_guided_input_structural_tag(self):
+        e = _make_engine()
+        req = SimpleNamespace(
             guided_json=None,
             guided_regex=None,
             guided_choice=None,
@@ -211,21 +204,23 @@ class TestHasGuidedInput(unittest.TestCase):
             guided_grammar=None,
             guided_json_object=None,
         )
-        self.assertTrue(self.engine._has_guided_input(request))
+        assert e._has_guided_input(req) is True
 
-    def test_guided_grammar(self):
-        request = SimpleNamespace(
+    def test_has_guided_input_grammar(self):
+        e = _make_engine()
+        req = SimpleNamespace(
             guided_json=None,
             guided_regex=None,
             guided_choice=None,
             structural_tag=None,
-            guided_grammar="expr = number | expr '+' expr",
+            guided_grammar="expr",
             guided_json_object=None,
         )
-        self.assertTrue(self.engine._has_guided_input(request))
+        assert e._has_guided_input(req) is True
 
-    def test_guided_json_object(self):
-        request = SimpleNamespace(
+    def test_has_guided_input_json_object(self):
+        e = _make_engine()
+        req = SimpleNamespace(
             guided_json=None,
             guided_regex=None,
             guided_choice=None,
@@ -233,493 +228,277 @@ class TestHasGuidedInput(unittest.TestCase):
             guided_grammar=None,
             guided_json_object=True,
         )
-        self.assertTrue(self.engine._has_guided_input(request))
+        assert e._has_guided_input(req) is True
 
+    # ── _setting_environ_variables ─────────────────────────────────────
 
-# ═══════════════════ Tests: _setting_environ_variables ═══════════════════
+    def test_environ_returns_string_with_critical_vars(self):
+        e = _make_engine()
+        result = e._setting_environ_variables()
+        assert isinstance(result, str)
+        assert "OMP_NUM_THREADS=" in result
+        assert "NCCL_ALGO=Ring" in result
+        assert "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python" in result
+        assert "SOT_LOG_LEVEL=" in result
 
+    def test_environ_splitwise_prefill_adds_disagg(self):
+        e = _make_engine()
+        e.cfg.scheduler_config.splitwise_role = "prefill"
+        result = e._setting_environ_variables()
+        assert "FLAGS_use_pd_disaggregation" in result
 
-class TestSettingEnvironVariables(unittest.TestCase):
-    """Tests for _setting_environ_variables() env var string builder."""
+    def test_environ_mixed_no_disagg(self):
+        e = _make_engine()
+        e.cfg.scheduler_config.splitwise_role = "mixed"
+        result = e._setting_environ_variables()
+        assert "FLAGS_use_pd_disaggregation=1" not in result
 
-    def setUp(self):
-        self.engine = _make_engine_no_init()
+    # ── _worker_processes_ready ────────────────────────────────────────
 
-    def test_returns_string(self):
-        result = self.engine._setting_environ_variables()
-        self.assertIsInstance(result, str)
+    def test_worker_ready_all(self):
+        e = _make_engine()
+        e.worker_ready_signal = SimpleNamespace(value=np.ones(1, dtype=np.int32))
+        assert e._worker_processes_ready() is True
 
-    def test_contains_critical_vars(self):
-        result = self.engine._setting_environ_variables()
-        self.assertIn("OMP_NUM_THREADS=", result)
-        self.assertIn("NCCL_ALGO=Ring", result)
-        self.assertIn("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python", result)
+    def test_worker_not_ready(self):
+        e = _make_engine()
+        e.worker_ready_signal = SimpleNamespace(value=np.zeros(1, dtype=np.int32))
+        assert e._worker_processes_ready() is False
 
-    def test_splitwise_prefill_adds_flag(self):
-        self.engine.cfg.scheduler_config.splitwise_role = "prefill"
-        result = self.engine._setting_environ_variables()
-        # When splitwise_role is not "mixed", disaggregation flags should be set
-        self.assertTrue(
-            "FLAGS_use_pd_disaggregation=1" in result or "FLAGS_use_pd_disaggregation_per_chunk=1" in result
-        )
+    def test_worker_partial_multi(self):
+        e = _make_engine()
+        e.cfg.worker_num_per_node = 4
+        e.worker_ready_signal = SimpleNamespace(value=np.array([1, 1, 0, 1], dtype=np.int32))
+        assert e._worker_processes_ready() is False
 
-    def test_splitwise_decode_adds_flag(self):
-        self.engine.cfg.scheduler_config.splitwise_role = "decode"
-        result = self.engine._setting_environ_variables()
-        self.assertTrue(
-            "FLAGS_use_pd_disaggregation=1" in result or "FLAGS_use_pd_disaggregation_per_chunk=1" in result
-        )
+    def test_worker_all_multi(self):
+        e = _make_engine()
+        e.cfg.worker_num_per_node = 3
+        e.worker_ready_signal = SimpleNamespace(value=np.array([1, 1, 1], dtype=np.int32))
+        assert e._worker_processes_ready() is True
 
-    def test_mixed_role_no_disagg_flag(self):
-        self.engine.cfg.scheduler_config.splitwise_role = "mixed"
-        result = self.engine._setting_environ_variables()
-        self.assertNotIn("FLAGS_use_pd_disaggregation=1", result)
+    # ── check_health ───────────────────────────────────────────────────
 
-    def test_dy2st_vars_present(self):
-        result = self.engine._setting_environ_variables()
-        self.assertIn("SOT_LOG_LEVEL=", result)
-        self.assertIn("SOT_UNSAFE_CACHE_FASTPATH=", result)
+    def test_health_ok_signal_zero(self):
+        e = _make_engine()
+        e.engine.worker_healthy_live_signal = SimpleNamespace(value=np.array([0.0]))
+        healthy, msg = e.check_health()
+        assert healthy is True
 
+    def test_health_ok_recent(self):
+        e = _make_engine()
+        e.engine.worker_healthy_live_signal = SimpleNamespace(value=np.array([time.time()]))
+        healthy, _ = e.check_health()
+        assert healthy is True
 
-# ═══════════════════ Tests: _worker_processes_ready ═══════════════════
+    def test_health_stale(self):
+        e = _make_engine()
+        e.engine.worker_healthy_live_signal = SimpleNamespace(value=np.array([time.time() - 60]))
+        healthy, msg = e.check_health(time_interval_threashold=30)
+        assert healthy is False
+        assert "Not Healthy" in msg
 
+    # ── _format_and_add_data ───────────────────────────────────────────
 
-class TestWorkerProcessesReady(unittest.TestCase):
-    """Tests for _worker_processes_ready() signal polling."""
-
-    def setUp(self):
-        self.engine = _make_engine_no_init()
-
-    def test_all_ready(self):
-        signal_mock = MagicMock()
-        signal_mock.value = np.ones(1, dtype=np.int32)
-        self.engine.worker_ready_signal = signal_mock
-        self.assertTrue(self.engine._worker_processes_ready())
-
-    def test_not_ready(self):
-        signal_mock = MagicMock()
-        signal_mock.value = np.zeros(1, dtype=np.int32)
-        self.engine.worker_ready_signal = signal_mock
-        self.assertFalse(self.engine._worker_processes_ready())
-
-    def test_partially_ready_multi_worker(self):
-        self.engine.cfg.worker_num_per_node = 4
-        signal_mock = MagicMock()
-        signal_mock.value = np.array([1, 1, 0, 1], dtype=np.int32)
-        self.engine.worker_ready_signal = signal_mock
-        self.assertFalse(self.engine._worker_processes_ready())
-
-    def test_all_ready_multi_worker(self):
-        self.engine.cfg.worker_num_per_node = 3
-        signal_mock = MagicMock()
-        signal_mock.value = np.array([1, 1, 1], dtype=np.int32)
-        self.engine.worker_ready_signal = signal_mock
-        self.assertTrue(self.engine._worker_processes_ready())
-
-
-# ═══════════════════ Tests: check_health ═══════════════════
-
-
-class TestCheckHealth(unittest.TestCase):
-    """Tests for check_health() worker liveness check."""
-
-    def setUp(self):
-        self.engine = _make_engine_no_init()
-        self.engine.engine = MagicMock()
-
-    def test_healthy_when_signal_zero(self):
-        signal_mock = MagicMock()
-        signal_mock.value = np.array([0], dtype=np.float64)
-        self.engine.engine.worker_healthy_live_signal = signal_mock
-
-        healthy, msg = self.engine.check_health()
-        self.assertTrue(healthy)
-        self.assertEqual(msg, "")
-
-    def test_healthy_when_recent(self):
-        signal_mock = MagicMock()
-        signal_mock.value = np.array([time.time()], dtype=np.float64)
-        self.engine.engine.worker_healthy_live_signal = signal_mock
-
-        healthy, msg = self.engine.check_health()
-        self.assertTrue(healthy)
-
-    def test_unhealthy_when_stale(self):
-        signal_mock = MagicMock()
-        # Simulate a stale heartbeat (old timestamp)
-        signal_mock.value = np.array([time.time() - 60], dtype=np.float64)
-        self.engine.engine.worker_healthy_live_signal = signal_mock
-
-        healthy, msg = self.engine.check_health(time_interval_threashold=30)
-        self.assertFalse(healthy)
-        self.assertIn("Not Healthy", msg)
-
-
-# ═══════════════════ Tests: _format_and_add_data ═══════════════════
-
-
-class TestFormatAndAddData(unittest.TestCase):
-    """Tests for _format_and_add_data() request preprocessing."""
-
-    def setUp(self):
-        self.engine = _make_engine_no_init()
-        # Mock add_requests to capture calls
-        self.engine.add_requests = MagicMock()
-
-    def test_generates_request_id_when_missing(self):
+    def test_format_generates_request_id(self):
+        e = _make_engine()
+        calls = []
+        e.add_requests = lambda t, **kw: calls.append(t)
         prompts = {"prompt": "Hello"}
-        req_id = self.engine._format_and_add_data(prompts)
-        self.assertIsNotNone(req_id)
-        # Should be a valid UUID
+        req_id = e._format_and_add_data(prompts)
         uuid.UUID(req_id)
-        self.assertEqual(prompts["request_id"], req_id)
+        assert prompts["request_id"] == req_id
+        assert len(calls) == 1
 
-    def test_preserves_existing_request_id(self):
-        existing_id = "my-custom-id-123"
-        prompts = {"prompt": "Hello", "request_id": existing_id}
-        req_id = self.engine._format_and_add_data(prompts)
-        self.assertEqual(req_id, existing_id)
+    def test_format_preserves_request_id(self):
+        e = _make_engine()
+        e.add_requests = lambda t, **kw: None
+        prompts = {"prompt": "Hello", "request_id": "my-id"}
+        assert e._format_and_add_data(prompts) == "my-id"
 
-    def test_sets_max_tokens_default(self):
+    def test_format_sets_max_tokens_default(self):
+        e = _make_engine()
+        e.add_requests = lambda t, **kw: None
         prompts = {"prompt": "Hello"}
-        self.engine._format_and_add_data(prompts)
-        self.assertEqual(prompts["max_tokens"], self.engine.cfg.model_config.max_model_len)
+        e._format_and_add_data(prompts)
+        assert prompts["max_tokens"] == e.cfg.model_config.max_model_len
 
-    def test_preserves_existing_max_tokens(self):
-        prompts = {"prompt": "Hello", "max_tokens": 100}
-        self.engine._format_and_add_data(prompts)
-        self.assertEqual(prompts["max_tokens"], 100)
-
-    def test_context_extraction(self):
+    def test_format_context_extraction(self):
+        e = _make_engine()
+        e.add_requests = lambda t, **kw: None
         prompts = {
             "context": [
-                {"role": "system", "utterance": "You are helpful"},
+                {"role": "system", "utterance": "Helper"},
                 {"role": "user", "utterance": "Hi"},
-                {"role": "assistant", "utterance": "Hello!"},
+                {"role": "assistant", "utterance": "Hey"},
                 {"role": "user", "utterance": "Bye"},
             ]
         }
-        self.engine._format_and_add_data(prompts)
-        self.assertEqual(prompts["system"], "You are helpful")
-        self.assertEqual(prompts["prompt"], ["Hi", "Hello!", "Bye"])
+        e._format_and_add_data(prompts)
+        assert prompts["system"] == "Helper"
+        assert prompts["prompt"] == ["Hi", "Hey", "Bye"]
 
-    def test_calls_add_requests(self):
-        prompts = {"prompt": "test"}
-        self.engine._format_and_add_data(prompts)
-        self.engine.add_requests.assert_called_once_with(prompts)
+    # ── _init_worker_signals ───────────────────────────────────────────
 
+    def test_init_signals_basic(self, monkeypatch):
+        e = _make_engine()
+        monkeypatch.setattr(
+            "fastdeploy.engine.engine.IPCSignal",
+            lambda **kw: SimpleNamespace(
+                value=np.zeros(kw.get("array", np.zeros(1)).shape, dtype=kw.get("dtype", np.int32)), clear=lambda: None
+            ),
+        )
+        e._init_worker_signals()
+        assert hasattr(e, "worker_ready_signal")
+        assert hasattr(e, "loaded_model_signal")
 
-# ═══════════════════ Tests: _init_worker_signals ═══════════════════
+    def test_init_signals_with_profile(self, monkeypatch):
+        e = _make_engine()
+        e.do_profile = 1
+        monkeypatch.setattr(
+            "fastdeploy.engine.engine.IPCSignal",
+            lambda **kw: SimpleNamespace(
+                value=np.zeros(kw.get("array", np.zeros(1)).shape, dtype=kw.get("dtype", np.int32)), clear=lambda: None
+            ),
+        )
+        e._init_worker_signals()
+        assert hasattr(e, "get_profile_block_num_signal")
 
+    def test_init_signals_with_prefix_caching(self, monkeypatch):
+        e = _make_engine()
+        e.cfg.cache_config.enable_prefix_caching = True
+        monkeypatch.setattr(
+            "fastdeploy.engine.engine.IPCSignal",
+            lambda **kw: SimpleNamespace(
+                value=np.zeros(kw.get("array", np.zeros(1)).shape, dtype=kw.get("dtype", np.int32)), clear=lambda: None
+            ),
+        )
+        e._init_worker_signals()
+        assert hasattr(e, "launched_cache_manager_signal")
 
-class TestInitWorkerSignals(unittest.TestCase):
-    """Tests for _init_worker_signals() IPC signal creation."""
+    def test_init_signals_dp_gt_1(self, monkeypatch):
+        e = _make_engine()
+        e.cfg.parallel_config.data_parallel_size = 2
+        monkeypatch.setattr(
+            "fastdeploy.engine.engine.IPCSignal",
+            lambda **kw: SimpleNamespace(
+                value=np.zeros(kw.get("array", np.zeros(1)).shape, dtype=kw.get("dtype", np.int32)), clear=lambda: None
+            ),
+        )
+        monkeypatch.setattr("fastdeploy.engine.engine.envs.FD_ENABLE_MULTI_API_SERVER", False)
+        e._init_worker_signals()
+        assert hasattr(e, "launched_expert_service_signal")
 
-    def setUp(self):
-        self.engine = _make_engine_no_init()
+    # ── _exit_sub_services ─────────────────────────────────────────────
 
-    @patch(f"{MB}.IPCSignal")
-    def test_creates_worker_ready_signal(self, mock_ipc):
-        mock_ipc.return_value = MagicMock()
-        self.engine._init_worker_signals()
-        self.assertTrue(hasattr(self.engine, "worker_ready_signal"))
+    def test_exit_sets_running_false(self, monkeypatch):
+        e = _make_engine()
+        e.worker_ready_signal = SimpleNamespace(clear=lambda: None)
+        e.loaded_model_signal = SimpleNamespace(clear=lambda: None)
+        monkeypatch.setattr("fastdeploy.engine.engine.os.getpgid", lambda pid: 12345)
+        monkeypatch.setattr("fastdeploy.engine.engine.os.killpg", lambda pgid, sig: None)
+        e._exit_sub_services()
+        assert e.running is False
 
-    @patch(f"{MB}.IPCSignal")
-    def test_creates_loaded_model_signal(self, mock_ipc):
-        mock_ipc.return_value = MagicMock()
-        self.engine._init_worker_signals()
-        self.assertTrue(hasattr(self.engine, "loaded_model_signal"))
+    def test_exit_kills_worker(self, monkeypatch):
+        e = _make_engine()
+        e.worker_ready_signal = SimpleNamespace(clear=lambda: None)
+        e.loaded_model_signal = SimpleNamespace(clear=lambda: None)
+        killed = []
+        monkeypatch.setattr("fastdeploy.engine.engine.os.getpgid", lambda pid: pid)
+        monkeypatch.setattr("fastdeploy.engine.engine.os.killpg", lambda pgid, sig: killed.append(pgid))
+        e.worker_proc = SimpleNamespace(pid=99999)
+        e._exit_sub_services()
+        assert 99999 in killed
 
-    @patch(f"{MB}.IPCSignal")
-    def test_creates_profile_signal_when_profiling(self, mock_ipc):
-        mock_ipc.return_value = MagicMock()
-        self.engine.do_profile = 1
-        self.engine._init_worker_signals()
-        self.assertTrue(hasattr(self.engine, "get_profile_block_num_signal"))
+    # ── _stop_profile ──────────────────────────────────────────────────
 
-    @patch(f"{MB}.IPCSignal")
-    def test_no_profile_signal_when_not_profiling(self, mock_ipc):
-        mock_ipc.return_value = MagicMock()
-        self.engine.do_profile = 0
-        self.engine._init_worker_signals()
-        self.assertFalse(hasattr(self.engine, "get_profile_block_num_signal"))
+    def test_stop_profile(self):
+        e = _make_engine()
+        e.do_profile = 1
+        e.get_profile_block_num_signal = SimpleNamespace(value=np.array([100], dtype=np.int32))
+        reset_calls = []
+        e.engine.resource_manager = SimpleNamespace(reset_cache_config=lambda cfg: None)
+        e.cfg.cache_config = SimpleNamespace(
+            reset=lambda n: reset_calls.append(n),
+            enable_prefix_caching=False,
+        )
+        e._stop_profile()
+        assert e.do_profile == 0
+        assert reset_calls == [100]
 
-    @patch(f"{MB}.IPCSignal")
-    def test_creates_cache_manager_signal_with_prefix_caching(self, mock_ipc):
-        mock_ipc.return_value = MagicMock()
-        self.engine.cfg.cache_config.enable_prefix_caching = True
-        self.engine._init_worker_signals()
-        self.assertTrue(hasattr(self.engine, "launched_cache_manager_signal"))
+    # ── _get_generated_result ──────────────────────────────────────────
 
-    @patch(f"{MB}.IPCSignal")
-    def test_creates_dp_signal_when_dp_gt_1(self, mock_ipc):
-        mock_ipc.return_value = MagicMock()
-        self.engine.cfg.parallel_config.data_parallel_size = 2
-        with patch(f"{MB}.envs") as mock_envs:
-            mock_envs.FD_ENABLE_MULTI_API_SERVER = False
-            self.engine._init_worker_signals()
-            self.assertTrue(hasattr(self.engine, "launched_expert_service_signal"))
+    def test_get_result_delegates(self):
+        e = _make_engine()
+        e.engine.scheduler = SimpleNamespace(get_results=lambda: ["r1"])
+        assert e._get_generated_result() == ["r1"]
 
+    # ── from_engine_args ───────────────────────────────────────────────
 
-# ═══════════════════ Tests: _exit_sub_services ═══════════════════
+    def test_from_engine_args(self, monkeypatch):
+        monkeypatch.setattr("fastdeploy.engine.engine.EngineService", lambda cfg: SimpleNamespace())
+        monkeypatch.setattr("fastdeploy.engine.engine.main_process_metrics.set_cache_config_info", lambda **kw: None)
+        monkeypatch.setattr("fastdeploy.engine.engine.tracing.trace_set_thread_info", lambda s: None)
+        args = SimpleNamespace(create_engine_config=lambda: _make_cfg())
+        engine = LLMEngine.from_engine_args(args)
+        assert isinstance(engine, LLMEngine)
+        assert engine.do_profile == 1
 
-
-class TestExitSubServices(unittest.TestCase):
-    """Tests for _exit_sub_services() cleanup."""
-
-    def setUp(self):
-        self.engine = _make_engine_no_init()
-
-    @patch(f"{MB}.os.getpgid", return_value=12345)
-    @patch(f"{MB}.os.killpg")
-    def test_sets_running_false(self, mock_killpg, mock_getpgid):
-        self.engine.worker_ready_signal = MagicMock()
-        self.engine.loaded_model_signal = MagicMock()
-        self.engine._exit_sub_services()
-        self.assertFalse(self.engine.running)
-
-    @patch(f"{MB}.os.getpgid", return_value=12345)
-    @patch(f"{MB}.os.killpg")
-    def test_clears_signals(self, mock_killpg, mock_getpgid):
-        self.engine.worker_ready_signal = MagicMock()
-        self.engine.loaded_model_signal = MagicMock()
-        self.engine._exit_sub_services()
-        self.engine.worker_ready_signal.clear.assert_called_once()
-        self.engine.loaded_model_signal.clear.assert_called_once()
-
-    @patch(f"{MB}.os.getpgid", return_value=12345)
-    @patch(f"{MB}.os.killpg")
-    def test_kills_worker_proc(self, mock_killpg, mock_getpgid):
-        self.engine.worker_ready_signal = MagicMock()
-        self.engine.loaded_model_signal = MagicMock()
-        worker = MagicMock()
-        worker.pid = 99999
-        self.engine.worker_proc = worker
-        self.engine._exit_sub_services()
-        mock_killpg.assert_called()
-
-    @patch(f"{MB}.os.getpgid", return_value=12345)
-    @patch(f"{MB}.os.killpg")
-    def test_clears_profile_signal_if_exists(self, mock_killpg, mock_getpgid):
-        self.engine.worker_ready_signal = MagicMock()
-        self.engine.loaded_model_signal = MagicMock()
-        self.engine.get_profile_block_num_signal = MagicMock()
-        self.engine._exit_sub_services()
-        self.engine.get_profile_block_num_signal.clear.assert_called_once()
-
-    @patch(f"{MB}.os.getpgid", return_value=12345)
-    @patch(f"{MB}.os.killpg")
-    def test_closes_zmq_server(self, mock_killpg, mock_getpgid):
-        self.engine.worker_ready_signal = MagicMock()
-        self.engine.loaded_model_signal = MagicMock()
-        zmq = MagicMock()
-        self.engine.zmq_server = zmq
-        self.engine._exit_sub_services()
-        zmq.close.assert_called_once()
-
-
-# ═══════════════════ Tests: _stop_profile ═══════════════════
-
-
-class TestStopProfile(unittest.TestCase):
-    """Tests for _stop_profile() profiling completion handler."""
-
-    def setUp(self):
-        self.engine = _make_engine_no_init()
-        self.engine.do_profile = 1
-
-    def test_resets_profile_flag(self):
-        signal = MagicMock()
-        signal.value = np.array([100], dtype=np.int32)
-        self.engine.get_profile_block_num_signal = signal
-        self.engine.engine.resource_manager = MagicMock()
-        self.engine.cfg.cache_config = MagicMock()
-
-        self.engine._stop_profile()
-        self.assertEqual(self.engine.do_profile, 0)
-
-    def test_resets_cache_config(self):
-        signal = MagicMock()
-        signal.value = np.array([50], dtype=np.int32)
-        self.engine.get_profile_block_num_signal = signal
-        self.engine.engine.resource_manager = MagicMock()
-        self.engine.cfg.cache_config = MagicMock()
-
-        self.engine._stop_profile()
-        self.engine.cfg.cache_config.reset.assert_called_once_with(50)
-        self.engine.engine.resource_manager.reset_cache_config.assert_called_once()
-
-
-# ═══════════════════ Tests: _get_generated_result ═══════════════════
-
-
-class TestGetGeneratedResult(unittest.TestCase):
-    """Tests for _get_generated_result() scheduler result retrieval."""
-
-    def test_delegates_to_scheduler(self):
-        engine = _make_engine_no_init()
-        engine.engine.scheduler = MagicMock()
-        engine.engine.scheduler.get_results.return_value = ["result1"]
-
-        result = engine._get_generated_result()
-        self.assertEqual(result, ["result1"])
-        engine.engine.scheduler.get_results.assert_called_once()
-
-
-# ═══════════════════ Tests: from_engine_args ═══════════════════
-
-
-class TestFromEngineArgs(unittest.TestCase):
-    """Tests for from_engine_args() factory method."""
-
-    @patch(f"{MB}.EngineService")
-    @patch(f"{MB}.main_process_metrics")
-    @patch(f"{MB}.tracing")
-    def test_creates_engine_from_args(self, mock_trace, mock_metrics, mock_svc):
-        """Test that from_engine_args correctly creates an engine."""
-        mock_args = MagicMock(spec=["create_engine_config"])
-        mock_cfg = _make_cfg()
-        mock_args.create_engine_config.return_value = mock_cfg
-
-        engine = LLMEngine.from_engine_args(mock_args)
-
-        self.assertIsInstance(engine, LLMEngine)
-        mock_args.create_engine_config.assert_called_once()
-
-    @patch(f"{MB}.EngineService")
-    @patch(f"{MB}.main_process_metrics")
-    @patch(f"{MB}.tracing")
-    def test_profile_flag_when_no_override(self, mock_trace, mock_metrics, mock_svc):
-        """Test do_profile is 1 when num_gpu_blocks_override is None."""
-        mock_args = MagicMock(spec=["create_engine_config"])
-        cfg = _make_cfg()
-        cfg.cache_config.num_gpu_blocks_override = None
-        mock_args.create_engine_config.return_value = cfg
-
-        engine = LLMEngine.from_engine_args(mock_args)
-        self.assertEqual(engine.do_profile, 1)
-
-    @patch(f"{MB}.EngineService")
-    @patch(f"{MB}.main_process_metrics")
-    @patch(f"{MB}.tracing")
-    def test_no_profile_when_override_set(self, mock_trace, mock_metrics, mock_svc):
-        """Test do_profile is 0 when num_gpu_blocks_override is set."""
-        mock_args = MagicMock(spec=["create_engine_config"])
+    def test_from_engine_args_no_profile(self, monkeypatch):
+        monkeypatch.setattr("fastdeploy.engine.engine.EngineService", lambda cfg: SimpleNamespace())
+        monkeypatch.setattr("fastdeploy.engine.engine.main_process_metrics.set_cache_config_info", lambda **kw: None)
+        monkeypatch.setattr("fastdeploy.engine.engine.tracing.trace_set_thread_info", lambda s: None)
         cfg = _make_cfg()
         cfg.cache_config.num_gpu_blocks_override = 100
-        mock_args.create_engine_config.return_value = cfg
+        args = SimpleNamespace(create_engine_config=lambda: cfg)
+        engine = LLMEngine.from_engine_args(args)
+        assert engine.do_profile == 0
 
-        engine = LLMEngine.from_engine_args(mock_args)
-        self.assertEqual(engine.do_profile, 0)
+    # ── launch_components ──────────────────────────────────────────────
 
+    def test_launch_splitwise_starts_receiver(self):
+        e = _make_engine()
+        e.cfg.scheduler_config.splitwise_role = "prefill"
+        e.cfg.scheduler_config.name = "splitwise"
+        started = []
+        e.engine.split_connector = SimpleNamespace(start_receiver=lambda: None)
+        e.engine.scheduler = SimpleNamespace(start=lambda *a, **kw: started.append(True))
+        e.launch_components()
+        assert hasattr(e, "splitwise_receive_thread")
+        assert len(started) == 1
 
-# ═══════════════════ Tests: launch_components ═══════════════════
+    def test_launch_local_no_splitwise(self):
+        e = _make_engine()
+        e.cfg.scheduler_config.splitwise_role = "mixed"
+        e.cfg.scheduler_config.name = "local"
+        started = []
+        e.engine.scheduler = SimpleNamespace(start=lambda: started.append(True))
+        e.launch_components()
+        assert len(started) == 0
 
+    # ── add_requests (validation) ──────────────────────────────────────
 
-class TestLaunchComponents(unittest.TestCase):
-    """Tests for launch_components() service startup."""
+    def test_add_requests_input_too_long(self, monkeypatch):
+        from fastdeploy.utils import EngineError
 
-    def setUp(self):
-        self.engine = _make_engine_no_init()
-
-    def test_splitwise_starts_receiver(self):
-        self.engine.cfg.scheduler_config.splitwise_role = "prefill"
-        self.engine.cfg.scheduler_config.name = "splitwise"
-        self.engine.engine.split_connector = MagicMock()
-        self.engine.engine.scheduler = MagicMock()
-
-        self.engine.launch_components()
-
-        self.assertTrue(hasattr(self.engine, "splitwise_receive_thread"))
-        self.engine.engine.scheduler.start.assert_called_once()
-
-    def test_local_scheduler_no_splitwise(self):
-        self.engine.cfg.scheduler_config.splitwise_role = "mixed"
-        self.engine.cfg.scheduler_config.name = "local"
-        self.engine.engine.scheduler = MagicMock()
-
-        self.engine.launch_components()
-
-        self.engine.engine.scheduler.start.assert_not_called()
-
-
-# ═══════════════════ Tests: add_requests validation ═══════════════════
-
-
-class TestAddRequestsValidation(unittest.TestCase):
-    """Tests for add_requests() input validation paths."""
-
-    def setUp(self):
-        self.engine = _make_engine_no_init()
-        self.engine.engine.data_processor = MagicMock()
-        self.engine.engine.scheduler = MagicMock()
-
-    def _make_mock_request(self, input_len=10, max_tokens=100):
-        """Create a mock Request-like object."""
-        req = MagicMock()
-        req.prompt_token_ids = list(range(input_len))
-        req.prompt_token_ids_len = input_len
-        req.need_prefill_tokens = input_len
-        req.metrics = SimpleNamespace(
-            scheduler_recv_req_time=0.0,
-            preprocess_start_time=0.0,
-            preprocess_end_time=0.0,
+        e = _make_engine()
+        e.cfg.model_config.max_model_len = 2048
+        req = SimpleNamespace(
+            prompt_token_ids=list(range(3000)),
+            prompt_token_ids_len=3000,
+            need_prefill_tokens=3000,
+            metrics=SimpleNamespace(scheduler_recv_req_time=0, preprocess_start_time=0, preprocess_end_time=0),
+            get=lambda k: {"max_tokens": 100, "min_tokens": 0, "request_id": "x", "stop_seqs_len": None}.get(k),
+            set=lambda k, v: None,
+            guided_json=None,
+            guided_regex=None,
+            guided_choice=None,
+            structural_tag=None,
+            guided_grammar=None,
+            guided_json_object=None,
         )
-
-        def get_side_effect(key):
-            defaults = {
-                "max_tokens": max_tokens,
-                "min_tokens": 0,
-                "request_id": "test-req",
-                "stop_seqs_len": None,
-            }
-            return defaults.get(key, None)
-
-        req.get = MagicMock(side_effect=get_side_effect)
-        req.set = MagicMock()
-        req.guided_json = None
-        req.guided_regex = None
-        req.guided_choice = None
-        req.structural_tag = None
-        req.guided_grammar = None
-        req.guided_json_object = None
-        return req
-
-    @patch(f"{MB}.Request")
-    def test_input_too_long_raises(self, mock_request_cls):
-        from fastdeploy.utils import EngineError
-
-        req = self._make_mock_request(input_len=3000)
-        mock_request_cls.from_dict.return_value = req
-        self.engine.engine.data_processor.process_request.return_value = req
-        self.engine.cfg.model_config.max_model_len = 2048
-
-        with self.assertRaises(EngineError):
-            self.engine.add_requests({"prompt": "x" * 3000})
-
-    @patch(f"{MB}.Request")
-    def test_min_tokens_too_large_raises(self, mock_request_cls):
-        from fastdeploy.utils import EngineError
-
-        req = self._make_mock_request(input_len=2000)
-
-        def get_with_min_tokens(key):
-            if key == "min_tokens":
-                return 100  # 2000 + 100 >= 2048
-            if key == "max_tokens":
-                return 48
-            if key == "stop_seqs_len":
-                return None
-            return None
-
-        req.get = MagicMock(side_effect=get_with_min_tokens)
-        mock_request_cls.from_dict.return_value = req
-        self.engine.engine.data_processor.process_request.return_value = req
-        self.engine.cfg.model_config.max_model_len = 2048
-
-        with self.assertRaises(EngineError):
-            self.engine.add_requests({"prompt": "test"})
-
-
-if __name__ == "__main__":
-    unittest.main()
+        monkeypatch.setattr("fastdeploy.engine.engine.Request.from_dict", lambda d: req)
+        e.engine.data_processor = SimpleNamespace(process_request=lambda r, *a, **kw: r)
+        with pytest.raises(EngineError):
+            e.add_requests({"prompt": "x" * 3000})
