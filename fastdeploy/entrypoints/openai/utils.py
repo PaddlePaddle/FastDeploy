@@ -220,15 +220,14 @@ class DealerConnectionManager:
                 main_process_metrics.record_zmq_stats(_zmq_metrics_stats, address)
 
                 # Parse req_id from outputs and dispatch in a single pass
-                async with self.lock:
-                    for outputs in batch_data:
-                        last_output = outputs[-1]
-                        req_id = last_output["request_id"] if isinstance(last_output, dict) else last_output.request_id
-                        if req_id.startswith(("cmpl", "embd", "reward", "chatcmpl")):
-                            req_id = req_id.rsplit("_", 1)[0]
-                        queue = self.request_map.get(req_id)
-                        if queue is not None:
-                            queue.put_nowait(outputs)
+                for outputs in batch_data:
+                    last_output = outputs[-1]
+                    req_id = last_output["request_id"] if isinstance(last_output, dict) else last_output.request_id
+                    if req_id.startswith(("cmpl", "embd", "reward", "chatcmpl")):
+                        req_id = req_id.rsplit("_", 1)[0]
+                    queue = self.request_map.get(req_id)
+                    if queue is not None:
+                        queue.put_nowait(outputs)
 
                 consecutive_errors = 0
 
