@@ -419,7 +419,7 @@ class OpenAIServingChat:
                         delta=delta_message,
                         logprobs=logprobs_res,
                         draft_logprobs=draft_logprobs_res,
-                        sampling_mask=output.get("sampling_mask", None),
+                        sampling_mask=self._make_sampling_mask_list(output["sampling_mask"]) if output.get("sampling_mask") is not None else None,
                         arrival_time=arrival_time,
                         speculate_metrics=output_speculate_metrics,
                     )
@@ -623,7 +623,7 @@ class OpenAIServingChat:
                             prompt_logprobs_res_list[idx].extend(clamp_prompt_logprobs(prompt_logprobs_res))
                     output_sampling_mask = output.get("sampling_mask", None)
                     if output_sampling_mask is not None:
-                        sampling_mask_list[idx].append(output_sampling_mask)
+                        sampling_mask_list[idx].append(self._make_sampling_mask_list(output_sampling_mask))
                     speculate_metrics[idx] = data["metrics"].get("speculate_metrics", None)
                     if data["finished"]:
                         num_choices -= 1
@@ -962,3 +962,8 @@ class OpenAIServingChat:
             )
             for token_id, logprob, rank, token in zip(logprob_token_ids, logprobs, ranks, decoded_tokens)
         }
+
+    @staticmethod
+    def _make_sampling_mask_list(sampling_mask: List[bool]) -> List[int]:
+        assert sampling_mask is not None
+        return [i for i, v in enumerate(sampling_mask) if v]
