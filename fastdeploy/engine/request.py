@@ -482,8 +482,8 @@ class Request:
         for param in add_params:
             if getattr(self, param, None) is not None:
                 data[param] = getattr(self, param)
-
-        data.update(asdict(self.sampling_params))
+        if self.sampling_params is not None:
+            data.update(asdict(self.sampling_params))
         data.update(asdict(self.metrics))
         return data
 
