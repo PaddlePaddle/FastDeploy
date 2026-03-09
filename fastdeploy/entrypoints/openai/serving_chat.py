@@ -258,9 +258,10 @@ class OpenAIServingChat:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
-            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
-            for rid in request_ids:
-                dealer.write([b"", rid.encode("utf-8")])
+            if not envs.ZMQ_SEND_BATCH_DATA:
+                request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+                for rid in request_ids:
+                    dealer.write([b"", rid.encode("utf-8")])
             choices = []
             current_waiting_time = 0
             response_processor = ChatResponseProcessor(
@@ -274,6 +275,9 @@ class OpenAIServingChat:
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
+                except asyncio.CancelledError:
+                    # Client disconnected, propagate to outer handler
+                    raise
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
@@ -551,10 +555,10 @@ class OpenAIServingChat:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
-            # dealer.write([b"", request_id.encode("utf-8")])
-            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
-            for rid in request_ids:
-                dealer.write([b"", rid.encode("utf-8")])
+            if not envs.ZMQ_SEND_BATCH_DATA:
+                request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+                for rid in request_ids:
+                    dealer.write([b"", rid.encode("utf-8")])
             previous_num_tokens = [0] * num_choices
             reasoning_num_tokens = [0] * num_choices
             current_waiting_time = 0
