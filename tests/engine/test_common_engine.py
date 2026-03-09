@@ -967,3 +967,282 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 eng._finalizer.detach()
             except Exception:
                 pass
+
+
+class TestCommonEngineUnitMethods(unittest.TestCase):
+    """Unit tests for EngineService methods that can be tested without a real model.
+
+    Uses EngineService.__new__() to bypass __init__ and sets minimal attributes
+    for each method under test, enabling fast CPU-only execution.
+    """
+
+    def _make_engine(self):
+        """Create a bare EngineService without calling __init__."""
+        eng = EngineService.__new__(EngineService)
+        eng.llm_logger = MagicMock()
+        eng.running = True
+        eng.is_paused = False
+        eng._pause_cond = __import__("threading").Condition()
+        return eng
+
+    # ── task_is_finished / all_tasks_finished ──────────────────────────
+
+    def test_task_is_finished_true(self):
+        eng = self._make_engine()
+        eng.resource_manager = MagicMock()
+        eng.resource_manager.stop_flags = np.array([True, False, True])
+        self.assertTrue(eng.task_is_finished(0))
+
+    def test_task_is_finished_false(self):
+        eng = self._make_engine()
+        eng.resource_manager = MagicMock()
+        eng.resource_manager.stop_flags = np.array([True, False, True])
+        self.assertFalse(eng.task_is_finished(1))
+
+    def test_all_tasks_finished_true(self):
+        eng = self._make_engine()
+        eng.resource_manager = MagicMock()
+        eng.resource_manager.stop_flags = np.array([True, True, True])
+        self.assertTrue(eng.all_tasks_finished())
+
+    def test_all_tasks_finished_false(self):
+        eng = self._make_engine()
+        eng.resource_manager = MagicMock()
+        eng.resource_manager.stop_flags = np.array([True, False, True])
+        self.assertFalse(eng.all_tasks_finished())
+
+    # ── check_and_free_block_tables ────────────────────────────────────
+
+    def test_check_and_free_block_tables_delegates(self):
+        eng = self._make_engine()
+        eng.resource_manager = MagicMock()
+        eng.check_and_free_block_tables()
+        eng.resource_manager.check_and_free_block_tables.assert_called_once()
+
+    # ── clear_data ─────────────────────────────────────────────────────
+
+    def test_clear_data_success(self):
+        eng = self._make_engine()
+        eng.token_processor = MagicMock()
+        eng.engine_worker_queue = MagicMock()
+        eng.send_response_server = MagicMock()
+        eng.send_response_server.req_dict = {}
+        eng.recv_request_server = MagicMock()
+        eng.recv_request_server.req_dict = {}
+        self.assertTrue(eng.clear_data())
+        eng.token_processor.clear_data.assert_called_once()
+        eng.engine_worker_queue.clear_data.assert_called_once()
+
+    def test_clear_data_with_cache_task_queue(self):
+        eng = self._make_engine()
+        eng.token_processor = MagicMock()
+        eng.engine_worker_queue = MagicMock()
+        eng.send_response_server = MagicMock()
+        eng.send_response_server.req_dict = {}
+        eng.recv_request_server = MagicMock()
+        eng.recv_request_server.req_dict = {}
+        eng.cache_task_queue = MagicMock()
+
+        self.assertTrue(eng.clear_data())
+        eng.cache_task_queue.clear_transfer_task.assert_called_once()
+
+    def test_clear_data_handles_exception(self):
+        eng = self._make_engine()
+        eng.token_processor = MagicMock()
+        eng.token_processor.clear_data.side_effect = RuntimeError("boom")
+        self.assertFalse(eng.clear_data())
+        eng.llm_logger.error.assert_called()
+
+    # ── _send_error_response ───────────────────────────────────────────
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    def test_send_error_response_internal_adapter(self, mock_envs):
+        mock_envs.FD_ENABLE_INTERNAL_ADAPTER = True
+        eng = self._make_engine()
+        eng.send_response_server = MagicMock()
+
+        eng._send_error_response("req-1", "server error", error_code=500)
+
+        eng.send_response_server.send_response.assert_called_once()
+        args = eng.send_response_server.send_response.call_args
+        self.assertIsNone(args[0][0])  # request_id=None for internal adapter
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    def test_send_error_response_standard(self, mock_envs):
+        mock_envs.FD_ENABLE_INTERNAL_ADAPTER = False
+        eng = self._make_engine()
+        eng.send_response_server = MagicMock()
+
+        eng._send_error_response("req-2", "bad request", error_code=400)
+
+        eng.send_response_server.send_response.assert_called_once()
+        args = eng.send_response_server.send_response.call_args
+        self.assertEqual(args[0][0], "req-2")  # request_id passed through
+
+    # ── _decode_token ──────────────────────────────────────────────────
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    def test_decode_token_return_text_enabled(self, mock_envs):
+        mock_envs.FD_ENABLE_RETURN_TEXT = True
+        eng = self._make_engine()
+        eng.data_processor = MagicMock()
+        eng.data_processor.ids2tokens.return_value = ("Hello", [1, 2, 3], None)
+        eng.data_processor.decode_status = {"req-1": [0, 2]}
+
+        delta, tokens = eng._decode_token([1, 2, 3], "req-1", is_end=False)
+        self.assertEqual(delta, "Hello")
+        self.assertEqual(tokens, [1, 2])  # cum_tokens[prefix_offset:read_offset]
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    def test_decode_token_return_text_end(self, mock_envs):
+        mock_envs.FD_ENABLE_RETURN_TEXT = True
+        eng = self._make_engine()
+        eng.data_processor = MagicMock()
+        eng.data_processor.ids2tokens.return_value = ("World", [1, 2], None)
+        eng.data_processor.decode_status = {"req-1": [0, 1]}
+
+        delta, tokens = eng._decode_token([1, 2], "req-1", is_end=True)
+        self.assertEqual(delta, "World")
+        # decode_status should be deleted on is_end
+        self.assertNotIn("req-1", eng.data_processor.decode_status)
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    def test_decode_token_return_text_disabled(self, mock_envs):
+        mock_envs.FD_ENABLE_RETURN_TEXT = False
+        eng = self._make_engine()
+
+        delta, tokens = eng._decode_token([1, 2, 3], "req-1", is_end=False)
+        self.assertEqual(delta, "")
+        self.assertEqual(tokens, [1, 2, 3])
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    def test_decode_token_empty_delta(self, mock_envs):
+        mock_envs.FD_ENABLE_RETURN_TEXT = True
+        eng = self._make_engine()
+        eng.data_processor = MagicMock()
+        eng.data_processor.ids2tokens.return_value = ("", [], None)
+        eng.data_processor.decode_status = {"req-1": [0, 0]}
+
+        delta, tokens = eng._decode_token([1], "req-1", is_end=False)
+        self.assertEqual(delta, "")
+        self.assertEqual(tokens, [])
+
+    # ── run_control_method ─────────────────────────────────────────────
+
+    def test_run_control_method_unknown_handler(self):
+        eng = self._make_engine()
+        eng.send_response_server = MagicMock()
+
+        ctrl_req = MagicMock()
+        ctrl_req.get_method.return_value = "nonexistent_method"
+        ctrl_req.request_id = "ctrl-1"
+
+        eng.run_control_method(ctrl_req)
+
+        eng.llm_logger.error.assert_called()
+        eng.send_response_server.send_response.assert_called_once()
+
+    def test_run_control_method_success(self):
+        eng = self._make_engine()
+        eng.send_response_server = MagicMock()
+        eng._control_is_paused = MagicMock(return_value={"is_paused": False})
+
+        ctrl_req = MagicMock()
+        ctrl_req.get_method.return_value = "is_paused"
+        ctrl_req.request_id = "ctrl-2"
+
+        eng.run_control_method(ctrl_req)
+
+        eng._control_is_paused.assert_called_once_with(ctrl_req)
+        eng.send_response_server.send_response.assert_called_once()
+
+    def test_run_control_method_handler_raises(self):
+        eng = self._make_engine()
+        eng.send_response_server = MagicMock()
+        eng._control_resume = MagicMock(side_effect=RuntimeError("fail"))
+
+        ctrl_req = MagicMock()
+        ctrl_req.get_method.return_value = "resume"
+        ctrl_req.request_id = "ctrl-3"
+
+        eng.run_control_method(ctrl_req)
+
+        eng.llm_logger.error.assert_called()
+        eng.send_response_server.send_response.assert_called_once()
+
+    # ── _control_resume ────────────────────────────────────────────────
+
+    def test_control_resume_when_paused(self):
+        eng = self._make_engine()
+        eng.is_paused = True
+
+        eng._control_resume(MagicMock())
+
+        self.assertFalse(eng.is_paused)
+
+    def test_control_resume_when_not_paused(self):
+        eng = self._make_engine()
+        eng.is_paused = False
+
+        result = eng._control_resume(MagicMock())
+
+        self.assertIsNone(result)
+        self.assertFalse(eng.is_paused)
+
+    # ── _control_is_paused ─────────────────────────────────────────────
+
+    def test_control_is_paused_true(self):
+        eng = self._make_engine()
+        eng.is_paused = True
+        result = eng._control_is_paused(MagicMock())
+        self.assertEqual(result, {"is_paused": True})
+
+    def test_control_is_paused_false(self):
+        eng = self._make_engine()
+        eng.is_paused = False
+        result = eng._control_is_paused(MagicMock())
+        self.assertEqual(result, {"is_paused": False})
+
+    # ── _control_update_weights ────────────────────────────────────────
+
+    def test_control_update_weights_not_paused_raises(self):
+        eng = self._make_engine()
+        eng.is_paused = False
+        with self.assertRaises(Exception) as ctx:
+            eng._control_update_weights(MagicMock())
+        self.assertIn("Pause LLM Engine first", str(ctx.exception))
+
+    def test_control_update_weights_paused_calls_worker(self):
+        eng = self._make_engine()
+        eng.is_paused = True
+        eng.engine_worker_queue = MagicMock()
+        eng._ctrl_worker_output_queues = []
+
+        ctrl_req = MagicMock()
+        ctrl_req.request_id = "upd-1"
+
+        with patch.object(eng, "_call_worker", return_value=[{"status": "ok"}]) as mock_call:
+            eng._control_update_weights(ctrl_req)
+            mock_call.assert_called_once_with(ctrl_req, 60)
+
+    # ── _control_pause error paths ─────────────────────────────────────
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    def test_control_pause_unsupported_scheduler(self, mock_envs):
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = True
+        eng = self._make_engine()
+        eng.cfg = MagicMock()
+        eng.cfg.scheduler_config.name = "dp"
+
+        with self.assertRaises(Exception) as ctx:
+            eng._control_pause(MagicMock())
+        self.assertIn("only supported in local scheduler", str(ctx.exception))
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    def test_control_pause_not_v1_scheduler_raises(self, mock_envs):
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        eng = self._make_engine()
+
+        with self.assertRaises(Exception) as ctx:
+            eng._control_pause(MagicMock())
+        self.assertIn("only supported in ENABLE_V1_KVCACHE_SCHEDULER", str(ctx.exception))
