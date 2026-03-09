@@ -29,6 +29,17 @@ import numpy as np
 import paddle
 import pytest
 
+from fastdeploy.model_executor.layers.attention.append_attn_backend import (
+    AppendAttentionBackend,
+)
+from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
+    build_kv_indices_from_block_tables,
+    build_kv_indices_from_block_tables_ref,
+    build_unified_kv_indices,
+    extend_attention_fwd_unified,
+    triton_cumsum_with_zero_prefix,
+)
+
 # ---------------------------------------------------------------------------
 # Tolerance constants
 # ---------------------------------------------------------------------------
@@ -141,6 +152,34 @@ def _build_paged_kv_cache(k_flat, v_flat, block_size):
 # ---------------------------------------------------------------------------
 
 
+def _run_single_seq_kernel(q_flat, k_flat, v_flat, block_size, num_q, num_kv, dim, is_causal=True, sm_scale=None):
+    """Run Triton kernel on a single sequence (bs=1, no prefix). Returns output tensor."""
+    seq_len = q_flat.shape[0]
+    cache_k, cache_v = _build_paged_kv_cache(k_flat, v_flat, block_size)
+    qo_indptr = paddle.to_tensor([0, seq_len], dtype="int32")
+    kv_indptr = paddle.to_tensor([0, k_flat.shape[0]], dtype="int32")
+    kv_indices = paddle.arange(k_flat.shape[0], dtype="int32")
+    prefix_lens = paddle.zeros([1], dtype="int32")
+    o = paddle.zeros_like(q_flat)
+    kwargs = {"sm_scale": sm_scale} if sm_scale is not None else {}
+    return extend_attention_fwd_unified(
+        q_flat,
+        o,
+        cache_k,
+        cache_v,
+        qo_indptr,
+        kv_indptr,
+        kv_indices,
+        prefix_lens,
+        num_q,
+        num_kv,
+        dim,
+        seq_len,
+        is_causal,
+        **kwargs,
+    )
+
+
 def _run_kernel_vs_ref(
     bs,
     q_len,
@@ -152,11 +191,11 @@ def _run_kernel_vs_ref(
     is_causal=True,
     dtype="float16",
     sm_scale=None,
+    ref_fn=None,
 ):
-    """Run Triton kernel and compare against naive reference. Returns (max_diff, cos_sim)."""
-    from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-        extend_attention_fwd_unified,
-    )
+    """Run Triton kernel and compare against reference. Returns (max_diff, cos_sim)."""
+    if ref_fn is None:
+        ref_fn = naive_attention
 
     kv_len = prefix_len + q_len
     paddle.seed(42)
@@ -165,7 +204,7 @@ def _run_kernel_vs_ref(
     v_batched = paddle.randn([bs, kv_len, num_kv_heads, head_dim]).astype(dtype)
 
     prefix_lens_ref = paddle.full([bs], prefix_len, dtype="int32")
-    ref_out = naive_attention(q_batched, k_batched, v_batched, prefix_lens_ref, is_causal)
+    ref_out = ref_fn(q_batched, k_batched, v_batched, prefix_lens_ref, is_causal)
 
     k_flat = k_batched.reshape([-1, num_kv_heads, head_dim])
     v_flat = v_batched.reshape([-1, num_kv_heads, head_dim])
@@ -182,9 +221,7 @@ def _run_kernel_vs_ref(
     kv_indices = paddle.arange(bs * kv_len, dtype="int32")
     prefix_lens_t = paddle.full([bs], prefix_len, dtype="int32")
 
-    kwargs = {}
-    if sm_scale is not None:
-        kwargs["sm_scale"] = sm_scale
+    kwargs = {"sm_scale": sm_scale} if sm_scale is not None else {}
 
     o_flat = extend_attention_fwd_unified(
         q_flat,
@@ -222,32 +259,28 @@ def _run_determinism_check(
     num_runs=10,
 ):
     """Run kernel multiple times and verify bitwise identical results."""
-    from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-        extend_attention_fwd_unified,
-    )
-
-    kv_len = prefix_len + q_len if prefix_len > 0 else q_len
-    total_q = bs * q_len if prefix_len == 0 else q_len
+    kv_len = prefix_len + q_len
+    actual_bs = 1 if prefix_len > 0 else bs
+    total_q = actual_bs * q_len if prefix_len == 0 else q_len
+    total_kv = actual_bs * kv_len if prefix_len == 0 else kv_len
 
     paddle.seed(999)
     q_flat = paddle.randn([total_q, num_q_heads, head_dim]).astype("float16")
-    k_flat = paddle.randn([bs * kv_len if prefix_len == 0 else kv_len, num_kv_heads, head_dim]).astype("float16")
-    v_flat = paddle.randn([bs * kv_len if prefix_len == 0 else kv_len, num_kv_heads, head_dim]).astype("float16")
+    k_flat = paddle.randn([total_kv, num_kv_heads, head_dim]).astype("float16")
+    v_flat = paddle.randn([total_kv, num_kv_heads, head_dim]).astype("float16")
     cache_k, cache_v = _build_paged_kv_cache(k_flat, v_flat, block_size)
 
     if prefix_len == 0:
-        seq_lens = paddle.full([bs], q_len, dtype="int32")
+        seq_lens = paddle.full([actual_bs], q_len, dtype="int32")
         qo_indptr = paddle.concat([paddle.zeros([1], dtype="int32"), paddle.cumsum(seq_lens).astype("int32")])
         kv_indptr = qo_indptr.clone()
-        kv_indices = paddle.arange(bs * q_len, dtype="int32")
-        prefix_lens_t = paddle.zeros([bs], dtype="int32")
-        max_extend = q_len
+        kv_indices = paddle.arange(total_kv, dtype="int32")
+        prefix_lens_t = paddle.zeros([actual_bs], dtype="int32")
     else:
         qo_indptr = paddle.to_tensor([0, q_len], dtype="int32")
         kv_indptr = paddle.to_tensor([0, kv_len], dtype="int32")
         kv_indices = paddle.arange(kv_len, dtype="int32")
         prefix_lens_t = paddle.to_tensor([prefix_len], dtype="int32")
-        max_extend = q_len
 
     results = []
     for _ in range(num_runs):
@@ -264,7 +297,7 @@ def _run_determinism_check(
             num_q_heads,
             num_kv_heads,
             head_dim,
-            max_extend,
+            q_len,
             True,
         )
         results.append(o.astype("float32").numpy())
@@ -281,50 +314,26 @@ def _run_determinism_check(
 class TestTritonCumsumWithZeroPrefix:
 
     def test_basic(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            triton_cumsum_with_zero_prefix,
-        )
-
         x = paddle.to_tensor([3, 1, 4, 1, 5], dtype="int32")
         assert triton_cumsum_with_zero_prefix(x).tolist() == [0, 3, 4, 8, 9, 14]
 
     def test_single_element(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            triton_cumsum_with_zero_prefix,
-        )
-
         x = paddle.to_tensor([7], dtype="int32")
         assert triton_cumsum_with_zero_prefix(x).tolist() == [0, 7]
 
     def test_empty(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            triton_cumsum_with_zero_prefix,
-        )
-
         x = paddle.to_tensor([], dtype="int32")
         assert triton_cumsum_with_zero_prefix(x, n=0).tolist() == [0]
 
     def test_all_zeros(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            triton_cumsum_with_zero_prefix,
-        )
-
         x = paddle.zeros([4], dtype="int32")
         assert triton_cumsum_with_zero_prefix(x).tolist() == [0, 0, 0, 0, 0]
 
     def test_with_explicit_n(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            triton_cumsum_with_zero_prefix,
-        )
-
         x = paddle.to_tensor([2, 3, 5, 7, 11], dtype="int32")
         assert triton_cumsum_with_zero_prefix(x, n=3).tolist() == [0, 2, 5, 10]
 
     def test_matches_paddle_reference(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            triton_cumsum_with_zero_prefix,
-        )
-
         np.random.seed(42)
         for length in [1, 7, 32, 64, 127, 128, 255]:
             x_np = np.random.randint(0, 100, size=length).astype(np.int32)
@@ -346,10 +355,6 @@ class TestBuildKvIndices:
     # --- build_kv_indices_from_block_tables ---
 
     def test_single_sequence(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_kv_indices_from_block_tables,
-        )
-
         block_tables = paddle.to_tensor([[2, 5]], dtype="int32")
         seq_lens = paddle.to_tensor([6], dtype="int32")
         kv_indptr, kv_indices = build_kv_indices_from_block_tables(block_tables, seq_lens, 4, bs=1)
@@ -358,10 +363,6 @@ class TestBuildKvIndices:
         assert kv_indices.tolist() == expected
 
     def test_multiple_sequences(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_kv_indices_from_block_tables,
-        )
-
         block_tables = paddle.to_tensor([[1, 3], [0, 0]], dtype="int32")
         seq_lens = paddle.to_tensor([3, 2], dtype="int32")
         kv_indptr, kv_indices = build_kv_indices_from_block_tables(block_tables, seq_lens, 2, bs=2)
@@ -369,20 +370,12 @@ class TestBuildKvIndices:
         assert kv_indices.tolist() == [2, 3, 6, 0, 1]
 
     def test_empty_sequence(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_kv_indices_from_block_tables,
-        )
-
         block_tables = paddle.to_tensor([[0]], dtype="int32")
         seq_lens = paddle.to_tensor([0], dtype="int32")
         kv_indptr, _ = build_kv_indices_from_block_tables(block_tables, seq_lens, 4, bs=1)
         assert kv_indptr.tolist() == [0, 0]
 
     def test_large_sequence(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_kv_indices_from_block_tables,
-        )
-
         block_size, seq_len = 64, 500
         num_blocks_needed = (seq_len + block_size - 1) // block_size
         block_tables = paddle.arange(num_blocks_needed, dtype="int32").unsqueeze(0)
@@ -394,10 +387,6 @@ class TestBuildKvIndices:
             assert kv_indices[t].item() == expected, f"Mismatch at t={t}"
 
     def test_non_contiguous_blocks(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_kv_indices_from_block_tables,
-        )
-
         block_size, seq_len = 4, 10
         block_tables = paddle.to_tensor([[5, 2, 8]], dtype="int32")
         seq_lens = paddle.to_tensor([seq_len], dtype="int32")
@@ -409,11 +398,6 @@ class TestBuildKvIndices:
         assert kv_indices.tolist() == expected
 
     def test_ref_vs_triton_cross_validation(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_kv_indices_from_block_tables,
-            build_kv_indices_from_block_tables_ref,
-        )
-
         rng = np.random.RandomState(123)
         for bs in [1, 4, 16]:
             block_size = 16
@@ -432,10 +416,6 @@ class TestBuildKvIndices:
             ), f"indices mismatch at bs={bs}"
 
     def test_bs_zero(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_kv_indices_from_block_tables,
-        )
-
         block_tables = paddle.zeros([0, 4], dtype="int32")
         seq_lens = paddle.zeros([0], dtype="int32")
         kv_indptr, _ = build_kv_indices_from_block_tables(block_tables, seq_lens, 4, bs=0)
@@ -444,10 +424,6 @@ class TestBuildKvIndices:
     # --- build_unified_kv_indices ---
 
     def test_unified_basic_merge(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_unified_kv_indices,
-        )
-
         prefix_kv_indptr = paddle.to_tensor([0, 2, 3], dtype="int32")
         prefix_kv_indices = paddle.to_tensor([10, 11, 20], dtype="int32")
         extend_seq_lens = paddle.to_tensor([3, 2], dtype="int32")
@@ -466,10 +442,6 @@ class TestBuildKvIndices:
         assert unified_indices[:8].tolist() == [10, 11, 100, 101, 102, 20, 200, 201]
 
     def test_unified_large_bs(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_unified_kv_indices,
-        )
-
         bs = 8
         prefix_lens_list = [10, 20, 5, 0, 15, 8, 30, 12]
         extend_lens_list = [5, 10, 3, 7, 2, 6, 4, 8]
@@ -510,10 +482,6 @@ class TestBuildKvIndices:
             assert seq_indices == expected_prefix + expected_extend, f"Seq {s} mismatch"
 
     def test_unified_some_prefix_zero(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_unified_kv_indices,
-        )
-
         prefix_kv_indptr = paddle.to_tensor([0, 0, 10, 10], dtype="int32")
         prefix_kv_indices = paddle.arange(10, dtype="int32") + 500
         extend_seq_lens = paddle.to_tensor([5, 3, 8], dtype="int32")
@@ -532,11 +500,6 @@ class TestBuildKvIndices:
         assert unified_indices[5:18].tolist() == list(range(500, 510)) + [805, 806, 807]
 
     def test_unified_extend_one(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_kv_indices_from_block_tables,
-            build_unified_kv_indices,
-        )
-
         bs, block_size = 2, 4
         prefix_lens = [10, 5]
         extend_lens = [1, 1]
@@ -569,10 +532,6 @@ class TestBuildKvIndices:
 
     @pytest.mark.parametrize("bs_mode", ["bs1", "bs3"])
     def test_unified_extend_start_loc(self, bs_mode):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_unified_kv_indices,
-        )
-
         if bs_mode == "bs1":
             prefix_kv_indptr = paddle.to_tensor([0, 3], dtype="int32")
             prefix_kv_indices = paddle.to_tensor([10, 11, 12], dtype="int32")
@@ -610,11 +569,6 @@ class TestBuildKvIndices:
             assert unified_indices[10:14].tolist() == [300, 301, 302, 303]
 
     def test_unified_large_batch_stress(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_kv_indices_from_block_tables,
-            build_unified_kv_indices,
-        )
-
         bs, block_size = 32, 16
         rng = np.random.RandomState(42)
         prefix_lens_list = rng.randint(0, 64, size=bs).tolist()
@@ -667,10 +621,6 @@ class TestBuildKvIndices:
         assert unified_indptr.tolist() == expected_indptr
 
     def test_unified_all_zero_extend(self):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_unified_kv_indices,
-        )
-
         prefix_kv_indptr = paddle.to_tensor([0, 3, 5], dtype="int32")
         prefix_kv_indices = paddle.to_tensor([10, 11, 12, 20, 21], dtype="int32")
         extend_seq_lens = paddle.zeros([2], dtype="int32")
@@ -697,10 +647,6 @@ class TestBuildKvIndices:
 class TestDeterministicBuildTritonIndices:
 
     def _make_mock_backend(self, block_size):
-        from fastdeploy.model_executor.layers.attention.append_attn_backend import (
-            AppendAttentionBackend,
-        )
-
         backend = object.__new__(AppendAttentionBackend)
         backend.block_size = block_size
         return backend
@@ -736,8 +682,6 @@ class TestDeterministicBuildTritonIndices:
         backend = self._make_mock_backend(block_size)
         seq_lens_t = paddle.to_tensor(seq_lens, dtype="int32")
         prefix_t = paddle.to_tensor(prefix_lens, dtype="int32")
-        # max_total = max(s + p for s, p in zip(seq_lens, prefix_lens))
-        # max_blocks = max((max_total + block_size - 1) // block_size, 1)
         n_seqs = len(seq_lens)
         if block_size == 8:
             num_blocks = 10
@@ -857,10 +801,6 @@ class TestKernelCorrectness:
     @pytest.mark.gpu
     def test_non_contiguous_blocks(self):
         """Non-contiguous physical block IDs must produce same result as sequential."""
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            extend_attention_fwd_unified,
-        )
-
         q_len, num_q, num_kv, dim, blk = 8, 4, 4, 64, 4
         total_blocks = 20
         paddle.seed(42)
@@ -899,61 +839,20 @@ class TestKernelCorrectness:
             q_len,
             True,
         )
-        # Compare with sequential
-        cache_k_ref, cache_v_ref = _build_paged_kv_cache(k_flat, v_flat, blk)
-        kv_indices_ref = paddle.arange(q_len, dtype="int32")
-        o_ref = paddle.zeros([q_len, num_q, dim], dtype="float16")
-        o_ref = extend_attention_fwd_unified(
-            q_flat,
-            o_ref,
-            cache_k_ref,
-            cache_v_ref,
-            qo_indptr,
-            kv_indptr,
-            kv_indices_ref,
-            prefix_lens,
-            num_q,
-            num_kv,
-            dim,
-            q_len,
-            True,
-        )
+        # Compare with sequential layout using shared helper
+        o_ref = _run_single_seq_kernel(q_flat, k_flat, v_flat, blk, num_q, num_kv, dim)
         max_diff = float(paddle.max(paddle.abs(o.astype("float32") - o_ref.astype("float32"))).item())
         assert max_diff < 1e-5, f"Non-contiguous blocks differ: max_diff={max_diff}"
 
     @pytest.mark.gpu
     def test_long_sequence_4096_no_nan(self):
         """Long sequence (4096) should not produce NaN/Inf."""
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            extend_attention_fwd_unified,
-        )
-
         seq_len, num_q, num_kv, dim, blk = 4096, 4, 4, 64, 64
         paddle.seed(42)
         q_flat = paddle.randn([seq_len, num_q, dim]).astype("float16")
         k_flat = paddle.randn([seq_len, num_kv, dim]).astype("float16")
         v_flat = paddle.randn([seq_len, num_kv, dim]).astype("float16")
-        cache_k, cache_v = _build_paged_kv_cache(k_flat, v_flat, blk)
-        qo_indptr = paddle.to_tensor([0, seq_len], dtype="int32")
-        kv_indptr = paddle.to_tensor([0, seq_len], dtype="int32")
-        kv_indices = paddle.arange(seq_len, dtype="int32")
-        prefix_lens = paddle.zeros([1], dtype="int32")
-        o = paddle.zeros_like(q_flat)
-        o = extend_attention_fwd_unified(
-            q_flat,
-            o,
-            cache_k,
-            cache_v,
-            qo_indptr,
-            kv_indptr,
-            kv_indices,
-            prefix_lens,
-            num_q,
-            num_kv,
-            dim,
-            seq_len,
-            True,
-        )
+        o = _run_single_seq_kernel(q_flat, k_flat, v_flat, blk, num_q, num_kv, dim)
         assert not paddle.any(paddle.isnan(o)).item(), "NaN in output"
         assert not paddle.any(paddle.isinf(o)).item(), "Inf in output"
         assert float(paddle.abs(o).mean().item()) > 1e-4, "Output is degenerate"
@@ -961,36 +860,12 @@ class TestKernelCorrectness:
     @pytest.mark.gpu
     def test_large_values_no_nan(self):
         """Input near fp16 range should not produce NaN/Inf."""
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            extend_attention_fwd_unified,
-        )
-
         q_len, num_q, num_kv, dim, blk = 8, 4, 4, 64, 4
         paddle.seed(42)
         q_flat = (paddle.randn([q_len, num_q, dim]) * 10.0).astype("float16")
         k_flat = (paddle.randn([q_len, num_kv, dim]) * 10.0).astype("float16")
         v_flat = (paddle.randn([q_len, num_kv, dim]) * 10.0).astype("float16")
-        cache_k, cache_v = _build_paged_kv_cache(k_flat, v_flat, blk)
-        qo_indptr = paddle.to_tensor([0, q_len], dtype="int32")
-        kv_indptr = paddle.to_tensor([0, q_len], dtype="int32")
-        kv_indices = paddle.arange(q_len, dtype="int32")
-        prefix_lens = paddle.zeros([1], dtype="int32")
-        o = paddle.zeros([q_len, num_q, dim], dtype="float16")
-        o = extend_attention_fwd_unified(
-            q_flat,
-            o,
-            cache_k,
-            cache_v,
-            qo_indptr,
-            kv_indptr,
-            kv_indices,
-            prefix_lens,
-            num_q,
-            num_kv,
-            dim,
-            q_len,
-            True,
-        )
+        o = _run_single_seq_kernel(q_flat, k_flat, v_flat, blk, num_q, num_kv, dim)
         assert not paddle.any(paddle.isnan(o)).item(), "NaN with large values"
         assert not paddle.any(paddle.isinf(o)).item(), "Inf with large values"
 
@@ -1009,12 +884,6 @@ class TestSplitInvariance:
     def _run_with_split(
         self, q_all, k_all, v_all, total_len, prefix_len, block_size, num_q_heads, num_kv_heads, head_dim
     ):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            build_kv_indices_from_block_tables,
-            build_unified_kv_indices,
-            extend_attention_fwd_unified,
-        )
-
         extend_len = total_len - prefix_len
         bs = 1
         q_extend = q_all[prefix_len:total_len]
@@ -1140,10 +1009,6 @@ class TestProductionScaleCorrectness:
         prefix_lens_list=None,
         dtype="float16",
     ):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            extend_attention_fwd_unified,
-        )
-
         if prefix_lens_list is None:
             prefix_lens_list = [0] * bs
         extend_lens = [s - p for s, p in zip(seq_lens, prefix_lens_list)]
@@ -1277,46 +1142,16 @@ class TestCrossValidation:
     @pytest.mark.gpu
     @pytest.mark.parametrize("head_dim", [64, 128])
     def test_triton_matches_sdpa(self, head_dim):
-        from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
-            extend_attention_fwd_unified,
-        )
-
-        bs, q_len, num_q, num_kv, blk = 2, 16, 8, 4, 16
-        paddle.seed(42)
-        q_batched = paddle.randn([bs, q_len, num_q, head_dim]).astype("float16")
-        k_batched = paddle.randn([bs, q_len, num_kv, head_dim]).astype("float16")
-        v_batched = paddle.randn([bs, q_len, num_kv, head_dim]).astype("float16")
-        prefix_lens_ref = paddle.zeros([bs], dtype="int32")
-        sdpa_out = sdpa_attention_reference(q_batched, k_batched, v_batched, prefix_lens_ref, is_causal=True)
-        k_flat = k_batched.reshape([-1, num_kv, head_dim])
-        v_flat = v_batched.reshape([-1, num_kv, head_dim])
-        cache_k, cache_v = _build_paged_kv_cache(k_flat, v_flat, blk)
-        total_tokens = bs * q_len
-        q_flat = q_batched.reshape([total_tokens, num_q, head_dim])
-        o_flat = paddle.zeros_like(q_flat)
-        seq_lens = paddle.full([bs], q_len, dtype="int32")
-        qo_indptr = paddle.concat([paddle.zeros([1], dtype="int32"), paddle.cumsum(seq_lens).astype("int32")])
-        kv_indptr = qo_indptr.clone()
-        kv_indices = paddle.arange(total_tokens, dtype="int32")
-        prefix_lens_t = paddle.zeros([bs], dtype="int32")
-        o_flat = extend_attention_fwd_unified(
-            q_flat,
-            o_flat,
-            cache_k,
-            cache_v,
-            qo_indptr,
-            kv_indptr,
-            kv_indices,
-            prefix_lens_t,
-            num_q,
-            num_kv,
+        """Triple validation: triton vs sdpa reference."""
+        max_diff, cos_sim = _run_kernel_vs_ref(
+            2,
+            16,
+            8,
+            4,
             head_dim,
-            q_len,
-            True,
+            16,
+            ref_fn=sdpa_attention_reference,
         )
-        triton_out = o_flat.reshape([bs, q_len, num_q, head_dim])
-        max_diff = float(paddle.max(paddle.abs(sdpa_out.astype("float32") - triton_out.astype("float32"))).item())
-        cos_sim = cosine_similarity(sdpa_out, triton_out)
         assert max_diff < FP16_ATOL, f"Triton vs SDPA mismatch: max_diff={max_diff}"
         assert cos_sim > COSINE_SIM_THRESHOLD, f"Low cosine sim: {cos_sim}"
 
