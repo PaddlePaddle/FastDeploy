@@ -236,6 +236,15 @@ class GpuWorker(WorkerBase):
         # Capture CUDAGraph for decode phase (all modes)
         self.model_runner.capture_model()
 
+        # Deterministic mode: reset RNG and share_inputs after warmup.
+        # Warmup _dummy_run() calls consume CUDA RNG state and leave stale
+        # data (infer_seed, stop_flags, seq_lens, etc.) in share_inputs.
+        # Without this reset, the first real request may see different state
+        # than subsequent requests, causing occasional first-run divergence.
+        if envs.FD_DETERMINISTIC_MODE:
+            set_random_seed(self.fd_config.model_config.seed)
+            self.model_runner.share_inputs.reset_share_inputs()
+
     def check_health(self) -> bool:
         """ """
         return True
