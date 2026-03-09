@@ -59,6 +59,7 @@ from fastdeploy.eplb.experts_manager import RedundantExpertManager
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import (
     ExistTaskStatus,
+    IPCLock,
     IPCSignal,
     ModelWeightsStatus,
     RearrangeExpertStatus,
@@ -289,13 +290,10 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
-        # gpu_cache_lock_signal: mutual exclusion between worker and CPU transfer
-        # for GPU KV cache access. Values: 0 = free, 1 = worker-held, 2 = transfer-held
-        gpu_cache_lock_data = np.zeros([1], dtype=np.int32)
-        self.gpu_cache_lock_signal = IPCSignal(
-            name="gpu_cache_lock_signal",
-            array=gpu_cache_lock_data,
-            dtype=np.int32,
+        # gpu_cache_lock: file-based lock for mutual exclusion between worker
+        # and CPU transfer when accessing GPU KV cache.
+        self.gpu_cache_lock = IPCLock(
+            name="gpu_cache_lock",
             suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
@@ -445,34 +443,31 @@ class PaddleDisWorkerProc:
     def _accquire_kvcache_lock(self, tp_rank):
         """Acquire the GPU KV cache lock for the worker process.
 
-        Spins on the shared memory lock until it becomes free (value=0),
-        then the rank-0 worker sets it to 1 to indicate worker occupancy.
-        This prevents concurrent GPU KV cache access between the worker
-        and the CPU transfer process during model execution.
+        Uses a file-based lock (fcntl.flock) to ensure mutual exclusion
+        between the worker and the CPU transfer process during model
+        execution. Only rank 0 acquires the lock to avoid deadlock among
+        tensor-parallel workers.
 
         Args:
             tp_rank: Tensor parallel rank of the current worker. Only rank 0
-                writes the lock value to avoid contention.
+                acquires the lock.
         """
         if not envs.FD_USE_KVCACHE_LOCK:
             return
-        # Spin until the shared memory lock is free during inference
-        while self.gpu_cache_lock_signal.value[0] != 0:
-            pass
         if tp_rank == 0:
-            self.gpu_cache_lock_signal.value[0] = 1
+            self.gpu_cache_lock.acquire()
 
     def _release_kvcache_lock(self, tp_rank):
         """Release the GPU KV cache lock held by the worker process.
 
         Args:
             tp_rank: Tensor parallel rank of the current worker. Only rank 0
-                writes the lock value to avoid contention.
+                releases the lock.
         """
         if not envs.FD_USE_KVCACHE_LOCK:
             return
         if tp_rank == 0:
-            self.gpu_cache_lock_signal.value[0] = 0
+            self.gpu_cache_lock.release()
 
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.

@@ -557,24 +557,20 @@ class PrefixCacheManager:
     def _accquire_kvcache_lock(self):
         """Acquire the GPU KV cache lock for the transfer process.
 
-        Spins on the shared memory lock until it becomes free (value=0),
-        then sets it to 2 to indicate transfer occupancy.
-        This prevents concurrent GPU KV cache access between the worker
-        and the CPU transfer process, which may cause NaN errors under
+        Uses a file-based lock (fcntl.flock) to ensure mutual exclusion
+        between the worker and the CPU transfer process. This prevents
+        concurrent GPU KV cache access which may cause NaN errors under
         certain DP+EP configurations.
         """
         if not envs.FD_USE_KVCACHE_LOCK:
             return
-        # Spin until the shared memory lock is free, then mark as transfer-occupied (value=2)
-        while self.gpu_cache_lock_signal.value[0] != 0:
-            pass
-        self.gpu_cache_lock_signal.value[0] = 2
+        self.gpu_cache_lock.acquire()
 
     def _release_kvcache_lock(self):
         """Release the GPU KV cache lock held by the transfer process."""
         if not envs.FD_USE_KVCACHE_LOCK:
             return
-        self.gpu_cache_lock_signal.value[0] = 0
+        self.gpu_cache_lock.release()
 
     def issue_swap_task(
         self,
