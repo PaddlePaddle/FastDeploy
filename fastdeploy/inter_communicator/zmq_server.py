@@ -316,7 +316,7 @@ class ZmqServerBase(ABC):
     def _send_batch_response(self, batch_data):
         """
         Batch send responses for multiple requests.
-        batch_data: List[[req_id, [output, ...]], ...]
+        batch_data: List[output, ...] where each output contains request_id
         """
         self._ensure_socket()
         if self.socket is None:
@@ -325,9 +325,7 @@ class ZmqServerBase(ABC):
         try:
             # Convert outputs to dict if needed (CPU work, no lock needed)
             if not envs.ENABLE_V1_DATA_PROCESSOR:
-                for req_id, outputs in batch_data:
-                    for i, output in enumerate(outputs):
-                        outputs[i] = output.to_dict()
+                batch_data = [output.to_dict() for output in batch_data]
 
             result = ForkingPickler.dumps(batch_data)
             result_len = len(result)

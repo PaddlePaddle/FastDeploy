@@ -202,7 +202,7 @@ class DealerConnectionManager:
     async def _dispatch_batch_responses(self):
         """
         Receive batch responses and dispatch to corresponding request queues.
-        batch_data format: [[req_id, [outputs]], [req_id, [outputs]], ...]
+        batch_data format: [output, output, ...] where each output contains request_id
         """
         consecutive_errors = 0
         max_consecutive_errors = 5
@@ -219,20 +219,15 @@ class DealerConnectionManager:
                 address = f"ipc:///dev/shm/response_{self.pid}.push"
                 main_process_metrics.record_zmq_stats(_zmq_metrics_stats, address)
 
-                # Parse request_ids (outside lock)
-                parsed_items = []
-                for req_id, outputs in batch_data:
-                    if req_id.startswith(("cmpl", "embd", "reward", "chatcmpl")):
-                        req_id = req_id.rsplit("_", 1)[0]
-                    parsed_items.append((req_id, outputs))
-
-                # Dispatch: dict lookup + put_nowait are both non-blocking,
-                # safe to do in a single pass under lock
+                # Dispatch directly: extract request_id from output and dispatch in one pass
                 async with self.lock:
-                    for req_id, outputs in parsed_items:
+                    for output in batch_data:
+                        req_id = output.request_id
+                        if req_id.startswith(("cmpl", "embd", "reward", "chatcmpl")):
+                            req_id = req_id.rsplit("_", 1)[0]
                         queue = self.request_map.get(req_id)
                         if queue is not None:
-                            queue.put_nowait(outputs)
+                            queue.put_nowait(output)
 
                 consecutive_errors = 0
 
