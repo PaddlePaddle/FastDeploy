@@ -84,7 +84,7 @@ from fastdeploy.utils import (
     retrive_model_from_server,
 )
 
-tracing.process_tracing_init()
+_tracing_inited = False
 
 parser = make_arg_parser(FlexibleArgumentParser())
 args = parser.parse_args()
@@ -170,7 +170,14 @@ async def lifespan(app: FastAPI):
     async context manager for FastAPI lifespan
     """
     global engine_args
+    global _tracing_inited
     import logging
+
+    # Initialize tracing in worker lifecycle instead of module import time.
+    # This avoids creating grpc/cygrpc state before gunicorn forks workers.
+    if not _tracing_inited:
+        tracing.process_tracing_init()
+        _tracing_inited = True
 
     uvicorn_access = logging.getLogger("uvicorn.access")
     uvicorn_access.handlers.clear()
