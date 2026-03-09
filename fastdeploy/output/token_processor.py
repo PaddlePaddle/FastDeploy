@@ -252,7 +252,8 @@ class TokenProcessor:
                     f"Request={task_id}, InputToken={task.prompt_token_ids_len}, "
                     f"CachedDetail={cached_detail}, OutputToken={self.tokens_counter[task_id]}, "
                     f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, "
-                    f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}"
+                    f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
+                    f"PreemptedCount={getattr(task.metrics, 'preempted_count', 0)}"
                 )
 
                 main_process_metrics.request_token_ratio.observe(token_ratio)
@@ -392,7 +393,7 @@ class TokenProcessor:
                     batch_result = self._process_batch_output_use_zmq(receive_datas)
                     self.postprocess(batch_result)
             except Exception as e:
-                llm_logger.error(f"Recieve message error: {e}")
+                llm_logger.error(f"Receive message:{receive_datas}, error:{e}")
                 continue
 
     def process_sampling_results(self):
@@ -752,7 +753,7 @@ class TokenProcessor:
             tracing.trace_set_proc_propagate_context(rid, trace_carrier, ts)
             if self.cfg.speculative_config.method:
                 self._record_speculative_decoding_accept_num_per_request(task_id, accept_num[i])
-                if accept_num[i] == PREEMPTED_TOKEN_ID:  # in MTP, meas preemption has happend in worker
+                if accept_num[i] == PREEMPTED_TOKEN_ID:  # in MTP, means preemption has happened in worker
                     llm_logger.info(f"sync preemption for request_id {task_id} done.")
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.abort_req_ids_set:
@@ -943,11 +944,13 @@ class TokenProcessor:
 
                     # Print combined log with all required information
                     ttft = task.metrics.first_token_time if task.metrics.first_token_time else 0
+                    ttft_s = ttft + task.metrics.time_in_queue
                     llm_logger.info(
                         f"Request={task_id}, InputToken={task.prompt_token_ids_len}, "
                         f"CachedDetail={cached_detail}, OutputToken={self.tokens_counter[task_id]}, "
-                        f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, "
-                        f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}"
+                        f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, TTFT_S={ttft_s:.2f}, "
+                        f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
+                        f"PreemptedCount={getattr(task.metrics, 'preempted_count', 0)}"
                     )
 
                     main_process_metrics.request_token_ratio.observe(token_ratio)

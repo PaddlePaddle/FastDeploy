@@ -671,7 +671,7 @@ class CacheMessagerV1:
                 else:
                     time.sleep(0.001)
             except Exception as e:
-                logger.info(f"add cache task occured error: {e},  {traceback.format_exc()!s}.")
+                logger.info(f"add cache task occurred error: {e},  {traceback.format_exc()!s}.")
 
     def prefill_layerwise_send_cache_thread(self):
         """

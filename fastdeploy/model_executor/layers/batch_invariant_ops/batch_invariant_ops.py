@@ -475,7 +475,7 @@ def mean_dim(
 # We thank the SGLang authors and the Thinking Machines Lab for their contributions.
 
 
-@triton.jit
+@triton.jit  # pragma: no cover
 def bmm_kernel_persistent(
     a_ptr,
     b_ptr,

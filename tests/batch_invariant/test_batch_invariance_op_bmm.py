@@ -173,6 +173,15 @@ class TestBatchInvariantForBMM(unittest.TestCase):
                     f"for shape=({Batch},{M},{K},{N}) {dtype} (rtol={rtol}, atol={atol})",
                 )
 
+    def test_unsupported_dtype_raises(self):
+        """bmm_persistent must raise ValueError for unsupported dtypes (e.g., int32)."""
+        with set_batch_invariant_mode(True):
+            a = paddle.randint(0, 10, [2, 16, 32], dtype=paddle.int32)
+            b = paddle.randint(0, 10, [2, 32, 16], dtype=paddle.int32)
+            with self.assertRaises(ValueError) as ctx:
+                paddle.bmm(a, b)
+            self.assertIn("Unsupported dtype", str(ctx.exception))
+
     def test_special_inputs(self):
         """Batch-invariant bmm must handle special input patterns correctly."""
         with set_batch_invariant_mode(True):

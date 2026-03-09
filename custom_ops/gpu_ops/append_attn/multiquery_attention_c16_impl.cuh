@@ -33,7 +33,7 @@ __global__ void multi_query_append_attention_kernel(
     const T *__restrict__ q,  // [token_num, (num_heads + 2* kv_num_head) *
                               // head_dim]
     const T *__restrict__ cache_k,  // [max_block_num, num_heads, block_size,
-                                    // head_dim]
+    // head_dim]
     const T *__restrict__ cache_v,
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
@@ -54,9 +54,9 @@ __global__ void multi_query_append_attention_kernel(
     const uint32_t chunk_size,
     const int num_blocks_x_cpu,
     T *__restrict__ tmp_workspace,  // split kv [token_num, num_chunks,
-                                    // num_heads, head_dim]
-    float *__restrict__ tmp_m,      // [token_num, num_chunks, num_heads]
-    float *__restrict__ tmp_d,      // [token_num, num_chunks, num_heads]
+    // num_heads, head_dim]
+    float *__restrict__ tmp_m,  // [token_num, num_chunks, num_heads]
+    float *__restrict__ tmp_d,  // [token_num, num_chunks, num_heads]
     OutT *__restrict__ out,
     const int speculate_max_draft_token_num = 5,
     const int sliding_window = 0,
@@ -940,10 +940,10 @@ void MultiQueryAppendAttention(
     const int num_chunks = div_up(max_dec_len, chunk_size);
     // Deterministic mode: force use nosplit kernel to ensure consistent
     // floating-point accumulation order across all sequence lengths
-    const bool force_no_partition = getBoolEnv("FD_DETERMINISTIC_MODE");
+    const bool force_no_partition = getEnvDeterministicMode();
 
     // Debug log for determinism verification
-    if (getBoolEnv("FD_DETERMINISTIC_DEBUG")) {
+    if (getEnvDeterministicDebug()) {
       printf(
           "[DET_DEBUG] num_chunks=%d, chunk_size=%u, max_dec_len=%d, "
           "force_no_partition=%d\n",
@@ -1176,7 +1176,7 @@ void MultiQueryAppendAttention(
     // NOTE: the warp1_4 nosplit kernel uses runtime num_chunks_this_seq check
     // (not constexpr partition_kv), so we MUST set gridDim.y=1 to avoid
     // nullptr write to tmp_workspace when num_chunks_this_seq > 1.
-    const bool force_no_partition = getBoolEnv("FD_DETERMINISTIC_MODE");
+    const bool force_no_partition = getEnvDeterministicMode();
     const int grid_chunks = force_no_partition ? 1 : num_chunks;
     dim3 grids(num_blocks_x_cpu, grid_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
