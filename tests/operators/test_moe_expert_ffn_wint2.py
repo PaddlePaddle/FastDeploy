@@ -31,6 +31,13 @@ import paddle
 
 from fastdeploy.model_executor.ops.gpu import moe_expert_ffn_wint2
 
+try:
+    from fastdeploy.model_executor.ops.gpu import winx_unzip as _winx_unzip_op
+
+    _HAS_WINX_UNZIP = True
+except ImportError:
+    _HAS_WINX_UNZIP = False
+
 paddle.seed(2026)
 np.random.seed(2026)
 
@@ -90,13 +97,11 @@ def _build_inputs(
     # --- Prefix sum ---
     tokens_expert_prefix_sum = paddle.to_tensor(np.cumsum(tokens_per_expert).astype("int64"))
 
-    # --- Packed uint8 weights with CUTLASS rearrangement ---
-    w_up = _cutlass_rearrange(
-        paddle.randint(0, 256, [num_experts, hidden_size // 4, gated_inter], dtype="int32").cast("uint8")
-    )
-    w_down = _cutlass_rearrange(
-        paddle.randint(0, 256, [num_experts, inter_size // 4, hidden_size], dtype="int32").cast("uint8")
-    )
+    # --- Packed uint8 weights (raw + CUTLASS rearranged) ---
+    w_up_raw = paddle.randint(0, 256, [num_experts, hidden_size // 4, gated_inter], dtype="int32").cast("uint8")
+    w_down_raw = paddle.randint(0, 256, [num_experts, inter_size // 4, hidden_size], dtype="int32").cast("uint8")
+    w_up = _cutlass_rearrange(w_up_raw)
+    w_down = _cutlass_rearrange(w_down_raw)
 
     # --- Super scales (channel-wise, input dtype) ---
     super_up = paddle.randn([num_experts, gated_inter], dtype=dtype) * 0.01
@@ -126,6 +131,9 @@ def _build_inputs(
         down_proj_local_scale=local_down,
         down_proj_code_scale=code_scale_down,
         down_proj_code_zp=code_zp_down,
+        # Raw (un-rearranged) weights for decomposed reference tests
+        _up_weight_raw=w_up_raw,
+        _down_weight_raw=w_down_raw,
     )
 
 
@@ -149,6 +157,56 @@ def _call_op(inputs, used_in_ep_low_latency=False):
     )
 
 
+def _reference_moe_expert_ffn(inputs):
+    """Decomposed reference: winx_unzip dequant → matmul → SwiGLU → matmul.
+
+    Uses the independently-validated winx_unzip op (test_winx_unzip.py)
+    to dequantize WINT2 weights, then computes the MoE FFN pipeline
+    in float32 for numerical stability.
+    """
+    E = inputs["_up_weight_raw"].shape[0]
+    prefix = inputs["tokens_expert_prefix_sum"].numpy()
+    starts = np.concatenate([[0], prefix[:-1]]).astype(int)
+
+    dense_up_gate = _winx_unzip_op(
+        inputs["_up_weight_raw"],
+        inputs["up_gate_proj_local_scale"],
+        inputs["up_gate_proj_code_scale"],
+        inputs["up_gate_proj_code_zp"],
+        inputs["up_gate_proj_scale"],
+        "weight_only_int2",
+    ).cast(
+        "float32"
+    )  # [E, H, gated_inter]
+
+    dense_down = _winx_unzip_op(
+        inputs["_down_weight_raw"],
+        inputs["down_proj_local_scale"],
+        inputs["down_proj_code_scale"],
+        inputs["down_proj_code_zp"],
+        inputs["down_proj_scale"],
+        "weight_only_int2",
+    ).cast(
+        "float32"
+    )  # [E, inter, H]
+
+    outputs = []
+    for e in range(E):
+        start, end = int(starts[e]), int(prefix[e])
+        if end <= start:
+            continue
+        x = inputs["permute_input"][start:end].cast("float32")
+        fc1 = paddle.matmul(x, dense_up_gate[e])  # [n_tok, gated_inter]
+        inter_size = fc1.shape[-1] // 2
+        act = paddle.nn.functional.silu(fc1[:, :inter_size]) * fc1[:, inter_size:]
+        out_e = paddle.matmul(act, dense_down[e])  # [n_tok, H]
+        outputs.append(out_e)
+
+    if outputs:
+        return paddle.concat(outputs, axis=0).cast(inputs["permute_input"].dtype)
+    return paddle.zeros_like(inputs["permute_input"][:0])
+
+
 # ===================================================================
 # Test Cases
 # ===================================================================
@@ -166,7 +224,41 @@ class TestMoeExpertFFNWint2(unittest.TestCase):
     def setUp(self):
         paddle.set_device("gpu")
 
-    # -- Numerical correctness -----------------------------------------
+    # -- Numerical correctness (reference comparison) ------------------
+
+    @unittest.skipUnless(_HAS_WINX_UNZIP, "winx_unzip needed for reference")
+    def test_correctness_bf16(self):
+        """Fused output matches decomposed reference (bfloat16).
+
+        Reference pipeline:
+          winx_unzip(raw_weights) → matmul → SwiGLU → matmul
+        """
+        inputs = _build_inputs(self.E, self.H, self.INTER, self.TOKENS, dtype="bfloat16")
+        out = _call_op(inputs).cast("float32").numpy()
+        ref = _reference_moe_expert_ffn(inputs).cast("float32").numpy()
+        np.testing.assert_allclose(
+            out,
+            ref,
+            rtol=5e-2,
+            atol=5e-2,
+            err_msg="Fused op diverges from decomposed reference (bf16)",
+        )
+
+    @unittest.skipUnless(_HAS_WINX_UNZIP, "winx_unzip needed for reference")
+    def test_correctness_fp16(self):
+        """Fused output matches decomposed reference (float16)."""
+        inputs = _build_inputs(self.E, self.H, self.INTER, self.TOKENS, dtype="float16")
+        out = _call_op(inputs).cast("float32").numpy()
+        ref = _reference_moe_expert_ffn(inputs).cast("float32").numpy()
+        np.testing.assert_allclose(
+            out,
+            ref,
+            rtol=5e-2,
+            atol=5e-2,
+            err_msg="Fused op diverges from decomposed reference (fp16)",
+        )
+
+    # -- Numerical invariants -------------------------------------------
 
     def test_zero_input_produces_zero_output(self):
         """Zero input => matmul=0, SwiGLU(0)=0, matmul=0 => output = 0.
