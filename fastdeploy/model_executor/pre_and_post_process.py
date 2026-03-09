@@ -104,6 +104,7 @@ else:
         custom_numpy_to_tensor,
     )
 
+from fastdeploy.config import PREEMPTED_TOKEN_ID
 from fastdeploy.model_executor.entropy_utils import (
     calculate_logits_entropy,
     speculate_calculate_logits_entropy,
@@ -212,6 +213,7 @@ def pre_process(
 
 def _build_stream_transfer_data(
     output_tokens: paddle.Tensor,
+    preempted_idx: paddle.Tensor,
     pooler_outputs: List[PoolingSequenceGroupOutput] = None,
     logprobs: Optional[LogprobsTensors] = None,
     prompt_logprobs_list: Optional[LogprobsTensors] = None,
@@ -225,6 +227,8 @@ def _build_stream_transfer_data(
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
+            if preempted_idx[bid] == 1:
+                output_token_per_sample = [PREEMPTED_TOKEN_ID]
             stream_transfer_data = StreamTransferData(
                 decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
             )
@@ -368,6 +372,7 @@ def save_output_normal(
             )
             output = _build_stream_transfer_data(
                 sampler_output.sampled_token_ids,
+                preempted_idx=share_inputs["preempted_idx"],
                 logprobs=sampler_output.logprobs_tensors,
                 prompt_logprobs_list=model_output.prompt_logprobs_list,
             )
@@ -407,6 +412,7 @@ def save_output_normal(
                 model_output.mp_rank,
             )
     share_inputs["last_preempted_idx"][:] = 0
+    share_inputs["preempted_idx"][:] = 0
 
 
 def post_process_specualate(
@@ -918,5 +924,7 @@ def post_process_pooling(
 
     if not skip_save_output:
         if save_each_rank or model_output.mp_rank == 0:
-            output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
+            output = _build_stream_transfer_data(
+                output_tokens=None, preempted_idx=None, pooler_outputs=pooler_output.outputs
+            )
             async_output_queue.put(output)
