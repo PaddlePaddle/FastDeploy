@@ -30,6 +30,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& step_idx,
                       const paddle::Tensor& output_cum_offsets,
                       const paddle::Tensor& stop_flags,
+                      const paddle::Tensor& batch_drop,
                       const paddle::Tensor& not_need_stop,
                       const paddle::Tensor& max_dec_len,
                       const paddle::Tensor& end_ids,
@@ -104,6 +105,7 @@ PD_BUILD_STATIC_OP(draft_model_update)
              "step_idx",
              "output_cum_offsets",
              "stop_flags",
+             "batch_drop",
              "not_need_stop",
              "max_dec_len",
              "end_ids",
@@ -116,6 +118,7 @@ PD_BUILD_STATIC_OP(draft_model_update)
               "seq_lens_decoder_out",
               "step_idx_out",
               "stop_flags_out",
+              "batch_drop_out",
               "not_need_stop_out",
               "base_model_draft_tokens_out"})
     .SetInplaceMap({{"draft_tokens", "draft_tokens_out"},
@@ -125,6 +128,7 @@ PD_BUILD_STATIC_OP(draft_model_update)
                     {"seq_lens_decoder", "seq_lens_decoder_out"},
                     {"step_idx", "step_idx_out"},
                     {"stop_flags", "stop_flags_out"},
+                    {"batch_drop", "batch_drop_out"},
                     {"not_need_stop", "not_need_stop_out"},
                     {"base_model_draft_tokens", "base_model_draft_tokens_out"}})
     .SetKernelFn(PD_KERNEL(DraftModelUpdate));

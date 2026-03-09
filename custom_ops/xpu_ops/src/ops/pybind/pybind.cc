@@ -787,6 +787,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("step_idx"),                 // 步骤索引张量
         py::arg("output_cum_offsets"),       // 输出累积偏移量张量
         py::arg("stop_flags"),               // 停止标志张量
+        py::arg("batch_drop"),               // MTP 停止推理标志张量
         py::arg("not_need_stop"),            // 无需停止标志张量
         py::arg("max_dec_len"),              // 最大解码长度张量
         py::arg("end_ids"),                  // 结束ID张量
