@@ -70,8 +70,6 @@ class ResourceManager:
             )
             if self.enable_prefix_cache:
                 raise NotImplementedError("Head-wise KV cache does not support prefix caching yet.")
-            if getattr(config.cache_config, "enable_chunked_prefill", False):
-                raise NotImplementedError("Head-wise KV cache does not support chunked prefill yet.")
 
         llm_logger.info(f"{self.info()}")
         main_process_metrics.max_batch_size.set(max_num_seqs)
