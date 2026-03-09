@@ -408,6 +408,8 @@ class CompletionOutput:
     reasoning_content: Optional[str] = None
     tool_calls: Optional[ToolCall] = None
     speculate_metrics: Optional[SpeculateMetrics] = None
+    # Binary mask [vocab_size]: 1 = retained by top_p/top_k, 0 = truncated
+    sampling_mask: Optional[Any] = None
 
     def to_dict(self):
         """
@@ -425,6 +427,7 @@ class CompletionOutput:
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
             "reasoning_content": self.reasoning_content,
+            "sampling_mask": self.sampling_mask,
         }
 
     @classmethod

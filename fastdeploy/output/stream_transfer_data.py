@@ -46,3 +46,5 @@ class StreamTransferData:
     accept_num: Optional[np.array] = None
     # [num_reqs, hidden_size]
     pooler_output: Optional[np.array] = None
+    # [vocab_size] bool mask: True = retained by top_p/top_k, False = truncated
+    sampling_mask: Optional[np.array] = None

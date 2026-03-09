@@ -196,6 +196,7 @@ class ModelConfig:
         self.enable_logprob = False
         self.max_logprobs = 20
         self.logprobs_mode = "raw_logprobs"
+        self.enable_keep_sampling_mask = False
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None

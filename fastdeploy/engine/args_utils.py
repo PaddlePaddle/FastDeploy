@@ -507,6 +507,13 @@ class EngineArgs:
     Flag to enable entropy output. Default is False (disabled).
     """
 
+    enable_keep_sampling_mask: bool = False
+    """
+    Flag to enable sampling mask output. Default is False (disabled).
+    When enabled, a binary mask is saved for each generated token indicating which token positions
+    were retained (1) or truncated (0) after top_p/top_k sampling, and streamed to the client.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -769,6 +776,13 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
+        )
+        model_group.add_argument(
+            "--enable-keep-sampling-mask",
+            action="store_true",
+            default=EngineArgs.enable_keep_sampling_mask,
+            help="Enable output of sampling mask. A binary mask per token step indicating which "
+            "positions were retained (1) or truncated (0) after top_p/top_k sampling.",
         )
         model_group.add_argument(
             "--max-logprobs",

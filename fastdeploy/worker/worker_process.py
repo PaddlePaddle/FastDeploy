@@ -942,6 +942,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--enable_keep_sampling_mask",
+        action="store_true",
+        help="Enable output of sampling mask (binary mask per token step after top_p/top_k).",
+    )
+
+    parser.add_argument(
         "--num_cpu_blocks",
         type=int,
         default=0,

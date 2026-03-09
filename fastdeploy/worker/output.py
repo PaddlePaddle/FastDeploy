@@ -178,6 +178,8 @@ class SamplerOutput:
     token_num_per_batch: Optional[paddle.Tensor] = None
     cu_batch_token_offset: Optional[paddle.Tensor] = None
     logits: Optional[paddle.Tensor] = None
+    # [num_reqs, vocab_size] binary mask: 1 = retained by top_p/top_k, 0 = truncated
+    sampling_mask: Optional[paddle.Tensor] = None
 
 
 @dataclass

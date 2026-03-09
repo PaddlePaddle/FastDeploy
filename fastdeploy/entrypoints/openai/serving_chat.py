@@ -419,6 +419,7 @@ class OpenAIServingChat:
                         delta=delta_message,
                         logprobs=logprobs_res,
                         draft_logprobs=draft_logprobs_res,
+                        sampling_mask=output.get("sampling_mask", None),
                         arrival_time=arrival_time,
                         speculate_metrics=output_speculate_metrics,
                     )
@@ -539,6 +540,7 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             prompt_logprobs_res_list = [[] for _ in range(num_choices)]
+            sampling_mask_list = [[] for _ in range(num_choices)]
             speculate_metrics = [None for _ in range(num_choices)]
             choices = []
             while num_choices > 0:
@@ -619,6 +621,9 @@ class OpenAIServingChat:
                         )
                         if prompt_logprobs_res:
                             prompt_logprobs_res_list[idx].extend(clamp_prompt_logprobs(prompt_logprobs_res))
+                    output_sampling_mask = output.get("sampling_mask", None)
+                    if output_sampling_mask is not None:
+                        sampling_mask_list[idx].append(output_sampling_mask)
                     speculate_metrics[idx] = data["metrics"].get("speculate_metrics", None)
                     if data["finished"]:
                         num_choices -= 1
@@ -641,6 +646,7 @@ class OpenAIServingChat:
                             draft_logprob_contents=draft_logprob_contents,
                             response_processor=response_processor,
                             prompt_logprobs_res_list=prompt_logprobs_res_list,
+                            sampling_mask_list=sampling_mask_list,
                             max_tokens=max_tokens,
                             speculate_metrics=speculate_metrics[idx],
                         )
@@ -694,6 +700,7 @@ class OpenAIServingChat:
         logprob_contents: list,
         draft_logprob_contents: list,
         prompt_logprobs_res_list: list,
+        sampling_mask_list: list,
         response_processor: ChatResponseProcessor,
         max_tokens: int,
         speculate_metrics: SpeculateMetrics | None,
@@ -731,6 +738,7 @@ class OpenAIServingChat:
             draft_logprobs_full_res = LogProbs(content=draft_logprob_contents[idx])
         if prompt_logprobs_res_list[idx]:
             prompt_logprobs_full_res = prompt_logprobs_res_list[idx]
+        sampling_mask_full_res = sampling_mask_list[idx] if sampling_mask_list[idx] else None
 
         num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
         num_input_image_tokens[idx] = data.get("num_input_image_tokens", 0)
@@ -753,6 +761,7 @@ class OpenAIServingChat:
             logprobs=logprobs_full_res,
             draft_logprobs=draft_logprobs_full_res,
             prompt_logprobs=prompt_logprobs_full_res,
+            sampling_mask=sampling_mask_full_res,
             finish_reason=finish_reason,
             speculate_metrics=speculate_metrics,
         )

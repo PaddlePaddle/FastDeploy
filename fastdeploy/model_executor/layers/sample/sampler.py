@@ -93,6 +93,46 @@ def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_le
     return top_p_padding, top_k_padding, topp_seed
 
 
+def _compute_sampling_mask(
+    probs: paddle.Tensor,
+    top_p: paddle.Tensor,
+) -> paddle.Tensor:
+    """
+    Compute a top-p (nucleus) sampling mask of shape [num_reqs, vocab_size].
+
+    For each request, retain the smallest set of tokens whose cumulative
+    probability >= top_p. The mask is True for retained positions, False
+    for truncated positions. When top_p >= 1.0, all tokens are retained.
+
+    Args:
+        probs: [num_reqs, vocab_size] softmax probabilities.
+        top_p: [num_reqs, 1] top-p threshold per request.
+
+    Returns:
+        mask: [num_reqs, vocab_size] bool tensor (CPU).
+    """
+    real_bsz = probs.shape[0]
+    top_p = top_p[:real_bsz]
+    sorted_indices = paddle.argsort(probs, axis=-1, descending=True)
+    sorted_probs = paddle.take_along_axis(probs, sorted_indices, axis=-1)
+    cum_probs = paddle.cumsum(sorted_probs, axis=-1)
+
+    # 标准 top-p: 保留”加入当前 token 之前累计概率仍小于 top_p”的位置
+    mask_cum = (cum_probs - sorted_probs) < top_p  # [B, V]
+
+    # top_p >= 1.0 的样本应全部保留
+    full_mask = (top_p >= 1.0).expand_as(mask_cum)  # [B, V]
+    mask_cum = paddle.where(full_mask, paddle.ones_like(mask_cum), mask_cum)
+
+    top_p_mask = paddle.zeros_like(probs, dtype="int64")
+    top_p_mask = paddle.put_along_axis(
+        top_p_mask, sorted_indices, mask_cum.astype("int64"), axis=-1
+    )
+    top_p_mask = top_p_mask.astype("bool")
+
+    return top_p_mask.cpu()
+
+
 class GuidedDecoding:
     """
     processor for guided decoding.
@@ -525,6 +565,13 @@ class Sampler(nn.Layer):
         probs = F.softmax(logits)
 
         probs = min_p_sampling(probs, sampling_metadata.min_p, sampling_metadata.min_p_list)
+
+        # Compute sampling mask BEFORE top_k_top_p_sampling modifies probs.
+        # Binary mask [num_reqs, vocab_size]: 1 = retained by top_k/top_p, 0 = truncated.
+        sampling_mask = None
+        if sampling_metadata.keep_sampling_mask:
+            sampling_mask = _compute_sampling_mask(probs, sampling_metadata.top_p)
+
         _, next_tokens = top_k_top_p_sampling(
             probs,
             sampling_metadata.top_p,
@@ -548,6 +595,7 @@ class Sampler(nn.Layer):
             sampled_token_ids=next_tokens,
             logprobs_tensors=logprobs_tensors,
             logits=logits,
+            sampling_mask=sampling_mask,
         )
 
         return sampler_output

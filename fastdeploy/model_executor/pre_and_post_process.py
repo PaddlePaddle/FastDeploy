@@ -21,6 +21,21 @@ import numpy as np
 import paddle
 
 from fastdeploy import envs
+from fastdeploy.inter_communicator import ZmqIpcClient
+import zmq as _zmq
+
+# Module-level cache: {rank_id: ZmqIpcClient} for sampling_mask side-channel
+_sampling_mask_zmq_clients = {}
+
+
+def _get_sampling_mask_zmq_client(rank_id: int) -> ZmqIpcClient:
+    """Lazily create and cache a ZMQ PUSH client for sampling_mask side-channel."""
+    global _sampling_mask_zmq_clients
+    if rank_id not in _sampling_mask_zmq_clients:
+        client = ZmqIpcClient(name=f"sampling_mask_output_rank{rank_id}", mode=_zmq.PUSH)
+        client.connect()
+        _sampling_mask_zmq_clients[rank_id] = client
+    return _sampling_mask_zmq_clients[rank_id]
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.platforms import current_platform
 
@@ -199,6 +214,7 @@ def _build_stream_transfer_data(
     pooler_outputs: List[PoolingSequenceGroupOutput] = None,
     logprobs: Optional[LogprobsTensors] = None,
     prompt_logprobs_list: Optional[LogprobsTensors] = None,
+    sampling_mask: Optional[paddle.Tensor] = None,
 ):
     """Split output_tokens and output"""
 
@@ -208,6 +224,11 @@ def _build_stream_transfer_data(
         output_tokens = output_tokens.reshape([-1]).numpy()
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
+        # Convert sampling_mask to numpy if present: shape [num_reqs, vocab_size]
+        sampling_mask_np = None
+        if sampling_mask is not None:
+            sampling_mask_np = sampling_mask.numpy()
+
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
             stream_transfer_data = StreamTransferData(
                 decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
@@ -216,6 +237,8 @@ def _build_stream_transfer_data(
                 stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
             if prompt_logprobs_list:
                 stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
+            if sampling_mask_np is not None:
+                stream_transfer_data.sampling_mask = sampling_mask_np[bid]
             stream_transfer_datas.append(stream_transfer_data)
     elif pooler_outputs is not None:
         for bid, pooler_output in enumerate(pooler_outputs):
@@ -370,6 +393,7 @@ def post_process_normal(
                     sampler_output.sampled_token_ids,
                     logprobs=sampler_output.logprobs_tensors,
                     prompt_logprobs_list=model_output.prompt_logprobs_list,
+                    sampling_mask=sampler_output.sampling_mask,
                 )
                 async_output_queue.put(output)
         else:
@@ -389,6 +413,17 @@ def post_process_normal(
                     model_output.not_need_stop,
                     model_output.mp_rank,
                 )
+            # Send sampling_mask via ZMQ side-channel when enabled.
+            if sampler_output.sampling_mask is not None and (save_each_rank or model_output.mp_rank == 0):
+                try:
+                    rank_id = model_output.mp_rank
+                    zmq_client = _get_sampling_mask_zmq_client(rank_id)
+                    # Convert bool tensor to dict {batch_id: list[bool]} for easy consumption.
+                    mask_np = sampler_output.sampling_mask.numpy()  # [num_reqs, vocab_size], bool
+                    mask_dict = {i: mask_np[i].tolist() for i in range(mask_np.shape[0])}
+                    zmq_client.send_pyobj(mask_dict)
+                except Exception as e:
+                    pass  # Non-critical: do not block inference on mask send failure
 
 
 def post_process_specualate(
