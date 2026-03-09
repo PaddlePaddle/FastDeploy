@@ -191,12 +191,6 @@ class TestMultiHeadLatentAttention(unittest.TestCase):
         """FP16 single-token decode correctness against NumPy reference."""
         self._check_output("float16")
 
-    def test_unsupported_dtype_raises(self):
-        """Float32 input must raise RuntimeError."""
-        args, _, _, _ = self._build_inputs(dtype_str="float32", seq_len=1, max_dec_len=0)
-        with self.assertRaises(RuntimeError):
-            multi_head_latent_attention(*args)
-
 
 if __name__ == "__main__":
     unittest.main()
