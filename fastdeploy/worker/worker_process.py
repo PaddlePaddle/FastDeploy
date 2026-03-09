@@ -572,7 +572,7 @@ class PaddleDisWorkerProc:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
-            
+
             self._tp_barrier_wait() if tp_size > 1 else None
             self.infer_finished_signal.value[0] = 1
             if (

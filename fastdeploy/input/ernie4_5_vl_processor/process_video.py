@@ -137,7 +137,7 @@ def read_frames_decord(
             fix_start=fix_start,
             input_fps=video_meta["fps"],
         )
-    
+
     frames = []
     for frame_indice_index in range(0, len(frame_indices)):
         frame_indice = frame_indices[frame_indice_index]
