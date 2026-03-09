@@ -46,9 +46,10 @@ template <
     /// Group size for quantization
     int GroupSize_>
 class Wint2ParamsAccessor {
-public:
-  static_assert(platform::is_same<T, half_t>::value || platform::is_same<T, bfloat16_t>::value,
-        "T must be fp16 or bf16");
+ public:
+  static_assert(platform::is_same<T, half_t>::value ||
+                    platform::is_same<T, bfloat16_t>::value,
+                "T must be fp16 or bf16");
 
   using ElementType = T;
   using Shape = Shape_;
@@ -72,7 +73,7 @@ public:
   using ElementLocalScale = typename IteratorLocalScale::Element;
   using LayoutLocalScale = typename IteratorLocalScale::Layout;
   static_assert(platform::is_same<ElementLocalScale, uint4b_t>::value,
-        "local_scale's type must be uint4b_t.");
+                "local_scale's type must be uint4b_t.");
 
   using ElementCodeScaleZp = typename IteratorCodeScaleZp::Element;
   using LayoutCodeScaleZp = typename IteratorCodeScaleZp::Layout;
@@ -80,24 +81,32 @@ public:
   /// 2 uint4b_t values are stored in a single uint8_t
   constexpr static int kStagesPerLocalScaleLoad = 2 * kGroupSize / Shape::kK;
   constexpr static int kLocalScaleRows =
-      IteratorLocalScale::Shape::kRow * IteratorLocalScale::Shape::kColumn * sizeof_bits<ElementLocalScale>::value / 8 / Shape::kN;
+      IteratorLocalScale::Shape::kRow * IteratorLocalScale::Shape::kColumn *
+      sizeof_bits<ElementLocalScale>::value / 8 / Shape::kN;
 
   using SmemElement = uint8_t;
-  constexpr static int kSmemRows =
-      kLocalScaleRows * kStages + sizeof(ElementSuperScale) + sizeof(ElementCodeScaleZp) * 2;
+  constexpr static int kSmemRows = kLocalScaleRows * kStages +
+                                   sizeof(ElementSuperScale) +
+                                   sizeof(ElementCodeScaleZp) * 2;
   constexpr static int kSmemColumns = Shape::kN;
 
   using QuantParamsShape = MatrixShape<kSmemRows, kSmemColumns>;
 
   constexpr static int kSuperScaleSmemOffset = 0;
-  constexpr static int kCodeScaleSmemOffset = kSmemColumns * sizeof(ElementSuperScale);
-  constexpr static int kCodeZpSmemOffset = kCodeScaleSmemOffset + kSmemColumns * sizeof(ElementCodeScaleZp);
-  constexpr static int kLocalScaleSmemOffset = kCodeZpSmemOffset + kSmemColumns * sizeof(ElementCodeScaleZp);
+  constexpr static int kCodeScaleSmemOffset =
+      kSmemColumns * sizeof(ElementSuperScale);
+  constexpr static int kCodeZpSmemOffset =
+      kCodeScaleSmemOffset + kSmemColumns * sizeof(ElementCodeScaleZp);
+  constexpr static int kLocalScaleSmemOffset =
+      kCodeZpSmemOffset + kSmemColumns * sizeof(ElementCodeScaleZp);
 
   /// TensorRef type for loading element from a tensor
-  using SuperTensorRef = cutlass::TensorRef<ElementSuperScale, LayoutSuperScale>;
-  using LocalTensorRef = cutlass::TensorRef<ElementLocalScale, LayoutLocalScale>;
-  using CodeTensorRef = cutlass::TensorRef<ElementCodeScaleZp, LayoutCodeScaleZp>;
+  using SuperTensorRef =
+      cutlass::TensorRef<ElementSuperScale, LayoutSuperScale>;
+  using LocalTensorRef =
+      cutlass::TensorRef<ElementLocalScale, LayoutLocalScale>;
+  using CodeTensorRef =
+      cutlass::TensorRef<ElementCodeScaleZp, LayoutCodeScaleZp>;
 
   struct Arguments {
     IteratorSuperScale iterator_super_scale;
@@ -113,14 +122,14 @@ public:
               IteratorCodeScaleZp iterator_code_scale,
               IteratorCodeScaleZp iterator_code_zp,
               int local_scale_pointer_offset)
-      : iterator_super_scale(iterator_super_scale),
-        iterator_local_scale(iterator_local_scale),
-        iterator_code_scale(iterator_code_scale),
-        iterator_code_zp(iterator_code_zp),
-        local_scale_pointer_offset(local_scale_pointer_offset) {}
+        : iterator_super_scale(iterator_super_scale),
+          iterator_local_scale(iterator_local_scale),
+          iterator_code_scale(iterator_code_scale),
+          iterator_code_zp(iterator_code_zp),
+          local_scale_pointer_offset(local_scale_pointer_offset) {}
   };
 
-private:
+ private:
   //
   // Data members
   //
@@ -128,13 +137,17 @@ private:
   /// Begin address of shared memory
   uint8_t* smem_pointer_;
 
-  /// Iterator to write threadblock-scoped tile of super scale operand to shared memory
+  /// Iterator to write threadblock-scoped tile of super scale operand to shared
+  /// memory
   SmemIteratorSuperScale smem_iterator_super_scale_;
-  /// Iterator to write threadblock-scoped tile of local scale operand to shared memory
+  /// Iterator to write threadblock-scoped tile of local scale operand to shared
+  /// memory
   SmemIteratorLocalScale smem_iterator_local_scale_;
-  /// Iterator to write threadblock-scoped tile of code scale operand to shared memory
+  /// Iterator to write threadblock-scoped tile of code scale operand to shared
+  /// memory
   SmemIteratorCodeScaleZp smem_iterator_code_scale_;
-  /// Iterator to write threadblock-scoped tile of code zp operand to shared memory
+  /// Iterator to write threadblock-scoped tile of code zp operand to shared
+  /// memory
   SmemIteratorCodeScaleZp smem_iterator_code_zp_;
 
   /// Shared memory write stage index
@@ -145,25 +158,29 @@ private:
 
   CUTLASS_DEVICE
   ElementSuperScale* get_super_scale_smem_ptr() {
-    return reinterpret_cast<ElementSuperScale*>(smem_pointer_ + kSuperScaleSmemOffset);
+    return reinterpret_cast<ElementSuperScale*>(smem_pointer_ +
+                                                kSuperScaleSmemOffset);
   }
 
   CUTLASS_DEVICE
   ElementLocalScale* get_local_scale_smem_ptr() {
-    return reinterpret_cast<ElementLocalScale*>(smem_pointer_ + kLocalScaleSmemOffset);
+    return reinterpret_cast<ElementLocalScale*>(smem_pointer_ +
+                                                kLocalScaleSmemOffset);
   }
 
   CUTLASS_DEVICE
   ElementCodeScaleZp* get_code_scale_smem_ptr() {
-    return reinterpret_cast<ElementCodeScaleZp*>(smem_pointer_ + kCodeScaleSmemOffset);
+    return reinterpret_cast<ElementCodeScaleZp*>(smem_pointer_ +
+                                                 kCodeScaleSmemOffset);
   }
 
   CUTLASS_DEVICE
   ElementCodeScaleZp* get_code_zp_smem_ptr() {
-    return reinterpret_cast<ElementCodeScaleZp*>(smem_pointer_ + kCodeZpSmemOffset);
+    return reinterpret_cast<ElementCodeScaleZp*>(smem_pointer_ +
+                                                 kCodeZpSmemOffset);
   }
 
-public:
+ public:
   /// Construct from tensor references
   CUTLASS_DEVICE
   Wint2ParamsAccessor(
@@ -175,55 +192,74 @@ public:
       int warp_idx,
       ///< ID of each thread within a warp
       int lane_idx)
-    : smem_pointer_(smem_pointer),
-      smem_iterator_super_scale_(LayoutSuperScale(IteratorSuperScale::Shape::kColumn),
-          get_super_scale_smem_ptr(), {1, IteratorSuperScale::Shape::kColumn}, thread_idx),
-      smem_iterator_local_scale_(LayoutLocalScale(IteratorLocalScale::Shape::kColumn),
-          get_local_scale_smem_ptr(), {1, IteratorLocalScale::Shape::kColumn}, thread_idx),
-      smem_iterator_code_scale_(LayoutCodeScaleZp(IteratorCodeScaleZp::Shape::kColumn),
-          get_code_scale_smem_ptr(), {1, IteratorCodeScaleZp::Shape::kColumn}, thread_idx),
-      smem_iterator_code_zp_(LayoutCodeScaleZp(IteratorCodeScaleZp::Shape::kColumn),
-          get_code_zp_smem_ptr(), {1, IteratorCodeScaleZp::Shape::kColumn}, thread_idx),
-      smem_write_stage_idx_(0),
-      smem_read_stage_idx_(0) {}
+      : smem_pointer_(smem_pointer),
+        smem_iterator_super_scale_(
+            LayoutSuperScale(IteratorSuperScale::Shape::kColumn),
+            get_super_scale_smem_ptr(),
+            {1, IteratorSuperScale::Shape::kColumn},
+            thread_idx),
+        smem_iterator_local_scale_(
+            LayoutLocalScale(IteratorLocalScale::Shape::kColumn),
+            get_local_scale_smem_ptr(),
+            {1, IteratorLocalScale::Shape::kColumn},
+            thread_idx),
+        smem_iterator_code_scale_(
+            LayoutCodeScaleZp(IteratorCodeScaleZp::Shape::kColumn),
+            get_code_scale_smem_ptr(),
+            {1, IteratorCodeScaleZp::Shape::kColumn},
+            thread_idx),
+        smem_iterator_code_zp_(
+            LayoutCodeScaleZp(IteratorCodeScaleZp::Shape::kColumn),
+            get_code_zp_smem_ptr(),
+            {1, IteratorCodeScaleZp::Shape::kColumn},
+            thread_idx),
+        smem_write_stage_idx_(0),
+        smem_read_stage_idx_(0) {}
 
   CUTLASS_DEVICE
   SuperTensorRef super_scale_ref() {
-    return {get_super_scale_smem_ptr(), LayoutSuperScale(IteratorSuperScale::Shape::kColumn)};
+    return {get_super_scale_smem_ptr(),
+            LayoutSuperScale(IteratorSuperScale::Shape::kColumn)};
   }
 
   CUTLASS_DEVICE
   LocalTensorRef local_scale_ref() {
-    return {get_local_scale_smem_ptr(), LayoutLocalScale(IteratorLocalScale::Shape::kColumn)};
+    return {get_local_scale_smem_ptr(),
+            LayoutLocalScale(IteratorLocalScale::Shape::kColumn)};
   }
 
   CUTLASS_DEVICE
   CodeTensorRef code_scale_ref() {
-    return {get_code_scale_smem_ptr(), LayoutCodeScaleZp(IteratorCodeScaleZp::Shape::kColumn)};
+    return {get_code_scale_smem_ptr(),
+            LayoutCodeScaleZp(IteratorCodeScaleZp::Shape::kColumn)};
   }
 
   CUTLASS_DEVICE
   CodeTensorRef code_zp_ref() {
-    return {get_code_zp_smem_ptr(), LayoutCodeScaleZp(IteratorCodeScaleZp::Shape::kColumn)};
+    return {get_code_zp_smem_ptr(),
+            LayoutCodeScaleZp(IteratorCodeScaleZp::Shape::kColumn)};
   }
 
   template <bool IsFirstStage>
-  CUTLASS_DEVICE
-  void copy_tiles_and_advance_per_stage(Arguments &quant_args, int stage) {
+  CUTLASS_DEVICE void copy_tiles_and_advance_per_stage(Arguments& quant_args,
+                                                       int stage) {
     if constexpr (IsFirstStage) {
-      // Load channel-wise super_scale to shared memory, which only needs to be done once.
+      // Load channel-wise super_scale to shared memory, which only needs to be
+      // done once.
       typename IteratorSuperScale::Fragment tb_frag_super_scale;
       tb_frag_super_scale.clear();
       quant_args.iterator_super_scale.load(tb_frag_super_scale);
       this->smem_iterator_super_scale_.store(tb_frag_super_scale);
 
-      // Load channel-wise code_scale to shared memory, which only needs to be done once.
+      // Load channel-wise code_scale to shared memory, which only needs to be
+      // done once.
       typename IteratorCodeScaleZp::Fragment tb_frag_code_scale;
       tb_frag_code_scale.clear();
       quant_args.iterator_code_scale.load(tb_frag_code_scale);
       this->smem_iterator_code_scale_.store(tb_frag_code_scale);
 
-      // Load channel-wise code_zp to shared memory, which only needs to be done once.
+      // Load channel-wise code_zp to shared memory, which only needs to be done
+      // once.
       typename IteratorCodeScaleZp::Fragment tb_frag_code_zp;
       tb_frag_code_zp.clear();
       quant_args.iterator_code_zp.load(tb_frag_code_zp);
@@ -231,20 +267,24 @@ public:
     }
 
     if ((stage % kStagesPerLocalScaleLoad) == 0) {
-      // Load group-wise local_scale to shared memory, which only needs to be done at each stage.
-      // Since 2 uint4b_t values of local_scale are saved in a single uint8_t, local_scale needs to be loaded once every two stages.
+      // Load group-wise local_scale to shared memory, which only needs to be
+      // done at each stage. Since 2 uint4b_t values of local_scale are saved in
+      // a single uint8_t, local_scale needs to be loaded once every two stages.
       using AccessType = typename IteratorLocalScale::AccessType;
-      cutlass::arch::CacheOperation::Kind const kCacheOp = (sizeof_bits<AccessType>::value == 128)
-          ? cutlass::arch::CacheOperation::Global : cutlass::arch::CacheOperation::Always;
+      cutlass::arch::CacheOperation::Kind const kCacheOp =
+          (sizeof_bits<AccessType>::value == 128)
+              ? cutlass::arch::CacheOperation::Global
+              : cutlass::arch::CacheOperation::Always;
 
       quant_args.iterator_local_scale.set_iteration_index(0);
       this->smem_iterator_local_scale_.set_iteration_index(0);
 
       // Async Copy for local_scale
       CUTLASS_PRAGMA_UNROLL
-      for (int j = 0; j < IteratorLocalScale::ThreadMap::Iterations::kCount; ++j) {
-        AccessType *dst_ptr =
-            reinterpret_cast<AccessType *>(this->smem_iterator_local_scale_.get());
+      for (int j = 0; j < IteratorLocalScale::ThreadMap::Iterations::kCount;
+           ++j) {
+        AccessType* dst_ptr = reinterpret_cast<AccessType*>(
+            this->smem_iterator_local_scale_.get());
 
         CUTLASS_PRAGMA_UNROLL
         for (int v = 0; v < IteratorLocalScale::kAccessesPerVector; ++v) {
@@ -255,8 +295,8 @@ public:
               IteratorLocalScale::ThreadMap::kElementsPerAccess /
               IteratorLocalScale::kAccessesPerVector / 8;
 
-              cutlass::arch::cp_async<kSrcBytes, kCacheOp>(
-                  dst_ptr + v, gmem_ptr, quant_args.iterator_local_scale.valid());
+          cutlass::arch::cp_async<kSrcBytes, kCacheOp>(
+              dst_ptr + v, gmem_ptr, quant_args.iterator_local_scale.valid());
         }
         ++quant_args.iterator_local_scale;
       }
@@ -265,13 +305,15 @@ public:
   }
 
   CUTLASS_DEVICE
-  void advance_smem_write_stage(Arguments &quant_args) {
+  void advance_smem_write_stage(Arguments& quant_args) {
     if (smem_write_stage_idx_ % kStagesPerLocalScaleLoad == 0) {
       // Advance global iterators
-      quant_args.iterator_local_scale.add_pointer_offset(quant_args.local_scale_pointer_offset);
+      quant_args.iterator_local_scale.add_pointer_offset(
+          quant_args.local_scale_pointer_offset);
 
       // Advance shared iterators
-      int smem_pointer_offset = IteratorLocalScale::Shape::kRow * IteratorLocalScale::Shape::kColumn;
+      int smem_pointer_offset =
+          IteratorLocalScale::Shape::kRow * IteratorLocalScale::Shape::kColumn;
       smem_iterator_local_scale_.add_pointer_offset(smem_pointer_offset);
     }
 
@@ -280,7 +322,8 @@ public:
 
     if (smem_write_stage_idx_ == kStagesPerLocalScaleLoad * kStages) {
       // Wrap back around to the 'start' of the circular buffer in shared memory
-      int pointer_offset = - kStages * IteratorLocalScale::Shape::kRow * IteratorLocalScale::Shape::kColumn;
+      int pointer_offset = -kStages * IteratorLocalScale::Shape::kRow *
+                           IteratorLocalScale::Shape::kColumn;
       smem_iterator_local_scale_.add_pointer_offset(pointer_offset);
       smem_write_stage_idx_ = 0;
     }
@@ -298,14 +341,14 @@ public:
 
     if (smem_read_stage_idx_ == kStagesPerLocalScaleLoad * kStages) {
       smem_read_stage_idx_ = 0;
-      byte_offset = - (kStages - 1) * kLocalScaleRows * kSmemColumns;
+      byte_offset = -(kStages - 1) * kLocalScaleRows * kSmemColumns;
     }
 
     return byte_offset;
   }
 
   CUTLASS_DEVICE
-  int clear_mask(Arguments &quant_args, bool cond) {
+  int clear_mask(Arguments& quant_args, bool cond) {
     quant_args.iterator_local_scale.clear_mask(cond);
   }
 };

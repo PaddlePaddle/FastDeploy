@@ -1,12 +1,12 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause
+ * Copyright (c) 2017 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights
+ *reserved. SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
- * 1. Redistributions of source code must retain the above copyright notice, this
- * list of conditions and the following disclaimer.
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *this list of conditions and the following disclaimer.
  *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  * this list of conditions and the following disclaimer in the documentation
@@ -18,14 +18,15 @@
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ *ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ *LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ *CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ *SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ *CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ *ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
 
@@ -66,10 +67,21 @@ template <
     cutlass::arch::CacheOperation::Kind CacheOpA,
     /// Cache operation of operand B
     cutlass::arch::CacheOperation::Kind CacheOpB>
-struct DefaultMmaCore<Shape_, WarpShape_, InstructionShape_, ElementA_,
-                      layout::RowMajor, uint2b_t, layout::ColumnMajor,
-                      ElementC_, LayoutC_, arch::OpClassTensorOp, Stages,
-                      Operator_, false, CacheOpA, CacheOpB> {
+struct DefaultMmaCore<Shape_,
+                      WarpShape_,
+                      InstructionShape_,
+                      ElementA_,
+                      layout::RowMajor,
+                      uint2b_t,
+                      layout::ColumnMajor,
+                      ElementC_,
+                      LayoutC_,
+                      arch::OpClassTensorOp,
+                      Stages,
+                      Operator_,
+                      false,
+                      CacheOpA,
+                      CacheOpB> {
   using Shape = Shape_;
   using WarpShape = WarpShape_;
   using InstructionShape = InstructionShape_;
@@ -104,7 +116,8 @@ struct DefaultMmaCore<Shape_, WarpShape_, InstructionShape_, ElementA_,
 
   /// Size of a threadblock-scoped access of B
   static constexpr int kMaxThreadsForB =
-      (Shape::kK * Shape::kN * sizeof_bits<ElementB>::value) / kAccessSizeInBits;
+      (Shape::kK * Shape::kN * sizeof_bits<ElementB>::value) /
+      kAccessSizeInBits;
   static constexpr int kThreadsForB =
       kMaxThreadsForB > kThreads ? kThreads : kMaxThreadsForB;
 
@@ -129,11 +142,13 @@ struct DefaultMmaCore<Shape_, WarpShape_, InstructionShape_, ElementA_,
   //
 
   using SmemLayoutA = layout::RowMajorTensorOpMultiplicandCrosswise<
-      sizeof_bits<ElementA>::value, Shape::kK>;
+      sizeof_bits<ElementA>::value,
+      Shape::kK>;
 
   // Shared memory layout
   using SmemLayoutB = layout::ColumnMajorTensorOpMultiplicandCrosswise<
-      sizeof_bits<ElementB>::value, Shape::kK>;
+      sizeof_bits<ElementB>::value,
+      Shape::kK>;
 
   //
   // Iterators to write to shared memory
@@ -141,26 +156,34 @@ struct DefaultMmaCore<Shape_, WarpShape_, InstructionShape_, ElementA_,
 
   /// ThreadMap of iterator A
   using IteratorThreadMapA = transform::PitchLinearWarpRakedThreadMap<
-      layout::PitchLinearShape<Shape::kK, Shape::kM>, kThreads,
+      layout::PitchLinearShape<Shape::kK, Shape::kM>,
+      kThreads,
       layout::PitchLinearShape<kWarpThreadArrangementContiguousA,
                                kWarpThreadArrangementStridedA>,
       kAccessSizeInBits / sizeof_bits<ElementA>::value>;
 
   /// Shared memory iterator to A operand
   using SmemIteratorA = transform::threadblock::RegularTileAccessIterator<
-      MatrixShape<Shape::kM, Shape::kK>, ElementA, SmemLayoutA, 0,
+      MatrixShape<Shape::kM, Shape::kK>,
+      ElementA,
+      SmemLayoutA,
+      0,
       IteratorThreadMapA>;
 
   /// ThreadMap of iterator B
   using IteratorThreadMapB = transform::PitchLinearWarpRakedThreadMap<
-      layout::PitchLinearShape<Shape::kK, Shape::kN>, kThreadsForB,
+      layout::PitchLinearShape<Shape::kK, Shape::kN>,
+      kThreadsForB,
       layout::PitchLinearShape<kWarpThreadArrangementContiguousB,
                                kWarpThreadArrangementStridedB>,
       kAccessSizeInBits / sizeof_bits<ElementB>::value>;
 
   /// Shared memory iterator to B operand
   using SmemIteratorB = transform::threadblock::RegularTileAccessIterator<
-      MatrixShape<Shape::kK, Shape::kN>, ElementB, SmemLayoutB, 1,
+      MatrixShape<Shape::kK, Shape::kN>,
+      ElementB,
+      SmemLayoutB,
+      1,
       IteratorThreadMapB>;
 
   //
@@ -168,13 +191,23 @@ struct DefaultMmaCore<Shape_, WarpShape_, InstructionShape_, ElementA_,
   //
 
   // Define the warp-level tensor op
-  using MmaTensorOp = typename cutlass::gemm::warp::DefaultMmaTensorOp<
-      WarpShape, InstructionShape, ElementA, SmemLayoutA, ElementB, SmemLayoutB,
-      ElementC, LayoutC, Operator, WarpCount::kK>::Type;
+  using MmaTensorOp =
+      typename cutlass::gemm::warp::DefaultMmaTensorOp<WarpShape,
+                                                       InstructionShape,
+                                                       ElementA,
+                                                       SmemLayoutA,
+                                                       ElementB,
+                                                       SmemLayoutB,
+                                                       ElementC,
+                                                       LayoutC,
+                                                       Operator,
+                                                       WarpCount::kK>::Type;
 
   /// Policy used to define MmaPipelined
-  using MmaPolicy = MmaPolicy<MmaTensorOp, MatrixShape<0, 0>,
-                                        MatrixShape<0, 0>, WarpCount::kK>;
+  using MmaPolicy = MmaPolicy<MmaTensorOp,
+                              MatrixShape<0, 0>,
+                              MatrixShape<0, 0>,
+                              WarpCount::kK>;
 };
 
 }  // namespace threadblock

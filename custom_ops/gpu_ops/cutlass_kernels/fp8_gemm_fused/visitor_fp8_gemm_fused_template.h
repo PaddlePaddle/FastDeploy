@@ -16,56 +16,68 @@
 #include "per_channel_fp8_fp8_half_gemm.h"  // NOLINT
 
 template <typename Gemm>
-typename Gemm::Arguments prepar_gemm_args_sm89(void* D, void const* A, void const* B, void const* C_bias,
-    int m, int n, int k, float const* scale_d0, float const* scale_d1)
-{
-    using ElementT = typename Gemm::ElementA;
-    using ElementOutput = typename Gemm::ElementD;
-    using ElementComputeEpilogue = float;
+typename Gemm::Arguments prepar_gemm_args_sm89(void* D,
+                                               void const* A,
+                                               void const* B,
+                                               void const* C_bias,
+                                               int m,
+                                               int n,
+                                               int k,
+                                               float const* scale_d0,
+                                               float const* scale_d1) {
+  using ElementT = typename Gemm::ElementA;
+  using ElementOutput = typename Gemm::ElementD;
+  using ElementComputeEpilogue = float;
 
-    int const lda = k;
-    int const ldb = k;
-    int const ldc = n;
+  int const lda = k;
+  int const ldb = k;
+  int const ldc = n;
 
-    typename Gemm::Arguments args(cutlass::gemm::GemmUniversalMode::kGemm, // Mode
-        {m, n, k},                                                         // Problem size
-        1,                                                                 // Split-k factor
-        {},                                                                // Epilogue args
-        reinterpret_cast<ElementT const*>(A),                              // a pointer
-        reinterpret_cast<ElementT const*>(B),                              // b pointer
-        nullptr,                                                           // c pointer (unused)
-        nullptr,                                                           // d pointer (unused)
-        m * k,                                                             // batch stride a (unused)
-        n * k,                                                             // batch stride b (unused)
-        m * n,                                                             // batch stride c (unused)
-        m * n,                                                             // batch stride d (unused)
-        lda,                                                               // stride a
-        ldb,                                                               // stride b
-        ldc,                                                               // stride c (unused)
-        ldc);                                                              // stride d (unused)
+  typename Gemm::Arguments args(
+      cutlass::gemm::GemmUniversalMode::kGemm,  // Mode
+      {m, n, k},                                // Problem size
+      1,                                        // Split-k factor
+      {},                                       // Epilogue args
+      reinterpret_cast<ElementT const*>(A),     // a pointer
+      reinterpret_cast<ElementT const*>(B),     // b pointer
+      nullptr,                                  // c pointer (unused)
+      nullptr,                                  // d pointer (unused)
+      m * k,                                    // batch stride a (unused)
+      n * k,                                    // batch stride b (unused)
+      m * n,                                    // batch stride c (unused)
+      m * n,                                    // batch stride d (unused)
+      lda,                                      // stride a
+      ldb,                                      // stride b
+      ldc,                                      // stride c (unused)
+      ldc);                                     // stride d (unused)
 
-    args.epilogue = {
-        {
-            {
-                {
-                    {},                                      // Accumulator
-                    {reinterpret_cast<ElementComputeEpilogue const*>(scale_d1), ElementComputeEpilogue(0),
-                        {cute::_0{}, cute::_1{}, cute::_0{}}},
-                    {} // Multiplies
-                },
-                {reinterpret_cast<ElementComputeEpilogue const*>(scale_d0), ElementComputeEpilogue(0), {cute::_0{}, cute::_0{}, cute::_0{}}},
-                {} // Multiplies
-            },                                                                                                          // Accum
-            {reinterpret_cast<ElementOutput const*>(C_bias), ElementOutput(0), {cute::_0{}, cute::_1{}, cute::_0{}}},                 // Bias
-            {}                                                                                             // Compute0
-        },
-        {reinterpret_cast<ElementOutput*>(D), {n, cute::_1{}, cute::_0{}}}
-    };
-    return args;
+  args.epilogue = {
+      {
+          {
+              {
+                  {},  // Accumulator
+                  {reinterpret_cast<ElementComputeEpilogue const*>(scale_d1),
+                   ElementComputeEpilogue(0),
+                   {cute::_0{}, cute::_1{}, cute::_0{}}},
+                  {}  // Multiplies
+              },
+              {reinterpret_cast<ElementComputeEpilogue const*>(scale_d0),
+               ElementComputeEpilogue(0),
+               {cute::_0{}, cute::_0{}, cute::_0{}}},
+              {}  // Multiplies
+          },      // Accum
+          {reinterpret_cast<ElementOutput const*>(C_bias),
+           ElementOutput(0),
+           {cute::_0{}, cute::_1{}, cute::_0{}}},  // Bias
+          {}                                       // Compute0
+      },
+      {reinterpret_cast<ElementOutput*>(D), {n, cute::_1{}, cute::_0{}}}};
+  return args;
 }
 
 template <typename Gemm>
-bool per_channel_fp8_fp8_gemm_scale_bias(GemmEpilogueAllParams params, typename Gemm::Arguments args) {
+bool per_channel_fp8_fp8_gemm_scale_bias(GemmEpilogueAllParams params,
+                                         typename Gemm::Arguments args) {
   Gemm per_channel_fp8_gemm;
 
   cutlass::Status status = per_channel_fp8_gemm.can_implement(args);
@@ -89,14 +101,31 @@ bool per_channel_fp8_fp8_gemm_scale_bias(GemmEpilogueAllParams params, typename 
   return true;
 }
 
-
-template <typename InputType, typename OutType,
-            typename ThreadBlockShape, typename WarpShape,
-            typename MMAShape, int Stages, bool hasbias, typename SM>
+template <typename InputType,
+          typename OutType,
+          typename ThreadBlockShape,
+          typename WarpShape,
+          typename MMAShape,
+          int Stages,
+          bool hasbias,
+          typename SM>
 bool dispatch_visitor_fuse_gemm(GemmEpilogueAllParams params) {
-    using AccumElementType = float;
-    using Gemm = typename DeviceGemmFp8RowwiseSm89<InputType, OutType, AccumElementType, ThreadBlockShape, WarpShape, MMAShape,
-        Stages>::Gemm;
-    auto args = prepar_gemm_args_sm89<Gemm>(params.D, params.A, params.B, params.bias, params.M, params.N, params.K, params.scalar_scale, params.channel_scale);
-    per_channel_fp8_fp8_gemm_scale_bias<Gemm>(params, args);
+  using AccumElementType = float;
+  using Gemm = typename DeviceGemmFp8RowwiseSm89<InputType,
+                                                 OutType,
+                                                 AccumElementType,
+                                                 ThreadBlockShape,
+                                                 WarpShape,
+                                                 MMAShape,
+                                                 Stages>::Gemm;
+  auto args = prepar_gemm_args_sm89<Gemm>(params.D,
+                                          params.A,
+                                          params.B,
+                                          params.bias,
+                                          params.M,
+                                          params.N,
+                                          params.K,
+                                          params.scalar_scale,
+                                          params.channel_scale);
+  per_channel_fp8_fp8_gemm_scale_bias<Gemm>(params, args);
 }

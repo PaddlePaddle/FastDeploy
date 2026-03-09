@@ -509,17 +509,22 @@ class EngineService:
         if not is_decode:
             self.llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
             for task in tasks:
-                task.metrics.inference_start_time = time.time()
-                tracing.trace_report_span(
-                    tracing.TraceSpanName.SCHEDULE,
-                    task.request_id.split("_")[0],
-                    int(task.metrics.scheduler_recv_req_time * 1e9),
-                    int(task.metrics.inference_start_time * 1e9),
-                    thread_finish_flag=True,
-                )
-                trace_print(LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", ""))
-                trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
-                trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
+                if not getattr(task, "has_been_preempted_before", False):
+                    task.metrics.inference_start_time = time.time()
+                    tracing.trace_report_span(
+                        tracing.TraceSpanName.SCHEDULE,
+                        task.request_id.split("_")[0],
+                        int(task.metrics.scheduler_recv_req_time * 1e9),
+                        int(task.metrics.inference_start_time * 1e9),
+                        thread_finish_flag=True,
+                    )
+                    trace_print(LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", ""))
+                    trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
+                    trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
+                else:
+                    trace_print(
+                        LoggingEventName.RESCHEDULED_INFERENCE_START, task.request_id, getattr(task, "user", "")
+                    )
             if not is_prefill:
                 if not self.cfg.model_config.enable_mm:
                     self.update_requests_chunk_size(tasks)
@@ -792,7 +797,7 @@ class EngineService:
                 main_process_metrics.num_requests_waiting.dec(len(tasks))
                 main_process_metrics.num_requests_running.inc(len(tasks))
             except Exception as e:
-                err_msg = f"Error happend while insert task to engine: {e}, {traceback.format_exc()!s}."
+                err_msg = f"Error happened while insert task to engine: {e}, {traceback.format_exc()!s}."
                 self.llm_logger.error(err_msg)
 
     def _schedule_request_to_worker_v1(self):
@@ -1022,28 +1027,37 @@ class EngineService:
                     for task in tasks:
                         if task.task_type == RequestType.PREFILL:
                             rid = task.request_id.split("_")[0]
-                            trace_carrier = task.trace_carrier
-                            tracing.trace_set_proc_propagate_context(rid, trace_carrier)
-                            trace_carrier = tracing.trace_get_proc_propagate_context(rid)
-                            task.trace_carrier = trace_carrier
-                            tracing.trace_report_span(
-                                tracing.TraceSpanName.SCHEDULE,
-                                rid,
-                                int(task.metrics.scheduler_recv_req_time * 1e9),
-                                int(time.time() * 1e9),
-                                thread_finish_flag=True,
-                            )
-                            trace_print(
-                                LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", "")
-                            )
-                            trace_print(
-                                LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", "")
-                            )
-                            trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
+                            if isinstance(task, Request) and task.has_been_preempted_before:
+                                trace_print(
+                                    LoggingEventName.RESCHEDULED_INFERENCE_START,
+                                    task.request_id,
+                                    getattr(task, "user", ""),
+                                )
+                            else:
+                                trace_carrier = task.trace_carrier
+                                tracing.trace_set_proc_propagate_context(rid, trace_carrier)
+                                trace_carrier = tracing.trace_get_proc_propagate_context(rid)
+                                task.trace_carrier = trace_carrier
+                                tracing.trace_report_span(
+                                    tracing.TraceSpanName.SCHEDULE,
+                                    rid,
+                                    int(task.metrics.scheduler_recv_req_time * 1e9),
+                                    int(time.time() * 1e9),
+                                    thread_finish_flag=True,
+                                )
+                                trace_print(
+                                    LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", "")
+                                )
+                                trace_print(
+                                    LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", "")
+                                )
+                                trace_print(
+                                    LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", "")
+                                )
                         if isinstance(task, Request):
                             if self.cfg.scheduler_config.splitwise_role == "decode":
                                 task.metrics.decode_inference_start_time = time.time()
-                            else:
+                            elif not task.has_been_preempted_before:
                                 task.metrics.inference_start_time = time.time()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
 
@@ -1062,7 +1076,7 @@ class EngineService:
                 if "cannot schedule new futures after shutdown" in str(e):
                     break
             except Exception as e:
-                err_msg = "Error happend while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
+                err_msg = "Error happened while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
 
     def _get_scheduler_unhandled_request_num(self) -> int:
@@ -1171,6 +1185,10 @@ class EngineService:
                             request = Request.from_dict(data)
                         request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.requests_number.inc()
+                        trace_carrier = data.get("trace_carrier")
+                        if trace_carrier:
+                            request_id = data["request_id"].split("_")[0]
+                            tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_QUEUE_START, data["request_id"], data.get("user", ""))
@@ -1448,7 +1466,7 @@ class EngineService:
 
     def _zmq_send_generated_tokens(self):
         """
-        Recieve output for zmq
+        Receive output for zmq
         """
         while self.running:
             try:
@@ -1842,7 +1860,7 @@ class EngineService:
                 create=True,
             )
 
-        # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
+        # launched_expert_service_signal: Used to sense whether each expert_service is started successfully
         if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
@@ -2112,19 +2130,11 @@ class EngineService:
 
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
-        request_queues_for_dp_ipc = None
-        result_queue_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
             self.scheduler.start(role, host_ip, self.cfg.register_info)
         elif self.cfg.scheduler_config.name == "dp":
-            request_queues_for_dp_ipc = []
-            result_queue_for_dp_ipc = multiprocessing.Queue()
-            for i in range(self.cfg.parallel_config.data_parallel_size):
-                request_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.scheduler.start(
                 self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
-                request_queues_for_dp_ipc,
-                result_queue_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:

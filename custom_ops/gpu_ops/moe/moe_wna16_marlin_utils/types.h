@@ -49,7 +49,6 @@ struct Tensor {
 
   int64_t size(int64_t d) const { return raw_tensor_.dims().at(d); }
 
-
   template <typename T>
   T *data_ptr() const {
     return const_cast<T *>(raw_tensor_.data<T>());
@@ -73,7 +72,6 @@ struct Tensor {
   bool is_gpu() const {
     return raw_tensor_.place().GetType() == phi::AllocationType::GPU;
   }
-
 
   // MARLIN_NAMESPACE_NAME::ScalarType scalar_type() const {
   //   return raw_tensor_.dtype();

@@ -61,7 +61,7 @@ ModelImpl = Literal["auto", "fastdeploy", "paddleformers"]
 
 _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "generate": [],
-    "pooling": ["embed"],
+    "pooling": ["embed", "reward"],
 }
 
 PREEMPTED_TOKEN_ID = -9
@@ -142,6 +142,7 @@ class ErnieArchitectures:
     ERNIE5_MODELS = {
         "Ernie5ForCausalLM",
         "Ernie5MoeForCausalLM",
+        "Ernie5MoEForRewardModel",
     }
 
     @classmethod
@@ -1928,7 +1929,12 @@ class FDConfig:
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
 
-        if not current_platform.is_cuda() and not current_platform.is_maca() and not current_platform.is_xpu():
+        if (
+            not current_platform.is_cuda()
+            and not current_platform.is_maca()
+            and not current_platform.is_xpu()
+            and not current_platform.is_iluvatar()
+        ):
             self.graph_opt_config.use_cudagraph = False
             logger.info(
                 "Current Platform can not support CUDAGraph, CUDAGraph currently only support on GPU/XPU/Metax GPU !"

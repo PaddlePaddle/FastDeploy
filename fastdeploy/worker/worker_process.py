@@ -23,9 +23,13 @@ import traceback
 from typing import Tuple
 
 import numpy as np
-import paddle
-import paddle.distributed as dist
-from paddle.distributed import fleet
+
+from fastdeploy.logger.logger import intercept_paddle_loggers
+
+with intercept_paddle_loggers():
+    import paddle
+    import paddle.distributed as dist
+    from paddle.distributed import fleet
 
 from fastdeploy import envs
 from fastdeploy.config import (
@@ -166,10 +170,7 @@ class PaddleDisWorkerProc:
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        self.speculative_decoding = fd_config.speculative_config.method is not None
-        self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule and (
-            not self.speculative_decoding
-        )
+        self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule
 
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
@@ -556,12 +557,11 @@ class PaddleDisWorkerProc:
                 self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
 
             if (
-                (not self.parallel_config.use_ep)
-                and (not self.worker.model_runner.not_need_stop())
-                and (not self.enable_overlap_schedule)
+                not self.parallel_config.use_ep
+                and hasattr(self.worker.model_runner, "not_need_stop")
+                and not self.worker.model_runner.not_need_stop()
             ):
                 self._tp_barrier_wait() if tp_size > 1 else None
-
                 time.sleep(0.001)
                 continue
 
@@ -573,6 +573,14 @@ class PaddleDisWorkerProc:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
+
+            if (
+                not self.parallel_config.use_ep
+                and hasattr(self.worker.model_runner, "current_launch_token_num")
+                and self.worker.model_runner.current_launch_token_num == 0
+            ):
+                self._tp_barrier_wait() if tp_size > 1 else None
+                time.sleep(0.001)
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -1208,12 +1216,10 @@ def run_worker_proc() -> None:
     # transformers) will fail when transformers tries to query torch metadata.
     if envs.FD_DETERMINISTIC_MODE:
         from fastdeploy.model_executor.layers.batch_invariant_ops import (
-            enable_batch_invariant_mode,
-            is_batch_invariant_mode_enabled,
+            init_deterministic_mode,
         )
 
-        if not is_batch_invariant_mode_enabled():
-            enable_batch_invariant_mode()
+        init_deterministic_mode()
 
     # Initialize device and create model runner
     worker_proc.init_device()

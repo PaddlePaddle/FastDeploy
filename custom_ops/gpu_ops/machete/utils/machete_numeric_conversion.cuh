@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/main/csrc/cutlass_extensions/vllm_numeric_conversion.cuh
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/main/csrc/cutlass_extensions/vllm_numeric_conversion.cuh
 #pragma once
 
 #include "cutlass/numeric_conversion.h"
@@ -8,10 +9,10 @@
 
 // this file extends:
 //   https://github.com/NVIDIA/cutlass/blob/cutlass-3.5.0/include/cutlass/numeric_conversion.h
-// with vllm specific type conversions, namely: machete_uint4b8_t, machete_uint8b128_t
-// as well as adds interleaved numeric array converters for specific types.
-// (interleaved numeric array converters can be more efficient for subbyte
-// types)
+// with vllm specific type conversions, namely: machete_uint4b8_t,
+// machete_uint8b128_t as well as adds interleaved numeric array converters for
+// specific types. (interleaved numeric array converters can be more efficient
+// for subbyte types)
 
 namespace cutlass {
 
@@ -19,7 +20,10 @@ namespace cutlass {
 // deinterleaves converted elements based on IlvBlkLayout, interleaving can
 // make subbyte converts more efficient by allowing for efficient extraction
 // of subbyte elements from a 32bit register.
-template <typename IlvBlkLayout, typename T, typename S, int N,
+template <typename IlvBlkLayout,
+          typename T,
+          typename S,
+          int N,
           FloatRoundStyle Round = FloatRoundStyle::round_to_nearest,
           class Enable = void>
 struct InterleavedNumericArrayConverter {
@@ -34,12 +38,17 @@ struct InterleavedNumericArrayConverter {
       if constexpr (std::is_same_v<IlvBlkLayout, void>) {
         printf(
             "Convert %s <= %s (N = %d, IlvBlkLayout = void), not implemented\n",
-            nameof_v<T>, nameof_v<S>, N);
+            nameof_v<T>,
+            nameof_v<S>,
+            N);
       } else {
         printf(
             "Convert %s <= %s (N = %d, size(IlvBlkLayout{}) = %d), not "
             "implemented\n",
-            nameof_v<T>, nameof_v<S>, N, size(IlvBlkLayout{}));
+            nameof_v<T>,
+            nameof_v<S>,
+            N,
+            size(IlvBlkLayout{}));
       }
       __brkpt();
     }
@@ -50,10 +59,17 @@ struct InterleavedNumericArrayConverter {
   result_type operator()(source_type const& s) const { return convert(s); }
 };
 
-template <typename IlvBlkLayout, typename T, typename S, int N,
+template <typename IlvBlkLayout,
+          typename T,
+          typename S,
+          int N,
           FloatRoundStyle Round>
 struct InterleavedNumericArrayConverter<
-    IlvBlkLayout, T, S, N, Round,
+    IlvBlkLayout,
+    T,
+    S,
+    N,
+    Round,
     std::enable_if_t<is_identity_layout<IlvBlkLayout>()>> {
   using Converter = NumericArrayConverter<T, S, N, Round>;
 
@@ -131,18 +147,26 @@ struct ArrayConverterPacked32Bit {
     using ConverterType =
         ArrayConverterPacked32Bit<RegConvert32bit,
                                   typename result_type::Element,
-                                  typename source_type::Element, N>;
+                                  typename source_type::Element,
+                                  N>;
 
     if constexpr (src_elems_per_32bit_reg >= 8) {
-      detail::VectorizedConverter::convert<
-          ConverterType, result_packed_8_t, src_packed_8_t, result_packed_4_t,
-          src_packed_4_t, result_packed_2_t, src_packed_2_t>(result, source);
+      detail::VectorizedConverter::convert<ConverterType,
+                                           result_packed_8_t,
+                                           src_packed_8_t,
+                                           result_packed_4_t,
+                                           src_packed_4_t,
+                                           result_packed_2_t,
+                                           src_packed_2_t>(result, source);
     } else if constexpr (src_elems_per_32bit_reg >= 4) {
-      detail::VectorizedConverter::convert<ConverterType, result_packed_4_t,
-                                           src_packed_4_t, result_packed_2_t,
+      detail::VectorizedConverter::convert<ConverterType,
+                                           result_packed_4_t,
+                                           src_packed_4_t,
+                                           result_packed_2_t,
                                            src_packed_2_t>(result, source);
     } else {
-      detail::VectorizedConverter::convert<ConverterType, result_packed_2_t,
+      detail::VectorizedConverter::convert<ConverterType,
+                                           result_packed_2_t,
                                            src_packed_2_t>(result, source);
     }
 
@@ -152,10 +176,22 @@ struct ArrayConverterPacked32Bit {
 
 // Convert 8 4bit values packed into a 32bit register to 8 8bit values packed
 // into 2 32bit register.
-template <uint8_t LUT0, uint8_t LUT1, uint8_t LUT2, uint8_t LUT3,    //
-          uint8_t LUT4, uint8_t LUT5, uint8_t LUT6, uint8_t LUT7,    //
-          uint8_t LUT8, uint8_t LUT9, uint8_t LUT10, uint8_t LUT11,  //
-          uint8_t LUT12, uint8_t LUT13, uint8_t LUT14, uint8_t LUT15>
+template <uint8_t LUT0,
+          uint8_t LUT1,
+          uint8_t LUT2,
+          uint8_t LUT3,  //
+          uint8_t LUT4,
+          uint8_t LUT5,
+          uint8_t LUT6,
+          uint8_t LUT7,  //
+          uint8_t LUT8,
+          uint8_t LUT9,
+          uint8_t LUT10,
+          uint8_t LUT11,  //
+          uint8_t LUT12,
+          uint8_t LUT13,
+          uint8_t LUT14,
+          uint8_t LUT15>
 CUTLASS_DEVICE cutlass::AlignedArray<uint32_t, 2> lut_4bit_to_8bit_convert(
     uint32_t src) {
   cutlass::AlignedArray<uint32_t, 2> r;
@@ -202,7 +238,11 @@ CUTLASS_DEVICE cutlass::AlignedArray<uint32_t, 2> lut_4bit_to_8bit_convert(
         "  prmt.b32 %0, low, high, %6;\n"
         "}\n"
         : "=r"(r[ii])
-        : "n"(LOW_0), "n"(LOW_1), "n"(HIGH_0), "n"(HIGH_1), "r"(lut_idx),
+        : "n"(LOW_0),
+          "n"(LOW_1),
+          "n"(HIGH_0),
+          "n"(HIGH_1),
+          "r"(lut_idx),
           "r"(final_prmt_idx));
   }
 
@@ -222,10 +262,22 @@ struct NumericArrayConverter<int8_t, machete_uint4b8_t, N, Round> {
     template <typename PackedResultType>
     CUTLASS_DEVICE static PackedResultType convert(Array<uint32_t, 1> src_) {
       // [-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7] as int8s
-      auto r = lut_4bit_to_8bit_convert<0xF8, 0xF9, 0xFA, 0xFB,  //
-                                        0xFC, 0xFD, 0xFE, 0xFF,  //
-                                        0x00, 0x01, 0x02, 0x03,  //
-                                        0x04, 0x05, 0x06, 0x07>(src_[0]);
+      auto r = lut_4bit_to_8bit_convert<0xF8,
+                                        0xF9,
+                                        0xFA,
+                                        0xFB,  //
+                                        0xFC,
+                                        0xFD,
+                                        0xFE,
+                                        0xFF,  //
+                                        0x00,
+                                        0x01,
+                                        0x02,
+                                        0x03,  //
+                                        0x04,
+                                        0x05,
+                                        0x06,
+                                        0x07>(src_[0]);
       return reinterpret_cast<PackedResultType&>(r);
     };
   };
@@ -233,7 +285,8 @@ struct NumericArrayConverter<int8_t, machete_uint4b8_t, N, Round> {
  public:
   CUTLASS_DEVICE
   static result_type convert(source_type const& source) {
-    return ArrayConverterPacked32Bit<RegConvert, typename result_type::Element,
+    return ArrayConverterPacked32Bit<RegConvert,
+                                     typename result_type::Element,
                                      typename source_type::Element,
                                      N>::convert(source);
   }
@@ -244,7 +297,10 @@ struct NumericArrayConverter<int8_t, machete_uint4b8_t, N, Round> {
 
 // for Array<cutlass::float_e4m3_t, N> <= Array<machete_uint4b8_t, N>
 template <FloatRoundStyle Round, int N>
-struct NumericArrayConverter<cutlass::float_e4m3_t, machete_uint4b8_t, N, Round> {
+struct NumericArrayConverter<cutlass::float_e4m3_t,
+                             machete_uint4b8_t,
+                             N,
+                             Round> {
   using result_type = Array<cutlass::float_e4m3_t, N>;
   using source_type = Array<machete_uint4b8_t, N>;
 
@@ -255,10 +311,22 @@ struct NumericArrayConverter<cutlass::float_e4m3_t, machete_uint4b8_t, N, Round>
     template <typename PackedResultType>
     CUTLASS_DEVICE static PackedResultType convert(Array<uint32_t, 1> src_) {
       // [-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7] as fp8s
-      auto r = lut_4bit_to_8bit_convert<0xD0, 0xCE, 0xCC, 0xCA,  //
-                                        0xC8, 0xC4, 0xC0, 0xB8,  //
-                                        0x00, 0x38, 0x40, 0x44,  //
-                                        0x48, 0x4A, 0x4C, 0x4E>(src_[0]);
+      auto r = lut_4bit_to_8bit_convert<0xD0,
+                                        0xCE,
+                                        0xCC,
+                                        0xCA,  //
+                                        0xC8,
+                                        0xC4,
+                                        0xC0,
+                                        0xB8,  //
+                                        0x00,
+                                        0x38,
+                                        0x40,
+                                        0x44,  //
+                                        0x48,
+                                        0x4A,
+                                        0x4C,
+                                        0x4E>(src_[0]);
       return reinterpret_cast<PackedResultType&>(r);
     };
   };
@@ -266,7 +334,8 @@ struct NumericArrayConverter<cutlass::float_e4m3_t, machete_uint4b8_t, N, Round>
  public:
   CUTLASS_DEVICE
   static result_type convert(source_type const& source) {
-    return ArrayConverterPacked32Bit<RegConvert, typename result_type::Element,
+    return ArrayConverterPacked32Bit<RegConvert,
+                                     typename result_type::Element,
                                      typename source_type::Element,
                                      N>::convert(source);
   }
@@ -285,9 +354,9 @@ struct NumericArrayConverter<cutlass::half_t, machete_uint4b8_t, N, Round> {
     template <typename PackedResultType>
     CUTLASS_DEVICE static PackedResultType convert(Array<uint32_t, 1> src_) {
       uint32_t src = src_[0];
-      using RegArray =
-          cutlass::AlignedArray<uint32_t, PackedResultType::kElements / 2,
-                                sizeof(PackedResultType)>;
+      using RegArray = cutlass::AlignedArray<uint32_t,
+                                             PackedResultType::kElements / 2,
+                                             sizeof(PackedResultType)>;
       RegArray r;
 
       // Below constructs the following temporary:
@@ -359,7 +428,8 @@ struct NumericArrayConverter<cutlass::half_t, machete_uint4b8_t, N, Round> {
  public:
   CUTLASS_DEVICE
   static result_type convert(source_type const& source) {
-    return ArrayConverterPacked32Bit<RegConvert, typename result_type::Element,
+    return ArrayConverterPacked32Bit<RegConvert,
+                                     typename result_type::Element,
                                      typename source_type::Element,
                                      N>::convert(source);
   }
@@ -372,8 +442,11 @@ struct NumericArrayConverter<cutlass::half_t, machete_uint4b8_t, N, Round> {
 //   for IlvdLayout: (2, 4):(4, 1)
 template <FloatRoundStyle Round, int N>
 struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
-                                        cutlass::half_t, machete_uint4b8_t, N,
-                                        Round, void> {
+                                        cutlass::half_t,
+                                        machete_uint4b8_t,
+                                        N,
+                                        Round,
+                                        void> {
   using IlvdLayout = Layout<Shape<_2, _4>, Stride<_4, _1>>;
   static_assert(N % size(IlvdLayout{}) == 0);
 
@@ -387,9 +460,9 @@ struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
     template <typename PackedResultType>
     CUTLASS_DEVICE static PackedResultType convert(Array<uint32_t, 1> src_) {
       uint32_t src = src_[0];
-      using RegArray =
-          cutlass::AlignedArray<uint32_t, PackedResultType::kElements / 2,
-                                sizeof(PackedResultType)>;
+      using RegArray = cutlass::AlignedArray<uint32_t,
+                                             PackedResultType::kElements / 2,
+                                             sizeof(PackedResultType)>;
       RegArray r;
 
       static_assert(PackedResultType::kElements <= size(IlvdLayout{}));
@@ -449,7 +522,8 @@ struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
  public:
   CUTLASS_DEVICE
   static result_type convert(source_type const& source) {
-    return ArrayConverterPacked32Bit<RegConvert, typename result_type::Element,
+    return ArrayConverterPacked32Bit<RegConvert,
+                                     typename result_type::Element,
                                      typename source_type::Element,
                                      N>::convert(source);
   }
@@ -462,7 +536,10 @@ struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
 //   for IlvdLayout: (2, 4):(4, 1)
 template <FloatRoundStyle Round, int N>
 struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
-                                        cutlass::half_t, uint4_t, N, Round,
+                                        cutlass::half_t,
+                                        uint4_t,
+                                        N,
+                                        Round,
                                         void> {
   using IlvdLayout = Layout<Shape<_2, _4>, Stride<_4, _1>>;
   static_assert(N % size(IlvdLayout{}) == 0);
@@ -477,9 +554,9 @@ struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
     template <typename PackedResultType>
     CUTLASS_DEVICE static PackedResultType convert(Array<uint32_t, 1> src_) {
       uint32_t src = src_[0];
-      using RegArray =
-          cutlass::AlignedArray<uint32_t, PackedResultType::kElements / 2,
-                                sizeof(PackedResultType)>;
+      using RegArray = cutlass::AlignedArray<uint32_t,
+                                             PackedResultType::kElements / 2,
+                                             sizeof(PackedResultType)>;
       RegArray r;
 
       static_assert(PackedResultType::kElements <= size(IlvdLayout{}));
@@ -538,7 +615,8 @@ struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
  public:
   CUTLASS_DEVICE
   static result_type convert(source_type const& source) {
-    return ArrayConverterPacked32Bit<RegConvert, typename result_type::Element,
+    return ArrayConverterPacked32Bit<RegConvert,
+                                     typename result_type::Element,
                                      typename source_type::Element,
                                      N>::convert(source);
   }
@@ -558,19 +636,19 @@ struct NumericArrayConverter<cutlass::half_t, machete_uint8b128_t, N, Round> {
     CUTLASS_DEVICE static PackedResultType convert(Array<uint32_t, 1> src_) {
       uint32_t src = src_[0];
       // Hold output FP16s in reg. We need 1 reg for every 2 elements
-      using RegArray =
-          cutlass::AlignedArray<uint32_t, PackedResultType::kElements / 2,
-                                sizeof(PackedResultType)>;
+      using RegArray = cutlass::AlignedArray<uint32_t,
+                                             PackedResultType::kElements / 2,
+                                             sizeof(PackedResultType)>;
       RegArray r;
 
       uint32_t const prmt_indices[2] = {0x5150, 0x5352};
       static constexpr uint32_t start_byte_for_fp16 = 0x64646464;
 
       for (int ii = 0; ii < RegArray::kElements; ++ii) {
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n"
-                     : "=r"(r[ii])
-                     : "r"(src), "n"(start_byte_for_fp16),
-                       "r"(prmt_indices[ii]));
+        asm volatile(
+            "prmt.b32 %0,%1,%2,%3;\n"
+            : "=r"(r[ii])
+            : "r"(src), "n"(start_byte_for_fp16), "r"(prmt_indices[ii]));
       }
 
       // -128 is folded into bias subtraction, i.e. the 0x80 in the low bytes
@@ -589,7 +667,8 @@ struct NumericArrayConverter<cutlass::half_t, machete_uint8b128_t, N, Round> {
  public:
   CUTLASS_DEVICE
   static result_type convert(source_type const& source) {
-    return ArrayConverterPacked32Bit<RegConvert, typename result_type::Element,
+    return ArrayConverterPacked32Bit<RegConvert,
+                                     typename result_type::Element,
                                      typename source_type::Element,
                                      N>::convert(source);
   }
@@ -631,7 +710,8 @@ struct NumericArrayConverter<float, machete_uint8b128_t, N, Round> {
  public:
   CUTLASS_DEVICE
   static result_type convert(source_type const& source) {
-    return ArrayConverterPacked32Bit<RegConvert, typename result_type::Element,
+    return ArrayConverterPacked32Bit<RegConvert,
+                                     typename result_type::Element,
                                      typename source_type::Element,
                                      N>::convert(source);
   }
@@ -656,9 +736,9 @@ struct NumericArrayConverter<cutlass::bfloat16_t, machete_uint4b8_t, N, Round> {
     CUTLASS_DEVICE static PackedResultType convert(Array<uint32_t, 1> src_) {
       uint32_t src_reg = src_[0];
       // Hold output BF16s in reg. We need 1 reg for every 2 elements
-      using RegArray =
-          cutlass::AlignedArray<uint32_t, PackedResultType::kElements / 2,
-                                sizeof(PackedResultType)>;
+      using RegArray = cutlass::AlignedArray<uint32_t,
+                                             PackedResultType::kElements / 2,
+                                             sizeof(PackedResultType)>;
       RegArray r;
       uint32_t src_reg_shifted = src_reg >> 4;
 
@@ -720,7 +800,8 @@ struct NumericArrayConverter<cutlass::bfloat16_t, machete_uint4b8_t, N, Round> {
  public:
   CUTLASS_DEVICE
   static result_type convert(source_type const& source) {
-    return ArrayConverterPacked32Bit<RegConvert, typename result_type::Element,
+    return ArrayConverterPacked32Bit<RegConvert,
+                                     typename result_type::Element,
                                      typename source_type::Element,
                                      N>::convert(source);
   }
@@ -733,8 +814,11 @@ struct NumericArrayConverter<cutlass::bfloat16_t, machete_uint4b8_t, N, Round> {
 //   for IlvdLayout: (2, 4):(4, 1)
 template <FloatRoundStyle Round, int N>
 struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
-                                        cutlass::bfloat16_t, machete_uint4b8_t, N,
-                                        Round, void> {
+                                        cutlass::bfloat16_t,
+                                        machete_uint4b8_t,
+                                        N,
+                                        Round,
+                                        void> {
   using IlvdLayout = Layout<Shape<_2, _4>, Stride<_4, _1>>;
   static_assert(N % size(IlvdLayout{}) == 0);
 
@@ -746,9 +830,9 @@ struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
     template <typename PackedResultType>
     CUTLASS_DEVICE static PackedResultType convert(Array<uint32_t, 1> src_) {
       uint32_t src = src_[0];
-      using RegArray =
-          cutlass::AlignedArray<uint32_t, PackedResultType::kElements / 2,
-                                sizeof(PackedResultType)>;
+      using RegArray = cutlass::AlignedArray<uint32_t,
+                                             PackedResultType::kElements / 2,
+                                             sizeof(PackedResultType)>;
       RegArray r;
 
       static_assert(PackedResultType::kElements <= size(IlvdLayout{}));
@@ -789,7 +873,8 @@ struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
  public:
   CUTLASS_DEVICE
   static result_type convert(source_type const& source) {
-    return ArrayConverterPacked32Bit<RegConvert, typename result_type::Element,
+    return ArrayConverterPacked32Bit<RegConvert,
+                                     typename result_type::Element,
                                      typename source_type::Element,
                                      N>::convert(source);
   }
@@ -802,7 +887,10 @@ struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
 //   for IlvdLayout: (2, 4):(4, 1)
 template <FloatRoundStyle Round, int N>
 struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
-                                        cutlass::bfloat16_t, uint4_t, N, Round,
+                                        cutlass::bfloat16_t,
+                                        uint4_t,
+                                        N,
+                                        Round,
                                         void> {
   using IlvdLayout = Layout<Shape<_2, _4>, Stride<_4, _1>>;
   static_assert(N % size(IlvdLayout{}) == 0);
@@ -815,9 +903,9 @@ struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
     template <typename PackedResultType>
     CUTLASS_DEVICE static PackedResultType convert(Array<uint32_t, 1> src_) {
       uint32_t src = src_[0];
-      using RegArray =
-          cutlass::AlignedArray<uint32_t, PackedResultType::kElements / 2,
-                                sizeof(PackedResultType)>;
+      using RegArray = cutlass::AlignedArray<uint32_t,
+                                             PackedResultType::kElements / 2,
+                                             sizeof(PackedResultType)>;
       RegArray r;
 
       static_assert(PackedResultType::kElements <= size(IlvdLayout{}));
@@ -858,7 +946,8 @@ struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
  public:
   CUTLASS_DEVICE
   static result_type convert(source_type const& source) {
-    return ArrayConverterPacked32Bit<RegConvert, typename result_type::Element,
+    return ArrayConverterPacked32Bit<RegConvert,
+                                     typename result_type::Element,
                                      typename source_type::Element,
                                      N>::convert(source);
   }
@@ -869,7 +958,10 @@ struct InterleavedNumericArrayConverter<Layout<Shape<_2, _4>, Stride<_4, _1>>,
 
 // for Array<cutlass::bfloat16_t, N> <= Array<machete_uint8b128_t, N>
 template <FloatRoundStyle Round, int N>
-struct NumericArrayConverter<cutlass::bfloat16_t, machete_uint8b128_t, N, Round> {
+struct NumericArrayConverter<cutlass::bfloat16_t,
+                             machete_uint8b128_t,
+                             N,
+                             Round> {
   using result_type = Array<cutlass::bfloat16_t, N>;
   using source_type = Array<machete_uint8b128_t, N>;
   static FloatRoundStyle const round_style = Round;
@@ -898,13 +990,17 @@ struct NumericArrayConverter<cutlass::bfloat16_t, machete_uint8b128_t, N, Round>
         "Invalid PackedSrcType/PackedResultType must be 2 or 4 to use private "
         "convert dispatch.");
 
-    NumericArrayConverter<float, machete_uint8b128_t, PackedResultType::kElements,
+    NumericArrayConverter<float,
+                          machete_uint8b128_t,
+                          PackedResultType::kElements,
                           Round>
         convert_uint8_to_f32;
     Array<float, PackedResultType::kElements> tmp =
         convert_uint8_to_f32(source);
-    NumericArrayConverter<cutlass::bfloat16_t, float,
-                          PackedResultType::kElements, Round>
+    NumericArrayConverter<cutlass::bfloat16_t,
+                          float,
+                          PackedResultType::kElements,
+                          Round>
         convert_f32_to_bf16_;
     return convert_f32_to_bf16_(tmp);
   }
@@ -915,11 +1011,14 @@ struct NumericArrayConverter<cutlass::bfloat16_t, machete_uint8b128_t, N, Round>
   CUTLASS_DEVICE
   static result_type convert(source_type const& source) {
     result_type result;
-    using ConverterType =
-        NumericArrayConverter<typename result_type::Element,
-                              typename source_type::Element, N, Round>;
-    detail::VectorizedConverter::convert<ConverterType, result_packed_4_t,
-                                         src_packed_4_t, result_packed_2_t,
+    using ConverterType = NumericArrayConverter<typename result_type::Element,
+                                                typename source_type::Element,
+                                                N,
+                                                Round>;
+    detail::VectorizedConverter::convert<ConverterType,
+                                         result_packed_4_t,
+                                         src_packed_4_t,
+                                         result_packed_2_t,
                                          src_packed_2_t>(result, source);
 
     return result;
@@ -944,8 +1043,10 @@ struct NumericArrayConverter<int8_t, cutlass::half_t, N, Round> {
     CUTLASS_DEVICE static PackedResultType convert(
         Array<uint32_t, src_regs> src) {
       // Hold output int8s in reg. We need 1 reg for every 4 elements
-      using RegArray = cutlass::AlignedArray<
-          uint32_t, std::max(PackedResultType::kElements / 4, size_t(1))>;
+      using RegArray =
+          cutlass::AlignedArray<uint32_t,
+                                std::max(PackedResultType::kElements / 4,
+                                         size_t(1))>;
       RegArray r;
 
       static constexpr uint32_t MAGIC_BIAS_ = 0x64806480;
@@ -963,10 +1064,10 @@ struct NumericArrayConverter<int8_t, cutlass::half_t, N, Round> {
       uint32_t uint8s;
       static constexpr uint32_t MASK_0246 = 0x6420;
       static constexpr uint32_t UINT8s_TO_INT8s_MASK = 0x80808080;
-      asm volatile("prmt.b32 %0,%1,%2,%3;\n"
-                   : "=r"(uint8s)
-                   : "r"(src[0]), "r"((src_regs > 1) ? src[1] : src[0]),
-                     "n"(MASK_0246));
+      asm volatile(
+          "prmt.b32 %0,%1,%2,%3;\n"
+          : "=r"(uint8s)
+          : "r"(src[0]), "r"((src_regs > 1) ? src[1] : src[0]), "n"(MASK_0246));
 
       uint32_t int8s = (uint8s ^ UINT8s_TO_INT8s_MASK);
 
@@ -977,7 +1078,8 @@ struct NumericArrayConverter<int8_t, cutlass::half_t, N, Round> {
  public:
   CUTLASS_DEVICE
   static result_type convert(source_type const& source) {
-    return ArrayConverterPacked32Bit<RegConvert, typename result_type::Element,
+    return ArrayConverterPacked32Bit<RegConvert,
+                                     typename result_type::Element,
                                      typename source_type::Element,
                                      N>::convert(source);
   }

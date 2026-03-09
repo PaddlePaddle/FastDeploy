@@ -27,14 +27,20 @@ from paddle.distributed.fleet.meta_parallel import (
     RowParallelLinear,
 )
 from paddle.distributed.fleet.utils import recompute
-from paddle.nn.functional.flash_attention import (
-    flash_attn_unpadded as flash_attn_varlen_func,
-)
 from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.model_executor.layers.utils import divide, get_tensor
 from fastdeploy.model_executor.utils import fd_cast, h2d_copy, set_weight_attrs
 from fastdeploy.platforms import current_platform
+
+if current_platform.is_iluvatar():
+    from fastdeploy.model_executor.ops.iluvatar import (
+        flash_attn_unpadded as flash_attn_varlen_func,
+    )
+else:
+    from paddle.nn.functional.flash_attention import (
+        flash_attn_unpadded as flash_attn_varlen_func,
+    )
 
 from .activation import ACT2FN
 from .configuration import DFNRopeVisionTransformerConfig

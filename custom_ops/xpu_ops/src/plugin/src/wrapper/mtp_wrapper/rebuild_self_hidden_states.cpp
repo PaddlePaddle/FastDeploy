@@ -63,6 +63,7 @@ int rebuild_self_hidden_states(Context* ctx,
                                const T* input,
                                int* src_map,
                                T* output,
+                               int input_token_num,
                                int dim_embed,
                                int elem_cnt) {
   WRAPPER_CHECK_CTX(ctx);
@@ -70,6 +71,8 @@ int rebuild_self_hidden_states(Context* ctx,
   WRAPPER_DUMP_PARAM5(ctx, input, src_map, output, dim_embed, elem_cnt);
   WRAPPER_DUMP(ctx);
 
+  WRAPPER_CHECK_PTR(ctx, T, input_token_num * dim_embed, input);
+  WRAPPER_CHECK_PTR(ctx, int, input_token_num, src_map);
   WRAPPER_CHECK_PTR(ctx, T, elem_cnt, output);
   WRAPPER_ASSERT_GT(ctx, dim_embed, 0);
   WRAPPER_ASSERT_GT(ctx, elem_cnt, 0);
@@ -83,11 +86,11 @@ int rebuild_self_hidden_states(Context* ctx,
 }
 
 template int rebuild_self_hidden_states(
-    Context*, const bfloat16*, int*, bfloat16*, int, int);
+    Context*, const bfloat16*, int*, bfloat16*, int, int, int);
 template int rebuild_self_hidden_states(
-    Context*, const float*, int*, float*, int, int);
+    Context*, const float*, int*, float*, int, int, int);
 template int rebuild_self_hidden_states(
-    Context*, const float16*, int*, float16*, int, int);
+    Context*, const float16*, int*, float16*, int, int, int);
 }  // namespace plugin
 }  // namespace api
 }  // namespace xpu
