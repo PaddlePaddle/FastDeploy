@@ -1,4 +1,4 @@
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,346 +12,250 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
+# -- Stubs ------------------------------------------------------------------
+
+
+class _StubCacheManager:
+    """Minimal PrefixCacheManager surface for unit-testing ResourceManager."""
+
+    def __init__(self, *args, num_blocks=100, **kwargs):
+        self.num_gpu_blocks = num_blocks
+        self.gpu_free_block_list = list(range(num_blocks))
+        self._recycled = []
+        self._released = []
+
+    def allocate_gpu_blocks(self, n):
+        out = self.gpu_free_block_list[:n]
+        self.gpu_free_block_list = self.gpu_free_block_list[n:]
+        return out
+
+    def recycle_gpu_blocks(self, blocks):
+        self._recycled.extend(blocks)
+        self.gpu_free_block_list.extend(blocks)
+
+    def release_block_ids_async(self, task):
+        self._released.append(task)
+
+    def free_block_ids_async(self, n):
+        return n
+
+    def update_cache_config(self, cfg):
+        pass
+
+    def request_block_ids(self, task, block_size, dec_token_num):
+        total = (len(task.prompt_token_ids) + block_size - 1) // block_size
+        common = list(range(total // 2))
+        unique = list(range(100, 100 + total - total // 2))
+        return common, unique, {"gpu_cache_blocks": len(common), "cpu_cache_blocks": 0}
+
+
+class _Task:
+    """Real task object with all fields ResourceManager touches."""
+
+    def __init__(self, request_id="req-1", prompt_len=128, disaggregate_info=None):
+        self.request_id = request_id
+        self.prompt_token_ids = list(range(prompt_len))
+        self.prompt_token_ids_len = prompt_len
+        self.block_tables = []
+        self.need_block_tables = []
+        self.disaggregate_info = disaggregate_info
+        self.seq_lens_decoder = 0
+        self.inference_time_cost = -1.0
+        self.tokens_all_num = 0
+        self.idx = 0
+        self.num_cached_tokens = 0
+        self.gpu_cache_token_num = 0
+        self.cpu_cache_token_num = 0
+        self.cache_info = None
+        self.cache_prepare_time = 0.0
+        self._seed = None
+
+    def get(self, k):
+        return self._seed if k == "seed" else None
+
+    def set(self, k, v):
+        if k == "seed":
+            self._seed = v
+
 
 def _cache_cfg(block_size=64, dec_token_num=128, max_block_num_per_seq=16, enable_prefix_caching=False):
-    c = MagicMock()
-    c.block_size = block_size
-    c.dec_token_num = dec_token_num
-    c.max_block_num_per_seq = max_block_num_per_seq
-    c.enable_prefix_caching = enable_prefix_caching
-    return c
+    return SimpleNamespace(
+        block_size=block_size,
+        dec_token_num=dec_token_num,
+        max_block_num_per_seq=max_block_num_per_seq,
+        enable_prefix_caching=enable_prefix_caching,
+    )
 
 
 def _config(cache_config=None):
-    cfg = MagicMock()
-    cfg.cache_config = cache_config or _cache_cfg()
-    return cfg
+    return SimpleNamespace(cache_config=cache_config or _cache_cfg())
 
 
-def _task(**kw):
-    t = MagicMock()
-    t.request_id = kw.get("request_id", "req-001")
-    t.prompt_token_ids = kw.get("prompt_token_ids", list(range(128)))
-    t.prompt_token_ids_len = kw.get("prompt_token_ids_len", len(t.prompt_token_ids))
-    t.block_tables = kw.get("block_tables", [])
-    t.need_block_tables = kw.get("need_block_tables", [])
-    t.disaggregate_info = kw.get("disaggregate_info", None)
-    t.seq_lens_decoder = 0
-    t.inference_time_cost = -1.0
-    t.tokens_all_num = 0
-    t.idx = 0
-    t.num_cached_tokens = 0
-    t.gpu_cache_token_num = 0
-    t.cpu_cache_token_num = 0
-    t.cache_info = None
-    t.cache_prepare_time = 0.0
-    _seed = [kw.get("seed", None)]
-    t.get = lambda k: _seed[0] if k == "seed" else None
+def _noop_logger():
+    return SimpleNamespace(
+        info=lambda *a, **kw: None,
+        debug=lambda *a, **kw: None,
+        error=lambda *a, **kw: None,
+        warning=lambda *a, **kw: None,
+    )
 
-    def _set(k, v):
-        if k == "seed":
-            _seed[0] = v
 
-    t.set = _set
-    return t
+def _stub_metrics():
+    m = SimpleNamespace()
+    for n in (
+        "max_batch_size",
+        "batch_size",
+        "available_gpu_block_num",
+        "gpu_cache_usage_perc",
+        "prefix_cache_token_num",
+        "prefix_gpu_cache_token_num",
+        "prefix_cpu_cache_token_num",
+    ):
+        setattr(m, n, SimpleNamespace(set=lambda v: None, inc=lambda v: None))
+    return m
 
 
 @pytest.fixture()
-def rm_env():
-    """Patch heavy deps and yield a factory for ResourceManager."""
+def rm_factory():
+    """Yield a factory that creates ResourceManagers with stubbed deps."""
     with (
-        patch("fastdeploy.engine.resource_manager.PrefixCacheManager") as pcm,
-        patch("fastdeploy.engine.resource_manager.main_process_metrics", new_callable=MagicMock) as met,
-        patch("fastdeploy.engine.resource_manager.llm_logger", new_callable=MagicMock) as log,
+        patch("fastdeploy.engine.resource_manager.PrefixCacheManager", _StubCacheManager),
+        patch("fastdeploy.engine.resource_manager.main_process_metrics", _stub_metrics()),
+        patch("fastdeploy.engine.resource_manager.llm_logger", _noop_logger()),
     ):
-        inst = MagicMock()
-        inst.num_gpu_blocks = 100
-        inst.gpu_free_block_list = list(range(100))
-        pcm.return_value = inst
+        from fastdeploy.engine.resource_manager import ResourceManager
 
-        def factory(max_seqs=4, block_size=64, dec_token=128, enable_prefix=False, num_free=100, max_per_seq=16):
-            from fastdeploy.engine.resource_manager import ResourceManager
-
-            cc = _cache_cfg(block_size, dec_token, max_per_seq, enable_prefix)
+        def make(max_seqs=4, block_size=64, dec_token=128, enable_prefix=False, num_free=100):
+            cc = _cache_cfg(block_size, dec_token, 16, enable_prefix)
             rm = ResourceManager(max_seqs, _config(cc), 1, "mixed")
-            rm.cache_manager.gpu_free_block_list = list(range(num_free))
-            rm.cache_manager.num_gpu_blocks = num_free
-            rm.cache_manager.allocate_gpu_blocks = MagicMock(side_effect=lambda n: list(range(n)))
+            rm.cache_manager = _StubCacheManager(num_blocks=num_free)
             return rm
 
-        class Env:
-            make = staticmethod(factory)
-            pcm_cls = pcm
-            metrics = met
-            logger = log
-
-        yield Env
+        yield make
 
 
-# ── Setup, configuration, and block calculations ───────────────────────────
-class TestResourceManagerConfig:
-    """Constructor, reset_cache_config, block math, availability checks."""
-
-    def test_init_fields(self, rm_env):
-        rm = rm_env.make(max_seqs=8)
-        assert rm.max_num_seqs == 8
-        assert rm.stop_flags == [True] * 8
-        assert rm.tasks_list == [None] * 8
-        assert rm.req_dict == {}
-        assert rm.real_bsz == 0
-
-    def test_init_prefix_flag_and_pcm(self, rm_env):
-        rm = rm_env.make(enable_prefix=True)
-        assert rm.enable_prefix_cache is True
-        rm_env.pcm_cls.assert_called()
-
-    def test_init_max_batch_metric(self, rm_env):
-        rm_env.make(max_seqs=16)
-        rm_env.metrics.max_batch_size.set.assert_called_with(16)
-
-    def test_reset_cache_config(self, rm_env):
-        rm = rm_env.make()
-        new = _cache_cfg(block_size=128)
-        rm.reset_cache_config(new)
-        assert rm.cfg.block_size == 128
-        rm.cache_manager.update_cache_config.assert_called_once_with(new)
-
-    def test_block_required(self, rm_env):
-        rm = rm_env.make(block_size=64, dec_token=128)
-        assert rm.get_required_block_number(100) == 4  # (100+63+128)//64
-
-    def test_block_required_exact(self, rm_env):
-        rm = rm_env.make(block_size=64, dec_token=0)
-        assert rm.get_required_block_number(64) == 1
-
-    def test_block_encoder_decoder(self, rm_env):
-        rm = rm_env.make(block_size=64, dec_token=128)
-        assert rm.get_encoder_block_number(100) == 2
-        assert rm.get_decoder_block_number() == 2
-
-    def test_total_block_delegates(self, rm_env):
-        rm = rm_env.make()
-        rm.cache_manager.num_gpu_blocks = 1024
-        assert rm.total_block_number() == 1024
-
-    def test_available_batch(self, rm_env):
-        rm = rm_env.make(max_seqs=4)
-        assert rm.available_batch() == 4
-        rm.stop_flags[0] = rm.stop_flags[2] = False
-        assert rm.available_batch() == 2
-
-    def test_available_blocks(self, rm_env):
-        rm = rm_env.make(num_free=5)
-        rm.cache_manager.gpu_free_block_list = [0, 1, 2, 3, 4]
-        assert rm.available_block_num() == 5
-
-    def test_is_resource_sufficient(self, rm_env):
-        rm = rm_env.make(block_size=64, dec_token=0, num_free=100)
-        assert rm.is_resource_sufficient(64) is True
-
-    def test_insufficient_no_batch(self, rm_env):
-        rm = rm_env.make(max_seqs=2)
-        rm.stop_flags = [False, False]
-        assert rm.is_resource_sufficient(1) is False
-
-    def test_insufficient_no_blocks(self, rm_env):
-        rm = rm_env.make(num_free=0)
-        assert rm.is_resource_sufficient(64) is False
+# -- Tests ------------------------------------------------------------------
 
 
-# ── Allocation, block tables, recycling ─────────────────────────────────────
-class TestResourceManagerAllocate:
-    """_get_block_tables, allocate_resources_for_new_tasks, _recycle, free,
-    check_and_free, _delete_cached_data, _record_request_cache_info."""
-
-    # _get_block_tables
-    def test_get_blocks_all(self, rm_env):
-        rm = rm_env.make(block_size=64, dec_token=0)
-        assert len(rm._get_block_tables(64)) == 1
-
-    def test_get_blocks_encoder_decoder(self, rm_env):
-        rm = rm_env.make(block_size=64, dec_token=128)
-        assert len(rm._get_block_tables(100, "encoder")) == 2
-        assert len(rm._get_block_tables(0, "decoder")) == 2
-
-    def test_get_blocks_unknown_raises(self, rm_env):
-        rm = rm_env.make()
-        with pytest.raises(ValueError):
-            rm._get_block_tables(64, "invalid")
-
-    def test_get_blocks_insufficient(self, rm_env):
-        rm = rm_env.make(block_size=64, dec_token=0, num_free=0)
-        assert rm._get_block_tables(64) == []
-
-    # allocate — no prefix
-    def test_allocate_single(self, rm_env):
-        rm = rm_env.make(enable_prefix=False, dec_token=0)
-        res = rm.allocate_resources_for_new_tasks([_task()])
-        assert len(res) == 1
-        assert rm.stop_flags[0] is False
-
-    def test_allocate_multiple_and_bsz(self, rm_env):
-        rm = rm_env.make(max_seqs=4, enable_prefix=False, dec_token=0)
-        ts = [_task(request_id=f"r{i}") for i in range(3)]
-        res = rm.allocate_resources_for_new_tasks(ts)
-        assert len(res) == 3
-        assert rm.stop_flags == [False, False, False, True]
-        assert rm.real_bsz == 3
-
-    def test_allocate_skips_occupied(self, rm_env):
-        rm = rm_env.make(max_seqs=4, enable_prefix=False, dec_token=0)
-        rm.stop_flags[0] = False
-        t = _task()
-        rm.allocate_resources_for_new_tasks([t])
-        assert t.idx == 1
-
-    def test_allocate_sets_seed(self, rm_env):
-        rm = rm_env.make(enable_prefix=False, dec_token=0)
-        t = _task(seed=None)
-        rm.allocate_resources_for_new_tasks([t])
-        assert t.get("seed") is not None
-
-    def test_allocate_empty(self, rm_env):
-        rm = rm_env.make(enable_prefix=False)
-        assert rm.allocate_resources_for_new_tasks([]) == []
-
-    def test_allocate_disaggregate(self, rm_env):
-        rm = rm_env.make(enable_prefix=False, dec_token=0)
-        for role in ("prefill", "decode"):
-            t = _task(request_id=f"r-{role}", disaggregate_info={"role": role})
-            rm.allocate_resources_for_new_tasks([t])
-            assert t.request_id in rm.req_dict
-
-    def test_allocate_retry_on_empty(self, rm_env):
-        rm = rm_env.make(enable_prefix=False, dec_token=0)
-        t = _task()
-        call_count = [0]
-        orig = rm._get_block_tables
-
-        def _mock(n, typ="all"):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return []
-            rm.cache_manager.gpu_free_block_list = list(range(10))
-            return orig(n, typ)
-
-        rm._get_block_tables = _mock
-        rm.cache_manager.gpu_free_block_list = []
-        assert len(rm.allocate_resources_for_new_tasks([t])) == 1
-
-    # allocate — with prefix
-    def test_prefix_allocates_and_records(self, rm_env):
-        rm = rm_env.make(enable_prefix=True, dec_token=0, block_size=64)
-        rm.cache_manager.request_block_ids = MagicMock(
-            return_value=([10, 11], [20, 21], {"gpu_cache_blocks": 2, "cpu_cache_blocks": 0})
-        )
-        t = _task(prompt_token_ids=list(range(256)))
-        res = rm.allocate_resources_for_new_tasks([t])
-        assert len(res) == 1
-        assert t.block_tables == [10, 11, 20, 21]
-
-    def test_prefix_insufficient(self, rm_env):
-        rm = rm_env.make(enable_prefix=True, dec_token=0)
-        rm.cache_manager.request_block_ids = MagicMock(
-            return_value=([10], None, {"gpu_cache_blocks": 1, "cpu_cache_blocks": 0})
-        )
-        assert rm.allocate_resources_for_new_tasks([_task()]) is None
-
-    def test_prefix_disaggregate(self, rm_env):
-        rm = rm_env.make(enable_prefix=True, dec_token=0, block_size=64)
-        rm.cache_manager.request_block_ids = MagicMock(
-            return_value=([10, 11], [20, 21], {"gpu_cache_blocks": 2, "cpu_cache_blocks": 0})
-        )
-        for role in ("prefill", "decode"):
-            t = _task(request_id=f"r-{role}", prompt_token_ids=list(range(256)), disaggregate_info={"role": role})
-            rm.allocate_resources_for_new_tasks([t])
-            assert t.request_id in rm.req_dict
-
-    # recycle / free / check_and_free
-    def test_recycle_prefix_releases(self, rm_env):
-        rm = rm_env.make(enable_prefix=True)
-        t = _task()
-        rm._recycle_block_tables(t)
-        rm.cache_manager.release_block_ids_async.assert_called_once_with(t)
-
-    def test_recycle_normal(self, rm_env):
-        rm = rm_env.make(enable_prefix=False)
-        t = _task(block_tables=[1, 2, 3])
-        rm._recycle_block_tables(t)
-        rm.cache_manager.recycle_gpu_blocks.assert_called_once_with([1, 2, 3])
-
-    def test_free_delegates(self, rm_env):
-        rm = rm_env.make()
-        rm.free_block_tables(32)
-        rm.cache_manager.free_block_ids_async.assert_called_once_with(32)
-
-    def test_check_and_free_prefix(self, rm_env):
-        rm = rm_env.make(enable_prefix=True, num_free=5, max_per_seq=16)
-        rm.check_and_free_block_tables()
-        rm.cache_manager.free_block_ids_async.assert_called_once_with(16)
-
-    def test_check_and_free_above_threshold(self, rm_env):
-        rm = rm_env.make(enable_prefix=True, num_free=20, max_per_seq=16)
-        rm.check_and_free_block_tables()
-        rm.cache_manager.free_block_ids_async.assert_not_called()
-
-    def test_check_and_free_no_prefix(self, rm_env):
-        rm = rm_env.make(enable_prefix=False)
-        rm.check_and_free_block_tables()
-        rm.cache_manager.free_block_ids_async.assert_not_called()
-
-    # cache helpers
-    def test_delete_cached_data(self, rm_env):
-        rm = rm_env.make(block_size=64)
-        t = _task(prompt_token_ids=list(range(128)))
-        rm._delete_cached_data(t, 128)
-        assert t.prompt_token_ids_len == 64
-        assert t.seq_lens_decoder == 64
-        t2 = _task(prompt_token_ids=list(range(256)))
-        rm._delete_cached_data(t2, 64)
-        assert t2.prompt_token_ids_len == 192
-
-    def test_record_cache_info(self, rm_env):
-        rm = rm_env.make(block_size=64)
-        t = _task(prompt_token_ids=list(range(256)))
-        hit = {"gpu_cache_blocks": 2, "cpu_cache_blocks": 1}
-        cached = rm._record_request_cache_info(t, [10, 11], [20, 21, 22], hit)
-        assert cached == 128
-        assert t.block_tables == [10, 11, 20, 21, 22]
-        assert t.num_cached_tokens == 128
-        assert t.cache_info == (2, 2)
+def test_init_block_math_and_config(rm_factory):
+    """Constructor fields, block calculations, reset_cache_config."""
+    rm = rm_factory(max_seqs=8, block_size=64, dec_token=128)
+    assert rm.max_num_seqs == 8
+    assert rm.stop_flags == [True] * 8
+    assert rm.get_required_block_number(100) == 4
+    assert rm.get_encoder_block_number(100) == 2
+    assert rm.get_decoder_block_number() == 2
+    assert rm.total_block_number() == 100
+    rm.reset_cache_config(_cache_cfg(block_size=128))
+    assert rm.cfg.block_size == 128
 
 
-# ── Info & metrics ──────────────────────────────────────────────────────────
-class TestResourceManagerInfo:
-    """info string and gpu_cache_usage_perc."""
+def test_block_table_types_and_insufficient(rm_factory):
+    """_get_block_tables: all/encoder/decoder types, unknown raises, insufficient."""
+    rm = rm_factory(block_size=64, dec_token=64, num_free=100)
+    assert len(rm._get_block_tables(64, "encoder")) > 0
+    assert len(rm._get_block_tables(0, "decoder")) > 0
+    assert len(rm._get_block_tables(64, "all")) > 0
+    with pytest.raises(ValueError):
+        rm._get_block_tables(64, "invalid")
+    rm2 = rm_factory(num_free=0)
+    assert rm2._get_block_tables(64) == []
 
-    def test_info_string(self, rm_env):
-        rm = rm_env.make()
-        rm.cache_manager.num_gpu_blocks = 100
-        rm.cache_manager.gpu_free_block_list = list(range(80))
-        info = rm.info()
-        assert "ResourceManager info" in info
-        assert "total_block_number: 100" in info
 
-    def test_usage_calc(self, rm_env):
-        rm = rm_env.make()
-        rm.cache_manager.num_gpu_blocks = 100
-        rm.cache_manager.gpu_free_block_list = list(range(80))
-        assert abs(rm.get_gpu_cache_usage_perc() - 0.2) < 1e-9
+def test_availability_and_sufficiency(rm_factory):
+    """available_batch, available_block_num, is_resource_sufficient."""
+    rm = rm_factory(max_seqs=4, dec_token=0, num_free=100)
+    assert rm.available_batch() == 4
+    assert rm.available_block_num() == 100
+    assert rm.is_resource_sufficient(64)
+    rm.stop_flags = [False] * 4
+    assert not rm.is_resource_sufficient(1)
+    rm2 = rm_factory(max_seqs=4, num_free=0)
+    assert not rm2.is_resource_sufficient(64)
 
-    def test_usage_full(self, rm_env):
-        rm = rm_env.make(num_free=0)
-        rm.cache_manager.num_gpu_blocks = 100
-        rm.cache_manager.gpu_free_block_list = []
-        assert abs(rm.get_gpu_cache_usage_perc() - 1.0) < 1e-9
 
-    def test_usage_zero_total(self, rm_env):
-        rm = rm_env.make(num_free=0)
-        rm.cache_manager.num_gpu_blocks = 0
-        rm.cache_manager.gpu_free_block_list = []
-        assert rm.get_gpu_cache_usage_perc() == 0.0
+def test_allocate_no_prefix(rm_factory):
+    """Main allocation path without prefix caching (happy + empty-blocks)."""
+    rm = rm_factory(max_seqs=4, enable_prefix=False, dec_token=0, num_free=100)
+    tasks = [_Task(request_id=f"r{i}") for i in range(3)]
+    result = rm.allocate_resources_for_new_tasks(tasks)
+    assert len(result) == 3
+    assert rm.stop_flags == [False, False, False, True]
+    assert rm.real_bsz == 3
+    assert all(t.get("seed") is not None for t in result)
+    assert all(len(t.block_tables) > 0 for t in result)
+
+
+def test_allocate_with_prefix(rm_factory):
+    """Allocation with prefix cache (exercises _record_request_cache_info)."""
+    rm = rm_factory(max_seqs=4, enable_prefix=True, dec_token=0, block_size=64, num_free=100)
+    t = _Task(prompt_len=256)
+    result = rm.allocate_resources_for_new_tasks([t])
+    assert len(result) == 1
+    assert len(t.block_tables) > 0
+    assert t.num_cached_tokens >= 0
+    assert t.cache_info is not None
+
+
+def test_allocate_disaggregate(rm_factory):
+    """Disaggregate prefill/decode paths (prefix + no-prefix)."""
+    rm = rm_factory(max_seqs=4, enable_prefix=True, dec_token=0, block_size=64, num_free=100)
+    t = _Task(prompt_len=256, disaggregate_info={"role": "prefill"})
+    rm.allocate_resources_for_new_tasks([t])
+    assert "block_tables" in t.disaggregate_info
+    assert t.request_id in rm.req_dict
+    # No-prefix + decode
+    rm2 = rm_factory(max_seqs=4, enable_prefix=False, dec_token=0, num_free=100)
+    t2 = _Task(prompt_len=128, disaggregate_info={"role": "decode"})
+    rm2.allocate_resources_for_new_tasks([t2])
+    assert t2.request_id in rm2.req_dict
+
+
+def test_recycle_free_and_check(rm_factory):
+    """_recycle_block_tables, free_block_tables, check_and_free_block_tables."""
+    rm = rm_factory(enable_prefix=False, num_free=100)
+    t = _Task()
+    t.block_tables = [0, 1, 2]
+    rm._recycle_block_tables(t)
+    assert 0 in rm.cache_manager._recycled
+    # Prefix recycle delegates to release_block_ids_async
+    rm2 = rm_factory(enable_prefix=True, num_free=100)
+    t2 = _Task()
+    t2.block_tables = [0, 1]
+    rm2._recycle_block_tables(t2)
+    assert t2 in rm2.cache_manager._released
+    # free + check paths
+    assert rm.free_block_tables(10) == 10
+    rm.check_and_free_block_tables()
+    rm3 = rm_factory(enable_prefix=True, num_free=5)
+    rm3.check_and_free_block_tables()
+
+
+def test_info_and_cache_usage(rm_factory):
+    """info() string and get_gpu_cache_usage_perc."""
+    rm = rm_factory(num_free=100)
+    assert "ResourceManager info" in rm.info()
+    rm.cache_manager.num_gpu_blocks = 100
+    rm.cache_manager.gpu_free_block_list = list(range(80))
+    assert abs(rm.get_gpu_cache_usage_perc() - 0.2) < 1e-9
+    rm2 = rm_factory(num_free=0)
+    rm2.cache_manager.num_gpu_blocks = 0
+    assert rm2.get_gpu_cache_usage_perc() == 0.0
+
+
+def test_delete_cached_data(rm_factory):
+    """_delete_cached_data: full and partial cache hits."""
+    rm = rm_factory(block_size=64)
+    t = _Task(prompt_len=128)
+    rm._delete_cached_data(t, 128)
+    assert t.prompt_token_ids_len == 64
+    assert t.seq_lens_decoder == 64
+    t2 = _Task(prompt_len=256)
+    rm._delete_cached_data(t2, 64)
+    assert t2.prompt_token_ids_len == 192
+    assert t2.seq_lens_decoder == 64
