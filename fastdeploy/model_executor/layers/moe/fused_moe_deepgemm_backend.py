@@ -91,11 +91,10 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         (permute_input.shape[0], layer_added_weight_attrs_0.shape[1]),
         dtype=paddle.bfloat16,
     )
-    # if disable_ue8m0_cast:
+
     if permute_scale.strides[0] != 1:
         permute_scale = permute_scale.transpose([1, 0]).contiguous()
         permute_scale = permute_scale.transpose([1, 0])
-
     # disable_ue8m0_cast is False for SM100
     m_grouped_fp8_gemm_nt_contiguous(
         (permute_input, permute_scale),
@@ -128,7 +127,6 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         dtype=paddle.bfloat16,
     )
     # disable_ue8m0_cast is False for SM100
-
     m_grouped_fp8_gemm_nt_contiguous(
         (ffn_in_x, ffn_in_x_scale_tensor),
         (layer_added_weight_attrs_1, layer_added_scale_attrs_1),
