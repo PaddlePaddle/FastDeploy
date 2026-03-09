@@ -35,6 +35,7 @@ __global__ void set_value_by_flags(bool *stop_flags,
                                    const int64_t *step_idx,
                                    const int64_t *stop_seqs,
                                    const int *stop_seqs_len,
+                                   const int *preempted_idx,
                                    const int stop_seqs_bs,
                                    const int stop_seqs_max_len,
                                    bool beam_search,
@@ -64,6 +65,10 @@ __global__ void set_value_by_flags(bool *stop_flags,
             }
             if (!beam_search && is_in_end(topk_ids[bid], end_ids, end_length)) {
                 stop_flags[bid] = true;
+            }
+            if (preempted_idx[bid] == 1){
+                stop_flags[bid] = true;
+                topk_ids[bid] = -1;
             }
         }
         // dealing stop_seqs
@@ -135,6 +140,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
         step_idx.data<int64_t>(),
         stop_seqs.data<int64_t>(),
         stop_seqs_len.data<int>(),
+        preempted_idx.data<int>(),
         stop_seqs_bs,
         stop_seqs_max_len,
         beam_search,
@@ -142,7 +148,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
 }
 
 PD_BUILD_STATIC_OP(set_stop_value_multi_ends)
-    .Inputs({"topk_ids", "stop_flags", "seq_lens", "end_ids", "next_tokens", "pre_ids", "step_idx", "stop_seqs", "stop_seqs_len"})
+    .Inputs({"topk_ids", "stop_flags", "seq_lens", "end_ids", "next_tokens", "pre_ids", "step_idx", "stop_seqs", "stop_seqs_len", "preempted_idx"})
     .Attrs({"beam_search: bool"})
     .Outputs({"topk_ids_out", "stop_flags_out", "next_tokens_out"})
     .SetInplaceMap({{"topk_ids", "topk_ids_out"},

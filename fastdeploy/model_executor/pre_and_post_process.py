@@ -222,6 +222,7 @@ def post_process_normal(
             model_output.step_idx,
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
+            model_output.preempted_idx,
             False,
         )  # multi ends
     else:
