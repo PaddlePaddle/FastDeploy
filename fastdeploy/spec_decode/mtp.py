@@ -192,6 +192,7 @@ class MTPProposer(Proposer):
             self.model_inputs["step_idx"][idx : idx + 1] = 0
             self.model_inputs["max_dec_len"][idx : idx + 1] = max_dec_len
             self.model_inputs["stop_flags"][idx : idx + 1] = False
+            self.model_inputs["batch_drop"][idx : idx + 1] = False
 
             self.model_inputs["encoder_block_lens"][idx : idx + 1] = block_num
             self.model_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
