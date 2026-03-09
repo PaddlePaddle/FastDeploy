@@ -289,7 +289,7 @@ def get_otlp_span_exporter(endpoint, headers):
         OTLPSpanExporter as HTTPSpanExporter,
     )
 
-    protocol = os.environ.get(OTEL_EXPORTER_OTLP_TRACES_PROTOCOL, "grpc")
+    protocol = os.environ.get(OTEL_EXPORTER_OTLP_TRACES_PROTOCOL, "http/protobuf")
     supported_protocols = {"grpc", "http/protobuf"}
 
     if protocol not in supported_protocols:
