@@ -28,8 +28,8 @@ namespace cub = hipcub;
 #include <sys/types.h>
 #include <unistd.h>
 #include <algorithm>
-#include "stdint.h"
 #include "helper.h"
+#include "stdint.h"
 
 #define FLT_MAX 1e38
 
@@ -1371,6 +1371,9 @@ std::vector<paddle::Tensor> BeamSearchSoftmax(
                   sizeof(int),
                   cudaMemcpyDeviceToHost,
                   cu_stream);
+
+  // Must synchronize before using host values copied from device
+  cudaStreamSynchronize(cu_stream);
 
   int beam_batch_size = logits_shape[0];
   int batch_size = beam_batch_size / beam_width_scalar;

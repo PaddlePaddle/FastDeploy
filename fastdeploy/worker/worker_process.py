@@ -1221,12 +1221,10 @@ def run_worker_proc() -> None:
     # transformers) will fail when transformers tries to query torch metadata.
     if envs.FD_DETERMINISTIC_MODE:
         from fastdeploy.model_executor.layers.batch_invariant_ops import (
-            enable_batch_invariant_mode,
-            is_batch_invariant_mode_enabled,
+            init_deterministic_mode,
         )
 
-        if not is_batch_invariant_mode_enabled():
-            enable_batch_invariant_mode()
+        init_deterministic_mode()
 
     # Initialize device and create model runner
     worker_proc.init_device()

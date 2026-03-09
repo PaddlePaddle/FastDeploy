@@ -376,7 +376,7 @@ class LLMEngine:
                 create=True,
             )
 
-        # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
+        # launched_expert_service_signal: Used to sense whether each expert_service is started successfully
         if self.cfg.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
