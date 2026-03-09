@@ -139,8 +139,12 @@ def call_gqa_rope_write_cache(
     decoder_chunk_size_device = paddle.full([1], 64, dtype="int32")
     max_len_tensor_cpu = paddle.full([9], 0, dtype="int32").cpu()
 
-    encoder_batch_ids = paddle.full([max(bs, 1)], 0, dtype="int32")
-    encoder_tile_ids = paddle.full([max(bs, 1)], 0, dtype="int32")
+    # Encoder tiles: each batch item may need ceil(seq_len / chunk_size) tiles
+    total_token_nums = sum(int(seq_lens_this_time[i].item()) for i in range(bs))
+    encoder_chunk_size = 64
+    max_encoder_tiles = max((total_token_nums + encoder_chunk_size - 1) // encoder_chunk_size, 1)
+    encoder_batch_ids = paddle.full([max_encoder_tiles], 0, dtype="int32")
+    encoder_tile_ids = paddle.full([max_encoder_tiles], 0, dtype="int32")
     encoder_num_blocks_x_cpu = paddle.full([1], 0, dtype="int32").cpu()
 
     kv_batch_ids = paddle.full([max(max_blocks_total, 1)], 0, dtype="int32")

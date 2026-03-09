@@ -105,25 +105,35 @@ def _normal_forward(emb, ids):
     return emb(ids)
 
 
-def _bitwise_equal(a, b, dtype):
-    """Compare two tensors bitwise by viewing as integer type."""
+def _assert_bitwise_equal(a, b, dtype, msg=""):
+    """Assert two tensors are bitwise-identical via integer view. Raise with diff details on failure."""
     int_dtype = _FLOAT_TO_INT[dtype]
     a_bits = a.view(int_dtype)
     b_bits = b.view(int_dtype)
-    return (a_bits == b_bits).all().item()
-
-
-def _bitwise_diff_summary(a, b, dtype):
-    """Return summary string of bitwise differences."""
-    int_dtype = _FLOAT_TO_INT[dtype]
-    a_bits = a.view(int_dtype)
-    b_bits = b.view(int_dtype)
-    diff_mask = a_bits != b_bits
-    num_diff = diff_mask.sum().item()
+    if (a_bits == b_bits).all().item():
+        return
+    num_diff = (a_bits != b_bits).sum().item()
     total = a_bits.numel()
-    # Also show float-level max diff for reference
     max_diff = (a.astype("float32") - b.astype("float32")).abs().max().item()
-    return f"{num_diff}/{total} elements differ in bits, float max_diff={max_diff}"
+    raise AssertionError(f"{msg}: {num_diff}/{total} bits differ, max_float_diff={max_diff}")
+
+
+def _check_equivalence(emb, ids, dtype, msg=""):
+    """Run both branches and assert bitwise equivalence."""
+    det_out = _deterministic_forward(emb, ids)
+    norm_out = _normal_forward(emb, ids)
+    _assert_bitwise_equal(det_out, norm_out, dtype, f"Equivalence {msg}")
+
+
+def _check_determinism(emb, ids, dtype, num_runs=NUM_RUNS, msg=""):
+    """Run deterministic branch N times and assert all results are bitwise-identical to the first."""
+    int_dtype = _FLOAT_TO_INT[dtype]
+    first_bits = _deterministic_forward(emb, ids).view(int_dtype).numpy().copy()
+    for i in range(1, num_runs):
+        cur_bits = _deterministic_forward(emb, ids).view(int_dtype).numpy()
+        if not np.array_equal(first_bits, cur_bits):
+            num_diff = (first_bits != cur_bits).sum()
+            raise AssertionError(f"Determinism {msg}: run 0 vs {i}, {num_diff} bits differ")
 
 
 # ── Test 1: Equivalence ─────────────────────────────────────────────
@@ -136,23 +146,16 @@ def test_equivalence(rank, world_size, mp_group):
 
     for dtype in SUPPORTED_DTYPES:
         emb = _create_vocab_parallel_embedding(vocab_size, embed_dim, world_size, rank, mp_group, dtype)
-
         test_inputs = [
-            paddle.to_tensor([0, 1, 2, 3], dtype="int64"),  # low ids
-            paddle.to_tensor([vocab_size - 1, vocab_size - 2], dtype="int64"),  # high ids
-            paddle.randint(0, vocab_size, [128], dtype="int64"),  # random ids
-            paddle.to_tensor([vocab_size // world_size - 1, vocab_size // world_size], dtype="int64"),  # boundary ids
+            paddle.to_tensor([0, 1, 2, 3], dtype="int64"),
+            paddle.to_tensor([vocab_size - 1, vocab_size - 2], dtype="int64"),
+            paddle.randint(0, vocab_size, [128], dtype="int64"),
+            paddle.to_tensor([vocab_size // world_size - 1, vocab_size // world_size], dtype="int64"),
         ]
-
         for i, ids in enumerate(test_inputs):
-            det_out = _deterministic_forward(emb, ids)
-            norm_out = _normal_forward(emb, ids)
-
-            if not _bitwise_equal(det_out, norm_out, dtype):
-                summary = _bitwise_diff_summary(det_out, norm_out, dtype)
-                raise AssertionError(f"Equivalence FAILED: dtype={dtype}, input#{i}, {summary}")
-        dist.barrier()
+            _check_equivalence(emb, ids, dtype, msg=f"dtype={dtype}, input#{i}")
         print(f"  [rank {rank}] PASS: equivalence for {dtype}")
+    dist.barrier()
 
 
 # ── Test 2: Determinism ─────────────────────────────────────────────
@@ -166,23 +169,9 @@ def test_determinism(rank, world_size, mp_group):
     for dtype in SUPPORTED_DTYPES:
         emb = _create_vocab_parallel_embedding(vocab_size, embed_dim, world_size, rank, mp_group, dtype)
         ids = paddle.randint(0, vocab_size, [256], dtype="int64")
-
-        int_dtype = _FLOAT_TO_INT[dtype]
-        first_bits = None
-        for run_idx in range(NUM_RUNS):
-            out = _deterministic_forward(emb, ids)
-            out_bits = out.view(int_dtype).numpy().copy()
-            if first_bits is None:
-                first_bits = out_bits
-            elif not np.array_equal(first_bits, out_bits):
-                num_diff = (first_bits != out_bits).sum()
-                raise AssertionError(
-                    f"Determinism FAILED: dtype={dtype}, run 0 vs run {run_idx}, "
-                    f"{num_diff} elements differ in bits"
-                )
-            dist.barrier()
-        dist.barrier()
+        _check_determinism(emb, ids, dtype, msg=f"dtype={dtype}")
         print(f"  [rank {rank}] PASS: determinism ({NUM_RUNS} runs) for {dtype}")
+    dist.barrier()
 
 
 # ── Test 3: Large vocab / large batch ───────────────────────────────
@@ -198,22 +187,8 @@ def test_large_vocab(rank, world_size, mp_group):
     emb = _create_vocab_parallel_embedding(vocab_size, embed_dim, world_size, rank, mp_group, dtype)
     ids = paddle.randint(0, vocab_size, [batch_size], dtype="int64")
 
-    # Equivalence
-    det_out = _deterministic_forward(emb, ids)
-    norm_out = _normal_forward(emb, ids)
-    if not _bitwise_equal(det_out, norm_out, dtype):
-        summary = _bitwise_diff_summary(det_out, norm_out, dtype)
-        raise AssertionError(f"Large vocab equivalence FAILED: {summary}")
-
-    # Determinism
-    int_dtype = _FLOAT_TO_INT[dtype]
-    first_bits = det_out.view(int_dtype).numpy().copy()
-    for run_idx in range(1, 10):
-        out = _deterministic_forward(emb, ids)
-        out_bits = out.view(int_dtype).numpy().copy()
-        if not np.array_equal(first_bits, out_bits):
-            raise AssertionError(f"Large vocab determinism FAILED: run 0 vs {run_idx}")
-        dist.barrier()
+    _check_equivalence(emb, ids, dtype, msg="large_vocab")
+    _check_determinism(emb, ids, dtype, msg="large_vocab")
 
     dist.barrier()
     print(f"  [rank {rank}] PASS: large vocab (V={vocab_size}, B={batch_size}, {dtype})")
@@ -231,12 +206,7 @@ def test_single_token(rank, world_size, mp_group):
     emb = _create_vocab_parallel_embedding(vocab_size, embed_dim, world_size, rank, mp_group, dtype)
     ids = paddle.to_tensor([42], dtype="int64")
 
-    det_out = _deterministic_forward(emb, ids)
-    norm_out = _normal_forward(emb, ids)
-
-    if not _bitwise_equal(det_out, norm_out, dtype):
-        summary = _bitwise_diff_summary(det_out, norm_out, dtype)
-        raise AssertionError(f"Single token equivalence FAILED: {summary}")
+    _check_equivalence(emb, ids, dtype, msg="single_token")
 
     dist.barrier()
     print(f"  [rank {rank}] PASS: single token")
@@ -256,17 +226,11 @@ def test_ids_on_single_rank(rank, world_size, mp_group):
 
     # All ids in rank 0's shard
     ids = paddle.randint(0, per_part, [64], dtype="int64")
-    det_out = _deterministic_forward(emb, ids)
-    norm_out = _normal_forward(emb, ids)
-    if not _bitwise_equal(det_out, norm_out, dtype):
-        raise AssertionError("Single-rank ids equivalence FAILED (rank0 shard)")
+    _check_equivalence(emb, ids, dtype, msg="rank0_shard")
 
     # All ids in last rank's shard
     ids = paddle.randint(per_part * (world_size - 1), vocab_size, [64], dtype="int64")
-    det_out = _deterministic_forward(emb, ids)
-    norm_out = _normal_forward(emb, ids)
-    if not _bitwise_equal(det_out, norm_out, dtype):
-        raise AssertionError("Single-rank ids equivalence FAILED (last rank shard)")
+    _check_equivalence(emb, ids, dtype, msg="last_rank_shard")
 
     dist.barrier()
     print(f"  [rank {rank}] PASS: all ids on single rank's shard")
