@@ -502,3 +502,493 @@ class TestLLMEngine:
         e.engine.data_processor = SimpleNamespace(process_request=lambda r, *a, **kw: r)
         with pytest.raises(EngineError):
             e.add_requests({"prompt": "x" * 3000})
+
+    def test_add_requests_min_tokens_exceeds(self, monkeypatch):
+        from fastdeploy.utils import EngineError
+
+        e = _make_engine()
+        e.cfg.model_config.max_model_len = 100
+        vals = {"max_tokens": 50, "min_tokens": 95, "request_id": "x", "stop_seqs_len": None}
+        req = SimpleNamespace(
+            prompt_token_ids=list(range(10)),
+            prompt_token_ids_len=10,
+            need_prefill_tokens=10,
+            metrics=SimpleNamespace(scheduler_recv_req_time=0, preprocess_start_time=0, preprocess_end_time=0),
+            get=lambda k: vals.get(k),
+            set=lambda k, v: None,
+            sampling_params=None,
+            guided_json=None,
+            guided_regex=None,
+            guided_choice=None,
+            structural_tag=None,
+            guided_grammar=None,
+            guided_json_object=None,
+        )
+        monkeypatch.setattr("fastdeploy.engine.engine.Request.from_dict", lambda d: req)
+        e.engine.data_processor = SimpleNamespace(process_request=lambda r, *a, **kw: r)
+        with pytest.raises(EngineError):
+            e.add_requests({"prompt": "hi"})
+
+    def test_add_requests_stop_seqs_too_many(self, monkeypatch):
+        from fastdeploy.utils import EngineError
+
+        e = _make_engine()
+        e.cfg.model_config.max_model_len = 2048
+        vals = {"max_tokens": 100, "min_tokens": 0, "request_id": "x", "stop_seqs_len": list(range(200))}
+        req = SimpleNamespace(
+            prompt_token_ids=list(range(10)),
+            prompt_token_ids_len=10,
+            need_prefill_tokens=10,
+            metrics=SimpleNamespace(scheduler_recv_req_time=0, preprocess_start_time=0, preprocess_end_time=0),
+            get=lambda k: vals.get(k),
+            set=lambda k, v: setattr(req, k, v),
+            sampling_params=None,
+            guided_json=None,
+            guided_regex=None,
+            guided_choice=None,
+            structural_tag=None,
+            guided_grammar=None,
+            guided_json_object=None,
+        )
+        monkeypatch.setattr("fastdeploy.engine.engine.Request.from_dict", lambda d: req)
+        monkeypatch.setattr("fastdeploy.engine.engine.envs.FD_MAX_STOP_SEQS_NUM", 10)
+        e.engine.data_processor = SimpleNamespace(process_request=lambda r, *a, **kw: r)
+        with pytest.raises(EngineError):
+            e.add_requests({"prompt": "hi"})
+
+    def test_add_requests_stop_seq_too_long(self, monkeypatch):
+        from fastdeploy.utils import EngineError
+
+        e = _make_engine()
+        e.cfg.model_config.max_model_len = 2048
+        vals = {"max_tokens": 100, "min_tokens": 0, "request_id": "x", "stop_seqs_len": [500]}
+        req = SimpleNamespace(
+            prompt_token_ids=list(range(10)),
+            prompt_token_ids_len=10,
+            need_prefill_tokens=10,
+            metrics=SimpleNamespace(scheduler_recv_req_time=0, preprocess_start_time=0, preprocess_end_time=0),
+            get=lambda k: vals.get(k),
+            set=lambda k, v: setattr(req, k, v),
+            sampling_params=None,
+            guided_json=None,
+            guided_regex=None,
+            guided_choice=None,
+            structural_tag=None,
+            guided_grammar=None,
+            guided_json_object=None,
+        )
+        monkeypatch.setattr("fastdeploy.engine.engine.Request.from_dict", lambda d: req)
+        monkeypatch.setattr("fastdeploy.engine.engine.envs.FD_MAX_STOP_SEQS_NUM", 100)
+        monkeypatch.setattr("fastdeploy.engine.engine.envs.FD_STOP_SEQS_MAX_LEN", 10)
+        e.engine.data_processor = SimpleNamespace(process_request=lambda r, *a, **kw: r)
+        with pytest.raises(EngineError):
+            e.add_requests({"prompt": "hi"})
+
+    def test_add_requests_guided_no_backend(self, monkeypatch):
+        from fastdeploy.utils import EngineError
+
+        e = _make_engine()
+        e.cfg.model_config.max_model_len = 2048
+        e.guided_decoding_checker = None
+        vals = {"max_tokens": 100, "min_tokens": 0, "request_id": "x", "stop_seqs_len": None}
+        req = SimpleNamespace(
+            prompt_token_ids=list(range(10)),
+            prompt_token_ids_len=10,
+            need_prefill_tokens=10,
+            metrics=SimpleNamespace(scheduler_recv_req_time=0, preprocess_start_time=0, preprocess_end_time=0),
+            get=lambda k: vals.get(k),
+            set=lambda k, v: setattr(req, k, v),
+            sampling_params=None,
+            guided_json='{"type":"object"}',
+            guided_regex=None,
+            guided_choice=None,
+            structural_tag=None,
+            guided_grammar=None,
+            guided_json_object=None,
+        )
+        monkeypatch.setattr("fastdeploy.engine.engine.Request.from_dict", lambda d: req)
+        e.engine.data_processor = SimpleNamespace(process_request=lambda r, *a, **kw: r)
+        with pytest.raises(EngineError):
+            e.add_requests({"prompt": "hi"})
+
+    def test_add_requests_happy_path(self, monkeypatch):
+        e = _make_engine()
+        e.cfg.model_config.max_model_len = 2048
+        put_calls = []
+        vals = {"max_tokens": 100, "min_tokens": 0, "request_id": "x", "stop_seqs_len": None}
+        req = SimpleNamespace(
+            prompt_token_ids=list(range(10)),
+            prompt_token_ids_len=10,
+            need_prefill_tokens=10,
+            metrics=SimpleNamespace(scheduler_recv_req_time=0, preprocess_start_time=0, preprocess_end_time=0),
+            get=lambda k: vals.get(k),
+            set=lambda k, v: setattr(req, k, v),
+            sampling_params=None,
+            guided_json=None,
+            guided_regex=None,
+            guided_choice=None,
+            structural_tag=None,
+            guided_grammar=None,
+            guided_json_object=None,
+        )
+        monkeypatch.setattr("fastdeploy.engine.engine.Request.from_dict", lambda d: req)
+        e.engine.data_processor = SimpleNamespace(process_request=lambda r, *a, **kw: r)
+        e.engine.scheduler = SimpleNamespace(put_requests=lambda reqs: put_calls.extend(reqs))
+        e.add_requests({"prompt": "hi"})
+        assert len(put_calls) == 1
+
+    def test_add_requests_with_sampling_params(self, monkeypatch):
+
+        e = _make_engine()
+        e.cfg.model_config.max_model_len = 2048
+        put_calls = []
+        vals = {"max_tokens": 100, "min_tokens": 0, "request_id": "x", "stop_seqs_len": None}
+        req = SimpleNamespace(
+            prompt_token_ids=list(range(10)),
+            prompt_token_ids_len=10,
+            need_prefill_tokens=10,
+            metrics=SimpleNamespace(scheduler_recv_req_time=0, preprocess_start_time=0, preprocess_end_time=0),
+            get=lambda k: vals.get(k),
+            set=lambda k, v: setattr(req, k, v),
+            guided_json=None,
+            guided_regex=None,
+            guided_choice=None,
+            structural_tag=None,
+            guided_grammar=None,
+            guided_json_object=None,
+        )
+        sp = SimpleNamespace(temperature=0.0)
+        monkeypatch.setattr("fastdeploy.engine.engine.Request.from_dict", lambda d: req)
+        monkeypatch.setattr("fastdeploy.engine.engine.asdict", lambda x: {"temperature": 0.0})
+        e.engine.data_processor = SimpleNamespace(process_request=lambda r, *a, **kw: r)
+        e.engine.scheduler = SimpleNamespace(put_requests=lambda reqs: put_calls.extend(reqs))
+        e.add_requests({"prompt": "hi"}, sampling_params=sp)
+        assert sp.temperature == 1e-06  # clamped from 0
+        assert req.sampling_params is sp
+
+    # ── _start_worker_service ──────────────────────────────────────────
+
+    def test_start_worker_service_builds_cmd(self, monkeypatch):
+
+        e = _make_engine()
+        e.data_processor = SimpleNamespace(
+            tokenizer=SimpleNamespace(
+                vocab={"<pad>": 0, "hello": 1},
+                get_vocab=lambda: {"<think>": 5, "</think>": 6, "<|IMAGE_PLACEHOLDER|>": -1, "\n": 10},
+                encode=lambda s, add_special_tokens=False: [10],
+                think_truncate_prompt="...",
+                tokenize=lambda s: ["..."],
+                convert_tokens_to_ids=lambda t: [99],
+            ),
+            eos_token_id_len=1,
+            pad_token_id=0,
+        )
+        e.engine.data_processor = e.data_processor
+        e.engine.mm_max_tokens_per_item = None
+        captured = []
+        monkeypatch.setattr(
+            "fastdeploy.engine.engine.subprocess.Popen",
+            lambda cmd, **kw: SimpleNamespace(pid=1234) if captured.append(cmd) or True else None,
+        )
+        monkeypatch.setattr("fastdeploy.engine.engine.current_platform.is_iluvatar", lambda: False)
+        e._start_worker_service()
+        assert "--max_model_len 2048" in captured[0]
+        assert "--tensor_parallel_size 1" in captured[0]
+
+    # ── generate ───────────────────────────────────────────────────────
+
+    def test_generate_stream(self):
+        e = _make_engine()
+        e.add_requests = lambda t, **kw: None
+        results = [
+            SimpleNamespace(finished=False),
+            SimpleNamespace(finished=True),
+        ]
+        e._get_generated_tokens = lambda rid: iter(results)
+        e.engine.data_processor = SimpleNamespace(
+            process_response=lambda r: SimpleNamespace(
+                to_dict=lambda: {"outputs": {"text": "hi", "reasoning_content": ""}}
+            )
+        )
+        e.engine.check_and_free_block_tables = lambda: None
+        outputs = list(e.generate({"prompt": "test"}, stream=True))
+        assert len(outputs) == 2
+
+    def test_generate_non_stream(self):
+        e = _make_engine()
+        e.add_requests = lambda t, **kw: None
+        results = [SimpleNamespace(finished=True)]
+        e._get_generated_tokens = lambda rid: iter(results)
+        e.engine.data_processor = SimpleNamespace(
+            process_response=lambda r: SimpleNamespace(to_dict=lambda: {"outputs": {"text": "done"}})
+        )
+        e.engine.check_and_free_block_tables = lambda: None
+        outputs = list(e.generate({"prompt": "test"}, stream=False))
+        assert len(outputs) == 1
+        assert outputs[0]["outputs"]["text"] == "done"
+
+    def test_generate_error_raises(self, monkeypatch):
+        from fastdeploy.utils import EngineError
+
+        e = _make_engine()
+        e.add_requests = None  # will fail
+        monkeypatch.setattr(
+            "fastdeploy.engine.engine.Request.from_dict",
+            lambda d: (_ for _ in ()).throw(ValueError("bad")),
+        )
+        with pytest.raises(EngineError):
+            list(e.generate({"prompt": "x"}, stream=False))
+
+    # ── launch_components (DP path) ────────────────────────────────────
+
+    def test_launch_dp_scheduler(self, monkeypatch):
+        e = _make_engine()
+        e.cfg.scheduler_config.name = "dp"
+        e.cfg.scheduler_config.splitwise_role = "mixed"
+        started = []
+        e.engine.scheduler = SimpleNamespace(start=lambda *a, **kw: started.append(a))
+        e.launch_components()
+        assert len(started) == 1
+
+    def test_launch_dp_multi_creates_processes(self, monkeypatch):
+
+        e = _make_engine()
+        e.cfg.scheduler_config.name = "local"
+        e.cfg.scheduler_config.splitwise_role = "mixed"
+        e.cfg.parallel_config.data_parallel_size = 2
+        e.cfg.parallel_config.engine_worker_queue_port = [6778, 6779]
+        monkeypatch.setattr("fastdeploy.engine.engine.envs.FD_ENABLE_MULTI_API_SERVER", False)
+        monkeypatch.setattr("fastdeploy.engine.engine.envs.FD_ENGINE_TASK_QUEUE_WITH_SHM", False)
+
+        e.launched_expert_service_signal = SimpleNamespace(value=np.zeros(2, dtype=np.int32))
+        # Make signal value[1] immediately 1 so while loop exits
+        e.launched_expert_service_signal.value[1] = 1
+
+        mock_proc = SimpleNamespace(start=lambda: None, pid=111)
+        mock_ctx = SimpleNamespace(Process=lambda target, args: mock_proc)
+        monkeypatch.setattr("fastdeploy.engine.engine.multiprocessing.get_context", lambda kind: mock_ctx)
+        monkeypatch.setattr(
+            "fastdeploy.engine.engine.EngineWorkerQueue",
+            lambda **kw: SimpleNamespace(),
+        )
+        monkeypatch.setattr("fastdeploy.engine.engine.copy.deepcopy", lambda x: x)
+
+        e.launch_components()
+        assert len(e.dp_processed) == 1
+        assert e.dp_processed[0].pid == 111
+
+    # ── _exit_sub_services (cache manager path) ────────────────────────
+
+    def test_exit_cleans_cache_manager(self, monkeypatch):
+        e = _make_engine()
+        e.worker_ready_signal = SimpleNamespace(clear=lambda: None)
+        e.loaded_model_signal = SimpleNamespace(clear=lambda: None)
+        killed_pids = []
+        monkeypatch.setattr("fastdeploy.engine.engine.os.getpgid", lambda pid: pid)
+        monkeypatch.setattr("fastdeploy.engine.engine.os.killpg", lambda pgid, sig: killed_pids.append(pgid))
+        cache_cleared = []
+        e.engine.resource_manager = SimpleNamespace(
+            cache_manager=SimpleNamespace(
+                shm_cache_task_flag_broadcast=SimpleNamespace(clear=lambda: cache_cleared.append("broadcast")),
+                cache_ready_signal=SimpleNamespace(clear=lambda: cache_cleared.append("ready")),
+            )
+        )
+        e.cache_manager_processes = [SimpleNamespace(pid=5555)]
+        e._exit_sub_services()
+        assert 5555 in killed_pids
+        assert "broadcast" in cache_cleared
+        assert "ready" in cache_cleared
+
+    def test_exit_cleans_dp_processes(self, monkeypatch):
+        e = _make_engine()
+        e.worker_ready_signal = SimpleNamespace(clear=lambda: None)
+        e.loaded_model_signal = SimpleNamespace(clear=lambda: None)
+        monkeypatch.setattr("fastdeploy.engine.engine.os.getpgid", lambda pid: pid)
+        monkeypatch.setattr("fastdeploy.engine.engine.os.killpg", lambda pgid, sig: None)
+        joined = []
+        e.dp_processed = [SimpleNamespace(pid=7777, join=lambda: joined.append(True))]
+        e.dp_engine_worker_queue_server = [SimpleNamespace(cleanup=lambda: None)]
+        e._exit_sub_services()
+        assert len(joined) == 1
+
+    def test_exit_cleans_zmq(self, monkeypatch):
+        e = _make_engine()
+        e.worker_ready_signal = SimpleNamespace(clear=lambda: None)
+        e.loaded_model_signal = SimpleNamespace(clear=lambda: None)
+        closed = []
+        e.zmq_server = SimpleNamespace(close=lambda: closed.append(True))
+        e._exit_sub_services()
+        assert len(closed) == 1
+
+    # ── _stop_profile (prefix caching path) ────────────────────────────
+
+    def test_stop_profile_starts_cache_service(self, monkeypatch):
+        e = _make_engine()
+        e.do_profile = 1
+        e.get_profile_block_num_signal = SimpleNamespace(value=np.array([42], dtype=np.int32))
+        e.cfg.cache_config.enable_prefix_caching = True
+        e.cfg.scheduler_config.splitwise_role = "mixed"
+        cache_started = []
+        e.engine.resource_manager = SimpleNamespace(reset_cache_config=lambda cfg: None)
+        e.engine.start_cache_service = lambda dev, suf: cache_started.append(True)
+        e.cfg.cache_config.reset = lambda n: None
+        monkeypatch.setattr("fastdeploy.engine.engine.current_platform.is_intel_hpu", lambda: False)
+        e._stop_profile()
+        assert e.do_profile == 0
+        assert len(cache_started) == 1
+
+    # ── check_worker_initialize_status ─────────────────────────────────
+
+    def test_check_worker_status_success(self, monkeypatch):
+
+        e = _make_engine()
+        e.cfg.model_config.num_hidden_layers = 2
+        e.worker_init_status = {}
+        # Simulate stdout with weight loading and layer loading lines
+        lines = [
+            b"Loading checkpoint shards: 100\n",
+            b"Start load layer 0\n",
+            b"Start load layer 1\n",
+        ]
+        e.worker_proc = SimpleNamespace(
+            stdout=iter(lines),
+            poll=lambda: None,
+        )
+        # Make worker ready immediately so progress loops exit
+        e.worker_ready_signal = SimpleNamespace(value=np.ones(1, dtype=np.int32))
+        e.cfg.worker_num_per_node = 1
+        result = e.check_worker_initialize_status()
+        assert result is True
+
+    def test_check_worker_status_proc_dies(self, monkeypatch):
+        e = _make_engine()
+        e.cfg.model_config.num_hidden_layers = 2
+        e.worker_init_status = {}
+        e.worker_proc = SimpleNamespace(
+            stdout=iter([]),
+            poll=lambda: 1,  # process exited
+        )
+        e.worker_ready_signal = SimpleNamespace(value=np.zeros(1, dtype=np.int32))
+        e.cfg.worker_num_per_node = 1
+        result = e.check_worker_initialize_status()
+        assert result is False
+
+    # ── _start_worker_service (sp_model path + iluvatar) ───────────────
+
+    def test_start_worker_sp_model_path(self, monkeypatch):
+        e = _make_engine()
+        e.data_processor = SimpleNamespace(
+            tokenizer=SimpleNamespace(
+                sp_model=["a", "b", "c"],  # has sp_model
+                get_vocab=lambda: {"<think>": -1, "</think>": -1, "<|IMAGE_PLACEHOLDER|>": -1, "\n": -1},
+                encode=lambda s, add_special_tokens=False: {"input_ids": [10]},
+                think_truncate_prompt="...",
+                tokenize=lambda s: ["..."],
+                convert_tokens_to_ids=lambda t: [99],
+            ),
+            eos_token_id_len=1,
+            pad_token_id=0,
+        )
+        e.engine.data_processor = e.data_processor
+        e.engine.mm_max_tokens_per_item = {"image": 256}
+        e.cfg.structured_outputs_config.logits_processors = ["proc1"]
+        captured = []
+        monkeypatch.setattr(
+            "fastdeploy.engine.engine.subprocess.Popen",
+            lambda cmd, **kw: SimpleNamespace(pid=2222) if captured.append(cmd) or True else None,
+        )
+        monkeypatch.setattr("fastdeploy.engine.engine.current_platform.is_iluvatar", lambda: False)
+        e._start_worker_service()
+        assert "--ori_vocab_size 3" in captured[0]
+        assert "--logits-processors proc1" in captured[0]
+        assert "--mm_max_tokens_per_item" in captured[0]
+
+    def test_start_worker_iluvatar_strips_devices(self, monkeypatch):
+
+        e = _make_engine()
+        e.data_processor = SimpleNamespace(
+            tokenizer=SimpleNamespace(
+                vocab={"<pad>": 0},
+                get_vocab=lambda: {"<think>": -1, "</think>": -1, "<|IMAGE_PLACEHOLDER|>": -1, "\n": -1},
+                encode=lambda s, add_special_tokens=False: [10],
+                think_truncate_prompt="...",
+                tokenize=lambda s: ["..."],
+                convert_tokens_to_ids=lambda t: [99],
+            ),
+            eos_token_id_len=1,
+            pad_token_id=0,
+        )
+        e.engine.data_processor = e.data_processor
+        e.engine.mm_max_tokens_per_item = None
+        captured = []
+        monkeypatch.setattr(
+            "fastdeploy.engine.engine.subprocess.Popen",
+            lambda cmd, **kw: SimpleNamespace(pid=3333) if captured.append(cmd) or True else None,
+        )
+        monkeypatch.setattr("fastdeploy.engine.engine.current_platform.is_iluvatar", lambda: True)
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+        e._start_worker_service()
+        assert f"--devices {e.cfg.parallel_config.device_ids}" not in captured[0]
+
+    def test_start_worker_nnode_gt_1(self, monkeypatch):
+        e = _make_engine()
+        e.cfg.nnode = 2
+        e.cfg.ips = ["10.0.0.1", "10.0.0.2"]
+        e.data_processor = SimpleNamespace(
+            tokenizer=SimpleNamespace(
+                vocab={"<pad>": 0},
+                get_vocab=lambda: {"<think>": -1, "</think>": -1, "<|IMAGE_PLACEHOLDER|>": -1, "\n": -1},
+                encode=lambda s, add_special_tokens=False: [10],
+                think_truncate_prompt="...",
+                tokenize=lambda s: ["..."],
+                convert_tokens_to_ids=lambda t: [99],
+            ),
+            eos_token_id_len=1,
+            pad_token_id=0,
+        )
+        e.engine.data_processor = e.data_processor
+        e.engine.mm_max_tokens_per_item = None
+        captured = []
+        monkeypatch.setattr(
+            "fastdeploy.engine.engine.subprocess.Popen",
+            lambda cmd, **kw: SimpleNamespace(pid=4444) if captured.append(cmd) or True else None,
+        )
+        monkeypatch.setattr("fastdeploy.engine.engine.current_platform.is_iluvatar", lambda: False)
+        e._start_worker_service()
+        assert "--nnodes 2" in captured[0]
+
+    def test_start_worker_store_true_flags(self, monkeypatch):
+        e = _make_engine()
+        e.cfg.cache_config.num_gpu_blocks_override = 200
+        e.cfg.cache_config.kvcache_storage_backend = "rocksdb"
+        e.cfg.parallel_config.enable_expert_parallel = True
+        e.cfg.cache_config.enable_prefix_caching = True
+        e.data_processor = SimpleNamespace(
+            tokenizer=SimpleNamespace(
+                vocab={"<pad>": 0},
+                get_vocab=lambda: {"<think>": -1, "</think>": -1, "<|IMAGE_PLACEHOLDER|>": -1, "\n": -1},
+                encode=lambda s, add_special_tokens=False: [10],
+                think_truncate_prompt="...",
+                tokenize=lambda s: ["..."],
+                convert_tokens_to_ids=lambda t: [99],
+            ),
+            eos_token_id_len=1,
+            pad_token_id=0,
+        )
+        e.engine.data_processor = e.data_processor
+        e.engine.mm_max_tokens_per_item = None
+        captured = []
+        monkeypatch.setattr(
+            "fastdeploy.engine.engine.subprocess.Popen",
+            lambda cmd, **kw: SimpleNamespace(pid=5555) if captured.append(cmd) or True else None,
+        )
+        monkeypatch.setattr("fastdeploy.engine.engine.current_platform.is_iluvatar", lambda: False)
+        e._start_worker_service()
+        assert "--enable_expert_parallel" in captured[0]
+        assert "--enable_prefix_caching" in captured[0]
+        assert "--num_gpu_blocks_override 200" in captured[0]
+        assert "--kvcache_storage_backend rocksdb" in captured[0]
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
