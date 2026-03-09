@@ -16,6 +16,7 @@
 
 import asyncio
 import inspect
+import json
 import os
 import re
 import time
@@ -297,7 +298,11 @@ class EngineClient:
         try:
             chat_template_kwargs = task.get("chat_template_kwargs") or {}
             chat_template_kwargs.update({"chat_template": task.get("chat_template")})
+            reasoning_effort = task.get("reasoning_effort")
+            if reasoning_effort is not None:
+                chat_template_kwargs["reasoning_effort"] = reasoning_effort
             task["chat_template_kwargs"] = chat_template_kwargs
+            self.process_messages(task.get("messages", []))
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
@@ -416,6 +421,12 @@ class EngineClient:
                 data["reasoning_max_tokens"] = data["max_tokens"]
                 api_server_logger.warning(
                     f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to {data['max_tokens']}"
+                )
+            if data.get("reasoning_effort") is not None:
+                data["reasoning_max_tokens"] = None
+                api_server_logger.warning(
+                    f"req_id: {data['request_id']}, reasoning_max_tokens and reasoning_effort are both set, "
+                    f"enable_thinking will be disabled."
                 )
 
         if data.get("response_max_tokens") is not None:
@@ -962,3 +973,23 @@ class EngineClient:
                 self._send_task(data)
 
             api_server_logger.info("Aborted request(s) %s.", ",".join(request_ids))
+
+    def process_messages(self, messages):
+        for message in messages:
+            if message["role"] == "assistant" and "tool_calls" in message:
+                tool_calls = message.get("tool_calls")
+                if not isinstance(tool_calls, list):
+                    continue
+
+                if len(tool_calls) == 0:
+                    # Drop empty tool_calls to keep templates on the normal assistant path.
+                    message.pop("tool_calls", None)
+                    continue
+
+                for item in tool_calls:
+                    # if arguments is None or empty string, set to {}
+                    if content := item["function"].get("arguments"):
+                        if not isinstance(content, (dict, list)):
+                            item["function"]["arguments"] = json.loads(content)
+                    else:
+                        item["function"]["arguments"] = {}

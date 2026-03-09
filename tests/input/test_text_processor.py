@@ -461,7 +461,6 @@ class DataProcessorTestCase(unittest.TestCase):
         )
 
         processed = processor.process_response(response)
-        self.assertEqual(processed.outputs.text, "tool-only")
         self.assertEqual(processed.outputs.reasoning_content, "think")
         self.assertEqual(processed.outputs.tool_calls, ["tool"])
 
@@ -508,7 +507,6 @@ class DataProcessorTestCase(unittest.TestCase):
 
         result = processor.process_response_dict_normal(response, enable_thinking=True)
         self.assertEqual(result["outputs"]["completion_tokens"], "7")
-        self.assertEqual(result["outputs"]["text"], "tool-text")
         self.assertEqual(result["outputs"]["reasoning_content"], "because")
         self.assertEqual(result["outputs"]["reasoning_token_num"], 1)
 

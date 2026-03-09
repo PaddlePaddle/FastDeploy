@@ -303,6 +303,25 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         assert request["tools"] == [1]
         # assert request["chat_template_kwargs"]["tools"] == [1]
 
+    async def test_add_request_with_reasoning_effort(self):
+        """Test add_requests with reasoning_effort parameter."""
+        request = {
+            "request_id": "test-request-id",
+            "chat_template_kwargs": {"enable_thinking": True},
+            "prompt_token_ids": [1],
+            "chat_template": "Hello",
+            "max_tokens": 20,
+            "reasoning_effort": "medium",
+            "metrics": {},
+        }
+
+        await self.engine_client.add_requests(request)
+        # Verify reasoning_effort is added to chat_template_kwargs
+        assert (
+            "reasoning_effort" in request["chat_template_kwargs"]
+        ), "'reasoning_effort' not found in 'chat_template_kwargs'"
+        assert request["chat_template_kwargs"]["reasoning_effort"] == "medium"
+
 
 class TestEngineClientValidParameters(unittest.TestCase):
     """Test cases for EngineClient.valid_parameters method"""
@@ -822,6 +841,24 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
             self.assertEqual(data["reasoning_max_tokens"], 50)
             mock_logger.warning.assert_called_once()
+
+    def test_valid_parameters_reasoning_max_tokens_with_reasoning_effort(self):
+        """Test valid_parameters when both reasoning_max_tokens and reasoning_effort are set."""
+        data = {
+            "max_tokens": 100,
+            "reasoning_max_tokens": 50,
+            "reasoning_effort": "medium",
+            "request_id": "test-id",
+        }
+
+        with patch("fastdeploy.entrypoints.engine_client.api_server_logger") as mock_logger:
+            self.engine_client.valid_parameters(data)
+
+            # When reasoning_effort is set, reasoning_max_tokens should be set to None
+            self.assertIsNone(data["reasoning_max_tokens"])
+            mock_logger.warning.assert_called_once()
+            warning_call = mock_logger.warning.call_args[0][0]
+            self.assertIn("reasoning_max_tokens and reasoning_effort are both set", warning_call)
 
     def test_valid_parameters_temperature_zero_adjustment(self):
         """Test valid_parameters adjusts zero temperature."""
@@ -1659,6 +1696,283 @@ class TestEngineClientValidParameters(unittest.TestCase):
             )
 
         self.assertIn("ZMQ send failed", str(context.exception))
+
+
+class TestProcessMessages:
+    """Tests for EngineClient.process_messages method."""
+
+    def test_process_messages_with_empty_tool_calls(self):
+        """Test that empty tool_calls list is removed from message."""
+        messages = [{"role": "assistant", "content": "test", "tool_calls": []}]
+
+        client = EngineClient.__new__(EngineClient)
+        client.process_messages(messages)
+
+        assert "tool_calls" not in messages[0]
+
+    def test_process_messages_with_string_arguments(self):
+        """Test that string arguments are parsed to dict."""
+        messages = [
+            {
+                "role": "assistant",
+                "content": "test",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "test_func", "arguments": '{"key": "value"}'},
+                    }
+                ],
+            }
+        ]
+
+        client = EngineClient.__new__(EngineClient)
+        client.process_messages(messages)
+
+        assert messages[0]["tool_calls"][0]["function"]["arguments"] == {"key": "value"}
+
+    def test_process_messages_with_dict_arguments(self):
+        """Test that dict arguments are kept as is."""
+        messages = [
+            {
+                "role": "assistant",
+                "content": "test",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "test_func", "arguments": {"key": "value"}},
+                    }
+                ],
+            }
+        ]
+
+        client = EngineClient.__new__(EngineClient)
+        client.process_messages(messages)
+
+        assert messages[0]["tool_calls"][0]["function"]["arguments"] == {"key": "value"}
+
+    def test_process_messages_with_list_arguments(self):
+        """Test that list arguments are kept as is."""
+        messages = [
+            {
+                "role": "assistant",
+                "content": "test",
+                "tool_calls": [
+                    {"id": "call_1", "type": "function", "function": {"name": "test_func", "arguments": [1, 2, 3]}}
+                ],
+            }
+        ]
+
+        client = EngineClient.__new__(EngineClient)
+        client.process_messages(messages)
+
+        assert messages[0]["tool_calls"][0]["function"]["arguments"] == [1, 2, 3]
+
+    def test_process_messages_with_none_arguments(self):
+        """Test that None arguments are converted to empty dict."""
+        messages = [
+            {
+                "role": "assistant",
+                "content": "test",
+                "tool_calls": [
+                    {"id": "call_1", "type": "function", "function": {"name": "test_func", "arguments": None}}
+                ],
+            }
+        ]
+
+        client = EngineClient.__new__(EngineClient)
+        client.process_messages(messages)
+
+        assert messages[0]["tool_calls"][0]["function"]["arguments"] == {}
+
+    def test_process_messages_with_empty_string_arguments(self):
+        """Test that empty string arguments are converted to empty dict."""
+        messages = [
+            {
+                "role": "assistant",
+                "content": "test",
+                "tool_calls": [
+                    {"id": "call_1", "type": "function", "function": {"name": "test_func", "arguments": ""}}
+                ],
+            }
+        ]
+
+        client = EngineClient.__new__(EngineClient)
+        client.process_messages(messages)
+
+        assert messages[0]["tool_calls"][0]["function"]["arguments"] == {}
+
+    def test_process_messages_with_invalid_json_arguments_raises_error(self):
+        """Test that invalid JSON string arguments raise JSONDecodeError.
+
+        NOTE: This is a known issue in the original code - invalid JSON will cause
+        json.JSONDecodeError. Consider adding try/except handling in the implementation.
+        """
+        import json
+
+        messages = [
+            {
+                "role": "assistant",
+                "content": "test",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "test_func", "arguments": "not valid json"},
+                    }
+                ],
+            }
+        ]
+
+        client = EngineClient.__new__(EngineClient)
+        # Original code raises JSONDecodeError for invalid JSON
+        with pytest.raises(json.JSONDecodeError):
+            client.process_messages(messages)
+
+    def test_process_messages_with_non_list_tool_calls(self):
+        """Test that non-list tool_calls are skipped."""
+        messages = [{"role": "assistant", "content": "test", "tool_calls": "not a list"}]
+
+        client = EngineClient.__new__(EngineClient)
+        client.process_messages(messages)
+
+        # tool_calls should remain unchanged
+        assert messages[0]["tool_calls"] == "not a list"
+
+    def test_process_messages_with_non_assistant_role(self):
+        """Test that non-assistant messages are not processed."""
+        messages = [
+            {
+                "role": "user",
+                "content": "test",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "test_func", "arguments": '{"key": "value"}'},
+                    }
+                ],
+            }
+        ]
+
+        client = EngineClient.__new__(EngineClient)
+        client.process_messages(messages)
+
+        # Should not be processed since role is not assistant
+        assert messages[0]["tool_calls"][0]["function"]["arguments"] == '{"key": "value"}'
+
+    def test_process_messages_without_tool_calls(self):
+        """Test that messages without tool_calls are not affected."""
+        messages = [{"role": "assistant", "content": "test"}]
+
+        client = EngineClient.__new__(EngineClient)
+        client.process_messages(messages)
+
+        assert messages == [{"role": "assistant", "content": "test"}]
+
+    def test_process_messages_with_missing_function_key_raises_error(self):
+        """Test that tool_calls without function key raise KeyError.
+
+        NOTE: This is a known issue in the original code - missing 'function' key
+        will cause KeyError. Consider adding defensive checks in the implementation.
+        """
+        messages = [{"role": "assistant", "content": "test", "tool_calls": [{"id": "call_1", "type": "function"}]}]
+
+        client = EngineClient.__new__(EngineClient)
+        # Original code raises KeyError when 'function' key is missing
+        with pytest.raises(KeyError):
+            client.process_messages(messages)
+
+    def test_process_messages_with_non_dict_item_raises_error(self):
+        """Test that non-dict items in tool_calls raise TypeError.
+
+        NOTE: This is a known issue in the original code - non-dict items will
+        cause TypeError when accessing item["function"]. Consider adding
+        isinstance checks in the implementation.
+        """
+        messages = [{"role": "assistant", "content": "test", "tool_calls": ["string_item", None, 123]}]
+
+        client = EngineClient.__new__(EngineClient)
+        # Original code raises TypeError when item is not a dict
+        with pytest.raises(TypeError):
+            client.process_messages(messages)
+
+    def test_process_messages_with_non_dict_function_raises_error(self):
+        """Test that non-dict function value raises AttributeError.
+
+        NOTE: This is a known issue in the original code - when function is not
+        a dict, calling .get() on it will raise AttributeError. Consider adding
+        isinstance checks in the implementation.
+        """
+        messages = [
+            {"role": "assistant", "content": "test", "tool_calls": [{"id": "call_1", "function": "not a dict"}]}
+        ]
+
+        client = EngineClient.__new__(EngineClient)
+        # Original code raises AttributeError when function is not a dict
+        with pytest.raises(AttributeError):
+            client.process_messages(messages)
+
+    def test_process_messages_multiple_messages(self):
+        """Test processing multiple messages."""
+        messages = [
+            {"role": "user", "content": "hello"},
+            {
+                "role": "assistant",
+                "content": "response",
+                "tool_calls": [
+                    {"id": "call_1", "type": "function", "function": {"name": "func1", "arguments": '{"a": 1}'}}
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": "response2",
+                "tool_calls": [{"id": "call_2", "type": "function", "function": {"name": "func2", "arguments": None}}],
+            },
+        ]
+
+        client = EngineClient.__new__(EngineClient)
+        client.process_messages(messages)
+
+        # First assistant message should have arguments parsed
+        assert messages[1]["tool_calls"][0]["function"]["arguments"] == {"a": 1}
+        # Second assistant message should have None converted to {}
+        assert messages[2]["tool_calls"][0]["function"]["arguments"] == {}
+
+    def test_process_messages_missing_role_raises_error(self):
+        """Test that messages without role field raise KeyError.
+
+        NOTE: This is a known issue in the original code - missing 'role' key
+        will cause KeyError. Consider using message.get("role") instead.
+        """
+        messages = [{"content": "test", "tool_calls": []}]
+
+        client = EngineClient.__new__(EngineClient)
+        # Original code raises KeyError when 'role' key is missing
+        with pytest.raises(KeyError):
+            client.process_messages(messages)
+
+    def test_process_messages_with_multiple_tool_calls(self):
+        """Test processing multiple tool_calls in a single message."""
+        messages = [
+            {
+                "role": "assistant",
+                "content": "test",
+                "tool_calls": [
+                    {"id": "call_1", "type": "function", "function": {"name": "func1", "arguments": '{"a": 1}'}},
+                    {"id": "call_2", "type": "function", "function": {"name": "func2", "arguments": None}},
+                    {"id": "call_3", "type": "function", "function": {"name": "func3", "arguments": ""}},
+                ],
+            }
+        ]
+
+        client = EngineClient.__new__(EngineClient)
+        client.process_messages(messages)
+
+        assert messages[0]["tool_calls"][0]["function"]["arguments"] == {"a": 1}
+        assert messages[0]["tool_calls"][1]["function"]["arguments"] == {}
+        assert messages[0]["tool_calls"][2]["function"]["arguments"] == {}
 
 
 if __name__ == "__main__":
