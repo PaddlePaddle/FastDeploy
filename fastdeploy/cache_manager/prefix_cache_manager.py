@@ -1013,6 +1013,76 @@ class PrefixCacheManager:
         while (self.gpu_free_task_future is not None) and (not self.gpu_free_task_future.done()):
             time.sleep(0.001)
 
+    def _cleanup_request_mappings(self, req_id, leaf_node):
+        """
+        清理请求相关的映射关系。
+
+        参数:
+            req_id: 请求ID
+            leaf_node: 请求对应的叶子节点
+
+        输出:
+            无
+        """
+        if leaf_node in self.leaf_req_map:
+            self.leaf_req_map[leaf_node].remove(req_id)
+            if not (self.leaf_req_map[leaf_node]):
+                del self.leaf_req_map[leaf_node]
+
+    def _update_radix_tree_nodes(self, req_id, leaf_node):
+        """
+        遍历基数树节点，更新节点的请求集合和共享计数。
+
+        参数:
+            req_id: 请求ID
+            leaf_node: 请求对应的叶子节点
+
+        输出:
+            keys: 遍历过程中收集的节点哈希值列表
+        """
+        keys = []
+        node = leaf_node
+        while node != self.radix_tree_root:
+            if req_id in node.req_id_set:
+                node.req_id_set.remove(req_id)
+            node.decrement_shared_count()
+            keys.append(node.hash_value)
+            node = node.parent
+        return keys
+
+    def _handle_root_leaf_node(self, req_id, leaf_node):
+        """
+        处理叶子节点是基数树根节点的情况，回收GPU块。
+
+        参数:
+            req_id: 请求ID
+            leaf_node: 请求对应的叶子节点
+
+        输出:
+            True 表示已处理（叶子节点为根节点），False 表示不是根节点
+        """
+        if leaf_node == self.radix_tree_root:
+            self.recycle_gpu_blocks(self.unfilled_req_block_map[req_id], req_id)
+            del self.unfilled_req_block_map[req_id]
+            return True
+        return False
+
+    def _add_to_gpu_lru_if_needed(self, leaf_node):
+        """
+        如果叶子节点满足条件（共享计数为0、是GPU叶子节点、非持久化），则添加到GPU LRU集合。
+
+        参数:
+            leaf_node: 要检查的叶子节点
+
+        输出:
+            无
+        """
+        if leaf_node in self.gpu_lru_leaf_set:
+            return
+        if leaf_node.shared_count == 0 and leaf_node.is_gpu_leaf_node and leaf_node.is_persistent is False:
+            self.gpu_lru_leaf_set.add(leaf_node)
+            heapq.heappush(self.gpu_lru_leaf_heap, leaf_node)
+
     def release_block_ids(self, task):
         """
         release block ids
@@ -1020,35 +1090,22 @@ class PrefixCacheManager:
         with self.request_release_lock:
             try:
                 req_id = task.request_id
-                keys = []
                 leaf_node = self.req_leaf_map.pop(req_id)
-                if leaf_node in self.leaf_req_map:
-                    self.leaf_req_map[leaf_node].remove(req_id)
-                    if not (self.leaf_req_map[leaf_node]):
-                        del self.leaf_req_map[leaf_node]
-                node = leaf_node
-                while node != self.radix_tree_root:
-                    if req_id in node.req_id_set:
-                        node.req_id_set.remove(req_id)
-                    node.decrement_shared_count()
-                    keys.append(node.hash_value)
-                    node = node.parent
+
+                self._cleanup_request_mappings(req_id, leaf_node)
+
+                self._update_radix_tree_nodes(req_id, leaf_node)
 
                 if req_id in self.req_to_radix_tree_info:
                     del self.req_to_radix_tree_info[req_id]
 
                 logger.info(f"release_block_ids: req_id {req_id} leaf_node {leaf_node}")
 
-                if leaf_node == self.radix_tree_root:
-                    self.recycle_gpu_blocks(self.unfilled_req_block_map[req_id], req_id)
-                    del self.unfilled_req_block_map[req_id]
+                if self._handle_root_leaf_node(req_id, leaf_node):
                     return
 
-                if leaf_node in self.gpu_lru_leaf_set:
-                    return
-                if leaf_node.shared_count == 0 and leaf_node.is_gpu_leaf_node and leaf_node.is_persistent is False:
-                    self.gpu_lru_leaf_set.add(leaf_node)
-                    heapq.heappush(self.gpu_lru_leaf_heap, leaf_node)
+                self._add_to_gpu_lru_if_needed(leaf_node)
+
                 logger.info(
                     f"release_block_ids: req_id {req_id} has been finished, "
                     + f"current gpu_lru_leaf_heap length {len(self.gpu_lru_leaf_heap)}"

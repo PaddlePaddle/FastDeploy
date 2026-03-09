@@ -1886,16 +1886,19 @@ class EngineService:
         if self.cfg.node_rank == 0 and self.cfg.parallel_config.local_data_parallel_id == 0:
             # Report by DP0
             report_info = paddle.to_tensor(report_info_list)
+            """
             local_data_parallel_size = len(self.cfg.parallel_config.engine_worker_queue_port)
             global_data_parallel_id = (
                 self.cfg.node_rank * local_data_parallel_size + self.cfg.parallel_config.local_data_parallel_id
             )
+            """
             payload = {
                 "last_sched_batch_id": last_sched_batch_id,
                 "last_received_request_ids": last_received_request_ids,
                 "last_run_batch_duration": report_info[:, 0].max().item(),
                 "remain_token_num_per_dp": report_info[:, 1].tolist(),
-                # "fed_instance_name": os.getenv("FED_INSTANCE_NAME"),
+                "fed_instance_name": os.getenv("FED_INSTANCE_NAME"),
+                """
                 "fed_instance_name": (
                     os.getenv("POD_NAMESPACE", "None")
                     + "_"
@@ -1907,12 +1910,13 @@ class EngineService:
                     + "_"
                     + str(global_data_parallel_id)
                 ),
+                """
                 "model_id": os.getenv("MODEL_ID"),
             }
             llm_logger.info(f"report info: {payload}")
 
             try:
-                url = f"http://10.25.77.31:{envs.FD_REPORT_IM_PORT}/end_forward"
+                url = f"http://0.0.0.0:{envs.FD_REPORT_IM_PORT}/end_forward"
                 response = requests.post(url, json=payload)
                 response.raise_for_status()
                 llm_logger.info(f"report IM successful: {response}")
