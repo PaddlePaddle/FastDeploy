@@ -316,20 +316,17 @@ class ZmqServerBase(ABC):
     def _send_batch_response(self, batch_data):
         """
         Batch send responses for multiple requests.
-        batch_data: List[[req_id, [output, ...]], ...]
+        batch_data: List[List[output, ...], ...]
         """
         self._ensure_socket()
         if self.socket is None:
             raise RuntimeError("Socket not created.")
 
         try:
-            # Convert outputs to dict if needed (CPU work, no lock needed)
             if not envs.ENABLE_V1_DATA_PROCESSOR:
-                for req_id, outputs in batch_data:
-                    for i, output in enumerate(outputs):
-                        outputs[i] = output.to_dict()
-
-            result = ForkingPickler.dumps(batch_data)
+                result = ForkingPickler.dumps([[output.to_dict() for output in outputs] for outputs in batch_data])
+            else:
+                result = ForkingPickler.dumps(batch_data)
             result_len = len(result)
 
             # Only hold lock for the actual socket send
@@ -356,24 +353,16 @@ class ZmqServerBase(ABC):
         Unified response sending interface.
 
         Args:
-            req_id: Request ID
+            req_id: Request ID (None for batch mode)
             data: Response data
-                  - Internal Adapter mode: List[output] or List[List[output]] (batch)
-                  - Batch mode (ZMQ_SEND_BATCH_DATA=1): List[output] or List[[req_id, [output]]] (batch)
+                  - Internal Adapter mode: List[List[output]] (batch per step)
+                  - Batch mode (ZMQ_SEND_BATCH_DATA=1): List[List[output]], req_id is always None
                   - Per-query mode (ZMQ_SEND_BATCH_DATA=0): List[output], sent via ROUTER per request
-                  - When req_id=None, data is already in batch format
         """
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
             self._send_response_per_step(req_id, data)
         elif envs.ZMQ_SEND_BATCH_DATA:
-            # Batch mode: ensure data format is [[req_id, [outputs]], ...]
-            if req_id is None:
-                # Already in batch format, send directly
-                self._send_batch_response(data)
-            else:
-                # Convert single request to batch format
-                batch_data = [[req_id, data]]
-                self._send_batch_response(batch_data)
+            self._send_batch_response(data)
         else:
             self._send_response_per_query(req_id, data)
 

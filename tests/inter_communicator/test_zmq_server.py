@@ -337,8 +337,9 @@ class TestZmqServerBase(unittest.TestCase):
         # Branch 2: FD_ENABLE_INTERNAL_ADAPTER=False, ZMQ_SEND_BATCH_DATA=True -> _send_batch_response
         with mock.patch.object(envs, "FD_ENABLE_INTERNAL_ADAPTER", False):
             with mock.patch.object(envs, "ZMQ_SEND_BATCH_DATA", True):
-                server.send_response("req", [_DummyResponse(1)])
-                server._send_batch_response.assert_called_once()
+                batch_data = [[_DummyResponse(1)]]
+                server.send_response(None, batch_data)
+                server._send_batch_response.assert_called_once_with(batch_data)
         # Branch 3: FD_ENABLE_INTERNAL_ADAPTER=False, ZMQ_SEND_BATCH_DATA=False -> _send_response_per_query
         with mock.patch.object(envs, "FD_ENABLE_INTERNAL_ADAPTER", False):
             with mock.patch.object(envs, "ZMQ_SEND_BATCH_DATA", False):
@@ -351,7 +352,7 @@ class TestZmqServerBase(unittest.TestCase):
         server._send_batch_response = mock.Mock()
         with mock.patch.object(envs, "FD_ENABLE_INTERNAL_ADAPTER", False):
             with mock.patch.object(envs, "ZMQ_SEND_BATCH_DATA", True):
-                batch_data = [["req-1", [_DummyResponse(1)]], ["req-2", [_DummyResponse(2)]]]
+                batch_data = [[_DummyResponse(1)], [_DummyResponse(2)]]
                 server.send_response(None, batch_data)
                 server._send_batch_response.assert_called_once_with(batch_data)
 
@@ -361,7 +362,7 @@ class TestZmqServerBase(unittest.TestCase):
         server = _DummyServer(socket=fake_socket)
         server.address = "test-address"
         with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            batch_data = [["req-1", [_DummyResponse(1, finished=True)]]]
+            batch_data = [[_DummyResponse(1, finished=True)]]
             server._send_batch_response(batch_data)
         self.assertEqual(len(fake_socket.sent), 1)
         self.assertEqual(fake_socket.sent[0][0], "send")
@@ -372,7 +373,7 @@ class TestZmqServerBase(unittest.TestCase):
         server = _DummyServer(socket=fake_socket)
         server.address = "test-address"
         with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", True):
-            batch_data = [["req-1", [_DummyResponse(1, finished=True)]]]
+            batch_data = [[_DummyResponse(1, finished=True)]]
             server._send_batch_response(batch_data)
         self.assertEqual(len(fake_socket.sent), 1)
 
@@ -380,7 +381,7 @@ class TestZmqServerBase(unittest.TestCase):
         """Test _send_batch_response raises when socket is None"""
         server = _DummyServer(socket=None)
         server._create_socket = lambda: None
-        batch_data = [["req-1", [_DummyResponse(1)]]]
+        batch_data = [[_DummyResponse(1)]]
         with self.assertRaises(RuntimeError):
             server._send_batch_response(batch_data)
 
@@ -393,7 +394,7 @@ class TestZmqServerBase(unittest.TestCase):
 
         server = _DummyServer(socket=_ErrorSocket())
         server.address = "test-address"
-        batch_data = [["req-1", [_DummyResponse(1)]]]
+        batch_data = [[_DummyResponse(1)]]
         with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
             # Should not raise, error is caught and logged
             server._send_batch_response(batch_data)

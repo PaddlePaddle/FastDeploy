@@ -1522,73 +1522,40 @@ class EngineService:
                         self.send_response_server.send_response(None, new_contents)
 
                 else:
-                    if envs.ZMQ_SEND_BATCH_DATA:
-                        # Batch mode: collect and send all request results together
-                        batch_data = []
-
-                        for request_id, contents in results.items():
-                            new_contents = []
-                            for content in contents:
-                                if isinstance(content, RequestOutput) and content.outputs is not None:
-                                    decode_type = content.outputs.decode_type
-                                    delta_text = ""
-                                    if decode_type == 0:
-                                        delta_text, token_ids = self._decode_token(
-                                            token_ids=content.outputs.token_ids,
-                                            req_id=request_id,
-                                            is_end=content.finished,
-                                        )
-                                    else:
-                                        token_ids = content.outputs.token_ids
-                                    if len(token_ids):
-                                        content.outputs.token_ids = token_ids
-                                        content.outputs.text = delta_text
-                                        new_contents.append(content)
-                                    elif content.finished:
-                                        new_contents.append(content)
-                                    else:
-                                        self.llm_logger.warning(
-                                            f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
-                                        )
+                    batch_data = []
+                    for request_id, contents in results.items():
+                        new_contents = []
+                        for content in contents:
+                            if isinstance(content, RequestOutput) and content.outputs is not None:
+                                decode_type = content.outputs.decode_type
+                                delta_text = ""
+                                if decode_type == 0:
+                                    delta_text, token_ids = self._decode_token(
+                                        token_ids=content.outputs.token_ids,
+                                        req_id=request_id,
+                                        is_end=content.finished,
+                                    )
                                 else:
+                                    token_ids = content.outputs.token_ids
+                                if len(token_ids):
+                                    content.outputs.token_ids = token_ids
+                                    content.outputs.text = delta_text
                                     new_contents.append(content)
-                            if new_contents:
-                                batch_data.append([request_id, new_contents])
-
-                        # Send all request results together in one batch
-                        if batch_data:
-                            self.send_response_server.send_response(None, batch_data)
-                    else:
-                        # Per-query mode: send each request's results individually
-                        for request_id, contents in results.items():
-                            new_contents = []
-                            for content in contents:
-                                if isinstance(content, RequestOutput) and content.outputs is not None:
-                                    decode_type = content.outputs.decode_type
-                                    delta_text = ""
-                                    if decode_type == 0:
-                                        delta_text, token_ids = self._decode_token(
-                                            token_ids=content.outputs.token_ids,
-                                            req_id=request_id,
-                                            is_end=content.finished,
-                                        )
-                                    else:
-                                        token_ids = content.outputs.token_ids
-                                    if len(token_ids):
-                                        content.outputs.token_ids = token_ids
-                                        content.outputs.text = delta_text
-                                        new_contents.append(content)
-                                    elif content.finished:
-                                        new_contents.append(content)
-                                    else:
-                                        self.llm_logger.warning(
-                                            f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
-                                        )
+                                elif content.finished:
+                                    new_contents.append(content)
                                 else:
-                                    new_contents.append(content)
-                            if len(new_contents):
-                                self.llm_logger.debug(f"Send response for request id: {request_id}")
+                                    self.llm_logger.warning(
+                                        f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
+                                    )
+                            else:
+                                new_contents.append(content)
+                        if new_contents:
+                            if envs.ZMQ_SEND_BATCH_DATA:
+                                batch_data.append(new_contents)
+                            else:
                                 self.send_response_server.send_response(request_id, new_contents)
+                    if envs.ZMQ_SEND_BATCH_DATA and batch_data:
+                        self.send_response_server.send_response(None, batch_data)
             except Exception as e:
                 self.llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
 
