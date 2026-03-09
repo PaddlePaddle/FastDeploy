@@ -76,12 +76,10 @@ class TokenProcessor:
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
         self.use_logprobs = self.cfg.model_config.enable_logprob
-        self.use_sampling_mask = getattr(self.cfg.model_config, 'enable_keep_sampling_mask', False)
+        self.use_sampling_mask = getattr(self.cfg.model_config, "enable_keep_sampling_mask", False)
         if not envs.FD_USE_GET_SAVE_OUTPUT_V1 and self.use_sampling_mask:
             rank_id = self.cfg.parallel_config.local_data_parallel_id
-            self.sampling_mask_zmq_server = ZmqIpcServer(
-                name=f'sampling_mask_output_rank{rank_id}', mode=zmq.PULL
-            )
+            self.sampling_mask_zmq_server = ZmqIpcServer(name=f"sampling_mask_output_rank{rank_id}", mode=zmq.PULL)
         self.enable_draft_logprob = self.cfg.speculative_config.enable_draft_logprob
 
         if self.speculative_decoding:
@@ -674,7 +672,7 @@ class TokenProcessor:
         # Receive sampling_mask per request from ZMQ side-channel (if enabled).
         # The worker sends a dict {batch_id: bool_mask_list} each step.
         sampling_masks_per_request = {}
-        if self.use_sampling_mask and not envs.FD_USE_GET_SAVE_OUTPUT_V1 and hasattr(self, 'sampling_mask_zmq_server'):
+        if self.use_sampling_mask and not envs.FD_USE_GET_SAVE_OUTPUT_V1 and hasattr(self, "sampling_mask_zmq_server"):
             _, mask_data = self.sampling_mask_zmq_server.receive_pyobj_once(block=True)
             if mask_data is not None and isinstance(mask_data, dict):
                 sampling_masks_per_request = mask_data
