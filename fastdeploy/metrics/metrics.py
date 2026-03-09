@@ -480,13 +480,13 @@ class MetricsManager:
         "msg_recv_total": {
             "type": Counter,
             "name": "fastdeploy:zmq:msg_recv_total",
-            "description": "Total number of zmq messages recieved",
+            "description": "Total number of zmq messages received",
             "kwargs": {"labelnames": ["address"]},
         },
         "msg_bytes_recv_total": {
             "type": Counter,
             "name": "fastdeploy:zmq:msg_bytes_recv_total",
-            "description": "Total number of bytes recieved over zmq",
+            "description": "Total number of bytes received over zmq",
             "kwargs": {"labelnames": ["address"]},
         },
         "zmq_latency": {

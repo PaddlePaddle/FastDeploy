@@ -420,7 +420,7 @@ class ZmqTcpServer(ZmqServerBase):
 
     def recv_control_cmd(self):
         """
-        Recieve control command from client
+        Receive control command from client
         """
         self._ensure_socket()
         try:
