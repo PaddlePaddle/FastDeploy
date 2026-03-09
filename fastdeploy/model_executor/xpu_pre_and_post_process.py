@@ -95,6 +95,62 @@ def _build_stream_transfer_data(
     return stream_transfer_datas
 
 
+def _build_speculate_stream_transfer_data(
+    accept_tokens: paddle.Tensor,
+    accept_num: paddle.Tensor,
+    seq_lens_decoder: paddle.Tensor,
+    prompt_lens: paddle.Tensor,
+    preempted_idx: paddle.Tensor,
+    logprobs_tensors: Optional[LogprobsTensors],
+    cu_batch_token_offset: Optional[paddle.Tensor],
+) -> List[StreamTransferData]:
+    """Build StreamTransferData list for MTP target decode logprob ZMQ path."""
+    from fastdeploy.config import PREEMPTED_TOKEN_ID
+
+    bsz = accept_num.shape[0]
+    accept_tokens_cpu = accept_tokens.cpu().numpy()
+    accept_num_cpu = accept_num.cpu().numpy()
+    seq_lens_decoder_cpu = seq_lens_decoder.cpu().numpy()
+    prompt_lens_cpu = prompt_lens.cpu().numpy()
+    preempted_cpu = preempted_idx.cpu().numpy()
+    cu_offset_cpu = cu_batch_token_offset.cpu().numpy() if cu_batch_token_offset is not None else None
+
+    stream_datas = []
+    for i in range(bsz):
+        n = int(accept_num_cpu[i])
+        if preempted_cpu[i] == 1:
+            stream_datas.append(
+                StreamTransferData(
+                    decoder_state=DecoderState.TEXT,
+                    batch_id=i,
+                    tokens=np.array([PREEMPTED_TOKEN_ID], dtype=np.int64),
+                    speculaive_decoding=True,
+                    mtype=3,
+                )
+            )
+            continue
+        if seq_lens_decoder_cpu[i] < prompt_lens_cpu[i]:
+            continue
+        if n == 0:
+            continue
+        token_ids = accept_tokens_cpu[i, :n]
+        lp = None
+        if logprobs_tensors is not None and cu_offset_cpu is not None:
+            start, end = int(cu_offset_cpu[i]), int(cu_offset_cpu[i + 1])
+            lp = logprobs_tensors.slice_rows(start, end)
+        stream_datas.append(
+            StreamTransferData(
+                decoder_state=DecoderState.TEXT,
+                batch_id=i,
+                tokens=token_ids,
+                speculaive_decoding=True,
+                mtype=3,
+                logprobs=lp,
+            )
+        )
+    return stream_datas
+
+
 def xpu_pre_process(
     input_ids: paddle.Tensor,
     seq_lens_this_time: int,
@@ -414,6 +470,7 @@ def xpu_post_process_specualate(
     share_inputs: Dict[str, paddle.Tensor],
     save_each_rank: bool = False,
     skip_save_output: bool = False,
+    async_output_queue: queue.Queue = None,
 ):
     """"""
 
@@ -444,34 +501,50 @@ def xpu_post_process_specualate(
         model_output.mask_rollback,
     )
     if not skip_save_output:
-        if sampler_output.logprobs_tensors is None:
-            speculate_save_output(
-                model_output.accept_tokens,
-                model_output.accept_num,
-                model_output.not_need_stop,
-                model_output.seq_lens_decoder,
-                model_output.prompt_lens,
-                share_inputs["preempted_idx"],
-                model_output.mp_rank,
-                save_each_rank,
-                bool(envs.ENABLE_V1_KVCACHE_SCHEDULER),
-            )
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            # ZMQ path
+            if save_each_rank or model_output.mp_rank == 0:
+                output = _build_speculate_stream_transfer_data(
+                    model_output.accept_tokens,
+                    model_output.accept_num,
+                    model_output.seq_lens_decoder,
+                    model_output.prompt_lens,
+                    share_inputs["preempted_idx"],
+                    sampler_output.logprobs_tensors,
+                    sampler_output.cu_batch_token_offset,
+                )
+                if async_output_queue is not None:
+                    async_output_queue.put(output)
         else:
-            speculate_save_output_topk(
-                sampler_output.sampled_token_ids,
-                sampler_output.logprobs_tensors.logprob_token_ids,
-                sampler_output.logprobs_tensors.logprobs,
-                sampler_output.logprobs_tensors.selected_token_ranks,
-                sampler_output.token_num_per_batch,
-                sampler_output.cu_batch_token_offset,
-                model_output.not_need_stop,
-                model_output.seq_lens_decoder,
-                model_output.prompt_lens,
-                share_inputs["preempted_idx"],
-                3,  # message_flag: target model
-                model_output.mp_rank,
-                save_each_rank,
-            )
+            # IPC path
+            if sampler_output.logprobs_tensors is None:
+                speculate_save_output(
+                    model_output.accept_tokens,
+                    model_output.accept_num,
+                    model_output.not_need_stop,
+                    model_output.seq_lens_decoder,
+                    model_output.prompt_lens,
+                    share_inputs["preempted_idx"],
+                    model_output.mp_rank,
+                    save_each_rank,
+                    bool(envs.ENABLE_V1_KVCACHE_SCHEDULER),
+                )
+            else:
+                speculate_save_output_topk(
+                    sampler_output.sampled_token_ids,
+                    sampler_output.logprobs_tensors.logprob_token_ids,
+                    sampler_output.logprobs_tensors.logprobs,
+                    sampler_output.logprobs_tensors.selected_token_ranks,
+                    sampler_output.token_num_per_batch,
+                    sampler_output.cu_batch_token_offset,
+                    model_output.not_need_stop,
+                    model_output.seq_lens_decoder,
+                    model_output.prompt_lens,
+                    share_inputs["preempted_idx"],
+                    3,  # message_flag: target model
+                    model_output.mp_rank,
+                    save_each_rank,
+                )
 
     speculate_clear_accept_nums(model_output.accept_num, model_output.seq_lens_decoder)
 

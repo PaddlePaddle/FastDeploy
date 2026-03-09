@@ -258,7 +258,9 @@ class TokenProcessor:
                 main_process_metrics.request_token_ratio.observe(token_ratio)
                 llm_logger.info(f"{self.resource_manager.info()}")
                 if self.cfg.speculative_config.method:
-                    self._compute_speculative_status()
+                    # TODO(jijiajun): Speculative metrics are not fully implemented yet
+                    # with MTP on the ZMQ path, this may raise error: float division by zero
+                    self._compute_speculative_status(result)
                 if not is_prefill:
                     self._record_completion_metrics(task, current_time)
                 self._recycle_resources(task_id, batch_id, task, result, is_prefill)
@@ -374,8 +376,6 @@ class TokenProcessor:
         """
         use zmq to receive outputs from worker and process them
         """
-        if self.speculative_decoding:
-            raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support speculative decoding")
         rank_id = self.cfg.parallel_config.local_data_parallel_id
         while True:
             try:
@@ -390,7 +390,8 @@ class TokenProcessor:
                     self._reschedule_preempt_task_use_zmq(receive_datas)
 
                     batch_result = self._process_batch_output_use_zmq(receive_datas)
-                    self.postprocess(batch_result)
+                    mtype = getattr(receive_datas[0], "mtype", 3) if receive_datas else 3
+                    self.postprocess(batch_result, mtype)
             except Exception as e:
                 llm_logger.error(f"Recieve message error: {e}")
                 continue

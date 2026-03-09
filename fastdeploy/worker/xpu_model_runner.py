@@ -1642,6 +1642,7 @@ class XPUModelRunner(ModelRunnerBase):
                     self.share_inputs,
                     self.parallel_config.data_parallel_size > 1,
                     skip_save_output,
+                    async_output_queue=self.async_output_queue,
                 )
             else:
                 xpu_post_process_normal(
