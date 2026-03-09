@@ -296,8 +296,9 @@ class ChatCompletionResponseStreamChoice(BaseModel):
     logprobs: Optional[LogProbs] = None
     draft_logprobs: Optional[LogProbs] = None
     prompt_logprobs: Optional[PromptLogprobs] = None
-    # Int index list of retained token positions after top_p sampling
-    sampling_mask: Optional[List[int]] = None
+    # Per-token index list of retained positions after top_p sampling.
+    # Non-MTP: [[idx, ...]] (1 token/step). MTP: [[idx, ...], ...] (N accepted tokens/step).
+    sampling_mask: Optional[List[List[int]]] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     arrival_time: Optional[float] = None
     speculate_metrics: Optional[SpeculateMetrics] = None

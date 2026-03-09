@@ -419,7 +419,11 @@ class OpenAIServingChat:
                         delta=delta_message,
                         logprobs=logprobs_res,
                         draft_logprobs=draft_logprobs_res,
-                        sampling_mask=self._make_sampling_mask_list(output["sampling_mask"]) if output.get("sampling_mask") is not None else None,
+                        sampling_mask=(
+                            self._make_sampling_mask_list(output["sampling_mask"])
+                            if output.get("sampling_mask") is not None
+                            else None
+                        ),
                         arrival_time=arrival_time,
                         speculate_metrics=output_speculate_metrics,
                     )
@@ -738,7 +742,10 @@ class OpenAIServingChat:
             draft_logprobs_full_res = LogProbs(content=draft_logprob_contents[idx])
         if prompt_logprobs_res_list[idx]:
             prompt_logprobs_full_res = prompt_logprobs_res_list[idx]
-        sampling_mask_full_res = sampling_mask_list[idx] if sampling_mask_list[idx] else None
+        # Flatten per-step List[List[int]] into a single List[List[int]] over all tokens.
+        sampling_mask_full_res = None
+        if sampling_mask_list[idx]:
+            sampling_mask_full_res = [mask for step in sampling_mask_list[idx] for mask in step]
 
         num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
         num_input_image_tokens[idx] = data.get("num_input_image_tokens", 0)
@@ -964,6 +971,15 @@ class OpenAIServingChat:
         }
 
     @staticmethod
-    def _make_sampling_mask_list(sampling_mask: List[bool]) -> List[int]:
+    def _make_sampling_mask_list(sampling_mask) -> List[List[int]]:
+        """Convert sampling_mask to a list of per-token index lists.
+
+        Non-MTP: sampling_mask is List[bool] (1 token/step)  → [[idx, ...]]
+        MTP:     sampling_mask is List[List[bool]] (N tokens) → [[idx, ...], ...]
+        """
         assert sampling_mask is not None
-        return [i for i, v in enumerate(sampling_mask) if v]
+        if sampling_mask and isinstance(sampling_mask[0], list):
+            # MTP: list of per-accepted-token bool masks
+            return [[i for i, v in enumerate(mask) if v] for mask in sampling_mask]
+        # Non-MTP: single-token bool mask, wrap in outer list for uniform format
+        return [[i for i, v in enumerate(sampling_mask) if v]]

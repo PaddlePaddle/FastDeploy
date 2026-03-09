@@ -125,9 +125,7 @@ def _compute_sampling_mask(
     mask_cum = paddle.where(full_mask, paddle.ones_like(mask_cum), mask_cum)
 
     top_p_mask = paddle.zeros_like(probs, dtype="int64")
-    top_p_mask = paddle.put_along_axis(
-        top_p_mask, sorted_indices, mask_cum.astype("int64"), axis=-1
-    )
+    top_p_mask = paddle.put_along_axis(top_p_mask, sorted_indices, mask_cum.astype("int64"), axis=-1)
     top_p_mask = top_p_mask.astype("bool")
 
     return top_p_mask.cpu()
@@ -853,8 +851,14 @@ class SpeculativeSampler(nn.Layer):
         )
 
         num_logprobs = sampling_metadata.max_num_logprobs
+        keep_sampling_mask = sampling_metadata.keep_sampling_mask
+        # Compute batch indexing offsets needed by both logprobs and sampling_mask.
         batch_token_num = None
-        if num_logprobs is not None:
+        ori_cu_batch_token_offset = None
+        cu_batch_token_offset = None
+        real_bsz = None
+        accept_nums = None
+        if num_logprobs is not None or keep_sampling_mask:
             real_bsz = share_inputs["seq_lens_this_time"].shape[0]
             batch_token_num = paddle.where(
                 share_inputs["seq_lens_encoder"][:real_bsz] != 0,
@@ -865,13 +869,14 @@ class SpeculativeSampler(nn.Layer):
             ori_cu_batch_token_offset = paddle.concat([paddle.to_tensor([0]), paddle.cumsum(batch_token_num)]).astype(
                 "int32"
             )
-            cu_batch_token_offset = paddle.concat(
-                [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:real_bsz])]
-            ).astype("int32")
+            accept_nums = share_inputs["accept_num"][:real_bsz].reshape([-1])
+            cu_batch_token_offset = paddle.concat([paddle.to_tensor([0]), paddle.cumsum(accept_nums)]).astype("int32")
             share_inputs["cu_batch_token_offset"] = cu_batch_token_offset
-            target_logits = paddle.empty(
-                [share_inputs["accept_num"][:real_bsz].sum(), logits.shape[1]], dtype=logits.dtype
-            )
+
+            # Extract target logits/probs at accepted positions (shared by logprobs and sampling_mask).
+            # When both are enabled, reuse target_logits to derive target_probs (avoid a second kernel call).
+            total_accepted = int(accept_nums.sum().item())
+            target_logits = paddle.empty([total_accepted, logits.shape[1]], dtype=logits.dtype)
             speculate_get_target_logits(
                 target_logits,
                 logits,
@@ -881,6 +886,12 @@ class SpeculativeSampler(nn.Layer):
                 share_inputs["seq_lens_encoder"],
                 share_inputs["accept_num"],
             )
+            if keep_sampling_mask:
+                # Derive target probs from already-extracted target_logits; avoids a second kernel call.
+                target_probs = F.softmax(target_logits, axis=-1)
+
+        raw_logprobs = None
+        if num_logprobs is not None:
             if self.logprobs_mode == "raw_logprobs":
                 raw_logprobs = self.compute_logprobs(target_logits, sampling_metadata)
             elif self.logprobs_mode == "raw_logits":
@@ -894,12 +905,21 @@ class SpeculativeSampler(nn.Layer):
             token_ids = paddle.masked_select(share_inputs["accept_tokens"], mask)
             logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
 
+        # Compute sampling mask at accepted token positions.
+        # Shape: [total_accepted_tokens, vocab_size], bool (CPU).
+        sampling_mask = None
+        if keep_sampling_mask:
+            # Expand top_p from [batch, 1] to [total_accepted, 1].
+            accept_top_p = sampling_metadata.top_p[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
+            sampling_mask = _compute_sampling_mask(target_probs, accept_top_p)
+
         sampler_output = SamplerOutput(
             sampled_token_ids=share_inputs["accept_tokens"],
             logprobs_tensors=logprobs_tensors,
             token_num_per_batch=share_inputs["accept_num"],
             cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
             logits=logits,
+            sampling_mask=sampling_mask,
         )
 
         return sampler_output
@@ -1153,6 +1173,12 @@ class MTPSampler(nn.Layer):
         )
         probs = F.softmax(logits)
 
+        # Compute sampling mask BEFORE top_k_top_p_sampling modifies probs.
+        # Binary mask [num_reqs, vocab_size]: 1 = retained by top_k/top_p, 0 = truncated.
+        sampling_mask = None
+        if sampling_metadata.keep_sampling_mask:
+            sampling_mask = _compute_sampling_mask(probs, sampling_metadata.top_p)
+
         next_tokens = paddle.argmax(probs, axis=-1)
 
         token_ids = None
@@ -1176,6 +1202,7 @@ class MTPSampler(nn.Layer):
             logprobs_tensors=logprobs_tensors,
             token_num_per_batch=share_inputs["batch_token_num"][:real_bsz],
             cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
+            sampling_mask=sampling_mask,
         )
         return next_tokens, sampler_output
 

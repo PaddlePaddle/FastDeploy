@@ -415,15 +415,12 @@ def post_process_normal(
                 )
             # Send sampling_mask via ZMQ side-channel when enabled.
             if sampler_output.sampling_mask is not None and (save_each_rank or model_output.mp_rank == 0):
-                try:
-                    rank_id = model_output.mp_rank
-                    zmq_client = _get_sampling_mask_zmq_client(rank_id)
-                    # Convert bool tensor to dict {batch_id: list[bool]} for easy consumption.
-                    mask_np = sampler_output.sampling_mask.numpy()  # [num_reqs, vocab_size], bool
-                    mask_dict = {i: mask_np[i].tolist() for i in range(mask_np.shape[0])}
-                    zmq_client.send_pyobj(mask_dict)
-                except Exception as e:
-                    pass  # Non-critical: do not block inference on mask send failure
+                rank_id = model_output.mp_rank
+                zmq_client = _get_sampling_mask_zmq_client(rank_id)
+                # Convert bool tensor to dict {batch_id: list[bool]} for easy consumption.
+                mask_np = sampler_output.sampling_mask.numpy()  # [num_reqs, vocab_size], bool
+                mask_dict = {i: mask_np[i].tolist() for i in range(mask_np.shape[0])}
+                zmq_client.send_pyobj(mask_dict)
 
 
 def post_process_specualate(
@@ -532,6 +529,23 @@ def post_process_specualate(
                 model_output.mp_rank,
                 save_each_rank,
             )
+        # Send sampling_mask via ZMQ side-channel when enabled.
+        if sampler_output.sampling_mask is not None and (save_each_rank or model_output.mp_rank == 0):
+            rank_id = model_output.mp_rank
+            zmq_client = _get_sampling_mask_zmq_client(rank_id)
+            # sampling_mask shape: [total_accepted_tokens, vocab_size] (MTP may accept >1 token per request)
+            mask_np = sampler_output.sampling_mask.numpy()
+            real_bsz = model_output.accept_num.shape[0]
+            accept_nums = model_output.accept_num[:real_bsz].flatten().tolist()
+            mask_dict = {}
+            offset = 0
+            for i, n in enumerate(accept_nums):
+                n = int(n)
+                if n > 0:
+                    # List of n masks, each of shape [vocab_size]
+                    mask_dict[i] = mask_np[offset : offset + n].tolist()
+                offset += n
+            zmq_client.send_pyobj(mask_dict)
 
     # Update pre_ids through accept tokens
 
