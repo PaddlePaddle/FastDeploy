@@ -675,7 +675,7 @@ class TokenProcessor:
         # The worker sends a dict {batch_id: bool_mask_list} each step.
         sampling_masks_per_request = {}
         if self.use_sampling_mask and not envs.FD_USE_GET_SAVE_OUTPUT_V1 and hasattr(self, 'sampling_mask_zmq_server'):
-            _, mask_data = self.sampling_mask_zmq_server.receive_pyobj_once(block=False)
+            _, mask_data = self.sampling_mask_zmq_server.receive_pyobj_once(block=True)
             if mask_data is not None and isinstance(mask_data, dict):
                 sampling_masks_per_request = mask_data
 
