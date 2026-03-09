@@ -13,7 +13,6 @@
 // limitations under the License.
 #pragma once
 
-#include "helper.h"  // For getBoolEnv
 #include "multiquery_attention_c8_kernel.h"
 
 template <typename T,
@@ -1233,24 +1232,9 @@ void MultiQueryAppendC8Attention(
     cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev_id);
     uint32_t chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
     const int num_chunks = div_up(max_dec_len, chunk_size);
-    // Deterministic mode: force use nosplit kernel to ensure consistent
-    // floating-point accumulation order across all sequence lengths
-    const bool force_no_partition = getBoolEnv("FD_DETERMINISTIC_MODE");
-
-    // Debug log for determinism verification
-    if (getBoolEnv("FD_DETERMINISTIC_DEBUG")) {
-      printf(
-          "[DET_DEBUG] num_chunks=%d, chunk_size=%u, max_dec_len=%d, "
-          "force_no_partition=%d\n",
-          num_chunks,
-          chunk_size,
-          max_dec_len,
-          force_no_partition);
-    }
-
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
-    if (num_chunks <= 1 || force_no_partition) {
+    if (num_chunks <= 1) {
       auto nosplit_kv_kernel =
           multi_query_append_attention_c8_kernel<NV_TYPE,
                                                  uint8_t,
