@@ -243,7 +243,7 @@ func (c *radixPrefixCache) Match(tokens []int, allowed map[string]struct{}) map[
 	c.mu.RLock()
 	node, matched := c.matchPrefixHelper(c.root, hashes)
 	length := matched
-	logger.Debug(nil, "radix match: hashes=%d matched_len=%d node_children=%d", len(hashes), matched, len(node.children))
+	logger.Debug(context.Background(), "radix match: hashes=%d matched_len=%d node_children=%d", len(hashes), matched, len(node.children))
 	for n := node; n != nil; n = n.parent {
 		ratio := 0
 		if len(hashes) > 0 {
@@ -291,7 +291,7 @@ func (c *radixPrefixCache) Record(tokens []int, worker string) {
 		}
 		n.workers[worker] = now
 	}
-	logger.Debug(nil, "radix record: worker=%s hashes=%d node_depth=%d", worker, len(hashes), node.contextLen)
+	logger.Debug(context.Background(), "radix record: worker=%s hashes=%d node_depth=%d", worker, len(hashes), node.contextLen)
 }
 
 // evictionWorker periodically evicts inactive nodes
@@ -313,7 +313,7 @@ func (c *radixPrefixCache) evictExpired() {
 		removed += c.evictSubtreeIfExpired(c.root, childKey, child, now)
 	}
 	if removed > 0 {
-		logger.Debug(nil, "radix eviction: removed=%d nodeCount=%d", removed, c.nodeCount)
+		logger.Debug(context.Background(), "radix eviction: removed=%d nodeCount=%d", removed, c.nodeCount)
 	}
 }
 

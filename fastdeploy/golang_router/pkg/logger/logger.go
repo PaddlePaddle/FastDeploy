@@ -64,7 +64,7 @@ func contextPrefix(ctx context.Context) string {
 	if rid, ok := ctx.Value(RequestIDKey).(string); ok && rid != "" {
 		return "[request_id:" + rid + "] "
 	}
-	return "[request_id:null] "
+	return ""
 }
 
 // Info logs informational messages
