@@ -11,8 +11,8 @@ unset http_proxy
 unset https_proxy
 unset no_proxy
 
-export FD_LOG_DIR=/fdlog/$HOSTNAME
-echo "FD log will be saved into $FD_LOG_DIR"
+# export FD_LOG_DIR=/fdlog/$HOSTNAME
+# echo "FD log will be saved into $FD_LOG_DIR"
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 ln -sf /usr/local/bin/python3 /usr/local/bin/python
 function pip_install_with_retry() {
@@ -36,6 +36,9 @@ pip_install_with_retry -r requirements_iluvatar.txt
 echo "install paddle cpu and custom device"
 pip_install_with_retry --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
 pip_install_with_retry --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+
+echo "Run paddle.utils.run_check()"
+python -c "import paddle; paddle.utils.run_check()"
 
 INCLUDE_FOLDERS=(
     "ERNIE_300B_4L"
