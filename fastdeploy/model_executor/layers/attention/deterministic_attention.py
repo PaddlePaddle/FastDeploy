@@ -23,6 +23,8 @@ Mixed into AppendAttentionBackend via multiple inheritance; methods access host 
 """
 
 import os
+from dataclasses import dataclass
+from typing import Optional
 
 import paddle
 
@@ -31,6 +33,7 @@ from fastdeploy.model_executor.layers.attention.ops import (
     pre_cache_len_concat,
 )
 from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
+    _elementwise_add_kernel,
     _scatter_extend_kv_indices_kernel,
     build_kv_indices_from_block_tables,
     build_unified_kv_indices,
@@ -38,6 +41,38 @@ from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attent
     pre_cache_len_concat_triton,
     triton_cumsum_with_zero_prefix,
 )
+from fastdeploy.utils import get_logger
+
+logger = get_logger("deterministic_attention", "deterministic_attention.log")
+
+
+@dataclass
+class DeterministicCudaGraphBuffers:
+    """Pre-allocated GPU buffers for CUDA Graph-compatible deterministic attention."""
+
+    # pre_cache_len_concat_triton
+    cu_seqlens_k: Optional[paddle.Tensor] = None
+    pre_cache_batch_ids: Optional[paddle.Tensor] = None
+    pre_cache_tile_ids: Optional[paddle.Tensor] = None
+    cache_len: Optional[paddle.Tensor] = None
+    loop_times: Optional[paddle.Tensor] = None
+    gridx_offset: Optional[paddle.Tensor] = None
+    # index building
+    qo_indptr: Optional[paddle.Tensor] = None
+    prefix_kv_indptr: Optional[paddle.Tensor] = None
+    prefix_kv_indices: Optional[paddle.Tensor] = None
+    all_kv_indptr: Optional[paddle.Tensor] = None
+    all_kv_indices: Optional[paddle.Tensor] = None
+    extend_kv_indices: Optional[paddle.Tensor] = None
+    unified_kv_indptr: Optional[paddle.Tensor] = None
+    unified_kv_indices: Optional[paddle.Tensor] = None
+    prefix_lens_buf: Optional[paddle.Tensor] = None
+    unified_lens_buf: Optional[paddle.Tensor] = None
+    total_seq_lens_buf: Optional[paddle.Tensor] = None
+    # attention output
+    output: Optional[paddle.Tensor] = None
+    # q_roped buffer: gqa_rope_write_cache allocates internally; Triton needs fixed addr
+    q_roped: Optional[paddle.Tensor] = None
 
 
 class DeterministicAttentionMixin:
@@ -45,20 +80,78 @@ class DeterministicAttentionMixin:
     Mixin providing deterministic attention for AppendAttentionBackend.
 
     Expects host class to provide via self:
-        block_size, max_seq_len, num_heads, kv_num_heads, head_dim, causal, rope_3d
+        block_size, max_seq_len, num_heads, kv_num_heads, head_dim, causal, rope_3d, fd_config
     """
 
-    def _deterministic_build_triton_indices(self, forward_meta):
+    def _init_cudagraph_buffers(self):
+        """Pre-allocate GPU buffers at max sizes for CUDA Graph compatibility.
+        Called lazily on first step_use_cudagraph=True forward."""
+
+        max_bsz = self.fd_config.scheduler_config.max_num_seqs
+        max_model_len = self.max_seq_len
+        block_size = self.block_size
+        max_total_kv_len = max(max_bsz * max_model_len, 1)
+        max_tile_per_bs = (max_model_len + block_size - 1) // block_size
+        max_pre_cache_size = max(max_bsz * max_tile_per_bs, 1)
+        max_capture_size = self.fd_config.graph_opt_config.max_capture_size
+
+        bufs = DeterministicCudaGraphBuffers()
+        # pre_cache_len_concat_triton buffers
+        bufs.cu_seqlens_k = paddle.empty([max_bsz + 1], dtype="int32")
+        bufs.pre_cache_batch_ids = paddle.empty([max_pre_cache_size], dtype="int32")
+        bufs.pre_cache_tile_ids = paddle.empty([max_pre_cache_size], dtype="int32")
+        bufs.cache_len = paddle.empty([max_bsz], dtype="int32")
+        bufs.loop_times = paddle.empty([max_bsz], dtype="int32")
+        bufs.gridx_offset = paddle.empty([max_bsz + 1], dtype="int32")
+        # Index building buffers
+        bufs.qo_indptr = paddle.empty([max_bsz + 1], dtype="int32")
+        bufs.prefix_kv_indptr = paddle.empty([max_bsz + 1], dtype="int32")
+        bufs.prefix_kv_indices = paddle.empty([max_total_kv_len], dtype="int32")
+        bufs.all_kv_indptr = paddle.empty([max_bsz + 1], dtype="int32")
+        bufs.all_kv_indices = paddle.empty([max_total_kv_len], dtype="int32")
+        bufs.extend_kv_indices = paddle.empty([max(max_total_kv_len, 1)], dtype="int32")
+        bufs.unified_kv_indptr = paddle.empty([max_bsz + 1], dtype="int32")
+        bufs.unified_kv_indices = paddle.empty([max_total_kv_len], dtype="int32")
+        bufs.prefix_lens_buf = paddle.empty([max_bsz], dtype="int32")
+        bufs.unified_lens_buf = paddle.empty([max_bsz], dtype="int32")
+        bufs.total_seq_lens_buf = paddle.empty([max_bsz], dtype="int32")
+        # q_roped buffer (pre-allocate to avoid dynamic alloc inside CUDA Graph capture)
+        bufs.q_roped = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=paddle.bfloat16)
+        # Attention output buffer (pre-allocate with bfloat16; will be re-created if dtype mismatches)
+        bufs.output = paddle.empty(
+            [max_capture_size, self.num_heads, self.head_dim],
+            dtype=paddle.bfloat16,
+        )
+
+        total_bytes = (
+            7 * (max_bsz + 1) * 4
+            + 5 * max_bsz * 4
+            + 3 * max_total_kv_len * 4
+            + max_bsz * 4
+            + 2 * max_pre_cache_size * 4
+            + max_capture_size * self.num_heads * self.head_dim * 2
+        )
+        logger.info(
+            f"[DeterministicAttention] Pre-allocated CUDA Graph buffers: "
+            f"{total_bytes / 1024 / 1024:.1f} MB "
+            f"(max_bsz={max_bsz}, max_kv_len={max_total_kv_len}, "
+            f"max_capture={max_capture_size})"
+        )
+        self._cudagraph_bufs = bufs
+
+    def _deterministic_build_triton_indices(self, forward_meta, bufs=None):
         """
         Build unified KV indices for Triton attention from block_tables.
         CUDA Graph compatible: all .item() replaced by pre-computed CPU scalars + Triton kernels.
 
-        Handles ALL sequences in the batch (both prefill and decode):
-        - Prefill sequences: extend_len = seq_lens_this_time (= seq_lens_encoder)
-        - Decode sequences: extend_len = seq_lens_this_time (= 1)
+        Args:
+            bufs: Optional DeterministicCudaGraphBuffers for CUDA Graph compatibility.
+                  When None, tensors are allocated dynamically.
 
         Returns: (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len)
         """
+        import triton
+
         bs = forward_meta.deter_bs
         total_extend_len = forward_meta.deter_total_extend_len
         max_extend_len = forward_meta.deter_max_extend_len
@@ -67,7 +160,11 @@ class DeterministicAttentionMixin:
         seq_lens_this_time = forward_meta.seq_lens_this_time
         prefix_lens = forward_meta.prefix_lens[:bs].astype("int32")
         extend_seq_lens = seq_lens_this_time[:bs]
-        qo_indptr = triton_cumsum_with_zero_prefix(extend_seq_lens, bs)
+        qo_indptr = triton_cumsum_with_zero_prefix(
+            extend_seq_lens,
+            bs,
+            out_buf=bufs.qo_indptr if bufs else None,
+        )
 
         prefix_kv_indptr, prefix_kv_indices = build_kv_indices_from_block_tables(
             forward_meta.block_tables,
@@ -75,20 +172,35 @@ class DeterministicAttentionMixin:
             self.block_size,
             bs,
             total_kv_len=total_prefix_len,
+            kv_indptr_buf=bufs.prefix_kv_indptr if bufs else None,
+            kv_indices_buf=bufs.prefix_kv_indices if bufs else None,
         )
-        total_seq_lens = prefix_lens + extend_seq_lens
+
+        # Compute total_seq_lens = prefix_lens + extend_seq_lens (allocation-free when bufs)
+        if bufs is not None and bs > 0:
+            total_seq_lens = bufs.total_seq_lens_buf[:bs]
+            BLOCK = triton.next_power_of_2(bs)
+            _elementwise_add_kernel[(1,)](prefix_lens, extend_seq_lens, total_seq_lens, bs, BLOCK=BLOCK)
+        else:
+            total_seq_lens = prefix_lens + extend_seq_lens
+
         all_kv_indptr, all_kv_indices = build_kv_indices_from_block_tables(
             forward_meta.block_tables,
             total_seq_lens,
             self.block_size,
             bs,
             total_kv_len=total_prefix_len + total_extend_len,
+            kv_indptr_buf=bufs.all_kv_indptr if bufs else None,
+            kv_indices_buf=bufs.all_kv_indices if bufs else None,
         )
 
-        # extend_start_loc is the exclusive prefix sum = qo_indptr[:bs]
         extend_start_loc = qo_indptr[:bs]
 
-        extend_kv_indices = paddle.empty([max(total_extend_len, 1)], dtype="int32")
+        if bufs is not None:
+            extend_kv_indices = bufs.extend_kv_indices[: max(total_extend_len, 1)]
+        else:
+            extend_kv_indices = paddle.empty([max(total_extend_len, 1)], dtype="int32")
+
         if bs > 0 and total_extend_len > 0:
             _scatter_extend_kv_indices_kernel[(bs,)](
                 all_kv_indices,
@@ -107,6 +219,10 @@ class DeterministicAttentionMixin:
             extend_seq_lens,
             extend_kv_indices,
             bs,
+            unified_kv_indptr_buf=bufs.unified_kv_indptr if bufs else None,
+            unified_kv_indices_buf=bufs.unified_kv_indices if bufs else None,
+            prefix_lens_buf=bufs.prefix_lens_buf if bufs else None,
+            unified_lens_buf=bufs.unified_lens_buf if bufs else None,
         )
 
         return qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len
@@ -219,6 +335,11 @@ class DeterministicAttentionMixin:
         # Use Triton GPU-only version when CUDA Graph is active (no D2H copy).
         # CPU scalars come from forward_meta (pre-computed outside capture region).
         if forward_meta.step_use_cudagraph:
+            # Lazy init CUDA Graph buffers on first use
+            if not hasattr(self, "_cudagraph_bufs"):
+                self._init_cudagraph_buffers()
+            bufs = self._cudagraph_bufs
+
             bsz = forward_meta.seq_lens_this_time.shape[0]
             max_dec_len = int(forward_meta.max_len_tensor_cpu[2])
             max_tile_per_bs = (max_dec_len + self.block_size - 1) // self.block_size
@@ -229,6 +350,12 @@ class DeterministicAttentionMixin:
                 bsz,
                 self.block_size,
                 max_tile_per_bs,
+                cu_seqlens_k_buf=bufs.cu_seqlens_k,
+                batch_ids_buf=bufs.pre_cache_batch_ids,
+                tile_ids_buf=bufs.pre_cache_tile_ids,
+                cache_len_buf=bufs.cache_len,
+                loop_times_buf=bufs.loop_times,
+                gridx_offset_buf=bufs.gridx_offset,
             )
             # Build CPU tensors directly (no D2H copy), needed by gqa_rope_write_cache C++ op
             pre_cache_num_blocks_cpu = paddle.to_tensor(
@@ -303,6 +430,17 @@ class DeterministicAttentionMixin:
         )
         # q_roped: [token_nums, num_heads, head_dim] with RoPE already applied
 
+        # CUDA Graph fix: gqa_rope_write_cache allocates q_roped internally (new address each call).
+        # Triton kernels record raw pointers during capture, so we must copy q_roped into a
+        # pre-allocated buffer with a fixed address for replay to work correctly.
+        if forward_meta.step_use_cudagraph:
+            token_nums = q_roped.shape[0]
+            if bufs.q_roped is None or bufs.q_roped.dtype != q_roped.dtype:
+                max_capture_size = self.fd_config.graph_opt_config.max_capture_size
+                bufs.q_roped = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=q_roped.dtype)
+            bufs.q_roped[:token_nums].copy_(q_roped, False)
+            q_roped = bufs.q_roped[:token_nums]
+
         # --- DIAG: Layer 0 — 4 return values + paged cache ---
         # Enable with: export FD_DIAG_ATTN=1
         if os.environ.get("FD_DIAG_ATTN", "0") == "1" and layer.layer_id == 0:
@@ -344,28 +482,65 @@ class DeterministicAttentionMixin:
             if num_blocks_used > 11:
                 _wlog.info(f"[DIAG-L0] cache_k blk11 md5={self._diag_md5(cache_k[int(bt[0][11].item())])}")
 
-        # --- Step 3: Triton unified attention for all tokens (prefill + decode) ---
-        (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
-            self._deterministic_build_triton_indices(forward_meta)
-        )
+        # --- Debug: FD_DETER_GRAPH_SKIP controls which steps run inside CUDA Graph ---
+        # Values: "attn" (skip attention), "index+attn" (skip index+attention),
+        #         "rope+index+attn" (skip rope+index+attention)
+        # When a step is skipped, its output is replaced with zeros.
+        _graph_skip = os.environ.get("FD_DETER_GRAPH_SKIP", "") if forward_meta.step_use_cudagraph else ""
+        _skip_attn = "attn" in _graph_skip
+        _skip_index = "index" in _graph_skip
+        _skip_rope = "rope" in _graph_skip
 
-        token_nums = q_roped.shape[0]
-        o = paddle.zeros([token_nums, self.num_heads, self.head_dim], dtype=q_roped.dtype)
-        res = extend_attention_fwd_unified(
-            q_roped,
-            o,
-            cache_k,
-            cache_v,
-            qo_indptr,
-            unified_kv_indptr,
-            unified_kv_indices,
-            prefix_lens,
-            self.num_heads,
-            self.kv_num_heads,
-            self.head_dim,
-            max_extend_len,
-            self.causal,
-        ).reshape([-1, self.num_heads * self.head_dim])
+        if _skip_rope:
+            # Skip gqa_rope_write_cache output — replace q_roped with zeros
+            q_roped = bufs.q_roped[:1].zero_() if forward_meta.step_use_cudagraph else q_roped
+
+        # --- Step 3: Triton unified attention for all tokens (prefill + decode) ---
+        if forward_meta.step_use_cudagraph:
+            if not _skip_index:
+                (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
+                    self._deterministic_build_triton_indices(forward_meta, bufs=bufs)
+                )
+            else:
+                # Skip index building — use dummy indices
+                bs = forward_meta.deter_bs
+                max_extend_len = forward_meta.deter_max_extend_len
+                qo_indptr = bufs.qo_indptr[: bs + 1].zero_()
+                unified_kv_indptr = bufs.unified_kv_indptr[: bs + 1].zero_()
+                unified_kv_indices = bufs.unified_kv_indices[:1].zero_()
+                prefix_lens = bufs.prefix_lens_buf[:bs].zero_() if bs > 0 else bufs.prefix_lens_buf[:1].zero_()
+            token_nums = q_roped.shape[0]
+            # Lazy-allocate output buffer with correct dtype on first use
+            if bufs.output is None or bufs.output.dtype != q_roped.dtype:
+                max_capture_size = self.fd_config.graph_opt_config.max_capture_size
+                bufs.output = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=q_roped.dtype)
+            o = bufs.output[:token_nums].zero_()
+        else:
+            (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
+                self._deterministic_build_triton_indices(forward_meta)
+            )
+            token_nums = q_roped.shape[0]
+            o = paddle.zeros([token_nums, self.num_heads, self.head_dim], dtype=q_roped.dtype)
+
+        if not _skip_attn:
+            res = extend_attention_fwd_unified(
+                q_roped,
+                o,
+                cache_k,
+                cache_v,
+                qo_indptr,
+                unified_kv_indptr,
+                unified_kv_indices,
+                prefix_lens,
+                self.num_heads,
+                self.kv_num_heads,
+                self.head_dim,
+                max_extend_len,
+                self.causal,
+            ).reshape([-1, self.num_heads * self.head_dim])
+        else:
+            # Skip Triton attention — return zeros
+            res = o.reshape([-1, self.num_heads * self.head_dim])
 
         # --- DIAG: Layer 0 attention output ---
         # Enable with: export FD_DIAG_ATTN=1

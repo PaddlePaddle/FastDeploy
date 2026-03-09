@@ -45,20 +45,49 @@ def _cumsum_with_zero_prefix_kernel(input_ptr, output_ptr, n, BLOCK: tl.constexp
     tl.store(output_ptr + 1 + idx, cumval, mask=mask)
 
 
-def triton_cumsum_with_zero_prefix(x, n=None):
+def triton_cumsum_with_zero_prefix(x, n=None, out_buf=None):
     """
     Triton replacement for: paddle.concat([zeros([1], int32), cumsum(x).astype(int32)])
     Returns int32 tensor of shape [n+1].  CUDA Graph capture compatible.
+
+    Args:
+        out_buf: Optional pre-allocated buffer of size >= [n+1].
+                 If provided, writes into out_buf[:n+1] instead of allocating.
     """
     if n is None:
         n = x.shape[0]
-    out = paddle.empty([n + 1], dtype="int32")
+    out = out_buf[: n + 1] if out_buf is not None else paddle.empty([n + 1], dtype="int32")
     if n == 0:
         out[0:1] = paddle.zeros([1], dtype="int32")
         return out
     BLOCK = triton.next_power_of_2(n)
     _cumsum_with_zero_prefix_kernel[(1,)](x, out, n, BLOCK=BLOCK)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Triton helper kernels (allocation-free elementwise ops for CUDA Graph)
+# ---------------------------------------------------------------------------
+
+
+@triton.jit
+def _indptr_to_lens_kernel(indptr_ptr, lens_ptr, n, BLOCK: tl.constexpr):
+    """Compute lens[i] = indptr[i+1] - indptr[i] for i in [0, n)."""
+    idx = tl.arange(0, BLOCK)
+    mask = idx < n
+    a = tl.load(indptr_ptr + idx + 1, mask=mask, other=0)
+    b = tl.load(indptr_ptr + idx, mask=mask, other=0)
+    tl.store(lens_ptr + idx, a - b, mask=mask)
+
+
+@triton.jit
+def _elementwise_add_kernel(a_ptr, b_ptr, out_ptr, n, BLOCK: tl.constexpr):
+    """Compute out[i] = a[i] + b[i] for i in [0, n)."""
+    idx = tl.arange(0, BLOCK)
+    mask = idx < n
+    a = tl.load(a_ptr + idx, mask=mask, other=0)
+    b = tl.load(b_ptr + idx, mask=mask, other=0)
+    tl.store(out_ptr + idx, a + b, mask=mask)
 
 
 # ---------------------------------------------------------------------------
@@ -117,20 +146,42 @@ def build_unified_kv_indices(
     extend_seq_lens,
     extend_kv_indices,
     bs,
+    unified_kv_indptr_buf=None,
+    unified_kv_indices_buf=None,
+    prefix_lens_buf=None,
+    unified_lens_buf=None,
 ):
     """
     Build unified KV indices from prefix and extend parts.
     Uses Triton cumsum (CUDA Graph compatible) for indptr, Triton kernel for index copy.
 
+    Optional *_buf args: pre-allocated buffers for CUDA Graph compatibility.
+    When None (default), tensors are allocated dynamically (backward-compatible).
+
     Returns:
         (unified_kv_indptr, unified_kv_indices, prefix_lens)
     """
-    prefix_lens = prefix_kv_indptr[1 : bs + 1] - prefix_kv_indptr[:bs]
-    unified_lens = prefix_lens + extend_seq_lens[:bs]
-    unified_kv_indptr = triton_cumsum_with_zero_prefix(unified_lens, bs)
+    if prefix_lens_buf is not None and bs > 0:
+        prefix_lens = prefix_lens_buf[:bs]
+        BLOCK = triton.next_power_of_2(bs)
+        _indptr_to_lens_kernel[(1,)](prefix_kv_indptr, prefix_lens, bs, BLOCK=BLOCK)
+    else:
+        prefix_lens = prefix_kv_indptr[1 : bs + 1] - prefix_kv_indptr[:bs]
+
+    if unified_lens_buf is not None and bs > 0:
+        unified_lens = unified_lens_buf[:bs]
+        BLOCK = triton.next_power_of_2(bs)
+        _elementwise_add_kernel[(1,)](prefix_lens, extend_seq_lens, unified_lens, bs, BLOCK=BLOCK)
+    else:
+        unified_lens = prefix_lens + extend_seq_lens[:bs]
+
+    unified_kv_indptr = triton_cumsum_with_zero_prefix(unified_lens, bs, out_buf=unified_kv_indptr_buf)
 
     total_len = prefix_kv_indices.shape[0] + extend_kv_indices.shape[0]
-    unified_kv_indices = paddle.empty([total_len], dtype="int32")
+    if unified_kv_indices_buf is not None:
+        unified_kv_indices = unified_kv_indices_buf[:total_len]
+    else:
+        unified_kv_indices = paddle.empty([total_len], dtype="int32")
 
     _copy_unified_indices_kernel[(bs,)](
         prefix_kv_indptr,
@@ -205,15 +256,22 @@ def _scatter_extend_kv_indices_kernel(
         tl.store(out_ptr + dst_start + idx, val, mask=mask)
 
 
-def build_kv_indices_from_block_tables(block_tables, seq_lens, block_size, bs, total_kv_len=None):
+def build_kv_indices_from_block_tables(
+    block_tables, seq_lens, block_size, bs, total_kv_len=None, kv_indptr_buf=None, kv_indices_buf=None
+):
     """
     Convert FastDeploy's block_tables to flat token-level KV indices.
     CUDA Graph capture compatible (uses Triton cumsum, no thrust).
+
+    Optional *_buf args: pre-allocated buffers for CUDA Graph compatibility.
     """
-    kv_indptr = triton_cumsum_with_zero_prefix(seq_lens[:bs], bs)
+    kv_indptr = triton_cumsum_with_zero_prefix(seq_lens[:bs], bs, out_buf=kv_indptr_buf)
     if total_kv_len is None:
         total_kv_len = int(paddle.sum(seq_lens[:bs]).item())
-    kv_indices = paddle.empty([max(total_kv_len, 1)], dtype="int32")
+    if kv_indices_buf is not None:
+        kv_indices = kv_indices_buf[: max(total_kv_len, 1)]
+    else:
+        kv_indices = paddle.empty([max(total_kv_len, 1)], dtype="int32")
 
     if bs > 0 and total_kv_len > 0:
         max_blocks_per_seq = block_tables.shape[1]
@@ -322,7 +380,18 @@ def _pre_cache_scatter_kernel(
 
 
 def pre_cache_len_concat_triton(
-    seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, bsz, block_size, max_tile_size_per_bs
+    seq_lens_encoder,
+    seq_lens_decoder,
+    seq_lens_this_time,
+    bsz,
+    block_size,
+    max_tile_size_per_bs,
+    cu_seqlens_k_buf=None,
+    batch_ids_buf=None,
+    tile_ids_buf=None,
+    cache_len_buf=None,
+    loop_times_buf=None,
+    gridx_offset_buf=None,
 ):
     """
     GPU-only Triton replacement for pre_cache_len_concat C++ op.
@@ -332,20 +401,24 @@ def pre_cache_len_concat_triton(
       Phase 1: Vectorized kernel computes cu_seqlens_k, cache_len, loop_times
       Phase 2: Per-batch scatter kernel writes batch_ids and tile_ids
 
+    Optional *_buf args: pre-allocated buffers for CUDA Graph compatibility.
+
     Returns:
         cu_seqlens_k: [bsz+1] int32, GPU
         batch_ids: [bsz * max_tile_size_per_bs] int32, GPU
         tile_ids_per_batch: [bsz * max_tile_size_per_bs] int32, GPU
     """
-    cu_seqlens_k = paddle.empty([bsz + 1], dtype="int32")
+    cu_seqlens_k = (
+        cu_seqlens_k_buf[: bsz + 1] if cu_seqlens_k_buf is not None else paddle.empty([bsz + 1], dtype="int32")
+    )
     out_size = max(bsz * max_tile_size_per_bs, 1)
-    batch_ids = paddle.empty([out_size], dtype="int32")
-    tile_ids = paddle.empty([out_size], dtype="int32")
+    batch_ids = batch_ids_buf[:out_size] if batch_ids_buf is not None else paddle.empty([out_size], dtype="int32")
+    tile_ids = tile_ids_buf[:out_size] if tile_ids_buf is not None else paddle.empty([out_size], dtype="int32")
 
     if bsz > 0:
         BLOCK_BSZ = triton.next_power_of_2(bsz)
-        cache_len_buf = paddle.empty([bsz], dtype="int32")
-        loop_times_buf = paddle.empty([bsz], dtype="int32")
+        _cache_len_buf = cache_len_buf[:bsz] if cache_len_buf is not None else paddle.empty([bsz], dtype="int32")
+        _loop_times_buf = loop_times_buf[:bsz] if loop_times_buf is not None else paddle.empty([bsz], dtype="int32")
 
         # Phase 1: compute cu_seqlens_k, cache_len, loop_times
         _pre_cache_cu_seqlens_kernel[(1,)](
@@ -353,17 +426,17 @@ def pre_cache_len_concat_triton(
             seq_lens_decoder,
             seq_lens_this_time,
             cu_seqlens_k,
-            cache_len_buf,
-            loop_times_buf,
+            _cache_len_buf,
+            _loop_times_buf,
             bsz=bsz,
             block_size=block_size,
             BLOCK_BSZ=BLOCK_BSZ,
         )
 
         # Phase 2: compute gridx_offset (exclusive prefix sum) and scatter
-        gridx_offset = triton_cumsum_with_zero_prefix(loop_times_buf, bsz)  # [bsz+1]
+        gridx_offset = triton_cumsum_with_zero_prefix(_loop_times_buf, bsz, out_buf=gridx_offset_buf)
         _pre_cache_scatter_kernel[(bsz,)](
-            loop_times_buf,
+            _loop_times_buf,
             gridx_offset,
             batch_ids,
             tile_ids,

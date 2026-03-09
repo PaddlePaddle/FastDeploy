@@ -1,6 +1,13 @@
 """
 Unified extend attention kernel tests — correctness, determinism, and split-invariance.
 
+Correctness verification strategy:
+    Two independent, simple Python reference implementations (naive_attention via einsum
+    and sdpa_attention_reference via float32 matmul) are first cross-validated against each
+    other, then the Triton kernel output is compared against both using max absolute diff
+    and cosine similarity thresholds. Broad parametrized coverage spans head configurations
+    (MHA/GQA/MQA), data types (float16/bfloat16), sequence lengths, and edge cases.
+
 Test scenarios:
 1. Cumsum utility (triton_cumsum_with_zero_prefix): basic, empty, cross-validate vs paddle
 2. Index building (build_kv_indices_from_block_tables / build_unified_kv_indices):
