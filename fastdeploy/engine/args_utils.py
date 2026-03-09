@@ -562,7 +562,7 @@ class EngineArgs:
             and not current_platform.is_maca()
         ):
             self.enable_prefix_caching = False
-        if not current_platform.is_cuda():
+        if not current_platform.is_cuda() or self.speculative_config is not None or self.splitwise_role != "mixed":
             self.enable_overlap_schedule = False
         if self.enable_logprob:
             if not current_platform.is_cuda() and not current_platform.is_xpu():
