@@ -142,10 +142,21 @@ class IPCLock:
 
         if create:
             llm_logger.debug(f"creating ipc lock: {self._lock_path}")
-            self._fd = os.open(self._lock_path, os.O_CREAT | os.O_RDWR, 0o666)
+            # Use restrictive permissions to avoid other users acquiring the lock.
+            self._fd = os.open(self._lock_path, os.O_CREAT | os.O_RDWR, 0o600)
         else:
             llm_logger.debug(f"attaching ipc lock: {self._lock_path}")
-            self._fd = os.open(self._lock_path, os.O_RDWR)
+            try:
+                self._fd = os.open(self._lock_path, os.O_RDWR)
+            except FileNotFoundError as e:
+                llm_logger.error(
+                    f"Failed to attach IPC lock: {self._lock_path} does not exist. "
+                    "Ensure that the lock has been created (create=True) with the same "
+                    "name and suffix before attaching."
+                )
+                raise RuntimeError(
+                    f"IPC lock file not found: {self._lock_path}"
+                ) from e
 
     def acquire(self) -> None:
         """Acquire the lock (blocking). Uses kernel-level flock for atomicity."""
