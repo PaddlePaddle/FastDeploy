@@ -216,6 +216,9 @@ class SplitwiseConnector:
             if time.time() - start_time > envs.FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS:
                 del self.current_request_ids[task.request_id]
                 return False, "prefill waits for decode resource timeout"
+            if task.request_id in self.resource_manager.waiting_abort_req_id_set:
+                del self.current_request_ids[task.request_id]
+                return False, "request aborted during decode resource allocation"
 
         msg = self.current_request_ids[task.request_id]
         del self.current_request_ids[task.request_id]

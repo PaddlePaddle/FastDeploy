@@ -764,7 +764,6 @@ class EngineService:
                     max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
-                tasks = [task for task in tasks if task.request_id not in self.resource_manager.abort_req_ids_set]
                 for task in tasks:
                     task.metrics.engine_get_req_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
@@ -833,7 +832,6 @@ class EngineService:
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
-                tasks = [task for task in tasks if task.request_id not in self.resource_manager.abort_req_ids_set]
                 for task in tasks:
                     task.metrics.engine_get_req_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
@@ -865,9 +863,15 @@ class EngineService:
                             )
                             task.metrics.ask_decode_resource_start_time = time.time()
                             while True:
+                                if task.request_id in self.resource_manager.waiting_abort_req_id_set:
+                                    need_delete_tasks.append(task)
+                                    break
                                 self.split_connector.send_splitwise_tasks([task], task.idx)
                                 status, msg = self.split_connector.check_decode_allocated(task)
                                 if not status:
+                                    if task.request_id in self.resource_manager.waiting_abort_req_id_set:
+                                        need_delete_tasks.append(task)
+                                        break
                                     self.llm_logger.error(
                                         f"D failed to allocate resource for request {task.request_id}, try again."
                                     )
@@ -886,6 +890,9 @@ class EngineService:
                                 f"P has allocated resources and then ask D resource for req_id: {task.request_id}"
                             )
                             task.metrics.ask_decode_resource_start_time = time.time()
+                            if task.request_id in self.resource_manager.waiting_abort_req_id_set:
+                                need_delete_tasks.append(task)
+                                continue
                             self.split_connector.send_splitwise_tasks([task], task.idx)
 
                         for task in tasks:
@@ -1151,19 +1158,8 @@ class EngineService:
                     if status_value is not None and status_value == RequestStatus.ABORT.value:
                         req_id = data["request_id"]
                         self.llm_logger.info(f"Receive abort request, req_id: {req_id}")
-                        self.resource_manager.abort_req_ids_set.add(req_id)
                         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                            if req_id in self.resource_manager.requests:
-                                req = self.resource_manager.requests[req_id]
-                                task = self.resource_manager._prepare_preempt_task(req)
-                                self.engine_worker_queue.put_tasks(([task], self.resource_manager.real_bsz))
-                                self.llm_logger.info(f"put abort task in engine worker queue, req_id: {req_id}")
-                            else:
-                                self.scheduler._recycle(req_id)
-                                self.llm_logger.info(
-                                    f"req_id:{req_id} has not been allocated any resources, recycled it in scheduler"
-                                )
-                                self.resource_manager.abort_req_ids_set.remove(req_id)
+                            self.resource_manager.add_abort_req_ids(req_id)
                         continue
                     err_msg = None
                     try:
@@ -1596,6 +1592,15 @@ class EngineService:
                 if hasattr(self.scheduler, "has_request") and not self.scheduler.has_request(req_output.request_id):
                     # ensure the api_server and scheduler in decode have
                     # received the request sent by the client
+                    if req_output.request_id in self.resource_manager.waiting_abort_req_id_set:
+                        self.llm_logger.warning(
+                            f"{req_output.request_id} aborted while waiting for scheduler, recycle resource"
+                        )
+                        self.resource_manager.pre_recycle_resource(req_output.request_id)
+                        self.resource_manager.waiting_abort_req_id_set.discard(req_output.request_id)
+                        if req_output.request_id in self.token_processor.tokens_counter:
+                            del self.token_processor.tokens_counter[req_output.request_id]
+                        continue
                     waiting_request_outputs.append(req_output)
                     continue
                 req_output.finished = False
