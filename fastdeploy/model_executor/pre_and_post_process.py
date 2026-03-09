@@ -19,24 +19,11 @@ from typing import Dict, List, Optional, Union
 
 import numpy as np
 import paddle
+import zmq
 
 from fastdeploy import envs
-from fastdeploy.inter_communicator import ZmqIpcClient
-import zmq as _zmq
-
-# Module-level cache: {rank_id: ZmqIpcClient} for sampling_mask side-channel
-_sampling_mask_zmq_clients = {}
-
-
-def _get_sampling_mask_zmq_client(rank_id: int) -> ZmqIpcClient:
-    """Lazily create and cache a ZMQ PUSH client for sampling_mask side-channel."""
-    global _sampling_mask_zmq_clients
-    if rank_id not in _sampling_mask_zmq_clients:
-        client = ZmqIpcClient(name=f"sampling_mask_output_rank{rank_id}", mode=_zmq.PUSH)
-        client.connect()
-        _sampling_mask_zmq_clients[rank_id] = client
-    return _sampling_mask_zmq_clients[rank_id]
 from fastdeploy.config import SpeculativeConfig
+from fastdeploy.inter_communicator import ZmqIpcClient
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_iluvatar():
@@ -115,6 +102,19 @@ from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferD
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
+
+# Module-level cache: {rank_id: ZmqIpcClient} for sampling_mask side-channel
+_sampling_mask_zmq_clients = {}
+
+
+def _get_sampling_mask_zmq_client(rank_id: int) -> ZmqIpcClient:
+    """Lazily create and cache a ZMQ PUSH client for sampling_mask side-channel."""
+    global _sampling_mask_zmq_clients
+    if rank_id not in _sampling_mask_zmq_clients:
+        client = ZmqIpcClient(name=f"sampling_mask_output_rank{rank_id}", mode=zmq.PUSH)
+        client.connect()
+        _sampling_mask_zmq_clients[rank_id] = client
+    return _sampling_mask_zmq_clients[rank_id]
 
 
 def pre_process(
