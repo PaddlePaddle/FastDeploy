@@ -553,6 +553,19 @@ class PrefixCacheManager:
                 heapq.heappush(self.cpu_free_block_list, cpu_block_id)
         else:
             heapq.heappush(self.cpu_free_block_list, cpu_block_ids)
+    
+    def _accquire_kvcache_lock(self):
+        if not envs.FD_USE_KVCACHE_LOCK:
+            return
+        # 自旋方式获取共享内存锁，标记 transfer 占用 (值=2) 
+        while self.gpu_cache_lock_signal.value[0] != 0:
+            pass
+        self.gpu_cache_lock_signal.value[0] = 2  # 标记 transfer 占用
+    
+    def _release_kvcache_lock(self):
+        if not envs.FD_USE_KVCACHE_LOCK:
+            return
+        self.gpu_cache_lock_signal.value[0] = 0 # 释放
 
     def issue_swap_task(
         self,
@@ -573,13 +586,15 @@ class PrefixCacheManager:
             event_type:       CacheStatus.SWAP2GPU or CacheStatus.SWAP2CPU
             is_sync:          bool, whether to wait for the result of the swap task
         """
-
+        assert is_sync, "Only support is sync for swap_task now."
+        self._accquire_kvcache_lock()
         self.task_swapping_event[transfer_task_id] = Event()
         self.cache_task_queue.put_transfer_task(
             (event_type, transfer_task_id, swap_node_ids, gpu_block_ids, cpu_block_ids)
         )
         if is_sync:
             self.sync_swap_task(transfer_task_id)
+        self._release_kvcache_lock()
 
     def sync_swap_task(self, transfer_task_id):
         """

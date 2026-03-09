@@ -289,6 +289,17 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+        # init gpu_cache_lock_signal: 用于 worker 与 cpu transfer 互斥访问 GPU KV
+        # 0 = 空闲, 1 = worker 占用, 2 = transfer 占用
+        gpu_cache_lock_data = np.zeros([1], dtype=np.int32) 
+        self.gpu_cache_lock_signal = IPCSignal(
+            name="gpu_cache_lock_signal",
+            array=gpu_cache_lock_data,
+            dtype=np.int32,       
+            suffix=self.parallel_config.engine_worker_queue_port,
+            create=False
+        )
+
     def update_weights_from_tensor(self, mmap_infos):
         """
         update_weights_from_tensor
@@ -430,6 +441,21 @@ class PaddleDisWorkerProc:
             if tp_rank == 0:
                 self.rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
             logger.info("redundant_expert: done")
+
+    def _accquire_kvcache_lock(self, tp_rank):
+        if not envs.FD_USE_KVCACHE_LOCK:
+            return
+        # 仅在推理阶段持有 gpu_cache_lock（自旋方式获取共享内存锁）
+        while self.gpu_cache_lock_signal.value[0] != 0:
+            pass
+        if tp_rank == 0:
+            self.gpu_cache_lock_signal.value[0] = 1
+    
+    def _release_kvcache_lock(self, tp_rank):
+        if not envs.FD_USE_KVCACHE_LOCK:
+            return
+        if tp_rank == 0:
+            self.gpu_cache_lock_signal.value[0] = 0  # 释放
 
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
@@ -573,7 +599,11 @@ class PaddleDisWorkerProc:
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
+            
+            self._accquire_kvcache_lock(tp_rank)
             self.worker.execute_model(req_dicts, max_occupied_batch_index)
+            self._release_kvcache_lock(tp_rank)
+
             # Only v0 use this signal
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()

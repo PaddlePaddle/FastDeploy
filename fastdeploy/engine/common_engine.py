@@ -172,6 +172,9 @@ class EngineService:
             )
         self._init_worker_monitor_signals()
 
+        # 将共享内存锁信号传递给 cache_manager，用于 cpu transfer 与 worker 互斥
+        self.resource_manager.cache_manager.gpu_cache_lock_signal = self.gpu_cache_lock_signal
+
         if self.cfg.eplb_config.enable_eplb:
             current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
             init_eplb_signals(cfg, current_suffix)
@@ -379,6 +382,17 @@ class EngineService:
             dtype=np.int32,
             suffix=current_suffix,
             create=True,
+        )
+
+        # gpu_cache_lock_signal: 用于 worker 进程和 cpu transfer 之间互斥访问 GPU KV Cache
+        # 0 = 空闲, 1 = worker 占用, 2 = transfer 占用
+        gpu_cache_lock_data = np.zeros([1], dtype=np.int32)
+        self.gpu_cache_lock_signal = IPCSignal(
+            name="gpu_cache_lock_signal",
+            array=gpu_cache_lock_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True
         )
 
     def start_worker_queue_service(self, start_queue):
