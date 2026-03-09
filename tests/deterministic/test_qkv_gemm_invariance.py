@@ -1,129 +1,65 @@
 """
-Direct test: does QKV projection GEMM produce bit-identical results
-for the same tokens when M (total token count) differs?
+Test: Is matmul_persistent (Triton) M-invariant for QKV projection GEMM?
 
-Cache miss: GEMM(825, K) @ W(K, N) → take last 57 rows
-Cache hit:  GEMM(57, K)  @ W(K, N) → all 57 rows
+M-invariance means: for the same token data at tail positions,
+  matmul(full_batch, W)[-tail:] == matmul(tail_only, W)
+regardless of how many other rows precede them.
 
-If the last 57 rows differ, that's the root cause of prefix caching non-determinism.
+This is the root cause of prefix caching non-determinism when using cuBLAS.
 """
 
-import os
-import sys
-
 import paddle
+import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
+from fastdeploy.model_executor.layers.batch_invariant_ops.batch_invariant_ops import (
+    matmul_persistent,
+)
+
+# (M_full, M_tail, K, N)
+SHAPES = [
+    (825, 57, 3584, 4608),  # Qwen2-7B real case
+    (1024, 128, 4096, 4096),  # power-of-2
+    (512, 1, 3584, 4608),  # single-token tail
+]
+N_SEEDS = 5
 
 
-def test_gemm_m_invariance():
-    """Test whether matmul results are invariant to M dimension for overlapping rows."""
-    paddle.seed(42)
-
-    # Typical Qwen2-7B dimensions: hidden=3584, qkv_out=4608
-    K = 3584
-    N = 4608
-    M_full = 825  # cache miss
-    M_partial = 57  # cache hit (only new tokens)
-
+def _check_m_invariance(fn, M_full, M_tail, K, N, seed):
+    """Return max abs diff between fn(full)[-tail:] and fn(tail)."""
+    paddle.seed(seed)
     W = paddle.randn([K, N], dtype="bfloat16")
     full_input = paddle.randn([M_full, K], dtype="bfloat16")
-    partial_input = full_input[-M_partial:].clone()  # same data
+    tail_input = full_input[-M_tail:].clone()
 
-    print("=" * 70)
-    print("Test: GEMM M-dimension invariance (QKV projection)")
-    print(f"  W: ({K}, {N}), full: ({M_full}, {K}), partial: ({M_partial}, {K})")
-    print("=" * 70)
+    full_out = fn(full_input, W)
+    tail_out = fn(tail_input, W)
+    diff = (full_out[-M_tail:].astype("float32") - tail_out.astype("float32")).abs()
+    return float(diff.max().item())
 
-    # --- Test 1: Default paddle matmul (cuBLAS) ---
-    print("\n[1] Default paddle.matmul (cuBLAS):")
-    full_out = paddle.matmul(full_input, W)
-    partial_out = paddle.matmul(partial_input, W)
-    overlap = full_out[-M_partial:]
 
-    diff = (overlap.float() - partial_out.float()).abs()
-    max_diff = diff.max().item()
-    n_differ = (diff > 0).sum().item()
-    total = diff.numel()
-    print(f"  max_diff = {max_diff}")
-    print(f"  differing elements: {n_differ}/{total} ({100*n_differ/total:.2f}%)")
-    cublas_identical = max_diff == 0.0
-    print(f"  bit-identical: {'YES' if cublas_identical else 'NO'}")
-
-    # --- Test 2: Batch-invariant matmul (Triton persistent) ---
-    print("\n[2] Batch-invariant matmul (Triton persistent kernel):")
-    from fastdeploy.model_executor.layers.batch_invariant_ops.batch_invariant_ops import (
-        matmul_persistent,
+def test_cublas_is_m_non_invariant():
+    """Confirm cuBLAS matmul is NOT M-invariant (baseline, documents the problem)."""
+    non_invariant_count = 0
+    for M_full, M_tail, K, N in SHAPES:
+        for seed in range(N_SEEDS):
+            diff = _check_m_invariance(paddle.matmul, M_full, M_tail, K, N, seed)
+            if diff > 0:
+                non_invariant_count += 1
+    assert non_invariant_count > 0, (
+        "Expected cuBLAS bf16 matmul to be M-non-invariant in at least one case. "
+        "If this fails, cuBLAS behavior may have changed."
     )
 
-    full_out_bi = matmul_persistent(full_input, W)
-    partial_out_bi = matmul_persistent(partial_input, W)
-    overlap_bi = full_out_bi[-M_partial:]
 
-    diff_bi = (overlap_bi.float() - partial_out_bi.float()).abs()
-    max_diff_bi = diff_bi.max().item()
-    n_differ_bi = (diff_bi > 0).sum().item()
-    print(f"  max_diff = {max_diff_bi}")
-    print(f"  differing elements: {n_differ_bi}/{total} ({100*n_differ_bi/total:.2f}%)")
-    bi_identical = max_diff_bi == 0.0
-    print(f"  bit-identical: {'YES' if bi_identical else 'NO'}")
-
-    # --- Test 3: Check if F.linear / paddle.nn.Linear uses matmul or linear op ---
-    print("\n[3] paddle.nn.Linear path:")
-    linear = paddle.nn.Linear(K, N, bias_attr=False)
-    linear.weight.set_value(W.cast("float32"))  # Linear default float32, cast for set_value
-    linear = linear.to(dtype="bfloat16")
-
-    full_out_nn = linear(full_input)
-    partial_out_nn = linear(partial_input)
-    overlap_nn = full_out_nn[-M_partial:]
-
-    diff_nn = (overlap_nn.float() - partial_out_nn.float()).abs()
-    max_diff_nn = diff_nn.max().item()
-    n_differ_nn = (diff_nn > 0).sum().item()
-    print(f"  max_diff = {max_diff_nn}")
-    print(f"  differing elements: {n_differ_nn}/{total} ({100*n_differ_nn/total:.2f}%)")
-    nn_identical = max_diff_nn == 0.0
-    print(f"  bit-identical: {'YES' if nn_identical else 'NO'}")
-
-    # --- Test 4: paddle.nn.Linear WITH batch-invariant mode enabled ---
-    print("\n[4] paddle.nn.Linear + batch-invariant mode enabled:")
-    from fastdeploy.model_executor.layers.batch_invariant_ops.batch_invariant_ops import (
-        disable_batch_invariant_mode,
-        enable_batch_invariant_mode,
-    )
-
-    enable_batch_invariant_mode()
-
-    full_out_patched = linear(full_input)
-    partial_out_patched = linear(partial_input)
-    overlap_patched = full_out_patched[-M_partial:]
-
-    diff_patched = (overlap_patched.float() - partial_out_patched.float()).abs()
-    max_diff_patched = diff_patched.max().item()
-    n_differ_patched = (diff_patched > 0).sum().item()
-    print(f"  max_diff = {max_diff_patched}")
-    print(f"  differing elements: {n_differ_patched}/{total} ({100*n_differ_patched/total:.2f}%)")
-    patched_identical = max_diff_patched == 0.0
-    print(f"  bit-identical: {'YES' if patched_identical else 'NO'}")
-
-    disable_batch_invariant_mode()
-
-    # --- Summary ---
-    print("\n" + "=" * 70)
-    print("SUMMARY:")
-    print(f"  [1] cuBLAS direct:               {'PASS' if cublas_identical else 'FAIL'}")
-    print(f"  [2] Triton persistent (direct):   {'PASS' if bi_identical else 'FAIL'}")
-    print(f"  [3] nn.Linear (no patch):         {'PASS' if nn_identical else 'FAIL'}")
-    print(f"  [4] nn.Linear (batch-invariant):  {'PASS' if patched_identical else 'FAIL'}")
-    print("=" * 70)
-
-    if not cublas_identical and bi_identical and not patched_identical:
-        print("\nDIAGNOSIS: Triton persistent matmul IS batch-invariant,")
-        print("  but nn.Linear bypasses it even with batch-invariant mode on!")
-        print("  → nn.Linear calls _C_ops.linear, not _C_ops.matmul")
-        print("  → FIX: patch _C_ops.linear to also use Triton persistent matmul")
+@pytest.mark.parametrize("M_full,M_tail,K,N", SHAPES, ids=lambda s: f"{s[0]}x{s[1]}")
+def test_triton_persistent_is_m_invariant(M_full, M_tail, K, N):
+    """Triton persistent matmul must be bit-identical regardless of M."""
+    for seed in range(N_SEEDS):
+        diff = _check_m_invariance(matmul_persistent, M_full, M_tail, K, N, seed)
+        assert diff == 0.0, (
+            f"matmul_persistent NOT M-invariant: " f"shape=({M_full},{M_tail},{K},{N}) seed={seed} diff={diff}"
+        )
 
 
 if __name__ == "__main__":
-    test_gemm_m_invariance()
+    pytest.main(["-sv", __file__])
