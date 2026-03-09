@@ -77,9 +77,9 @@ __global__ void PrefillPermuteToMaskedGemmKernel(
         const ScaleT* src_scale =
             scale + static_cast<int64_t>(token_idx) * hidden_scale;
         ScaleT* dst_scale_base = permute_scale +
-                                static_cast<int64_t>(expert_idx) *
-                                    hidden_scale * max_tokens_per_expert +
-                                offset;
+                                 static_cast<int64_t>(expert_idx) *
+                                     hidden_scale * max_tokens_per_expert +
+                                 offset;
 
         for (int s = tidx; s < hidden_scale; s += BLOCK_THREADS) {
           dst_scale_base[static_cast<int64_t>(s) * max_tokens_per_expert] =
@@ -157,11 +157,13 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemmDispatch(
   PrefillPermuteToMaskedGemmKernel<DataType_, ScaleDataType_, VecSize, TOP_K>
       <<<num_blocks, BLOCK_THREADS, 0, stream>>>(
           reinterpret_cast<DataType_*>(permute_x.data<data_t>()),
-          reinterpret_cast<ScaleDataType_*>(permute_scale.template data<scale_data_t>()),
+          reinterpret_cast<ScaleDataType_*>(
+              permute_scale.template data<scale_data_t>()),
           permuted_indice_map.data<int32_t>(),
           token_nums_per_expert.data<int32_t>(),
           reinterpret_cast<const DataType_*>(x.data<data_t>()),
-          reinterpret_cast<const ScaleDataType_*>(scale.template data<scale_data_t>()),
+          reinterpret_cast<const ScaleDataType_*>(
+              scale.template data<scale_data_t>()),
           topk_ids.data<int64_t>(),
           num_tokens,
           hidden,
@@ -180,7 +182,7 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
   const int topk = topk_ids.shape()[1];
 
 #define DISPATCH_TOPK(DTYPE, SCALE_DTYPE, TOPK_VAL)                          \
-  case TOPK_VAL:                                                \
+  case TOPK_VAL:                                                             \
     return PrefillPermuteToMaskedGemmDispatch<DTYPE, SCALE_DTYPE, TOPK_VAL>( \
         x, scale, topk_ids, num_local_experts, max_token_num);
 
@@ -189,16 +191,20 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
       switch (scale.dtype()) {
         case paddle::DataType::FLOAT32: {
           switch (topk) {
-            DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::FLOAT32, 4)
-            DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::FLOAT32, 8)
+            DISPATCH_TOPK(
+                paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::FLOAT32, 4)
+            DISPATCH_TOPK(
+                paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::FLOAT32, 8)
             default:
               PD_THROW("Unsupported topk value, must be 4 or 8");
           }
         }
         case paddle::DataType::INT32: {
           switch (topk) {
-            DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::INT32, 4)
-            DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::INT32, 8)
+            DISPATCH_TOPK(
+                paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::INT32, 4)
+            DISPATCH_TOPK(
+                paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::INT32, 8)
             default:
               PD_THROW("Unsupported topk value, must be 4 or 8");
           }
@@ -209,16 +215,20 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
       switch (scale.dtype()) {
         case paddle::DataType::FLOAT32: {
           switch (topk) {
-            DISPATCH_TOPK(paddle::DataType::BFLOAT16, paddle::DataType::FLOAT32, 4)
-            DISPATCH_TOPK(paddle::DataType::BFLOAT16, paddle::DataType::FLOAT32, 8)
+            DISPATCH_TOPK(
+                paddle::DataType::BFLOAT16, paddle::DataType::FLOAT32, 4)
+            DISPATCH_TOPK(
+                paddle::DataType::BFLOAT16, paddle::DataType::FLOAT32, 8)
             default:
               PD_THROW("Unsupported topk value, must be 4 or 8");
           }
         }
         case paddle::DataType::INT32: {
           switch (topk) {
-            DISPATCH_TOPK(paddle::DataType::BFLOAT16, paddle::DataType::INT32, 4)
-            DISPATCH_TOPK(paddle::DataType::BFLOAT16, paddle::DataType::INT32, 8)
+            DISPATCH_TOPK(
+                paddle::DataType::BFLOAT16, paddle::DataType::INT32, 4)
+            DISPATCH_TOPK(
+                paddle::DataType::BFLOAT16, paddle::DataType::INT32, 8)
             default:
               PD_THROW("Unsupported topk value, must be 4 or 8");
           }
