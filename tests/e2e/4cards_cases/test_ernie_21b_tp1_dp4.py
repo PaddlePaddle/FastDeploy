@@ -1,4 +1,4 @@
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,9 +50,17 @@ def setup_and_run_server(api_url):
 
     ports_to_add = [
         FD_API_PORT + 1,
+        FD_API_PORT + 2,
+        FD_API_PORT + 3,
         FD_METRICS_PORT + 1,
+        FD_METRICS_PORT + 2,
+        FD_METRICS_PORT + 3,
         FD_CACHE_QUEUE_PORT + 1,
+        FD_CACHE_QUEUE_PORT + 2,
+        FD_CACHE_QUEUE_PORT + 3,
         FD_ENGINE_QUEUE_PORT + 1,
+        FD_ENGINE_QUEUE_PORT + 2,
+        FD_ENGINE_QUEUE_PORT + 3,
     ]
 
     for port in ports_to_add:
@@ -70,8 +78,6 @@ def setup_and_run_server(api_url):
         model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
     else:
         model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
-    mtp_model_path = os.path.join(model_path, "mtp")
-    speculative_config = {"method": "mtp", "num_speculative_tokens": 1, "model": mtp_model_path}
 
     log_path = "server.log"
     cmd = [
@@ -79,22 +85,22 @@ def setup_and_run_server(api_url):
         "-m",
         "fastdeploy.entrypoints.openai.multi_api_server",
         "--num-servers",
-        "2",
+        "4",
         "--ports",
-        f"{FD_API_PORT},{FD_API_PORT + 1}",
+        f"{FD_API_PORT},{FD_API_PORT + 1},{FD_API_PORT + 2},{FD_API_PORT + 3}",
         "--metrics-ports",
-        f"{FD_METRICS_PORT},{FD_METRICS_PORT + 1}",
+        f"{FD_METRICS_PORT},{FD_METRICS_PORT + 1},{FD_METRICS_PORT + 2},{FD_METRICS_PORT + 3}",
         "--args",
         "--model",
         model_path,
         "--engine-worker-queue-port",
-        f"{FD_ENGINE_QUEUE_PORT},{FD_ENGINE_QUEUE_PORT + 1}",
+        f"{FD_ENGINE_QUEUE_PORT},{FD_ENGINE_QUEUE_PORT + 1},{FD_ENGINE_QUEUE_PORT + 2},{FD_ENGINE_QUEUE_PORT + 3}",
         "--cache-queue-port",
-        f"{FD_CACHE_QUEUE_PORT},{FD_CACHE_QUEUE_PORT + 1}",
+        f"{FD_CACHE_QUEUE_PORT},{FD_CACHE_QUEUE_PORT + 1},{FD_CACHE_QUEUE_PORT + 2},{FD_CACHE_QUEUE_PORT + 3}",
         "--tensor-parallel-size",
-        "2",
+        "1",
         "--data-parallel-size",
-        "2",
+        "4",
         "--max-model-len",
         "65536",
         "--max-num-seqs",
@@ -102,10 +108,6 @@ def setup_and_run_server(api_url):
         "--quantization",
         "block_wise_fp8",
         "--enable-logprob",
-        "--speculative-config",
-        json.dumps(speculative_config),
-        "--graph-optimization-config",
-        '{"use_cudagraph":true,  "use_unique_memory_pool":true, "draft_model_use_cudagraph":true}',
     ]
 
     # Start subprocess in new process group
@@ -257,7 +259,6 @@ def get_token_list(response):
         if token is not None:
             token_list.append(token)
 
-    print(f"Token List: {token_list}")
     return token_list
 
 
@@ -332,17 +333,19 @@ def test_text_diff(api_url):
     chunks = get_stream_chunks(response)
 
     result = "".join(x["choices"][0]["delta"]["content"] for x in chunks)
-    print(result)
 
     base_path = os.getenv("MODEL_PATH")
-
     if base_path:
-        base_file = os.path.join(base_path, "21b_ep4_mtp_text_baseline_dev_0311.txt")
+        base_file = os.path.join(base_path, "21b_tp1_dp4_text_baseline.txt")
     else:
-        base_file = "21b_ep4_mtp_text_baseline_dev_0311.txt"
+        base_file = "21b_tp1_dp4_text_baseline.txt"
 
     with open(base_file, "r", encoding="utf-8") as f:
         baseline = f.read()
+
+    if result != baseline:
+        with open("21b_tp1_dp4_text_tmp.txt", "w", encoding="utf-8") as f:
+            f.write(result)
 
     assert result == baseline, f"Text mismatch with baseline\nresult: {result}\nbaseline: {baseline}"
 
@@ -476,6 +479,109 @@ def test_non_chat_usage_non_stream(api_url):
     assert usage["total_tokens"] == total_tokens
 
 
+def test_stop_sequence(api_url):
+    """
+    Verify that a punctuation stop sequence correctly truncates generation.
+
+    The test validates stop behavior at the token level using logprobs.
+    """
+    payload = {
+        "stream": False,
+        "stop": ["。"],
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "你要严格按照我接下来的话输出，输出冒号后面的内容，"
+                    "请输出：这是第一段。果冻这是第二段啦啦啦啦啦。"
+                ),
+            },
+        ],
+        "max_tokens": 20,
+        "top_p": 0,
+        "logprobs": True,
+        "top_logprobs": 5,
+        "min_tokens": 10,
+        "chat_template_kwargs": {
+            "options": {"thinking_mode": "close"},
+        },
+        "bad_words_token_ids": [101031, 101032, 101027, 101028, 101023, 101024],
+    }
+
+    response = send_request(url=api_url, payload=payload).json()
+
+    token_list = get_token_list(response)
+
+    assert "第二段" not in token_list
+    assert "。" in token_list
+
+
+def test_stop_sequence1(api_url):
+    """
+    Verify that generation is not truncated when no stop sequence is provided.
+    """
+    payload = {
+        "stream": False,
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "你要严格按照我接下来的话输出，输出冒号后面的内容，"
+                    "请输出：这是第一段。果冻这是第二段啦啦啦啦啦。"
+                ),
+            },
+        ],
+        "max_tokens": 20,
+        "top_p": 0,
+        "logprobs": True,
+        "top_logprobs": 5,
+        "min_tokens": 10,
+        "chat_template_kwargs": {
+            "options": {"thinking_mode": "close"},
+        },
+        "bad_words_token_ids": [101031, 101032, 101027, 101028, 101023, 101024],
+    }
+
+    response = send_request(url=api_url, payload=payload).json()
+
+    content = response["choices"][0]["message"]["content"]
+    assert "第二段" in content
+
+
+def test_stop_sequence2(api_url):
+    """
+    Verify that a custom string stop sequence truncates generation correctly.
+    """
+    payload = {
+        "stream": False,
+        "stop": ["这是第二段啦啦"],
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "你要严格按照我接下来的话输出，输出冒号后面的内容，"
+                    "请输出：这是第一段。果冻这是第二段啦啦啦啦啦。"
+                ),
+            },
+        ],
+        "max_tokens": 20,
+        "top_p": 0,
+        "logprobs": True,
+        "top_logprobs": 5,
+        "min_tokens": 10,
+        "chat_template_kwargs": {
+            "options": {"thinking_mode": "close"},
+        },
+        "bad_words_token_ids": [101031, 101032, 101027, 101028, 101023, 101024],
+    }
+
+    response = send_request(url=api_url, payload=payload).json()
+
+    content = response["choices"][0]["message"]["content"]
+
+    assert "啦啦啦" not in content
+
+
 def test_non_stream_with_logprobs(api_url):
     """
     Verify deterministic logprobs output in non-streaming mode.
@@ -502,14 +608,17 @@ def test_non_stream_with_logprobs(api_url):
     logprobs = resp_json["choices"][0]["logprobs"]
 
     base_path = os.getenv("MODEL_PATH")
-
     if base_path:
-        base_file = os.path.join(base_path, "21b_ep4_mtp_logprobs_non_stream_static_baseline_dev_0311.txt")
+        base_file = os.path.join(base_path, "21b_tp1_dp4_logprobs_non_stream_static_baseline.txt")
     else:
-        base_file = "21b_ep4_mtp_logprobs_non_stream_static_baseline_dev_0311.txt"
+        base_file = "21b_tp1_dp4_logprobs_non_stream_static_baseline.txt"
 
     with open(base_file, "r", encoding="utf-8") as f:
         baseline = json.load(f)
+
+    if logprobs != baseline:
+        with open("21b_tp1_dp4_logprobs_non_stream_static_tmp.txt", "w", encoding="utf-8") as f:
+            f.write(json.dumps(logprobs, ensure_ascii=False, indent=2))
 
     assert logprobs == baseline
 
@@ -537,13 +646,16 @@ def test_stream_with_logprobs(api_url):
     logprobs = extract_logprobs(chunks)
 
     base_path = os.getenv("MODEL_PATH")
-
     if base_path:
-        base_file = os.path.join(base_path, "21b_ep4_mtp_logprobs_stream_static_baseline_dev_0311.txt")
+        base_file = os.path.join(base_path, "21b_tp1_dp4_logprobs_stream_static_baseline.txt")
     else:
-        base_file = "21b_ep4_mtp_logprobs_stream_static_baseline_dev_0311.txt"
+        base_file = "21b_tp1_dp4_logprobs_stream_static_baseline.txt"
 
     with open(base_file, "r", encoding="utf-8") as f:
         baseline = json.load(f)
+
+    if logprobs != baseline:
+        with open("21b_tp1_dp4_logprobs_stream_static_tmp.txt", "w", encoding="utf-8") as f:
+            f.write(json.dumps(logprobs, ensure_ascii=False, indent=2))
 
     assert logprobs == baseline
