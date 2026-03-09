@@ -20,7 +20,6 @@ import paddle
 from paddle import nn
 from paddle.incubate.nn.functional import fused_bias_act, swiglu
 
-from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.platforms import current_platform
 
@@ -121,7 +120,7 @@ class SiluAndMul(nn.Layer):
         Returns:
             Tensor: Output tensor.
         """
-        if self.bias is None and self.quant_scale == -1 and envs.FD_SiluAndMul_USE_PHI_SWIGLU:
+        if self.bias is None and self.quant_scale == -1:
             return paddle.nn.functional.swiglu(x)
         return fused_bias_act(
             x,
