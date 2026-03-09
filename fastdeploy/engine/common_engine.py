@@ -172,7 +172,8 @@ class EngineService:
             )
         self._init_worker_monitor_signals()
 
-        # 将共享内存锁信号传递给 cache_manager，用于 cpu transfer 与 worker 互斥
+        # Pass the shared memory lock signal to cache_manager for mutual exclusion
+        # between the CPU transfer process and the worker process.
         self.resource_manager.cache_manager.gpu_cache_lock_signal = self.gpu_cache_lock_signal
 
         if self.cfg.eplb_config.enable_eplb:
@@ -384,15 +385,11 @@ class EngineService:
             create=True,
         )
 
-        # gpu_cache_lock_signal: 用于 worker 进程和 cpu transfer 之间互斥访问 GPU KV Cache
-        # 0 = 空闲, 1 = worker 占用, 2 = transfer 占用
+        # gpu_cache_lock_signal: mutual exclusion between worker and CPU transfer
+        # for GPU KV cache access. Values: 0 = free, 1 = worker-held, 2 = transfer-held
         gpu_cache_lock_data = np.zeros([1], dtype=np.int32)
         self.gpu_cache_lock_signal = IPCSignal(
-            name="gpu_cache_lock_signal",
-            array=gpu_cache_lock_data,
-            dtype=np.int32,
-            suffix=current_suffix,
-            create=True
+            name="gpu_cache_lock_signal", array=gpu_cache_lock_data, dtype=np.int32, suffix=current_suffix, create=True
         )
 
     def start_worker_queue_service(self, start_queue):

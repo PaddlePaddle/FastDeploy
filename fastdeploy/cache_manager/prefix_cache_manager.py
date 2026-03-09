@@ -553,19 +553,28 @@ class PrefixCacheManager:
                 heapq.heappush(self.cpu_free_block_list, cpu_block_id)
         else:
             heapq.heappush(self.cpu_free_block_list, cpu_block_ids)
-    
+
     def _accquire_kvcache_lock(self):
+        """Acquire the GPU KV cache lock for the transfer process.
+
+        Spins on the shared memory lock until it becomes free (value=0),
+        then sets it to 2 to indicate transfer occupancy.
+        This prevents concurrent GPU KV cache access between the worker
+        and the CPU transfer process, which may cause NaN errors under
+        certain DP+EP configurations.
+        """
         if not envs.FD_USE_KVCACHE_LOCK:
             return
-        # 自旋方式获取共享内存锁，标记 transfer 占用 (值=2) 
+        # Spin until the shared memory lock is free, then mark as transfer-occupied (value=2)
         while self.gpu_cache_lock_signal.value[0] != 0:
             pass
-        self.gpu_cache_lock_signal.value[0] = 2  # 标记 transfer 占用
-    
+        self.gpu_cache_lock_signal.value[0] = 2
+
     def _release_kvcache_lock(self):
+        """Release the GPU KV cache lock held by the transfer process."""
         if not envs.FD_USE_KVCACHE_LOCK:
             return
-        self.gpu_cache_lock_signal.value[0] = 0 # 释放
+        self.gpu_cache_lock_signal.value[0] = 0
 
     def issue_swap_task(
         self,

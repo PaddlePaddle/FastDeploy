@@ -228,10 +228,12 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
-    # 是否启KV Cache Lock，强制要求PrefixManager与Worker不能同时访问KV Cache
-    # 在部分DP+EP场景下，测试发现同时访问(甚至只读)导致计算出现未知原因的NaN结果
-    # 配置1启用Lock，默认为0表示不使用Lock
-    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("USE_KVCACHE_LOCK", "0"))
+    # Whether to enable KV cache lock, enforcing mutual exclusion between
+    # PrefixCacheManager and Worker when accessing GPU KV cache.
+    # Under certain DP+EP configurations, concurrent access (even read-only)
+    # has been observed to cause NaN computation errors.
+    # Set to 1 to enable the lock; defaults to 0 (disabled).
+    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("USE_KVCACHE_LOCK", "0"))),
 }
 
 
