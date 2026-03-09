@@ -131,7 +131,6 @@ class TestPrefillPermuteToMaskedGemm(unittest.TestCase):
         x_ref_np = x.cast(paddle.float32).numpy()
         scale_ref_np = scale.numpy()
 
-
         expert_to_tokens, token_nums_ref = self._get_expected_tokens_per_expert(
             x=x_ref_np,
             scale=scale_ref_np,
@@ -301,7 +300,6 @@ class TestPrefillPermuteToMaskedGemm(unittest.TestCase):
             sparsity=0.3,
         )
 
-
     def test_very_large_tokens_with_fp32_scale(self):
         self._run_and_verify(
             num_tokens=65536,
@@ -311,7 +309,7 @@ class TestPrefillPermuteToMaskedGemm(unittest.TestCase):
             max_token_num=16384,
             topk=4,
             sparsity=0.3,
-            scale_dtype=paddle.float32
+            scale_dtype=paddle.float32,
         )
 
     def test_all_minus_one(self):

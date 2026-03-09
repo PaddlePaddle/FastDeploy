@@ -476,8 +476,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 expected_m,
                 disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
             )
-            del act_out_fp8
-            del scale
 
             tmp_ffn_out = call_depermute_prefill_combine(
                 x=ffn_out,
@@ -485,8 +483,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 topk_weights=recv_topk_weights,
                 num_worst_tokens=recv_x_value.shape[0],
             )
-
-            del ffn_out
 
         elif token_all_num > 0:
             logger.debug(f"token_all_num {token_all_num}")
