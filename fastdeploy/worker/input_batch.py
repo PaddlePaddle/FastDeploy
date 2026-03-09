@@ -17,8 +17,8 @@
 import paddle
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.config import CacheConfig, FDConfig, ModelConfig, SpeculativeConfig
-from fastdeploy.engine import envs
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.logits_processor import build_logits_processors
 from fastdeploy.platforms import current_platform
