@@ -156,3 +156,17 @@ bool getEnvEnablePDL() {
   });
   return enablePDL;
 }
+
+bool getEnvDeterministicMode() {
+  static std::once_flag flag;
+  static bool value = false;
+  std::call_once(flag, [&]() { value = getBoolEnv("FD_DETERMINISTIC_MODE"); });
+  return value;
+}
+
+bool getEnvDeterministicDebug() {
+  static std::once_flag flag;
+  static bool value = false;
+  std::call_once(flag, [&]() { value = getBoolEnv("FD_DETERMINISTIC_DEBUG"); });
+  return value;
+}
