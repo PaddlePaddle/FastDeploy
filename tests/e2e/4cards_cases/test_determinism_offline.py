@@ -17,19 +17,18 @@ Determinism offline inference tests using LLM.generate
 
 Test scenarios:
 1. Same-prompt repeatability (FD_DETERMINISTIC_MODE=1)
-2. Batch invariance (single vs. batch, different positions)
-3. Different batch sizes consistency
-4. Sampling-parameter combinations (temperature x top_p, parametrized)
-5. Minimal output (max_tokens=1, early stop)
-6. Special characters & multi-language prompts
-7. Multi-turn conversation
-8. State isolation (interleaved / interference prompts)
-9. Non-deterministic validation (proves tests are effective)
+2. Different batch sizes consistency
+3. Sampling-parameter combinations (temperature x top_p, parametrized)
+4. Minimal output (max_tokens=1, early stop)
+5. Special characters & multi-language prompts
+6. Multi-turn conversation
+7. State isolation (interleaved / interference prompts)
+8. Non-deterministic validation (proves tests are effective)
 
-Long sequence / long prompt tests have been moved to test_determinism_long.py.
+Long sequence / long prompt / batch invariance tests are in test_determinism_long.py.
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0,1,2,3 pytest tests/deterministic/test_determinism_offline.py -v
+    CUDA_VISIBLE_DEVICES=0,1,2,3 pytest tests/e2e/4cards_cases/test_determinism_offline.py -v
 """
 
 import os
