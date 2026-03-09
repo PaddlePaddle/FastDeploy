@@ -296,10 +296,6 @@ class AppendAttentionBackend(AttentionBackend, DeterministicAttentionMixin):
         """
         metadata = self.attention_metadata
 
-        # Deterministic mode: unified path for ALL tokens (prefill + decode),
-        # bypasses append_attention entirely. No per-layer GPU→CPU sync needed.
-        use_deterministic = envs.FD_DETERMINISTIC_MODE
-
         # - PaddleFormers fallback: rope_already_applied=True -> use identity RoPE (cos=1, sin=0)
         rope_already_applied = getattr(forward_meta, "rope_already_applied", False)
         if rope_already_applied and forward_meta.rotary_embs is not None:
@@ -364,12 +360,12 @@ class AppendAttentionBackend(AttentionBackend, DeterministicAttentionMixin):
 
         # Deterministic mode: unified path (gqa_rope_write_cache + Triton attention for all tokens).
         # Normal path is completely untouched below.
-        if use_deterministic and self.use_output:
+        if envs.FD_DETERMINISTIC_MODE and self.use_output:
             raise NotImplementedError(
                 "Deterministic mode does not support output quantization (use_output=True) yet. "
                 "Please enable full_cuda_graph or disable FD_DETERMINISTIC_MODE."
             )
-        if use_deterministic:
+        if envs.FD_DETERMINISTIC_MODE:
             return self._deterministic_forward(qkv, cache_k, cache_v, layer, forward_meta, metadata)
 
         if self.use_output:
