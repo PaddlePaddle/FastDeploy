@@ -639,7 +639,8 @@ class XPUMoEMethod(MoEMethodBase):
         print(f"[DEBUG apply_ep_prefill] ep_moe_expert_dispatch done, ffn1_x_scale_per_token={ffn1_x_scale_per_token}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         if "a_expertwise_int8" in self.xpu_moe_quant_type:
-            ffn1_x_scale = getattr(layer, self.added_in_scale_attrs[1])
+            # ffn1_x_scale = getattr(layer, self.added_in_scale_attrs[1])
+            ffn1_x_scale = ffn1_x_scale_per_token
         elif "a_tokenwise_int8" in self.xpu_moe_quant_type:
             ffn1_x_scale = ffn1_x_scale_per_token
         else:

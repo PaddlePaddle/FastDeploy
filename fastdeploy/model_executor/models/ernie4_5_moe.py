@@ -56,7 +56,7 @@ from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
-
+from fastdeploy.model_executor.utils import set_weight_attrs
 
 class Ernie4_5_MLP(nn.Layer):
     def __init__(
@@ -206,6 +206,12 @@ class Ernie4_5_MoE(nn.Layer):
             with_bias=False,
             skip_quant=True,
             weight_dtype="float32",
+        )
+        set_weight_attrs(
+            self.gate.weight,
+            {
+                "weight_need_transpose": True,
+            },
         )
 
         self.experts = FusedMoE(
@@ -673,7 +679,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ckpt_act_suffix="activation_scale",
         )
         params_dict = dict(self.named_parameters())
-        print("params_dict: ", params_dict.keys())
+        # print("params_dict: ", params_dict.keys())
 
         process_weights_after_loading_fn = process_weights_after_loading(
             dict(self.named_sublayers()), fd_config=self.fd_config
@@ -685,7 +691,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             # Map checkpoint suffixes to FD naming convention.
             # This is needed because rename_offline_ckpt_suffix_to_fd_suffix is bypassed
             # when is_checkpoint_bf16=True (e.g. MixQuantConfig with w4a8).
-            # print("loaded_weight_name: ", loaded_weight_name)
+            print("loaded_weight_name: ", loaded_weight_name)
             # if loaded_weight_name.endswith(".activation_scale"):
             #     loaded_weight_name = loaded_weight_name[: -len(".activation_scale")] + ".in_scale"
             # elif loaded_weight_name.endswith(".quant_weight"):

@@ -317,6 +317,7 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
         """fn"""
         output_dim = getattr(param, "output_dim", None)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
+        print("weight_need_transpose: ", weight_need_transpose)
         if weight_need_transpose:
             loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
