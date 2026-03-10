@@ -452,8 +452,10 @@ def post_process_specualate(
         speculate_calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
 
     # Unified state update: merges speculate_update + speculate_set_value_by_flags_and_idx
-    # into a single kernel launch. step_output_ids/step_output_len are READ-ONLY here,
-    # so save_output can safely read them afterward.
+    # into a single kernel launch. For MTP/ngram paths, verify_draft_tokens has already
+    # handled EOS/max_dec_len detection (replacing tokens + updating step_idx), so
+    # unified_update_model_status acts as a no-op for those checks. For naive mode
+    # (which skips verify), this kernel handles EOS/max_dec_len detection.
     unified_update_model_status(
         model_output.seq_lens_encoder,  # seq_lens_encoder
         model_output.seq_lens_decoder,  # seq_lens_decoder

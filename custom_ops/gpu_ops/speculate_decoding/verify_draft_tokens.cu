@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Pure verification kernel — outputs step_output_ids + step_output_len only.
-// All state management (step_idx, stop_flags, EOS/max_dec_len detection)
-// is handled by unified_update_model_status.
+// Verification kernel — outputs step_output_ids + step_output_len,
+// and performs EOS / max_dec_len detection (read-only on step_idx).
+// step_idx is NOT modified here; all state updates (including step_idx)
+// are handled by unified_update_model_status.
 //
 // Verification strategies:
 //   0 = TOPP         : draft token in top-p candidate set (+ verify_window
@@ -76,61 +77,98 @@ __device__ inline bool verify_one_match(int64_t target_token,
 }
 
 // ============================================================
-// TOPP-only: verify_window bulk-accept fallback
-//
-// When draft token is NOT in top-p set but IS the top-2 token,
-// check verify_window consecutive positions for top-1 match.
-// If all match, bulk-accept from position i through ii.
-//
-// Returns the new loop position (i) after handling.
-// Sets *stopped=true and adjusts *accept_num_now if EOS hit.
-// Sets *rejected=true if fallback was not triggered (caller should break).
+// VerifyContext — per-batch mutable state + accept helpers.
+// Eliminates repeated EOS/max_dec_len check and output write
+// patterns across Phase 1 and Phase 2.
 // ============================================================
-__device__ inline int try_verify_window_fallback(
-    int bid,
-    int i,
-    int *output_len_now,
-    bool *stopped,
-    bool *rejected,
-    const int64_t *verify_tokens_now,
-    const int64_t *step_input_ids_now,
-    int64_t *step_output_ids,
-    const int64_t *end_tokens,
-    int seq_len_this_time,
-    int max_candidate_len,
-    int max_step_tokens,
-    int end_length,
-    int verify_window) {
-  int ii = i;
-  if (max_candidate_len >= 2 && verify_tokens_now[ii * max_candidate_len + 1] ==
-                                    step_input_ids_now[ii + 1]) {
-    // top-2 matches — scan verify_window consecutive top-1 matches
-    int j = 0;
-    ii += 1;
-    for (; j < verify_window && ii < seq_len_this_time - 1; j++, ii++) {
-      if (verify_tokens_now[ii * max_candidate_len] !=
-          step_input_ids_now[ii + 1]) {
-        break;
-      }
+struct VerifyContext {
+  // Immutable per-batch (set once at kernel entry)
+  int bid;
+  int max_step_tokens;
+  int end_length;
+  const int64_t *end_tokens;
+  const int64_t *max_dec_len;
+  const int64_t *step_input_ids_now;
+  int64_t *step_output_ids;
+
+  // Mutable per-batch state
+  int64_t cur_step_idx;
+  int output_len_now;
+  bool stopped;
+
+  // Emit a token at position `pos` to output in Phase 1.
+  // Performs: step_idx check, EOS detection, token replacement, output write.
+  // Returns true if this sequence should stop (EOS or max_dec_len hit).
+  __device__ __forceinline__ bool emit_token(int pos, int64_t token) {
+    cur_step_idx++;
+    bool is_eos = is_in_end(token, end_tokens, end_length);
+    bool max_len_hit = (cur_step_idx >= max_dec_len[bid]);
+    if ((is_eos || max_len_hit) && !is_eos) {
+      token = end_tokens[0];
     }
-    if (j >= verify_window) {
-      // Bulk accept all tokens from i to ii
-      for (; i < ii; i++) {
-        auto token = step_input_ids_now[i + 1];
-        step_output_ids[bid * max_step_tokens + i] = token;
-        (*output_len_now)++;
-        if (is_in_end(token, end_tokens, end_length)) {
-          *stopped = true;
-          return i;
+    step_output_ids[bid * max_step_tokens + pos] = token;
+    output_len_now++;
+    if (is_eos || max_len_hit) {
+      stopped = true;
+      return true;
+    }
+    return false;
+  }
+
+  // Emit the final token at position `pos` in Phase 2.
+  // Same EOS/max_dec_len logic, but does NOT increment output_len_now
+  // (Phase 2's token is already counted in the initial output_len_now=1).
+  __device__ __forceinline__ void emit_final_token(int pos, int64_t token) {
+    cur_step_idx++;
+    bool is_eos = is_in_end(token, end_tokens, end_length);
+    bool max_len_hit = (cur_step_idx >= max_dec_len[bid]);
+    if ((is_eos || max_len_hit) && !is_eos) {
+      token = end_tokens[0];
+    }
+    step_output_ids[bid * max_step_tokens + pos] = token;
+  }
+
+  // TOPP-only: verify_window bulk-accept fallback.
+  //
+  // When draft token is NOT in top-p set but IS the top-2 token,
+  // check verify_window consecutive positions for top-1 match.
+  // If all match, bulk-accept from position i through ii.
+  //
+  // Returns the new loop position (i) after handling.
+  // Sets *rejected=true if fallback was not triggered (caller should break).
+  __device__ __forceinline__ int try_verify_window_fallback(
+      int i,
+      bool *rejected,
+      const int64_t *verify_tokens_now,
+      int seq_len_this_time,
+      int max_candidate_len,
+      int verify_window) {
+    int ii = i;
+    if (max_candidate_len >= 2 &&
+        verify_tokens_now[ii * max_candidate_len + 1] ==
+            step_input_ids_now[ii + 1]) {
+      // top-2 matches — scan verify_window consecutive top-1 matches
+      int j = 0;
+      ii += 1;
+      for (; j < verify_window && ii < seq_len_this_time - 1; j++, ii++) {
+        if (verify_tokens_now[ii * max_candidate_len] !=
+            step_input_ids_now[ii + 1]) {
+          break;
         }
       }
-      return i;  // continue outer loop from position ii
+      if (j >= verify_window) {
+        // Bulk accept all tokens from i to ii
+        for (; i < ii; i++) {
+          if (emit_token(i, step_input_ids_now[i + 1])) return i;
+        }
+        return i;  // continue outer loop from position ii
+      }
     }
+    // Fallback not triggered or insufficient window — reject
+    *rejected = true;
+    return i;
   }
-  // Fallback not triggered or insufficient window — reject
-  *rejected = true;
-  return i;
-}
+};
 
 // ============================================================
 // Phase 2 helpers — sample token for rejected/last position
@@ -192,6 +230,9 @@ __global__ void verify_draft_tokens(
     const bool *is_block_step,
     const int *cu_seqlens_q_output,
     const int *reasoning_status,
+    // max_dec_len / step_idx for EOS/max-len detection (read-only)
+    const int64_t *max_dec_len,
+    const int64_t *step_idx,
     // Dimensions and config
     const int max_bsz,
     const int real_bsz,
@@ -204,8 +245,6 @@ __global__ void verify_draft_tokens(
     const bool reject_all,
     const bool accept_all) {
   const int bid = threadIdx.x;
-  int output_len_now = 1;
-  bool stopped = false;
 
   // Initialize step_output_len to 0 for ALL slots
   if (bid < max_bsz) {
@@ -228,7 +267,19 @@ __global__ void verify_draft_tokens(
       candidate_lens ? candidate_lens + start_token_id : nullptr;
   auto *target_tokens_now =
       target_tokens ? target_tokens + start_token_id : nullptr;
-  auto *step_input_ids_now = step_input_ids + bid * max_step_tokens;
+
+  // Initialize per-batch verification context
+  VerifyContext ctx;
+  ctx.bid = bid;
+  ctx.max_step_tokens = max_step_tokens;
+  ctx.end_length = end_length;
+  ctx.end_tokens = end_tokens;
+  ctx.max_dec_len = max_dec_len;
+  ctx.step_input_ids_now = step_input_ids + bid * max_step_tokens;
+  ctx.step_output_ids = step_output_ids;
+  ctx.cur_step_idx = step_idx[bid];
+  ctx.output_len_now = 1;
+  ctx.stopped = false;
 
   // ======== Phase 1: Verify draft tokens ========
   int i = 0;
@@ -241,13 +292,7 @@ __global__ void verify_draft_tokens(
 
     // Accept-all override (debug/warmup)
     if (accept_all) {
-      auto draft_token = step_input_ids_now[i + 1];
-      step_output_ids[bid * max_step_tokens + i] = draft_token;
-      output_len_now++;
-      if (is_in_end(draft_token, end_tokens, end_length)) {
-        stopped = true;
-        break;
-      }
+      if (ctx.emit_token(i, ctx.step_input_ids_now[i + 1])) break;
       continue;
     }
 
@@ -259,46 +304,30 @@ __global__ void verify_draft_tokens(
                                    ? max_candidate_len
                                    : candidate_lens_now[i];
         accepted = verify_one_topp(candidate_ids_now + i * max_candidate_len,
-                                   step_input_ids_now[i + 1],
+                                   ctx.step_input_ids_now[i + 1],
                                    actual_cand_len);
         if (!accepted) {
           bool rejected = false;
-          i = try_verify_window_fallback(bid,
-                                         i,
-                                         &output_len_now,
-                                         &stopped,
-                                         &rejected,
-                                         candidate_ids_now,
-                                         step_input_ids_now,
-                                         step_output_ids,
-                                         end_tokens,
-                                         seq_lens_this_time[bid],
-                                         max_candidate_len,
-                                         max_step_tokens,
-                                         end_length,
-                                         verify_window);
-          if (stopped || rejected) goto phase1_done;
+          i = ctx.try_verify_window_fallback(i,
+                                             &rejected,
+                                             candidate_ids_now,
+                                             seq_lens_this_time[bid],
+                                             max_candidate_len,
+                                             verify_window);
+          if (ctx.stopped || rejected) goto phase1_done;
           continue;  // bulk accept succeeded, continue from new i
         }
         break;
       }
       case 1:  // GREEDY
-        accepted =
-            verify_one_match(target_tokens_now[i], step_input_ids_now[i + 1]);
-        break;
       case 2:  // TARGET_MATCH
-        accepted =
-            verify_one_match(target_tokens_now[i], step_input_ids_now[i + 1]);
+        accepted = verify_one_match(target_tokens_now[i],
+                                    ctx.step_input_ids_now[i + 1]);
         break;
     }
 
     if (accepted) {
-      step_output_ids[bid * max_step_tokens + i] = step_input_ids_now[i + 1];
-      output_len_now++;
-      if (is_in_end(step_input_ids_now[i + 1], end_tokens, end_length)) {
-        stopped = true;
-        break;
-      }
+      if (ctx.emit_token(i, ctx.step_input_ids_now[i + 1])) break;
     } else {
       break;  // reject
     }
@@ -306,7 +335,7 @@ __global__ void verify_draft_tokens(
 phase1_done:
 
   // ======== Phase 2: Output token for rejected/last position ========
-  if (!stopped) {
+  if (!ctx.stopped) {
     int64_t output_token;
     switch (verify_strategy) {
       case 0: {  // TOPP — stochastic sampling from candidate set
@@ -322,15 +351,13 @@ phase1_done:
         break;
       }
       case 1:  // GREEDY — deterministic argmax from target_tokens
-        output_token = target_tokens_now[i];
-        break;
       case 2:  // TARGET_MATCH — target model's sampled token
         output_token = target_tokens_now[i];
         break;
     }
-    step_output_ids[bid * max_step_tokens + i] = output_token;
+    ctx.emit_final_token(i, output_token);
   }
-  step_output_len[bid] = output_len_now;
+  step_output_len[bid] = ctx.output_len_now;
 }
 
 // ============================================================
@@ -357,6 +384,9 @@ void VerifyDraftTokens(
     const paddle::Tensor &is_block_step,
     const paddle::Tensor &cu_seqlens_q_output,
     const paddle::Tensor &reasoning_status,
+    // max_dec_len / step_idx for EOS/max-len detection
+    const paddle::Tensor &max_dec_len,
+    const paddle::Tensor &step_idx,
     int max_seq_len,
     int verify_window,
     int verify_strategy,
@@ -369,7 +399,14 @@ void VerifyDraftTokens(
   // max_candidate_len: 1 if candidate_ids not provided, else from shape
   int max_candidate_len = candidate_ids ? candidate_ids->shape()[1] : 1;
 
-  constexpr int BlockSize = 512;
+  constexpr int BlockSize = 1024;
+  PADDLE_ENFORCE_LE(bsz,
+                    BlockSize,
+                    phi::errors::InvalidArgument(
+                        "verify_draft_tokens: bsz (%d) exceeds BlockSize (%d). "
+                        "Increase BlockSize or reduce max_num_seqs.",
+                        bsz,
+                        BlockSize));
   auto stream = step_output_ids.stream();
 
   // curand state: only needed for TOPP(0) strategy (stochastic sampling)
@@ -443,6 +480,9 @@ void VerifyDraftTokens(
       is_block_step.data<bool>(),
       cu_seqlens_q_output.data<int>(),
       reasoning_status.data<int>(),
+      // max_dec_len / step_idx
+      max_dec_len.data<int64_t>(),
+      step_idx.data<int64_t>(),
       // Dimensions and config
       bsz,       // max_bsz
       real_bsz,  // real_bsz
@@ -471,7 +511,9 @@ PD_BUILD_STATIC_OP(verify_draft_tokens)
              "end_tokens",
              "is_block_step",
              "cu_seqlens_q_output",
-             "reasoning_status"})
+             "reasoning_status",
+             "max_dec_len",
+             "step_idx"})
     .Outputs({"step_output_ids_out", "step_output_len_out"})
     .Attrs({"max_seq_len: int",
             "verify_window: int",

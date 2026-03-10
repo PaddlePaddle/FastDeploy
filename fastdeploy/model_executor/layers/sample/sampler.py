@@ -844,6 +844,9 @@ class SpeculativeSampler(nn.Layer):
             share_inputs["is_block_step"],
             share_inputs["cu_seqlens_q_output"],
             share_inputs["reasoning_status"],
+            # max_dec_len / step_idx for EOS/max-len detection, only read
+            share_inputs["max_dec_len"],
+            share_inputs["step_idx"],
             # Config
             max_model_len,
             self.speculative_verify_window,

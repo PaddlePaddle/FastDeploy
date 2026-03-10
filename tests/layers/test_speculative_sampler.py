@@ -186,8 +186,8 @@ def test_speculative_sampler():
     max_model_len = 1024
     max_draft_token_num = 1
 
-    # Use ngram_match method for speculative decoding
-    fd_config = _create_fd_config(max_model_len, method="ngram_match")
+    # Use ngram method for speculative decoding
+    fd_config = _create_fd_config(max_model_len, method="ngram")
     sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len)
     logits = _create_fake_logits(batch_size * (max_draft_token_num + 1), vocab_size)
     share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
@@ -204,8 +204,8 @@ def test_speculative_sampler_logprobs():
     max_model_len = 1024
     max_draft_token_num = 1
 
-    # Use ngram_match method for speculative decoding
-    fd_config = _create_fd_config(max_model_len, method="ngram_match")
+    # Use ngram method for speculative decoding
+    fd_config = _create_fd_config(max_model_len, method="ngram")
     share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
     sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len, max_num_logprobs=0)
     sampling_metadata.share_inputs = share_inputs

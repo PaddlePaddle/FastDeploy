@@ -162,7 +162,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --model ${path_to_main_model} \
     --tensor-parallel-size 4 \
     --config ${path_to_FastDeploy}benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml \
-    --speculative-config '{"method": "ngram_match", "num_speculative_tokens": 1}'
+    --speculative-config '{"method": "ngram", "num_speculative_tokens": 1}'
 ```
 
 ## 📝 使用 Naive 模式（普通解码）

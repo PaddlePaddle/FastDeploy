@@ -762,7 +762,7 @@ class SpeculativeConfig:
         args,
     ):
         # Valid value lists (not defaults, but valid options)
-        self.method_list = ["ngram_match", "mtp", "naive", "suffix"]
+        self.method_list = ["ngram", "mtp", "naive", "suffix"]
         self.mtp_strategy_list = ["default", "with_ngram"]
 
         # Initialize from defaults

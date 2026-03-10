@@ -240,4 +240,4 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --speculative-config '{"method": "naive", "num_speculative_tokens": 1}'
 ```
 
-**Note**: In Naive mode, `num_speculative_tokens` will be forced to 1.
+**Note**: In Naive mode, `num_speculative_tokens` will be forced to 0.

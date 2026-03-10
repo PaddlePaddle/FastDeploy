@@ -74,7 +74,7 @@ class SpecMethod(str, Enum):
 
     NAIVE = "naive"
     MTP = "mtp"
-    NGRAM = "ngram_match"
+    NGRAM = "ngram"
     SUFFIX = "suffix"
 
     def create_proposer(self, fd_config, **kwargs) -> Optional["Proposer"]:
@@ -124,7 +124,7 @@ class SpecMethod(str, Enum):
         """Create SpecMethod from string with validation (case-insensitive).
 
         Args:
-            value: Method name (e.g., "mtp", "NGRAM_MATCH", "Naive")
+            value: Method name (e.g., "mtp", "NGRAM", "Naive")
 
         Returns:
             SpecMethod enum value
@@ -139,8 +139,11 @@ class SpecMethod(str, Enum):
                 f"but got {type(value).__name__}: {value}. "
                 f"If you have an enum value, use SpecMethod(value) directly."
             )
+        # Backward-compatible aliases
+        ALIASES = {"ngram_match": "ngram"}
+        normalized = ALIASES.get(value.lower(), value.lower())
         try:
-            return cls(value.lower())
+            return cls(normalized)
         except ValueError:
             valid_names = [m.value for m in cls]
             raise ValueError(

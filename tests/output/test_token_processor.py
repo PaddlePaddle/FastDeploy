@@ -929,7 +929,7 @@ def test_process_batch_output_speculative_logprob_targets_topk_scores():
 
 
 def test_record_metrics_and_speculative_ngram_metrics():
-    processor, _, _, _ = _make_processor(speculative_method="ngram_match", enable_logprob=True)
+    processor, _, _, _ = _make_processor(speculative_method="ngram", enable_logprob=True)
     metrics = _Metrics()
     task = types.SimpleNamespace(
         request_id="req-metrics",

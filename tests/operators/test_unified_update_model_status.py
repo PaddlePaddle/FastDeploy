@@ -405,6 +405,10 @@ TEST_CONFIGS = [
 
 class TestUnifiedUpdateModelStatus(unittest.TestCase):
 
+    def setUp(self):
+        if not paddle.is_compiled_with_cuda():
+            self.skipTest("Requires CUDA")
+
     # ------ shared helpers ------
 
     def _run_and_get(self, inputs: Dict[str, Any]) -> Dict[str, np.ndarray]:

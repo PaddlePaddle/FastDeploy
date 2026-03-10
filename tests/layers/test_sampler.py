@@ -300,7 +300,7 @@ def test_speculative_sampler_basic(monkeypatch):
     fd_config = types.SimpleNamespace(
         model_config=types.SimpleNamespace(logprobs_mode="raw_logits", think_end_id=1, line_break_id=2),
         speculative_config=types.SimpleNamespace(
-            method="ngram_match",
+            method="ngram",
             verify_window=2,
             max_candidate_len=4,
             benchmark_mode=False,

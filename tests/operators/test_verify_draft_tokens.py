@@ -71,6 +71,8 @@ def run_kernel(paddle_inputs: Dict[str, Any], inputs: Dict[str, Any]):
         paddle_inputs["is_block_step"],
         paddle_inputs["cu_seqlens_q_output"],
         paddle_inputs["reasoning_status"],
+        paddle_inputs["max_dec_len"],
+        paddle_inputs["step_idx"],
         inputs["max_seq_len"],
         inputs["verify_window"],
         inputs["verify_strategy"],
@@ -98,6 +100,8 @@ def run_ref(inputs: Dict[str, Any]):
         ref["is_block_step"],
         ref["cu_seqlens_q_output"],
         ref["reasoning_status"],
+        ref["max_dec_len"],
+        ref["step_idx"],
         ref["max_seq_len"],
         ref["verify_window"],
         ref["verify_strategy"],
@@ -164,6 +168,55 @@ def is_in(candidate_list, token, length):
     return token in candidate_list[:length]
 
 
+class _VerifyContext:
+    """Python mirror of the CUDA VerifyContext struct for reference testing."""
+
+    def __init__(
+        self,
+        bid,
+        max_step_tokens,
+        end_length,
+        end_tokens,
+        max_dec_len,
+        step_input_ids_now,
+        step_output_ids_flat,
+        cur_step_idx,
+    ):
+        self.bid = bid
+        self.max_step_tokens = max_step_tokens
+        self.end_length = end_length
+        self.end_tokens = end_tokens
+        self.max_dec_len = max_dec_len
+        self.step_input_ids_now = step_input_ids_now
+        self.step_output_ids_flat = step_output_ids_flat
+        self.cur_step_idx = cur_step_idx
+        self.output_len_now = 1
+        self.stopped = False
+
+    def emit_token(self, pos, token):
+        """Emit a token to output. Returns True if sequence should stop."""
+        self.cur_step_idx += 1
+        eos = is_in_end(token, self.end_tokens, self.end_length)
+        max_hit = self.cur_step_idx >= int(self.max_dec_len[self.bid])
+        if (eos or max_hit) and not eos:
+            token = int(self.end_tokens[0])
+        self.step_output_ids_flat[self.bid * self.max_step_tokens + pos] = token
+        self.output_len_now += 1
+        if eos or max_hit:
+            self.stopped = True
+            return True
+        return False
+
+    def emit_final_token(self, pos, token):
+        """Emit the Phase 2 final token (no output_len_now increment)."""
+        self.cur_step_idx += 1
+        eos = is_in_end(token, self.end_tokens, self.end_length)
+        max_hit = self.cur_step_idx >= int(self.max_dec_len[self.bid])
+        if (eos or max_hit) and not eos:
+            token = int(self.end_tokens[0])
+        self.step_output_ids_flat[self.bid * self.max_step_tokens + pos] = token
+
+
 def verify_draft_tokens_ref(
     step_output_ids,
     step_output_len,
@@ -180,6 +233,8 @@ def verify_draft_tokens_ref(
     is_block_step,
     cu_seqlens_q_output,
     reasoning_status,
+    max_dec_len,
+    step_idx,
     max_seq_len,
     verify_window,
     verify_strategy,
@@ -201,8 +256,6 @@ def verify_draft_tokens_ref(
 
     for bid in range(real_bsz):
         start_token_id = cu_seqlens_q_output[bid]
-        output_len_now = 1
-        stopped = False
 
         if is_block_step[bid] or stop_flags[bid]:
             step_output_len[bid] = 0
@@ -218,17 +271,24 @@ def verify_draft_tokens_ref(
             candidate_scores_flat[start_token_id * max_candidate_len :] if candidate_scores_flat is not None else None
         )
 
+        ctx = _VerifyContext(
+            bid,
+            max_step_tokens,
+            end_length,
+            end_tokens,
+            max_dec_len,
+            step_input_ids_now,
+            step_output_ids_flat,
+            int(step_idx[bid]),
+        )
+
         # Phase 1: Verify
         i = 0
         while i < seq_lens_this_time[bid] - 1:
             if reject_all or seq_lens_encoder[bid] != 0 or reasoning_status[bid] == 1:
                 break
             if accept_all:
-                draft_token = step_input_ids_now[i + 1]
-                step_output_ids_flat[bid * max_step_tokens + i] = draft_token
-                output_len_now += 1
-                if is_in_end(draft_token, end_tokens, end_length):
-                    stopped = True
+                if ctx.emit_token(i, step_input_ids_now[i + 1]):
                     break
                 i += 1
                 continue
@@ -242,6 +302,7 @@ def verify_draft_tokens_ref(
                     actual_cand_len,
                 )
                 if not accepted:
+                    # verify_window fallback
                     ii = i
                     if (
                         max_candidate_len >= 2
@@ -255,14 +316,10 @@ def verify_draft_tokens_ref(
                             ii += 1
                         if j >= verify_window:
                             for k in range(i, ii):
-                                token = step_input_ids_now[k + 1]
-                                step_output_ids_flat[bid * max_step_tokens + k] = token
-                                output_len_now += 1
-                                if is_in_end(token, end_tokens, end_length):
-                                    stopped = True
+                                if ctx.emit_token(k, step_input_ids_now[k + 1]):
                                     i = k
                                     break
-                            if stopped:
+                            if ctx.stopped:
                                 break
                             i = ii
                             continue
@@ -271,17 +328,14 @@ def verify_draft_tokens_ref(
                 accepted = target_tokens_now[i] == step_input_ids_now[i + 1]
 
             if accepted:
-                step_output_ids_flat[bid * max_step_tokens + i] = step_input_ids_now[i + 1]
-                output_len_now += 1
-                if is_in_end(step_input_ids_now[i + 1], end_tokens, end_length):
-                    stopped = True
+                if ctx.emit_token(i, step_input_ids_now[i + 1]):
                     break
             else:
                 break
             i += 1
 
         # Phase 2: Sample for rejected/last position
-        if not stopped:
+        if not ctx.stopped:
             if verify_strategy == 0:
                 if candidate_lens_now is not None and len(candidate_lens_now) > i:
                     actual_cand_len = min(candidate_lens_now[i], max_candidate_len)
@@ -306,9 +360,9 @@ def verify_draft_tokens_ref(
                     if candidate_ids_now is not None
                     else int(step_input_ids_now[0])
                 )
-            step_output_ids_flat[bid * max_step_tokens + i] = accept_token
+            ctx.emit_final_token(i, accept_token)
 
-        step_output_len[bid] = output_len_now
+        step_output_len[bid] = ctx.output_len_now
 
     return step_output_ids, step_output_len
 
@@ -407,6 +461,8 @@ def gen_verify_draft_tokens_inputs(
         "is_block_step": is_block_step,
         "cu_seqlens_q_output": cu_seqlens_q_output,
         "reasoning_status": reasoning_status,
+        "max_dec_len": rng.integers(50, 200, size=real_bsz, dtype=np.int64),
+        "step_idx": rng.integers(0, 30, size=real_bsz, dtype=np.int64),
         "max_seq_len": max_seq_len,
         "verify_window": verify_window,
         "verify_strategy": verify_strategy,
@@ -584,6 +640,10 @@ TEST_CONFIGS = [
 
 class TestVerifyDraftTokens(unittest.TestCase):
 
+    def setUp(self):
+        if not paddle.is_compiled_with_cuda():
+            self.skipTest("Requires CUDA")
+
     # ------ shared run + check helper ------
 
     def _run_and_compare(self, inputs: Dict[str, Any], label: str = ""):
@@ -611,6 +671,23 @@ class TestVerifyDraftTokens(unittest.TestCase):
         )
         inputs["step_input_ids"][0, 2] = inputs["end_tokens"][0]
         self._run_and_compare(inputs, label="eos_handling")
+
+    def test_max_dec_len_truncation(self):
+        """Test max_dec_len causes token replacement with end_tokens[0]."""
+        inputs = gen_verify_draft_tokens_inputs(
+            real_bsz=4, max_draft_tokens=5, verify_strategy=VerifyStrategy.GREEDY.value, seed=42, match_ratio=1.0
+        )
+        # Set step_idx close to max_dec_len so it triggers during verification
+        inputs["step_idx"][:] = [48, 10, 10, 10]
+        inputs["max_dec_len"][:] = [50, 200, 200, 200]
+        inputs["is_block_step"][:] = False
+        inputs["stop_flags"][:] = False
+        # Ensure no accidental EOS in draft tokens
+        for bid in range(4):
+            for j in range(5):
+                while inputs["step_input_ids"][bid, j] in inputs["end_tokens"]:
+                    inputs["step_input_ids"][bid, j] = (inputs["step_input_ids"][bid, j] + 1) % 1000
+        self._run_and_compare(inputs, label="max_dec_len_truncation")
 
     def test_verify_strategy_enum(self):
         self.assertEqual(VerifyStrategy.TOPP.value, 0)
