@@ -276,6 +276,12 @@ class TestInit:
         cfg = self._deps(monkeypatch, guided=True)
         e = EngineService(cfg, start_queue=False, use_async_llm=False)
         assert e.guided_decoding_checker is not None
+        # eplb enabled (L176-177)
+        cfg2 = self._deps(monkeypatch)
+        cfg2.eplb_config.enable_eplb = True
+        monkeypatch.setattr("fastdeploy.engine.common_engine.init_eplb_signals", _noop)
+        e2 = EngineService(cfg2, start_queue=False, use_async_llm=False)
+        assert e2.cfg.eplb_config.enable_eplb
 
 
 class TestLifecycle:
@@ -308,6 +314,54 @@ class TestLifecycle:
         e3._decode_process_splitwise_requests = lambda: dc.append(1)
         e3.start()
         assert len(dc) == 1
+        # async_llm → start_worker_service (L193)
+        e4 = _eng(monkeypatch)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", False)
+        e4.use_async_llm = True
+        e4.start_worker_service = _noop
+        e4.token_processor.tasks_queue = None
+        e4.token_processor.run = _noop
+        e4.cfg.router_config.router = None
+        e4._schedule_request_to_worker = _noop
+        e4.start()
+        # register_to_router with router enabled (L1748-1749)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.time.sleep", _noop)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.check_service_health", lambda u: False)
+        e5 = _eng(monkeypatch)
+        e5.cfg.router_config.router = "http://test:9999"
+        e5._register_to_router()
+        # daemon thread started — give it a tick then stop engine
+        e5.running = False
+        # register_to_router: success + error + exception paths (L1741-1759)
+        import threading as _thr
+
+        _done = _thr.Event()
+        _post_n = [0]
+
+        def _mock_post(*a, **kw):
+            _post_n[0] += 1
+            if _post_n[0] == 1:
+                return _ns(ok=True)
+            if _post_n[0] == 2:
+                return _ns(ok=False, status_code=500, text="err")
+            raise ConnectionError("mock")
+
+        _sleep_n = [0]
+
+        def _mock_sleep(secs):
+            _sleep_n[0] += 1
+            if _sleep_n[0] >= 3:
+                _done.set()
+                raise OSError("stop")
+
+        monkeypatch.setattr("fastdeploy.engine.common_engine.time.sleep", _mock_sleep)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.check_service_health", lambda u: True)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.requests.post", _mock_post)
+        e6 = _eng(monkeypatch)
+        e6.cfg.router_config.router = "http://test:9999"
+        e6.cfg.register_info = {"host": "test"}
+        e6._register_to_router()
+        _done.wait(timeout=5)
 
     def test_worker_service(self, monkeypatch):
         EWQ = lambda **kw: _ns(get_server_port=lambda: 12345, cleanup=_noop)
@@ -324,6 +378,12 @@ class TestLifecycle:
         e2.cfg.cache_config.enable_prefix_caching = True
         e2.start_worker_queue_service(start_queue=True)
         assert hasattr(e2, "cache_task_queue")
+        # SHM queue address (L391)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENGINE_TASK_QUEUE_WITH_SHM", True)
+        e_shm = _eng(monkeypatch)
+        e_shm.start_worker_queue_service(start_queue=True)
+        assert hasattr(e_shm, "engine_worker_queue")
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENGINE_TASK_QUEUE_WITH_SHM", False)
         # cmd building
         cap = {}
         monkeypatch.setattr(
@@ -380,6 +440,24 @@ class TestLifecycle:
         e3c.ipc_signal_suffix = 12345
         e3c._start_worker_service()
         assert "--line_break_id 99" in cap["cmd"]
+        # line_break via raw int from encode (L1997)
+        dp_int = _ns(
+            tokenizer=_ns(
+                vocab={"a": 0},
+                get_vocab=lambda: {},
+                encode=lambda *a, **k: 77,
+            ),
+            eos_token_id_len=1,
+            pad_token_id=0,
+            image_patch_id=-1,
+        )
+        e3e = _eng(monkeypatch)
+        e3e.data_processor = dp_int
+        e3e.mm_max_tokens_per_item = None
+        e3e.do_profile = 0
+        e3e.ipc_signal_suffix = 12345
+        e3e._start_worker_service()
+        assert "--line_break_id 77" in cap["cmd"]
         # nnode > 1
         e3d = _eng(monkeypatch)
         e3d.data_processor = dp
@@ -390,6 +468,17 @@ class TestLifecycle:
         e3d.cfg.ips = ["10.0.0.1", "10.0.0.2"]
         e3d._start_worker_service()
         assert "--nnodes 2" in cap["cmd"]
+        # logits_processors + mm_max_tokens_per_item (L2051, L2053)
+        e3f = _eng(monkeypatch)
+        e3f.data_processor = dp
+        e3f.mm_max_tokens_per_item = {"image": 512}
+        e3f.do_profile = 0
+        e3f.ipc_signal_suffix = 12345
+        e3f.cfg.structured_outputs_config.logits_processors = ["xgrammar"]
+        e3f.cfg.cache_config.num_gpu_blocks_override = 64
+        e3f._start_worker_service()
+        assert "--logits-processors xgrammar" in cap["cmd"]
+        assert "--mm_max_tokens_per_item" in cap["cmd"]
         # full flow with profiling
         e4 = _eng(monkeypatch)
         e4.use_async_llm = True
@@ -491,6 +580,23 @@ class TestLifecycle:
         e6.engine_worker_queue_server = _ns(cleanup=lambda: qc.append(1))
         e6._exit_sub_services()
         assert len(qc) == 1
+        # cache_manager kill exception (L1778-1779)
+        e7 = _eng(monkeypatch)
+        e7.use_async_llm = True
+        e7.worker_proc = None
+        e7.worker_ready_signal = _Sig()
+        e7.loaded_model_signal = _Sig()
+        monkeypatch.setattr("os.getpgid", lambda pid: (_ for _ in ()).throw(OSError("no pid")))
+        e7.cache_manager_processes = [_ns(pid=777)]
+        e7._exit_sub_services()  # should not raise
+        # manager.shutdown exception (L1792-1793)
+        e8 = _eng(monkeypatch)
+        e8.use_async_llm = True
+        e8.worker_proc = None
+        e8.worker_ready_signal = _Sig()
+        e8.loaded_model_signal = _Sig()
+        e8.cache_task_queue = _ns(manager=_ns(shutdown=lambda: (_ for _ in ()).throw(RuntimeError("dead"))))
+        e8._exit_sub_services()  # should not raise
 
     def test_signals_and_setup(self, monkeypatch):
         monkeypatch.setattr("fastdeploy.engine.common_engine.IPCSignal", lambda **kw: _Sig(kw.get("array")))
@@ -787,9 +893,15 @@ class TestQueryControlMisc:
         # clear_data
         e.send_response_server = _ns(req_dict={})
         e.recv_request_server = _ns(req_dict={})
+        e.cache_task_queue = _ns(clear_transfer_task=_noop)
         assert e.clear_data()
         e.token_processor.clear_data = lambda: (_ for _ in ()).throw(RuntimeError("x"))
         assert not e.clear_data()
+        # check_and_free_block_tables (L1702)
+        freed = []
+        e.resource_manager.check_and_free_block_tables = lambda: freed.append(1)
+        e.check_and_free_block_tables()
+        assert freed
         # _setting_environ_variables
         e2 = _eng(monkeypatch)
         r = e2._setting_environ_variables()
@@ -799,6 +911,9 @@ class TestQueryControlMisc:
         assert "FLAGS_use_pd_disaggregation=1" in e2._setting_environ_variables()
         monkeypatch.setattr("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True)
         assert "FLAGS_use_pd_disaggregation_per_chunk=1" in e2._setting_environ_variables()
+        # enable_mm → FLAGS_max_partition_size (L1941)
+        e2.cfg.model_config.enable_mm = True
+        assert "FLAGS_max_partition_size=1024" in e2._setting_environ_variables()
         # _send_error_response
         e3 = _eng(monkeypatch)
         sent = []
@@ -1006,6 +1121,16 @@ class TestInsertTasks:
         e3.resource_manager.real_bsz = 1
         e3.engine_worker_queue = _ns(put_tasks=_noop)
         assert e3.insert_tasks([_task(preempted=True, carrier={"traceparent": "00-abc"})])
+        # enable_mm path → update_mm_requests_chunk_size (L532)
+        e4 = _eng(monkeypatch)
+        e4.cfg.scheduler_config.splitwise_role = "mixed"
+        e4.cfg.model_config.enable_mm = True
+        e4.cfg.cache_config.enable_chunked_prefill = False
+        e4.resource_manager.allocate_resources_for_new_tasks = lambda t: t
+        e4.resource_manager.real_bsz = 1
+        e4.engine_worker_queue = _ns(put_tasks=_noop)
+        e4.update_mm_requests_chunk_size = _noop
+        assert e4.insert_tasks([_task()])
 
     def test_prefilled_requests(self, monkeypatch):
         def _setup(e):
@@ -1076,6 +1201,25 @@ class TestInsertTasks:
         e3._insert_prefilled_requests([ro_eos])
         assert e3.resource_manager.stop_flags[0]
         assert e2.resource_manager.stop_flags[0]
+        # MTP speculative decode path (L566)
+        e4 = _eng(monkeypatch)
+        _setup(e4)
+        e4.cfg.speculative_config = _ns(method="mtp")
+        e4.resource_manager.req_dict = {"rm": 0}
+        e4.resource_manager.tasks_list = [_ns(prompt_token_ids=[0], num_cached_tokens=0, metrics=met)]
+        e4.resource_manager.stop_flags = np.array([False], dtype=bool)
+        e4.token_processor = _ns(tokens_counter={}, clear_data=_noop, number_of_tasks=0, number_of_input_tokens=0)
+        e4.engine_worker_queue = _ns(put_tasks=_noop)
+        ro_mtp = _ns(
+            request_id="rm",
+            outputs=_ns(token_ids=[7], draft_token_ids=[10, 11]),
+            error_code=200,
+            error_msg=None,
+            num_cached_tokens=3,
+            metrics=met,
+        )
+        e4._insert_prefilled_requests([ro_mtp])
+        assert e4.resource_manager.tasks_list[0].draft_token_ids == [10, 11]
 
 
 class TestSchedule:
@@ -1617,6 +1761,39 @@ class TestZmqAndSplitwise:
         e11.recv_request_server = _ns(receive_json_once=recv11)
         monkeypatch.setattr("fastdeploy.engine.common_engine.ZmqTcpServer", lambda **kw: e11.recv_request_server)
         e11._insert_zmq_task_to_scheduler()
+        # trace_carrier path (L1190-1191)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.ControlRequest.is_control_request", lambda d: False)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False)
+        monkeypatch.setattr(
+            "fastdeploy.engine.common_engine.Request.from_dict",
+            lambda d: _ns(request_id=d["request_id"], metrics=_ns(scheduler_recv_req_time=0)),
+        )
+        e12 = _eng(monkeypatch)
+        e12.send_response_server = _ns(send_response=_noop)
+        e12.guided_decoding_checker = None
+        _zmq_recv(e12, [(None, {"request_id": "tc_1", "status": None, "trace_carrier": {"x": "y"}})])
+        # control request exception (L1154-1155)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.ControlRequest.is_control_request", lambda d: True)
+        monkeypatch.setattr(
+            "fastdeploy.engine.common_engine.ControlRequest.from_dict",
+            lambda d: (_ for _ in ()).throw(ValueError("bad ctrl")),
+        )
+        e13 = _eng(monkeypatch)
+        e13.send_response_server = _ns(send_response=_noop)
+        _zmq_recv(e13, [(None, {"request_id": "c_err"})])
+        # result with failed=None → num_requests_waiting.inc (L1232-1233)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.ControlRequest.is_control_request", lambda d: False)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False)
+        monkeypatch.setattr(
+            "fastdeploy.engine.common_engine.Request.from_dict",
+            lambda d: _ns(request_id=d["request_id"], metrics=_ns(scheduler_recv_req_time=0)),
+        )
+        e14 = _eng(monkeypatch)
+        e14.send_response_server = _ns(send_response=_noop)
+        e14.guided_decoding_checker = None
+        e14.scheduler.put_requests = lambda tasks: [(tasks[0].request_id, None)]
+        _zmq_recv(e14, [(None, {"request_id": "ok1", "status": None})])
 
     def test_send_tokens(self, monkeypatch):
         from fastdeploy.engine.request import CompletionOutput, RequestOutput
@@ -1737,6 +1914,37 @@ class TestZmqAndSplitwise:
         e6.scheduler.get_results = gr6
         e6._zmq_send_generated_tokens()
         assert len(s6) >= 1
+        # non-adapter: exception in get_results → logged (L1538-1539)
+        e7 = _eng(monkeypatch)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False)
+        cc7 = [0]
+
+        def gr7():
+            cc7[0] += 1
+            if cc7[0] == 1:
+                raise RuntimeError("boom")
+            e7.running = False
+            return {}
+
+        e7.scheduler.get_results = gr7
+        e7._zmq_send_generated_tokens()  # should not raise
+        # non-adapter: non-RequestOutput content → append directly (L1534)
+        e8 = _eng(monkeypatch)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False)
+        s8 = []
+        e8.send_response_server = _ns(send_response=lambda rid, r: s8.append(rid))
+        cc8 = [0]
+
+        def gr8():
+            cc8[0] += 1
+            if cc8[0] == 1:
+                return {"n1": ["raw_string"]}
+            e8.running = False
+            return {}
+
+        e8.scheduler.get_results = gr8
+        e8._zmq_send_generated_tokens()
+        assert "n1" in s8
 
     def test_splitwise_decode(self, monkeypatch):
         from fastdeploy.engine.request import CompletionOutput, Request, RequestOutput
