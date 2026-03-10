@@ -234,12 +234,20 @@ class ResourceManagerV1(ResourceManager):
 
         # SWA recycle
         self.request_head_recycle_upto = {}
-        self.swa_window_size = getattr(self.config.model_config, "sliding_window", 0)
+        self.swa_window_size = getattr(self.config.model_config, "window_size", 0)
 
         if self.enable_head_wise_kv_cache:
-            # To do：
-            # swa_kv_head_indices需要根据模型设置赋值
-            self.swa_kv_head_indices = []
+            num_kv_heads = self.config.model_config.num_key_value_heads
+            swa_ratio = getattr(self.config.model_config, "head_wise_swa_ratio", 0.75)
+            num_swa_heads = int(num_kv_heads * swa_ratio)
+
+            self.swa_kv_head_indices = list(range(num_kv_heads - num_swa_heads, num_kv_heads))
+            self.full_kv_head_indices = list(range(0, num_kv_heads - num_swa_heads))
+            llm_logger.debug(
+                f"[SWA Config] window_size={self.swa_window_size}, "
+                f"swa_ratio={swa_ratio}, num_kv_heads={num_kv_heads}, "
+                f"swa_heads={self.swa_kv_head_indices}, full_heads={self.full_kv_head_indices}"
+            )
         else:
             self.head_wise_kv_cache = None
 
