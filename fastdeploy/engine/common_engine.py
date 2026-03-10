@@ -55,6 +55,7 @@ from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     EngineCacheQueue,
     EngineWorkerQueue,
+    IPCLock,
     IPCSignal,
     ZmqIpcServer,
     ZmqTcpServer,
@@ -171,6 +172,10 @@ class EngineService:
                 disable_any_whitespace=self.cfg.structured_outputs_config.disable_any_whitespace,
             )
         self._init_worker_monitor_signals()
+
+        # Pass the GPU KV cache lock to cache_manager for mutual exclusion
+        # between the CPU transfer process and the worker process.
+        self.resource_manager.cache_manager.gpu_cache_lock = self.gpu_cache_lock
 
         if self.cfg.eplb_config.enable_eplb:
             current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
@@ -377,6 +382,14 @@ class EngineService:
             name="kv_cache_status",
             array=kv_cache_status,
             dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        # gpu_cache_lock: file-based lock for mutual exclusion between worker
+        # and CPU transfer when accessing GPU KV cache.
+        self.gpu_cache_lock = IPCLock(
+            name="gpu_cache_lock",
             suffix=current_suffix,
             create=True,
         )
