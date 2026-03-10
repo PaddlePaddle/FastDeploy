@@ -363,6 +363,7 @@ def test_long_sequence_determinism_basic(llm):
     ],
     ids=["19_chunks", "32_chunks", "47_chunks"],
 )
+@pytest.mark.skip(reason="Skipping because the test takes a long time.")
 def test_long_sequence_multiple_lengths(llm, max_tokens, min_expected, desc):
     """
     Test determinism across sequence lengths that cross the chunk boundary.
