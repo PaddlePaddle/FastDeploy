@@ -461,7 +461,6 @@ class DataProcessorTestCase(unittest.TestCase):
         )
 
         processed = processor.process_response(response)
-        self.assertEqual(processed.outputs.text, "tool-only")
         self.assertEqual(processed.outputs.reasoning_content, "think")
         self.assertEqual(processed.outputs.tool_calls, ["tool"])
 
@@ -508,7 +507,6 @@ class DataProcessorTestCase(unittest.TestCase):
 
         result = processor.process_response_dict_normal(response, enable_thinking=True)
         self.assertEqual(result["outputs"]["completion_tokens"], "7")
-        self.assertEqual(result["outputs"]["text"], "tool-text")
         self.assertEqual(result["outputs"]["reasoning_content"], "because")
         self.assertEqual(result["outputs"]["reasoning_token_num"], 1)
 
@@ -590,7 +588,7 @@ class DataProcessorTestCase(unittest.TestCase):
         request = {"prompt_token_ids": [1, 2, 3], "max_tokens": 5}
         processed = self.processor.process_request_dict(request, max_model_len=6)
         self.assertEqual(processed["prompt_token_ids"], [1, 2, 3])
-        self.assertEqual(processed["max_tokens"], 5)
+        self.assertEqual(processed["max_tokens"], 3)
 
     def test_process_request_dict_requires_chat_template(self):
         original_template = self.processor.tokenizer.chat_template

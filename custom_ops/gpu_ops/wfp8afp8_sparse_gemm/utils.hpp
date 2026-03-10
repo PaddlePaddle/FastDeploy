@@ -32,69 +32,71 @@
 #include <cutlass/numeric_conversion.h>
 #include <cutlass/numeric_types.h>
 
-
 using namespace cute;
 
-
-template<typename T>
+template <typename T>
 struct PackedHalf;
 
-template<>
+template <>
 struct PackedHalf<cutlass::half_t> {
-    using Type = __half2;
+  using Type = __half2;
 };
 
-template<>
+template <>
 struct PackedHalf<cutlass::bfloat16_t> {
-    using Type = nv_bfloat162;
+  using Type = nv_bfloat162;
 };
 
 template <class PointerType>
-__device__ GmmaDescriptor make_smem_desc(
-        PointerType smem_ptr,
-        int layout_type,
-        int leading_byte_offset = 0,
-        int stride_byte_offset = 1024) {
-
-    GmmaDescriptor desc;
-    auto uint_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
-    desc.bitfield.start_address_ = uint_ptr >> 4;
-    desc.bitfield.layout_type_ = layout_type;
-    desc.bitfield.leading_byte_offset_ = leading_byte_offset >> 4;
-    desc.bitfield.stride_byte_offset_ = stride_byte_offset >> 4;
-    desc.bitfield.base_offset_ = 0;
-    return desc;
+__device__ GmmaDescriptor make_smem_desc(PointerType smem_ptr,
+                                         int layout_type,
+                                         int leading_byte_offset = 0,
+                                         int stride_byte_offset = 1024) {
+  GmmaDescriptor desc;
+  auto uint_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
+  desc.bitfield.start_address_ = uint_ptr >> 4;
+  desc.bitfield.layout_type_ = layout_type;
+  desc.bitfield.leading_byte_offset_ = leading_byte_offset >> 4;
+  desc.bitfield.stride_byte_offset_ = stride_byte_offset >> 4;
+  desc.bitfield.base_offset_ = 0;
+  return desc;
 }
 
-template <typename Mma, size_t ...Idx>
-__forceinline__ __device__ static void gemm(uint64_t const& desc_a, uint64_t const& desc_b, float* d, const uint32_t e, std::index_sequence<Idx...>) {
-    Mma::fma(desc_a, desc_b, d[Idx]..., e, GMMA::ScaleOut::One);
+template <typename Mma, size_t... Idx>
+__forceinline__ __device__ static void gemm(uint64_t const& desc_a,
+                                            uint64_t const& desc_b,
+                                            float* d,
+                                            const uint32_t e,
+                                            std::index_sequence<Idx...>) {
+  Mma::fma(desc_a, desc_b, d[Idx]..., e, GMMA::ScaleOut::One);
 }
 
 template <typename Mma, int kBlockK, int NumMmaThreads, typename T>
-__forceinline__ __device__ void gemm(
-        const T * sA,
-        const T * sB,
-        float * acc_c,
-        const uint32_t *E) {
+__forceinline__ __device__ void gemm(const T* sA,
+                                     const T* sB,
+                                     float* acc_c,
+                                     const uint32_t* E) {
+  constexpr int acc_num = sizeof(Mma::CRegisters) / sizeof(float);
 
-    constexpr int acc_num = sizeof(Mma::CRegisters) / sizeof(float);
+  warpgroup_arrive();
+// 选择的下标   对应的16进制
+//    01          4
+//    02          8
+//    03          12
+//    12          9
+//    13          13
+//    23          14
+#pragma unroll
+  for (int i = 0; i < kBlockK / 64; i++) {
+    GmmaDescriptor a_desc = make_smem_desc(sA + i * 32, 1, 0, 1024);
+    GmmaDescriptor b_desc = make_smem_desc(sB + i * 64, 1, 0, 1024);
+    gemm<Mma>(a_desc,
+              b_desc,
+              acc_c,
+              E[i * NumMmaThreads],
+              std::make_index_sequence<acc_num>{});
+  }
 
-    warpgroup_arrive();
-    // 选择的下标   对应的16进制
-    //    01          4
-    //    02          8
-    //    03          12
-    //    12          9
-    //    13          13
-    //    23          14
-    #pragma unroll
-    for (int i = 0; i < kBlockK / 64; i++) {
-        GmmaDescriptor a_desc = make_smem_desc(sA + i * 32, 1, 0, 1024);
-        GmmaDescriptor b_desc = make_smem_desc(sB + i * 64, 1, 0, 1024);
-        gemm<Mma>(a_desc, b_desc, acc_c, E[i * NumMmaThreads], std::make_index_sequence<acc_num>{});
-    }
-
-    warpgroup_commit_batch();
-    warpgroup_wait<0>();
+  warpgroup_commit_batch();
+  warpgroup_wait<0>();
 }

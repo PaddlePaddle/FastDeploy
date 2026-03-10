@@ -440,7 +440,7 @@ class EngineArgs:
     """
     SplitWise Use, Results Writer Batch Size
     """
-    enable_overlap_schedule: bool = False
+    enable_overlap_schedule: bool = True
     """
     Flag to enable overlapping schedule. Default is False (disabled).
     """
@@ -501,6 +501,11 @@ class EngineArgs:
     Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
+    moe_gate_fp32: bool = False
+    """
+    Flag to specify the dtype of gate as FP32. Default is False (Using model default dtype).
+    """
+
     logits_processors: Optional[List[str]] = None
     """
     A list of FQCNs (Fully Qualified Class Names) of logits processors supported by the service.
@@ -557,6 +562,13 @@ class EngineArgs:
             and not current_platform.is_maca()
         ):
             self.enable_prefix_caching = False
+        if (
+            not current_platform.is_cuda()
+            or self.speculative_config is not None
+            or self.splitwise_role != "mixed"
+            or self.dynamic_load_weight
+        ):
+            self.enable_overlap_schedule = False
         if self.enable_logprob:
             if not current_platform.is_cuda() and not current_platform.is_xpu():
                 raise NotImplementedError("Only CUDA and XPU platforms support logprob.")
@@ -908,6 +920,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.lm_head_fp32,
             help="Specify the dtype of lm_head weight as float32.",
+        )
+        model_group.add_argument(
+            "--moe-gate-fp32",
+            action="store_true",
+            default=EngineArgs.moe_gate_fp32,
+            help="Specify the dtype of gate weight as float32.",
         )
         model_group.add_argument(
             "--logits-processors",
@@ -1319,7 +1337,7 @@ class EngineArgs:
 
         scheduler_group.add_argument(
             "--enable-overlap-schedule",
-            action="store_true",
+            action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_overlap_schedule,
             help="Enable overlapping schedule.",
         )
@@ -1436,7 +1454,7 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                if current_platform.is_maca():
+                if current_platform.is_maca() or current_platform.is_iluvatar():
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM

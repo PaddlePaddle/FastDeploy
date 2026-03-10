@@ -23,9 +23,13 @@ import traceback
 from typing import Tuple
 
 import numpy as np
-import paddle
-import paddle.distributed as dist
-from paddle.distributed import fleet
+
+from fastdeploy.logger.logger import intercept_paddle_loggers
+
+with intercept_paddle_loggers():
+    import paddle
+    import paddle.distributed as dist
+    from paddle.distributed import fleet
 
 from fastdeploy import envs
 from fastdeploy.config import (
@@ -166,10 +170,7 @@ class PaddleDisWorkerProc:
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        self.speculative_decoding = fd_config.speculative_config.method is not None
-        self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule and (
-            not self.speculative_decoding
-        )
+        self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule
 
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
@@ -478,9 +479,13 @@ class PaddleDisWorkerProc:
 
                     self.model_weights_status.value[0] = self.model_weights_signal[0]
                     self.kv_cache_status.value[0] = self.model_weights_signal[0]
+                    cache_flag = (
+                        self.fd_config.cache_config.num_cpu_blocks > 0
+                        or self.fd_config.cache_config.kvcache_storage_backend is not None
+                    )
                     DynamicWeightManager.check_model_weights_status(
                         self.model_weights_status,
-                        self.kv_cache_status if self.fd_config.cache_config.num_cpu_blocks > 0 else None,
+                        self.kv_cache_status if cache_flag else None,
                         # model_weights_signal
                         self.worker.model_runner,
                         self.parallel_config.local_engine_worker_queue_port,
@@ -556,12 +561,11 @@ class PaddleDisWorkerProc:
                 self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
 
             if (
-                (not self.parallel_config.use_ep)
-                and (not self.worker.model_runner.not_need_stop())
-                and (not self.enable_overlap_schedule)
+                not self.parallel_config.use_ep
+                and hasattr(self.worker.model_runner, "not_need_stop")
+                and not self.worker.model_runner.not_need_stop()
             ):
                 self._tp_barrier_wait() if tp_size > 1 else None
-
                 time.sleep(0.001)
                 continue
 
@@ -573,6 +577,14 @@ class PaddleDisWorkerProc:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
+
+            if (
+                not self.parallel_config.use_ep
+                and hasattr(self.worker.model_runner, "current_launch_token_num")
+                and self.worker.model_runner.current_launch_token_num == 0
+            ):
+                self._tp_barrier_wait() if tp_size > 1 else None
+                time.sleep(0.001)
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -825,6 +837,7 @@ def parse_args():
     parser.add_argument("--think_end_id", type=int, default=-1)
     parser.add_argument("--image_patch_id", type=int, default=-1)
     parser.add_argument("--line_break_id", type=int, default=-1)
+    parser.add_argument("--think_truncate_prompt_ids", type=json.loads, default=[])
 
     parser.add_argument(
         "--quantization",
@@ -927,6 +940,12 @@ def parse_args():
         "--lm_head_fp32",
         action="store_true",
         help="Flag to specify dtype of lm_head as FP32",
+    )
+
+    parser.add_argument(
+        "--moe_gate_fp32",
+        action="store_true",
+        help="Flag to specify dtype of gate as FP32",
     )
 
     parser.add_argument(
@@ -1192,6 +1211,19 @@ def run_worker_proc() -> None:
     else:
         worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
         worker_proc.init_control()
+
+    # Enable batch-invariant mode for deterministic inference.
+    # This must happen AFTER worker creation but BEFORE model loading,
+    # because enable_batch_invariant_mode() calls paddle.compat.enable_torch_proxy()
+    # which makes torch appear available via proxy. If called before worker creation,
+    # the gpu_model_runner import chain (ernie4_5_vl_processor → paddleformers →
+    # transformers) will fail when transformers tries to query torch metadata.
+    if envs.FD_DETERMINISTIC_MODE:
+        from fastdeploy.model_executor.layers.batch_invariant_ops import (
+            init_deterministic_mode,
+        )
+
+        init_deterministic_mode()
 
     # Initialize device and create model runner
     worker_proc.init_device()

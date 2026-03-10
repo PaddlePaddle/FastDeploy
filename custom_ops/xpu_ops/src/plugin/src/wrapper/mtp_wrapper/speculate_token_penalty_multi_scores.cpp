@@ -267,17 +267,21 @@ static int xpu3_wrapper(Context* ctx,
   int ret = api::constant<int>(ctx, repeat_times, token_num * length, 0);
   WRAPPER_ASSERT_SUCCESS(ctx, ret);
 
-  update_repeat_times_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
-      reinterpret_cast<const XPU_INT64*>(pre_ids),
-      reinterpret_cast<const XPU_INT64*>(cur_len),
-      repeat_times,
-      output_padding_offset,
-      bs,
-      length,
-      length_id,
-      token_num,
-      max_seq_len);
-  min_length_logits_process_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  int32_t ret_xre =
+      update_repeat_times_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+          reinterpret_cast<const XPU_INT64*>(pre_ids),
+          reinterpret_cast<const XPU_INT64*>(cur_len),
+          repeat_times,
+          output_padding_offset,
+          bs,
+          length,
+          length_id,
+          token_num,
+          max_seq_len);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
+  ret_xre = min_length_logits_process_kernel<<<ctx->ncluster(),
+                                               64,
+                                               ctx->xpu_stream>>>(
       logits,
       reinterpret_cast<const XPU_INT64*>(cur_len),
       reinterpret_cast<const XPU_INT64*>(min_len),
@@ -290,7 +294,10 @@ static int xpu3_wrapper(Context* ctx,
       end_length,
       token_num,
       max_seq_len);
-  update_value_by_repeat_times_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
+  ret_xre = update_value_by_repeat_times_kernel<<<ctx->ncluster(),
+                                                  64,
+                                                  ctx->xpu_stream>>>(
       repeat_times,
       penalty_scores,
       frequency_scores,
@@ -302,9 +309,10 @@ static int xpu3_wrapper(Context* ctx,
       length,
       token_num,
       max_seq_len);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
 
   if (bad_words && length_bad_words > 0) {
-    ban_bad_words_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+    ret_xre = ban_bad_words_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
         logits,
         reinterpret_cast<const XPU_INT64*>(bad_words),
         output_padding_offset,
@@ -313,6 +321,7 @@ static int xpu3_wrapper(Context* ctx,
         length_bad_words,
         token_num,
         max_seq_len);
+    KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   }
   return api::SUCCESS;
 }

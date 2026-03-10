@@ -127,9 +127,9 @@ func SelectWorker(ctx context.Context, workers []string, message string, workerT
 	}
 
 	if workerType == "prefill" {
-		logger.Info("select worker (prefill): %s, tokens: %d", selectWorkerURL, tokens)
+		logger.Info(ctx, "select worker (prefill): %s, tokens: %d", selectWorkerURL, tokens)
 	} else {
-		logger.Info("select worker (%s): %s, count: %d", workerType, selectWorkerURL, count)
+		logger.Info(ctx, "select worker (%s): %s, count: %d", workerType, selectWorkerURL, count)
 	}
 
 	return selectWorkerURL, nil
@@ -139,7 +139,7 @@ func SelectWorker(ctx context.Context, workers []string, message string, workerT
 func Release(ctx context.Context, url string) {
 	counter := GetOrCreateCounter(ctx, url)
 	counter.Dec()
-	logger.Info("release worker: %s, count: %d", url, counter.Get())
+	logger.Info(ctx, "release worker: %s, count: %d", url, counter.Get())
 }
 
 // GetCounter retrieves the counter for the specified root URL
@@ -182,7 +182,7 @@ func CleanupUnhealthyCounter(ctx context.Context, unhealthyRootURL string) {
 
 	delete(DefaultScheduler.IdCounterMap, unhealthyRootURL)
 	delete(DefaultScheduler.tokenMap, unhealthyRootURL)
-	logger.Info("After cleanup unhealthy counter: %v", DefaultScheduler.IdCounterMap)
+	logger.Info(ctx, "After cleanup unhealthy counter: %v", DefaultScheduler.IdCounterMap)
 }
 
 // CleanupInvalidCounters removes counters for invalid or unreachable workers
@@ -218,7 +218,7 @@ func CleanupInvalidCounters(ctx context.Context) {
 		}
 	}
 
-	logger.Info("After cleanup invalid counters: %v", DefaultScheduler.IdCounterMap)
+	logger.Info(ctx, "After cleanup invalid counters: %v", DefaultScheduler.IdCounterMap)
 }
 
 // StartBackupCleanupTask starts a background task for cleaning up invalid counters
@@ -278,5 +278,5 @@ func ReleasePrefillTokens(ctx context.Context, url, message string) {
 	}
 	tokenCounter := GetOrCreateTokenCounter(ctx, url)
 	tokenCounter.Sub(estimateTokens(message))
-	logger.Info("release prefill tokens: %s, tokens: %d", url, tokenCounter.Get())
+	logger.Info(ctx, "release prefill tokens: %s, tokens: %d", url, tokenCounter.Get())
 }

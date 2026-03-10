@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/extension.h"
+#include "pybind11/numpy.h"
 #include "pybind11/pybind11.h"
 namespace py = pybind11;
 
@@ -49,9 +50,19 @@ void cuda_host_free(uintptr_t ptr) {
   check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
 }
 
-paddle::Tensor GetStop(paddle::Tensor& not_need_stop);
-
-void SetStop(paddle::Tensor& not_need_stop, bool flag);
+paddle::Tensor CustomNumpyToTensor(py::array numpy_array,
+                                   paddle::Tensor tensor) {
+  py::buffer_info buf_info = numpy_array.request();
+  void* numpy_data = buf_info.ptr;
+  size_t data_size = buf_info.size * buf_info.itemsize;
+  auto stream = tensor.stream();
+  cudaMemcpyAsync((void*)(tensor.data()),
+                  numpy_data,
+                  data_size,
+                  cudaMemcpyHostToDevice,
+                  stream);
+  return tensor;
+}
 
 void FlashAttentionMask(const paddle::Tensor& q_input,
                         const paddle::Tensor& k_input,
@@ -118,7 +129,8 @@ std::vector<paddle::Tensor> AppendAttention(
     const int speculate_max_draft_token_num,
     const bool causal,
     const bool speculate_decoder,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::Tensor& qkv,
@@ -174,7 +186,8 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const int speculate_max_draft_token_num,
     const bool causal,
     const bool speculate_decoder,
-    const int sliding_window);
+    const int sliding_window,
+    const int sink_size);
 
 std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor& qkv,
@@ -414,11 +427,12 @@ std::vector<paddle::Tensor> GetPaddingOffset(
     const paddle::optional<paddle::Tensor>& seq_lens_encoder,
     const int64_t token_num_cpu);
 
-void SetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
+void SetValueByFlagsAndIdx(const paddle::Tensor& token_ids_all,
                            const paddle::Tensor& input_ids,
                            const paddle::Tensor& seq_lens_this_time,
                            const paddle::Tensor& seq_lens_encoder,
                            const paddle::Tensor& seq_lens_decoder,
+                           const paddle::Tensor& prompt_lens,
                            const paddle::Tensor& step_idx,
                            const paddle::Tensor& stop_flags);
 
@@ -438,7 +452,8 @@ void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const paddle::Tensor& seq_lens,
                        const paddle::Tensor& end_ids,
                        const paddle::Tensor& next_tokens,
-                       const paddle::Tensor& pre_ids,
+                       const paddle::Tensor& token_ids_all,
+                       const paddle::Tensor& prompt_lens,
                        const paddle::Tensor& step_idx,
                        const paddle::Tensor& stop_seqs,
                        const paddle::Tensor& stop_seqs_len,
@@ -747,8 +762,17 @@ std::vector<paddle::Tensor> SpeculateGetSeqLensOutput(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder);
 
+std::vector<paddle::Tensor> SpeculatePreProcess(
+    const int64_t cpu_token_num,
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& seq_len,
+    const paddle::Tensor& draft_tokens,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder);
+
 void SpecTokenPenaltyMultiScores(
-    const paddle::Tensor& pre_ids,
+    const paddle::Tensor& token_ids_all,
+    const paddle::Tensor& prompt_lens,
     const paddle::Tensor& logits,
     const paddle::Tensor& penalty_scores,
     const paddle::Tensor& frequency_scores,
@@ -766,7 +790,8 @@ void SpecTokenPenaltyMultiScores(
 
 void SpecGetStopFlagsMultiSeqs(const paddle::Tensor& accept_tokens,
                                const paddle::Tensor& accept_num,
-                               const paddle::Tensor& pre_ids,
+                               const paddle::Tensor& token_ids_all,
+                               const paddle::Tensor& prompt_lens,
                                const paddle::Tensor& step_idx,
                                const paddle::Tensor& stop_flags,
                                const paddle::Tensor& seq_lens,
@@ -812,7 +837,8 @@ void SpeculateUpdate(const paddle::Tensor& seq_lens_encoder,
                      const paddle::Tensor& is_block_step,
                      const paddle::Tensor& mask_rollback);
 
-void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
+void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& token_ids_all,
+                                    const paddle::Tensor& prompt_lens,
                                     const paddle::Tensor& accept_tokens,
                                     const paddle::Tensor& accept_num,
                                     const paddle::Tensor& stop_flags,
@@ -853,7 +879,8 @@ void SpeculateScheduleCache(const paddle::Tensor& draft_tokens,
 
 void NgramMatch(const paddle::Tensor& input_ids,
                 const paddle::Tensor& input_ids_len,
-                const paddle::Tensor& pre_ids,
+                const paddle::Tensor& token_ids_all,
+                const paddle::Tensor& prompt_lens,
                 const paddle::Tensor& step_idx,
                 const paddle::Tensor& draft_token_num,
                 const paddle::Tensor& draft_tokens,
@@ -1014,41 +1041,28 @@ void SaveOutMmsgStatic(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool save_each_rank);
 
-void LimitThinkingContentLengthV1(const paddle::Tensor& next_tokens,
-                                  const paddle::Tensor& max_think_lens,
-                                  const paddle::Tensor& step_idx,
-                                  const paddle::Tensor& limit_think_status,
-                                  const paddle::Tensor& stop_flags,
-                                  const paddle::Tensor& eos_token_ids,
-                                  const int64_t think_end_id);
+void LimitThinkingContentLength(const paddle::Tensor& next_tokens,
+                                const paddle::Tensor& max_think_lens,
+                                const paddle::Tensor& max_reply_lens,
+                                const paddle::Tensor& step_idx,
+                                const paddle::Tensor& limit_status,
+                                const paddle::Tensor& stop_flags,
+                                const paddle::Tensor& eos_token_ids,
+                                const paddle::Tensor& inject_token_ids,
+                                const int64_t think_end_id,
+                                const bool splitwise_role_is_decode);
 
-void LimitThinkingContentLengthV2(const paddle::Tensor& next_tokens,
-                                  const paddle::Tensor& max_think_lens,
-                                  const paddle::Tensor& step_idx,
-                                  const paddle::Tensor& limit_think_status,
-                                  const paddle::Tensor& stop_flags,
-                                  const int64_t think_end_id,
-                                  const int64_t line_break_id);
-
-void SpeculateLimitThinkingContentLengthV1(
-    const paddle::Tensor& next_tokens,
-    const paddle::Tensor& max_think_lens,
-    const paddle::Tensor& step_idx,
-    const paddle::Tensor& limit_think_status,
-    const paddle::Tensor& accept_num,
-    const paddle::Tensor& stop_flags,
-    const paddle::Tensor& eos_token_ids,
-    const int64_t think_end_id);
-
-void SpeculateLimitThinkingContentLengthV2(
-    const paddle::Tensor& next_tokens,
-    const paddle::Tensor& max_think_lens,
-    const paddle::Tensor& step_idx,
-    const paddle::Tensor& limit_think_status,
-    const paddle::Tensor& accept_num,
-    const paddle::Tensor& stop_flags,
-    const int64_t think_end_id,
-    const int64_t line_break_id);
+void SpeculateLimitThinkingContentLength(const paddle::Tensor& next_tokens,
+                                         const paddle::Tensor& max_think_lens,
+                                         const paddle::Tensor& max_reply_lens,
+                                         const paddle::Tensor& step_idx,
+                                         const paddle::Tensor& limit_status,
+                                         const paddle::Tensor& accept_num,
+                                         const paddle::Tensor& stop_flags,
+                                         const paddle::Tensor& eos_token_ids,
+                                         const paddle::Tensor& inject_token_ids,
+                                         const int64_t think_end_id,
+                                         const bool splitwise_role_is_decode);
 
 void SpeculateGetLogits(const paddle::Tensor& draft_logits,
                         const paddle::Tensor& next_token_num,
@@ -1099,7 +1113,8 @@ std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input);
 
 void ReasoningPhaseTokenConstraint(
     const paddle::Tensor& logits,
-    const paddle::Tensor& pre_ids,
+    const paddle::Tensor& token_ids_all,
+    const paddle::Tensor& prompt_lens,
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_encoder,
@@ -1117,6 +1132,47 @@ std::vector<paddle::Tensor> get_attn_mask_q(
     const paddle::Tensor& cu_seqlens_k,
     const paddle::optional<paddle::Tensor>& attn_mask_kv,
     const int kv_token_num);
+
+void RadixTopkRaggedTransform(
+    paddle::Tensor& input,
+    paddle::Tensor& output_indices,
+    const paddle::Tensor& offsets,
+    paddle::Tensor& lengths,
+    paddle::optional<paddle::Tensor>& seq_len_decoder,
+    paddle::optional<paddle::Tensor>& batch_id_per_token,
+    paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
+    int top_k,
+    int q_num_heads = 0);
+
+std::vector<paddle::Tensor> DSMLAWriteCacheKernel(
+    const paddle::Tensor& kv_nope,
+    const paddle::Tensor& kv_pe,
+    const paddle::Tensor& kv_cache,
+    const paddle::Tensor& slot_mapping,
+    const paddle::Tensor& seq_lens,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::optional<paddle::Tensor>& kv_signal_data,
+    const paddle::optional<paddle::Tensor>& scale,
+    const std::string& cache_quant_type_str,
+    const int max_seq_len,
+    const bool is_prefill);
+
+std::vector<paddle::Tensor> IndexerKQuantAndCacheKernel(
+    const paddle::Tensor& k,
+    const paddle::Tensor& kv_cache,
+    const paddle::Tensor& slot_mapping,
+    const int64_t quant_block_size,
+    const std::string& scale_fmt);
+
+std::vector<paddle::Tensor> CpGatherIndexerKQuantCacheKernel(
+    const paddle::Tensor& kv_cache,
+    paddle::Tensor& dst_k,
+    paddle::Tensor& dst_scale,
+    const paddle::Tensor& block_table,
+    const paddle::Tensor& cu_seq_lens);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
@@ -1608,6 +1664,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SpeculateGetSeqLensOutput,
         "speculate_get_seq_lens_output function");
 
+  m.def("speculate_pre_process",
+        &SpeculatePreProcess,
+        "speculate_pre_process function");
+
   m.def("speculate_get_token_penalty_multi_scores",
         &SpecTokenPenaltyMultiScores,
         "speculate_get_token_penalty_multi_scores function");
@@ -1678,20 +1738,12 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("save_output", &SaveOutMmsgStatic, "save_output function");
 
-  m.def("limit_thinking_content_length_v1",
-        &LimitThinkingContentLengthV1,
-        "limit_thinking_content_length_v1 function");
+  m.def("limit_thinking_content_length",
+        &LimitThinkingContentLength,
+        "limit_thinking_content_length function");
 
-  m.def("limit_thinking_content_length_v2",
-        &LimitThinkingContentLengthV2,
-        "limit_thinking_content_length_v2 function");
-
-  m.def("speculate_limit_thinking_content_length_v1",
-        &SpeculateLimitThinkingContentLengthV1,
-        "speculate limit thinking content length function");
-
-  m.def("speculate_limit_thinking_content_length_v2",
-        &SpeculateLimitThinkingContentLengthV2,
+  m.def("speculate_limit_thinking_content_length",
+        &SpeculateLimitThinkingContentLength,
         "speculate limit thinking content length function");
 
   m.def("speculate_get_logits",
@@ -1722,7 +1774,21 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_attn_mask_q", &get_attn_mask_q, "get_attn_mask_q function");
 
-  m.def("get_stop", &GetStop, "get_stop function");
+  m.def("custom_numpy_to_tensor",
+        &CustomNumpyToTensor,
+        "custom_numpy_to_tensor function");
 
-  m.def("set_stop", &SetStop, "set_stop function");
+  m.def("radix_topk_ragged_transform",
+        &RadixTopkRaggedTransform,
+        "radix_topk_ragged_transform function");
+
+  m.def("dsk_attn_write_cache", &DSMLAWriteCacheKernel, "dsk_attn_write_cache");
+
+  m.def("indexer_k_quant_and_cache",
+        &IndexerKQuantAndCacheKernel,
+        "indexer_k_quant_and_cache");
+
+  m.def("cp_gather_indexer_k_quant_cache",
+        &CpGatherIndexerKQuantCacheKernel,
+        "cp_gather_indexer_k_quant_cache");
 }

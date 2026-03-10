@@ -15,5 +15,7 @@
 #pragma once
 #include "helper.h"
 
-paddle::Tensor
-SwigluOAI(const paddle::Tensor &fc1_out_tensor, const float alpha, const float limit, const std::string& type);
+paddle::Tensor SwigluOAI(const paddle::Tensor& fc1_out_tensor,
+                         const float alpha,
+                         const float limit,
+                         const std::string& type);

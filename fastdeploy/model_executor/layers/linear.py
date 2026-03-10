@@ -258,7 +258,10 @@ class LinearBase(nn.Layer):
         Raises:
             NotImplementedError: If the weight dtype is not float8 or act dtype is not equal to weight dtype.
         """
-        linear_out = self.quant_method.apply(self, x)
+        if self.weight_dtype == "float32":
+            linear_out = self.quant_method.apply(self, x.cast("float32"))
+        else:
+            linear_out = self.quant_method.apply(self, x)
 
         return linear_out
 
@@ -713,7 +716,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                 loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             # Tensor parallelism splits the weight along the output_dim
-            if self.tp_size > 1 and output_dim is not None and not self.fd_config.load_config.is_pre_sharded:
+            if self.tp_size > 1 and not self.fd_config.load_config.is_pre_sharded:
                 block_size = self._get_shard_size_mapping(loaded_shard_id, head_dim)
                 shard_id = self.local_rank if loaded_shard_id == "q" else self.local_rank // self.num_kv_head_replicas
                 shard_offset = shard_id * block_size

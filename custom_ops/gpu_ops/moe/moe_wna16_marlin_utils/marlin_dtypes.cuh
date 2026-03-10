@@ -6,7 +6,7 @@
 #include <cuda_bf16.h>
 
 #ifndef MARLIN_NAMESPACE_NAME
-  #define MARLIN_NAMESPACE_NAME marlin_moe_wna16
+#define MARLIN_NAMESPACE_NAME marlin_moe_wna16
 #endif
 
 namespace MARLIN_NAMESPACE_NAME::kernel_types {
@@ -78,6 +78,6 @@ class ScalarType<nv_bfloat16> {
 #endif
 };
 
-}  // namespace MARLIN_NAMESPACE_NAME
+}  // namespace MARLIN_NAMESPACE_NAME::kernel_types
 
 #endif

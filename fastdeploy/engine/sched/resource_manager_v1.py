@@ -46,6 +46,8 @@ from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.platforms import current_platform
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import download_from_bos, init_bos_client, llm_logger
 
 
@@ -246,6 +248,8 @@ class ResourceManagerV1(ResourceManager):
             llm_logger.debug(f"reschedule {request_id} into waiting queue")
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
+                request.has_been_preempted_before = True
+                request.metrics.preempted_count += 1
                 if process_func is not None:
                     process_func(request)
                 llm_logger.debug(f"self.waiting append request:{request.request_id},req.type:{request.status}")
@@ -284,6 +288,7 @@ class ResourceManagerV1(ResourceManager):
                 self._free_blocks(req)
                 req.cached_block_num = 0
                 self.to_be_rescheduled_request_id_set.add(req.request_id)
+                trace_print(LoggingEventName.PREEMPTED, req.request_id, getattr(req, "user", ""))
                 preempted_reqs.append(self._prepare_preempt_task(req))
             return preempted_reqs
 
@@ -329,6 +334,9 @@ class ResourceManagerV1(ResourceManager):
                     self._free_blocks(preempted_req)
                     preempted_req.num_cached_blocks = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
+                    trace_print(
+                        LoggingEventName.PREEMPTED, preempted_req.request_id, getattr(preempted_req, "user", "")
+                    )
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
@@ -357,8 +365,8 @@ class ResourceManagerV1(ResourceManager):
             can_schedule_block_num_threshold = num_chunk_new_block
         else:
             can_schedule_block_num_threshold = (
-                request.need_prefill_tokens + self.config.cache_config.block_size - 1
-            ) // self.config.cache_config.block_size + len(self.running) * self.current_reserve_output_block_num
+                num_chunk_new_block + len(self.running) * self.current_reserve_output_block_num
+            )
             if self.config.speculative_config.method is not None:
                 can_schedule_block_num_threshold = min(
                     can_schedule_block_num_threshold + 1, self.config.cache_config.max_block_num_per_seq
@@ -453,7 +461,42 @@ class ResourceManagerV1(ResourceManager):
     def _get_num_new_tokens(self, request, token_budget):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
+        assert num_new_tokens > 0, (
+            f"Request {request.request_id} has no remaining tokens: "
+            f"need_prefill={request.need_prefill_tokens}, computed={request.num_computed_tokens}"
+        )
         num_new_tokens = min(num_new_tokens, token_budget)
+
+        # Deterministic mode: align chunk boundaries to split_kv_size
+        # This ensures batch-invariant attention by making each chunk
+        # a multiple of the split-KV block size (default 16)
+        if envs.FD_DETERMINISTIC_MODE:
+            split_kv_size = envs.FD_DETERMINISTIC_SPLIT_KV_SIZE
+            current_pos = request.num_computed_tokens
+            remaining_tokens = request.need_prefill_tokens - current_pos
+
+            # Case 1: Final chunk - no alignment needed
+            if remaining_tokens < split_kv_size:
+                aligned_end = current_pos + remaining_tokens
+            else:
+                # Case 2: Need to align to split_kv_size boundary
+                # Calculate next boundary position
+                next_boundary = ((current_pos + split_kv_size - 1) // split_kv_size) * split_kv_size
+                tokens_to_boundary = next_boundary - current_pos
+
+                # Not enough budget to reach the next boundary: defer to next iteration
+                if token_budget < tokens_to_boundary:
+                    return 0
+
+                # Align to as many full boundaries as budget allows
+                aligned_end = ((current_pos + token_budget) // split_kv_size) * split_kv_size
+
+            num_new_tokens = aligned_end - current_pos
+            # Don't exceed the original budget or remaining tokens
+            num_new_tokens = min(
+                num_new_tokens, token_budget, request.need_prefill_tokens - request.num_computed_tokens
+            )
+
         if (
             current_platform.is_intel_hpu()
             and request.need_prefill_tokens - request.num_computed_tokens > token_budget
@@ -466,7 +509,11 @@ class ResourceManagerV1(ResourceManager):
             return num_new_tokens
 
         inputs = request.multimodal_inputs
-        if inputs.get("patch_idx", None) is not None and inputs.get("patch_map", None) is not None:
+        if (
+            inputs is not None
+            and inputs.get("patch_idx", None) is not None
+            and inputs.get("patch_map", None) is not None
+        ):
             pre_end_idx = request.num_computed_tokens
             new_end_idx = pre_end_idx + num_new_tokens
 
@@ -541,7 +588,8 @@ class ResourceManagerV1(ResourceManager):
             request.video_end = end_patch_map["video_num"]
             request.audio_end = _compute_audio_prefix_count(new_end_idx, end_patch_idx)
         elif (
-            inputs.get("images", None) is not None
+            inputs is not None
+            and inputs.get("images", None) is not None
             and inputs.get("image_patch_id", None) is not None
             and inputs.get("grid_thw", None) is not None
         ):
@@ -790,6 +838,9 @@ class ResourceManagerV1(ResourceManager):
                         req_index += 1
                         continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                    if num_new_tokens == 0:
+                        req_index += 1
+                        continue
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
@@ -863,6 +914,12 @@ class ResourceManagerV1(ResourceManager):
                             continue
                         # Allocate blocks for the tokens that does not hit cache
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                        if num_new_tokens == 0:
+                            if self.config.cache_config.enable_prefix_caching:
+                                self._free_blocks(request)
+                            skip_requests.append(request)
+                            self.waiting.popleft()
+                            continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             request, num_new_block
@@ -916,6 +973,12 @@ class ResourceManagerV1(ResourceManager):
 
                         # Allocate blocks for the tokens that does not hit cache
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                        if num_new_tokens == 0:
+                            if self.config.cache_config.enable_prefix_caching:
+                                self._free_blocks(request)
+                            skip_requests.append(request)
+                            self.waiting.popleft()
+                            continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             request, num_new_block
@@ -1134,16 +1197,17 @@ class ResourceManagerV1(ResourceManager):
                     elif common_block_ids[block_idx] in metrics["match_storage_block_ids"]:
                         metrics["storage_match_token_num"] -= self.config.cache_config.block_size
 
-            request.metrics.gpu_cache_token_num = metrics["gpu_match_token_num"]
-            request.metrics.cpu_cache_token_num = metrics["cpu_match_token_num"]
-            request.metrics.storage_cache_token_num = metrics["storage_match_token_num"]
-            request.metrics.cpu_cache_prepare_time = metrics["cpu_cache_prepare_time"]
-            request.metrics.storage_cache_prepare_time = metrics["storage_cache_prepare_time"]
+            if not request.has_been_preempted_before:
+                # NOTE: Do not log or report metrics for cache hit rate when request is being rescheduled
+                request.metrics.gpu_cache_token_num = metrics["gpu_match_token_num"]
+                request.metrics.cpu_cache_token_num = metrics["cpu_match_token_num"]
+                request.metrics.storage_cache_token_num = metrics["storage_match_token_num"]
+                request.metrics.cpu_cache_prepare_time = metrics["cpu_cache_prepare_time"]
+                request.metrics.storage_cache_prepare_time = metrics["storage_cache_prepare_time"]
 
-            # Report the number of cached tokens to Prometheus metrics
-            main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
-            main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
-            main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.cpu_cache_token_num)
+                main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
+                main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
+                main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.cpu_cache_token_num)
 
             return True
         except Exception as e:
@@ -1243,8 +1307,6 @@ class ResourceManagerV1(ResourceManager):
         If can not, return False
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
-        if request.reasoning_max_tokens is not None:
-            request.reasoning_max_tokens -= 1
         request.need_prefill_tokens = len(request.prompt_token_ids)
         need_prealloc_prefill_blocks = (
             request.need_prefill_tokens + self.config.cache_config.block_size - 1

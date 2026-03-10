@@ -376,7 +376,7 @@ class LLMEngine:
                 create=True,
             )
 
-        # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
+        # launched_expert_service_signal: Used to sense whether each expert_service is started successfully
         if self.cfg.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
@@ -555,6 +555,15 @@ class LLMEngine:
                     line_break_id = int(line_break_ids)
         if line_break_id >= 0:
             llm_logger.info(f"Get line_break_id {line_break_id} from tokenizer.")
+        try:
+            think_truncate_prompt_ids = self.data_processor.tokenizer.convert_tokens_to_ids(
+                self.data_processor.tokenizer.tokenize(self.data_processor.tokenizer.think_truncate_prompt)
+            )
+        except Exception:
+            think_truncate_prompt_ids = self.data_processor.tokenizer.convert_tokens_to_ids(
+                self.data_processor.tokenizer.tokenize(envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR)
+            )
+        llm_logger.info(f"Get think_truncate_prompt_ids {think_truncate_prompt_ids} from tokenizer.")
 
         ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
@@ -586,6 +595,7 @@ class LLMEngine:
             f" --think_end_id {think_end_id}"
             f" --image_patch_id {image_patch_id}"
             f" --line_break_id {line_break_id}"
+            f" --think_truncate_prompt_ids '{json.dumps(think_truncate_prompt_ids)}'"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.structured_outputs_config.guided_decoding_backend}"
@@ -630,6 +640,7 @@ class LLMEngine:
             "disable_sequence_parallel_moe": self.cfg.parallel_config.disable_sequence_parallel_moe,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
+            "moe_gate_fp32": self.cfg.model_config.moe_gate_fp32,
             "shutdown_comm_group_if_worker_idle": self.cfg.parallel_config.shutdown_comm_group_if_worker_idle,
             "enable_entropy": self.cfg.model_config.enable_entropy,
             "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
@@ -764,20 +775,11 @@ class LLMEngine:
 
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
-        request_queues_for_dp_ipc = None
-        result_queues_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
             self.engine.scheduler.start(role, host_ip, self.cfg.register_info)
         elif self.cfg.scheduler_config.name == "dp":
-            request_queues_for_dp_ipc = []
-            result_queues_for_dp_ipc = []
-            for i in range(self.cfg.parallel_config.data_parallel_size):
-                request_queues_for_dp_ipc.append(multiprocessing.Queue())
-                result_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.engine.scheduler.start(
                 self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
-                request_queues_for_dp_ipc,
-                result_queues_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
@@ -815,8 +817,6 @@ class LLMEngine:
                                 cfg,
                                 i,
                                 None,
-                                request_queues_for_dp_ipc,
-                                result_queues_for_dp_ipc,
                             ),
                         )
                     )
