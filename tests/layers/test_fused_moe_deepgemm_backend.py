@@ -28,14 +28,19 @@ if _gpu is None:
     sys.modules["fastdeploy.model_executor.ops.gpu"] = _gpu
 for _a in (
     "count_tokens_per_expert_func",
-    "per_token_quant",
-    "ep_moe_expert_dispatch_fp8",
+    "depermute_prefill_combine",
     "ep_moe_expert_combine",
-    "moe_topk_select",
+    "ep_moe_expert_dispatch_fp8",
     "fused_mask_swiglu_fp8_quant",
-    "MoeWna16MarlinGemmApi",
-    "tritonmoe_preprocess_func",
+    "get_padding_offset",
     "gptq_marlin_repack",
+    "MoeWna16MarlinGemmApi",
+    "moe_expert_dispatch",
+    "moe_expert_reduce",
+    "moe_topk_select",
+    "per_token_quant",
+    "prefill_permute_to_masked_gemm",
+    "tritonmoe_preprocess_func",
 ):
     if not hasattr(_gpu, _a):
         setattr(_gpu, _a, None)
@@ -203,6 +208,7 @@ def test_apply_tp(monkeypatch):
     x = paddle.ones([2, H], dtype="float32")
 
     monkeypatch.setattr(dgb.fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", False)
+    monkeypatch.setattr(dgb.fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", False)
     monkeypatch.setattr(
         "fastdeploy.model_executor.layers.moe.moe.get_moe_scores",
         lambda g, ng, tg, k, s, b, r: (
@@ -219,7 +225,7 @@ def test_apply_tp(monkeypatch):
     monkeypatch.setattr(
         _gpu,
         "per_token_quant",
-        lambda x, bs: (paddle.zeros([x.shape[0], H], "int8"), paddle.ones([1, 1], "float32")),
+        lambda x, bs, *_: (paddle.zeros([x.shape[0], H], "int8"), paddle.ones([1, 1], "float32")),
     )
     monkeypatch.setattr(
         _gpu,
@@ -277,6 +283,7 @@ def test_apply_ep_prefill(monkeypatch):
         def __init__(self, n):
             self._n = n
             self.ep_engine = SimpleNamespace(async_finish=True)
+            self.num_worst_tokens = 0
 
         def moe_select(self, _layer, gate_out):
             return paddle.zeros([gate_out.shape[0], 1], "int64"), paddle.ones([gate_out.shape[0], 1], "float32")
@@ -290,10 +297,11 @@ def test_apply_ep_prefill(monkeypatch):
 
     monkeypatch.setattr(dgb, "let_another_thread_run", lambda: None)
     monkeypatch.setattr(dgb.fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", False)
+    monkeypatch.setattr(dgb.fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", False)
     monkeypatch.setattr(
         _gpu,
         "per_token_quant",
-        lambda x, bs: (paddle.zeros([x.shape[0], H], "int8"), paddle.ones([1, 1], "float32")),
+        lambda x, bs, *_: (paddle.zeros([x.shape[0], H], "int8"), paddle.ones([1, 1], "float32")),
     )
     monkeypatch.setattr(
         dgb,
