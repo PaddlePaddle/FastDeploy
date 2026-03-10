@@ -15,13 +15,14 @@
 #include "helper.h"
 #include "paddle/extension.h"
 
-#define CEILDIV(a,b) (((a+b-1)/b))
+#define CEILDIV(a, b) (((a + b - 1) / b))
 
 template <typename scalar_t>
-__global__ void count_and_sort_expert_tokens_kernel(const scalar_t* __restrict__ topk_ids,
-                                                    int32_t* __restrict__ sorted_token_ids,
-                                                    int32_t* __restrict__ cumsum_buffer,
-                                                    size_t numel) {
+__global__ void count_and_sort_expert_tokens_kernel(
+    const scalar_t* __restrict__ topk_ids,
+    int32_t* __restrict__ sorted_token_ids,
+    int32_t* __restrict__ cumsum_buffer,
+    size_t numel) {
   const size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
   const size_t stride = blockDim.x * gridDim.x;
 
@@ -33,16 +34,17 @@ __global__ void count_and_sort_expert_tokens_kernel(const scalar_t* __restrict__
 }
 
 template <typename scalar_t, int num_experts>
-__global__ void moe_align_block_size_kernel(const scalar_t* __restrict__ topk_ids,
-                                            int32_t* __restrict__ expert_ids,
-                                            int32_t* __restrict__ total_tokens_post_pad,
-                                            int32_t GEMM_BLOCK_SIZE_M,
-                                            size_t numel,
-                                            int32_t* __restrict__ cumsum_buffer) {
+__global__ void moe_align_block_size_kernel(
+    const scalar_t* __restrict__ topk_ids,
+    int32_t* __restrict__ expert_ids,
+    int32_t* __restrict__ total_tokens_post_pad,
+    int32_t GEMM_BLOCK_SIZE_M,
+    size_t numel,
+    int32_t* __restrict__ cumsum_buffer) {
   __shared__ int32_t tokens_per_ep[num_experts];
 
   for (int i = threadIdx.x; i < num_experts; i += blockDim.x) {
-      tokens_per_ep[i] = 0;
+    tokens_per_ep[i] = 0;
   }
 
   __syncthreads();
@@ -57,8 +59,10 @@ __global__ void moe_align_block_size_kernel(const scalar_t* __restrict__ topk_id
   if (threadIdx.x == 0) {
     cumsum_buffer[0] = 0;
     for (int i = 1; i <= num_experts; ++i) {
-      int expert_count = tokens_per_ep[i-1];
-      cumsum_buffer[i] = cumsum_buffer[i - 1] + CEILDIV(expert_count, GEMM_BLOCK_SIZE_M) * GEMM_BLOCK_SIZE_M;
+      int expert_count = tokens_per_ep[i - 1];
+      cumsum_buffer[i] =
+          cumsum_buffer[i - 1] +
+          CEILDIV(expert_count, GEMM_BLOCK_SIZE_M) * GEMM_BLOCK_SIZE_M;
     }
     *total_tokens_post_pad = cumsum_buffer[num_experts];
   }
@@ -66,32 +70,38 @@ __global__ void moe_align_block_size_kernel(const scalar_t* __restrict__ topk_id
   __syncthreads();
 
   if (threadIdx.x < num_experts) {
-    for (int i = cumsum_buffer[threadIdx.x]; i < cumsum_buffer[threadIdx.x + 1]; i += GEMM_BLOCK_SIZE_M) {
+    for (int i = cumsum_buffer[threadIdx.x]; i < cumsum_buffer[threadIdx.x + 1];
+         i += GEMM_BLOCK_SIZE_M) {
       expert_ids[i / GEMM_BLOCK_SIZE_M] = threadIdx.x;
     }
   }
 }
 
+std::vector<std::vector<int64_t>> tritonmoe_preprocessInferShape(
+    const std::vector<int64_t>& topk_ids,
+    int64_t num_experts,
+    int64_t GEMM_BLOCK_SIZE_M) {
+  int topk_ids_numel = topk_ids[0] * topk_ids[1];
+  int max_num_tokens_padded =
+      topk_ids_numel + num_experts * (GEMM_BLOCK_SIZE_M - 1);
 
-std::vector<std::vector<int64_t>> tritonmoe_preprocessInferShape(const std::vector<int64_t>& topk_ids, int64_t num_experts, int64_t GEMM_BLOCK_SIZE_M) {
+  std::vector<int64_t> sorted_ids = {max_num_tokens_padded};
 
+  int max_num_m_blocks = max_num_tokens_padded / GEMM_BLOCK_SIZE_M;
+  std::vector<int64_t> expert_ids = {max_num_m_blocks};
+  std::vector<int64_t> num_tokens_post_pad = {1};
 
-    int topk_ids_numel = topk_ids[0] * topk_ids[1];
-    int max_num_tokens_padded = topk_ids_numel + num_experts * (GEMM_BLOCK_SIZE_M - 1);
-
-    std::vector<int64_t> sorted_ids = {max_num_tokens_padded};
-
-    int max_num_m_blocks = max_num_tokens_padded / GEMM_BLOCK_SIZE_M;
-    std::vector<int64_t> expert_ids = {max_num_m_blocks};
-    std::vector<int64_t> num_tokens_post_pad = {1};
-
-    return {sorted_ids, expert_ids, num_tokens_post_pad};
+  return {sorted_ids, expert_ids, num_tokens_post_pad};
 }
 
-std::vector<paddle::DataType> tritonmoe_preprocessIferDtype(const paddle::DataType& topk_ids, int64_t num_experts, int64_t GEMM_BLOCK_SIZE_M) {
-    return {paddle::DataType::INT32, paddle::DataType::INT32, paddle::DataType::INT32};
+std::vector<paddle::DataType> tritonmoe_preprocessIferDtype(
+    const paddle::DataType& topk_ids,
+    int64_t num_experts,
+    int64_t GEMM_BLOCK_SIZE_M) {
+  return {paddle::DataType::INT32,
+          paddle::DataType::INT32,
+          paddle::DataType::INT32};
 }
-
 
 /*
 supporse num_experts = 8, GEMM_BLOCK_SIZE_M = 4,
@@ -113,85 +123,74 @@ Then return value `sorted_ids` is
 0,16,16,16
 */
 
+std::vector<paddle::Tensor> tritonmoe_preprocess_kernel(
+    const paddle::Tensor& topk_ids,
+    int64_t num_experts,
+    int64_t GEMM_BLOCK_SIZE_M) {
+  int topk_ids_numel = topk_ids.shape()[0] * topk_ids.shape()[1];
+  int max_num_tokens_padded =
+      topk_ids_numel + num_experts * (GEMM_BLOCK_SIZE_M - 1);
 
-std::vector<paddle::Tensor> tritonmoe_preprocess_kernel(const paddle::Tensor& topk_ids, int64_t num_experts, int64_t GEMM_BLOCK_SIZE_M) {
+  auto sorted_ids = paddle::full({max_num_tokens_padded},
+                                 topk_ids_numel,
+                                 paddle::DataType::INT32,
+                                 topk_ids.place());
 
-    int topk_ids_numel = topk_ids.shape()[0] * topk_ids.shape()[1];
-    int max_num_tokens_padded = topk_ids_numel + num_experts * (GEMM_BLOCK_SIZE_M - 1);
+  int max_num_m_blocks = max_num_tokens_padded / GEMM_BLOCK_SIZE_M;
 
-    auto sorted_ids = paddle::full(
-        {max_num_tokens_padded},
-        topk_ids_numel,
-        paddle::DataType::INT32,
-        topk_ids.place()
-    );
+  auto expert_ids = paddle::empty(
+      {max_num_m_blocks}, paddle::DataType::INT32, topk_ids.place());
 
-    int max_num_m_blocks = max_num_tokens_padded / GEMM_BLOCK_SIZE_M;
+  auto num_tokens_post_pad =
+      paddle::empty({1}, paddle::DataType::INT32, topk_ids.place());
 
-    auto expert_ids = paddle::empty(
-        {max_num_m_blocks}, paddle::DataType::INT32,
-        topk_ids.place()
-    );
+  auto cumsum_buffer = paddle::empty(
+      {num_experts + 1}, paddle::DataType::INT32, topk_ids.place());
 
-    auto num_tokens_post_pad = paddle::empty(
-        {1},
-        paddle::DataType::INT32,
-         topk_ids.place()
-    );
+  auto stream = topk_ids.stream();
+  using scalar_t = int64_t;
 
-    auto cumsum_buffer = paddle::empty(
-        {num_experts + 1},
-        paddle::DataType::INT32,
-        topk_ids.place()
-    );
+#define run_align_kernel(num_experts)                                       \
+  auto align_kernel = moe_align_block_size_kernel<scalar_t, num_experts>;   \
+  align_kernel<<<1, 1024, 0, stream>>>(topk_ids.data<scalar_t>(),           \
+                                       expert_ids.data<int32_t>(),          \
+                                       num_tokens_post_pad.data<int32_t>(), \
+                                       GEMM_BLOCK_SIZE_M,                   \
+                                       topk_ids_numel,                      \
+                                       cumsum_buffer.data<int32_t>());
 
-    auto stream = topk_ids.stream();
-    using scalar_t = int64_t;
+  if (num_experts == 8) {
+    run_align_kernel(8);
+  } else if (num_experts == 256) {
+    run_align_kernel(256);
+  } else if (num_experts == 2) {
+    run_align_kernel(2);
+  } else if (num_experts == 64) {
+    run_align_kernel(64);
+  } else if (num_experts == 128) {
+    run_align_kernel(128);
+  } else if (num_experts == 160) {
+    run_align_kernel(160);
+  } else if (num_experts == 32) {
+    run_align_kernel(32);
+  } else {
+    PD_THROW("Not support num_experts: %d", num_experts);
+  }
 
-    # define run_align_kernel(num_experts) \
-    auto align_kernel = moe_align_block_size_kernel<scalar_t, num_experts>; \
-    align_kernel<<<1, 1024, 0, stream>>>( \
-    topk_ids.data<scalar_t>(),  \
-    expert_ids.data<int32_t>(), \
-    num_tokens_post_pad.data<int32_t>(), \
-    GEMM_BLOCK_SIZE_M,  \
-    topk_ids_numel, \
-    cumsum_buffer.data<int32_t>());
+  const int block_threads = 256;
+  const int num_blocks = CEILDIV(topk_ids_numel, block_threads);
+  const int max_blocks = 65535;
+  const int actual_blocks = std::min(num_blocks, max_blocks);
 
-    if (num_experts == 8) {
-      run_align_kernel(8);
-    } else if (num_experts == 256) {
-      run_align_kernel(256);
-    } else if (num_experts == 2) {
-      run_align_kernel(2);
-    } else if (num_experts == 64) {
-      run_align_kernel(64);
-    } else if (num_experts == 128) {
-      run_align_kernel(128);
-    } else if (num_experts == 160) {
-      run_align_kernel(160);
-    } else if (num_experts == 32) {
-      run_align_kernel(32);
-    }
-    else {
-      PD_THROW("Not support num_experts: %d", num_experts);
-    }
+  auto sort_kernel = count_and_sort_expert_tokens_kernel<scalar_t>;
 
-    const int block_threads = 256;
-    const int num_blocks = CEILDIV(topk_ids_numel, block_threads);
-    const int max_blocks = 65535;
-    const int actual_blocks = std::min(num_blocks, max_blocks);
+  sort_kernel<<<actual_blocks, block_threads, 0, stream>>>(
+      topk_ids.data<scalar_t>(),
+      sorted_ids.data<int32_t>(),
+      cumsum_buffer.data<int32_t>(),
+      topk_ids_numel);
 
-    auto sort_kernel = count_and_sort_expert_tokens_kernel<scalar_t>;
-
-    sort_kernel<<<actual_blocks, block_threads, 0, stream>>>(topk_ids.data<scalar_t>(),
-                                                              sorted_ids.data<int32_t>(),
-                                                              cumsum_buffer.data<int32_t>(),
-                                                              topk_ids_numel);
-
-
-
-    return {sorted_ids, expert_ids, num_tokens_post_pad};
+  return {sorted_ids, expert_ids, num_tokens_post_pad};
 }
 
 PD_BUILD_STATIC_OP(tritonmoe_preprocess)

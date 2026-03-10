@@ -46,6 +46,8 @@ from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.platforms import current_platform
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import download_from_bos, init_bos_client, llm_logger
 
 
@@ -260,6 +262,8 @@ class ResourceManagerV1(ResourceManager):
             llm_logger.debug(f"reschedule {request_id} into waiting queue")
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
+                request.has_been_preempted_before = True
+                request.metrics.preempted_count += 1
                 if process_func is not None:
                     process_func(request)
                 llm_logger.debug(f"self.waiting append request:{request.request_id},req.type:{request.status}")
@@ -319,6 +323,7 @@ class ResourceManagerV1(ResourceManager):
                 self._free_blocks(req)
                 req.cached_block_num = 0
                 self.to_be_rescheduled_request_id_set.add(req.request_id)
+                trace_print(LoggingEventName.PREEMPTED, req.request_id, getattr(req, "user", ""))
                 preempted_reqs.append(self._prepare_preempt_task(req))
             return preempted_reqs
 
@@ -364,6 +369,9 @@ class ResourceManagerV1(ResourceManager):
                     self._free_blocks(preempted_req)
                     preempted_req.num_cached_blocks = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
+                    trace_print(
+                        LoggingEventName.PREEMPTED, preempted_req.request_id, getattr(preempted_req, "user", "")
+                    )
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
@@ -392,8 +400,8 @@ class ResourceManagerV1(ResourceManager):
             can_schedule_block_num_threshold = num_chunk_new_block
         else:
             can_schedule_block_num_threshold = (
-                request.need_prefill_tokens + self.config.cache_config.block_size - 1
-            ) // self.config.cache_config.block_size + len(self.running) * self.current_reserve_output_block_num
+                num_chunk_new_block + len(self.running) * self.current_reserve_output_block_num
+            )
             if self.config.speculative_config.method is not None:
                 can_schedule_block_num_threshold = min(
                     can_schedule_block_num_threshold + 1, self.config.cache_config.max_block_num_per_seq
@@ -1243,16 +1251,17 @@ class ResourceManagerV1(ResourceManager):
                     elif common_block_ids[block_idx] in metrics["match_storage_block_ids"]:
                         metrics["storage_match_token_num"] -= self.config.cache_config.block_size
 
-            request.metrics.gpu_cache_token_num = metrics["gpu_match_token_num"]
-            request.metrics.cpu_cache_token_num = metrics["cpu_match_token_num"]
-            request.metrics.storage_cache_token_num = metrics["storage_match_token_num"]
-            request.metrics.cpu_cache_prepare_time = metrics["cpu_cache_prepare_time"]
-            request.metrics.storage_cache_prepare_time = metrics["storage_cache_prepare_time"]
+            if not request.has_been_preempted_before:
+                # NOTE: Do not log or report metrics for cache hit rate when request is being rescheduled
+                request.metrics.gpu_cache_token_num = metrics["gpu_match_token_num"]
+                request.metrics.cpu_cache_token_num = metrics["cpu_match_token_num"]
+                request.metrics.storage_cache_token_num = metrics["storage_match_token_num"]
+                request.metrics.cpu_cache_prepare_time = metrics["cpu_cache_prepare_time"]
+                request.metrics.storage_cache_prepare_time = metrics["storage_cache_prepare_time"]
 
-            # Report the number of cached tokens to Prometheus metrics
-            main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
-            main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
-            main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.cpu_cache_token_num)
+                main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
+                main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
+                main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.cpu_cache_token_num)
 
             return True
         except Exception as e:

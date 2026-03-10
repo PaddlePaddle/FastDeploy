@@ -61,6 +61,15 @@ class Test(unittest.TestCase):
         for i in range(self.num_seqs):
             pre_ids[i, : step_idx[i]] = fake_tokens[i, : step_idx[i]]
 
+        token_ids_all = paddle.full(
+            shape=[self.num_seqs, self.max_model_len],
+            fill_value=-1,
+            dtype="int64",
+        )
+        for i in range(self.num_seqs):
+            token_ids_all[i, : prompt_lens[i]] = prompt_ids[i, : prompt_lens[i]]
+            token_ids_all[i, prompt_lens[i] : (prompt_lens[i] + step_idx[i])] = pre_ids[i, : step_idx[i]]
+
         logits = paddle.randn([self.num_seqs, self.vocab_size]).cast("float32")
 
         penalty_score = paddle.ones([self.num_seqs, 1]) * 1.05
@@ -76,6 +85,7 @@ class Test(unittest.TestCase):
         self.input_data = {
             "prompt_ids": prompt_ids,
             "prompt_lens": prompt_lens,
+            "token_ids_all": token_ids_all,
             "pre_ids": pre_ids,
             "step_idx": step_idx,
             "logits": logits,
@@ -153,9 +163,7 @@ class Test(unittest.TestCase):
         from fastdeploy.model_executor.ops.gpu import get_token_penalty_multi_scores
 
         logits = get_token_penalty_multi_scores(
-            self.input_data["pre_ids"],
-            self.input_data["prompt_ids"],
-            self.input_data["prompt_lens"],
+            self.input_data["token_ids_all"],
             self.input_data["logits"],
             self.input_data["penalty_score"],
             self.input_data["frequency_score"],
@@ -163,6 +171,7 @@ class Test(unittest.TestCase):
             self.input_data["temperature"],
             self.input_data["bad_tokens"],
             self.input_data["bad_tokens_len"],
+            self.input_data["prompt_lens"],
             self.input_data["step_idx"],
             self.input_data["min_dec_len"],
             self.input_data["eos_token_id"],

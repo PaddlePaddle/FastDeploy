@@ -30,8 +30,9 @@ __global__ void set_value_by_flags(bool *stop_flags,
                                    const int *seq_lens,
                                    const int bs,
                                    const int end_length,
-                                   const int64_t *pre_ids,
-                                   const int pre_ids_len,
+                                   const int64_t *token_ids_all,
+                                   const int64_t max_model_len,
+                                   const int64_t *prompt_lens,
                                    const int64_t *step_idx,
                                    const int64_t *stop_seqs,
                                    const int *stop_seqs_len,
@@ -80,7 +81,8 @@ __global__ void set_value_by_flags(bool *stop_flags,
     if (stop_seq_len <= 0) return;
     const int64_t *stop_seq_now =
         stop_seqs + bid * stop_seqs_bs + tid * stop_seqs_max_len;
-    const int64_t *pre_ids_now = pre_ids + bid * pre_ids_len;
+    const int64_t *pre_ids_now =
+        token_ids_all + bid * max_model_len + prompt_lens[bid];
     const int64_t step_idx_now = step_idx[bid];
 
     bool is_end = true;
@@ -105,7 +107,8 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &seq_lens,
                        const paddle::Tensor &end_ids,
                        const paddle::Tensor &next_tokens,
-                       const paddle::Tensor &pre_ids,
+                       const paddle::Tensor &token_ids_all,
+                       const paddle::Tensor &prompt_lens,
                        const paddle::Tensor &step_idx,
                        const paddle::Tensor &stop_seqs,
                        const paddle::Tensor &stop_seqs_len,
@@ -134,6 +137,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
   int64_t end_length = end_ids.shape()[0];
   int stop_seqs_bs = stop_seqs.shape()[1];
   int stop_seqs_max_len = stop_seqs.shape()[2];
+  int64_t max_model_len = token_ids_all.shape()[1];
   int block_size = (stop_seqs_bs + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
   set_value_by_flags<<<bs_now, block_size, 0, cu_stream>>>(
       const_cast<bool *>(stop_flags.data<bool>()),
@@ -143,8 +147,9 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
       seq_lens.data<int>(),
       bs_now,
       end_length,
-      pre_ids.data<int64_t>(),
-      pre_ids.shape()[1],
+      token_ids_all.data<int64_t>(),
+      max_model_len,
+      prompt_lens.data<int64_t>(),
       step_idx.data<int64_t>(),
       stop_seqs.data<int64_t>(),
       stop_seqs_len.data<int>(),
@@ -161,7 +166,8 @@ PD_BUILD_STATIC_OP(set_stop_value_multi_ends)
              "seq_lens",
              "end_ids",
              "next_tokens",
-             "pre_ids",
+             "token_ids_all",
+             "prompt_lens",
              "step_idx",
              "stop_seqs",
              "stop_seqs_len",

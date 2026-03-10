@@ -77,6 +77,7 @@ std::vector<paddle::Tensor> GetInferParam(
   int max_seq_len = 0;
   int max_prefix_len = 0;
   int max_kv_len = 0;
+  int max_dec_len = 0;
   for (int i = 0; i < bsz; ++i) {
     if (seq_lens_encoder_vec[i] > 0) {
       enc_batch++;
@@ -93,8 +94,9 @@ std::vector<paddle::Tensor> GetInferParam(
       encoder_kv_lod_vec[enc_batch] =
           seq_len + prefix_len + encoder_kv_lod_vec[enc_batch - 1];
       prefix_len_vec[enc_batch - 1] = prefix_len;
-    } else if (seq_lens_decoder_vec[i] > 0) {
+    } else if (seq_lens_decoder_vec[i] > 0 && seq_lens_this_time_vec[i] > 0) {
       dec_batch++;
+      max_dec_len = std::max(max_dec_len, seq_lens_this_time_vec[i]);
       decoder_batch_map_vec[dec_batch - 1] = i;
       decoder_batch_idx_vec[dec_batch - 1] = i - batch_offset;
       decoder_context_len_vec[dec_batch - 1] =
@@ -295,9 +297,10 @@ std::vector<paddle::Tensor> GetInferParam(
                                    total_enc_len,
                                    max_seq_len,
                                    max_kv_len,
-                                   prefix_block_num_per_seq};
+                                   prefix_block_num_per_seq,
+                                   max_dec_len};
   auto len_info_cpu =
-      paddle::empty({6}, seq_lens_encoder.type(), paddle::CPUPlace());
+      paddle::empty({7}, seq_lens_encoder.type(), paddle::CPUPlace());
   std::memcpy(len_info_cpu.data<int32_t>(),
               len_info_vec.data(),
               sizeof(int32_t) * len_info_vec.size());
@@ -352,7 +355,7 @@ std::vector<std::vector<int64_t>> GetInferParamInferShape(
           seq_lens_encoder_shape,
           seq_lens_encoder_shape,
           seq_lens_encoder_shape,
-          {6}};
+          {7}};
 }
 
 std::vector<paddle::DataType> GetInferParamInferDtype(

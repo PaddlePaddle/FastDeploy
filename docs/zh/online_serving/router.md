@@ -190,9 +190,9 @@ server:
   splitwise: true # true代表开启pd分离模式,false代表开启非pd分离模式
 
 scheduler:
-  policy: "power_of_two" # 调度策略(可选): random, power_of_two, round_robin, process_tokens, request_num, cache_aware, fd_metrics_score
-  prefill-policy: "cache_aware" # pd分离模式下prefill节点调度策略
-  decode-policy: "fd_metrics_score" # pd分离模式下decode节点调度策略
+  policy: "power_of_two" # 调度策略(可选): random, power_of_two, round_robin, process_tokens, request_num, cache_aware, fd_metrics_score; 默认: request_num
+  prefill-policy: "cache_aware" # pd分离模式下prefill节点调度策略; 默认: process_tokens
+  decode-policy: "fd_metrics_score" # pd分离模式下decode节点调度策略; 默认: request_num
   eviction-interval-secs: 60 # cache-aware策略清理过期cache的间隔时间
   balance-abs-threshold: 1 # cache-aware策略绝对阈值
   balance-rel-threshold: 0.2 # cache-aware策略相对阈值
@@ -253,3 +253,19 @@ instances:
 * metrics_port: 推理实例的metrics端口号。
 
 其中 `role`、`host_ip` 和 `port` 为必填参数，其余参数为可选。
+
+## 调度策略说明
+
+Router 支持以下调度策略，可通过配置文件中的 `policy`（mixed 模式）、`prefill-policy` 和 `decode-policy`（PD 分离模式）字段指定。
+
+**默认策略**：不配置时，prefill 节点默认使用 `process_tokens`，mixed 和 decode 节点默认使用 `request_num`。
+
+| 策略名 | 适用场景 | 实现方式 |
+|--------|----------|----------|
+| `random` | 通用 | 从所有可用实例中随机选择一个，无状态感知，适合轻量场景。 |
+| `round_robin` | 通用 | 使用原子计数器对实例列表循环取模，按顺序均匀分发请求。 |
+| `power_of_two` | 通用 | 随机选取两个实例，比较其当前并发请求数，选择负载较低的一个。 |
+| `process_tokens` | **prefill（默认）** | 遍历所有实例，选择当前正在处理的 token 数最少的实例，适合 prefill 阶段的长请求负载均衡。 |
+| `request_num` | **mixed / decode（默认）** | 遍历所有实例，选择当前并发请求数最少的实例，适合 decode 及 mixed 场景的请求均衡。 |
+| `fd_metrics_score` | mixed / decode | 实时从各实例的 metrics 接口获取 running/waiting 请求数，按 `running + waiting × waitingWeight` 打分，选择得分最低的实例。 |
+| `cache_aware` | prefill | 基于 Radix Tree 维护各实例的 KV Cache 前缀命中情况，综合命中率与负载打分选择实例；负载严重不均衡时自动回退至 `process_tokens`。 |

@@ -37,6 +37,31 @@ def next_power_of_2(n: int):
     return 1 << (n - 1).bit_length() if n > 0 else 1
 
 
+def _process_scale_interleaved(scales):
+    scale_dim = len(scales.shape)
+    if scale_dim == 2:
+        scales = scales.unsqueeze(0)
+    assert len(scales.shape) == 3
+    B, M, K = scales.shape
+    round_up_multiple = lambda x, m: (x + m - 1) // m * m
+    M_padded = round_up_multiple(M, 128)
+    K_padded = round_up_multiple(K, 4)
+    padded_scales = paddle.empty([B, M_padded, K_padded], dtype=scales.dtype)
+    padded_scales[:B, :M, :K].copy_(scales)
+    batches, rows, cols = padded_scales.shape
+    assert rows % 128 == 0
+    assert cols % 4 == 0
+    padded_scales = padded_scales.reshape(batches, rows // 128, 4, 32, cols // 4, 4)
+    padded_scales = padded_scales.transpose([0, 1, 4, 3, 2, 5])
+    # [batches, rows // 128, cols // 4, 32, 4, 4]
+
+    padded_scales = padded_scales.contiguous().to(paddle.device.get_device())
+    padded_scales = (
+        padded_scales.reshape(M_padded, K_padded) if scale_dim == 2 else padded_scales.reshape(B, M_padded, K_padded)
+    )
+    return padded_scales
+
+
 class ModelOptNvFp4Config(QuantConfigBase):
     """
     quantization config for ModelOpt Nvfp4 datatype
@@ -132,8 +157,6 @@ class ModelOptNvFp4Config(QuantConfigBase):
         else:
             return ModelOptNvFp4LinearMethod(self)
 
-        return None
-
 
 class ModelOptNvFp4LinearMethod(QuantMethodBase):
     """Linear method for Model Optimizer NVFP4.
@@ -167,12 +190,17 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         layer,
         **extra_weight_attrs,
     ):
+        # 因为模型存储是列存储的，所以这里需要not一下！
         extra_weight_attrs["output_dim"] = not extra_weight_attrs["output_dim"]
-        weight_shape = layer.weight_shape[::-1]
-        weight_shape[1] = weight_shape[1] // 2
+        K = layer.weight_shape[0]
+        N = layer.weight_shape[1]
+        # 因为模型的存储时候权重是[N,K//2]
+        # 所以这里创建的权重是为了契合模型存储的权重！
+        weight_shape = [N, K // 2]
         layer.weight_dtype = "uint8"
+
         input_scale_shape = [1]
-        weight_scale_shape = [layer.weight_shape[::-1][0], layer.weight_shape[::-1][1] // self.quant_config.group_size]
+        weight_scale_shape = [N, K // self.quant_config.group_size]
         weight_scale_2_shape = [1]
 
         self._create_main_weight(layer, weight_shape, extra_weight_attrs)
@@ -221,12 +249,6 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
             weight_scale_2_shape: 权重缩放2形状
             extra_weight_attrs: 额外权重属性
         """
-        layer.weight_scale_2 = layer.create_parameter(
-            shape=weight_scale_2_shape,
-            dtype=paddle.float32,
-            is_bias=False,
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
         layer.weight_scale = layer.create_parameter(
             shape=weight_scale_shape,
             dtype=paddle.float8_e4m3fn,
@@ -238,30 +260,14 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
             extra_weight_attrs,
         )
 
+        layer.weight_scale_2 = layer.create_parameter(
+            shape=weight_scale_2_shape,
+            dtype=paddle.float32,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+
     def process_weights_after_loading(self, layer) -> None:
-        def _process_scale_interleaved(scales):
-            scale_dim = len(scales.shape)
-            if scale_dim == 2:
-                scales = scales.unsqueeze(0)
-            assert len(scales.shape) == 3
-            B, M, K = scales.shape
-            round_up_multiple = lambda x, m: (x + m - 1) // m * m
-            M_padded = round_up_multiple(M, 128)
-            K_padded = round_up_multiple(K, 4)
-            padded_scales = paddle.empty([B, M_padded, K_padded], dtype=scales.dtype)
-            padded_scales[:B, :M, :K].copy_(scales)
-            batches, rows, cols = padded_scales.shape
-            assert rows % 128 == 0
-            assert cols % 4 == 0
-            padded_scales = padded_scales.reshape(batches, rows // 128, 4, 32, cols // 4, 4)
-            padded_scales = padded_scales.transpose([0, 1, 4, 3, 2, 5])
-            padded_scales = padded_scales.contiguous().to(paddle.device.get_device())
-            padded_scales = (
-                padded_scales.reshape(M_padded, K_padded)
-                if scale_dim == 2
-                else padded_scales.reshape(B, M_padded, K_padded)
-            )
-            return padded_scales
 
         input_scale_2 = layer.input_scale.max().to(paddle.float32)
         weight_scale_2 = layer.weight_scale_2.max().to(paddle.float32)
@@ -332,7 +338,9 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         else:
             raise ValueError(f"Unsupported backend: {self.backend}.")
 
+        # shape 恢复到[K//2,N]
         w = layer.weight.T
+        # shape 恢复到[K//group_size, N]
         w_scale_interleaved = layer.weight_scale_interleaved.T
 
         if backend == "cutlass":
@@ -343,7 +351,8 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         out = fp4_gemm(x_fp4, w, x_scale_interleaved, w_scale_interleaved, layer.alpha, output_dtype, backend=backend)
         if layer.with_bias:
             out = paddle.add(out, layer.bias)
-        return out.view(*output_shape)
+        assert out.shape == output_shape
+        return out
 
 
 class ModelOptNvFp4FusedMoE(QuantMethodBase):
@@ -385,7 +394,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
 
     def create_weights(self, layer, **extra_weight_attrs):
         """
-        Triton MoE create weight process.
+        NVFP4 MoE create weight.
         """
         self.up_gate_proj_weight_shape = [
             layer.num_local_experts,
@@ -397,20 +406,15 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             layer.hidden_size,
             layer.moe_intermediate_size // 2,
         ]
-        self.up_gate_proj_scale_shape = [
-            layer.num_local_experts,
-            layer.moe_intermediate_size * 2,
-            layer.hidden_size // self.quant_config.group_size,
+        self.up_gate_proj_scale_shape = self.up_gate_proj_weight_shape[0:2] + [
+            layer.hidden_size // self.quant_config.group_size
         ]
-        self.down_proj_scale_shape = [
-            layer.num_local_experts,
-            layer.hidden_size,
-            layer.moe_intermediate_size // self.quant_config.group_size,
+        self.down_proj_scale_shape = self.down_proj_weight_shape[0:2] + [
+            layer.moe_intermediate_size // self.quant_config.group_size
         ]
 
         self.weight_scale_dtype = paddle.float8_e4m3fn
         self.weight_dtype = paddle.uint8
-        self.added_scale_attrs = ["up_gate_proj_weight_scale", "down_proj_weight_scale"]
         up_gate_proj_weight_name = self.added_weight_attrs[0]
         down_proj_weight_name = self.added_weight_attrs[1]
         up_gate_proj_scale_name = self.added_scale_attrs[0]
@@ -493,38 +497,10 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}},
         )
 
-        set_weight_attrs(
-            layer.up_gate_proj_weight_scale_2,
-            {**extra_weight_attrs, "weight_type": "weight_scale_2"},
-        )
+        set_weight_attrs(layer.up_gate_proj_weight_scale_2, {**extra_weight_attrs, "weight_type": "weight_scale_2"})
         set_weight_attrs(layer.down_proj_weight_scale_2, {**extra_weight_attrs, "weight_type": "weight_scale_2"})
         set_weight_attrs(layer.up_gate_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
         set_weight_attrs(layer.down_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
-
-    def swizzle_blockscale(self, scale):
-        assert scale.dtype == paddle.float8_e4m3fn
-        # Pad and blockwise interleave weight_scale
-        scale_dim = len(scale.shape)
-        if len(scale.shape) == 2:
-            scale = scale.unsqueeze(0)
-        assert len(scale.shape) == 3
-        B, M, K = scale.shape
-        round_up_multiple = lambda x, m: (x + m - 1) // m * m
-        M_padded = round_up_multiple(M, 128)
-        K_padded = round_up_multiple(K, 4)
-        padded_scale = paddle.empty([B, M_padded, K_padded], dtype=scale.dtype)
-        padded_scale[:B, :M, :K].copy_(scale)
-        batches, rows, cols = padded_scale.shape
-        assert rows % 128 == 0
-        assert cols % 4 == 0
-        padded_scale = padded_scale.reshape(batches, rows // 128, 4, 32, cols // 4, 4)
-        swizzled_scale = padded_scale.permute((0, 1, 4, 3, 2, 5))
-        swizzled_scale = swizzled_scale.contiguous().to(paddle.device.get_device())
-        return (
-            swizzled_scale.reshape(M_padded, K_padded)
-            if scale_dim == 2
-            else swizzled_scale.reshape(B, M_padded, K_padded)
-        )
 
     @property
     def load_up_proj_weight_first(self) -> bool:
@@ -561,13 +537,13 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
                 weight_scale.dtype == paddle.float8_e4m3fn
             ), f"{name} Weight Blockscale must be represented as FP8-E4M3"
 
-        up_gate_proj_blockscale_swizzled = self.swizzle_blockscale(layer.up_gate_proj_weight_scale)
+        up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
         free_tensor(layer.up_gate_proj_weight_scale)
         layer.up_gate_proj_weight_scale = None
         create_parameter_and_copy(
             layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
         )
-        down_proj_blockscale_swizzled = self.swizzle_blockscale(layer.down_proj_weight_scale)
+        down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
         free_tensor(layer.down_proj_weight_scale)
         layer.down_proj_weight_scale = None
         create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)

@@ -5,14 +5,14 @@ echo "$DIR"
 ixsmi
 
 #先kill一遍
-ps -efww | grep -E 'run_ernie300B_4layer' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+ps -efww | grep -E 'run_ernie_21b' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 
 unset http_proxy
 unset https_proxy
 unset no_proxy
 
-export FD_LOG_DIR=/fdlog/$HOSTNAME
-echo "FD log will be saved into $FD_LOG_DIR"
+# export FD_LOG_DIR=/fdlog/$HOSTNAME
+# echo "FD log will be saved into $FD_LOG_DIR"
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 ln -sf /usr/local/bin/python3 /usr/local/bin/python
 function pip_install_with_retry() {
@@ -37,8 +37,11 @@ echo "install paddle cpu and custom device"
 pip_install_with_retry --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
 pip_install_with_retry --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
 
+echo "Run paddle.utils.run_check()"
+python -c "import paddle; paddle.utils.run_check()"
+
 INCLUDE_FOLDERS=(
-    "ERNIE_300B_4L"
+    # "ERNIE_300B_4L"
     "ERNIE-4.5-21B-A3B-Paddle"
     "ERNIE-4.5-VL-28B-A3B-Paddle"
     "PaddleOCR-VL"
@@ -56,20 +59,32 @@ for filename in "${INCLUDE_FOLDERS[@]}"; do
     cp -r $file $MODEL_DIR
 done
 
+CONTAINER_PP_DOC_DIR=/root/.paddlex/official_models
+mkdir -p $CONTAINER_PP_DOC_DIR
+echo "start copy $SOURCE_DIR/PP-DocLayoutV2 into $CONTAINER_PP_DOC_DIR"
+cp -r $SOURCE_DIR/PP-DocLayoutV2 $CONTAINER_PP_DOC_DIR
+
 echo "copy done"
 echo "ls $MODEL_DIR"
 ls $MODEL_DIR
+echo "ls $CONTAINER_PP_DOC_DIR"
+ls $CONTAINER_PP_DOC_DIR
 
 echo "build whl"
 bash build.sh || exit 1
 
 function print_error_message() {
-    if [ ! -f "log/workerlog.0" ]; then
+    if [ -f "log/launch_worker.log" ]; then
         echo "------------------- log/launch_worker.log -----------------"
         cat log/launch_worker.log
-    else
+    fi
+    if [ -f "log/workerlog.0" ]; then
         echo "------------------- log/workerlog.0 -----------------"
         cat log/workerlog.0
+    fi
+    if [ -f "log/workerlog.1" ]; then
+        echo "------------------- log/workerlog.1 -----------------"
+        cat log/workerlog.1
     fi
     if [ -f "log/fastdeploy_error.log" ]; then
         echo "------------------- log/fastdeploy_error.log -----------------"
@@ -84,7 +99,7 @@ export FD_SAMPLING_CLASS=rejection
 ################# Test offline ###################
 
 offline_ci_list=(
-    ${CI_PATH}/run_ernie300B_4layer.py
+    ${CI_PATH}/run_ernie_21b.py
     ${CI_PATH}/run_ernie_vl_28B.py
 )
 echo "test offline ci files: ${offline_ci_list[@]}"
@@ -182,7 +197,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --quantization wint8 \
        --max-model-len 32768 \
        --max-num-seqs 8 \
-       --block-size 16 > server.log 2>&1 &
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": false}' > server.log 2>&1 &
 
 check_server_status
 
@@ -229,7 +245,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --reasoning-parser ernie-45-vl \
        --max-model-len 32768 \
        --max-num-seqs 8 \
-       --block-size 16 > server.log 2>&1 &
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": false}' > server.log 2>&1 &
 
 check_server_status
 
@@ -284,7 +301,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --max-num-batched-tokens 16384 \
        --max-num-seqs 64 \
        --workers 2 \
-       --block-size 16 > server.log 2>&1 &
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": true}' > server.log 2>&1 &
 
 check_server_status
 

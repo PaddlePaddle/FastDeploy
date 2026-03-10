@@ -216,9 +216,6 @@ class SplitwiseConnector:
             if time.time() - start_time > envs.FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS:
                 del self.current_request_ids[task.request_id]
                 return False, "prefill waits for decode resource timeout"
-            if task.request_id in self.resource_manager.waiting_abort_req_id_set:
-                del self.current_request_ids[task.request_id]
-                return False, "request aborted during decode resource allocation"
 
         msg = self.current_request_ids[task.request_id]
         del self.current_request_ids[task.request_id]
@@ -280,6 +277,14 @@ class SplitwiseConnector:
                     "request_id": tasks[i].request_id,
                     "error_msg": tasks[i].get("error_msg"),
                 }
+                if (
+                    envs.ENABLE_V1_KVCACHE_SCHEDULER
+                    and tasks[i].request_id in self.resource_manager.waiting_abort_req_id_set
+                ):
+                    addr = f"{dsg_info['prefill_ip']}:" + f"{dsg_info['prefill_connector_port']}"
+                    if addr not in cache_info:
+                        cache_info[addr] = []
+                    cache_info[addr].append(info)
             else:
                 addr = f"{dsg_info['prefill_ip']}:" + f"{dsg_info['prefill_connector_port']}"
                 info = {
