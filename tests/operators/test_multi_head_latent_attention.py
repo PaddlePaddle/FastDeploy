@@ -97,7 +97,7 @@ class TestMultiHeadLatentAttention(unittest.TestCase):
         self.max_seq_len = self.max_blocks * self.block_size
         self.softmax_scale = 1.0 / math.sqrt(self.head_dim_qk)
 
-    def _build_inputs(self, dtype_str="bfloat16", seq_len=5, max_dec_len=1):
+    def _build_inputs(self, dtype_str="bfloat16", seq_len=5):
         """Build all input tensors for the MLA op."""
         total_blocks = self.batch_size * self.max_blocks
         q_hidden = self.q_num_heads * self.head_dim_qk
@@ -117,6 +117,12 @@ class TestMultiHeadLatentAttention(unittest.TestCase):
         block_tables = paddle.arange(self.max_blocks, dtype="int32").unsqueeze(0)
 
         compute_dtype = "bf16" if dtype_str == "bfloat16" else "fp16"
+        # max_dec_len_this_time and max_len_kv are read on the HOST via
+        # .data<int>()[0], so they MUST be CPU tensors.
+        max_dec_len_cpu = paddle.to_tensor(np.array([self.token_num], dtype="int32")).cpu()
+        max_len_kv_cpu = paddle.to_tensor(np.array([seq_len + self.token_num], dtype="int32")).cpu()
+        # kv_num_blocks is passed as CPU/pinned tensor in production
+        kv_num_blocks_cpu = paddle.to_tensor(np.array([1], dtype="int32")).cpu()
         args = [
             query,
             kv,
@@ -128,13 +134,13 @@ class TestMultiHeadLatentAttention(unittest.TestCase):
             block_tables,
             paddle.zeros([1], dtype="int32"),
             paddle.zeros([1], dtype="int32"),
-            paddle.to_tensor([1], dtype="int32"),
+            kv_num_blocks_cpu,
             paddle.zeros([1], dtype="int32"),
             paddle.zeros([1], dtype="int32"),
             paddle.to_tensor([1], dtype="int32"),
             paddle.to_tensor([self.block_size], dtype="int32"),
-            paddle.to_tensor([max_dec_len], dtype="int32"),
-            paddle.to_tensor([seq_len], dtype="int32"),
+            max_dec_len_cpu,
+            max_len_kv_cpu,
             None,
             None,
             None,
@@ -164,7 +170,7 @@ class TestMultiHeadLatentAttention(unittest.TestCase):
         """Run op and compare against NumPy reference."""
         if self.sm < 90:
             self.skipTest("MLA kernel requires SM >= 90 (H100+).")
-        args, q_ref, kv_ref, bt_np = self._build_inputs(dtype_str=dtype_str, seq_len=seq_len, max_dec_len=seq_len)
+        args, q_ref, kv_ref, bt_np = self._build_inputs(dtype_str=dtype_str, seq_len=seq_len)
         out = multi_head_latent_attention(*args).cast("float32").numpy()
         ref = _reference_mla_decode(
             q_ref,
