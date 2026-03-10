@@ -15,6 +15,8 @@
 """
 
 import os
+import sys
+import tempfile
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -337,10 +339,11 @@ class ZmqIpcServer(ZmqServerBase):
         self.name = name
         self.mode = mode
         self.cached_results = defaultdict(list)
+        _shm_dir = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
         if mode == zmq.PULL:
-            self.file_name = f"/dev/shm/{name}.socket"
+            self.file_name = f"{_shm_dir}/{name}.socket"
         elif mode == zmq.ROUTER:
-            self.file_name = f"/dev/shm/router_{name}.ipc"
+            self.file_name = f"{_shm_dir}/router_{name}.ipc"
         self.ZMQ_SNDHWM = int(envs.FD_ZMQ_SNDHWM)
         self.aggregate_send = envs.FD_USE_AGGREGATE_SEND
         self.mutex = threading.Lock()

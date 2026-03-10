@@ -25,6 +25,7 @@ import re
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -402,7 +403,8 @@ class EngineService:
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
             address = (self.cfg.master_ip, self.cfg.parallel_config.local_engine_worker_queue_port)
         else:
-            address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.local_engine_worker_queue_port}.sock"
+            _shm_dir = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
+            address = f"{_shm_dir}/fd_task_queue_{self.cfg.parallel_config.local_engine_worker_queue_port}.sock"
 
         if self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0":
             if start_queue:
@@ -1773,8 +1775,11 @@ class EngineService:
             if hasattr(self, "worker_proc") and self.worker_proc is not None:
                 self.llm_logger.info("Cleaning up worker processes...")
                 try:
-                    pgid = os.getpgid(self.worker_proc.pid)
-                    os.killpg(pgid, signal.SIGTERM)
+                    if sys.platform != "win32":
+                        pgid = os.getpgid(self.worker_proc.pid)
+                        os.killpg(pgid, signal.SIGTERM)
+                    else:
+                        self.worker_proc.terminate()
                 except Exception as e:
                     self.llm_logger.error(f"Error extracting sub services: {e}, {str(traceback.format_exc())}")
 
@@ -1786,8 +1791,11 @@ class EngineService:
                 for p in self.cache_manager_processes:
                     self.llm_logger.info(f"Killing cache manager process {p.pid}")
                     try:
-                        pgid = os.getpgid(p.pid)
-                        os.killpg(pgid, signal.SIGTERM)
+                        if sys.platform != "win32":
+                            pgid = os.getpgid(p.pid)
+                            os.killpg(pgid, signal.SIGTERM)
+                        else:
+                            p.terminate()
                     except Exception as e:
                         self.llm_logger.error(
                             f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
@@ -2101,7 +2109,7 @@ class EngineService:
             pd_cmd,
             stdout=subprocess.PIPE,
             shell=True,
-            preexec_fn=os.setsid,
+            **({} if sys.platform == "win32" else {"preexec_fn": os.setsid}),
         )
         return p
 
@@ -2165,7 +2173,10 @@ class EngineService:
                             int(self.cfg.parallel_config.engine_worker_queue_port[i]),
                         )
                     else:
-                        address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
+                        _shm_dir = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
+                        address = (
+                            f"{_shm_dir}/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
+                        )
 
                     self.llm_logger.info(f"dp start queue service {address}")
                     self.dp_engine_worker_queue_server.append(

@@ -18,6 +18,8 @@ import argparse
 import json
 import math
 import queue
+import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -161,7 +163,8 @@ class CacheMessager:
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
             address = (pod_ip, engine_worker_queue_port)
         else:
-            address = f"/dev/shm/fd_task_queue_{engine_worker_queue_port}.sock"
+            _shm_dir = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
+            address = f"{_shm_dir}/fd_task_queue_{engine_worker_queue_port}.sock"
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
@@ -503,7 +506,8 @@ class CacheMessagerV1:
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
             address = (pod_ip, engine_worker_queue_port)
         else:
-            address = f"/dev/shm/fd_task_queue_{engine_worker_queue_port}.sock"
+            _shm_dir = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
+            address = f"{_shm_dir}/fd_task_queue_{engine_worker_queue_port}.sock"
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
@@ -511,7 +515,6 @@ class CacheMessagerV1:
             client_id=self.rank,
             local_data_parallel_id=local_data_parallel_id,
         )
-        self.block_size = block_size
         transfer_protocol = transfer_protocol.split(",")
 
         logger.info(
