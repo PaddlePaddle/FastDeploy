@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include "helper.h"  // For getEnvDeterministicMode, getEnvDeterministicDebug
 #include "multiquery_attention_c16_kernel.h"
 
 template <typename T,
@@ -544,7 +545,9 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   T *q_base_ptr = q + q_offset;
   T *o_base_ptr_T = nullptr;
   OutT *o_base_ptr_int8 = nullptr;
-  if (num_chunks_this_seq <= 1) {
+  // When partition_kv=false (nosplit), always write to out directly,
+  // even if num_chunks_this_seq > 1 (tmp_workspace may be nullptr).
+  if (!partition_kv || num_chunks_this_seq <= 1) {
     o_base_ptr_int8 = out + o_offset;
   } else {
     if (ENABLE_PREFILL) {
@@ -747,7 +750,8 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   merge_block_res_v2<num_frags_x, num_frags_y, T>(
       o_frag, reinterpret_cast<float *>(smem), m_frag, d_frag, wid, tid);
 
-  if (num_chunks_this_seq <= 1) {
+  // nosplit: always normalize (partition_kv=false means no merge step later)
+  if (!partition_kv || num_chunks_this_seq <= 1) {
     if (sinks) {
       float current_sinks[num_frags_x][2];
 #pragma unroll
@@ -770,7 +774,8 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
 
   // write o
   // [num_frags_x, 16, num_frags_y, 16]
-  if (num_chunks_this_seq <= 1) {
+  // nosplit: always write directly to out (not tmp_workspace)
+  if (!partition_kv || num_chunks_this_seq <= 1) {
     write_o_reg_gmem_multi_warps_shift_smooth_quant<GROUP_SIZE,
                                                     num_frags_x,
                                                     num_frags_y,
@@ -808,7 +813,8 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
         HEAD_DIM);
   }
 
-  if (num_chunks_this_seq > 1) {
+  // nosplit: skip tmp_m/tmp_d write (no merge step, tmp_m/tmp_d may be nullptr)
+  if (partition_kv && num_chunks_this_seq > 1) {
     if (wid == 0) {
 #pragma unroll
       for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
@@ -932,9 +938,24 @@ void MultiQueryAppendAttention(
 
     uint32_t chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
     const int num_chunks = div_up(max_dec_len, chunk_size);
+    // Deterministic mode: force use nosplit kernel to ensure consistent
+    // floating-point accumulation order across all sequence lengths
+    const bool force_no_partition = getEnvDeterministicMode();
+
+    // Debug log for determinism verification
+    if (getEnvDeterministicDebug()) {
+      printf(
+          "[DET_DEBUG] num_chunks=%d, chunk_size=%u, max_dec_len=%d, "
+          "force_no_partition=%d\n",
+          num_chunks,
+          chunk_size,
+          max_dec_len,
+          force_no_partition);
+    }
+
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
-    if (num_chunks <= 1) {
+    if (num_chunks <= 1 || force_no_partition) {
       auto nosplit_kv_kernel =
           multi_query_append_attention_kernel<NV_TYPE,
                                               false,
@@ -1150,9 +1171,18 @@ void MultiQueryAppendAttention(
     }
 
     const int num_chunks = div_up(max_seq_len, chunk_size);
-    dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
+    // Deterministic mode: force nosplit kernel with gridDim.y=1 to ensure
+    // consistent floating-point accumulation order across all sequence lengths.
+    // NOTE: the warp1_4 nosplit kernel uses runtime num_chunks_this_seq check
+    // (not constexpr partition_kv), so we MUST set gridDim.y=1 to avoid
+    // nullptr write to tmp_workspace when num_chunks_this_seq > 1.
+    const bool force_no_partition = getEnvDeterministicMode();
+    const int grid_chunks = force_no_partition ? 1 : num_chunks;
+    dim3 grids(num_blocks_x_cpu, grid_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
-    if (num_chunks <= 0) {
+    // before it's deadcode: num_chunks <= 0
+    // now it's only used for determinism
+    if (force_no_partition) {
       auto nosplit_kv_kernel =
           multi_query_append_attention_warp1_4_kernel<NV_TYPE,
                                                       false,

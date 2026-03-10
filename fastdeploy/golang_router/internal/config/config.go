@@ -118,5 +118,14 @@ func Load(configPath, listenPort string, isSplitwise bool) (*Config, error) {
 	if cfg.Scheduler.WaitingWeight == 0 {
 		cfg.Scheduler.WaitingWeight = 1
 	}
+	if cfg.Scheduler.Policy == "" {
+		cfg.Scheduler.Policy = "request_num"
+	}
+	if cfg.Scheduler.PrefillPolicy == "" {
+		cfg.Scheduler.PrefillPolicy = "process_tokens"
+	}
+	if cfg.Scheduler.DecodePolicy == "" {
+		cfg.Scheduler.DecodePolicy = "request_num"
+	}
 	return &cfg, nil
 }

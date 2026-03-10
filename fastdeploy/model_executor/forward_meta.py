@@ -158,6 +158,8 @@ class ForwardMeta:
     # for prefill
     exist_prefill: bool = False
 
+    position_ids: Optional[paddle.Tensor] = None
+
     def clear_caches(self):
         """Safely clean up the caches"""
         if self.caches:

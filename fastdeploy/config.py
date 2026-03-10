@@ -62,7 +62,7 @@ ModelImpl = Literal["auto", "fastdeploy", "paddleformers"]
 
 _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "generate": [],
-    "pooling": ["embed"],
+    "pooling": ["embed", "reward"],
 }
 
 PREEMPTED_TOKEN_ID = -9
@@ -143,6 +143,7 @@ class ErnieArchitectures:
     ERNIE5_MODELS = {
         "Ernie5ForCausalLM",
         "Ernie5MoeForCausalLM",
+        "Ernie5MoEForRewardModel",
     }
 
     @classmethod
