@@ -79,7 +79,11 @@ class TokenProcessor:
         self.use_sampling_mask = getattr(self.cfg.model_config, "enable_keep_sampling_mask", False)
         if not envs.FD_USE_GET_SAVE_OUTPUT_V1 and self.use_sampling_mask:
             rank_id = self.cfg.parallel_config.local_data_parallel_id
-            self.sampling_mask_zmq_server = ZmqIpcServer(name=f"sampling_mask_output_rank{rank_id}", mode=zmq.PULL)
+            port = self.cfg.parallel_config.engine_worker_queue_port[rank_id]
+            self.sampling_mask_zmq_server = ZmqIpcServer(
+                name=f"sampling_mask_output_rank_{rank_id}_{port}", mode=zmq.PULL
+            )
+            llm_logger.info(f"create zmq sampling_mask_output_rank_{rank_id}_{port}")
         self.enable_draft_logprob = self.cfg.speculative_config.enable_draft_logprob
 
         if self.speculative_decoding:

@@ -19,7 +19,6 @@ from typing import Dict, List, Optional, Union
 
 import numpy as np
 import paddle
-import zmq
 
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
@@ -102,19 +101,6 @@ from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferD
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
-
-# Module-level cache: {rank_id: ZmqIpcClient} for sampling_mask side-channel
-_sampling_mask_zmq_clients = {}
-
-
-def _get_sampling_mask_zmq_client(rank_id: int) -> ZmqIpcClient:
-    """Lazily create and cache a ZMQ PUSH client for sampling_mask side-channel."""
-    global _sampling_mask_zmq_clients
-    if rank_id not in _sampling_mask_zmq_clients:
-        client = ZmqIpcClient(name=f"sampling_mask_output_rank{rank_id}", mode=zmq.PUSH)
-        client.connect()
-        _sampling_mask_zmq_clients[rank_id] = client
-    return _sampling_mask_zmq_clients[rank_id]
 
 
 def pre_process(
@@ -269,6 +255,7 @@ def post_process_normal(
     splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
     routing_replay_manager: RoutingReplayManager = None,
+    sampling_mask_zmq_client: ZmqIpcClient = None,
 ):
     """Post-processing steps after completing a single token generation."""
     if think_end_id > 0:
@@ -414,13 +401,11 @@ def post_process_normal(
                     model_output.mp_rank,
                 )
             # Send sampling_mask via ZMQ side-channel when enabled.
-            if sampler_output.sampling_mask is not None and (save_each_rank or model_output.mp_rank == 0):
-                rank_id = model_output.mp_rank
-                zmq_client = _get_sampling_mask_zmq_client(rank_id)
+            if sampler_output.sampling_mask is not None and model_output.mp_rank == 0:
                 # Convert bool tensor to dict {batch_id: list[bool]} for easy consumption.
                 mask_np = sampler_output.sampling_mask.numpy()  # [num_reqs, vocab_size], bool
                 mask_dict = {i: mask_np[i].tolist() for i in range(mask_np.shape[0])}
-                zmq_client.send_pyobj(mask_dict)
+                sampling_mask_zmq_client.send_pyobj(mask_dict)
 
 
 def post_process_specualate(
@@ -434,6 +419,7 @@ def post_process_specualate(
     splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
     routing_replay_manager: RoutingReplayManager = None,
+    sampling_mask_zmq_client: ZmqIpcClient = None,
 ):
     if think_end_id > 0:
         speculate_limit_thinking_content_length(
@@ -530,9 +516,7 @@ def post_process_specualate(
                 save_each_rank,
             )
         # Send sampling_mask via ZMQ side-channel when enabled.
-        if sampler_output.sampling_mask is not None and (save_each_rank or model_output.mp_rank == 0):
-            rank_id = model_output.mp_rank
-            zmq_client = _get_sampling_mask_zmq_client(rank_id)
+        if sampler_output.sampling_mask is not None and model_output.mp_rank == 0:
             # sampling_mask shape: [total_accepted_tokens, vocab_size] (MTP may accept >1 token per request)
             mask_np = sampler_output.sampling_mask.numpy()
             real_bsz = model_output.accept_num.shape[0]
@@ -545,7 +529,7 @@ def post_process_specualate(
                     # List of n masks, each of shape [vocab_size]
                     mask_dict[i] = mask_np[offset : offset + n].tolist()
                 offset += n
-            zmq_client.send_pyobj(mask_dict)
+            sampling_mask_zmq_client.send_pyobj(mask_dict)
 
     # Update pre_ids through accept tokens
 
@@ -576,6 +560,7 @@ def post_process(
     splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
     routing_replay_manager: RoutingReplayManager = None,
+    sampling_mask_zmq_client: ZmqIpcClient = None,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
 
@@ -603,6 +588,7 @@ def post_process(
                 splitwise_role_is_decode,
                 enable_entropy,
                 routing_replay_manager,
+                sampling_mask_zmq_client,
             )
         else:
             post_process_normal(
@@ -618,6 +604,7 @@ def post_process(
                 splitwise_role_is_decode,
                 enable_entropy,
                 routing_replay_manager,
+                sampling_mask_zmq_client,
             )
 
 
