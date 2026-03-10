@@ -91,7 +91,9 @@ class TestMultiHeadLatentAttention(unittest.TestCase):
         self.sm = SM_VERSION
         self.batch_size, self.token_num = 1, 1
         self.q_num_heads, self.kv_num_heads = 8, 1
-        self.head_dim_qk, self.head_dim_v = 128, 128
+        # MLA dimensions: q_head_dim = nope_size + pe_dim = 512 + 64 = 576
+        self.head_dim_qk = 576  # kernel requires exactly 576
+        self.head_dim_v = 512  # kv_lora_rank (nope_size), used for value/output
         self.block_size = 64
         self.max_blocks = 2
         self.max_seq_len = self.max_blocks * self.block_size
