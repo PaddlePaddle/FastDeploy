@@ -340,6 +340,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/reasoning_phase_token_constraint.cu",
         "gpu_ops/get_attn_mask_q.cu",
         "gpu_ops/v100_decode_attention.cu",
+        "gpu_ops/v100_rope_write_cache.cu",
     ]
     sm_versions = get_sm_version(archs)
     # Some kernels in this file require SM75+ instructions. Exclude them when building SM70 (V100).
@@ -425,7 +426,9 @@ elif paddle.is_compiled_with_cuda():
             "-DENABLE_BF16",
         ]
         # Generate marlin kernel instantiation files (needed for linking even on SM70)
-        os.system("python gpu_ops/moe/moe_wna16_marlin_utils/generate_kernels.py")
+        ret = os.system("python gpu_ops/moe/moe_wna16_marlin_utils/generate_kernels.py")
+        if ret != 0:
+            raise RuntimeError("Failed to generate Marlin kernel files. " "Please install jinja2: pip install jinja2")
         sources += [
             # MoE files for SM_70 support
             "gpu_ops/moe/deepgemm_preprocess.cu",

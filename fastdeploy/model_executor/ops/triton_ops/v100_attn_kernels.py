@@ -319,6 +319,7 @@ def v100_decode_fused(
     max_kv_len,
     partial_out=None,  # Optional pre-allocated buffer
     partial_lse=None,  # Optional pre-allocated buffer
+    skip_kv_write=False,  # Skip KV write if already written by v100_rope_write_cache
 ):
     """KV write + decode attention. Write KV first, then fused stage1+stage2.
 
@@ -339,16 +340,17 @@ def v100_decode_fused(
     MAX_BLOCKS_PER_SPLIT = ceil_div(max_kv_blocks, num_kv_splits) + 1
     single_split = num_kv_splits == 1
 
-    # Step 1: Write KV to cache (must complete before attention reads)
-    v100_write_kv_cache(
-        k_new,
-        v_new,
-        key_cache,
-        value_cache,
-        block_tables,
-        positions,
-        batch_id_per_token,
-    )
+    # Step 1: Write KV to cache (skip if already written by v100_rope_write_cache)
+    if not skip_kv_write:
+        v100_write_kv_cache(
+            k_new,
+            v_new,
+            key_cache,
+            value_cache,
+            block_tables,
+            positions,
+            batch_id_per_token,
+        )
 
     # Step 2: Fused attention (writes output directly when single_split)
     if not single_split:

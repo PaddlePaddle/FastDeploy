@@ -419,7 +419,8 @@ void V100DecodeAttention(
     const paddle::Tensor& q_start_locs,  // [batch_size] int32
     float sm_scale,
     int num_kv_splits,
-    int max_blocks_per_split) {
+    int max_blocks_per_split,
+    bool skip_kv_write) {
   auto stream = q.stream();
 
   const int num_tokens = q.dims()[0];
@@ -440,8 +441,9 @@ void V100DecodeAttention(
            " but got ",
            head_dim);
 
-  // ---- Kernel 1: Write KV to cache ----
-  {
+  // ---- Kernel 1: Write KV to cache (skip if already written by
+  // v100_rope_write_cache) ----
+  if (!skip_kv_write) {
     const int grid_size = num_tokens * kv_num_heads;
     const int block_threads = min(head_dim, THREADS);
     dim3 grid(grid_size);
@@ -572,7 +574,8 @@ PD_BUILD_STATIC_OP(v100_decode_attention)
     .Outputs({"output_out", "key_cache_out", "value_cache_out"})
     .Attrs({"sm_scale: float",
             "num_kv_splits: int",
-            "max_blocks_per_split: int"})
+            "max_blocks_per_split: int",
+            "skip_kv_write: bool"})
     .SetInplaceMap({{"output", "output_out"},
                     {"key_cache", "key_cache_out"},
                     {"value_cache", "value_cache_out"}})
