@@ -516,13 +516,19 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/machete", ".cu")
         cc_compile_args += ["-DENABLE_MACHETE"]
 
+    cuda_libraries = ["cublasLt"]
+    if sys.platform == "win32":
+        cuda_link_args = ["/DEFAULTLIB:cuda.lib", "/DEFAULTLIB:nvml.lib"]
+    else:
+        cuda_link_args = ["-lcuda", "-lnvidia-ml"]
+
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
             sources=sources,
             extra_compile_args={"cxx": cc_compile_args, "nvcc": nvcc_compile_args},
-            libraries=["cublasLt"],
-            extra_link_args=["-lcuda", "-lnvidia-ml"],
+            libraries=cuda_libraries,
+            extra_link_args=cuda_link_args,
         ),
         packages=find_packages(where="third_party/DeepGEMM"),
         package_dir={"": "third_party/DeepGEMM"},
