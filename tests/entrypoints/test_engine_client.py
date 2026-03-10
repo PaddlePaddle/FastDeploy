@@ -1768,7 +1768,8 @@ def test_control_and_redundant_and_expert_stats(minimal_engine_client):
     minimal_engine_client.connection_manager = MagicMock(get_connection=AsyncMock(return_value=(dealer, queue)))
 
     req = ControlRequest(request_id="c1", method="ping")
-    resp = asyncio.run(minimal_engine_client.run_control_method(req))
+    with patch("fastdeploy.entrypoints.engine_client.envs.ZMQ_SEND_BATCH_DATA", 0):
+        resp = asyncio.run(minimal_engine_client.run_control_method(req))
     assert resp.error_code == 200
     dealer.write.assert_called_once()
 

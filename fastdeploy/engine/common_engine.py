@@ -1280,19 +1280,22 @@ class EngineService:
             if handler is None or not callable(handler):
                 error_result = ControlResponse(request_id, 400, f"unknown control method:{method}")
                 self.llm_logger.error(str(error_result))
-                self.send_response_server.send_response(request_id, [error_result])
+                data = [[error_result]] if envs.ZMQ_SEND_BATCH_DATA else [error_result]
+                self.send_response_server.send_response(request_id, data)
                 return
 
             result = handler(control_req)
             self.llm_logger.info(f"SUCCESS run control method {method}.")
             succ_result = ControlResponse(request_id, 200, "Success", result)
-            self.send_response_server.send_response(request_id, [succ_result])
+            data = [[succ_result]] if envs.ZMQ_SEND_BATCH_DATA else [succ_result]
+            self.send_response_server.send_response(request_id, data)
 
         except Exception as e:
             error_msg = f"Failed run control method {method}: {str(e)}"
             self.llm_logger.error(f"{error_msg}\n{traceback.format_exc()}")
             error_result = ControlResponse(request_id, 500, error_msg)
-            self.send_response_server.send_response(request_id, [error_result])
+            data = [[error_result]] if envs.ZMQ_SEND_BATCH_DATA else [error_result]
+            self.send_response_server.send_response(request_id, data)
 
     def _control_pause(self, control_request: ControlRequest):
         """Pauses the LLM engine and aborts all running/inflight requests.
@@ -1460,6 +1463,8 @@ class EngineService:
         # Since the request is not in scheduler
         # Send result by zmq directly
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            self.send_response_server.send_response(None, [[error_result]])
+        elif envs.ZMQ_SEND_BATCH_DATA:
             self.send_response_server.send_response(None, [[error_result]])
         else:
             self.send_response_server.send_response(request_id, [error_result])

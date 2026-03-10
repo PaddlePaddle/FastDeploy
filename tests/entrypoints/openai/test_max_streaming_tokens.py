@@ -386,6 +386,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         found_done = any("[DONE]" in chunk for chunk in chunks)
         self.assertTrue(found_done, "Not Receive '[DONE]'")
 
+    @patch("fastdeploy.entrypoints.openai.serving_completion.envs.ZMQ_SEND_BATCH_DATA", 0)
     @patch("fastdeploy.entrypoints.openai.serving_completion.api_server_logger")
     async def test_completion_full_generator(self, mock_logger):
         final_response_data = [
