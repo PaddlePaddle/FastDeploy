@@ -59,9 +59,7 @@ class TestFlashInferWorkspaceManagerEdgeCases(unittest.TestCase):
     def setUp(self):
         """Initialize test fixtures"""
         # Patch before importing to test fallback paths
-        self.patcher_has_flashinfer = patch(
-            "fastdeploy.model_executor.layers.flashinfer_comm_fusion.has_flashinfer"
-        )
+        self.patcher_has_flashinfer = patch("fastdeploy.model_executor.layers.flashinfer_comm_fusion.has_flashinfer")
         self.mock_has_flashinfer = self.patcher_has_flashinfer.start()
 
     def tearDown(self):
@@ -71,9 +69,7 @@ class TestFlashInferWorkspaceManagerEdgeCases(unittest.TestCase):
     def test_initialization_early_return_when_already_initialized(self):
         """Test line 47: early return when already initialized with same world_size"""
         # Patch _flashinfer_comm to be available
-        with patch(
-            "fastdeploy.model_executor.layers.flashinfer_comm_fusion._flashinfer_comm"
-        ) as mock_comm:
+        with patch("fastdeploy.model_executor.layers.flashinfer_comm_fusion._flashinfer_comm") as mock_comm:
             from fastdeploy.model_executor.layers.flashinfer_comm_fusion import (
                 FlashInferWorkspaceManager,
             )
@@ -85,9 +81,7 @@ class TestFlashInferWorkspaceManagerEdgeCases(unittest.TestCase):
             manager.world_size = 2
 
             # Mock the comm functions
-            mock_comm.trtllm_create_ipc_workspace_for_all_reduce_fusion = Mock(
-                return_value=(Mock(), Mock())
-            )
+            mock_comm.trtllm_create_ipc_workspace_for_all_reduce_fusion = Mock(return_value=(Mock(), Mock()))
 
             # Second initialization with same world_size - should return early
             manager.initialize(
@@ -123,9 +117,7 @@ class TestFlashInferWorkspaceManagerEdgeCases(unittest.TestCase):
 
     def test_cleanup_with_exception(self):
         """Test lines 73-80: cleanup with exception handling"""
-        with patch(
-            "fastdeploy.model_executor.layers.flashinfer_comm_fusion._flashinfer_comm"
-        ) as mock_comm:
+        with patch("fastdeploy.model_executor.layers.flashinfer_comm_fusion._flashinfer_comm") as mock_comm:
             from fastdeploy.model_executor.layers.flashinfer_comm_fusion import (
                 FlashInferWorkspaceManager,
             )
@@ -136,9 +128,7 @@ class TestFlashInferWorkspaceManagerEdgeCases(unittest.TestCase):
             manager.workspace_tensor = Mock()
 
             # Mock the destroy function to raise exception
-            mock_comm.trtllm_destroy_ipc_workspace_for_all_reduce = Mock(
-                side_effect=RuntimeError("Cleanup error")
-            )
+            mock_comm.trtllm_destroy_ipc_workspace_for_all_reduce = Mock(side_effect=RuntimeError("Cleanup error"))
 
             # Should not raise, just log warning
             manager.cleanup()
@@ -169,9 +159,7 @@ class TestEnsureWorkspaceInitialized(unittest.TestCase):
 
     def setUp(self):
         """Initialize test fixtures"""
-        self.patcher_has_flashinfer = patch(
-            "fastdeploy.model_executor.layers.flashinfer_comm_fusion.has_flashinfer"
-        )
+        self.patcher_has_flashinfer = patch("fastdeploy.model_executor.layers.flashinfer_comm_fusion.has_flashinfer")
         self.mock_has_flashinfer = self.patcher_has_flashinfer.start()
 
     def tearDown(self):
@@ -220,9 +208,7 @@ class TestEnsureWorkspaceInitialized(unittest.TestCase):
         """Test line 96: early return when world_size <= 1"""
         self.mock_has_flashinfer.return_value = True
 
-        with patch(
-            "fastdeploy.model_executor.layers.flashinfer_comm_fusion._flashinfer_comm"
-        ):
+        with patch("fastdeploy.model_executor.layers.flashinfer_comm_fusion._flashinfer_comm"):
             from fastdeploy.model_executor.layers.flashinfer_comm_fusion import (
                 ensure_workspace_initialized,
             )
@@ -243,9 +229,7 @@ class TestFlashInferAllReduceResidualRMSNormFallbacks(unittest.TestCase):
 
     def setUp(self):
         """Initialize test fixtures"""
-        self.patcher_has_flashinfer = patch(
-            "fastdeploy.model_executor.layers.flashinfer_comm_fusion.has_flashinfer"
-        )
+        self.patcher_has_flashinfer = patch("fastdeploy.model_executor.layers.flashinfer_comm_fusion.has_flashinfer")
         self.mock_has_flashinfer = self.patcher_has_flashinfer.start()
 
     def tearDown(self):
@@ -285,9 +269,7 @@ class TestFlashInferAllReduceResidualRMSNormFallbacks(unittest.TestCase):
         """Test lines 146-147: fallback for single GPU"""
         self.mock_has_flashinfer.return_value = True
 
-        with patch(
-            "fastdeploy.model_executor.layers.flashinfer_comm_fusion._flashinfer_comm"
-        ):
+        with patch("fastdeploy.model_executor.layers.flashinfer_comm_fusion._flashinfer_comm"):
             from fastdeploy.model_executor.layers.flashinfer_comm_fusion import (
                 flashinfer_allreduce_residual_rmsnorm,
             )
@@ -317,11 +299,12 @@ class TestFlashInferAllReduceResidualRMSNormFallbacks(unittest.TestCase):
         """Test line 166: empty tensor handling"""
         self.mock_has_flashinfer.return_value = True
 
-        with patch(
-            "fastdeploy.model_executor.layers.flashinfer_comm_fusion._flashinfer_comm"
-        ) as mock_comm, patch(
-            "fastdeploy.model_executor.layers.flashinfer_comm_fusion.ensure_workspace_initialized",
-            return_value=True,
+        with (
+            patch("fastdeploy.model_executor.layers.flashinfer_comm_fusion._flashinfer_comm") as mock_comm,
+            patch(
+                "fastdeploy.model_executor.layers.flashinfer_comm_fusion.ensure_workspace_initialized",
+                return_value=True,
+            ),
         ):
             from fastdeploy.model_executor.layers.flashinfer_comm_fusion import (
                 flashinfer_allreduce_residual_rmsnorm,
@@ -388,9 +371,7 @@ class TestCleanupFlashInferWorkspace(unittest.TestCase):
 
     def test_cleanup_workspace_function(self):
         """Test lines 211-212: cleanup function"""
-        with patch(
-            "fastdeploy.model_executor.layers.flashinfer_comm_fusion._workspace_manager"
-        ) as mock_manager:
+        with patch("fastdeploy.model_executor.layers.flashinfer_comm_fusion._workspace_manager") as mock_manager:
             from fastdeploy.model_executor.layers.flashinfer_comm_fusion import (
                 cleanup_flashinfer_workspace,
             )
