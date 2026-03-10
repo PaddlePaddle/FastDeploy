@@ -673,6 +673,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ckpt_act_suffix="activation_scale",
         )
         params_dict = dict(self.named_parameters())
+        print("params_dict: ", params_dict.keys())
 
         process_weights_after_loading_fn = process_weights_after_loading(
             dict(self.named_sublayers()), fd_config=self.fd_config
@@ -684,20 +685,27 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             # Map checkpoint suffixes to FD naming convention.
             # This is needed because rename_offline_ckpt_suffix_to_fd_suffix is bypassed
             # when is_checkpoint_bf16=True (e.g. MixQuantConfig with w4a8).
-            if loaded_weight_name.endswith(".activation_scale"):
-                loaded_weight_name = loaded_weight_name[: -len(".activation_scale")] + ".in_scale"
-            elif loaded_weight_name.endswith(".quant_weight"):
-                loaded_weight_name = loaded_weight_name[: -len(".quant_weight")] + ".weight"
+            print("loaded_weight_name: ", loaded_weight_name)
+            # if loaded_weight_name.endswith(".activation_scale"):
+            #     loaded_weight_name = loaded_weight_name[: -len(".activation_scale")] + ".in_scale"
+            # elif loaded_weight_name.endswith(".quant_weight"):
+            #     loaded_weight_name = loaded_weight_name[: -len(".quant_weight")] + ".weight"
             for param_name, weight_name, exp_id, shard_id, is_moe in all_param_mapping:
+                flags="activation_scale" in loaded_weight_name
                 loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe)
+                # if flags:
+                    # print("checkpoint_to_fd_key_fn: ", loaded_weight_name)
+
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
                 if model_param_name not in params_dict:
+                    # print(f"{model_param_name} not in params_dict")
                     continue
                 param = params_dict[model_param_name]
                 expert_id = exp_id
                 shard_id = shard_id
                 break
             else:
+                # print("else: loaded_weight_name: ", loaded_weight_name)
                 expert_id = None
                 shard_id = None
                 loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe=False)
@@ -709,16 +717,13 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             # Get weight loader from parameter and set weight
             weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
             sig = inspect.signature(weight_loader)
+            print("sig.parameters: ",sig.parameters)
+            print("expert_id: ", expert_id)
+            print("shard_id: ", shard_id)
+            print("model_param_name: ", model_param_name)
+            print("weight_loader: ", weight_loader)
             if "expert_id" in sig.parameters:
                 weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
-            elif expert_id is not None:
-                # Expert param without expert_id-aware weight_loader (e.g., XPU w4a8 backend).
-                # Directly write loaded_weight to the correct expert index.
-                if not param._is_initialized():
-                    param.initialize()
-                expert_id_offset = self.fd_config.parallel_config.num_experts_start_offset
-                local_idx = expert_id - expert_id_offset
-                param[local_idx] = loaded_weight
             else:
                 weight_loader(param, loaded_weight, shard_id)
 

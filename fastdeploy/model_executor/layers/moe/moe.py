@@ -295,7 +295,14 @@ class FusedMoE(nn.Layer):
             # 1.gate up fused in disk
             if weight_need_transpose:
                 loaded_weight = loaded_weight.transpose([1, 0])
-            output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
+            print("debug point, weight_loader", expert_id, "expert_id_offset", self.expert_id_offset)
+            print("debug point, weight_loader, param", param, "dim", SHARD_ID_TO_SHARDED_DIM["gate"])
+            print("debug point, weight_loader, param[expert_id - self.expert_id_offset]", param[expert_id - self.expert_id_offset])
+
+            shard_param = param[expert_id - self.expert_id_offset]
+            if shard_param.shape == []:
+                shard_param = shard_param.unsqueeze(0)
+            output_size = shard_param.shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
             shard_offsets = [
                 # (shard_id, shard_offset, shard_size)
                 ("gate", 0, output_size // 2 * self.tp_size),
@@ -330,6 +337,9 @@ class FusedMoE(nn.Layer):
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, tp_shard_dim, shard_offset, shard_size)
         expert_param = param[expert_id - self.expert_id_offset]
+        if expert_param.shape == []:
+            expert_param = expert_param.unsqueeze(0)
+        # expert_param = param[expert_id - self.expert_id_offset]
         dim = -1 if shard_dim else 0
         param_shard_size = expert_param.shape[dim] // 2
         switch_w13 = getattr(self.quant_method, "load_up_proj_weight_first", False)
@@ -385,11 +395,17 @@ class FusedMoE(nn.Layer):
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, tp_shard_dim, shard_offset, shard_size)
         expert_param = param[expert_id - self.expert_id_offset]
+        if expert_param.shape == []:
+            expert_param = expert_param.unsqueeze(0)
+        # print("debug point, _load_down_weight", expert_id, "expert_id_offset", self.expert_id_offset)
+        # print("debug point, _load_down_weight, expert_param", expert_param)
+        # print("debug point, _load_down_weight, param", param)
         if hasattr(param, "tensor_track"):
             # for dyn quant
             param.tensor_track.mark(start=0, batch_id=expert_id - self.expert_id_offset)
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU and opensource weight
         if expert_param.shape != loaded_weight.shape:
+            print("debug point, expert_param.shape != loaded_weight.shape", expert_param.shape, loaded_weight.shape)
             loaded_weight = loaded_weight.transpose([1, 0])
         assert expert_param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"

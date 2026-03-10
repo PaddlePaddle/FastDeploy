@@ -374,6 +374,11 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         raise NotImplementedError
 
     def apply(self, layer, x):
+        print("***********************")
+        print("x:", x)
+        print("layer.weight:", layer.weight)
+        print("layer.weight_scale:", layer.weight_scale)
+
         linear_out = weight_only_linear(
             x,
             weight=layer.weight,
@@ -382,6 +387,9 @@ class WeightOnlyLinearMethod(QuantMethodBase):
             weight_dtype=("int8" if self.quant_config.name() == "wint8" else "int4"),
             arch=self.quant_config.weight_only_linear_arch,
         )
+
+        print("***********************")
+        print("linear_out:", linear_out)
         return linear_out
 
 

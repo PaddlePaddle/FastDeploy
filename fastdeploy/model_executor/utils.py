@@ -543,6 +543,9 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
             dense_quant_type = fd_config.quant_config.name()
 
     def fn(loaded_weight_name, is_moe):
+        # print("in: ", loaded_weight_name)
+        # print("fd_config.quant_config:", fd_config.quant_config)
+        # print("fd_config.quant_config.is_checkpoint_bf16:", fd_config.quant_config.is_checkpoint_bf16)
         if fd_config.quant_config is None or fd_config.quant_config.is_checkpoint_bf16:
             return loaded_weight_name
         # Can be extended to other offline quantization suffixes if needed.
@@ -550,16 +553,16 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
             fd_suffix_map = fp8_suffix_map
         elif (is_moe and moe_quant_type == "tensor_wise_fp8") or (not is_moe and dense_quant_type == "tensor_wise_fp8"):
             fd_suffix_map = tensor_wise_fp8_suffix_map
-        elif (is_moe and moe_quant_type in ("w4a8", "w4afp8")) or (
-            not is_moe and dense_quant_type in ("w4a8", "w4afp8")
-        ):
+        elif (is_moe and moe_quant_type in ("w4a8", "w4afp8")):
             fd_suffix_map = w4a8_suffix_map
         else:
             fd_suffix_map = {}
+        # print("fd_suffix_map: ", fd_suffix_map)
         for ckpt_suffix, fd_suffix in fd_suffix_map.items():
             if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
                 loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)
                 return loaded_weight_name
+        # print("out: ", loaded_weight_name)
         return loaded_weight_name
 
     return fn

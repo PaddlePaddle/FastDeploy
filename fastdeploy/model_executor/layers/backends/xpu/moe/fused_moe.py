@@ -271,7 +271,6 @@ class XPUMoEMethod(MoEMethodBase):
                 set_weight_attrs(
                     getattr(layer, self.added_scale_attrs[0]),
                     {
-                        "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 0, "up": 0},
                         "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
                     },
                 )
@@ -287,10 +286,23 @@ class XPUMoEMethod(MoEMethodBase):
                 set_weight_attrs(
                     getattr(layer, self.added_scale_attrs[1]),
                     {
-                        "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 0, "up": 0},
                         "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
                     },
                 )
+
+                set_weight_attrs(
+                    layer.up_gate_proj_weight,
+                    {
+                        "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                    },
+                )
+                set_weight_attrs(
+                    layer.down_proj_weight,
+                    {
+                        "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                    },
+                )
+
 
             if self.moe_quant_type in ["w8a8", "w4a8"]:
                 for in_scale_name in self.added_in_scale_attrs:
@@ -303,6 +315,19 @@ class XPUMoEMethod(MoEMethodBase):
                             default_initializer=paddle.nn.initializer.Constant(0),
                         ),
                     )
+                set_weight_attrs(
+                    layer.down_proj_in_scale,
+                    {
+                        "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                    },
+                )
+
+                set_weight_attrs(
+                    layer.up_gate_proj_in_scale,
+                    { 
+                        "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                    },
+                )
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
