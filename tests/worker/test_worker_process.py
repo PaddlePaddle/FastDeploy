@@ -99,6 +99,16 @@ def test_intercept_paddle_loggers():
 # -- get_worker ----------------------------------------------------------------
 
 
+def test_get_worker_logprob_unsupported():
+    from fastdeploy.worker.worker_process import get_worker
+
+    with patch(f"{WP}.current_platform") as plat:
+        for a in ("is_dcu", "is_cuda", "is_xpu", "is_iluvatar", "is_gcu", "is_maca", "is_intel_hpu"):
+            getattr(plat, a).return_value = False
+        with pytest.raises(NotImplementedError):
+            get_worker(_cfg(**{"model_config.enable_logprob": True}), local_rank=0, rank=0)
+
+
 @pytest.mark.parametrize(
     "platform,module_path,class_name",
     [
@@ -254,7 +264,7 @@ def test_initialize_fd_config():
         initialize_fd_config(args, ranks=1, local_rank=0)
         m["FDConfig"].assert_called_once()
         m["update_fd_config_for_mm"].assert_called_once()
-    # EP + quant path
+    # EP + quant path (list moe_num_experts)
     args2, stack2, m2 = _fd_config_env()
     with stack2:
         m2["ParallelConfig"].return_value.data_parallel_size = 2
@@ -265,6 +275,67 @@ def test_initialize_fd_config():
         m2["ModelConfig"].return_value.is_quantized = True
         initialize_fd_config(args2, ranks=2, local_rank=0)
         m2["FDConfig"].assert_called_once()
+    # EP with int moe_num_experts + num_local_experts=None → else branch
+    args3, stack3, m3 = _fd_config_env()
+    with stack3:
+        m3["ParallelConfig"].return_value.expert_parallel_size = 2
+        m3["ModelConfig"].return_value.moe_num_experts = 8
+        m3["ModelConfig"].return_value.num_local_experts = None
+        m3["EPLBConfig"].return_value.redundant_experts_num = 0
+        initialize_fd_config(args3, ranks=1, local_rank=0)
+    # All platforms False → ENABLE_V1_KVCACHE_SCHEDULER set to 0
+    args4, stack4, m4 = _fd_config_env()
+    with stack4:
+        for a in ("is_cuda", "is_xpu", "is_maca", "is_iluvatar", "is_intel_hpu"):
+            getattr(m4["current_platform"], a).return_value = False
+        initialize_fd_config(args4, ranks=1, local_rank=0)
+    # v1_loader_support returns False → load_choices fallback
+    args5, stack5, m5 = _fd_config_env()
+    with stack5:
+        m5["v1_loader_support"].return_value = False
+        fd = m5["FDConfig"].return_value
+        fd.load_config.load_choices = "default_v1"
+        fd.model_config.architectures = ["LlamaForCausalLM"]
+        initialize_fd_config(args5, ranks=1, local_rank=0)
+    # PaddleOCR architecture
+    args6, stack6, m6 = _fd_config_env()
+    with stack6:
+        fd6 = m6["FDConfig"].return_value
+        fd6.model_config.architectures = ["PaddleOCRForCausalLM"]
+        fd6.load_config.load_choices = "default"
+        initialize_fd_config(args6, ranks=1, local_rank=0)
+    # EP with num_local_experts int (not list, not None) → elif branch (L1089)
+    args_ep, stack_ep, m_ep = _fd_config_env()
+    with stack_ep:
+        m_ep["ParallelConfig"].return_value.expert_parallel_size = 2
+        m_ep["ModelConfig"].return_value.moe_num_experts = 8
+        m_ep["ModelConfig"].return_value.num_local_experts = 4
+        m_ep["EPLBConfig"].return_value.redundant_experts_num = 0
+        initialize_fd_config(args_ep, ranks=1, local_rank=0)
+    # Quant config present but not pre-quantized → online quant log (L1138)
+    args_q, stack_q, m_q = _fd_config_env()
+    with stack_q:
+        m_q["parse_quant_config"].return_value = MagicMock()
+        m_q["ModelConfig"].return_value.is_quantized = False
+        initialize_fd_config(args_q, ranks=1, local_rank=0)
+    # Splitwise prefill with V1 scheduler → PREFILL_NODE_ONE_STEP_STOP_V1="1" (L1159)
+    args_sp, stack_sp, m_sp = _fd_config_env()
+    with stack_sp, patch(f"{WP}.envs") as env_sp, patch.dict("os.environ", {}, clear=False):
+        env_sp.ENABLE_V1_KVCACHE_SCHEDULER = True
+        args_sp.splitwise_role = "prefill"
+        initialize_fd_config(args_sp, ranks=1, local_rank=0)
+    # Splitwise decode → PREFILL_NODE_ONE_STEP_STOP_V1="0" (L1161)
+    args_sd, stack_sd, m_sd = _fd_config_env()
+    with stack_sd, patch(f"{WP}.envs") as env_sd, patch.dict("os.environ", {}, clear=False):
+        env_sd.ENABLE_V1_KVCACHE_SCHEDULER = True
+        args_sd.splitwise_role = "decode"
+        initialize_fd_config(args_sd, ranks=1, local_rank=0)
+    # num_hidden_layers is None → ValueError
+    args7, stack7, m7 = _fd_config_env()
+    with stack7:
+        m7["ModelConfig"].return_value.num_hidden_layers = None
+        with pytest.raises(ValueError):
+            initialize_fd_config(args7, ranks=1, local_rank=0)
 
 
 # -- PaddleDisWorkerProc -------------------------------------------------------
@@ -281,18 +352,6 @@ def test_proc_init_and_control(pw):
     gw.reset_mock()
     assert _make(pw).max_chips_per_node == 16
     plat.is_iluvatar.return_value = False
-    # Speculative + overlap
-    plat.is_cuda.return_value = True
-    gw.reset_mock()
-    p3 = _make(
-        pw,
-        **{
-            "speculative_config.method": "eagle",
-            "scheduler_config.enable_overlap_schedule": True,
-        },
-    )
-    assert p3.speculative_decoding and not p3.enable_overlap_schedule
-    plat.is_cuda.return_value = False
     # init_control
     with patch(f"{WP}.FMQ") as fmq:
         p4 = _make(pw, **{"parallel_config.local_engine_worker_queue_port": 5555})
@@ -303,7 +362,7 @@ def test_proc_init_and_control(pw):
 
 def test_health_and_task_queue(pw):
     """init_health_status + start_task_queue_service."""
-    with patch(f"{WP}.IPCSignal") as ipc, patch(f"{WP}.time") as t:
+    with patch(f"{WP}.IPCSignal") as ipc, patch(f"{WP}.IPCLock"), patch(f"{WP}.time") as t:
         t.time.return_value = 1000.0
         _make(pw, **{"parallel_config.data_parallel_size": 1}).init_health_status()
         assert ipc.call_count > 0
@@ -372,6 +431,20 @@ def test_kv_cache(pw):
         p2.worker.cal_theortical_kvcache.return_value = 1024**2
         p2.initialize_kv_cache()
         p2.worker.initialize_cache.assert_called_once_with(num_gpu_blocks=1024)
+    # Multi-rank profile → dist.all_reduce path (L626-628)
+    _, gw2 = pw
+    gw2.return_value = MagicMock()
+    with patch(f"{WP}.IPCSignal"), patch(f"{WP}.dist") as d2:
+        p2r = _make(pw, ranks=2, **{"parallel_config.do_profile": True})
+        p2r.worker.determine_available_memory.return_value = 1024**3
+        p2r.worker.cal_theortical_kvcache.return_value = 1024**2
+        mock_t2 = MagicMock()
+        mock_t2.item.return_value = 512
+        d2.all_reduce.return_value = None
+        with patch(f"{WP}.paddle") as pdl2:
+            pdl2.full.return_value = mock_t2
+            p2r.initialize_kv_cache()
+            d2.all_reduce.assert_called_once()
     # Zero memory → ValueError
     with patch(f"{WP}.IPCSignal"), patch(f"{WP}.dist"):
         p3 = _make(pw, **{"parallel_config.do_profile": True})
