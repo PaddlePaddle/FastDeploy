@@ -17,6 +17,7 @@
 import paddle
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.config import CacheConfig, FDConfig, ModelConfig, SpeculativeConfig
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.logits_processor import build_logits_processors
@@ -577,7 +578,11 @@ class InputBatch:
             # Reset reasoning buffers
             fill_paddle_tensor(self, "reasoning_status", 0)
             # Reset reasoning allowed tokens (not using fill_paddle_tensor since it's a fixed tensor)
-            self.reasoning_allowed_tokens = paddle.to_tensor([100973, 100975], dtype="int64")
+            # In deterministic mode, use in-place op to preserve GPU address for CUDAGraph safety
+            if envs.FD_DETERMINISTIC_MODE and hasattr(self, "reasoning_allowed_tokens"):
+                self.reasoning_allowed_tokens[:] = paddle.to_tensor([100973, 100975], dtype="int64")
+            else:
+                self.reasoning_allowed_tokens = paddle.to_tensor([100973, 100975], dtype="int64")
 
             # Reset block tables
             fill_paddle_tensor(self, "block_tables", -1)
@@ -590,8 +595,14 @@ class InputBatch:
                     -1,
                 )
             )
-            self.free_list = paddle.to_tensor(free_list, dtype="int32")
-            self.free_list_len = paddle.full([1], len(free_list), dtype="int32")
+            # In deterministic mode, use in-place ops to preserve GPU address for CUDAGraph safety
+            if envs.FD_DETERMINISTIC_MODE and hasattr(self, "free_list"):
+                self.free_list.fill_(0)
+                self.free_list[: len(free_list)] = paddle.to_tensor(free_list, dtype="int32")
+                self.free_list_len.fill_(len(free_list))
+            else:
+                self.free_list = paddle.to_tensor(free_list, dtype="int32")
+                self.free_list_len = paddle.full([1], len(free_list), dtype="int32")
 
             # Reset stop sequences
             fill_paddle_tensor(self, "stop_seqs_len", 0)
@@ -625,29 +636,44 @@ class InputBatch:
                 else:
                     rope_head_dim = head_dim // 2
 
-                self.rope_emb = paddle.full(
-                    shape=[
-                        max_num_seqs,
-                        2,
-                        1,
-                        self.model_config.max_model_len,
-                        1,
-                        rope_head_dim,
-                    ],
-                    fill_value=0,
-                    dtype="float32",
-                )
+                # In deterministic mode, use in-place fill_ to preserve GPU address for CUDAGraph safety
+                if envs.FD_DETERMINISTIC_MODE and hasattr(self, "rope_emb"):
+                    self.rope_emb.fill_(0)
+                else:
+                    self.rope_emb = paddle.full(
+                        shape=[
+                            max_num_seqs,
+                            2,
+                            1,
+                            self.model_config.max_model_len,
+                            1,
+                            rope_head_dim,
+                        ],
+                        fill_value=0,
+                        dtype="float32",
+                    )
                 self.image_features = None
                 self.image_features_list = None
             else:
                 # Reset non-multimodal rope_emb
-                self.rope_emb = get_rope(
-                    rotary_dim=self.model_config.head_dim,
-                    position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
-                    base=self.model_config.rope_theta,
-                    model_config=self.model_config,
-                    partial_rotary_factor=self.model_config.partial_rotary_factor,
-                )
+                # In deterministic mode, use in-place copy_ to preserve GPU address for CUDAGraph safety
+                if envs.FD_DETERMINISTIC_MODE and hasattr(self, "rope_emb"):
+                    new_rope_emb = get_rope(
+                        rotary_dim=self.model_config.head_dim,
+                        position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
+                        base=self.model_config.rope_theta,
+                        model_config=self.model_config,
+                        partial_rotary_factor=self.model_config.partial_rotary_factor,
+                    )
+                    self.rope_emb.copy_(new_rope_emb, False)
+                else:
+                    self.rope_emb = get_rope(
+                        rotary_dim=self.model_config.head_dim,
+                        position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
+                        base=self.model_config.rope_theta,
+                        model_config=self.model_config,
+                        partial_rotary_factor=self.model_config.partial_rotary_factor,
+                    )
 
             # Reset other miscellaneous tensors
             fill_paddle_tensor(self, "mask_rollback", 0)
