@@ -115,13 +115,11 @@ class DeterministicAttentionMixin:
         bufs.prefix_lens_buf = paddle.empty([max_bsz], dtype="int32")
         bufs.unified_lens_buf = paddle.empty([max_bsz], dtype="int32")
         bufs.total_seq_lens_buf = paddle.empty([max_bsz], dtype="int32")
-        # q_roped buffer (pre-allocate to avoid dynamic alloc inside CUDA Graph capture)
-        bufs.q_roped = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=paddle.bfloat16)
-        # Attention output buffer (pre-allocate with bfloat16; will be re-created if dtype mismatches)
-        bufs.output = paddle.empty(
-            [max_capture_size, self.num_heads, self.head_dim],
-            dtype=paddle.bfloat16,
-        )
+        # q_roped and output buffers: use model's compute dtype (not hardcoded bfloat16).
+        # paddle.get_default_dtype() returns the dtype set by the model loading code.
+        compute_dtype = paddle.get_default_dtype()
+        bufs.q_roped = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=compute_dtype)
+        bufs.output = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=compute_dtype)
 
         total_bytes = (
             7 * (max_bsz + 1) * 4

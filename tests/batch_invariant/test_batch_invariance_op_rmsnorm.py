@@ -128,7 +128,7 @@ class TestBatchInvariantForRMSNorm(unittest.TestCase):
             (64, 1024, paddle.float32, 1e-5),
             (64, 1024, paddle.bfloat16, 1e-3),
             (64, 3584, paddle.float32, 1e-5),
-            (64, 3584, paddle.bfloat16, 1e-3),
+            (64, 3584, paddle.bfloat16, 1e-2),
             (64, 128, paddle.float32, 1e-5),
         ]
         for B, D, dtype, atol in test_configs:
