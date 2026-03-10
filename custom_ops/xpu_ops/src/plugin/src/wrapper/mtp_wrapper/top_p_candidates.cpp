@@ -110,7 +110,7 @@ static int xpu3_wrapper(Context* ctx,
                         int candidate_len,
                         int max_seq_len) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  xpu3::plugin::top_p_candidates<T, MaxLength, TopPBeamTopK>
+  int32_t ret_xre = xpu3::plugin::top_p_candidates<T, MaxLength, TopPBeamTopK>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           src,
           top_ps,
@@ -122,6 +122,7 @@ static int xpu3_wrapper(Context* ctx,
           token_num,
           candidate_len,
           max_seq_len);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

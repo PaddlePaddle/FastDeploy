@@ -382,7 +382,7 @@ static int xpu3_wrapper(Context *ctx,
                         const bool accept_all_drafts,
                         const bool use_target_sampling) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  xpu3::plugin::speculate_verify<ENABLE_TOPP, USE_TOPK>
+  int32_t ret_xre = xpu3::plugin::speculate_verify<ENABLE_TOPP, USE_TOPK>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           reinterpret_cast<const XPU_INT64 *>(sampled_token_ids),
           reinterpret_cast<XPU_INT64 *>(accept_tokens),
@@ -413,6 +413,7 @@ static int xpu3_wrapper(Context *ctx,
           benchmark_mode,
           accept_all_drafts,
           use_target_sampling);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 template <bool ENABLE_TOPP, bool USE_TOPK>

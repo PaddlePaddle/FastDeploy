@@ -116,7 +116,7 @@ static int xpu3_wrapper(Context* ctx,
                         int64_t image_token_num,
                         int64_t hidden_size,
                         bool is_scatter) {
-  xpu3::plugin::text_image_gather_scatter<T>
+  int32_t ret_xre = xpu3::plugin::text_image_gather_scatter<T>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(input,
                                                  text_input,
                                                  image_input,
@@ -128,6 +128,7 @@ static int xpu3_wrapper(Context* ctx,
                                                  image_token_num,
                                                  hidden_size,
                                                  is_scatter);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
