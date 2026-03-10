@@ -29,6 +29,7 @@ def is_cuda() -> bool:
     """
     return paddle.is_compiled_with_cuda() and not paddle.is_compiled_with_rocm()
 
+
 def _validate_split_kv_size(value: int) -> int:
     """Validate FD_DETERMINISTIC_SPLIT_KV_SIZE is a positive power of 2."""
     if value <= 0 or (value & (value - 1)) != 0:
