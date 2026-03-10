@@ -440,7 +440,7 @@ class PaddleDisWorkerProc:
                 self.rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
             logger.info("redundant_expert: done")
 
-    def _accquire_kvcache_lock(self, tp_rank):
+    def _acquire_kvcache_lock(self, tp_rank):
         """Acquire the GPU KV cache lock for the worker process.
 
         Uses a file-based lock (fcntl.flock) to ensure mutual exclusion
@@ -612,7 +612,7 @@ class PaddleDisWorkerProc:
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
 
-            self._accquire_kvcache_lock(tp_rank)
+            self._acquire_kvcache_lock(tp_rank)
             self.worker.execute_model(req_dicts, max_occupied_batch_index)
             self._release_kvcache_lock(tp_rank)
 

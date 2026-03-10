@@ -554,7 +554,7 @@ class PrefixCacheManager:
         else:
             heapq.heappush(self.cpu_free_block_list, cpu_block_ids)
 
-    def _accquire_kvcache_lock(self):
+    def _acquire_kvcache_lock(self):
         """Acquire the GPU KV cache lock for the transfer process.
 
         Uses a file-based lock (fcntl.flock) to ensure mutual exclusion
@@ -592,7 +592,7 @@ class PrefixCacheManager:
             is_sync:          bool, whether to wait for the result of the swap task
         """
         assert is_sync, "Only support is sync for swap_task now."
-        self._accquire_kvcache_lock()
+        self._acquire_kvcache_lock()
         self.task_swapping_event[transfer_task_id] = Event()
         self.cache_task_queue.put_transfer_task(
             (event_type, transfer_task_id, swap_node_ids, gpu_block_ids, cpu_block_ids)

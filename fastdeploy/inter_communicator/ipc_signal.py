@@ -154,9 +154,7 @@ class IPCLock:
                     "Ensure that the lock has been created (create=True) with the same "
                     "name and suffix before attaching."
                 )
-                raise RuntimeError(
-                    f"IPC lock file not found: {self._lock_path}"
-                ) from e
+                raise RuntimeError(f"IPC lock file not found: {self._lock_path}") from e
 
     def acquire(self) -> None:
         """Acquire the lock (blocking). Uses kernel-level flock for atomicity."""
