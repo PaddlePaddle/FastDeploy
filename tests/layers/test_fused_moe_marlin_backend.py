@@ -25,7 +25,15 @@ _gpu = sys.modules.get("fastdeploy.model_executor.ops.gpu")
 if _gpu is None:
     _gpu = types.ModuleType("fastdeploy.model_executor.ops.gpu")
     sys.modules["fastdeploy.model_executor.ops.gpu"] = _gpu
-for _a in ("MoeWna16MarlinGemmApi", "tritonmoe_preprocess_func", "gptq_marlin_repack", "moe_topk_select"):
+for _a in (
+    "MoeWna16MarlinGemmApi",
+    "moe_expert_dispatch",
+    "moe_expert_reduce",
+    "tritonmoe_preprocess_func",
+    "gptq_marlin_repack",
+    "moe_topk_select",
+    "get_padding_offset",
+):
     if not hasattr(_gpu, _a):
         setattr(_gpu, _a, None)
 
