@@ -54,6 +54,7 @@ class TestCoverageFix(unittest.TestCase):
     def setUp(self):
         """为 TokenProcessor 测试设置通用的 mock 对象。"""
         self.mock_cfg = MagicMock()
+        self.mock_cfg.parallel_config.local_data_parallel_id = 0
         self.mock_cached_generated_tokens = MagicMock()
         self.mock_engine_worker_queue = MagicMock()
         self.mock_split_connector = MagicMock()

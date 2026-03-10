@@ -744,7 +744,7 @@ class OpenAIServingChat:
             prompt_logprobs_full_res = prompt_logprobs_res_list[idx]
         # Flatten per-step List[List[int]] into a single List[List[int]] over all tokens.
         sampling_mask_full_res = None
-        if sampling_mask_list[idx]:
+        if sampling_mask_list and sampling_mask_list[idx]:
             sampling_mask_full_res = [mask for step in sampling_mask_list[idx] for mask in step]
 
         num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
