@@ -101,7 +101,7 @@ def _reference_moe_expert_ffn(inputs):
     starts = np.concatenate([[0], prefix[:-1]]).astype(int)
 
     dense_up_gate = _winx_unzip_op(
-        inputs["_up_weight_raw"],
+        inputs["up_gate_proj_weight"],
         inputs["up_gate_proj_local_scale"],
         inputs["up_gate_proj_code_scale"],
         inputs["up_gate_proj_code_zp"],
@@ -109,7 +109,7 @@ def _reference_moe_expert_ffn(inputs):
         "weight_only_int2",
     ).cast("float32")
     dense_down = _winx_unzip_op(
-        inputs["_down_weight_raw"],
+        inputs["down_proj_weight"],
         inputs["down_proj_local_scale"],
         inputs["down_proj_code_scale"],
         inputs["down_proj_code_zp"],
