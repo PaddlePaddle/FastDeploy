@@ -394,6 +394,12 @@ def test_commit_config():
         tmp_path = f.name
     try:
         c2 = CommitConfig()
+        # Reset state loaded by constructor so we test partial-file parsing in isolation
+        c2.fastdeploy_commit = ""
+        c2.paddle_version = ""
+        c2.paddle_commit = ""
+        c2.cuda_version = ""
+        c2.compiler_version = ""
         c2._load_from_version_file(tmp_path)
         assert c2.fastdeploy_commit == "abc123" and c2.paddle_version == ""
     finally:
