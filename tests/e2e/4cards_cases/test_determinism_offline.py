@@ -39,7 +39,7 @@ import pytest
 pytestmark = pytest.mark.gpu
 
 DEFAULT_MODEL_DIR = "./models"
-MODEL_NAME = "Qwen2-7B-Instruct"
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen3-0.6B")
 
 
 @contextmanager
