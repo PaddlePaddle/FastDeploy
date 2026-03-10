@@ -72,6 +72,7 @@ if current_platform.is_cuda():
     )
 
     paddle.enable_compat(scope={"deep_gemm"})
+    import deep_gemm
 
 
 class DeepSeekV3MLP(nn.Layer):
@@ -570,7 +571,7 @@ class Indexer(nn.Layer):
             64,
         )
 
-        import deep_gemm
+        indexer_top_k = paddle.full([q_fp8.shape[0], self.index_topk], -1, dtype="int32")
 
         if forward_meta.max_len_tensor_cpu[1]:
 
@@ -623,7 +624,6 @@ class Indexer(nn.Layer):
                 tmp[i, ks[i] : ke[i]] = logits[i, : ke[i] - ks[i]]
             logits = tmp
 
-            indexer_top_k = paddle.full([logits.shape[0], self.index_topk], -1, dtype="int32")
             radix_topk_ragged_transform(
                 logits.contiguous(),
                 indexer_top_k,
@@ -653,8 +653,6 @@ class Indexer(nn.Layer):
                 self.max_model_len,
                 clean_logits=True,
             )
-
-            indexer_top_k = paddle.full([logits.shape[0], self.index_topk], -1, dtype="int32")
 
             radix_topk_ragged_transform(
                 logits.contiguous(),
@@ -1239,7 +1237,7 @@ class DeepSeekV3PretrainedModel(PretrainedModel):
 
 @ModelRegistry.register_model_class(
     architecture="DeepseekV32ForCausalLM",
-    module_name="deepseek_v32",
+    module_name="deepseek_v3",  # TODO(changwenbin): trick using the current dsk-v3 model
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )
