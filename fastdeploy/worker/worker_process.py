@@ -1124,7 +1124,10 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     quant_config = parse_quant_config(
         args,
         model_config,
-        is_ernie=ErnieArchitectures.contains_ernie_arch(model_config.architectures),
+        is_ernie=(
+            ErnieArchitectures.contains_ernie_arch(model_config.architectures)
+            or ErnieArchitectures.is_ernie5_arch(model_config.architectures)
+        ),
         is_v1_loader=load_config.load_choices == "default_v1",
     )
 
