@@ -307,53 +307,6 @@ class DeterministicAttentionMixin:
         max_extend_len = int(paddle.max(extend_seq_lens).item())
         return qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len
 
-    def _write_decode_kv_to_cache(self, qkv_out, cache_k, cache_v, forward_meta):
-        """
-        Write decode tokens' KV to paged cache.
-
-        gqa_rope_write_cache skips decode tokens (seq_lens_encoder==0) in CascadeAppendWriteCacheKVQKV.
-        This method fills the gap by writing RoPE'd K,V from qkv_out into paged cache for decode tokens.
-
-        qkv_out: [token_num, (num_heads + 2*kv_num_heads) * head_dim], RoPE already applied
-        cache_k/v: [num_blocks, kv_num_heads, block_size, head_dim]
-        """
-        seq_lens_encoder = forward_meta.seq_lens_encoder
-        seq_lens_decoder = forward_meta.seq_lens_decoder
-        cu_seqlens_q = forward_meta.cu_seqlens_q
-        block_tables = forward_meta.block_tables
-        bsz = seq_lens_encoder.shape[0]
-        num_heads = self.num_heads
-        kv_num_heads = self.kv_num_heads
-        head_dim = self.head_dim
-        block_size = self.block_size
-
-        k_offset = num_heads * head_dim
-        v_offset = (num_heads + kv_num_heads) * head_dim
-
-        for bid in range(bsz):
-            enc = int(seq_lens_encoder[bid].item())
-            if enc > 0:
-                continue  # prefill tokens already handled by gqa_rope_write_cache
-            dec = int(seq_lens_decoder[bid].item())
-            if dec <= 0:
-                continue
-            # Token index in qkv_out for this decode batch
-            token_start = int(cu_seqlens_q[bid].item())
-            q_len = int(cu_seqlens_q[bid + 1].item()) - token_start  # typically 1 for decode
-            for t in range(q_len):
-                token_idx = token_start + t
-                # Position in KV cache: dec + t (seq_lens_decoder already accounts for prefix)
-                cache_pos = dec + t
-                blk_idx = cache_pos // block_size
-                blk_off = cache_pos % block_size
-                blk_id = int(block_tables[bid][blk_idx].item())
-                # Extract K and V from qkv_out
-                k_vec = qkv_out[token_idx, k_offset : k_offset + kv_num_heads * head_dim]
-                v_vec = qkv_out[token_idx, v_offset : v_offset + kv_num_heads * head_dim]
-                # Reshape to [kv_num_heads, head_dim] and write to cache
-                cache_k[blk_id, :, blk_off, :] = k_vec.reshape([kv_num_heads, head_dim])
-                cache_v[blk_id, :, blk_off, :] = v_vec.reshape([kv_num_heads, head_dim])
-
     @staticmethod
     def _diag_md5(tensor, n=16):
         """Quick MD5 for diagnostics (first n hex chars)."""
@@ -456,6 +409,13 @@ class DeterministicAttentionMixin:
         cache_v_scales = getattr(layer, "cache_v_scale", None)
 
         # --- Step 1: Prepare metadata for gqa_rope_write_cache ---
+        # BUG FIX: gqa_rope_write_cache C++ kernel skips tokens where seq_lens_encoder==0
+        # (designed for the split prefill/decode path in append_attention).
+        # In deterministic mode, ALL tokens go through this unified path, so decode tokens
+        # (enc==0) must appear as 1-token prefill to receive correct RoPE and KV cache writes.
+        enc = forward_meta.seq_lens_encoder
+        seq_lens_encoder_for_rope = paddle.where(enc == 0, paddle.ones_like(enc), enc)
+
         # Use Triton GPU-only version when CUDA Graph is active (no D2H copy).
         # CPU scalars come from forward_meta (pre-computed outside capture region).
         if forward_meta.step_use_cudagraph:
@@ -468,7 +428,7 @@ class DeterministicAttentionMixin:
             max_dec_len = int(forward_meta.max_len_tensor_cpu[2])
             max_tile_per_bs = (max_dec_len + self.block_size - 1) // self.block_size
             cu_seqlens_k, pre_cache_batch_ids, pre_cache_tile_ids_per_batch = pre_cache_len_concat_triton(
-                forward_meta.seq_lens_encoder,
+                seq_lens_encoder_for_rope,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,
                 bsz,
@@ -487,14 +447,6 @@ class DeterministicAttentionMixin:
             )
             kv_token_num = forward_meta.deter_kv_token_num
         else:
-            # Treat decode tokens as prefill so gqa_rope_write_cache applies correct
-            # RoPE position (seq_lens_decoder) and writes KV to paged cache.
-            # Original kernel skips both when seq_lens_encoder==0.
-            enc = forward_meta.seq_lens_encoder
-            # For decode slots (enc==0), pretend they are prefill with seq_len=1
-            # so gqa_rope_write_cache applies correct RoPE and writes KV to cache.
-            # Decode always generates exactly 1 token, so ones_like is correct.
-            seq_lens_encoder_for_rope = paddle.where(enc == 0, paddle.ones_like(enc), enc)
             (
                 cu_seqlens_k,
                 pre_cache_batch_ids,
@@ -534,7 +486,7 @@ class DeterministicAttentionMixin:
             cu_seqlens_k,
             forward_meta.rotary_embs,
             forward_meta.seq_lens_this_time,
-            seq_lens_encoder_for_rope if not forward_meta.step_use_cudagraph else forward_meta.seq_lens_encoder,
+            seq_lens_encoder_for_rope,
             forward_meta.seq_lens_decoder,
             forward_meta.batch_id_per_token,
             forward_meta.block_tables,

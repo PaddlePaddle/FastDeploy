@@ -1345,7 +1345,6 @@ class GPUModelRunner(ModelRunnerBase):
         # These .item() calls are safe here because we are outside the graph capture region.
         if envs.FD_DETERMINISTIC_MODE and "skip_deter_precompute" not in envs.FD_OVERLAP_DIAG:
             slt_np = self.share_inputs["seq_lens_this_time"].numpy()
-            sle_np = self.share_inputs["seq_lens_encoder"].numpy()
             sld_np = self.share_inputs["seq_lens_decoder"].numpy()
             plen_np = prefix_lens.numpy()
             # Active slots may not be contiguous (e.g. slot 0 done, slot 1 still decoding)
@@ -1363,7 +1362,9 @@ class GPUModelRunner(ModelRunnerBase):
                 num_blocks = 0
                 for bid in range(dbs):
                     idx = active_idx[bid]
-                    cache_len = int(sld_np[idx]) if int(sle_np[idx]) > 0 else 0
+                    # Mirror the seq_lens_encoder_for_rope fix: decode tokens (sle==0)
+                    # are faked as 1-token prefill, so cache_len = sld always.
+                    cache_len = int(sld_np[idx])
                     kv_token_num += cache_len + int(slt_np[idx])
                     num_blocks += (cache_len + block_size - 1) // block_size
                 self.forward_meta.deter_kv_token_num = kv_token_num
