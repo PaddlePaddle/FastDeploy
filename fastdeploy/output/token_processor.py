@@ -72,9 +72,12 @@ class TokenProcessor:
         self.split_connector = split_connector
 
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            llm_logger.debug(f"create zmq get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}")
+            port = self.cfg.parallel_config.local_engine_worker_queue_port
+            llm_logger.debug(
+                f"create zmq get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}_{port}"
+            )
             self.zmq_server = ZmqIpcServer(
-                name=f"get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}", mode=zmq.PULL
+                name=f"get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}_{port}", mode=zmq.PULL
             )
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
