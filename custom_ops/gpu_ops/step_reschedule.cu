@@ -275,8 +275,7 @@ void Schedule(const paddle::Tensor &stop_flags,
            step_lens_cpu.data<int>()[0]);
     const int64_t *x_data = next_tokens.data<int64_t>();
 #ifdef _WIN32
-    PD_THROW(
-        "StepReschedule: System V IPC is not supported on Windows");
+    PD_THROW("StepReschedule: System V IPC is not supported on Windows");
 #else
     static struct msgdata msg_sed;
     int msg_queue_id = rank_id;

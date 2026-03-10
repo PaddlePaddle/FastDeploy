@@ -49,8 +49,7 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
                              int64_t rank_id,
                              bool wait_flag) {
 #ifdef _WIN32
-  PD_THROW(
-      "SpeculateGetOutMmsgTopK: System V IPC is not supported on Windows");
+  PD_THROW("SpeculateGetOutMmsgTopK: System V IPC is not supported on Windows");
 #else
   struct msgdata msg_rcv;
   int msg_queue_id = 1;

@@ -77,8 +77,9 @@ struct RemoteCacheKvIpc {
       if (!inited) {
         // just init once
 #ifdef _WIN32
-        PD_THROW("RemoteCacheKvIpc::init: System V IPC is not supported on "
-                 "Windows");
+        PD_THROW(
+            "RemoteCacheKvIpc::init: System V IPC is not supported on "
+            "Windows");
 #else
         int msg_queue_id = 1024;
         if (const char* msg_que_str_tmp =

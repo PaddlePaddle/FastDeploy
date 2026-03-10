@@ -19,7 +19,8 @@
 namespace {
 int sharedMemoryOpen2(const char *name, size_t sz, sharedMemoryInfo *info) {
 #ifdef _WIN32
-  PD_THROW("sharedMemoryOpen2: POSIX shared memory is not supported on Windows");
+  PD_THROW(
+      "sharedMemoryOpen2: POSIX shared memory is not supported on Windows");
   return -1;
 #else
   info->size = sz;
