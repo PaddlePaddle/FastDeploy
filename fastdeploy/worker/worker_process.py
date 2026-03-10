@@ -486,7 +486,7 @@ class PaddleDisWorkerProc:
                     self.kv_cache_status.value[0] = self.model_weights_signal[0]
                     cache_flag = (
                         self.fd_config.cache_config.num_cpu_blocks > 0
-                        or self.fd_config.kvcache_storage_backend is not None
+                        or self.fd_config.cache_config.kvcache_storage_backend is not None
                     )
                     DynamicWeightManager.check_model_weights_status(
                         self.model_weights_status,
