@@ -52,9 +52,10 @@ static int xpu3_wrapper(Context* ctx,
                         T* output,
                         int dim_embed,
                         int elem_cnt) {
-  xpu3::plugin::rebuildSelfHiddenStatesKernel<T>
+  int32_t ret_xre = xpu3::plugin::rebuildSelfHiddenStatesKernel<T>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           input, src_map, output, dim_embed, elem_cnt);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

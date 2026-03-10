@@ -68,6 +68,7 @@ def top_k_top_p_sampling(
 
     """
     top_p_class = envs.FD_SAMPLING_CLASS.lower()
+    topp_seed_device = None
 
     # In deterministic mode, reset CUDA generator offset before sampling.
     # paddle.tensor.top_p_sampling uses the global GPU generator offset even
@@ -83,11 +84,14 @@ def top_k_top_p_sampling(
         ids = rejection_top_p_sampling(x, top_p, top_k, top_k_list, seed, order)
         _ = None
     elif top_p_class == "base_non_truncated":
+        if topp_seed is not None:
+            topp_seed_device = paddle.empty(shape=topp_seed.shape, dtype=topp_seed.dtype)
+            topp_seed_device.copy_(topp_seed, False)
         _, ids = paddle.tensor.top_p_sampling(
             x,
             top_p,
             threshold=threshold,
-            topp_seed=topp_seed,
+            topp_seed=topp_seed_device,
             seed=seed,
             k=k,
             mode="non-truncated",
@@ -100,11 +104,14 @@ def top_k_top_p_sampling(
 
             _, ids = native_top_p_sampling(x, top_p)
         else:
+            if topp_seed is not None:
+                topp_seed_device = paddle.empty(shape=topp_seed.shape, dtype=topp_seed.dtype)
+                topp_seed_device.copy_(topp_seed, False)
             _, ids = paddle.tensor.top_p_sampling(
                 x,
                 top_p,
                 threshold=threshold,
-                topp_seed=topp_seed,
+                topp_seed=topp_seed_device,
                 seed=seed,
                 k=k,
                 mode="truncated",

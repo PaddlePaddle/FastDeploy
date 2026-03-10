@@ -60,7 +60,7 @@ func main() {
 
 	// Start server
 	addr := ":" + cfg.Server.Port
-	logger.Info("Starting server on %s", addr)
+	logger.Info(context.Background(), "Starting server on %s", addr)
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

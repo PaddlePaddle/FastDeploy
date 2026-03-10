@@ -273,6 +273,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule and (
             not self.speculative_decoding
         )
+        if self.enable_overlap_schedule:
+            logger.info("Using overlap schedule")
         self.current_launch_token_num = 0
 
     def _async_output_busy_loop(self):

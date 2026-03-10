@@ -52,17 +52,19 @@ static int xpu3_wrapper(Context *ctx,
                         const int block_size) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto recover_decode_task = xpu3::plugin::recover_decode_task;
-  recover_decode_task<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
-      stop_flags,
-      seq_lens_this_time,
-      seq_lens_encoder,
-      seq_lens_decoder,
-      step_seq_lens_decoder,
-      block_tables,
-      is_block_step,
-      bsz,
-      block_num_per_seq,
-      block_size);
+  int32_t ret_xre =
+      recover_decode_task<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+          stop_flags,
+          seq_lens_this_time,
+          seq_lens_encoder,
+          seq_lens_decoder,
+          step_seq_lens_decoder,
+          block_tables,
+          is_block_step,
+          bsz,
+          block_num_per_seq,
+          block_size);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

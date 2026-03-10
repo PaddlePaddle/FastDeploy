@@ -178,28 +178,30 @@ static int xpu2or3_wrapper(Context* ctx,
                            const bool prefill_one_step_stop) {
   ctx_guard RAII_GUARD(ctx);
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  xpu3::plugin::draft_model_update<<<1, 64, ctx->xpu_stream>>>(
-      reinterpret_cast<const XPU_INT64*>(inter_next_tokens),
-      reinterpret_cast<XPU_INT64*>(draft_tokens),
-      reinterpret_cast<XPU_INT64*>(pre_ids),
-      seq_lens_this_time,
-      seq_lens_encoder,
-      seq_lens_decoder,
-      reinterpret_cast<XPU_INT64*>(step_idx),
-      output_cum_offsets,
-      stop_flags,
-      not_need_stop,
-      reinterpret_cast<const XPU_INT64*>(max_dec_len),
-      reinterpret_cast<const XPU_INT64*>(end_ids),
-      reinterpret_cast<XPU_INT64*>(base_model_draft_tokens),
-      bsz,
-      max_draft_token,
-      pre_id_length,
-      max_base_model_draft_token,
-      end_ids_len,
-      max_seq_len,
-      substep,
-      prefill_one_step_stop);
+  int32_t ret_xre =
+      xpu3::plugin::draft_model_update<<<1, 64, ctx->xpu_stream>>>(
+          reinterpret_cast<const XPU_INT64*>(inter_next_tokens),
+          reinterpret_cast<XPU_INT64*>(draft_tokens),
+          reinterpret_cast<XPU_INT64*>(pre_ids),
+          seq_lens_this_time,
+          seq_lens_encoder,
+          seq_lens_decoder,
+          reinterpret_cast<XPU_INT64*>(step_idx),
+          output_cum_offsets,
+          stop_flags,
+          not_need_stop,
+          reinterpret_cast<const XPU_INT64*>(max_dec_len),
+          reinterpret_cast<const XPU_INT64*>(end_ids),
+          reinterpret_cast<XPU_INT64*>(base_model_draft_tokens),
+          bsz,
+          max_draft_token,
+          pre_id_length,
+          max_base_model_draft_token,
+          end_ids_len,
+          max_seq_len,
+          substep,
+          prefill_one_step_stop);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
 
   return api::SUCCESS;
 }
