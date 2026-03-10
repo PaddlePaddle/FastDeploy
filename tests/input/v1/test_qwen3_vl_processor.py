@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import copy
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -512,6 +513,142 @@ class TestQwen3VLProcessor(unittest.TestCase):
         result = self.processor.process_request_dict(request, 1024)
         self.assertGreater(len(result.prompt_token_ids), 0)
         self.assertGreater(len(result.multimodal_inputs), 0)
+
+    def test_process_request_dict_with_prompt_token_ids_only(self):
+        """Test process_request_dict with prompt_token_ids only"""
+        request = Request.from_dict(
+            {
+                "request_id": "12345",
+                "prompt_token_ids": [1, 2, 3],
+            }
+        )
+        result = self.processor.process_request_dict(request, 1024)
+
+        self.assertEqual(result.prompt_token_ids, [1, 2, 3])
+        self.assertEqual(result.prompt_token_ids_len, 3)
+        self.assertIsNone(result.multimodal_inputs["images"])
+        self.assertEqual(result.multimodal_inputs["token_type_ids"].tolist(), [0, 0, 0])
+
+    def test_process_request_dict_with_prompt_token_ids_and_messages(self):
+        """Test process_request_dict with prompt_token_ids and multimodal messages"""
+        source_request = Request.from_dict(
+            {
+                "request_id": "12345",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": "file://demo.jpeg"}},
+                            {"type": "video_url", "video_url": {"url": "file://3_frame_video.mp4"}},
+                            {"type": "text", "text": "Describe image and video."},
+                        ],
+                    }
+                ],
+            }
+        )
+        source_result = self.processor.process_request_dict(source_request, 1024 * 100)
+
+        token_request = Request.from_dict(
+            {
+                "request_id": "12345",
+                "prompt_token_ids": list(source_result.prompt_token_ids),
+                "messages": copy.deepcopy(source_request.messages),
+            }
+        )
+        token_result = self.processor.process_request_dict(token_request, 1024 * 100)
+
+        self.assertEqual(token_result.prompt_token_ids, source_result.prompt_token_ids)
+        self.assertTrue(
+            np.equal(token_result.multimodal_inputs["grid_thw"], source_result.multimodal_inputs["grid_thw"]).all()
+        )
+        self.assertTrue(
+            np.equal(
+                token_result.multimodal_inputs["position_ids"],
+                source_result.multimodal_inputs["position_ids"],
+            ).all()
+        )
+        self.assertTrue(
+            np.equal(
+                token_result.multimodal_inputs["image_type_ids"],
+                source_result.multimodal_inputs["image_type_ids"],
+            ).all()
+        )
+
+    def test_process_request_dict_prompt_token_ids_more_multimodal_segments_than_messages(self):
+        """Test prompt_token_ids path when token-side multimodal segments exceed messages"""
+        source_request = Request.from_dict(
+            {
+                "request_id": "12345",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": "file://demo.jpeg"}},
+                            {"type": "video_url", "video_url": {"url": "file://3_frame_video.mp4"}},
+                            {"type": "text", "text": "Describe image and video."},
+                        ],
+                    }
+                ],
+            }
+        )
+        source_result = self.processor.process_request_dict(source_request, 1024 * 100)
+
+        token_request = Request.from_dict(
+            {
+                "request_id": "12345",
+                "prompt_token_ids": list(source_result.prompt_token_ids),
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": "file://demo.jpeg"}},
+                            {"type": "text", "text": "Describe image and video."},
+                        ],
+                    }
+                ],
+            }
+        )
+
+        with self.assertRaisesRegex(ValueError, "more multimodal placeholder"):
+            self.processor.process_request_dict(token_request, 1024 * 100)
+
+    def test_process_request_dict_prompt_token_ids_unused_multimodal_messages(self):
+        """Test prompt_token_ids path when messages have unused multimodal items"""
+        source_request = Request.from_dict(
+            {
+                "request_id": "12345",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": "file://demo.jpeg"}},
+                            {"type": "text", "text": "Describe image."},
+                        ],
+                    }
+                ],
+            }
+        )
+        source_result = self.processor.process_request_dict(source_request, 1024 * 100)
+
+        token_request = Request.from_dict(
+            {
+                "request_id": "12345",
+                "prompt_token_ids": list(source_result.prompt_token_ids),
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": "file://demo.jpeg"}},
+                            {"type": "video_url", "video_url": {"url": "file://3_frame_video.mp4"}},
+                            {"type": "text", "text": "Describe image."},
+                        ],
+                    }
+                ],
+            }
+        )
+
+        with self.assertRaisesRegex(ValueError, "number of multimodal items does not match"):
+            self.processor.process_request_dict(token_request, 1024 * 100)
 
     def test_process_request_dict_invalid_format(self):
         """Test process_request_dict with invalid format"""
