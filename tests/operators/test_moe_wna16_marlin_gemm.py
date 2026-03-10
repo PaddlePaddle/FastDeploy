@@ -84,7 +84,7 @@ def _build_marlin_weights(weights_list, K, N):
 class TestMoeWna16MarlinGemm(unittest.TestCase):
     """Tests for moe_wna16_marlin_gemm — quantized MoE GEMM correctness."""
 
-    E, K, N, BLOCK_M = 8, 128, 64, 16
+    E, K, N, BLOCK_M = 8, 256, 256, 16
 
     def setUp(self):
         paddle.set_device("gpu")
