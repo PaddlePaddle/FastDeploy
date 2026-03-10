@@ -343,6 +343,53 @@ class TestLifecycle:
         e3.ipc_signal_suffix = 12345
         e3._start_worker_service()
         assert "--max_num_seqs" in cap["cmd"]
+        # sp_model + think tokens + line_break via encode
+        dp_sp = _ns(
+            tokenizer=_ns(
+                sp_model=[0] * 50,
+                vocab={"a": 0},
+                get_vocab=lambda: {"<think>": 10, "</think>": 11},
+                encode=lambda *a, **k: {"input_ids": [[42]]},
+            ),
+            eos_token_id_len=1,
+            pad_token_id=0,
+            image_patch_id=-1,
+        )
+        e3b = _eng(monkeypatch)
+        e3b.data_processor = dp_sp
+        e3b.mm_max_tokens_per_item = None
+        e3b.do_profile = 0
+        e3b.ipc_signal_suffix = 12345
+        e3b._start_worker_service()
+        assert "--think_start_id 10" in cap["cmd"]
+        # line_break via .input_ids attr
+        dp_lb = _ns(
+            tokenizer=_ns(
+                vocab={"a": 0},
+                get_vocab=lambda: {},
+                encode=lambda *a, **k: _ns(input_ids=[99]),
+            ),
+            eos_token_id_len=1,
+            pad_token_id=0,
+            image_patch_id=-1,
+        )
+        e3c = _eng(monkeypatch)
+        e3c.data_processor = dp_lb
+        e3c.mm_max_tokens_per_item = None
+        e3c.do_profile = 0
+        e3c.ipc_signal_suffix = 12345
+        e3c._start_worker_service()
+        assert "--line_break_id 99" in cap["cmd"]
+        # nnode > 1
+        e3d = _eng(monkeypatch)
+        e3d.data_processor = dp
+        e3d.mm_max_tokens_per_item = None
+        e3d.do_profile = 0
+        e3d.ipc_signal_suffix = 12345
+        e3d.cfg.nnode = 2
+        e3d.cfg.ips = ["10.0.0.1", "10.0.0.2"]
+        e3d._start_worker_service()
+        assert "--nnodes 2" in cap["cmd"]
         # full flow with profiling
         e4 = _eng(monkeypatch)
         e4.use_async_llm = True
@@ -408,6 +455,42 @@ class TestLifecycle:
         e2.get_profile_block_num_signal = _Sig()
         e2._exit_sub_services()
         assert 100 in killed and 200 in killed
+        # cache_task_queue with manager (no cleanup attr)
+        e3 = _eng(monkeypatch)
+        e3.use_async_llm = True
+        e3.worker_proc = None
+        e3.worker_ready_signal = _Sig()
+        e3.loaded_model_signal = _Sig()
+        shut = []
+        e3.cache_task_queue = _ns(manager=_ns(shutdown=lambda: shut.append(1)))
+        e3._exit_sub_services()
+        assert len(shut) == 1
+        # dp_processed join + cleanup
+        e4 = _eng(monkeypatch)
+        e4.use_async_llm = True
+        e4.worker_proc = None
+        e4.worker_ready_signal = _Sig()
+        e4.loaded_model_signal = _Sig()
+        joined = []
+        cleaned = []
+        e4.dp_processed = [_ns(pid=300, join=lambda: joined.append(1))]
+        e4.dp_engine_worker_queue_server = [_ns(cleanup=lambda: cleaned.append(1))]
+        e4._exit_sub_services()
+        assert len(joined) == 1 and len(cleaned) == 1
+        # worker kill exception (OSError)
+        e5 = _eng(monkeypatch)
+        e5.use_async_llm = True
+        e5.worker_proc = _ns(pid=999)
+        monkeypatch.setattr("os.getpgid", lambda pid: (_ for _ in ()).throw(OSError("no pid")))
+        e5.worker_ready_signal = _Sig()
+        e5.loaded_model_signal = _Sig()
+        e5._exit_sub_services()  # should not raise
+        # engine_worker_queue_server cleanup
+        e6 = _eng(monkeypatch)
+        qc = []
+        e6.engine_worker_queue_server = _ns(cleanup=lambda: qc.append(1))
+        e6._exit_sub_services()
+        assert len(qc) == 1
 
     def test_signals_and_setup(self, monkeypatch):
         monkeypatch.setattr("fastdeploy.engine.common_engine.IPCSignal", lambda **kw: _Sig(kw.get("array")))
@@ -456,6 +539,18 @@ class TestLifecycle:
         e5.cfg.scheduler_config.name = "local"
         e5.launch_components()
         assert hasattr(e5, "splitwise_receive_thread")
+        # launch_components: splitwise scheduler
+        e5b = _eng(monkeypatch)
+        e5b.cfg.scheduler_config.splitwise_role = "prefill"
+        e5b.cfg.scheduler_config.name = "splitwise"
+        e5b.scheduler.start = lambda role, host, info: None
+        e5b.launch_components()
+        # launch_components: dp scheduler
+        e5c = _eng(monkeypatch)
+        e5c.cfg.scheduler_config.splitwise_role = "mixed"
+        e5c.cfg.scheduler_config.name = "dp"
+        e5c.scheduler.start = lambda rank: None
+        e5c.launch_components()
         # stop_profile
         e6 = _eng(monkeypatch)
         e6.do_profile = 1
@@ -466,6 +561,26 @@ class TestLifecycle:
         e6.ipc_signal_suffix = 12345
         e6._stop_profile()
         assert e6.do_profile == 0
+        # stop_profile with prefix_caching → starts cache service
+        e6b = _eng(monkeypatch)
+        e6b.do_profile = 1
+        e6b.get_profile_block_num_signal = _Sig(np.array([100], dtype=np.int32))
+        e6b.worker_proc = None
+        e6b.cfg.cache_config.reset = _noop
+        e6b.cfg.cache_config.enable_prefix_caching = True
+        e6b.resource_manager.reset_cache_config = _noop
+        e6b.ipc_signal_suffix = 12345
+        started_cache = []
+        e6b.start_cache_service = lambda d, s: (started_cache.append(1), [])[1]
+        e6b._stop_profile()
+        assert len(started_cache) == 1
+        # stop_profile: worker_proc dies during profiling
+        e6c = _eng(monkeypatch)
+        e6c.do_profile = 1
+        e6c.get_profile_block_num_signal = _Sig(np.array([0], dtype=np.int32))
+        e6c.worker_proc = _ns(poll=lambda: 1)
+        with pytest.raises(RuntimeError, match="Worker process failed"):
+            e6c._stop_profile()
         # check_worker_initialize_status: success
         e7 = _eng(monkeypatch)
         e7.cfg.worker_num_per_node = 1
@@ -479,6 +594,23 @@ class TestLifecycle:
 
         threading.Thread(target=ready7, daemon=True).start()
         assert e7.check_worker_initialize_status()
+        # check_worker_initialize_status: layer_loading (covers L2219, 2237)
+        e7b = _eng(monkeypatch)
+        e7b.cfg.worker_num_per_node = 1
+        e7b.cfg.model_config.num_hidden_layers = 4
+        e7b.worker_ready_signal = _Sig(np.array([0], dtype=np.int32))
+        e7b.worker_init_status = {}
+        e7b.worker_proc = _ns(
+            stdout=iter([b"Start load layer 0\n", b"Start load layer 1\n", b"set state for layer 2\n"]),
+            poll=lambda: None,
+        )
+
+        def ready7b():
+            time.sleep(0.1)
+            e7b.worker_ready_signal.value[0] = 1
+
+        threading.Thread(target=ready7b, daemon=True).start()
+        assert e7b.check_worker_initialize_status()
         # check_worker_initialize_status: proc dies
         e8 = _eng(monkeypatch)
         e8.cfg.worker_num_per_node = 1
@@ -486,6 +618,42 @@ class TestLifecycle:
         e8.worker_init_status = {}
         e8.worker_proc = _ns(stdout=iter([]), poll=lambda: 1)
         assert not e8.check_worker_initialize_status()
+        # custom device path in _init_worker_signals
+        monkeypatch.setattr("fastdeploy.engine.common_engine.paddle.is_compiled_with_custom_device", lambda x: True)
+        e9 = _eng(monkeypatch)
+        e9.ipc_signal_suffix = 12345
+        e9.do_profile = 0
+        e9._init_worker_signals()
+        assert hasattr(e9, "worker_ready_signal")
+
+    def test_stop_profile(self, monkeypatch):
+        monkeypatch.setattr("fastdeploy.engine.common_engine.time.sleep", _noop)
+        # normal: worker alive, signal set after 2 iterations
+        e = _eng(monkeypatch)
+        prof_sig = _Sig(np.array([0], dtype=np.int32))
+        sp_cc = [0]
+
+        def _sp_poll():
+            sp_cc[0] += 1
+            if sp_cc[0] >= 2:
+                prof_sig.value[0] = 42
+            return None
+
+        e.get_profile_block_num_signal = prof_sig
+        e.worker_proc = _ns(poll=_sp_poll)
+        e.cfg.cache_config.reset = _noop
+        e.cfg.cache_config.enable_prefix_caching = True
+        e.resource_manager.reset_cache_config = _noop
+        e.ipc_signal_suffix = "test"
+        e.start_cache_service = lambda *a, **kw: []
+        e._stop_profile()
+        assert e.do_profile == 0
+        # worker died: poll returns non-None → RuntimeError
+        e2 = _eng(monkeypatch)
+        e2.get_profile_block_num_signal = _Sig(np.array([0], dtype=np.int32))
+        e2.worker_proc = _ns(poll=lambda: 1)
+        with pytest.raises(RuntimeError, match="Worker process failed"):
+            e2._stop_profile()
 
 
 class TestQueryControlMisc:
@@ -547,11 +715,59 @@ class TestQueryControlMisc:
         e.scheduler.get_inflight_requests = lambda: []
         e._control_pause(_ns(request_id="p"))
         assert e.is_paused
+        # already-paused logs and returns
+        e._control_pause(_ns(request_id="p1b"))
+        assert e.is_paused
+        # inflight requests aborted during pause
+        e.is_paused = False
+        inflight = [_ns(request_id="inf1")]
+        e.scheduler.get_inflight_requests = lambda: inflight
+        e._control_pause(_ns(request_id="p1c"))
+        assert e.is_paused
+        # non-local scheduler raises
+        e.is_paused = False
+        e.cfg.scheduler_config.name = "dp"
+        with pytest.raises(Exception, match="local scheduler"):
+            e._control_pause(_ns(request_id="p1d"))
         # non-v1 pause raises
         e.is_paused = False
+        e.cfg.scheduler_config.name = "local"
         monkeypatch.setattr("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", False)
         with pytest.raises(Exception, match="pause only supported"):
             e._control_pause(_ns(request_id="p2"))
+        # run_control_method exception path — handler raises
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True)
+        e.is_paused = True
+        e._call_worker = lambda cr, t: (_ for _ in ()).throw(RuntimeError("fail"))
+        e.run_control_method(
+            _ns(request_id="ex", method="update_weights", params={}, get_method=lambda: "update_weights")
+        )
+        assert sent[-1] == "ex"
+        # pause with running requests
+        e.is_paused = False
+        e.cfg.scheduler_config.name = "local"
+        et_cc = [0]
+        e.engine_worker_queue = _ns(
+            exist_tasks=lambda: (et_cc.__setitem__(0, et_cc[0] + 1) or et_cc[0] <= 1), put_tasks=_noop
+        )
+        e.resource_manager.preempted_all = lambda: [_ns(request_id="rr1")]
+        e.resource_manager.get_real_bsz = _noop
+        e.resource_manager.real_bsz = 1
+        e.resource_manager.wait_worker_inflight_requests_finish = _noop
+        e.resource_manager.cache_manager = _ns(reset=_noop)
+        e.scheduler.get_inflight_requests = lambda: []
+        e._control_pause(_ns(request_id="p_run"))
+        assert e.is_paused
+        # run_control_method success path (known method completes normally)
+        e.run_control_method(_ns(request_id="sp", method="is_paused", params={}, get_method=lambda: "is_paused"))
+        assert sent[-1] == "sp"
+        # pause timeout — exist_tasks always True (L1315-1319)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.time.sleep", _noop)
+        e.is_paused = False
+        e.resource_manager.log_status = _noop
+        e.engine_worker_queue = _ns(exist_tasks=lambda: True)
+        with pytest.raises(Exception, match="timeout"):
+            e._control_pause(_ns(request_id="p_to"))
 
     def test_misc_utils(self, monkeypatch):
         e = _eng(monkeypatch)
@@ -593,6 +809,110 @@ class TestQueryControlMisc:
         monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True)
         e3._send_error_response("r2", "err")
         assert sent[-1] is None
+        # _get_scheduler_unhandled_request_num
+        e4 = _eng(monkeypatch)
+        assert e4._get_scheduler_unhandled_request_num() == 0  # not callable
+        e4.scheduler.get_unhandled_request_num = lambda: 5
+        assert e4._get_scheduler_unhandled_request_num() == 5
+        e4.scheduler.get_unhandled_request_num = lambda: -3
+        assert e4._get_scheduler_unhandled_request_num() == 0  # clamped
+        e4.scheduler.get_unhandled_request_num = lambda: (_ for _ in ()).throw(RuntimeError)
+        assert e4._get_scheduler_unhandled_request_num() == 0  # exception path
+        # resume when not paused
+        e5 = _eng(monkeypatch)
+        e5.is_paused = False
+        assert e5._control_resume(_ns(request_id="r")) is None
+        assert not e5.is_paused
+
+    def test_call_worker(self, monkeypatch):
+        """Cover _call_worker + _wait_all_control_responses (L1398-1434)."""
+        import asyncio
+
+        e = _eng(monkeypatch)
+        # set up mock ctrl queues that return a ControlResponse-like object
+        resp = _ns(request_id="cw1", error_code=200, error_message="", result={"ok": True})
+        payload_msg = _ns(payload=resp)
+
+        async def _get(timeout=0):
+            return payload_msg
+
+        q = _ns(get=_get, name="q0")
+        e._ctrl_worker_output_queues = [q]
+        e.engine_worker_queue = _ns(put_tasks=_noop)
+        cr = _ns(request_id="cw1")
+        result = e._call_worker(cr, timeout=10)
+        assert result == [{"ok": True}]
+
+        # timeout path
+        async def _get_slow(timeout=0):
+            await asyncio.sleep(999)
+
+        q2 = _ns(get=_get_slow, name="q1")
+        e2 = _eng(monkeypatch)
+        e2._ctrl_worker_output_queues = [q2]
+        e2.engine_worker_queue = _ns(put_tasks=_noop)
+        with pytest.raises(Exception, match="Timeouted"):
+            e2._call_worker(_ns(request_id="cw2"), timeout=0.01)
+
+        # error_code != 200
+        resp_err = _ns(request_id="cw3", error_code=500, error_message="bad", result=None)
+        payload_err = _ns(payload=resp_err)
+
+        async def _get_err(timeout=0):
+            return payload_err
+
+        q3 = _ns(get=_get_err, name="q2")
+        e3 = _eng(monkeypatch)
+        e3._ctrl_worker_output_queues = [q3]
+        e3.engine_worker_queue = _ns(put_tasks=_noop)
+        with pytest.raises(Exception, match="Call Worker error"):
+            e3._call_worker(_ns(request_id="cw3"), timeout=10)
+
+        # None message
+        async def _get_none(timeout=0):
+            return None
+
+        q4 = _ns(get=_get_none, name="q3")
+        e4 = _eng(monkeypatch)
+        e4._ctrl_worker_output_queues = [q4]
+        e4.engine_worker_queue = _ns(put_tasks=_noop)
+        with pytest.raises(Exception, match="Timeouted"):
+            e4._call_worker(_ns(request_id="cw4"), timeout=10)
+
+        # Exception from get
+        async def _get_exc(timeout=0):
+            raise ConnectionError("broken")
+
+        q5 = _ns(get=_get_exc, name="q4")
+        e5 = _eng(monkeypatch)
+        e5._ctrl_worker_output_queues = [q5]
+        e5.engine_worker_queue = _ns(put_tasks=_noop)
+        with pytest.raises(Exception, match="Call Worker error"):
+            e5._call_worker(_ns(request_id="cw5"), timeout=10)
+
+        # mismatched request_id (skipped) + matching
+        resp_skip = _ns(request_id="old", error_code=200, error_message="", result="skip")
+        resp_match = _ns(request_id="cw6", error_code=200, error_message="", result="match")
+        call_count = [0]
+
+        async def _get_multi(timeout=0):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return _ns(payload=resp_skip)
+            return _ns(payload=resp_match)
+
+        q6a = _ns(get=_get_multi, name="q5a")
+
+        async def _get_match(timeout=0):
+            return _ns(payload=resp_match)
+
+        q6b = _ns(get=_get_match, name="q5b")
+        e6 = _eng(monkeypatch)
+        e6._ctrl_worker_output_queues = [q6a, q6b]
+        e6.engine_worker_queue = _ns(put_tasks=_noop)
+        # q6a returns mismatched "old" (skipped), q6b returns matching "cw6"
+        result6 = e6._call_worker(_ns(request_id="cw6"), timeout=10)
+        assert "match" in result6
 
     def test_chunk_size(self, monkeypatch):
         e = _eng(monkeypatch)
@@ -654,6 +974,21 @@ class TestInsertTasks:
         e.split_connector = _ns(check_decode_allocated=lambda t: (True, None), send_cache_info_to_messager=_noop)
         e.engine_worker_queue = _ns(put_tasks=_noop)
         assert e.insert_tasks([_task(disagg=_ns(foo=1))])
+        # prefill fail path
+        from fastdeploy.engine.common_engine import EngineError as EE
+
+        e1b = _eng(monkeypatch)
+        e1b.cfg.scheduler_config.splitwise_role = "prefill"
+        e1b.cfg.cache_config.enable_chunked_prefill = False
+        e1b.resource_manager.allocate_resources_for_new_tasks = lambda t: t
+        e1b.resource_manager.real_bsz = 1
+        e1b.split_connector = _ns(
+            check_decode_allocated=lambda t: (False, "no blocks"), send_cache_info_to_messager=_noop
+        )
+        e1b.engine_worker_queue = _ns(put_tasks=_noop)
+        e1b.scheduler.put_results = _noop
+        with pytest.raises(EE):
+            e1b.insert_tasks([_task(disagg=_ns(foo=1))])
         # decode role
         e2 = _eng(monkeypatch)
         e2.cfg.scheduler_config.splitwise_role = "decode"
@@ -718,6 +1053,28 @@ class TestInsertTasks:
             metrics=met,
         )
         e2._insert_prefilled_requests([ro_e])
+        # adapter first-token-is-EOS
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True)
+        e3 = _eng(monkeypatch)
+        _setup(e3)
+        e3.resource_manager.req_dict = {"re2": 0}
+        e3.resource_manager.tasks_list = [_ns(prompt_token_ids=[0], num_cached_tokens=0, metrics=met)]
+        e3.resource_manager.stop_flags = np.array([False], dtype=bool)
+        e3.resource_manager._recycle_block_tables = _noop
+        e3.token_processor = _ns(
+            tokens_counter={"re2": 1}, clear_data=_noop, number_of_tasks=0, number_of_input_tokens=0
+        )
+        e3.engine_worker_queue = _ns(put_tasks=_noop)
+        ro_eos = _ns(
+            request_id="re2",
+            outputs=_ns(token_ids=[], draft_token_ids=None),
+            error_code=200,
+            error_msg=None,
+            num_cached_tokens=0,
+            metrics=met,
+        )
+        e3._insert_prefilled_requests([ro_eos])
+        assert e3.resource_manager.stop_flags[0]
         assert e2.resource_manager.stop_flags[0]
 
 
@@ -771,15 +1128,136 @@ class TestSchedule:
 
         e3.resource_manager.available_batch = avail3
         e3._schedule_request_to_worker()
+        # exist_tasks true → sleep+continue, then proceed
+        e4 = _eng(monkeypatch)
+        e4.cfg.scheduler_config.splitwise_role = "mixed"
+        et4 = [0]
+        e4.resource_manager.available_batch = lambda: 1
+        e4.resource_manager.available_block_num = lambda: 100
+        e4.resource_manager.abort_req_ids_set = set()
+        e4.engine_worker_queue = _ns(
+            exist_tasks=lambda: (et4.__setitem__(0, et4[0] + 1) or et4[0] <= 1),
+            put_tasks=_noop,
+            num_cache_infos=lambda: 0,
+        )
+        e4.split_connector = _ns(current_request_ids=[], has_splitwise_tasks=lambda: False)
+        vc4 = [0]
+
+        def gr4(**kw):
+            vc4[0] += 1
+            if vc4[0] >= 1:
+                e4.running = False
+            return []
+
+        e4.scheduler.get_requests = gr4
+        e4._schedule_request_to_worker()
+        # decode role → skip
+        e5 = _eng(monkeypatch)
+        e5.cfg.scheduler_config.splitwise_role = "decode"
+        e5.resource_manager.available_batch = lambda: 1
+        e5.resource_manager.available_block_num = lambda: 100
+        e5.resource_manager.abort_req_ids_set = set()
+        e5.engine_worker_queue = _ns(exist_tasks=lambda: False, num_cache_infos=lambda: 0)
+        e5.split_connector = _ns(current_request_ids=[], has_splitwise_tasks=lambda: False)
+        dc5 = [0]
+
+        def gr5(**kw):
+            dc5[0] += 1
+            if dc5[0] >= 2:
+                e5.running = False
+            return [_task()]
+
+        e5.scheduler.get_requests = gr5
+        e5._schedule_request_to_worker()
+        # num_cache_infos > 0
+        e6 = _eng(monkeypatch)
+        e6.cfg.scheduler_config.splitwise_role = "mixed"
+        nc6 = [0]
+        e6.resource_manager.available_batch = lambda: 1
+        e6.engine_worker_queue = _ns(
+            exist_tasks=lambda: False,
+            num_cache_infos=lambda: (1 if nc6[0] == 0 else 0) or (nc6.__setitem__(0, nc6[0] + 1) or 0),
+        )
+        e6.split_connector = _ns(current_request_ids=[], has_splitwise_tasks=lambda: False)
+        nc_sc6 = [0]
+
+        def avail6():
+            nc_sc6[0] += 1
+            if nc_sc6[0] >= 3:
+                e6.running = False
+            return 1
+
+        e6.resource_manager.available_batch = avail6
+        e6._schedule_request_to_worker()
+        # current_request_ids non-empty
+        e7 = _eng(monkeypatch)
+        e7.cfg.scheduler_config.splitwise_role = "mixed"
+        e7.resource_manager.available_batch = lambda: 1
+        e7.engine_worker_queue = _ns(exist_tasks=lambda: False, num_cache_infos=lambda: 0)
+        cr_ids = [["rid1"]]
+        e7.split_connector = _ns(current_request_ids=cr_ids[0], has_splitwise_tasks=lambda: False)
+        rc7 = [0]
+
+        def avail7():
+            rc7[0] += 1
+            if rc7[0] >= 2:
+                cr_ids[0].clear()
+            if rc7[0] >= 4:
+                e7.running = False
+            return 1
+
+        e7.resource_manager.available_batch = avail7
+        e7._schedule_request_to_worker()
+        # non-mixed splitwise → send tasks (L787-789)
+        e8 = _eng(monkeypatch)
+        e8.cfg.scheduler_config.splitwise_role = "prefill"
+        e8.resource_manager.available_batch = lambda: 1
+        e8.resource_manager.available_block_num = lambda: 100
+        e8.resource_manager.abort_req_ids_set = set()
+        e8.resource_manager.allocate_resources_for_new_tasks = lambda t: t
+        e8.resource_manager.real_bsz = 1
+        e8.split_connector = _ns(current_request_ids=[], has_splitwise_tasks=lambda: False, send_splitwise_tasks=_noop)
+        e8.engine_worker_queue = _ns(exist_tasks=lambda: False, put_tasks=_noop, num_cache_infos=lambda: 0)
+        cc8 = [0]
+
+        def gr8(**kw):
+            cc8[0] += 1
+            if cc8[0] == 1:
+                return [_task()]
+            e8.running = False
+            return []
+
+        e8.scheduler.get_requests = gr8
+        e8._schedule_request_to_worker()
+        # insert_tasks fail → continue (L795)
+        e9 = _eng(monkeypatch)
+        e9.cfg.scheduler_config.splitwise_role = "mixed"
+        e9.resource_manager.available_batch = lambda: 1
+        e9.resource_manager.available_block_num = lambda: 100
+        e9.resource_manager.abort_req_ids_set = set()
+        e9.split_connector = _ns(current_request_ids=[], has_splitwise_tasks=lambda: False)
+        e9.engine_worker_queue = _ns(exist_tasks=lambda: False, put_tasks=_noop, num_cache_infos=lambda: 0)
+        cc9 = [0]
+
+        def gr9(**kw):
+            cc9[0] += 1
+            if cc9[0] >= 2:
+                e9.running = False
+            return [_task()]
+
+        e9.scheduler.get_requests = gr9
+        e9.insert_tasks = lambda *a, **kw: False
+        e9._schedule_request_to_worker()
 
     def test_v1_scheduling(self, monkeypatch):
         _ptr(monkeypatch)
-        # mixed happy
+        # mixed happy with scheduler_unhandled_request_num
         e = _eng(monkeypatch)
         e.cfg.scheduler_config.splitwise_role = "mixed"
         e.resource_manager.waiting = []
         e.resource_manager.get_real_bsz = _noop
         e.resource_manager.real_bsz = 1
+        e.resource_manager.scheduler_unhandled_request_num = 0
         e.engine_worker_queue = _ns(exist_tasks=lambda: False, put_tasks=_noop)
         e.scheduler.get_requests = lambda **kw: [_task()]
         cc = [0]
@@ -847,10 +1325,77 @@ class TestSchedule:
         e3.resource_manager.schedule = sched3
         e3._schedule_request_to_worker_v1()
         assert len(pr_calls) >= 1
+        # PREFILL task trace spans
+        e4 = _eng(monkeypatch)
+        e4.cfg.scheduler_config.splitwise_role = "mixed"
+        e4.resource_manager.waiting = []
+        e4.resource_manager.get_real_bsz = _noop
+        e4.resource_manager.real_bsz = 1
+        e4.engine_worker_queue = _ns(exist_tasks=lambda: False, put_tasks=_noop)
+        pf = Request.__new__(Request)
+        pf.request_id = "pf_1"
+        pf.task_type = RequestType.PREFILL
+        pf.has_been_preempted_before = False
+        pf.trace_carrier = {"traceparent": "00-abc"}
+        pf.user = "test"
+        pf.metrics = _ns(scheduler_recv_req_time=time.time(), inference_start_time=0)
+        cc4 = [0]
+
+        def sched4():
+            cc4[0] += 1
+            if cc4[0] == 1:
+                return [pf], []
+            e4.running = False
+            return [], []
+
+        e4.resource_manager.schedule = sched4
+        e4._schedule_request_to_worker_v1()
+        # PREFILL preempted (rescheduled)
+        e5 = _eng(monkeypatch)
+        e5.cfg.scheduler_config.splitwise_role = "mixed"
+        e5.resource_manager.waiting = []
+        e5.resource_manager.get_real_bsz = _noop
+        e5.resource_manager.real_bsz = 1
+        e5.engine_worker_queue = _ns(exist_tasks=lambda: False, put_tasks=_noop)
+        pf2 = Request.__new__(Request)
+        pf2.request_id = "pf_2"
+        pf2.task_type = RequestType.PREFILL
+        pf2.has_been_preempted_before = True
+        pf2.trace_carrier = None
+        pf2.user = "test"
+        pf2.metrics = _ns(scheduler_recv_req_time=time.time(), inference_start_time=0)
+        cc5 = [0]
+
+        def sched5():
+            cc5[0] += 1
+            if cc5[0] == 1:
+                return [pf2], []
+            e5.running = False
+            return [], []
+
+        e5.resource_manager.schedule = sched5
+        e5._schedule_request_to_worker_v1()
+        # v1 exist_tasks true → sleep+continue (L984-985)
+        e6 = _eng(monkeypatch)
+        e6.cfg.scheduler_config.splitwise_role = "mixed"
+        e6.resource_manager.waiting = []
+        e6.resource_manager.get_real_bsz = _noop
+        e6.resource_manager.real_bsz = 1
+        et6 = [0]
+        e6.engine_worker_queue = _ns(exist_tasks=lambda: (et6.__setitem__(0, et6[0] + 1) or et6[0] <= 1))
+        cc6 = [0]
+
+        def sched6():
+            cc6[0] += 1
+            e6.running = False
+            return [], []
+
+        e6.resource_manager.schedule = sched6
+        e6._schedule_request_to_worker_v1()
 
     def test_v1_errors(self, monkeypatch):
         _ptr(monkeypatch)
-        # shutdown RuntimeError
+        # shutdown RuntimeError from schedule()
         e = _eng(monkeypatch)
         e.resource_manager.waiting = []
         cc = [0]
@@ -884,6 +1429,24 @@ class TestSchedule:
         e2.resource_manager.schedule = sched2
         e2._schedule_request_to_worker_v1()
         assert "real" in sent and "skip" not in sent
+
+        # RuntimeError from ThreadPoolExecutor.submit (L997-1002) — MUST be last
+        class _FailPool:
+            def submit(self, fn):
+                raise RuntimeError("cannot schedule new futures after shutdown")
+
+            def shutdown(self, wait=False):
+                pass
+
+        monkeypatch.setattr("fastdeploy.engine.common_engine.ThreadPoolExecutor", lambda **kw: _FailPool())
+        e_tp = _eng(monkeypatch)
+        e_tp.cfg.scheduler_config.splitwise_role = "mixed"
+        e_tp.resource_manager.waiting = []
+        e_tp.resource_manager.get_real_bsz = _noop
+        e_tp.resource_manager.real_bsz = 1
+        e_tp.engine_worker_queue = _ns(exist_tasks=lambda: False)
+        e_tp.resource_manager.schedule = lambda: ([], [])
+        e_tp._schedule_request_to_worker_v1()
 
 
 class TestZmqAndSplitwise:
@@ -944,13 +1507,116 @@ class TestZmqAndSplitwise:
         e3._send_error_response = lambda *a: dropped.append(1)
         _zmq_recv(e3, [(None, {"request_id": "p1", "status": None})])
         assert len(dropped) >= 1
-        # v1 abort
+        # v1 abort — req IN resource_manager.requests
         monkeypatch.setattr("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True)
         e4 = _eng(monkeypatch)
         e4.resource_manager.abort_req_ids_set = set()
-        e4.resource_manager.abort = _noop
+        e4.resource_manager.requests = {"v1a": _ns(request_id="v1a")}
+        e4.resource_manager._prepare_preempt_task = lambda r: _ns(request_id=r.request_id)
+        e4.resource_manager.real_bsz = 1
+        e4.engine_worker_queue = _ns(put_tasks=_noop)
         _zmq_recv(e4, [(None, {"request_id": "v1a", "status": RequestStatus.ABORT.value})])
         assert "v1a" in e4.resource_manager.abort_req_ids_set
+        # v1 abort — req NOT in requests (recycle)
+        e4b = _eng(monkeypatch)
+        e4b.resource_manager.abort_req_ids_set = set()
+        e4b.resource_manager.requests = {}
+        e4b.scheduler._recycle = _noop
+        _zmq_recv(e4b, [(None, {"request_id": "v1b", "status": RequestStatus.ABORT.value})])
+        assert "v1b" not in e4b.resource_manager.abort_req_ids_set  # removed after recycle
+        # non-Context-terminated error → reconnect
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False)
+        e5 = _eng(monkeypatch)
+        e5.api_server_pid = "test"
+        rc = [0]
+
+        def _r5(block):
+            rc[0] += 1
+            if rc[0] == 1:
+                return ("socket error", None)
+            e5.running = False
+            return ("Context was terminated", None)
+
+        e5.recv_request_server = _ns(receive_json_once=_r5)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.ZmqIpcServer", lambda **kw: e5.recv_request_server)
+        e5._insert_zmq_task_to_scheduler()
+        # control request via zmq
+        monkeypatch.setattr("fastdeploy.engine.common_engine.ControlRequest.is_control_request", lambda d: True)
+        monkeypatch.setattr(
+            "fastdeploy.engine.common_engine.ControlRequest.from_dict",
+            lambda d: _ns(request_id="c1", get_method=lambda: "x"),
+        )
+        e6 = _eng(monkeypatch)
+        e6.send_response_server = _ns(send_response=_noop)
+        _zmq_recv(e6, [(None, {"request_id": "c1"})])
+        # from_dict exception
+        monkeypatch.setattr("fastdeploy.engine.common_engine.ControlRequest.is_control_request", lambda d: False)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False)
+        monkeypatch.setattr(
+            "fastdeploy.engine.common_engine.Request.from_dict", lambda d: (_ for _ in ()).throw(ValueError("bad"))
+        )
+        e7 = _eng(monkeypatch)
+        e7.send_response_server = _ns(send_response=_noop)
+        e7.guided_decoding_checker = None
+        _zmq_recv(e7, [(None, {"request_id": "bad1", "status": None})])
+        # guided_decoding_checker rejects
+        monkeypatch.setattr(
+            "fastdeploy.engine.common_engine.Request.from_dict",
+            lambda d: _ns(request_id=d["request_id"], metrics=_ns(scheduler_recv_req_time=0)),
+        )
+        e8 = _eng(monkeypatch)
+        e8.send_response_server = _ns(send_response=_noop)
+        e8.guided_decoding_checker = _ns(schema_format=lambda r: (r, "schema err"))
+        errs8 = []
+        e8._send_error_response = lambda *a: errs8.append(a)
+        _zmq_recv(e8, [(None, {"request_id": "g1", "status": None})])
+        assert len(errs8) >= 1
+        # adapter + decode early return (L1125)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True)
+        e9 = _eng(monkeypatch)
+        e9.cfg.scheduler_config.splitwise_role = "decode"
+        e9._insert_zmq_task_to_scheduler()  # returns immediately
+        # pyobj_once path (L1133) — enable_mm triggers receive_pyobj_once
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.ControlRequest.is_control_request", lambda d: False)
+        monkeypatch.setattr(
+            "fastdeploy.engine.common_engine.Request.from_dict",
+            lambda d: _ns(request_id=d["request_id"], metrics=_ns(scheduler_recv_req_time=0)),
+        )
+        e10 = _eng(monkeypatch)
+        e10.cfg.model_config.enable_mm = True
+        e10.send_response_server = _ns(send_response=_noop)
+        e10.guided_decoding_checker = None
+        idx10 = [0]
+
+        def recv10(block):
+            idx10[0] += 1
+            if idx10[0] == 1:
+                return None, {"request_id": "mm1", "status": None}
+            e10.running = False
+            return "Context was terminated", None
+
+        e10.recv_request_server = _ns(receive_pyobj_once=recv10)
+        e10._insert_zmq_task_to_scheduler()
+        # adapter reconnect via TcpServer (L1143)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False)
+        e11 = _eng(monkeypatch)
+        e11.cfg.model_config.enable_mm = False
+        e11.cfg.scheduler_config.splitwise_role = "mixed"
+        e11.api_server_pid = "test"
+        rc11 = [0]
+
+        def recv11(block):
+            rc11[0] += 1
+            if rc11[0] == 1:
+                return ("socket error", None)
+            e11.running = False
+            return ("Context was terminated", None)
+
+        e11.recv_request_server = _ns(receive_json_once=recv11)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.ZmqTcpServer", lambda **kw: e11.recv_request_server)
+        e11._insert_zmq_task_to_scheduler()
 
     def test_send_tokens(self, monkeypatch):
         from fastdeploy.engine.request import CompletionOutput, RequestOutput
@@ -1017,6 +1683,60 @@ class TestZmqAndSplitwise:
         e3.scheduler.get_results = gr3
         e3._zmq_send_generated_tokens()
         assert len(s3) >= 1
+        # non-adapter: accumulate warning (empty token_ids, not finished)
+        e4 = _eng(monkeypatch)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True)
+        e4.data_processor = _ns(ids2tokens=lambda t, r: ("", [], None), decode_status={"w1": [0, 0]})
+        s4 = []
+        e4.send_response_server = _ns(send_response=lambda rid, r: s4.append(rid))
+        cc4 = [0]
+
+        def gr4():
+            cc4[0] += 1
+            if cc4[0] == 1:
+                return {"w1": [_ro("w1", [1], dt=0)]}
+            e4.running = False
+            return {}
+
+        e4.scheduler.get_results = gr4
+        e4._zmq_send_generated_tokens()
+        # adapter: accumulate warning
+        e5 = _eng(monkeypatch)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True)
+        e5.data_processor = _ns(ids2tokens=lambda t, r: ("", [], None), decode_status={"w2": [0, 0]})
+        s5 = []
+        e5.send_response_server = _ns(send_response=lambda rid, r: s5.append(rid))
+        cc5 = [0]
+
+        def gr5():
+            cc5[0] += 1
+            if cc5[0] == 1:
+                return [[_ro("w2", [1], dt=0)]]
+            e5.running = False
+            return []
+
+        e5.scheduler.get_results = gr5
+        e5._zmq_send_generated_tokens()
+        # adapter: decode_type!=0 (L1492), finished+empty (L1498), non-RequestOutput (L1504)
+        e6 = _eng(monkeypatch)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", False)
+        s6 = []
+        e6.send_response_server = _ns(send_response=lambda rid, r: s6.append(r))
+        cc6 = [0]
+
+        def gr6():
+            cc6[0] += 1
+            if cc6[0] == 1:
+                return [[_ro("a6", [9], dt=1), _ro("a6f", [], finished=True, dt=1), "raw"]]
+            e6.running = False
+            return []
+
+        e6.scheduler.get_results = gr6
+        e6._zmq_send_generated_tokens()
+        assert len(s6) >= 1
 
     def test_splitwise_decode(self, monkeypatch):
         from fastdeploy.engine.request import CompletionOutput, Request, RequestOutput
@@ -1073,6 +1793,7 @@ class TestZmqAndSplitwise:
             eng.engine_worker_queue.disaggregate_queue_empty = qe
             eng.engine_worker_queue.get_disaggregated_tasks = gt
             eng._decode_process_splitwise_requests()
+            time.sleep(0.05)  # let daemon thread finish
 
         # v0: fetch
         e = _de(v1=False)
@@ -1101,6 +1822,36 @@ class TestZmqAndSplitwise:
         e4.resource_manager.pre_recycle_resource = lambda rid: recycled.append(rid)
         _run(e4, [(0, [_rro("re", ec=500)])])
         assert "re" in recycled
+        # v1: alloc success (Request + preallocate=True) → L1581-1586
+        e5 = _de(v1=True)
+        sent5 = []
+        e5.split_connector.send_cache_info_to_prefill = lambda t: sent5.append(t)
+        _run(e5, [(0, [_rr("rs")])])
+        assert len(sent5) >= 1
+        # v1: has_request=False → waiting (L1617-1618)
+        e6 = _de(v1=True)
+        e6.scheduler.has_request = lambda rid: False
+        added6 = []
+        e6.resource_manager.add_prefilled_request = lambda r: added6.append(r)
+        _run(e6, [(0, [_rro("rw")])])
+        assert len(added6) == 0
+        # v1: enable_decode_cache_task → waiting break (L1602-1603)
+        e7 = _de(v1=True)
+        e7.enable_decode_cache_task = True
+        e7.resource_manager.preallocate_resource_in_d = lambda t: False
+        _run(e7, [(0, [_rr("rb")])])
+        # v1: error_code + adapter EOS in prefilled (L1635-1641, L1648)
+        monkeypatch.setattr("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True)
+        e8 = _de(v1=True)
+        e8.scheduler.has_request = lambda rid: True
+        recycled8 = []
+        e8.resource_manager.pre_recycle_resource = lambda rid: recycled8.append(rid)
+        e8.token_processor.tokens_counter = {"re8": 1, "eos8": 2}
+        ro_err = _rro("re8", ec=500)
+        ro_eos = _rro("eos8", ec=200)
+        ro_eos.outputs.token_ids = []  # EOS → empty token_ids
+        _run(e8, [(0, [ro_err, ro_eos])])
+        assert "re8" in recycled8
 
 
 if __name__ == "__main__":
