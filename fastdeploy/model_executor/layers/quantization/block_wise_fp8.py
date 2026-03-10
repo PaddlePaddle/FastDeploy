@@ -255,7 +255,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
                             quant_method="128x128",
                             input_transpose=True,
                             return_transpose_only=True,
-                            using_pow2_scale=True,
+                            using_pow2_scale=fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
                             using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
                         )
                     )
@@ -313,7 +313,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
                     quant_method="128x128",
                     input_transpose=True,
                     return_transpose_only=True,
-                    using_pow2_scale=True,
+                    using_pow2_scale=fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
                     using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
                 )
         else:
