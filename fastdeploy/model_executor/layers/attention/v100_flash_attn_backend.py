@@ -433,16 +433,19 @@ class V100FlashAttentionBackend(AttentionBackend):
         qk_head_dim,
         use_neox_rotary_style,
     ):
-        """Apply RoPE and write KV to cache using CUDA kernel.
+        """Apply NeoX RoPE and write KV to cache using fused CUDA kernel.
 
-        V100优化: 使用CUDA kernel替代Python实现，消除Python for-loop瓶颈。
-        性能提升约10-50倍。
+        Uses PD_BUILD_STATIC_OP inplace interface: pre-allocated q_out/k_out are
+        passed as inputs and modified in-place by the kernel. key_cache/value_cache
+        are also modified in-place.
+
+        Only supports NeoX-style RoPE. Falls back to Python for non-NeoX style.
 
         Args:
             q_reshaped: [num_tokens, num_heads, head_dim]
             k_reshaped: [num_tokens, kv_num_heads, head_dim]
             v: [num_tokens, kv_num_heads * head_dim]
-            key_cache, value_cache: block caches
+            key_cache, value_cache: block caches (inplace modified)
             rotary_embs: [2, 1, max_seq_len, 1, rotary_dim] (cos, sin)
             positions: [num_tokens]
             forward_meta: contains block_tables, batch_id_per_token
@@ -452,8 +455,8 @@ class V100FlashAttentionBackend(AttentionBackend):
             q_rope: [num_tokens, num_heads, head_dim] - Q with RoPE applied
             k_rope: [num_tokens, kv_num_heads, head_dim] - K with RoPE applied (also in cache)
         """
-        if not _V100_ROPE_WRITE_CACHE_AVAILABLE:
-            # Fallback to Python implementation
+        if not _V100_ROPE_WRITE_CACHE_AVAILABLE or not use_neox_rotary_style:
+            # Fallback to Python: kernel unavailable or non-NeoX RoPE style
             q_rope, k_rope = self._python_apply_rope_to_qk(
                 q_reshaped,
                 k_reshaped,
@@ -476,18 +479,25 @@ class V100FlashAttentionBackend(AttentionBackend):
             return q_rope, k_rope
 
         # Extract cos/sin from rotary_embs: [2, 1, max_seq_len, 1, rotary_dim]
-        # cos_emb: [max_seq_len, rotary_dim/2], sin_emb: [max_seq_len, rotary_dim/2]
-        cos_emb = rotary_embs[0, 0, :, 0, :]  # [max_seq_len, rotary_dim]
-        sin_emb = rotary_embs[1, 0, :, 0, :]  # [max_seq_len, rotary_dim]
+        # .contiguous() ensures the sliced tensor has contiguous memory layout,
+        # which the CUDA kernel requires for correct pointer arithmetic.
+        cos_emb = rotary_embs[0, 0, :, 0, :].contiguous()  # [max_seq_len, rotary_dim]
+        sin_emb = rotary_embs[1, 0, :, 0, :].contiguous()  # [max_seq_len, rotary_dim]
 
-        # V needs reshaping
+        # V needs reshaping to [num_tokens, kv_num_heads, head_dim]
         v_reshaped = v.reshape([v.shape[0], kv_num_heads, qk_head_dim])
 
-        # Get block table dimensions
+        # Pre-allocate inplace output tensors (same shape/dtype as input)
+        q_out = paddle.empty_like(q_reshaped)
+        k_out = paddle.empty_like(k_reshaped)
+
         max_blocks_per_seq = forward_meta.block_tables.shape[1]
 
-        # Call CUDA kernel
-        q_rope, k_rope = v100_rope_write_cache_cuda(
+        # Call CUDA kernel (PD_BUILD_STATIC_OP inplace interface):
+        # q_out, k_out, key_cache, value_cache are modified in-place
+        v100_rope_write_cache_cuda(
+            q_out,
+            k_out,
             q_reshaped,
             k_reshaped,
             v_reshaped,
@@ -504,10 +514,9 @@ class V100FlashAttentionBackend(AttentionBackend):
             cos_emb.shape[-1],  # rotary_dim
             self.block_size,
             max_blocks_per_seq,
-            use_neox_rotary_style,
         )
 
-        return q_rope, k_rope
+        return q_out, k_out
 
     def _python_scaled_dot_product_attention_batched(
         self,
@@ -672,8 +681,15 @@ class V100FlashAttentionBackend(AttentionBackend):
             and self.group_size == 1  # Batched path simpler without GQA expansion
         ):
             try:
+                # Map batch_ids to token indices (in decode, each batch has exactly 1 token)
+                # batch_id_per_token maps token_idx -> batch_id, we need the reverse
+                bid_to_token = {}
+                for tok_idx in range(q_reshaped.shape[0]):
+                    bid = int(forward_meta.batch_id_per_token[tok_idx].item())
+                    bid_to_token[bid] = tok_idx
+
                 # Stack queries: [batch_size, num_heads, head_dim]
-                q_batch = paddle.stack([q_reshaped[i : i + 1].squeeze(0) for i in range(len(batch_ids))], axis=0)
+                q_batch = paddle.stack([q_reshaped[bid_to_token[bid]] for bid in batch_ids], axis=0)
 
                 # Stack KV: [batch_size, kv_num_heads, kv_len, head_dim]
                 kv_len = seq_lens_list[0]

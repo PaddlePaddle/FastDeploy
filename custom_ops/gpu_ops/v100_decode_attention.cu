@@ -420,7 +420,7 @@ void V100DecodeAttention(
     float sm_scale,
     int num_kv_splits,
     int max_blocks_per_split,
-    bool skip_kv_write) {
+    bool skip_kv_write = false) {
   auto stream = q.stream();
 
   const int num_tokens = q.dims()[0];
