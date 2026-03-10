@@ -207,6 +207,7 @@ class TestErnie4_5Processor(unittest.TestCase):
 
         self.assertEqual(processed.sampling_params.max_tokens, max(1, 10 - len(expected_ids)))
         self.assertEqual(processed.sampling_params.temperature, 1)
+        self.assertEqual(processed.sampling_params.top_k, 1)
         self.assertAlmostEqual(processed.sampling_params.top_p, _SAMPLING_EPS)
         self.assertEqual(processed.prompt_tokens, "hello")
 
@@ -358,6 +359,23 @@ class TestErnie4_5Processor(unittest.TestCase):
 
         self.assertTrue(hasattr(result.outputs, "tool_calls"))
         self.assertEqual(result.outputs.tool_calls[0]["name"], "fake_tool")
+
+    def test_process_request_greedy_sets_top_k(self):
+        """process_request with temperature=0 should set top_k=1 for greedy decoding."""
+        proc = self._make_processor()
+        proc.messages2ids = MagicMock(return_value=[9])
+
+        request = Request.from_dict(
+            {
+                "request_id": "test_greedy",
+                "prompt": "hello",
+                "temperature": 0.0,
+                "top_p": 0.5,
+            }
+        )
+        result = proc.process_request(request, max_model_len=10)
+        self.assertEqual(result.get("temperature"), 1)
+        self.assertEqual(result.get("top_k"), 1)
 
     def test_process_request(self):
         """Test process_request method with various input types."""

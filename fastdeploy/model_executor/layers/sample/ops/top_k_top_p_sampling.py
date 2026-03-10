@@ -78,6 +78,21 @@ def top_k_top_p_sampling(
     if envs.FD_DETERMINISTIC_MODE:
         _reset_cuda_generator_for_determinism()
 
+    # Greedy decoding fast-path (deterministic mode only):
+    # top_k=1 is equivalent to argmax. In non-rejection sampling modes,
+    # top_k is ignored by the backend, so we must handle it explicitly.
+    # Only enabled under FD_DETERMINISTIC_MODE to avoid affecting normal inference.
+    all_greedy = False
+    if envs.FD_DETERMINISTIC_MODE:
+        if top_k_list is not None:
+            all_greedy = all(k == 1 for k in top_k_list)
+        elif top_k is not None:
+            all_greedy = bool(paddle.all(top_k == 1))
+
+        if all_greedy:
+            ids = paddle.argmax(x, axis=-1, keepdim=True)
+            return None, ids
+
     if top_p_class == "air":
         _, ids = air_top_p_sampling(x, top_p, threshold, topp_seed, seed=seed, k=k, mode=mode)
     elif top_p_class == "rejection":
@@ -116,6 +131,18 @@ def top_k_top_p_sampling(
                 k=k,
                 mode="truncated",
             )
+    # Mixed batch (deterministic mode only): override top_k=1 rows with argmax.
+    # Shape guard: in overlap/speculative paths, x may be padded (e.g. [8,V])
+    # while top_k remains per-request (e.g. [2,1]). Skip when shapes disagree.
+    if envs.FD_DETERMINISTIC_MODE and not all_greedy and top_k is not None and top_k.shape[0] == ids.shape[0]:
+        has_greedy = (top_k_list is not None and any(k == 1 for k in top_k_list)) or (
+            top_k_list is None and bool(paddle.any(top_k == 1))
+        )
+        if has_greedy:
+            argmax_ids = paddle.argmax(x, axis=-1, keepdim=True)
+            greedy_mask = top_k == 1
+            ids = paddle.where(greedy_mask, argmax_ids, ids)
+
     return _, ids
 
 
