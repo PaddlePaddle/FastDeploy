@@ -773,13 +773,13 @@ std::vector<paddle::Tensor> SpeculatePreProcess(
     const paddle::Tensor& seq_lens_decoder);
 
 std::vector<paddle::Tensor> BuildSamplingParams(
-            const paddle::Tensor & top_p,
-            const paddle::Tensor & top_k,
-            paddle::Tensor & infer_seed,
-            const paddle::Tensor & seq_lens_this_time,
-            const paddle::Tensor & cur_seq_lens_q_output,
-            const int64_t token_num_output_cpu,
-            const int64_t increment_value);
+    const paddle::Tensor& top_p,
+    const paddle::Tensor& top_k,
+    paddle::Tensor& infer_seed,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& cur_seq_lens_q_output,
+    const int64_t token_num_output_cpu,
+    const int64_t increment_value);
 
 void SpecTokenPenaltyMultiScores(
     const paddle::Tensor& token_ids_all,

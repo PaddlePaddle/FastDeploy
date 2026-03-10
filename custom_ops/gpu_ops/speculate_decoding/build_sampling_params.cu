@@ -24,10 +24,10 @@ constexpr int64_t MAX_INFER_SEED = 9223372036854775806;
 __global__ void BuildSamplingParamsKernel(float *top_p_padding,
                                           int64_t *top_k_padding,
                                           int64_t *topp_seed,
-                                          const float* top_p,
-                                          const int64_t* top_k,
+                                          const float *top_p,
+                                          const int64_t *top_k,
                                           int64_t *infer_seed,
-                                          const int * cu_seq_lens_q_output,
+                                          const int *cu_seq_lens_q_output,
                                           const int64_t increment_value) {
   const int tid = threadIdx.x;
   const int bi = blockIdx.x;
@@ -37,7 +37,8 @@ __global__ void BuildSamplingParamsKernel(float *top_p_padding,
   const int64_t bi_top_k = top_k[bi];
   int64_t bi_infer_seed = infer_seed[bi] + tid * 4;
 
-  for (int i = tid; i < cur_seq_len_q_output_end - cur_seq_len_q_output_start; i += blockDim.x) {
+  for (int i = tid; i < cur_seq_len_q_output_end - cur_seq_len_q_output_start;
+       i += blockDim.x) {
     int pad_idx = cur_seq_len_q_output_start + i;
     top_p_padding[pad_idx] = bi_top_p;
     top_k_padding[pad_idx] = bi_top_k;
@@ -51,29 +52,34 @@ __global__ void BuildSamplingParamsKernel(float *top_p_padding,
 }
 
 std::vector<paddle::Tensor> BuildSamplingParams(
-            const paddle::Tensor & top_p,
-            const paddle::Tensor & top_k,
-            paddle::Tensor & infer_seed,
-            const paddle::Tensor & seq_lens_this_time,
-            const paddle::Tensor & cur_seq_lens_q_output,
-            const int64_t token_num_output_cpu,
-            const int64_t increment_value) {
+    const paddle::Tensor &top_p,
+    const paddle::Tensor &top_k,
+    paddle::Tensor &infer_seed,
+    const paddle::Tensor &seq_lens_this_time,
+    const paddle::Tensor &cur_seq_lens_q_output,
+    const int64_t token_num_output_cpu,
+    const int64_t increment_value) {
   auto cu_stream = seq_lens_this_time.stream();
   int real_bsz = seq_lens_this_time.shape()[0];
-  paddle::Tensor top_p_padding = paddle::empty({token_num_output_cpu, 1}, paddle::DataType::FLOAT32, seq_lens_this_time.place());
-  paddle::Tensor top_k_padding = paddle::empty({token_num_output_cpu, 1}, paddle::DataType::INT64, seq_lens_this_time.place());
-  paddle::Tensor topp_seed = paddle::empty({token_num_output_cpu, 1}, paddle::DataType::INT64, seq_lens_this_time.place());
+  paddle::Tensor top_p_padding = paddle::empty({token_num_output_cpu, 1},
+                                               paddle::DataType::FLOAT32,
+                                               seq_lens_this_time.place());
+  paddle::Tensor top_k_padding = paddle::empty({token_num_output_cpu, 1},
+                                               paddle::DataType::INT64,
+                                               seq_lens_this_time.place());
+  paddle::Tensor topp_seed = paddle::empty({token_num_output_cpu, 1},
+                                           paddle::DataType::INT64,
+                                           seq_lens_this_time.place());
 
   BuildSamplingParamsKernel<<<real_bsz, 64, 0, cu_stream>>>(
-    top_p_padding.data<float>(),
-    top_k_padding.data<int64_t>(),
-    topp_seed.data<int64_t>(),
-    top_p.data<float>(),
-    top_k.data<int64_t>(),
-    infer_seed.data<int64_t>(),
-    cur_seq_lens_q_output.data<int>(),
-    increment_value
-  );
+      top_p_padding.data<float>(),
+      top_k_padding.data<int64_t>(),
+      topp_seed.data<int64_t>(),
+      top_p.data<float>(),
+      top_k.data<int64_t>(),
+      infer_seed.data<int64_t>(),
+      cur_seq_lens_q_output.data<int>(),
+      increment_value);
 
   return {top_p_padding, top_k_padding, topp_seed};
 }
