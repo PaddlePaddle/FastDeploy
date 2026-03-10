@@ -136,29 +136,31 @@ static int xpu3_wrapper(Context *ctx,
                         const int pre_id_length) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto recover_block_kernel = xpu3::plugin::speculate_recover_block;
-  recover_block_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
-      recover_block_list,  // [bsz]
-      recover_len,
-      stop_flags,
-      seq_lens_this_time,
-      ori_seq_lens_encoder,
-      ori_seq_lens_decoder,
-      seq_lens_encoder,
-      seq_lens_decoder,
-      block_tables,
-      free_list,
-      free_list_len,
-      reinterpret_cast<XPU_INT64 *>(input_ids),
-      reinterpret_cast<const XPU_INT64 *>(pre_ids),
-      reinterpret_cast<const XPU_INT64 *>(step_idx),
-      encoder_block_lens,
-      used_list_len,
-      reinterpret_cast<const XPU_INT64 *>(next_tokens),
-      reinterpret_cast<const XPU_INT64 *>(first_token_ids),
-      bsz,
-      block_num_per_seq,
-      length,
-      pre_id_length);
+  int32_t ret_xre =
+      recover_block_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+          recover_block_list,  // [bsz]
+          recover_len,
+          stop_flags,
+          seq_lens_this_time,
+          ori_seq_lens_encoder,
+          ori_seq_lens_decoder,
+          seq_lens_encoder,
+          seq_lens_decoder,
+          block_tables,
+          free_list,
+          free_list_len,
+          reinterpret_cast<XPU_INT64 *>(input_ids),
+          reinterpret_cast<const XPU_INT64 *>(pre_ids),
+          reinterpret_cast<const XPU_INT64 *>(step_idx),
+          encoder_block_lens,
+          used_list_len,
+          reinterpret_cast<const XPU_INT64 *>(next_tokens),
+          reinterpret_cast<const XPU_INT64 *>(first_token_ids),
+          bsz,
+          block_num_per_seq,
+          length,
+          pre_id_length);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

@@ -98,16 +98,18 @@ static int xpu3_wrapper(api::Context *ctx,
   auto eb_adjust_batch_kernel =
       xpu3::plugin::eb_adjust_batch<XPU_INDEX_TYPE_TX, XPU_INDEX_TYPE_TY>;
   // NOTE: Don't change 16 to 64, because kernel use gsm
-  eb_adjust_batch_kernel<<<ctx->ncluster(), 16, ctx->xpu_stream>>>(
-      reinterpret_cast<XPU_INDEX_TYPE_TX *>(const_cast<TX *>(x)),
-      reinterpret_cast<XPU_INDEX_TYPE_TY *>(y),
-      encoder_seqs_lods.xpu,
-      decoder_seqs_lods.xpu,
-      encoder_batch_map.xpu,
-      decoder_batch_map.xpu,
-      en_batch,
-      de_batch,
-      hidden_dim);
+  int32_t ret_xre =
+      eb_adjust_batch_kernel<<<ctx->ncluster(), 16, ctx->xpu_stream>>>(
+          reinterpret_cast<XPU_INDEX_TYPE_TX *>(const_cast<TX *>(x)),
+          reinterpret_cast<XPU_INDEX_TYPE_TY *>(y),
+          encoder_seqs_lods.xpu,
+          decoder_seqs_lods.xpu,
+          encoder_batch_map.xpu,
+          decoder_batch_map.xpu,
+          en_batch,
+          de_batch,
+          hidden_dim);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
