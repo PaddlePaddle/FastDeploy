@@ -18,6 +18,8 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import paddle
+
+paddle.compat.enable_torch_proxy(scope={"triton"})
 import triton.language as tl
 
 TRITON_UTILS_V2_PATH = "fastdeploy.model_executor.ops.triton_ops.triton_utils_v2"

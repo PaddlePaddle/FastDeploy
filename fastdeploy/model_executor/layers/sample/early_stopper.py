@@ -84,6 +84,9 @@ class RepetitionEarlyStopper(EarlyStopper):
         self.trunc_scores = paddle.where(reset_mask, paddle.zeros_like(self.trunc_scores), self.trunc_scores)
 
     def process_triton(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, stop_flags: paddle.Tensor):
+        import paddle
+
+        paddle.compat.enable_torch_proxy(scope={"triton"})
         import triton
 
         from fastdeploy.model_executor.ops.triton_ops import (

@@ -11,6 +11,8 @@ from fastdeploy.utils import get_logger
 logger = get_logger("worker_process", "worker_process.log")
 
 import paddle
+
+paddle.compat.enable_torch_proxy(scope={"triton"})
 import triton
 import triton.language as tl
 

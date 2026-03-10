@@ -3,6 +3,8 @@ import unittest
 from dataclasses import dataclass, field  # 1. 导入 dataclass 和 field
 
 import paddle
+
+paddle.compat.enable_torch_proxy(scope={"triton"})
 import triton
 
 from fastdeploy.model_executor.ops.gpu import cache_kv_with_rope
