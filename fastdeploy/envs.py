@@ -179,6 +179,12 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_CONFIG_ROOT": lambda: os.path.expanduser(
         os.getenv("FD_CONFIG_ROOT", os.path.join(os.path.expanduser("~"), ".config", "fastdeploy"))
     ),
+    # Whether to enable KV cache lock, enforcing mutual exclusion between
+    # PrefixCacheManager and Worker when accessing GPU KV cache.
+    # Under certain DP+EP configurations, concurrent access (even read-only)
+    # has been observed to cause NaN computation errors.
+    # Set to 1 to enable the lock; defaults to 0 (disabled).
+    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("USE_KVCACHE_LOCK", "0"))),
 }
 
 
