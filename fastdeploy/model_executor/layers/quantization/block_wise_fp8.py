@@ -245,7 +245,20 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             weight_tensor = layer.weight.transpose([1, 0])
 
             if not self.quant_config.deepgemm_scale_ue8m0:
-                quanted_weight_tensor, weight_block_scale_tensor = per_block_cast_to_fp8(weight_tensor)
+                if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
+                    quanted_weight_tensor, weight_block_scale_tensor = per_block_cast_to_fp8(weight_tensor)
+                else:
+                    quanted_weight_tensor, weight_block_scale_tensor = (
+                        paddle.incubate.nn.functional.fp8_quant_blockwise(
+                            layer.weight,
+                            output_scale_transpose=False,
+                            quant_method="128x128",
+                            input_transpose=True,
+                            return_transpose_only=True,
+                            using_pow2_scale=fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
+                            using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
+                        )
+                    )
             else:
                 quanted_weight_tensor, weight_block_scale_tensor = quant_weight_ue8m0(weight_tensor, [128, 128])
                 weight_block_scale_tensor = transform_scale_ue8m0(
@@ -291,7 +304,18 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
     def process_loaded_weights(self, layer, weights) -> None:
         weight_tensor = weights.transpose([1, 0])
         if not self.quant_config.deepgemm_scale_ue8m0:
-            quanted_weight_tensor, weight_block_scale_tensor = per_block_cast_to_fp8(weight_tensor)
+            if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
+                quanted_weight_tensor, weight_block_scale_tensor = per_block_cast_to_fp8(weight_tensor)
+            else:
+                quanted_weight_tensor, weight_block_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
+                    layer.weight,
+                    output_scale_transpose=False,
+                    quant_method="128x128",
+                    input_transpose=True,
+                    return_transpose_only=True,
+                    using_pow2_scale=fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
+                    using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
+                )
         else:
             weight_block_size = self.quant_config.weight_block_size
             assert weight_block_size == [
@@ -331,7 +355,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         else:
             x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
                 x,
-                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
+                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0 or fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
                 output_scale_transpose=True,
                 using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
             )
