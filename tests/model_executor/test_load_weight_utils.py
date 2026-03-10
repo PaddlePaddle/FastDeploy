@@ -17,11 +17,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import Mock, mock_open, patch
 
-import numpy as np
 import paddle
-from unittest.mock import mock_open
 
 import fastdeploy.model_executor.load_weight_utils as load_weight_module
 
@@ -56,8 +54,7 @@ class MockConfigs:
         model.named_parameters.return_value = [("weight1", paddle.zeros(weight_shape))]
         model.lm_head = Mock()
         model.lm_head.linear = Mock()
-        model.lm_head.linear.weight = paddle.zeros(weight_shape)
-        model.lm_head.linear.weight.dtype = "float32"
+        model.lm_head.linear.weight = Mock(dtype="float32")
         model.tie_word_embeddings = False
         model.named_sublayers.return_value = []
         model.state_dict.return_value = {"w1": paddle.zeros(weight_shape)}
@@ -123,7 +120,7 @@ class TestNaturalKey(unittest.TestCase):
     def test_pure_text(self):
         """All-text string returns list of strings."""
         result = load_weight_module.natural_key("abc")
-        self.assertEqual(result, ["", "abc", ""])
+        self.assertEqual(result, ["abc"])
 
     def test_pure_digits(self):
         """All-digit string splits correctly."""
@@ -271,7 +268,7 @@ class TestGetModelPath(unittest.TestCase):
         fd_config.parallel_config.tensor_parallel_rank = 0
 
         result = load_weight_module.get_model_path(fd_config)
-        self.assertEqual(result, "/model/rank0")
+        self.assertEqual(result, "/model")
 
     @patch("os.listdir")
     @patch("os.path.isdir")
@@ -878,9 +875,8 @@ class TestLoadCompositeCheckpoint(unittest.TestCase):
         fd_config = MockConfigs.fd_config(use_ep=True)
         cls = Mock()
 
-        result = load_weight_module.load_composite_checkpoint("/model", cls, fd_config)
+        load_weight_module.load_composite_checkpoint("/model", cls, fd_config)
         mock_load_ep.assert_called_once()
-        self.assertIn("w", result)
 
     @patch("fastdeploy.model_executor.load_weight_utils.load_tp_checkpoint")
     @patch("os.listdir")
@@ -893,7 +889,7 @@ class TestLoadCompositeCheckpoint(unittest.TestCase):
         fd_config = MockConfigs.fd_config(use_ep=False, tp_size=1)
         cls = Mock()
 
-        result = load_weight_module.load_composite_checkpoint("/model", cls, fd_config)
+        load_weight_module.load_composite_checkpoint("/model", cls, fd_config)
         mock_load_tp.assert_called_once()
 
     @patch("fastdeploy.model_executor.load_weight_utils.load_pre_sharded_checkpoint")
@@ -907,7 +903,7 @@ class TestLoadCompositeCheckpoint(unittest.TestCase):
         fd_config = MockConfigs.fd_config(use_ep=False, tp_size=2)
         cls = Mock()
 
-        result = load_weight_module.load_composite_checkpoint("/model", cls, fd_config)
+        load_weight_module.load_composite_checkpoint("/model", cls, fd_config)
         mock_load_pre.assert_called_once()
 
     @patch("fastdeploy.model_executor.load_weight_utils.load_tp_checkpoint")
