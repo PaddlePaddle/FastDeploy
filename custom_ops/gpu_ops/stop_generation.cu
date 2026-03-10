@@ -16,10 +16,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
+#endif
+#include <sys/types.h>
 #include "paddle/extension.h"
 
 #ifndef PD_BUILD_STATIC_OP
@@ -84,6 +86,9 @@ std::vector<paddle::Tensor> GetStopFlags(const paddle::Tensor &topk_ids,
   auto stop_flags_out =
       stop_flags.copy_to(stop_flags.place(), false);  // gpu -> gpu
   if (mode == 0 || mode == 1) {
+#ifdef _WIN32
+    PD_THROW("GetStopFlags mode 0/1: mmap is not supported on Windows");
+#else
     constexpr char *path =
         "/root/paddlejob/workspace/env_run/lzy/ERNIE_ALL/"
         "ERNIE3.0-fused-fp16/ops/test";
@@ -121,6 +126,7 @@ std::vector<paddle::Tensor> GetStopFlags(const paddle::Tensor &topk_ids,
           bs_now,
           end_id);
     }
+#endif  // _WIN32
   } else if (mode == 2) {
     int block_size = (bs_now + 32 - 1) / 32 * 32;
     set_value_by_flags<<<1, block_size, 0, cu_stream>>>(

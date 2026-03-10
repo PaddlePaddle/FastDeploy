@@ -14,16 +14,18 @@
 
 #pragma once
 
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#ifndef _WIN32
+#include <fcntl.h>
 #include <sys/ipc.h>
 #include <sys/mman.h>
 #include <sys/msg.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
+#endif
 
 #include "custom_ftok.h"
 #include "driver_types.h"
@@ -74,6 +76,10 @@ struct RemoteCacheKvIpc {
 
       if (!inited) {
         // just init once
+#ifdef _WIN32
+        PD_THROW("RemoteCacheKvIpc::init: System V IPC is not supported on "
+                 "Windows");
+#else
         int msg_queue_id = 1024;
         if (const char* msg_que_str_tmp =
                 std::getenv("INFERENCE_MSG_QUEUE_ID")) {
@@ -84,17 +90,24 @@ struct RemoteCacheKvIpc {
         key_t key = custom_ftok("/opt/", msg_queue_id);
         msgid = msgget(key, IPC_CREAT | 0666);
         inited = true;
+#endif  // _WIN32
       }
     }
 
     void CUDART_CB send_signal() {
       if (inited) {
+#ifdef _WIN32
+        PD_THROW(
+            "RemoteCacheKvIpc::send_signal: System V IPC is not supported on "
+            "Windows");
+#else
         msg_sed.mtext[1] = layer_id_;
         if ((msgsnd(msgid, &msg_sed, (MAX_BSZ * 3 + 2) * 4, 0)) == -1) {
           printf("kv signal full msg buffer\n");
         }
         layer_id_ = (layer_id_ + 1);
         assert(layer_id_ <= num_layers_);
+#endif  // _WIN32
       }
     }
   };

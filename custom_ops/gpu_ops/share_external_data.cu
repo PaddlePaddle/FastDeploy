@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
+#include <sys/types.h>
+#ifndef _WIN32
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <stdio.h>
+#include <unistd.h>
+#endif
 #include "cuda_multiprocess.h"
 #include "helper.h"
 #include "paddle/phi/core/tensor_meta.h"

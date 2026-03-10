@@ -14,8 +14,10 @@
 
 #include <stdio.h>
 #include <string.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#endif
 #include <sys/types.h>
 #include "custom_ftok.h"
 #include "paddle/extension.h"
@@ -40,6 +42,9 @@ void GetOutputTopK(const paddle::Tensor& x,
                    int k,
                    int64_t rank_id,
                    bool wait_flag) {
+#ifdef _WIN32
+  PD_THROW("GetOutputTopK: System V IPC is not supported on Windows");
+#else
   static struct msgdata msg_rcv;
   int msg_queue_id = 1;
 
@@ -101,6 +106,7 @@ void GetOutputTopK(const paddle::Tensor& x,
     ranks_data[i] = (int64_t)msg_rcv.mtext_ranks[i];
   }
   return;
+#endif  // _WIN32
 }
 
 PD_BUILD_STATIC_OP(get_output_topk)

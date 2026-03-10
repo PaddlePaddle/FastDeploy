@@ -16,8 +16,10 @@
 
 #include <stdio.h>
 #include <string.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#endif
 #include <sys/types.h>
 #include "paddle/extension.h"
 

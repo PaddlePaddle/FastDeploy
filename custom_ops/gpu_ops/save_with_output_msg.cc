@@ -21,6 +21,9 @@ void save_kernel(const paddle::Tensor& x,
                  int64_t rank_id,
                  int msg_queue_id,
                  bool save_each_rank) {
+#ifdef _WIN32
+  PD_THROW("save_kernel: System V IPC is not supported on Windows");
+#else
   const int64_t* x_data = x.data<int64_t>();
   static struct msgdata msg_sed;
   const int32_t* preempted_idx_data = preempted_idx.data<int32_t>();
@@ -100,6 +103,7 @@ void save_kernel(const paddle::Tensor& x,
     printf("full msg buffer\n");
   }
   return;
+#endif  // _WIN32
 }
 
 void SaveOutMmsg(const paddle::Tensor& x,

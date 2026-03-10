@@ -274,6 +274,10 @@ void Schedule(const paddle::Tensor &stop_flags,
            rank_id,
            step_lens_cpu.data<int>()[0]);
     const int64_t *x_data = next_tokens.data<int64_t>();
+#ifdef _WIN32
+    PD_THROW(
+        "StepReschedule: System V IPC is not supported on Windows");
+#else
     static struct msgdata msg_sed;
     int msg_queue_id = rank_id;
     if (const char *inference_msg_queue_id_env_p =
@@ -313,6 +317,7 @@ void Schedule(const paddle::Tensor &stop_flags,
     if ((msgsnd(msgid, &msg_sed, (MAX_BSZ + 2) * 4, 0)) == -1) {
       printf("full msg buffer\n");
     }
+#endif  // _WIN32
   }
 }
 

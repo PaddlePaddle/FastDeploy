@@ -14,8 +14,10 @@
 
 #include <stdio.h>
 #include <string.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#endif
 #include <sys/types.h>
 #include "../speculate_msg.h"
 #include "../../custom_ftok.h"
@@ -36,6 +38,9 @@ void MTPSaveFirstToken(const paddle::Tensor& x,
                        int msg_queue_id,
                        bool save_each_rank,
                        bool skip_chunk_prefill) {
+#ifdef _WIN32
+  PD_THROW("MTPSaveFirstToken: System V IPC is not supported on Windows");
+#else
   if (!save_each_rank && rank_id > 0) {
     return;
   }
@@ -155,6 +160,7 @@ void MTPSaveFirstToken(const paddle::Tensor& x,
     printf("full msg buffer\n");
   }
   return;
+#endif  // _WIN32
 }
 
 void MTPSaveFirstTokenStatic(const paddle::Tensor& x,

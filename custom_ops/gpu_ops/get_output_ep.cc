@@ -14,8 +14,10 @@
 
 #include <stdio.h>
 #include <string.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#endif
 #include <sys/types.h>
 #include "custom_ftok.h"
 #include "msg_utils.h"
@@ -29,6 +31,9 @@
 void GetOutputKVSignal(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool wait_flag) {
+#ifdef _WIN32
+  PD_THROW("GetOutputKVSignal: System V IPC is not supported on Windows");
+#else
   int msg_queue_id = 1024;
   if (const char* msg_que_str_tmp = std::getenv("INFERENCE_MSG_QUEUE_ID")) {
     std::string msg_que_str(msg_que_str_tmp);
@@ -57,12 +62,16 @@ void GetOutputKVSignal(const paddle::Tensor& x,
     out_data[i] = msg_rcv.mtext[i];
   }
   return;
+#endif  // _WIN32
 }
 
 void GetOutputEp(const paddle::Tensor& x,
                  int64_t rank_id,
                  bool wait_flag,
                  int msg_queue_id) {
+#ifdef _WIN32
+  PD_THROW("GetOutputEp: System V IPC is not supported on Windows");
+#else
   static struct msgdata msg_rcv;
   if (const char* inference_msg_queue_id_env_p =
           std::getenv("INFERENCE_MSG_QUEUE_ID")) {
@@ -108,6 +117,7 @@ void GetOutputEp(const paddle::Tensor& x,
 #endif
 
   return;
+#endif  // _WIN32
 }
 
 void GetOutputEPStatic(const paddle::Tensor& x,

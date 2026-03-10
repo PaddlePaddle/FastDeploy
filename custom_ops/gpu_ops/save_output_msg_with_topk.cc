@@ -14,8 +14,10 @@
 
 #include <stdio.h>
 #include <string.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#endif
 #include <sys/types.h>
 #include "custom_ftok.h"
 #include "paddle/extension.h"
@@ -42,6 +44,9 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
                      const paddle::Tensor& not_need_stop,
                      const paddle::Tensor& preempted_idx,
                      int64_t rank_id) {
+#ifdef _WIN32
+  PD_THROW("SaveOutMmsgTopK: System V IPC is not supported on Windows");
+#else
   if (rank_id > 0) {
     return;
   }
@@ -145,6 +150,7 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
     printf("full msg buffer\n");
   }
   return;
+#endif  // _WIN32
 }
 
 PD_BUILD_STATIC_OP(save_output_topk)

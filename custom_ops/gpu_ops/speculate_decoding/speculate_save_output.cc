@@ -14,8 +14,10 @@
 
 #include <stdio.h>
 #include <string.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#endif
 #include <sys/types.h>
 #include "paddle/extension.h"
 #include "../custom_ftok.h"
@@ -36,6 +38,10 @@ void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
                                 int msg_queue_id,
                                 int save_each_rank,
                                 bool skip_prefill) {
+#ifdef _WIN32
+  PD_THROW(
+      "SpeculateSaveWithOutputMsg: System V IPC is not supported on Windows");
+#else
   // printf("enter save output");
   if (!save_each_rank && rank_id > 0) {
     return;
@@ -133,6 +139,7 @@ void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
     printf("full msg buffer\n");
   }
   return;
+#endif  // _WIN32
 }
 
 void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
