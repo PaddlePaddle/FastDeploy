@@ -23,6 +23,7 @@
 #pragma GCC diagnostic pop
 
 #include "helper.h"
+#include "../cccl_compat.h"  // CCCL 3.0 compatibility
 
 // This kernel is specifically designed for w4afp8 optimizations
 // Uses CUB BlockReduce for efficient parallel reduction
@@ -47,7 +48,8 @@ __global__ void compute_max_tokens_from_prefix_sum_kernel(
   }
 
   // Use CUB BlockReduce to find maximum value across all threads
-  int64_t block_max = BlockReduceT(temp_storage).Reduce(local_max, cub::Max());
+  int64_t block_max =
+      BlockReduceT(temp_storage).Reduce(local_max, fd_cub_compat::Max());
 
   if (tid == 0) {
     *max_tokens_output = block_max;

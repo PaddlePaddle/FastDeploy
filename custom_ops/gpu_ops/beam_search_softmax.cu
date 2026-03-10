@@ -30,6 +30,7 @@ namespace cub = hipcub;
 #include <algorithm>
 #include "helper.h"
 #include "stdint.h"
+#include "cccl_compat.h"  // CCCL 3.0 compatibility
 
 #define FLT_MAX 1e38
 
@@ -368,7 +369,7 @@ __launch_bounds__(THREADBLOCK_SIZE, 1) __global__
 
   using KVPair = cub::KeyValuePair<int, T>;
   KVPair topKVPairPartial{vocab_size - 1, -MAX_T_VAL};
-  cub::ArgMax argmax;
+  fd_cub_compat::ArgMax argmax;
 
   T const *local_logits = logits + beam_batch_id * vocab_size;
 #pragma unroll 1
@@ -595,7 +596,7 @@ __launch_bounds__(THREADBLOCK_SIZE) __global__
     typename BlockReduceMD::TempStorage md;
   } smemReduceBuffer;
 
-  cub::ArgMax argmax;
+  fd_cub_compat::ArgMax argmax;
   MD partial_md{-MAX_T_VAL, 0.0f};
   KVPair topKVPair{vocab_size - 1, -MAX_T_VAL};
 
