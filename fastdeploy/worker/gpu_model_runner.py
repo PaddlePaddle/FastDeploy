@@ -885,6 +885,7 @@ class GPUModelRunner(ModelRunnerBase):
                 ):  # In PD, we continue to decode after P generate first token
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                     self.exist_prefill_flag = False
+                    self._cached_launch_token_num = -1
                     if self.speculative_decoding:
                         # D speculate decode, seq_lens_this_time = length + 1
                         self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length + 1
