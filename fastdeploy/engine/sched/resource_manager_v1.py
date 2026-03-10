@@ -232,6 +232,17 @@ class ResourceManagerV1(ResourceManager):
         # Scheduler-side requests that have not been moved into resource manager waiting queue yet.
         self.scheduler_unhandled_request_num = 0
 
+        # SWA recycle
+        self.request_head_recycle_upto = {}
+        self.swa_window_size = getattr(self.config.model_config, "sliding_window", 0)
+
+        if self.enable_head_wise_kv_cache:
+            # To do：
+            # swa_kv_head_indices需要根据模型设置赋值
+            self.swa_kv_head_indices = []
+        else:
+            self.head_wise_kv_cache = None
+
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
 
@@ -729,6 +740,77 @@ class ResourceManagerV1(ResourceManager):
         # Compatible with scenarios without images and videos.
         return num_new_tokens
 
+    def _get_swa_recycle_start_block(self):
+        # prepare for sink size
+        return 0
+
+    def _get_swa_recycle_end_block(self, total_tokens):
+        block_size = self.config.cache_config.block_size
+        window_size = self.swa_window_size or 0
+        if window_size <= 0 or total_tokens <= window_size:
+            return 0
+
+        return max(0, (total_tokens - window_size) // block_size)
+
+    def _recycle_request_swa_head_cache_helper(
+        self,
+        request,
+        head_idx,
+        start_block_idx,
+        end_block_idx,
+    ):
+        if not hasattr(request, "block_tables_3d") or not request.block_tables_3d:
+            return
+        if head_idx >= len(request.block_tables_3d):
+            return
+
+        row = request.block_tables_3d[head_idx]
+        if start_block_idx >= len(row):
+            return
+
+        end_block_idx = min(end_block_idx, len(row))
+        if end_block_idx <= start_block_idx:
+            return
+
+        cache_ids_to_recycle = []
+        for i in range(start_block_idx, end_block_idx):
+            cid = row[i]
+            if cid is not None and cid >= 0:
+                cache_ids_to_recycle.append(cid)
+                row[i] = -1
+
+        if cache_ids_to_recycle:
+            self.cache_manager.recycle_gpu_blocks(cache_ids_to_recycle, request.request_id)
+
+    def recycle_request_swa_head_cache(self, request):
+        if not self.enable_head_wise_kv_cache:
+            return
+        if self.config.cache_config.enable_prefix_caching:
+            llm_logger.error("not support enable_prefix_caching and enable_head_wise_kv_caching at the same time")
+            return
+        if not hasattr(request, "block_tables_3d") or not request.block_tables_3d:
+            return
+        if not self.swa_kv_head_indices:
+            return
+
+        total_tokens = request.num_total_tokens
+        start_block = self._get_swa_recycle_start_block()
+        end_block = self._get_swa_recycle_end_block(total_tokens)
+
+        if end_block <= start_block:
+            return
+
+        if request.request_id not in self.request_head_recycle_upto:
+            self.request_head_recycle_upto[request.request_id] = [0] * self.kv_num_heads
+
+        recycle_upto = self.request_head_recycle_upto[request.request_id]
+
+        for head_idx in self.swa_kv_head_indices:
+            old_upto = max(recycle_upto[head_idx], start_block)
+            if end_block > old_upto:
+                self._recycle_request_swa_head_cache_helper(request, head_idx, old_upto, end_block)
+                recycle_upto[head_idx] = end_block
+
     def exist_mm_prefill(self, scheduled_reqs):
         for request in scheduled_reqs:
             if request.task_type == RequestType.PREFILL and self._is_mm_request(request):
@@ -801,6 +883,13 @@ class ResourceManagerV1(ResourceManager):
                         req_index += 1
                         need_abort_requests.append(request)
                         continue
+
+                    if (
+                        self.enable_head_wise_kv_cache
+                        and self.swa_kv_head_indices
+                        and not self.config.cache_config.enable_prefix_caching
+                    ):  # recycle for swa
+                        self.recycle_request_swa_head_cache(request)
 
                     if (
                         self.allocated_slots(request) - request.num_total_tokens
@@ -1630,6 +1719,7 @@ class ResourceManagerV1(ResourceManager):
             request.extend_block_tables = []
             del self.reuse_block_num_map[request.request_id]
             del self.need_block_num_map[request.request_id]
+        self.request_head_recycle_upto.pop(request.request_id, None)
 
     def finish_requests_async(self, request_ids: Union[str, Iterable[str]]):
         return self.finish_execution_pool.submit(self.finish_requests, request_ids)

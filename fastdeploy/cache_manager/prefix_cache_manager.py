@@ -604,7 +604,7 @@ class PrefixCacheManager:
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
-    def _recycle_gpu_blocks_head_wise(self, cache_ids_2d, req_id=None):
+    def _recycle_gpu_blocks_head_wise(self, cache_ids, req_id=None):
         """
         Recycle cache_ids for head-wise mode.
         """
@@ -614,15 +614,44 @@ class PrefixCacheManager:
         ):
             logger.warning("Prefix tree is not normal, skip recycle gpu blocks")
             return
-        if not isinstance(cache_ids_2d, list):
-            cache_ids_2d = [cache_ids_2d]
+        if cache_ids is None:
+            return
 
-        logger.info(
+        if not isinstance(cache_ids, list):
+            cache_ids = [cache_ids]
+
+        logger.debug(
             f"req_id:{req_id} recycle head-wise cache_ids, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
-        for head_ids in cache_ids_2d:
-            for cache_id in head_ids:
-                heapq.heappush(self.gpu_free_block_list, cache_id)
+
+        normalized = []
+        for item in cache_ids:
+            if isinstance(item, list):
+                for cid in item:
+                    if cid is not None and cid >= 0:
+                        normalized.append(cid)
+            else:
+                if item is not None and item >= 0:
+                    normalized.append(item)
+
+        normalized = list(dict.fromkeys(normalized))
+        logger.debug(f"req_id:{req_id} recycle head-wise cache_ids after normalization: {normalized}")
+
+        if not normalized:
+            logger.debug("No valid cache_ids received, skip recycling.")
+            return
+
+        if len(self.gpu_free_block_list) + len(normalized) > self.total_cache_ids:
+            logger.error(
+                f"The number of free gpu blocks {len(self.gpu_free_block_list)} plus the number of recycled "
+                f"gpu blocks {len(normalized)} exceeds the total number of cache ids {self.total_cache_ids} \n"
+                f"this indicates a block allocation and deallocation error, recycled blocks will be discarded {normalized}"
+            )
+            return
+
+        for cache_id in normalized:
+            heapq.heappush(self.gpu_free_block_list, cache_id)
+
         logger.debug(f"req_id:{req_id} recycle head-wise cache_ids end")
         free_block_count = len(self.gpu_free_block_list) // self.kv_num_heads
         main_process_metrics.free_gpu_block_num.set(free_block_count)
