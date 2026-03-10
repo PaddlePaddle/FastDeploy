@@ -260,6 +260,20 @@ class FusedMoE(nn.Layer):
             tp_size={self.tp_size}."
         )
 
+    def _load_in_scale_weight(self, param, expert_id, loaded_weight):
+        # only spport ernie now
+        expert_param = param[expert_id - self.expert_id_offset]
+        loaded_weight = get_tensor(loaded_weight)
+        if len(expert_param.shape) != len(loaded_weight.shape):
+            loaded_weight = loaded_weight.reshape(expert_param.shape)
+        assert expert_param.shape == loaded_weight.shape, (
+            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
+        )
+        if expert_param.dtype != loaded_weight.dtype:
+            loaded_weight = loaded_weight.cast(loaded_weight.dtype)
+        param[expert_id - self.expert_id_offset].copy_(loaded_weight, False)
+
+
     def weight_loader(
         self,
         param,
@@ -291,13 +305,19 @@ class FusedMoE(nn.Layer):
         if self.ep_size > 1 or weight_need_transpose:
             loaded_weight = get_tensor(loaded_weight)
 
+
+        if SHARD_ID_TO_SHARDED_DIM["gate"] is None and SHARD_ID_TO_SHARDED_DIM["up"] is None:
+            # in scale
+            self._load_in_scale_weight(param, expert_id, loaded_weight)
+            return
+
         if shard_id is None:
             # 1.gate up fused in disk
             if weight_need_transpose:
                 loaded_weight = loaded_weight.transpose([1, 0])
-            print("debug point, weight_loader", expert_id, "expert_id_offset", self.expert_id_offset)
-            print("debug point, weight_loader, param", param, "dim", SHARD_ID_TO_SHARDED_DIM["gate"])
-            print("debug point, weight_loader, param[expert_id - self.expert_id_offset]", param[expert_id - self.expert_id_offset])
+            # print("debug point, weight_loader", expert_id, "expert_id_offset", self.expert_id_offset)
+            # print("debug point, weight_loader, param", param, "dim", SHARD_ID_TO_SHARDED_DIM["gate"])
+            # print("debug point, weight_loader, param[expert_id - self.expert_id_offset]", param[expert_id - self.expert_id_offset])
 
             shard_param = param[expert_id - self.expert_id_offset]
             if shard_param.shape == []:
@@ -405,7 +425,7 @@ class FusedMoE(nn.Layer):
             param.tensor_track.mark(start=0, batch_id=expert_id - self.expert_id_offset)
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU and opensource weight
         if expert_param.shape != loaded_weight.shape:
-            print("debug point, expert_param.shape != loaded_weight.shape", expert_param.shape, loaded_weight.shape)
+            # print("debug point, expert_param.shape != loaded_weight.shape", expert_param.shape, loaded_weight.shape)
             loaded_weight = loaded_weight.transpose([1, 0])
         assert expert_param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"

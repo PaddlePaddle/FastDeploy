@@ -685,7 +685,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             # Map checkpoint suffixes to FD naming convention.
             # This is needed because rename_offline_ckpt_suffix_to_fd_suffix is bypassed
             # when is_checkpoint_bf16=True (e.g. MixQuantConfig with w4a8).
-            print("loaded_weight_name: ", loaded_weight_name)
+            # print("loaded_weight_name: ", loaded_weight_name)
             # if loaded_weight_name.endswith(".activation_scale"):
             #     loaded_weight_name = loaded_weight_name[: -len(".activation_scale")] + ".in_scale"
             # elif loaded_weight_name.endswith(".quant_weight"):
@@ -717,11 +717,11 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             # Get weight loader from parameter and set weight
             weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
             sig = inspect.signature(weight_loader)
-            print("sig.parameters: ",sig.parameters)
-            print("expert_id: ", expert_id)
-            print("shard_id: ", shard_id)
-            print("model_param_name: ", model_param_name)
-            print("weight_loader: ", weight_loader)
+            # print("sig.parameters: ",sig.parameters)
+            # print("expert_id: ", expert_id)
+            # print("shard_id: ", shard_id)
+            # print("model_param_name: ", model_param_name)
+            # print("weight_loader: ", weight_loader)
             if "expert_id" in sig.parameters:
                 weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
             else:
@@ -747,18 +747,12 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         """
         empty_input_forward
         """
-        import sys, time as _time
-        _t0 = _time.time()
-        print(f"[DEBUG empty_input_forward] START moe_start={self._moe_start}, num_layers={self._num_layers}", flush=True, file=sys.stderr)
         fake_hidden_states = paddle.empty(
             shape=[0, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
         for i in range(self._moe_start, self._num_layers):
-            print(f"[DEBUG empty_input_forward] layer {i} starting, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
             self.ernie.layers[i].mlp.experts(fake_hidden_states, self.ernie.layers[i].mlp.gate, forward_meta)
-            print(f"[DEBUG empty_input_forward] layer {i} done, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
-        print(f"[DEBUG empty_input_forward] ALL DONE, total={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
     def forward(
         self,

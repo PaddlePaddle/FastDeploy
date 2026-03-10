@@ -318,6 +318,7 @@ class XPUMoEMethod(MoEMethodBase):
                 set_weight_attrs(
                     layer.down_proj_in_scale,
                     {
+                        "SHARD_ID_TO_SHARDED_DIM": {"gate": None, "up": None, "down": None},
                         "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
                     },
                 )
@@ -325,12 +326,13 @@ class XPUMoEMethod(MoEMethodBase):
                 set_weight_attrs(
                     layer.up_gate_proj_in_scale,
                     { 
+                        "SHARD_ID_TO_SHARDED_DIM": {"gate": None, "up": None, "down": None},
                         "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
                     },
                 )
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
-        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = layer.extract_moe_ffn_weights(state_dict)
         for weights in [up_gate_proj_weights, down_proj_weights]:
             for idx, weight in enumerate(weights):
                 weights[idx] = weight.transpose([1, 0])
@@ -339,6 +341,108 @@ class XPUMoEMethod(MoEMethodBase):
 
         layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
         layer.down_proj_weight.set_value(stacked_down_proj_weights)
+
+        # self.load_w4a8_scale_weights(
+        #     layer, layer.weight_key_map, state_dict, logical_expert_ids, ep_rank_to_expert_id_list
+        # )
+
+
+    # def load_w4a8_scale_weights(
+    #     self,
+    #     layer: nn.Layer,
+    #     weight_key_map: dict,
+    #     state_dict: dict,
+    #     logical_expert_ids: paddle.Tensor,
+    #     ep_rank_to_expert_id_list: list,
+    # ):
+    #     """
+    #     Get w4a8 weights from state dict and process them.
+    #     Args:
+    #         layer (nn.Layer): The layer to add parameters to.
+    #         weight_key_map (dict): The weight key map.
+    #         state_dict (dict): The state dict.
+    #     """
+
+    #     def _extract_scale_tensor(layer: nn.Layer, state_dict, key_template, expert_idx):
+    #         return get_tensor(
+    #             (
+    #                 state_dict.pop(key_template.format(expert_idx))
+    #                 if key_template.format(expert_idx) in state_dict
+    #                 else key_template.format(expert_idx)
+    #             ),
+    #             layer.fd_config.model_config.model,
+    #         )
+
+    #     def _process_in_scale(name: str, in_scales: list[paddle.Tensor]):
+    #         processed_in_scale = 1 / paddle.concat(in_scales)
+    #         getattr(layer, name).set_value(processed_in_scale)
+    #         return processed_in_scale
+
+    #     def _process_weight_scale(
+    #         name: str,
+    #         weight_scales: list[paddle.Tensor],
+    #         processed_in_scale: paddle.Tensor,
+    #     ):
+    #         processed_weight_scale = (
+    #             paddle.stack(weight_scales, axis=0) / (127 * 112) / processed_in_scale[:, None]
+    #         ).cast(paddle.get_default_dtype())
+    #         getattr(layer, name).set_value(processed_weight_scale)
+
+    #     # 1. Init scale containers and maps
+    #     up_gate_proj_weight_scales = []
+    #     down_proj_weight_scales = []
+    #     up_gate_proj_in_scales_all_experts = []
+    #     up_gate_proj_in_scales = []
+    #     down_proj_in_scales = []
+
+    #     scale_weight_map = {
+    #         "up_gate_proj_weight_scale": up_gate_proj_weight_scales,
+    #         "down_proj_weight_scale": down_proj_weight_scales,
+    #         "up_gate_proj_in_scale": up_gate_proj_in_scales,
+    #         "down_proj_in_scale": down_proj_in_scales,
+    #     }
+    #     scale_key_map = {
+    #         "up_gate_proj_weight_scale": weight_key_map.get("up_gate_proj_expert_weight_scale_key", None),
+    #         "down_proj_weight_scale": weight_key_map.get("down_proj_expert_weight_scale_key", None),
+    #         "up_gate_proj_in_scale": weight_key_map.get("up_gate_proj_expert_in_scale_key", None),
+    #         "down_proj_in_scale": weight_key_map.get("down_proj_expert_in_scale_key", None),
+    #     }
+    #     for name, value in scale_key_map.items():
+    #         if value is None:
+    #             raise ValueError(f"scale {name} should not be none in w4a8 mode.")
+
+    #     # 2. Extract scale tensor from state dict
+    #     if layer.ep_size > 1:
+    #         for expert_idx in ep_rank_to_expert_id_list:
+    #             scale_tensor = get_tensor(
+    #                 (
+    #                     state_dict[scale_key_map["up_gate_proj_in_scale"].format(expert_idx)]
+    #                     if scale_key_map["up_gate_proj_in_scale"].format(expert_idx) in state_dict
+    #                     else scale_key_map["up_gate_proj_in_scale"].format(expert_idx)
+    #                 ),
+    #                 layer.fd_config.model_config.model,
+    #             )
+    #             up_gate_proj_in_scales_all_experts.append(1 / scale_tensor)
+    #         getattr(layer, "up_gate_proj_in_scale_all_experts").set_value(
+    #             paddle.concat(up_gate_proj_in_scales_all_experts)
+    #         )
+
+    #     for expert_idx in logical_expert_ids:
+    #         for name, scale_key_template in scale_key_map.items():
+    #             scale_tensor = _extract_scale_tensor(layer, state_dict, scale_key_template, expert_idx)
+    #             scale_weight_map[name].append(scale_tensor)
+
+    #     # 3. Process scale tensor and set to layer
+    #     in_scales = []
+    #     for in_scale_name in ["up_gate_proj_in_scale", "down_proj_in_scale"]:
+    #         in_scales.append(_process_in_scale(in_scale_name, scale_weight_map[in_scale_name]))
+
+    #     for i, weight_scale_name in enumerate(["up_gate_proj_weight_scale", "down_proj_weight_scale"]):
+    #         _process_weight_scale(
+    #             weight_scale_name,
+    #             scale_weight_map[weight_scale_name],
+    #             in_scales[i],
+    #         )
 
     def apply_tp(
         self,
@@ -465,21 +569,24 @@ class XPUMoEMethod(MoEMethodBase):
         print(f"[DEBUG apply_ep_prefill] START x.shape={x.shape}, quant={self.xpu_moe_quant_type}", flush=True, file=sys.stderr)
         print("[DEBUG apply_ep_prefill input] x: ", x)
         gate_out = gate(x.cast("float32"))
-        print(f"[DEBUG apply_ep_prefill] gate done, gate_out.shape={gate_out.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+        print(f"[DEBUG apply_ep_prefill] gate done, gate_out.shape={gate_out}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
-        print(f"[DEBUG apply_ep_prefill] moe_select done, topk_idx.shape={topk_idx.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
-
+        print(f"[DEBUG apply_ep_prefill] moe_select done, topk_idx={topk_idx}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+        print(f"[DEBUG apply_ep_prefill] moe_select done, topk_weights={topk_weights}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
         # 2. Dynamic compute blockwise quantization scales
         if "a_tokenwise_int8" in self.xpu_moe_quant_type:
             x, x_scale = quant2d_per_token(x)
             x_scale = x_scale.unsqueeze(1)
         else:
             x_scale = None
-
+        # x_scale = getattr(layer, self.added_in_scale_attrs[1])
+        print("self.added_in_scale_attrs[0]: ", getattr(layer, self.added_in_scale_attrs[0]))
+        print("self.added_in_scale_attrs[1]: ", getattr(layer, self.added_in_scale_attrs[1]))
+        print("x_scale: ", x_scale)
+        print("x:", x)
         # 3. EP Dispatch
-        print(f"[DEBUG apply_ep_prefill] calling EP dispatch...", flush=True, file=sys.stderr)
         (
             recv_x,
             recv_topk_idx,
@@ -502,13 +609,18 @@ class XPUMoEMethod(MoEMethodBase):
 
         # 4. Compute ffn
         token_all_num = sum(recv_num_tokens_per_expert_list)
-        print(f"[DEBUG apply_ep_prefill] token_all_num={token_all_num}, recv_x type={type(recv_x)}, recv_x.shape={recv_x.shape if hasattr(recv_x,'shape') else 'N/A'}", flush=True, file=sys.stderr)
+        print(f"[DEBUG apply_ep_prefill] token_all_num={token_all_num}, recv_x type={type(recv_x)}, recv_x.shape={recv_x if hasattr(recv_x,'shape') else 'N/A'}", flush=True, file=sys.stderr)
         if "a_expertwise_int8" in self.xpu_moe_quant_type:
             moe_dispatch_scale = getattr(layer, self.added_in_scale_attrs[0])
         elif "a_tokenwise_int8" in self.xpu_moe_quant_type:
             moe_dispatch_scale = recv_x_scales
         else:
             moe_dispatch_scale = None
+        print("moe_dispatch_scale: ", moe_dispatch_scale)
+        print("recv_topk_idx: ", recv_topk_idx)
+        print("recv_topk_weights: ", recv_topk_weights)
+        print("recv_num_tokens_per_expert_list: ", recv_num_tokens_per_expert_list)
+        print("token_all_num: ", token_all_num)
         (
             permute_input,
             permute_indices_per_token,
@@ -524,12 +636,15 @@ class XPUMoEMethod(MoEMethodBase):
             token_all_num,
             self.moe_quant_type,
         )
-        print(f"[DEBUG apply_ep_prefill] ep_moe_expert_dispatch done, permute_input.shape={permute_input.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+        print(f"[DEBUG apply_ep_prefill] ep_moe_expert_dispatch done, ffn1_x_scale_per_token={ffn1_x_scale_per_token}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
-        if "a_expertwise_int8" in self.xpu_moe_quant_type or "a_tokenwise_int8" in self.xpu_moe_quant_type:
+        if "a_expertwise_int8" in self.xpu_moe_quant_type:
+            ffn1_x_scale = getattr(layer, self.added_in_scale_attrs[1])
+        elif "a_tokenwise_int8" in self.xpu_moe_quant_type:
             ffn1_x_scale = ffn1_x_scale_per_token
         else:
             ffn1_x_scale = None
+        print("ffn1_x_scale: ", ffn1_x_scale)
         print(f"[DEBUG apply_ep_prefill] calling compute_ffn...", flush=True, file=sys.stderr)
         ffn_out = self.compute_ffn(
             layer,
@@ -538,6 +653,11 @@ class XPUMoEMethod(MoEMethodBase):
             token_num_lod,
             token_all_num,
         )
+        print("permute_input: ", permute_input)
+        print("token_all_num: ", token_all_num)
+        print("token_num_lod: ", token_num_lod)
+        print("ffn1_x_scale: ", ffn1_x_scale)
+        print("[DEBUG apply_ep_prefill ffn_out] ffn_out: ", ffn_out)
         print(f"[DEBUG apply_ep_prefill] compute_ffn done, ffn_out.shape={ffn_out.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         recv_topk_weights_bf16 = recv_topk_weights.astype("bfloat16")
