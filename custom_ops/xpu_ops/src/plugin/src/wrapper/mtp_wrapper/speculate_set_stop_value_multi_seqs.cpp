@@ -30,6 +30,7 @@ __attribute__((global)) void speculate_set_stop_value_multi_seqs(
     const int* stop_seqs_len,
     const int* seq_lens,
     const int64_t* end_ids,
+    const int64_t* min_tokens,
     const int bs,
     const int accept_tokens_len,
     const int stop_seqs_bs,
@@ -53,6 +54,7 @@ static int cpu_wrapper(Context* ctx,
                        const int* stop_seqs_len,
                        const int* seq_lens,
                        const int64_t* end_ids,
+                       const int64_t* min_tokens,
                        const int bs,
                        const int accept_tokens_len,
                        const int stop_seqs_bs,
@@ -63,6 +65,10 @@ static int cpu_wrapper(Context* ctx,
     int64_t* accept_tokens_now = accept_tokens + bid * accept_tokens_len;
     const int accept_num = accept_nums[bid];
     const int64_t step_idx_now = step_idx[bid];
+    const int64_t min_token_limit = min_tokens[bid];
+
+    const bool can_stop = (step_idx_now >= min_token_limit);
+    if (!can_stop) continue;
     for (int tid = 0; tid < stop_seqs_bs; ++tid) {
       const int stop_seq_len = stop_seqs_len[tid];
       if (stop_seq_len <= 0) continue;
@@ -124,29 +130,33 @@ static int xpu2or3_wrapper(Context* ctx,
                            const int* stop_seqs_len,
                            const int* seq_lens,
                            const int64_t* end_ids,
+                           const int64_t* min_tokens,
                            const int bs,
                            const int accept_tokens_len,
                            const int stop_seqs_bs,
                            const int stop_seqs_max_len,
                            const int pre_ids_len) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  xpu3::plugin::speculate_set_stop_value_multi_seqs<<<ctx->ncluster(),
-                                                      64,
-                                                      ctx->xpu_stream>>>(
-      stop_flags,
-      reinterpret_cast<XPU_INT64*>(accept_tokens),
-      accept_nums,
-      reinterpret_cast<const XPU_INT64*>(pre_ids),
-      reinterpret_cast<const XPU_INT64*>(step_idx),
-      reinterpret_cast<const XPU_INT64*>(stop_seqs),
-      stop_seqs_len,
-      seq_lens,
-      reinterpret_cast<const XPU_INT64*>(end_ids),
-      bs,
-      accept_tokens_len,
-      stop_seqs_bs,
-      stop_seqs_max_len,
-      pre_ids_len);
+  int32_t ret_xre =
+      xpu3::plugin::speculate_set_stop_value_multi_seqs<<<ctx->ncluster(),
+                                                          64,
+                                                          ctx->xpu_stream>>>(
+          stop_flags,
+          reinterpret_cast<XPU_INT64*>(accept_tokens),
+          accept_nums,
+          reinterpret_cast<const XPU_INT64*>(pre_ids),
+          reinterpret_cast<const XPU_INT64*>(step_idx),
+          reinterpret_cast<const XPU_INT64*>(stop_seqs),
+          stop_seqs_len,
+          seq_lens,
+          reinterpret_cast<const XPU_INT64*>(end_ids),
+          reinterpret_cast<const XPU_INT64*>(min_tokens),
+          bs,
+          accept_tokens_len,
+          stop_seqs_bs,
+          stop_seqs_max_len,
+          pre_ids_len);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
@@ -160,6 +170,7 @@ int speculate_set_stop_value_multi_seqs(Context* ctx,
                                         const int* stop_seqs_len,
                                         const int* seq_lens,
                                         const int64_t* end_ids,
+                                        const int64_t* min_tokens,
                                         const int bs_now,
                                         const int accept_tokens_len,
                                         const int stop_seqs_bs,
@@ -192,6 +203,7 @@ int speculate_set_stop_value_multi_seqs(Context* ctx,
                        stop_seqs_len,
                        seq_lens,
                        end_ids,
+                       min_tokens,
                        bs_now,
                        accept_tokens_len,
                        stop_seqs_bs,
@@ -209,6 +221,7 @@ int speculate_set_stop_value_multi_seqs(Context* ctx,
                            stop_seqs_len,
                            seq_lens,
                            end_ids,
+                           min_tokens,
                            bs_now,
                            accept_tokens_len,
                            stop_seqs_bs,

@@ -22,31 +22,23 @@ from paddleformers.utils.log import logger
 
 import fastdeploy
 from fastdeploy.model_executor.layers.moe.ep import deep_ep
+from fastdeploy.model_executor.layers.quantization.fp8_utils import deep_gemm
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import register_custom_python_op
 from fastdeploy.worker.tbo import let_another_thread_run
 
-from ..utils import get_sm_version
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 
 if current_platform.is_cuda():
-    if get_sm_version() == 100:
-        logger.info("Detected sm100, use PFCC DeepGEMM")
-        paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-        from deep_gemm import (
-            m_grouped_fp8_gemm_nt_contiguous,
-            m_grouped_fp8_gemm_nt_masked,
-        )
-    else:
-        from fastdeploy.model_executor.ops.gpu.deep_gemm import (
-            m_grouped_gemm_fp8_fp8_bf16_nt_contiguous as m_grouped_fp8_gemm_nt_contiguous,
-        )
-        from fastdeploy.model_executor.ops.gpu.deep_gemm import (
-            m_grouped_gemm_fp8_fp8_bf16_nt_masked as m_grouped_fp8_gemm_nt_masked,
-        )
+    try:
+        m_grouped_fp8_gemm_nt_contiguous = deep_gemm.m_grouped_fp8_gemm_nt_contiguous
+        m_grouped_fp8_gemm_nt_masked = deep_gemm.m_grouped_fp8_gemm_nt_masked
+    except:
+        m_grouped_fp8_gemm_nt_contiguous = deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous
+        m_grouped_fp8_gemm_nt_masked = deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_masked
 else:
     m_grouped_fp8_gemm_nt_contiguous = None
     m_grouped_fp8_gemm_nt_masked = None
@@ -231,14 +223,26 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 )
             )
 
-        up_gate_proj_weight = (
-            paddle.stack(up_gate_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
-        )
-        down_proj_weight = (
-            paddle.stack(down_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
-        )
-        up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
-        down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
+        if not self.quant_config.deepgemm_scale_ue8m0:
+            up_gate_proj_weight = (
+                paddle.stack(up_gate_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+            )
+            down_proj_weight = (
+                paddle.stack(down_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+            )
+            up_gate_proj_weight_scale = (
+                paddle.stack(up_gate_proj_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
+            )
+            down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
+        else:
+            up_gate_proj_weight = (
+                paddle.stack(up_gate_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+            )
+            down_proj_weight = (
+                paddle.stack(down_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+            )
+            up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0).transpose([0, 2, 1])
+            down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).transpose([0, 2, 1])
 
         name_tensor_map = {
             "up_gate_proj_weight": up_gate_proj_weight,
@@ -247,7 +251,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             "down_proj_weight_scale_inv": down_proj_weight_scale,
         }
         for name, tensor in name_tensor_map.items():
-            getattr(layer, name).set_value(tensor)
+            getattr(layer, name).data = tensor
 
     def apply_ep_prefill(
         self,
@@ -259,7 +263,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         Apply the EP prefill method.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
 
         hidden_size = x.shape[1]
 
@@ -355,7 +360,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 ffn_out,
                 m_indices,
             )
-            del permute_input
 
             # swiglu
             ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
@@ -374,7 +378,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 )
                 ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
 
-            del ffn_out
             ffn_out = paddle.empty(
                 (token_all_num, getattr(layer, self.added_weight_attrs[1]).shape[1]),
                 dtype=paddle.bfloat16,
@@ -386,7 +389,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 ffn_out,
                 m_indices,
             )
-            del ffn_in_x
 
             # prmt back per rank
             tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
@@ -398,7 +400,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 False,  # norm_topk_prob
                 1.0,
             )
-            del ffn_out
         else:
             tmp_ffn_out = paddle.empty([0, hidden_size], paddle.bfloat16)
 
@@ -422,7 +423,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         Apply the EP decoder method.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
@@ -498,7 +500,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         Paddle Use DeepGemm compute Fused MoE.
         below is TP compute method.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
 
         if layer.topk_method == "noaux_tc":
             _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(

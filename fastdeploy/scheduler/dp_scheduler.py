@@ -15,15 +15,15 @@
 """
 
 import logging
+import multiprocessing
 import threading
 import time
-from multiprocessing import Queue
 from typing import Dict, List, Optional
 
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.scheduler.data import ScheduledResponse
 from fastdeploy.scheduler.local_scheduler import LocalScheduler
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import envs, get_logger
 
 
 class DPLocalScheduler(LocalScheduler):
@@ -131,19 +131,52 @@ class DPLocalScheduler(LocalScheduler):
         Returns:
             List of Request objects ready for processing
         """
-        # DP scheduler is used in V1, there is no need to manage request fetching in the scheduler, resource_manager_v1 will do that.
+        if available_blocks <= reserved_output_blocks or batch < 1:
+            self.scheduler_logger.debug(
+                f"Scheduler's resource are insufficient: available_blocks={available_blocks} "
+                f"reserved_output_blocks={reserved_output_blocks} batch={batch} "
+                f"max_num_batched_tokens={max_num_batched_tokens}"
+            )
+            return []
+        required_total_blocks = 0
+        current_prefill_tokens = 0
+        start_batch_time = time.time()
         requests: List[Request] = []
 
         with self.requests_not_empty:
-            batch_ids = self.requests_not_empty.wait_for(
-                lambda: self.ids[self.ids_read_cursor : self.ids_read_cursor + 1],
-                0.005,
-            )
-            if batch_ids:
-                for request_id in batch_ids:
-                    request = self.requests[request_id]
-                    requests.append(request.raw)
-                    self.ids_read_cursor += 1
+            while True:
+                batch_ids = self.requests_not_empty.wait_for(
+                    lambda: self.ids[self.ids_read_cursor : self.ids_read_cursor + batch],
+                    0.005,
+                )
+                if batch_ids:
+                    for request_id in batch_ids:
+                        request = self.requests[request_id]
+                        required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
+                        current_prefill_tokens += request.prompt_tokens_ids_len
+                        required_total_blocks += required_input_blocks + reserved_output_blocks
+                        if required_total_blocks > available_blocks:
+                            break
+
+                        requests.append(request.raw)
+                        self.ids_read_cursor += 1
+                        start_batch_time = time.time()
+                        if current_prefill_tokens > max_num_batched_tokens:
+                            break
+                        if len(requests) >= batch:
+                            break
+                if (
+                    (current_prefill_tokens > max_num_batched_tokens)
+                    or (len(requests) >= batch)
+                    or (time.time() - start_batch_time > envs.FD_EP_BATCHED_TOKEN_TIMEOUT)
+                ):
+                    break
+
+        if batch_ids:
+            if len(batch_ids) > 0 and len(requests) == 0:
+                self.scheduler_logger.debug(
+                    f"Scheduler has put all just-pulled request into the queue: {len(batch_ids)}"
+                )
 
         if len(requests) > 0:
             self.scheduler_logger.info(
@@ -174,10 +207,10 @@ class DPScheduler:
             splitwise_role,
         )
 
-    def start(self, dp_rank: int, request_queues: List[Queue], result_queues: Queue):
+    def start(self, dp_rank: int):
         self.dp_rank = dp_rank
-        self.request_queues = request_queues
-        self.result_queues = result_queues
+        self.request_queues = multiprocessing.Queue()
+        self.result_queues = multiprocessing.Queue()
         self.scheduler_logger = get_logger("dpscheduler", f"dp_scheduler_rank{self.dp_rank}.log")
         self._scheduler.scheduler_logger = self.scheduler_logger
         threading.Thread(target=self._put_requests_to_local).start()
@@ -188,14 +221,14 @@ class DPScheduler:
         for request in requests:
             if not hasattr(request, "dp_rank"):
                 raise ValueError(f"Request object is missing the 'dp_rank' attribute: {request}")
-            self.request_queues[request.dp_rank].put(request)
+            self.request_queues.put(request)
             results.append((request.request_id, None))
         return results
 
     def _put_requests_to_local(self):
         while True:
-            request = self.request_queues[self.dp_rank].get()
-            self.scheduler_logger.info(f"Recieve request from puller, request_id: {request.request_id}")
+            request = self.request_queues.get()
+            self.scheduler_logger.info(f"Receive request from puller, request_id: {request.request_id}")
             self._scheduler.put_requests([request])
 
     def _get_response_from_local(self):
@@ -203,7 +236,7 @@ class DPScheduler:
             results = self._scheduler.get_results()
             if len(results) == 0:
                 continue
-            self.result_queues[self.dp_rank].put(results)
+            self.result_queues.put(results)
 
     def get_requests(
         self,
@@ -224,4 +257,4 @@ class DPScheduler:
         self._scheduler.put_results(results)
 
     def get_results(self) -> Dict[str, List[RequestOutput]]:
-        return self.result_queues[self.dp_rank].get()
+        return self.result_queues.get()

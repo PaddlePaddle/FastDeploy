@@ -14,12 +14,32 @@
 # limitations under the License.
 """
 
+from functools import partial
+
 import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention import IluvatarAttnBackend
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
+
+
+def _patch_before_model_runner():
+    paddle.Tensor.pin_memory = paddle.Tensor.cpu
+    paddle.device.cuda.create_event = partial(paddle.device.custom_device.create_event, device_type="iluvatar_gpu")
+
+    def disable_record(self):
+        pass
+
+    paddle.device.custom_device.Event.record = disable_record
+
+    def disable_synchronize(self):
+        pass
+
+    paddle.device.custom_device.Event.synchronize = disable_synchronize
+
+
+_patch_before_model_runner()
 
 
 class IluvatarModelRunner(GPUModelRunner):
@@ -31,8 +51,6 @@ class IluvatarModelRunner(GPUModelRunner):
         rank: int,
         local_rank: int,
     ):
-        # Iluvatar does not support cudagraph
-        fd_config.graph_opt_config.use_cudagraph = False
         super(IluvatarModelRunner, self).__init__(
             fd_config=fd_config, device=device, device_id=device_id, rank=rank, local_rank=local_rank
         )
@@ -41,11 +59,14 @@ class IluvatarModelRunner(GPUModelRunner):
         assert not self.cache_config.enable_prefix_caching, "Iluvatar does not support prefix caching"
         self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         assert not self.mla_cache, "Iluvatar does not support MLA"
-        assert not self.use_cudagraph, "Iluvatar does not support cudagraph"
+        self.dsa_cache = envs.FD_ATTENTION_BACKEND == "DSA_ATTN"
+        assert not self.dsa_cache, "Iluvatar does not support DSA_ATTN"
         if self.enable_mm:
             assert (
                 not self.cache_config.enable_chunked_prefill
             ), "Iluvatar does not support chunked prefill for VL model"
+
+        print(f"self.use_cudagraph={self.use_cudagraph}")
         # VL neox style = True
         emb_shape = self.share_inputs["rope_emb"].shape
         if emb_shape[-1] == self.model_config.head_dim // 2:
@@ -74,3 +95,20 @@ class IluvatarModelRunner(GPUModelRunner):
             head_dim=self.model_config.head_dim,
         )
         self.attn_backends.append(attn_backend)
+
+    def initialize_kv_cache(self, profile: bool = False) -> None:
+        super(IluvatarModelRunner, self).initialize_kv_cache(profile)
+        paddle.device.empty_cache()
+
+    def initialize_forward_meta(self, is_dummy_or_profile_run=False):
+        super(IluvatarModelRunner, self).initialize_forward_meta(is_dummy_or_profile_run)
+        only_decode = self.forward_meta.attn_backend.prefill_len == 0
+        self.fd_config.model_config.moe_phase.phase = "decode" if only_decode else "prefill"
+
+    def clear_cache(self):
+        super(IluvatarModelRunner, self).clear_cache()
+        paddle.device.empty_cache()
+
+    def clear_parameters(self, pid):
+        super(IluvatarModelRunner, self).clear_parameters(pid)
+        paddle.device.empty_cache()

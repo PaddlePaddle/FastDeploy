@@ -1265,5 +1265,345 @@ class TestAdditionalCoverage:
         trace.trace_req_finish(rid)
 
 
+class TestGetTraceInfoForRequest:
+    """Test cases for get_trace_info_for_request function - comprehensive coverage"""
+
+    def setup_method(self):
+        """Setup test environment"""
+        self.original_env = os.environ.copy()
+        os.environ["TRACES_ENABLE"] = "true"
+        os.environ["FD_SERVICE_NAME"] = "test_service"
+        os.environ["EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4317"
+
+        # Reset global state
+        trace.remote_trace_contexts = {}
+        trace.threads_info = {}
+        trace.reqs_context = {}
+        trace.tracing_enabled = False
+
+    def teardown_method(self):
+        """Restore environment"""
+        os.environ = self.original_env
+
+    def test_get_trace_info_tracing_disabled(self):
+        """Test get_trace_info_for_request when tracing is disabled"""
+        trace.tracing_enabled = False
+
+        result = trace.get_trace_info_for_request("test_rid")
+        assert result is None
+
+    def test_get_trace_info_request_not_found(self):
+        """Test get_trace_info_for_request when request doesn't exist"""
+        trace.process_tracing_init()
+
+        result = trace.get_trace_info_for_request("nonexistent_rid")
+        assert result is None
+
+    def test_get_trace_info_request_not_found_with_suffix(self):
+        """Test get_trace_info_for_request when rid with suffix doesn't exist"""
+        trace.process_tracing_init()
+
+        # Request with _idx suffix where neither rid nor orig_rid exists
+        result = trace.get_trace_info_for_request("nonexistent_rid_123")
+        assert result is None
+
+    def test_get_trace_info_rid_with_suffix_fallback(self):
+        """Test get_trace_info_for_request with rid suffix fallback to orig_rid"""
+        trace.process_tracing_init()
+
+        # Note: split("_")[0] takes only the first part before ANY underscore
+        # So "test_0" -> "test", not the full string before the last underscore
+        rid = "testrid"
+
+        # Create request context directly to avoid FastAPI instrumentation complications
+        from fastdeploy.metrics.trace import TraceReqContext
+
+        mock_span = MagicMock()
+        mock_span.get_span_context.return_value = MagicMock(is_valid=True, trace_id=123456789, span_id=987654321)
+
+        trace.reqs_context[rid] = TraceReqContext(
+            rid=rid,
+            start_time_ns=int(time.time() * 1e9),
+            threads_context={},
+            root_span=mock_span,
+            root_span_context=None,
+        )
+
+        # Request with _idx suffix should fallback to orig_rid (split on _ takes first part)
+        result = trace.get_trace_info_for_request("testrid_0")
+
+        # Should find the request and return trace info
+        assert result is not None
+        assert "trace_id" in result
+        assert "span_id" in result
+        assert result["trace_id"] == format(123456789, "032x")
+        assert result["span_id"] == format(987654321, "016x")
+
+        del trace.reqs_context[rid]
+
+    def test_get_trace_info_from_root_span_valid(self):
+        """Test get_trace_info_for_request from valid root_span"""
+        trace.process_tracing_init()
+        trace.trace_set_thread_info("test_thread")
+
+        rid = "test_valid_root_span"
+        trace.trace_req_start(rid, "")
+
+        result = trace.get_trace_info_for_request(rid)
+
+        assert result is not None
+        assert "trace_id" in result
+        assert "span_id" in result
+        # Verify format: trace_id should be 32 hex chars, span_id 16 hex chars
+        assert len(result["trace_id"]) == 32
+        assert len(result["span_id"]) == 16
+        # Verify they are valid hex strings
+        int(result["trace_id"], 16)
+        int(result["span_id"], 16)
+
+        trace.trace_req_finish(rid)
+
+    def test_get_trace_info_root_span_invalid_span_context(self):
+        """Test get_trace_info_for_request when root_span has invalid span_context"""
+        trace.process_tracing_init()
+        trace.trace_set_thread_info("test_thread")
+
+        rid = "test_invalid_span"
+
+        # Create a request context manually with mocked root_span
+        from fastdeploy.metrics.trace import TraceReqContext
+
+        mock_span = MagicMock()
+        mock_span.get_span_context.return_value = MagicMock(is_valid=False, trace_id=0, span_id=0)
+
+        trace.reqs_context[rid] = TraceReqContext(
+            rid=rid,
+            start_time_ns=int(time.time() * 1e9),
+            threads_context={},
+            root_span=mock_span,
+            root_span_context=None,
+        )
+
+        result = trace.get_trace_info_for_request(rid)
+        # Should return None since span_context is invalid and no root_span_context
+        assert result is None
+
+        del trace.reqs_context[rid]
+
+    def test_get_trace_info_root_span_zero_trace_id(self):
+        """Test get_trace_info_for_request when root_span has trace_id=0"""
+        trace.process_tracing_init()
+
+        rid = "test_zero_trace"
+
+        # Create a request context manually with mocked root_span with trace_id=0
+        from fastdeploy.metrics.trace import TraceReqContext
+
+        mock_span = MagicMock()
+        mock_span.get_span_context.return_value = MagicMock(is_valid=True, trace_id=0, span_id=12345)
+
+        trace.reqs_context[rid] = TraceReqContext(
+            rid=rid,
+            start_time_ns=int(time.time() * 1e9),
+            threads_context={},
+            root_span=mock_span,
+            root_span_context=None,
+        )
+
+        result = trace.get_trace_info_for_request(rid)
+        # Should return None since trace_id is 0
+        assert result is None
+
+        del trace.reqs_context[rid]
+
+    def test_get_trace_info_from_root_span_context(self):
+        """Test get_trace_info_for_request from root_span_context when root_span is None"""
+        trace.process_tracing_init()
+
+        rid = "test_root_span_context"
+
+        # Create a request context with root_span=None but valid root_span_context
+        from fastdeploy.metrics.trace import TraceReqContext
+
+        mock_root_context = MagicMock()
+
+        # Mock the span that will be returned from get_current_span
+        mock_span = MagicMock()
+        mock_span.get_span_context.return_value = MagicMock(is_valid=True, trace_id=123456789, span_id=987654321)
+
+        trace.reqs_context[rid] = TraceReqContext(
+            rid=rid,
+            start_time_ns=int(time.time() * 1e9),
+            threads_context={},
+            root_span=None,
+            root_span_context=mock_root_context,
+        )
+
+        # Patch get_current_span at the source module where it's imported from
+        with mock.patch("opentelemetry.trace.get_current_span", return_value=mock_span):
+            result = trace.get_trace_info_for_request(rid)
+
+            assert result is not None
+            assert "trace_id" in result
+            assert "span_id" in result
+            assert result["trace_id"] == format(123456789, "032x")
+            assert result["span_id"] == format(987654321, "016x")
+
+        del trace.reqs_context[rid]
+
+    def test_get_trace_info_root_span_context_invalid(self):
+        """Test get_trace_info_for_request when root_span_context span is invalid"""
+        trace.process_tracing_init()
+
+        rid = "test_invalid_root_span_context"
+
+        # Create a request context with root_span=None but root_span_context present
+        from fastdeploy.metrics.trace import TraceReqContext
+
+        mock_root_context = MagicMock()
+
+        # Mock the span with invalid context
+        mock_span = MagicMock()
+        mock_span.get_span_context.return_value = MagicMock(is_valid=False, trace_id=0)
+
+        trace.reqs_context[rid] = TraceReqContext(
+            rid=rid,
+            start_time_ns=int(time.time() * 1e9),
+            threads_context={},
+            root_span=None,
+            root_span_context=mock_root_context,
+        )
+
+        with mock.patch("opentelemetry.trace.get_current_span", return_value=mock_span):
+            result = trace.get_trace_info_for_request(rid)
+            # Should return None since span_context is invalid
+            assert result is None
+
+        del trace.reqs_context[rid]
+
+    def test_get_trace_info_get_current_span_exception(self):
+        """Test get_trace_info_for_request when get_current_span raises exception"""
+        trace.process_tracing_init()
+
+        rid = "test_exception"
+
+        # Create a request context with root_span=None but root_span_context present
+        from fastdeploy.metrics.trace import TraceReqContext
+
+        mock_root_context = MagicMock()
+
+        trace.reqs_context[rid] = TraceReqContext(
+            rid=rid,
+            start_time_ns=int(time.time() * 1e9),
+            threads_context={},
+            root_span=None,
+            root_span_context=mock_root_context,
+        )
+
+        # Mock get_current_span to raise exception
+        with mock.patch("opentelemetry.trace.get_current_span", side_effect=Exception("Test exception")):
+            result = trace.get_trace_info_for_request(rid)
+            # Should return None after catching exception
+            assert result is None
+
+        del trace.reqs_context[rid]
+
+    def test_get_trace_info_no_root_span_no_context(self):
+        """Test get_trace_info_for_request when both root_span and root_span_context are None"""
+        trace.process_tracing_init()
+        trace.trace_set_thread_info("test_thread")
+
+        rid = "test_no_root_no_context"
+        trace.trace_req_start(rid, "")
+
+        # Set both root_span and root_span_context to None
+        trace.reqs_context[rid].root_span = None
+        trace.reqs_context[rid].root_span_context = None
+
+        result = trace.get_trace_info_for_request(rid)
+        # Should return None since neither root_span nor root_span_context is available
+        assert result is None
+
+        trace.trace_req_finish(rid)
+
+    def test_get_trace_info_rid_conversion_to_string(self):
+        """Test get_trace_info_for_request converts rid to string"""
+        trace.process_tracing_init()
+        trace.trace_set_thread_info("test_thread")
+
+        # Use integer rid
+        rid = 12345
+        trace.trace_req_start(str(rid), "")
+
+        # Call with integer rid
+        result = trace.get_trace_info_for_request(rid)
+
+        assert result is not None
+        assert "trace_id" in result
+        assert "span_id" in result
+
+        trace.trace_req_finish(str(rid))
+
+    def test_get_trace_info_after_request_finished(self):
+        """Test get_trace_info_for_request after request is finished"""
+        trace.process_tracing_init()
+        trace.trace_set_thread_info("test_thread")
+
+        rid = "test_finished_request"
+        trace.trace_req_start(rid, "")
+        trace.trace_req_finish(rid)
+
+        # Request should be removed from reqs_context
+        result = trace.get_trace_info_for_request(rid)
+        assert result is None
+
+    def test_get_trace_info_from_copy_request(self):
+        """Test get_trace_info_for_request from a copied request (is_copy=True)"""
+        trace.process_tracing_init()
+        trace.trace_set_thread_info("test_thread")
+
+        # Create a request with is_copy=True
+        rid = "test_copy_request"
+        from fastdeploy.metrics.trace import TraceReqContext
+
+        trace.reqs_context[rid] = TraceReqContext(
+            rid=rid,
+            start_time_ns=int(time.time() * 1e9),
+            threads_context={},
+            is_copy=True,
+            root_span=None,
+            root_span_context=None,
+        )
+
+        # Without root_span or root_span_context, should return None
+        result = trace.get_trace_info_for_request(rid)
+        assert result is None
+
+    def test_get_trace_info_with_propagated_context(self):
+        """Test get_trace_info_for_request with propagated context from another process"""
+        trace.process_tracing_init()
+        trace.trace_set_thread_info("test_thread")
+
+        rid1 = "test_original"
+        trace.trace_req_start(rid1, "")
+
+        # Get propagation context
+        context_dict = trace.trace_get_proc_propagate_context(rid1)
+
+        # Set propagated context for new request
+        rid2 = "test_propagated"
+        trace.trace_set_proc_propagate_context(rid2, context_dict)
+
+        # Should be able to get trace info for propagated request
+        result = trace.get_trace_info_for_request(rid2)
+
+        # Note: The result might be None depending on how the context is set up,
+        # but the function should not crash
+        print(result)
+
+        trace.trace_req_finish(rid1)
+        trace.trace_req_finish(rid2)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

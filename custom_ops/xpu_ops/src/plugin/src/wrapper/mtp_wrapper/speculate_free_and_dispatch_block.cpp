@@ -209,31 +209,33 @@ static int xpu3_wrapper(Context *ctx,
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto speculate_free_and_dispatch_block_kernel =
       xpu3::plugin::speculate_free_and_dispatch_block;
-  speculate_free_and_dispatch_block_kernel<<<ctx->ncluster(),
-                                             64,
-                                             ctx->xpu_stream>>>(
-      stop_flags,
-      seq_lens_this_time,
-      seq_lens_decoder,
-      block_tables,
-      encoder_block_lens,
-      is_block_step,
-      step_block_list,
-      step_len,
-      recover_block_list,
-      recover_len,
-      need_block_list,
-      need_block_len,
-      used_list_len,
-      free_list,
-      free_list_len,
-      reinterpret_cast<XPU_INT64 *>(first_token_ids),
-      accept_num,
-      bsz,
-      block_size,
-      block_num_per_seq,
-      max_decoder_block_num,
-      max_draft_tokens);
+  int32_t ret_xre =
+      speculate_free_and_dispatch_block_kernel<<<ctx->ncluster(),
+                                                 64,
+                                                 ctx->xpu_stream>>>(
+          stop_flags,
+          seq_lens_this_time,
+          seq_lens_decoder,
+          block_tables,
+          encoder_block_lens,
+          is_block_step,
+          step_block_list,
+          step_len,
+          recover_block_list,
+          recover_len,
+          need_block_list,
+          need_block_len,
+          used_list_len,
+          free_list,
+          free_list_len,
+          reinterpret_cast<XPU_INT64 *>(first_token_ids),
+          accept_num,
+          bsz,
+          block_size,
+          block_num_per_seq,
+          max_decoder_block_num,
+          max_draft_tokens);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

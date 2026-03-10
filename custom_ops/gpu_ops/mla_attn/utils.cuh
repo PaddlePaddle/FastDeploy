@@ -68,41 +68,53 @@ CUTLASS_HOST_DEVICE auto flatten_1(TensorT tensor) {
   return cute::group_modes<1, rank(tensor_flatten)>(tensor_flatten);
 }
 
-CUTLASS_HOST_DEVICE auto get_gmem_layout(int nnz, int num_heads, int head_dim, int64_t n_stride,
-                                         int64_t h_stride) {
+CUTLASS_HOST_DEVICE auto get_gmem_layout(
+    int nnz, int num_heads, int head_dim, int64_t n_stride, int64_t h_stride) {
   return make_layout(make_shape(nnz, head_dim, num_heads),
                      make_stride(n_stride, cute::_1{}, h_stride));
 }
 
 CUTLASS_HOST_DEVICE auto get_lse_gmem_layout(int nnz, int num_heads) {
-  return make_layout(make_shape(num_heads, nnz), make_stride(cute::_1{}, int64_t(num_heads)));
+  return make_layout(make_shape(num_heads, nnz),
+                     make_stride(cute::_1{}, int64_t(num_heads)));
 }
 
 template <typename MTensor, typename Shape>
-CUTLASS_DEVICE auto get_local_tile_tensor(const MTensor& m_tensor, const Shape& tile_shape,
-                                          int head_idx, int offset, int seq_len) {
-  auto g_offset = local_tile(m_tensor(_, _, head_idx), cute::make_shape(1, get<1>(tile_shape)),
+CUTLASS_DEVICE auto get_local_tile_tensor(const MTensor& m_tensor,
+                                          const Shape& tile_shape,
+                                          int head_idx,
+                                          int offset,
+                                          int seq_len) {
+  auto g_offset = local_tile(m_tensor(_, _, head_idx),
+                             cute::make_shape(1, get<1>(tile_shape)),
                              make_coord(offset, _0{}));
   auto g_sequence =
       make_tensor(g_offset.data(),
-                  make_layout(cute::make_shape(seq_len, get<1>(tile_shape)), g_offset.stride()));
+                  make_layout(cute::make_shape(seq_len, get<1>(tile_shape)),
+                              g_offset.stride()));
   auto g_tensor = local_tile(g_sequence, tile_shape, make_coord(_, _0{}));
   return g_tensor;
 }
 
 template <typename MTensor, typename Shape>
-CUTLASS_DEVICE auto get_lse_local_tile_tensor(const MTensor& m_tensor, const Shape& tile_shape,
-                                              int head_idx, int offset, int seq_len) {
-  auto g_offset = local_tile(m_tensor(head_idx, _), cute::make_shape(_1{}), make_coord(offset));
+CUTLASS_DEVICE auto get_lse_local_tile_tensor(const MTensor& m_tensor,
+                                              const Shape& tile_shape,
+                                              int head_idx,
+                                              int offset,
+                                              int seq_len) {
+  auto g_offset = local_tile(
+      m_tensor(head_idx, _), cute::make_shape(_1{}), make_coord(offset));
 
-  auto g_sequence = make_tensor(g_offset.data(), make_layout(cute::make_shape(seq_len),
-                                                             cute::make_shape(shape<0>(m_tensor))));
+  auto g_sequence =
+      make_tensor(g_offset.data(),
+                  make_layout(cute::make_shape(seq_len),
+                              cute::make_shape(shape<0>(m_tensor))));
   auto g_tensor = local_tile(g_sequence, tile_shape, make_coord(_));
   return g_tensor;
 }
 
-// For SM90, convert acc_layout from ((2, 2, V), MMA_M, MMA_N) to (nrow=(2, MMA_M), ncol=(2, V,
-// MMA_N))
+// For SM90, convert acc_layout from ((2, 2, V), MMA_M, MMA_N) to (nrow=(2,
+// MMA_M), ncol=(2, V, MMA_N))
 template <typename Layout>
 __forceinline__ __device__ auto convert_layout_acc_rowcol(Layout acc_layout) {
   static_assert(decltype(size<0, 0>(acc_layout))::value == 2);
@@ -113,8 +125,8 @@ __forceinline__ __device__ auto convert_layout_acc_rowcol(Layout acc_layout) {
                      make_layout(get<0, 0>(l), get<0, 2>(l), get<2>(l)));
 };
 
-// For SM90, convert acc_layout from ((2, 2, N / 8), MMA_M, MMA_N) to ((2, 2, 2), MMA_M, (N / 16,
-// MMA_N))
+// For SM90, convert acc_layout from ((2, 2, N / 8), MMA_M, MMA_N) to ((2, 2,
+// 2), MMA_M, (N / 16, MMA_N))
 template <typename MMA_traits, typename Layout>
 __forceinline__ __device__ auto convert_layout_acc_Aregs(Layout acc_layout) {
   using X = Underscore;
@@ -122,27 +134,39 @@ __forceinline__ __device__ auto convert_layout_acc_Aregs(Layout acc_layout) {
   static_assert(decltype(size<0, 1>(acc_layout))::value == 2);
   static_assert(decltype(rank(acc_layout))::value == 3);
   static_assert(decltype(rank(get<0>(acc_layout)))::value == 3);
-  auto l = logical_divide(get<0>(acc_layout), Shape<X, X, _2>{});  // (2, 2, (2, N / 16)))
-  return make_layout(make_layout(get<0>(l), get<1>(l), get<2, 0>(l)), get<1>(acc_layout),
+  auto l = logical_divide(get<0>(acc_layout),
+                          Shape<X, X, _2>{});  // (2, 2, (2, N / 16)))
+  return make_layout(make_layout(get<0>(l), get<1>(l), get<2, 0>(l)),
+                     get<1>(acc_layout),
                      make_layout(get<2, 1>(l), get<2>(acc_layout)));
 };
 
 template <typename To_type, typename Engine, typename Layout>
-__forceinline__ __device__ auto convert_type(Tensor<Engine, Layout> const& tensor) {
+__forceinline__ __device__ auto convert_type(
+    Tensor<Engine, Layout> const& tensor) {
   using From_type = typename Engine::value_type;
   constexpr int numel = decltype(size(tensor))::value;
   cutlass::NumericArrayConverter<To_type, From_type, numel> convert_op;
-  auto frag = convert_op(*reinterpret_cast<const cutlass::Array<From_type, numel>*>(tensor.data()));
+  auto frag =
+      convert_op(*reinterpret_cast<const cutlass::Array<From_type, numel>*>(
+          tensor.data()));
   return make_tensor(make_rmem_ptr<To_type>(&frag), tensor.layout());
 }
 
-template <bool init = false, int wg_wait = 0, typename TensorA, typename TensorB, typename TensorC,
+template <bool init = false,
+          int wg_wait = 0,
+          typename TensorA,
+          typename TensorB,
+          typename TensorC,
           typename TiledMma>
-__forceinline__ __device__ void gemm(TiledMma& tiled_mma, TensorA const& tCrA, TensorB const& tCrB,
+__forceinline__ __device__ void gemm(TiledMma& tiled_mma,
+                                     TensorA const& tCrA,
+                                     TensorB const& tCrB,
                                      TensorC& tCrC) {
-  constexpr bool Is_RS =
-      !cute::is_base_of<cute::GMMA::DescriptorIterator, typename TiledMma::FrgTypeA>::value;
-  // Need to cast away const on tCrA since warpgroup_fence_operand doesn't take const
+  constexpr bool Is_RS = !cute::is_base_of<cute::GMMA::DescriptorIterator,
+                                           typename TiledMma::FrgTypeA>::value;
+  // Need to cast away const on tCrA since warpgroup_fence_operand doesn't take
+  // const
   if constexpr (Is_RS) {
     warpgroup_fence_operand(const_cast<TensorA&>(tCrA));
   }
@@ -225,13 +249,15 @@ struct prefill_softmax_state_t {
     }
   }
 
-  __device__ __forceinline__ void merge(const AlignedVector<T, vec_size>& other_o,
-                                        const float other_m,
-                                        const float other_d) {
+  __device__ __forceinline__ void merge(
+      const AlignedVector<T, vec_size>& other_o,
+      const float other_m,
+      const float other_d) {
     float m_prev = m, d_prev = d;
     m = max(m_prev, other_m);
     const float scale1 = __expf(m_prev - m), scale2 = __expf(other_m - m);
-    const T scale1_T = static_cast<T>(scale1), scale2_T = static_cast<T>(scale2);
+    const T scale1_T = static_cast<T>(scale1),
+            scale2_T = static_cast<T>(scale2);
     d = d_prev * scale1 + other_d * scale2;
 #pragma unroll
     for (size_t i = 0; i < vec_size; ++i) {
@@ -249,27 +275,32 @@ struct prefill_softmax_state_t {
 };
 
 template <typename T, int vec_size, uint32_t bdy, uint32_t HEAD_DIM>
-__global__ void merge_multi_chunks_kernel(const T * __restrict__ multi_out, // [max_num_chunks, bsz, max_draft_token, num_heads, head_dim]
-                                          const float * __restrict__ multi_m, // [max_num_chunks, bsz, max_draft_token, num_heads]
-                                          const float * __restrict__ multi_d, // [max_num_chunks, bsz, max_draft_token, num_heads]
-                                          const int * __restrict__ seq_lens_this_time,
-                                          const int * __restrict__ seq_lens_decoder,
-                                          const int *__restrict__ cu_seqlens_q,
-                                          const int * __restrict__ batch_id_per_token,
-                                          const int * __restrict__ chunk_size_device,
-                                          T * __restrict__ out, // [token_num, num_heads, head_dim]
-                                          const int num_heads,
-                                          const int head_dim,
-                                          const int token_num,
-                                          const int bsz,
-                                          const int max_draft_token_num) {
+__global__ void merge_multi_chunks_kernel(
+    const T* __restrict__ multi_out,  // [max_num_chunks, bsz, max_draft_token,
+                                      // num_heads, head_dim]
+    const float* __restrict__ multi_m,  // [max_num_chunks, bsz,
+                                        // max_draft_token, num_heads]
+    const float* __restrict__ multi_d,  // [max_num_chunks, bsz,
+                                        // max_draft_token, num_heads]
+    const int* __restrict__ seq_lens_this_time,
+    const int* __restrict__ seq_lens_decoder,
+    const int* __restrict__ cu_seqlens_q,
+    const int* __restrict__ batch_id_per_token,
+    const int* __restrict__ chunk_size_device,
+    T* __restrict__ out,  // [token_num, num_heads, head_dim]
+    const int num_heads,
+    const int head_dim,
+    const int token_num,
+    const int bsz,
+    const int max_draft_token_num) {
   const int vid = threadIdx.x, ty = threadIdx.y;
   const int hid = blockIdx.y;
   __shared__ T smem[bdy * HEAD_DIM];
   __shared__ float md_smem[bdy * 2];
   for (int qid = blockIdx.x; qid < token_num; qid += gridDim.x) {
     const uint32_t bid = batch_id_per_token[qid];
-    // NOTE : (changwenbin) Batch_id_per_token is initialized to [:]=-1, Marking meaningless batch IDs.
+    // NOTE : (changwenbin) Batch_id_per_token is initialized to [:]=-1, Marking
+    // meaningless batch IDs.
     if (bid == -1) continue;
     const int seq_len_q = seq_lens_this_time[bid];
     if (seq_len_q == 0) continue;
@@ -277,7 +308,8 @@ __global__ void merge_multi_chunks_kernel(const T * __restrict__ multi_out, // [
     int seq_len_kv = seq_lens_decoder[bid];
     if (seq_len_kv == 0) continue;
     seq_len_kv += seq_len_q;
-    const int num_chunks_this_seq = cute::ceil_div(seq_len_kv, chunk_size_device[0]);
+    const int num_chunks_this_seq =
+        cute::ceil_div(seq_len_kv, chunk_size_device[0]);
     if (num_chunks_this_seq <= 1) {
       // not need merge
       continue;
@@ -307,16 +339,23 @@ __global__ void merge_multi_chunks_kernel(const T * __restrict__ multi_out, // [
 
     for (int i = ty; i < num_chunks_this_seq; i += bdy) {
       uint32_t offset;
-      offset = ((i * bsz + bid) * max_draft_token_num + local_seq_id) * num_heads + hid;
+      offset =
+          ((i * bsz + bid) * max_draft_token_num + local_seq_id) * num_heads +
+          hid;
       float m_prev = m;
       float d_prev = d;
       const float m_now = multi_m[offset];
       const float d_now = multi_d[offset];
       m = max(m_prev, m_now);
-      offset = (((i * bsz + bid) * max_draft_token_num + local_seq_id) * num_heads + hid) * head_dim + vid * vec_size;
+      offset =
+          (((i * bsz + bid) * max_draft_token_num + local_seq_id) * num_heads +
+           hid) *
+              head_dim +
+          vid * vec_size;
       Load<T, vec_size>(&multi_out[offset], &load_vec);
       const float scale1 = __expf(m_prev - m), scale2 = __expf(m_now - m);
-      const T scale1_T = static_cast<T>(scale1), scale2_T = static_cast<T>(scale2);
+      const T scale1_T = static_cast<T>(scale1),
+              scale2_T = static_cast<T>(scale2);
       d = d * scale1 + d_now * scale2;
 #pragma unroll
       for (int j = 0; j < vec_size; j++) {
@@ -339,7 +378,8 @@ __global__ void merge_multi_chunks_kernel(const T * __restrict__ multi_out, // [
         st.merge(load_vec, m_tmp, d_tmp);
       }
       st.normalize();
-      Store<T, vec_size>(st.o, &out[(qid * num_heads + hid) * head_dim + vid * vec_size]);
+      Store<T, vec_size>(
+          st.o, &out[(qid * num_heads + hid) * head_dim + vid * vec_size]);
     }
     __syncthreads();
   }

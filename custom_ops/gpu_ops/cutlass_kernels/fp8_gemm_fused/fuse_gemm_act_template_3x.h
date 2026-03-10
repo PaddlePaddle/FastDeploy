@@ -26,26 +26,28 @@
 #include "cutlass/gemm/kernel/tile_scheduler.hpp"
 #include "cutlass/util/packed_stride.hpp"
 
-template <
-    typename InputType,
-    typename OutType,
-    bool hasbias,
-    template <class> typename Activation,
-    typename TileShape,
-    typename ClusterShape,
-    typename KernelSchedule =
-        cutlass::gemm::KernelTmaWarpSpecializedPingpongFP8FastAccum,
-    typename EpilogueSchedule = cutlass::epilogue::TmaWarpSpecialized,
-    typename SM = cutlass::arch::Sm90>
+template <typename InputType,
+          typename OutType,
+          bool hasbias,
+          template <class>
+          typename Activation,
+          typename TileShape,
+          typename ClusterShape,
+          typename KernelSchedule =
+              cutlass::gemm::KernelTmaWarpSpecializedPingpongFP8FastAccum,
+          typename EpilogueSchedule = cutlass::epilogue::TmaWarpSpecialized,
+          typename SM = cutlass::arch::Sm90>
 bool dispatch_fuse_gemm_act_sm90(GemmEpilogueAllParams params) {
   using namespace cute;
   using ElementA = typename std::conditional_t<
       std::is_same_v<InputType, phi::dtype::float8_e4m3fn>,
-      cutlass::float_e4m3_t, cutlass::float_e5m2_t>;
+      cutlass::float_e4m3_t,
+      cutlass::float_e5m2_t>;
   using ElementB = ElementA;
   using ElementD =
       typename std::conditional_t<std::is_same_v<OutType, phi::dtype::bfloat16>,
-                                  cutlass::bfloat16_t, cutlass::half_t>;
+                                  cutlass::bfloat16_t,
+                                  cutlass::half_t>;
   using ElementC = std::conditional_t<hasbias, ElementD, void>;
 
   using LayoutA = cutlass::layout::RowMajor;
@@ -66,29 +68,53 @@ bool dispatch_fuse_gemm_act_sm90(GemmEpilogueAllParams params) {
   static constexpr auto RoundStyle = cutlass::FloatRoundStyle::round_to_nearest;
 
   using FusionOperation =
-      cutlass::epilogue::fusion::LinCombEltAct<Activation, ElementD,
-                                               ElementCompute, ElementC,
-                                               ElementScalar, RoundStyle>;
+      cutlass::epilogue::fusion::LinCombEltAct<Activation,
+                                               ElementD,
+                                               ElementCompute,
+                                               ElementC,
+                                               ElementScalar,
+                                               RoundStyle>;
 
   using CollectiveEpilogue =
       typename cutlass::epilogue::collective::CollectiveBuilder<
-          SM, cutlass::arch::OpClassTensorOp, TileShape, ClusterShape,
-          cutlass::epilogue::collective::EpilogueTileAuto, ElementAccumulator,
-          ElementCompute, ElementC, LayoutC, AlignmentC, ElementD, LayoutD,
-          AlignmentD, EpilogueSchedule, FusionOperation>::CollectiveOp;
+          SM,
+          cutlass::arch::OpClassTensorOp,
+          TileShape,
+          ClusterShape,
+          cutlass::epilogue::collective::EpilogueTileAuto,
+          ElementAccumulator,
+          ElementCompute,
+          ElementC,
+          LayoutC,
+          AlignmentC,
+          ElementD,
+          LayoutD,
+          AlignmentD,
+          EpilogueSchedule,
+          FusionOperation>::CollectiveOp;
 
   using CollectiveMainloop =
       typename cutlass::gemm::collective::CollectiveBuilder<
-          SM, cutlass::arch::OpClassTensorOp, ElementA, LayoutA, AlignmentA,
-          ElementB, LayoutB, AlignmentB, ElementAccumulator, TileShape,
+          SM,
+          cutlass::arch::OpClassTensorOp,
+          ElementA,
+          LayoutA,
+          AlignmentA,
+          ElementB,
+          LayoutB,
+          AlignmentB,
+          ElementAccumulator,
+          TileShape,
           ClusterShape,
           cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(
               sizeof(typename CollectiveEpilogue::SharedStorage))>,
           KernelSchedule>::CollectiveOp;
 
-  using GemmKernel = cutlass::gemm::kernel::GemmUniversal<
-      Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue,
-      cutlass::gemm::PersistentScheduler>;
+  using GemmKernel =
+      cutlass::gemm::kernel::GemmUniversal<Shape<int, int, int, int>,
+                                           CollectiveMainloop,
+                                           CollectiveEpilogue,
+                                           cutlass::gemm::PersistentScheduler>;
 
   using Gemm = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
 
@@ -120,7 +146,7 @@ bool dispatch_fuse_gemm_act_sm90(GemmEpilogueAllParams params) {
   typename Gemm::Arguments arguments{cutlass::gemm::GemmUniversalMode::kGemm,
                                      problem_size,
                                      {a_ptr, stride_A, b_ptr, stride_B},
-                                     {{params.scale}, // epilogue.thread
+                                     {{params.scale},  // epilogue.thread
                                       c_ptr,
                                       stride_C,
                                       d_ptr,

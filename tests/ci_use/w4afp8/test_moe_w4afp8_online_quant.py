@@ -40,12 +40,6 @@ W4AFP8_CONFIGS = [
     {
         "id": "w4afp8_default_v1",
         "load_choices": "default_v1",
-        "model_name": "ernie-4_5-21b-a3b-bf16-paddle",
-        "model_subdir": None,
-    },
-    {
-        "id": "w4afp8_default_v1",
-        "load_choices": "default_v1",
         "model_name": "ERNIE-4.5-21B-A3B-PT",
         "model_subdir": "torch",
     },

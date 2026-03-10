@@ -55,9 +55,11 @@ from fastdeploy.model_executor.utils import get_sm_version
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
+import os
+
+from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 
-paddle.compat.enable_torch_proxy(scope={"flash_mask"})
 flashmask_attention_v4 = None
 
 if current_platform.is_cuda():
@@ -65,24 +67,20 @@ if current_platform.is_cuda():
 else:
     merge_prefill_decode_output = None
 
-import os
 
 FLASH_ATTN_VERSION = None
 
 
-def init_flash_attn_version(fa_version: int = None):
+def init_flash_attn_version():
     """
     init_flash_attn_version
     """
     if current_platform.is_cuda():
         global FLASH_ATTN_VERSION
-        if fa_version is not None:
-            FLASH_ATTN_VERSION = fa_version
-            logger.info(f"Force use Flash Attention V{fa_version}.")
-            return
         sm_version = get_sm_version()
         if sm_version >= 100:
             try:
+                paddle.compat.enable_torch_proxy(scope={"cutlass"})
                 from flash_mask.cute.interface import flashmask_attention as fa4
 
                 global flashmask_attention_v4
@@ -90,7 +88,7 @@ def init_flash_attn_version(fa_version: int = None):
                 FLASH_ATTN_VERSION = 4
                 logger.info("The current platform supports Flash Attention V4.")
             except ImportError:
-                pass
+                logger.info(f"The current platform[sm{get_sm_version()}] can't import Flash Attention V4.")
 
         if FLASH_ATTN_VERSION is None:
             if sm_version >= 89 and any(num >= 89 for num in paddle.version.cuda_archs()):
@@ -101,6 +99,14 @@ def init_flash_attn_version(fa_version: int = None):
                 logger.info("The current platform only support Flash Attention V2.")
     else:
         logger.info("Only support CUDA version flash attention.")
+
+
+def _is_deterministic_mode():
+    """Check if FD_DETERMINISTIC_MODE is enabled."""
+    return envs.FD_DETERMINISTIC_MODE
+
+
+init_flash_attn_version()
 
 
 def flash_attn_func(
@@ -118,10 +124,11 @@ def flash_attn_func(
     head_dim: int = 128,
     version: Optional[int] = None,
 ):
+    if FLASH_ATTN_VERSION is None:
+        init_flash_attn_version()
     if version is None:
-        if FLASH_ATTN_VERSION is None:
-            init_flash_attn_version()
         version = FLASH_ATTN_VERSION
+
     if version == 4:
         assert (
             flashmask_attention_v4 is not None
@@ -259,11 +266,12 @@ class FlashAttentionBackend(AttentionBackend):
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
             fd_config.model_config, "use_3d_rope", False
         )
+        if fd_config.speculative_config.model_type != "main":
+            self.rope_3d = False
         # Note(ZKK): here must be consistent with append_attn_backend.py
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
-        self.zero_seq_enc_lens_for_decode = paddle.zeros(
-            shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype=paddle.int32
-        )
+        if FLASH_ATTN_VERSION is None:
+            init_flash_attn_version()
 
     def get_attention_meta(self):
         """get_attention_meta"""
@@ -375,7 +383,7 @@ class FlashAttentionBackend(AttentionBackend):
                     forward_meta.max_len_tensor_cpu[2],
                     self.block_size,
                 )
-                if forward_meta.attn_mask_offsets is not None:
+                if FLASH_ATTN_VERSION == 4 or forward_meta.attn_mask_offsets is not None:
                     metadata.attn_mask_q = get_attn_mask_q(
                         cu_seqlens_q=forward_meta.cu_seqlens_q,
                         cu_seqlens_k=metadata.cu_seqlens_k,

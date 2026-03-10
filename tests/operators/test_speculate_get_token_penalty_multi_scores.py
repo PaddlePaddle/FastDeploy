@@ -25,8 +25,8 @@ def min_length_logits_process(
     cur_len,
     min_len,
     eos_token_id,
-    output_padding_offset,
-    output_cum_offsets,
+    batch_id_per_token_output,
+    cu_seqlens_q_output,
     token_num,
     bs,
     length,
@@ -34,11 +34,11 @@ def min_length_logits_process(
     max_seq_len,
 ):
     for token_idx in range(token_num):
-        bi = (token_idx + output_padding_offset[token_idx]) / max_seq_len
+        bi = batch_id_per_token_output[token_idx]
         bi = bi.astype(paddle.int32)
         if bi >= bs:
             continue
-        query_start_token_idx = bi * max_seq_len - output_cum_offsets[bi]
+        query_start_token_idx = cu_seqlens_q_output[bi]
 
         if cur_len[bi] < 0:
             continue
@@ -48,21 +48,21 @@ def min_length_logits_process(
 
 
 def update_repeat_times(
-    pre_ids, cur_len, repeat_times, output_padding_offset, token_num, bs, length, length_id, max_seq_len
+    token_ids_all, cur_len, repeat_times, batch_id_per_token_output, token_num, bs, length, length_id, max_seq_len
 ):
     for token_idx in range(token_num):
-        bi = (token_idx + output_padding_offset[token_idx]) / max_seq_len
+        bi = batch_id_per_token_output[token_idx]
         bi = bi.astype(paddle.int32)
         if bi >= bs:
             continue
         if cur_len[bi] < 0:
             continue
 
-        pre_ids_now = pre_ids[bi]
+        token_ids_all_now = token_ids_all[bi]
         repeat_times_now = repeat_times[token_idx]
 
         for i in range(length_id):
-            id = pre_ids_now[i]
+            id = token_ids_all_now[i]
             if id < 0:
                 break
             repeat_times_now[id] = repeat_times_now[id] + 1
@@ -75,14 +75,14 @@ def update_value_by_repeat_times(
     presence_score,
     temperatures,
     logits,
-    output_padding_offset,
+    batch_id_per_token_output,
     token_num,
     bs,
     length,
     max_seq_len,
 ):
     for token_idx in range(token_num):
-        bi = (token_idx + output_padding_offset[token_idx]) / max_seq_len
+        bi = batch_id_per_token_output[token_idx]
         bi = bi.astype(paddle.int32)
         if bi >= bs:
             continue
@@ -102,10 +102,18 @@ def update_value_by_repeat_times(
 
 
 def ban_bad_words(
-    logits, bad_words_list, bad_words_len, output_padding_offset, token_num, bs, length, bad_words_length, max_seq_len
+    logits,
+    bad_words_list,
+    bad_words_len,
+    batch_id_per_token_output,
+    token_num,
+    bs,
+    length,
+    bad_words_length,
+    max_seq_len,
 ):
     for token_idx in range(token_num):
-        bi = (token_idx + output_padding_offset[token_idx]) / max_seq_len
+        bi = batch_id_per_token_output[token_idx]
         bi = bi.astype(paddle.int32)
         if bi >= bs:
             continue
@@ -121,7 +129,8 @@ def ban_bad_words(
 
 
 def speculate_get_token_penalty_multi_scores_ref(
-    pre_ids,
+    token_ids_all,
+    prompt_lens,
     logits,
     penalty_scores,
     frequency_score,
@@ -133,8 +142,8 @@ def speculate_get_token_penalty_multi_scores_ref(
     min_len,
     eos_token_id,
     seq_lens_this_time,
-    output_padding_offset,
-    output_cum_offsets,
+    batch_id_per_token_output,
+    cu_seqlens_q_output,
     max_seq_len,
 ):
     shape = logits.shape
@@ -142,7 +151,7 @@ def speculate_get_token_penalty_multi_scores_ref(
     bs = seq_lens_this_time.shape[0]
     token_num = shape[0]
     length = shape[1]
-    length_id = pre_ids.shape[1]
+    length_id = token_ids_all.shape[1]
     length_bad_words = bad_tokens.shape[1]
 
     end_length = eos_token_id.shape[0]
@@ -152,8 +161,8 @@ def speculate_get_token_penalty_multi_scores_ref(
         cur_len,
         min_len,
         eos_token_id,
-        output_padding_offset,
-        output_cum_offsets,
+        batch_id_per_token_output,
+        cu_seqlens_q_output,
         token_num,
         bs,
         length,
@@ -162,7 +171,7 @@ def speculate_get_token_penalty_multi_scores_ref(
     )
 
     update_repeat_times(
-        pre_ids, cur_len, repeat_times, output_padding_offset, token_num, bs, length, length_id, max_seq_len
+        token_ids_all, cur_len, repeat_times, batch_id_per_token_output, token_num, bs, length, length_id, max_seq_len
     )
 
     update_value_by_repeat_times(
@@ -172,7 +181,7 @@ def speculate_get_token_penalty_multi_scores_ref(
         presence_score,
         temperatures,
         logits,
-        output_padding_offset,
+        batch_id_per_token_output,
         token_num,
         bs,
         length,
@@ -180,7 +189,15 @@ def speculate_get_token_penalty_multi_scores_ref(
     )
 
     ban_bad_words(
-        logits, bad_tokens, bad_tokens_len, output_padding_offset, token_num, bs, length, length_bad_words, max_seq_len
+        logits,
+        bad_tokens,
+        bad_tokens_len,
+        batch_id_per_token_output,
+        token_num,
+        bs,
+        length,
+        length_bad_words,
+        max_seq_len,
     )
 
 
@@ -193,30 +210,31 @@ class TestSpeculateGetTokenPenaltyMultiScores(unittest.TestCase):
         max_seq_len = 1024  # 1024 #2048 #8192
         data_type = "float32"
 
-        # prepare output_padding_offset and output_cum_offsets
+        # prepare batch_id_per_token_output and cu_seqlens_q_output
         tokens = [1] * bs
         token_num = np.sum(tokens)
-        output_padding_offset = []
-        output_cum_offsets = [0]
+        batch_id_per_token_output = []
+        cu_seqlens_q_output = [0]
         opo_offset = 0
         for bid in range(bs):
             ts = tokens[bid]
             for i in range(ts):
-                output_padding_offset.append(opo_offset)
+                batch_id_per_token_output.append(opo_offset)
             opo_offset += max_seq_len - ts
-            output_cum_offsets.append(opo_offset)
-        output_cum_offsets = output_cum_offsets[:-1]
-        output_padding_offset = paddle.to_tensor(output_padding_offset, "int32")
-        output_cum_offsets = paddle.to_tensor(output_cum_offsets, "int32")
+            cu_seqlens_q_output.append(opo_offset)
+        cu_seqlens_q_output = cu_seqlens_q_output[:-1]
+        batch_id_per_token_output = paddle.to_tensor(batch_id_per_token_output, "int32")
+        cu_seqlens_q_output = paddle.to_tensor(cu_seqlens_q_output, "int32")
 
-        # prepare pre_ids and logits
-        pre_ids_len = 122
+        # prepare token_ids_all and logits
+        token_ids_all_len = 122
         logits_len = 110
-        pre_ids = np.random.randint(1, logits_len, size=(bs, pre_ids_len))
-        negative_start = np.random.randint(1, pre_ids_len + 1, size=(bs))
+        token_ids_all = np.random.randint(1, logits_len, size=(bs, token_ids_all_len))
+        negative_start = np.random.randint(1, token_ids_all_len + 1, size=(bs))
         for i in range(bs):
-            pre_ids[:, negative_start[i] :] = -1
-        pre_ids = paddle.to_tensor(pre_ids).astype("int64")
+            token_ids_all[i, negative_start[i] :] = -1
+        token_ids_all = paddle.to_tensor(token_ids_all).astype("int64")
+        prompt_lens = paddle.zeros([bs, 1], dtype="int64")
         logits = paddle.zeros([token_num, logits_len]).astype(data_type)
         # prepare other params
         penalty_scores = paddle.to_tensor(np.random.random([bs])).astype(data_type)
@@ -233,7 +251,8 @@ class TestSpeculateGetTokenPenaltyMultiScores(unittest.TestCase):
         )  # value of seq_len_this_time is useless
 
         inputs = (
-            pre_ids,
+            token_ids_all,
+            prompt_lens,
             logits,
             penalty_scores,
             frequency_scores,
@@ -245,8 +264,8 @@ class TestSpeculateGetTokenPenaltyMultiScores(unittest.TestCase):
             min_len,
             eos_token_id,
             seq_len_this_time,
-            output_padding_offset,
-            output_cum_offsets,
+            batch_id_per_token_output,
+            cu_seqlens_q_output,
             max_seq_len,
         )
         # inplace modify, not return data

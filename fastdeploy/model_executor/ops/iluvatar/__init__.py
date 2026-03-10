@@ -19,9 +19,10 @@ PACKAGE = "fastdeploy.model_executor.ops.iluvatar"
 
 import_custom_ops(PACKAGE, ".fastdeploy_ops", globals())
 
-from .moe_ops import iluvatar_moe_expert_ffn as moe_expert_ffn  # noqa: F401
-from .paged_attention import (  # noqa: F401
+from .attention_ops import (  # noqa: F401
+    flash_attn_unpadded,
     mixed_fused_paged_attention,
     paged_attention,
     prefill_fused_paged_attention,
 )
+from .moe_ops import iluvatar_moe_expert_ffn as moe_expert_ffn  # noqa: F401

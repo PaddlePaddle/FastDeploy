@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/scaled_mm_c2x_sm80_dispatch.cuh
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/scaled_mm_c2x_sm80_dispatch.cuh
 
 #pragma once
 
@@ -11,8 +12,10 @@
 
 namespace fastdeploy {
 
-template <typename InType, typename OutType,
-          template <typename, typename> typename Epilogue>
+template <typename InType,
+          typename OutType,
+          template <typename, typename>
+          typename Epilogue>
 struct sm80_config_default {
   // This config is used in 2 cases,
   //  - M in (128, inf)
@@ -22,13 +25,21 @@ struct sm80_config_default {
   using TileShape = typename cutlass::gemm::GemmShape<128, 128, 64>;
   using WarpShape = typename cutlass::gemm::GemmShape<64, 64, 64>;
   using InstructionShape = typename cutlass::gemm::GemmShape<16, 8, 32>;
-  using Cutlass2xGemm =
-      cutlass_2x_gemm<cutlass::arch::Sm80, enable_sm80_to_sm89, InType, OutType,
-                      Epilogue, TileShape, WarpShape, InstructionShape, 5>;
+  using Cutlass2xGemm = cutlass_2x_gemm<cutlass::arch::Sm80,
+                                        enable_sm80_to_sm89,
+                                        InType,
+                                        OutType,
+                                        Epilogue,
+                                        TileShape,
+                                        WarpShape,
+                                        InstructionShape,
+                                        5>;
 };
 
-template <typename InType, typename OutType,
-          template <typename, typename> typename Epilogue>
+template <typename InType,
+          typename OutType,
+          template <typename, typename>
+          typename Epilogue>
 struct sm80_config_M64 {
   // This config is used in 2 cases,
   // - M in (32, 64]
@@ -38,13 +49,21 @@ struct sm80_config_M64 {
   using TileShape = typename cutlass::gemm::GemmShape<64, 128, 128>;
   using WarpShape = typename cutlass::gemm::GemmShape<64, 64, 64>;
   using InstructionShape = typename cutlass::gemm::GemmShape<16, 8, 32>;
-  using Cutlass2xGemm =
-      cutlass_2x_gemm<cutlass::arch::Sm80, enable_sm80_to_sm89, InType, OutType,
-                      Epilogue, TileShape, WarpShape, InstructionShape, 5>;
+  using Cutlass2xGemm = cutlass_2x_gemm<cutlass::arch::Sm80,
+                                        enable_sm80_to_sm89,
+                                        InType,
+                                        OutType,
+                                        Epilogue,
+                                        TileShape,
+                                        WarpShape,
+                                        InstructionShape,
+                                        5>;
 };
 
-template <typename InType, typename OutType,
-          template <typename, typename> typename Epilogue>
+template <typename InType,
+          typename OutType,
+          template <typename, typename>
+          typename Epilogue>
 struct sm80_config_M32 {
   // M in (16, 32]
   // Shared Memory required by this Gemm - 61440 bytes
@@ -52,13 +71,21 @@ struct sm80_config_M32 {
   using TileShape = typename cutlass::gemm::GemmShape<32, 64, 128>;
   using WarpShape = typename cutlass::gemm::GemmShape<32, 64, 64>;
   using InstructionShape = typename cutlass::gemm::GemmShape<16, 8, 32>;
-  using Cutlass2xGemm =
-      cutlass_2x_gemm<cutlass::arch::Sm80, enable_sm80_to_sm89, InType, OutType,
-                      Epilogue, TileShape, WarpShape, InstructionShape, 5>;
+  using Cutlass2xGemm = cutlass_2x_gemm<cutlass::arch::Sm80,
+                                        enable_sm80_to_sm89,
+                                        InType,
+                                        OutType,
+                                        Epilogue,
+                                        TileShape,
+                                        WarpShape,
+                                        InstructionShape,
+                                        5>;
 };
 
-template <typename InType, typename OutType,
-          template <typename, typename> typename Epilogue>
+template <typename InType,
+          typename OutType,
+          template <typename, typename>
+          typename Epilogue>
 struct sm80_config_M16 {
   // M in [1, 16]
   // Shared Memory required by this Gemm - 51200 bytes
@@ -66,13 +93,21 @@ struct sm80_config_M16 {
   using TileShape = typename cutlass::gemm::GemmShape<16, 64, 128>;
   using WarpShape = typename cutlass::gemm::GemmShape<16, 64, 64>;
   using InstructionShape = typename cutlass::gemm::GemmShape<16, 8, 32>;
-  using Cutlass2xGemm =
-      cutlass_2x_gemm<cutlass::arch::Sm80, enable_sm80_to_sm89, InType, OutType,
-                      Epilogue, TileShape, WarpShape, InstructionShape, 5>;
+  using Cutlass2xGemm = cutlass_2x_gemm<cutlass::arch::Sm80,
+                                        enable_sm80_to_sm89,
+                                        InType,
+                                        OutType,
+                                        Epilogue,
+                                        TileShape,
+                                        WarpShape,
+                                        InstructionShape,
+                                        5>;
 };
 
-template <typename InType, typename OutType,
-          template <typename, typename> typename Epilogue,
+template <typename InType,
+          typename OutType,
+          template <typename, typename>
+          typename Epilogue,
           typename... EpilogueArgs>
 inline void cutlass_gemm_sm80_dispatch(paddle::Tensor& out,
                                        paddle::Tensor const& a,
@@ -104,7 +139,8 @@ inline void cutlass_gemm_sm80_dispatch(paddle::Tensor& out,
   using FallbackGemm =
       typename sm80_config_M32<InType, OutType, Epilogue>::Cutlass2xGemm;
 
-  uint32_t const m = a.dims()[0];;
+  uint32_t const m = a.dims()[0];
+  ;
   uint32_t const mp2 =
       std::max(static_cast<uint32_t>(16), next_pow_2(m));  // next power of 2
   if (mp2 <= 16) {
@@ -121,7 +157,8 @@ inline void cutlass_gemm_sm80_dispatch(paddle::Tensor& out,
         out, a, b, std::forward<EpilogueArgs>(args)...);
   } else if (mp2 <= 128) {
     // M in (64, 128]
-    uint32_t const n = out.dims()[1];;
+    uint32_t const n = out.dims()[1];
+    ;
     bool const small_n = n < 8192;
     if (small_n) {
       return fallback_cutlass_gemm_caller<Cutlass2xGemmM128SmallN,

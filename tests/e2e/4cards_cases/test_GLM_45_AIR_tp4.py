@@ -84,6 +84,7 @@ def setup_and_run_server():
         "--load-choices",
         "default_v1",
         "--lm_head-fp32",
+        "--moe-gate-fp32",
         "--routing-replay-config",
         '{"enable_routing_replay":true, "routing_store_type":"local", "local_store_dir":"./R3_tmp/routing_replay_output_glm45air_tp4"}',
     ]

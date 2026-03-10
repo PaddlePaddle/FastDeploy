@@ -24,6 +24,13 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_gcu():
     from fastdeploy.model_executor.ops.gcu import top_p_sampling as gcu_top_p_sampling
 
+_DETERMINISTIC_RNG_SEED = 42
+
+
+def _reset_cuda_generator_for_determinism():
+    """Reset CUDA generator to fixed seed so global RNG offset is always 0."""
+    paddle.framework.core.default_cuda_generator(0).manual_seed(_DETERMINISTIC_RNG_SEED)
+
 
 def top_k_top_p_sampling(
     x: paddle.Tensor,
@@ -61,6 +68,15 @@ def top_k_top_p_sampling(
 
     """
     top_p_class = envs.FD_SAMPLING_CLASS.lower()
+    topp_seed_device = None
+
+    # In deterministic mode, reset CUDA generator offset before sampling.
+    # paddle.tensor.top_p_sampling uses the global GPU generator offset even
+    # when topp_seed is provided, causing RNG drift across generate() calls.
+    # Resetting to a fixed seed ensures the offset is always 0, making
+    # topp_seed the sole source of per-request randomness.
+    if envs.FD_DETERMINISTIC_MODE:
+        _reset_cuda_generator_for_determinism()
 
     if top_p_class == "air":
         _, ids = air_top_p_sampling(x, top_p, threshold, topp_seed, seed=seed, k=k, mode=mode)
@@ -68,11 +84,14 @@ def top_k_top_p_sampling(
         ids = rejection_top_p_sampling(x, top_p, top_k, top_k_list, seed, order)
         _ = None
     elif top_p_class == "base_non_truncated":
+        if topp_seed is not None:
+            topp_seed_device = paddle.empty(shape=topp_seed.shape, dtype=topp_seed.dtype)
+            topp_seed_device.copy_(topp_seed, False)
         _, ids = paddle.tensor.top_p_sampling(
             x,
             top_p,
             threshold=threshold,
-            topp_seed=topp_seed,
+            topp_seed=topp_seed_device,
             seed=seed,
             k=k,
             mode="non-truncated",
@@ -85,11 +104,14 @@ def top_k_top_p_sampling(
 
             _, ids = native_top_p_sampling(x, top_p)
         else:
+            if topp_seed is not None:
+                topp_seed_device = paddle.empty(shape=topp_seed.shape, dtype=topp_seed.dtype)
+                topp_seed_device.copy_(topp_seed, False)
             _, ids = paddle.tensor.top_p_sampling(
                 x,
                 top_p,
                 threshold=threshold,
-                topp_seed=topp_seed,
+                topp_seed=topp_seed_device,
                 seed=seed,
                 k=k,
                 mode="truncated",

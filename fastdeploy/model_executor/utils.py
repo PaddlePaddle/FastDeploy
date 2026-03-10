@@ -266,9 +266,8 @@ def process_final_after_loading(model, fd_config: FDConfig):
                 if hasattr(quant_method, "process_weights_after_loading"):
                     quant_method.process_weights_after_loading(sublayer)
                 continue
-        if not hasattr(sublayer, "process_weights_after_loading"):
-            continue
-        sublayer.process_weights_after_loading()
+        if hasattr(sublayer, "process_weights_after_loading"):
+            sublayer.process_weights_after_loading()
 
 
 def free_tensor(tensor):
@@ -318,7 +317,12 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
         if weight_need_transpose:
             loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
-        if output_dim is not None and fd_config is not None and fd_config.parallel_config.tensor_parallel_size > 1:
+        if (
+            output_dim is not None
+            and fd_config is not None
+            and fd_config.parallel_config.tensor_parallel_size > 1
+            and not fd_config.load_config.is_pre_sharded
+        ):
             dim = -1 if output_dim else 0
             if isinstance(loaded_weight, paddle.Tensor):
                 size = loaded_weight.shape[dim]
@@ -539,8 +543,6 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
             fd_suffix_map = fp8_suffix_map
         if (is_moe and moe_quant_type == "tensor_wise_fp8") or (not is_moe and dense_quant_type == "tensor_wise_fp8"):
             fd_suffix_map = tensor_wise_fp8_suffix_map
-        else:
-            fd_suffix_map = {}
         for ckpt_suffix, fd_suffix in fd_suffix_map.items():
             if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
                 loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)
@@ -556,3 +558,66 @@ def get_sm_version():
         prop = paddle.device.cuda.get_device_properties()
         return prop.major * 10 + prop.minor
     return 0
+
+
+@paddle.no_grad()
+def _move_param(src, device=None, blocking=True):
+    """
+    Move parameters from the source device to the target device and return the parameters on the target device.
+    If the target device is not specified, the current device is used.
+
+    Args:
+        src (Tensor): The tensor of parameters to be moved.
+        device (Optional[Union[str, paddle.Device]], optional): The target device. Can be a string or paddle.Device
+        object.
+            Defaults to None, which means using the current device.
+        blocking (bool, optional): Whether to block until the operation is complete. Defaults to True.
+
+    Returns:
+        Tensor: The tensor of parameters on the target device.
+    """
+    if isinstance(device, str):
+        device = paddle.device._convert_to_place(device)
+    dst = src._copy_to(device, blocking)
+    dst_tensor = dst.value().get_tensor()
+    src_tensor = src.value().get_tensor()
+    src_tensor._clear()
+    src_tensor._share_data_with(dst_tensor)
+
+
+def _reload_model(model):
+    """
+    Reload the model from CUDAPinnedPlace to GPU.
+    """
+    model.to(paddle.device.get_device())
+
+
+def _offload_model(model):
+    """
+    Offload the model from GPU to CUDAPinnedPlace.
+    """
+    pin_device = paddle.CUDAPinnedPlace()
+    for _, src in model.named_parameters():
+        if src._is_initialized() and not isinstance(src.place, paddle.CUDAPinnedPlace):
+            _move_param(src, pin_device)
+
+
+def reconstruct_memory(model):
+    """
+    reconstruct_memory to avoid memory chunks
+    """
+    if paddle.is_compiled_with_cuda():
+        _offload_model(model)
+        paddle.device.cuda.empty_cache()
+        _reload_model(model)
+
+
+def need_memory_reconstruction(fd_config):
+    _need_memory_reconstruction_archs = ["DeepseekV3ForCausalLM", "DeepseekV32ForCausalLM"]
+    if fd_config.model_config.architectures[0] in _need_memory_reconstruction_archs:
+        logger.info(
+            f"{fd_config.model_config.architectures[0]} Performing model offload and reload to defragment GPU memory."
+        )
+        return True
+    else:
+        return False

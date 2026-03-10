@@ -32,6 +32,8 @@
 
 #include "helper.h"
 
+#include "../cccl_compat.h"  // CCCL 3.0 compatibility
+
 #define WARP_SIZE 32
 
 namespace phi {
@@ -335,7 +337,7 @@ __launch_bounds__(TPB) __global__
   }
   const int64_t thread_row_offset = globalIdx * num_cols;
 
-  cub::Sum sum;
+  fd_cub_compat::Sum sum;
   float threadData(-FLT_MAX);
 
   for (int ii = threadIdx.x; ii < num_cols; ii += TPB) {
@@ -343,7 +345,8 @@ __launch_bounds__(TPB) __global__
     threadData = max(static_cast<float>(input[idx]), threadData);
   }
 
-  const float maxElem = BlockReduce(tmpStorage).Reduce(threadData, cub::Max());
+  const float maxElem =
+      BlockReduce(tmpStorage).Reduce(threadData, fd_cub_compat::Max());
   if (threadIdx.x == 0) {
     float_max = maxElem;
   }
@@ -373,7 +376,8 @@ __launch_bounds__(TPB) __global__
     threadData = max(static_cast<float>(T(val)), threadData);
   }
 
-  const float maxOut = BlockReduce(tmpStorage).Reduce(threadData, cub::Max());
+  const float maxOut =
+      BlockReduce(tmpStorage).Reduce(threadData, fd_cub_compat::Max());
   if (threadIdx.x == 0) {
     // group max probs
     max_out = 1.f / maxOut;
@@ -405,7 +409,7 @@ __launch_bounds__(TPB) __global__ void moe_softmax(const T* input,
   }
   const int64_t thread_row_offset = globalIdx * num_cols;
 
-  cub::Sum sum;
+  fd_cub_compat::Sum sum;
   float threadData(-FLT_MAX);
 
   for (int ii = threadIdx.x; ii < num_cols; ii += TPB) {
@@ -413,7 +417,8 @@ __launch_bounds__(TPB) __global__ void moe_softmax(const T* input,
     threadData = max(static_cast<float>(input[idx]), threadData);
   }
 
-  const float maxElem = BlockReduce(tmpStorage).Reduce(threadData, cub::Max());
+  const float maxElem =
+      BlockReduce(tmpStorage).Reduce(threadData, fd_cub_compat::Max());
   if (threadIdx.x == 0) {
     float_max = maxElem;
   }
@@ -456,7 +461,7 @@ __launch_bounds__(TPB) __global__
   __shared__ typename BlockReduce::TempStorage tmpStorage;
 
   cub_kvp thread_kvp;
-  cub::ArgMax arg_max;
+  fd_cub_compat::ArgMax arg_max;
 
   const int block_row = blockIdx.x + blockIdx.y * gridDim.x;
   if (block_row >= num_rows) {
@@ -514,7 +519,7 @@ __launch_bounds__(TPB) __global__ void moe_top_k(const T* inputs_after_softmax,
   __shared__ typename BlockReduce::TempStorage tmpStorage;
 
   cub_kvp thread_kvp;
-  cub::ArgMax arg_max;
+  fd_cub_compat::ArgMax arg_max;
 
   const int block_row = blockIdx.x + blockIdx.y * gridDim.x;
   if (block_row >= num_rows) {
@@ -609,12 +614,13 @@ __launch_bounds__(TPB) __global__
   const int64_t thread_row_offset = globalIdx * num_experts;
   const int64_t idx = thread_row_offset + threadIdx.x;
 
-  cub::Sum sum;
+  fd_cub_compat::Sum sum;
 
   float threadData =
       (threadIdx.x < num_experts) ? static_cast<float>(input[idx]) : (-FLT_MAX);
 
-  const float maxElem = BlockReduce(tmpStorage).Reduce(threadData, cub::Max());
+  const float maxElem =
+      BlockReduce(tmpStorage).Reduce(threadData, fd_cub_compat::Max());
   if (threadIdx.x == 0) {
     float_max = maxElem;
   }
@@ -639,7 +645,7 @@ __launch_bounds__(TPB) __global__
   __shared__ typename BlockReduceP::TempStorage tmpStorageP;
 
   cub_kvp thread_kvp;
-  cub::ArgMax arg_max;
+  fd_cub_compat::ArgMax arg_max;
 
   T weight_sum = static_cast<T>(0);
   T* row_outputs = nullptr;
@@ -727,7 +733,7 @@ __launch_bounds__(TPB) __global__
   __shared__ typename BlockReduce::TempStorage tmpStorage;
 
   cub_kvp thread_kvp;
-  cub::ArgMax arg_max;
+  fd_cub_compat::ArgMax arg_max;
 
   const int block_row = blockIdx.x + blockIdx.y * gridDim.x;
   // unsigned int state = block_row + blockIdx.x * blockDim.x +
