@@ -293,7 +293,9 @@ class GPUModelRunner(ModelRunnerBase):
         """
         check whether decode stage exist
         """
-        return (self.share_inputs["seq_lens_decoder"] > 0).any().cpu().numpy().item()
+        seq_lens_decoder = self.share_inputs["seq_lens_decoder"]
+        stop_flags = self.share_inputs["stop_flags"].squeeze(1)
+        return ((seq_lens_decoder > 0) & ~stop_flags).any().cpu().numpy().item()
 
     def _resolve_current_launch_token_num(
         self, cached_token_num: int, token_num_event, is_dummy_or_profile_run: bool
