@@ -50,6 +50,10 @@ from fastdeploy.reasoning import ReasoningParser
 from fastdeploy.spec_decode import SpecMethod, VerifyStrategy
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import (
+        build_sampling_params
+    )
 
 def top_p_normalize_probs_paddle(
     probs: paddle.Tensor,
@@ -922,6 +926,8 @@ class SpeculativeSampler(nn.Layer):
         sampling_metadata: SamplingMetadata,
         max_model_len: int,
         share_inputs: List[paddle.Tensor],
+        token_num_output_cpu: int,
+        increment_value : int,
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
     ) -> SamplerOutput:
