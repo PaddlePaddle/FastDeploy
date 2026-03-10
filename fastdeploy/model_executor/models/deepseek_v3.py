@@ -72,7 +72,6 @@ if current_platform.is_cuda():
     )
 
     paddle.enable_compat(scope={"deep_gemm"})
-    import deep_gemm
 
 
 class DeepSeekV3MLP(nn.Layer):
@@ -572,6 +571,7 @@ class Indexer(nn.Layer):
         )
 
         indexer_top_k = paddle.full([q_fp8.shape[0], self.index_topk], -1, dtype="int32")
+        import deep_gemm
 
         if forward_meta.max_len_tensor_cpu[1]:
 
