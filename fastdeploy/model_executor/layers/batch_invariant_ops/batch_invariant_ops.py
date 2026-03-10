@@ -820,6 +820,12 @@ def init_deterministic_mode():
 
     Call after worker creation but before model loading.
     """
+    import os
+
+    diag = os.getenv("FD_OVERLAP_DIAG", "")
+    if "skip_batch_invariant" in diag:
+        logger.warning("FD_OVERLAP_DIAG=skip_batch_invariant: skipping batch_invariant_ops for diagnosis")
+        return
     if not is_batch_invariant_mode_enabled():
         enable_batch_invariant_mode()
 

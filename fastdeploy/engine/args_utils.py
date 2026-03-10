@@ -569,6 +569,9 @@ class EngineArgs:
             or self.dynamic_load_weight
         ):
             self.enable_overlap_schedule = False
+        if envs.FD_DETERMINISTIC_MODE and self.enable_overlap_schedule and not envs.FD_OVERLAP_DIAG:
+            self.enable_overlap_schedule = False
+            console_logger.info("Deterministic mode: overlap schedule disabled for compatibility.")
         if self.enable_logprob:
             if not current_platform.is_cuda() and not current_platform.is_xpu():
                 raise NotImplementedError("Only CUDA and XPU platforms support logprob.")

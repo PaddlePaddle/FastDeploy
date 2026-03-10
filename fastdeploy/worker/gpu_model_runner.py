@@ -310,12 +310,14 @@ class GPUModelRunner(ModelRunnerBase):
         - non-overlap mode doesn't support caching
         - prefill stage changes batch composition
         - invalid cached value
+        - FD_OVERLAP_DIAG=force_sync forces synchronization for debugging
         """
         if (
             is_dummy_or_profile_run
             or (not self.enable_overlap_schedule)
             or self.exist_prefill()
             or cached_token_num <= 0
+            or "force_sync" in envs.FD_OVERLAP_DIAG
         ):
             token_num_event.synchronize()
             return self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
@@ -1341,7 +1343,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Pre-compute CPU scalars for deterministic mode + CUDA Graph compatibility.
         # These .item() calls are safe here because we are outside the graph capture region.
-        if envs.FD_DETERMINISTIC_MODE:
+        if envs.FD_DETERMINISTIC_MODE and "skip_deter_precompute" not in envs.FD_OVERLAP_DIAG:
             slt = self.share_inputs["seq_lens_this_time"]
             sle = self.share_inputs["seq_lens_encoder"]
             sld = self.share_inputs["seq_lens_decoder"]

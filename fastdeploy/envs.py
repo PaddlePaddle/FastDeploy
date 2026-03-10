@@ -226,6 +226,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     ),
     # Enable determinism logging (print MD5 hashes and debug info)
     "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
+    # Diagnostic flag for overlap schedule debugging (e.g. "force_sync" to force GPU-CPU sync in overlap path)
+    "FD_OVERLAP_DIAG": lambda: os.getenv("FD_OVERLAP_DIAG", ""),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
 }
