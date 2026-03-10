@@ -408,14 +408,17 @@ class ModelConfig:
                 logger.info("The model format is Hugging Face Torch")
             elif "dtype" in self.model_config:
                 # https://github.com/huggingface/transformers/releases/tag/v4.56.0  Transformers 4.56.0 version deprecated torch_dtype
-                if "transformers_version" in self.model_config and parse_version(
-                    self.model_config["transformers_version"]
-                ) > parse_version("4.56.0"):
-                    self.model_format = "torch"
-                    logger.info("The model format is Hugging Face Torch")
-                else:
+                if "source" in self.model_config and self.model_config["source"] == "paddle":
                     self.model_format = "paddle"
-                    logger.info("The model format is Paddle")
+                else:
+                    if "transformers_version" in self.model_config and parse_version(
+                        self.model_config["transformers_version"]
+                    ) > parse_version("4.56.0"):
+                        self.model_format = "torch"
+                        logger.info("The model format is Hugging Face Torch")
+                    else:
+                        self.model_format = "paddle"
+                        logger.info("The model format is Paddle")
             elif (
                 "quantization_config" in self.model_config
                 and "quant_method" in self.model_config["quantization_config"]
@@ -424,11 +427,11 @@ class ModelConfig:
                 self.model_format = "torch"
                 logger.info("The model format is Hugging Face")
             else:
-                raise ValueError(
-                    "Unknown model format. Please ensure your config.json contains "
-                    "either 'torch_dtype' (for Hugging Face models) or 'dtype' (for Paddle models) field. "
-                    f"Config file path: {config_path}"
-                )
+                if "source" in self.model_config and self.model_config["source"] == "paddle":
+                    self.model_format = "paddle"
+                else:
+                    self.model_format = "torch"
+                logger.info("The model format is Hugging Face")
 
     def _get_default_runner_type(
         self,
