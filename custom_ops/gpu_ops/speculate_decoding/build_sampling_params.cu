@@ -35,7 +35,7 @@ __global__ void BuildSamplingParamsKernel(float *top_p_padding,
   int cur_seq_len_q_output_end = cu_seq_lens_q_output[bi + 1];
   const float bi_top_p = top_p[bi];
   const int64_t bi_top_k = top_k[bi];
-  int64_t bi_infer_seed = infer_seed[bi] + tid * 4;
+  int64_t bi_infer_seed = (infer_seed[bi] + tid * 4) % MAX_INFER_SEED;
 
   for (int i = tid; i < cur_seq_len_q_output_end - cur_seq_len_q_output_start;
        i += blockDim.x) {
