@@ -155,9 +155,19 @@ class DeterministicAttentionMixin:
         max_extend_len = forward_meta.deter_max_extend_len
         total_prefix_len = forward_meta.deter_total_prefix_len
 
-        seq_lens_this_time = forward_meta.seq_lens_this_time
-        prefix_lens = forward_meta.prefix_lens[:bs].astype("int32")
-        extend_seq_lens = seq_lens_this_time[:bs]
+        # Active slots may not be contiguous (e.g. slot 0 done, slot 1 still decoding).
+        # Use integer indices to compact active slots (avoids boolean mask shape mismatch).
+        slt = forward_meta.seq_lens_this_time
+        if bufs is not None:
+            # CUDA Graph path: slots are padded to max_num_seqs, always contiguous
+            extend_seq_lens = slt[:bs]
+            prefix_lens = forward_meta.prefix_lens[:bs].astype("int32")
+            block_tables = forward_meta.block_tables
+        else:
+            active_idx = paddle.nonzero(slt > 0).flatten()[:bs]
+            extend_seq_lens = slt[active_idx]
+            prefix_lens = forward_meta.prefix_lens[active_idx].astype("int32")
+            block_tables = forward_meta.block_tables[active_idx]
         qo_indptr = triton_cumsum_with_zero_prefix(
             extend_seq_lens,
             bs,
@@ -165,7 +175,7 @@ class DeterministicAttentionMixin:
         )
 
         prefix_kv_indptr, prefix_kv_indices = build_kv_indices_from_block_tables(
-            forward_meta.block_tables,
+            block_tables,
             prefix_lens,
             self.block_size,
             bs,
@@ -183,7 +193,7 @@ class DeterministicAttentionMixin:
             total_seq_lens = prefix_lens + extend_seq_lens
 
         all_kv_indptr, all_kv_indices = build_kv_indices_from_block_tables(
-            forward_meta.block_tables,
+            block_tables,
             total_seq_lens,
             self.block_size,
             bs,
@@ -231,10 +241,13 @@ class DeterministicAttentionMixin:
         NOT compatible with CUDA Graph capture — kept for correctness validation.
         """
         seq_lens_this_time = forward_meta.seq_lens_this_time
-        bs = int((seq_lens_this_time > 0).sum().item())
+        active_idx = paddle.nonzero(seq_lens_this_time > 0).flatten()
+        bs = active_idx.shape[0]
 
-        prefix_lens = forward_meta.prefix_lens[:bs].astype("int32")
-        extend_seq_lens = seq_lens_this_time[:bs]
+        # Compact active slots (may not be contiguous)
+        prefix_lens = forward_meta.prefix_lens[active_idx].astype("int32")
+        extend_seq_lens = seq_lens_this_time[active_idx]
+        block_tables = forward_meta.block_tables[active_idx]
         qo_indptr = paddle.concat(
             [
                 paddle.zeros([1], dtype="int32"),
@@ -247,14 +260,14 @@ class DeterministicAttentionMixin:
         )
 
         prefix_kv_indptr, prefix_kv_indices = build_kv_indices_from_block_tables_ref(
-            forward_meta.block_tables,
+            block_tables,
             prefix_lens,
             self.block_size,
             bs,
         )
         total_seq_lens = prefix_lens + extend_seq_lens
         all_kv_indptr, all_kv_indices = build_kv_indices_from_block_tables_ref(
-            forward_meta.block_tables,
+            block_tables,
             total_seq_lens,
             self.block_size,
             bs,
@@ -294,6 +307,53 @@ class DeterministicAttentionMixin:
         max_extend_len = int(paddle.max(extend_seq_lens).item())
         return qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len
 
+    def _write_decode_kv_to_cache(self, qkv_out, cache_k, cache_v, forward_meta):
+        """
+        Write decode tokens' KV to paged cache.
+
+        gqa_rope_write_cache skips decode tokens (seq_lens_encoder==0) in CascadeAppendWriteCacheKVQKV.
+        This method fills the gap by writing RoPE'd K,V from qkv_out into paged cache for decode tokens.
+
+        qkv_out: [token_num, (num_heads + 2*kv_num_heads) * head_dim], RoPE already applied
+        cache_k/v: [num_blocks, kv_num_heads, block_size, head_dim]
+        """
+        seq_lens_encoder = forward_meta.seq_lens_encoder
+        seq_lens_decoder = forward_meta.seq_lens_decoder
+        cu_seqlens_q = forward_meta.cu_seqlens_q
+        block_tables = forward_meta.block_tables
+        bsz = seq_lens_encoder.shape[0]
+        num_heads = self.num_heads
+        kv_num_heads = self.kv_num_heads
+        head_dim = self.head_dim
+        block_size = self.block_size
+
+        k_offset = num_heads * head_dim
+        v_offset = (num_heads + kv_num_heads) * head_dim
+
+        for bid in range(bsz):
+            enc = int(seq_lens_encoder[bid].item())
+            if enc > 0:
+                continue  # prefill tokens already handled by gqa_rope_write_cache
+            dec = int(seq_lens_decoder[bid].item())
+            if dec <= 0:
+                continue
+            # Token index in qkv_out for this decode batch
+            token_start = int(cu_seqlens_q[bid].item())
+            q_len = int(cu_seqlens_q[bid + 1].item()) - token_start  # typically 1 for decode
+            for t in range(q_len):
+                token_idx = token_start + t
+                # Position in KV cache: dec + t (seq_lens_decoder already accounts for prefix)
+                cache_pos = dec + t
+                blk_idx = cache_pos // block_size
+                blk_off = cache_pos % block_size
+                blk_id = int(block_tables[bid][blk_idx].item())
+                # Extract K and V from qkv_out
+                k_vec = qkv_out[token_idx, k_offset : k_offset + kv_num_heads * head_dim]
+                v_vec = qkv_out[token_idx, v_offset : v_offset + kv_num_heads * head_dim]
+                # Reshape to [kv_num_heads, head_dim] and write to cache
+                cache_k[blk_id, :, blk_off, :] = k_vec.reshape([kv_num_heads, head_dim])
+                cache_v[blk_id, :, blk_off, :] = v_vec.reshape([kv_num_heads, head_dim])
+
     @staticmethod
     def _diag_md5(tensor, n=16):
         """Quick MD5 for diagnostics (first n hex chars)."""
@@ -310,6 +370,72 @@ class DeterministicAttentionMixin:
         blk_id = int(block_tables[seq_idx][block_idx].item())
         data = cache_k[blk_id].cpu().numpy().tobytes()
         return hashlib.md5(data).hexdigest()[:16]
+
+    def _deterministic_rope_kv_write(self, qkv, cache_k, cache_v, layer, forward_meta, metadata):
+        """Bisect helper: only pre_cache_len_concat + gqa_rope_write_cache (KV cache write), no attention."""
+        norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
+        q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
+        k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
+        cache_k_scales = getattr(layer, "cache_k_scale", None)
+        cache_v_scales = getattr(layer, "cache_v_scale", None)
+
+        (
+            cu_seqlens_k,
+            pre_cache_batch_ids,
+            pre_cache_tile_ids_per_batch,
+            pre_cache_num_blocks_cpu,
+            kv_token_num_cpu,
+        ) = pre_cache_len_concat(
+            forward_meta.seq_lens_encoder,
+            forward_meta.seq_lens_decoder,
+            forward_meta.seq_lens_this_time,
+            forward_meta.max_len_tensor_cpu[2],
+            self.block_size,
+        )
+        kv_token_num = kv_token_num_cpu[0].item()
+
+        gqa_rope_write_cache(
+            qkv,
+            cache_k,
+            cache_v,
+            forward_meta.cu_seqlens_q,
+            cu_seqlens_k,
+            forward_meta.rotary_embs,
+            forward_meta.seq_lens_this_time,
+            forward_meta.seq_lens_encoder,
+            forward_meta.seq_lens_decoder,
+            forward_meta.batch_id_per_token,
+            forward_meta.block_tables,
+            forward_meta.kv_batch_ids,
+            forward_meta.kv_tile_ids_per_batch,
+            forward_meta.kv_num_blocks_x_cpu,
+            pre_cache_batch_ids,
+            pre_cache_tile_ids_per_batch,
+            pre_cache_num_blocks_cpu,
+            q_norm_weight,
+            k_norm_weight,
+            cache_k_scales,
+            cache_v_scales,
+            getattr(layer, "cache_k_out_scale", None),
+            getattr(layer, "cache_v_out_scale", None),
+            getattr(layer, "cache_k_zp", None),
+            getattr(layer, "cache_v_zp", None),
+            metadata.kv_signal_data_list[layer.layer_id],
+            kv_token_num,
+            self.max_seq_len,
+            getattr(layer, "rms_norm_eps", 1e-6),
+            layer.use_neox_rotary_style,
+            getattr(layer, "cache_quant_type_str", "none"),
+            self.rope_3d,
+        )
+
+        # DIAG: snapshot KV cache after gqa_rope_write_cache, compare after append_attention overwrites
+        if os.environ.get("FD_DIAG_KV_CMP", "0") == "1" and layer.layer_id == 0:
+            bt = forward_meta.block_tables
+            blk0 = int(bt[0][0].item())
+            # Snapshot block 0, head 0 of cache_k after gqa_rope_write_cache
+            self._kv_snapshot = cache_k[blk0, 0, :, :4].clone().cpu().float().numpy()
+            self._kv_snapshot_blk = blk0
 
     def _deterministic_forward(self, qkv, cache_k, cache_v, layer, forward_meta, metadata):
         """
@@ -361,6 +487,14 @@ class DeterministicAttentionMixin:
             )
             kv_token_num = forward_meta.deter_kv_token_num
         else:
+            # Treat decode tokens as prefill so gqa_rope_write_cache applies correct
+            # RoPE position (seq_lens_decoder) and writes KV to paged cache.
+            # Original kernel skips both when seq_lens_encoder==0.
+            enc = forward_meta.seq_lens_encoder
+            # For decode slots (enc==0), pretend they are prefill with seq_len=1
+            # so gqa_rope_write_cache applies correct RoPE and writes KV to cache.
+            # Decode always generates exactly 1 token, so ones_like is correct.
+            seq_lens_encoder_for_rope = paddle.where(enc == 0, paddle.ones_like(enc), enc)
             (
                 cu_seqlens_k,
                 pre_cache_batch_ids,
@@ -368,7 +502,7 @@ class DeterministicAttentionMixin:
                 pre_cache_num_blocks_cpu,
                 kv_token_num_cpu,
             ) = pre_cache_len_concat(
-                forward_meta.seq_lens_encoder,
+                seq_lens_encoder_for_rope,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,
                 forward_meta.max_len_tensor_cpu[2],
@@ -400,7 +534,7 @@ class DeterministicAttentionMixin:
             cu_seqlens_k,
             forward_meta.rotary_embs,
             forward_meta.seq_lens_this_time,
-            forward_meta.seq_lens_encoder,
+            seq_lens_encoder_for_rope if not forward_meta.step_use_cudagraph else forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.batch_id_per_token,
             forward_meta.block_tables,
@@ -514,13 +648,64 @@ class DeterministicAttentionMixin:
                 bufs.output = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=q_roped.dtype)
             o = bufs.output[:token_nums].zero_()
         else:
-            (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
-                self._deterministic_build_triton_indices(forward_meta)
-            )
+            if "use_ref_indices" in os.environ.get("FD_OVERLAP_DIAG", ""):
+                (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
+                    self._deterministic_build_triton_indices_ref(forward_meta)
+                )
+            else:
+                (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
+                    self._deterministic_build_triton_indices(forward_meta)
+                )
+            # DIAG: compare indices with reference implementation (Layer 0 only)
+            if os.environ.get("FD_DIAG_INDEX", "0") == "1" and layer.layer_id == 0:
+                (qo_ref, kv_indptr_ref, kv_indices_ref, plen_ref, bs_ref, mel_ref) = (
+                    self._deterministic_build_triton_indices_ref(forward_meta)
+                )
+                import numpy as np
+
+                _eq = lambda a, b, name: logger.info(
+                    f"[DIAG-IDX] {name}: match={bool(np.array_equal(a.cpu().numpy(), b.cpu().numpy()))} "
+                    f"len={len(a)}/{len(b)} "
+                    f"triton={a[:min(10,len(a))].cpu().numpy().tolist()} ref={b[:min(10,len(b))].cpu().numpy().tolist()}"
+                )
+                _eq(qo_indptr[: bs + 1], qo_ref[: bs_ref + 1], "qo_indptr")
+                _eq(unified_kv_indptr[: bs + 1], kv_indptr_ref[: bs_ref + 1], "unified_kv_indptr")
+                # Show exact mismatch position for kv_indices
+                tri_np = unified_kv_indices.cpu().numpy()
+                ref_np = kv_indices_ref.cpu().numpy()
+                n = min(len(tri_np), len(ref_np))
+                diff_mask = tri_np[:n] != ref_np[:n]
+                if diff_mask.any():
+                    first_diff = int(np.argmax(diff_mask))
+                    logger.info(
+                        f"[DIAG-IDX] unified_kv_indices: MISMATCH at pos={first_diff} "
+                        f"triton_len={len(tri_np)} ref_len={len(ref_np)} "
+                        f"triton[{first_diff}]={tri_np[first_diff]} ref[{first_diff}]={ref_np[first_diff]} "
+                        f"total_diff={int(diff_mask.sum())}"
+                    )
+                elif len(tri_np) != len(ref_np):
+                    logger.info(
+                        f"[DIAG-IDX] unified_kv_indices: prefix match but LEN DIFF "
+                        f"triton_len={len(tri_np)} ref_len={len(ref_np)}"
+                    )
+                else:
+                    logger.info(f"[DIAG-IDX] unified_kv_indices: EXACT MATCH len={len(tri_np)}")
+                _eq(prefix_lens[:bs], plen_ref[:bs_ref], "prefix_lens")
+                logger.info(f"[DIAG-IDX] bs={bs}/{bs_ref} max_extend_len={max_extend_len}/{mel_ref}")
+
             token_nums = q_roped.shape[0]
             o = paddle.zeros([token_nums, self.num_heads, self.head_dim], dtype=q_roped.dtype)
 
         if not _skip_attn:
+            # DIAG: lightweight metadata log for Layer 0
+            if os.environ.get("FD_DIAG_ATTN", "0") == "1" and layer.layer_id == 0:
+                _pnp = prefix_lens[:bs].cpu().numpy().tolist() if bs > 0 else []
+                _kv_lens = (
+                    (unified_kv_indptr[1 : bs + 1] - unified_kv_indptr[:bs]).cpu().numpy().tolist() if bs > 0 else []
+                )
+                _wlog.info(
+                    f"[DIAG-L0] bs={bs} mel={max_extend_len} plen={_pnp} kv_len={_kv_lens} tokens={q_roped.shape[0]}"
+                )
             res = extend_attention_fwd_unified(
                 q_roped,
                 o,
@@ -536,6 +721,67 @@ class DeterministicAttentionMixin:
                 max_extend_len,
                 self.causal,
             ).reshape([-1, self.num_heads * self.head_dim])
+
+            # DIAG: naive attention comparison (Layer 0, first seq only)
+            if os.environ.get("FD_DIAG_ATTN_CMP", "0") == "1" and layer.layer_id == 0 and bs > 0:
+                import numpy as np
+
+                q_start = int(qo_indptr[0].item())
+                q_len = int(qo_indptr[1].item()) - q_start
+                kv_start = int(unified_kv_indptr[0].item())
+                kv_len = int(unified_kv_indptr[1].item()) - kv_start
+                plen = int(prefix_lens[0].item())
+                kv_idx = unified_kv_indices[kv_start : kv_start + kv_len].cpu().numpy()
+                sm_scale = 1.0 / (self.head_dim**0.5)
+                # Pick head 0 for comparison
+                h = 0
+                kv_h = h // (self.num_heads // self.kv_num_heads)
+                q_vec = q_roped[q_start : q_start + q_len, h, :].cpu().float().numpy()  # [q_len, D]
+                # Gather K,V from paged cache using kv_indices
+                block_size = cache_k.shape[2]
+                k_list, v_list = [], []
+                for idx in kv_idx:
+                    blk_id = idx // block_size
+                    off = idx % block_size
+                    k_list.append(cache_k[blk_id, kv_h, off, :].cpu().float().numpy())
+                    v_list.append(cache_v[blk_id, kv_h, off, :].cpu().float().numpy())
+                if not k_list:
+                    logger.info("[DIAG-ATTN-CMP] seq0 head0: SKIP (kv_len=0)")
+                else:
+                    k_mat = np.stack(k_list)  # [kv_len, D]
+                    v_mat = np.stack(v_list)  # [kv_len, D]
+                    # QK^T
+                    scores = q_vec @ k_mat.T * sm_scale  # [q_len, kv_len]
+                    # Causal mask
+                    if self.causal:
+                        for qi in range(q_len):
+                            for ki in range(kv_len):
+                                if ki >= plen and (ki - plen) > qi:
+                                    scores[qi, ki] = -1e20
+                    # Softmax
+                    scores_max = scores.max(axis=-1, keepdims=True)
+                    scores_exp = np.exp(scores - scores_max)
+                    scores_sum = scores_exp.sum(axis=-1, keepdims=True)
+                    attn_weights = scores_exp / scores_sum
+                    naive_out = attn_weights @ v_mat  # [q_len, D]
+                    # Compare with Triton output
+                    triton_out = (
+                        res[q_start : q_start + q_len, h * self.head_dim : (h + 1) * self.head_dim]
+                        .cpu()
+                        .float()
+                        .numpy()
+                    )
+                    diff = np.abs(naive_out - triton_out)
+                    logger.info(
+                        f"[DIAG-ATTN-CMP] seq0 head0: q_len={q_len} kv_len={kv_len} plen={plen} "
+                        f"max_diff={diff.max():.6f} mean_diff={diff.mean():.6f} "
+                        f"naive_norm={np.linalg.norm(naive_out):.4f} triton_norm={np.linalg.norm(triton_out):.4f}"
+                    )
+                    if diff.max() > 0.01:
+                        logger.info(f"[DIAG-ATTN-CMP] naive[0,:4]={naive_out[0,:4]} triton[0,:4]={triton_out[0,:4]}")
+                        logger.info(
+                            f"[DIAG-ATTN-CMP] naive[-1,:4]={naive_out[-1,:4]} triton[-1,:4]={triton_out[-1,:4]}"
+                        )
         else:
             # Skip Triton attention — return zeros
             res = o.reshape([-1, self.num_heads * self.head_dim])

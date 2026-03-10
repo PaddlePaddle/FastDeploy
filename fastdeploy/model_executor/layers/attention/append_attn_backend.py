@@ -365,8 +365,14 @@ class AppendAttentionBackend(AttentionBackend, DeterministicAttentionMixin):
                 "Deterministic mode does not support output quantization (use_output=True) yet. "
                 "Please enable full_cuda_graph or disable FD_DETERMINISTIC_MODE."
             )
-        if envs.FD_DETERMINISTIC_MODE:
-            return self._deterministic_forward(qkv, cache_k, cache_v, layer, forward_meta, metadata)
+        _diag = os.environ.get("FD_OVERLAP_DIAG", "")
+        if envs.FD_DETERMINISTIC_MODE and "skip_deter_attn" not in _diag:
+            if "deter_rope_only" in _diag:
+                # Bisect: only run gqa_rope_write_cache (writes KV cache), then fall through to C++ attention
+                self._deterministic_rope_kv_write(qkv, cache_k, cache_v, layer, forward_meta, metadata)
+                # Don't return — fall through to append_attention below
+            else:
+                return self._deterministic_forward(qkv, cache_k, cache_v, layer, forward_meta, metadata)
 
         if self.use_output:
             quant_max_bound = getattr(layer, "quant_max_bound", 0.0)
@@ -517,4 +523,28 @@ class AppendAttentionBackend(AttentionBackend, DeterministicAttentionMixin):
                 self.sink_size,
                 self.head_wise_full_hidden if self.head_wise_swa_ratio > 0 else 0,
             )
+
+        # DIAG: compare KV cache after append_attention vs gqa_rope_write_cache snapshot
+        if os.environ.get("FD_DIAG_KV_CMP", "0") == "1" and layer.layer_id == 0 and hasattr(self, "_kv_snapshot"):
+            import numpy as np
+
+            blk0 = self._kv_snapshot_blk
+            after_cpp = cache_k[blk0, 0, :, :4].cpu().float().numpy()
+            before_cpp = self._kv_snapshot
+            diff = np.abs(after_cpp - before_cpp)
+            logger.info(f"[DIAG-KV-CMP] blk={blk0} max_diff={diff.max():.6f} mean_diff={diff.mean():.6f}")
+            if diff.max() > 0.001:
+                row_diff = diff.max(axis=1)
+                diff_offsets = np.where(row_diff > 0.001)[0]
+                logger.info(
+                    f"[DIAG-KV-CMP] MISMATCH offsets={diff_offsets.tolist()} "
+                    f"enc={forward_meta.seq_lens_encoder[0].item()} "
+                    f"dec={forward_meta.seq_lens_decoder[0].item()} "
+                    f"slt={forward_meta.seq_lens_this_time[0].item()} "
+                    f"block_size={self.block_size}"
+                )
+                for off in diff_offsets[:3]:
+                    logger.info(f"[DIAG-KV-CMP] off={off}: gqa={before_cpp[off]} cpp={after_cpp[off]}")
+            del self._kv_snapshot
+
         return res
