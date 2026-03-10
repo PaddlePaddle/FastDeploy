@@ -221,7 +221,7 @@ def _build_stream_transfer_data(
     stream_transfer_datas = []
     if output_tokens is not None:
 
-        output_tokens = output_tokens.reshape([-1]).numpy()
+        output_tokens = output_tokens.numpy().reshape([-1])
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
@@ -363,11 +363,17 @@ def save_output_normal(
     # In the future, we will abandon this approach.
     if envs.FD_USE_GET_SAVE_OUTPUT_V1:
         if save_each_rank or model_output.mp_rank == 0:
+            recover_share_inputs_map = recover_batch_index_for_output(
+                share_inputs,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["sampled_token_ids"],
+            )
             recover_batch_index_for_sampler_output(
                 sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
             )
             output = _build_stream_transfer_data(
-                sampler_output.sampled_token_ids,
+                recover_share_inputs_map["sampled_token_ids"],
                 logprobs=sampler_output.logprobs_tensors,
                 prompt_logprobs_list=model_output.prompt_logprobs_list,
             )

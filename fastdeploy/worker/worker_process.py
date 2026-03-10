@@ -170,12 +170,7 @@ class PaddleDisWorkerProc:
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        self.speculative_decoding = fd_config.speculative_config.method is not None
-        self.enable_overlap_schedule = (
-            current_platform.is_cuda()
-            and self.scheduler_config.enable_overlap_schedule
-            and (not self.speculative_decoding)
-        )
+        self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule
 
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
@@ -1221,12 +1216,10 @@ def run_worker_proc() -> None:
     # transformers) will fail when transformers tries to query torch metadata.
     if envs.FD_DETERMINISTIC_MODE:
         from fastdeploy.model_executor.layers.batch_invariant_ops import (
-            enable_batch_invariant_mode,
-            is_batch_invariant_mode_enabled,
+            init_deterministic_mode,
         )
 
-        if not is_batch_invariant_mode_enabled():
-            enable_batch_invariant_mode()
+        init_deterministic_mode()
 
     # Initialize device and create model runner
     worker_proc.init_device()

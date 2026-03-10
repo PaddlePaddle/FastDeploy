@@ -797,7 +797,7 @@ class EngineService:
                 main_process_metrics.num_requests_waiting.dec(len(tasks))
                 main_process_metrics.num_requests_running.inc(len(tasks))
             except Exception as e:
-                err_msg = f"Error happend while insert task to engine: {e}, {traceback.format_exc()!s}."
+                err_msg = f"Error happened while insert task to engine: {e}, {traceback.format_exc()!s}."
                 self.llm_logger.error(err_msg)
 
     def _schedule_request_to_worker_v1(self):
@@ -1076,7 +1076,7 @@ class EngineService:
                 if "cannot schedule new futures after shutdown" in str(e):
                     break
             except Exception as e:
-                err_msg = "Error happend while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
+                err_msg = "Error happened while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
 
     def _get_scheduler_unhandled_request_num(self) -> int:
@@ -1466,7 +1466,7 @@ class EngineService:
 
     def _zmq_send_generated_tokens(self):
         """
-        Recieve output for zmq
+        Receive output for zmq
         """
         while self.running:
             try:
@@ -1860,7 +1860,7 @@ class EngineService:
                 create=True,
             )
 
-        # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
+        # launched_expert_service_signal: Used to sense whether each expert_service is started successfully
         if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32

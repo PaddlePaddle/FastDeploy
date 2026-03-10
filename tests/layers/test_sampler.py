@@ -19,6 +19,7 @@ import types
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import paddle
 import pytest
@@ -363,6 +364,74 @@ def test_mtp_sampler_xpu_and_compute(mock_ops, monkeypatch):
         paddle.to_tensor([1], dtype="int64"),
     )
     assert gathered.logprob_token_ids.shape[1] == 1
+
+
+def test_sampler_deterministic_log_mode_calls_diagnostic(mock_ops, monkeypatch):
+    """When FD_DETERMINISTIC_LOG_MODE is True, sampler calls _record_logits_diagnostic."""
+    import fastdeploy.envs as envs
+
+    # Mock the diagnostic function
+    mock_diagnostic = MagicMock()
+    monkeypatch.setattr(
+        "fastdeploy.model_executor.layers.sample.sampler._record_logits_diagnostic",
+        mock_diagnostic,
+    )
+
+    # Enable deterministic log mode
+    monkeypatch.setattr(envs, "FD_DETERMINISTIC_LOG_MODE", True)
+
+    sampler = _make_stubbed_sampler()
+    m = _create_metadata(batch_size=1, max_num_logprobs=None)
+    m.logits_processors = []
+
+    monkeypatch.setattr(
+        "fastdeploy.model_executor.layers.sample.sampler.top_k_top_p_sampling",
+        lambda probs, top_p, top_k, top_k_list, topp_seed=None: (
+            None,
+            paddle.to_tensor([[1]], dtype="int64"),
+        ),
+    )
+
+    logits = paddle.to_tensor([[1.0, 2.0, 3.0]], dtype="float32")
+    sampler.forward_cuda(logits, m)
+
+    # Should be called twice: once for raw_logits, once for post_penalty_logits
+    assert mock_diagnostic.call_count == 2
+    call_tags = [call.kwargs.get("tag", "") for call in mock_diagnostic.call_args_list]
+    assert "raw_logits" in call_tags
+    assert "post_penalty_logits" in call_tags
+
+
+def test_top_k_top_p_sampling_resets_cuda_rng_in_deterministic_mode(monkeypatch):
+    """When FD_DETERMINISTIC_MODE is True, top_k_top_p_sampling resets CUDA RNG."""
+    import sys
+
+    import fastdeploy.envs as envs
+
+    # Enable deterministic mode
+    monkeypatch.setattr(envs, "FD_DETERMINISTIC_MODE", True)
+
+    # Get the module directly from sys.modules
+    sampling_mod = sys.modules["fastdeploy.model_executor.layers.sample.ops.top_k_top_p_sampling"]
+
+    # Mock the reset function to track if it's called
+    mock_reset = MagicMock()
+    monkeypatch.setattr(sampling_mod, "_reset_cuda_generator_for_determinism", mock_reset)
+
+    # Mock the sampling to avoid actual GPU ops
+    monkeypatch.setattr(
+        sampling_mod.paddle.tensor,
+        "top_p_sampling",
+        lambda *a, **k: (None, paddle.to_tensor([[1]], dtype="int64")),
+    )
+
+    probs = paddle.to_tensor([[0.5, 0.3, 0.2]], dtype="float32")
+    top_p = paddle.to_tensor([[0.9]], dtype="float32")
+
+    sampling_mod.top_k_top_p_sampling(probs, top_p)
+
+    # Verify reset function was called
+    mock_reset.assert_called_once()
 
 
 if __name__ == "__main__":
