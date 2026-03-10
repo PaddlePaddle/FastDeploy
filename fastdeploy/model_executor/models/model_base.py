@@ -123,6 +123,8 @@ class ModelRegistry:
 
     def _register_enhanced_models(self):
         for arch, model_info in self._enhanced_models.items():
+            if arch == "DeepseekV32ForCausalLM":
+                model_info["module_name"] = "deepseek_v3"
             model = LazyRegisteredModel(
                 module_name=model_info["module_name"],
                 module_path=model_info["module_path"],
