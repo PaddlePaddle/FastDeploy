@@ -41,4 +41,5 @@ void DecoderWriteCacheWithRoPEKernel(
     paddle::Tensor* key_cache_out,
     paddle::Tensor* value_cache_out,
     const paddle::optional<paddle::Tensor>& q_norm_weight,
-    const paddle::optional<paddle::Tensor>& k_norm_weight,    const float rms_norm_eps);
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps);

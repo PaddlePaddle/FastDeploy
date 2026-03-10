@@ -173,6 +173,9 @@ def load_tensor_from_shm_mem(tensor_infos, shm_ptr, logger=None):
         elif dtype == paddle.float8_e4m3fn:
             tmp = np_array.view(np.uint8)
             tensor = paddle.Tensor(tmp, dtype=paddle.float8_e4m3fn, place=paddle.CPUPlace(), zero_copy=True)
+        elif dtype == paddle.int32:
+            tmp = np_array.view(np.int32)
+            tensor = paddle.Tensor(tmp, dtype=paddle.int32, place=paddle.CPUPlace(), zero_copy=True)
         else:
             raise TypeError(f"Unsupported dtype: {dtype}")
 

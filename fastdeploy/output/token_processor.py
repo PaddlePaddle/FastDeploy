@@ -66,6 +66,7 @@ class TokenProcessor:
         self.cfg = cfg
         self.cached_generated_tokens = cached_generated_tokens
         self.resource_manager = None
+        self.scheduler_metrics_logger = None
         self.engine_worker_queue = engine_worker_queue
         self.tokens_counter = Counter()
         self.split_connector = split_connector
@@ -159,6 +160,16 @@ class TokenProcessor:
         """
         assert self.resource_manager is None, "The resource manager is not None, cannot set again."
         self.resource_manager = resource_manager
+
+    def set_scheduler_metrics_logger(self, scheduler_metrics_logger):
+        self.scheduler_metrics_logger = scheduler_metrics_logger
+
+    def _is_decode_stage(self, task):
+        if task is None:
+            return False
+        if task.need_prefill_tokens is None:
+            return False
+        return task.num_computed_tokens >= task.need_prefill_tokens
 
     def run(self):
         """
@@ -434,7 +445,7 @@ class TokenProcessor:
                 speculate_get_output,
             )
         elif current_platform.is_iluvatar():
-            from fastdeploy.model_executor.ops.iluvatar import get_output
+            from fastdeploy.model_executor.ops.iluvatar import get_output, get_output_ep
         elif current_platform.is_gcu():
             from fastdeploy.model_executor.ops.gcu import get_output
         elif current_platform.is_intel_hpu():
@@ -777,7 +788,7 @@ class TokenProcessor:
             tracing.trace_set_proc_propagate_context(rid, trace_carrier, ts)
             if self.cfg.speculative_config.method:
                 self._record_speculative_decoding_accept_num_per_request(task_id, accept_num[i])
-                if accept_num[i] == PREEMPTED_TOKEN_ID:  # in MTP, meas preemption has happend in worker
+                if accept_num[i] == PREEMPTED_TOKEN_ID:  # in MTP, means preemption has happened in worker
                     llm_logger.info(f"sync preemption for request_id {task_id} done.")
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.abort_req_ids_set:
@@ -812,6 +823,8 @@ class TokenProcessor:
                         + i * MAX_DRAFT_TOKENS
                         + accept_num[i]
                     ].tolist()
+                if accept_num[i] == 0:
+                    continue
             else:
                 token_id = int(tokens[i, 0])
                 token_ids = [token_id]
@@ -843,6 +856,9 @@ class TokenProcessor:
                             llm_logger.info(f"sync preemption for request_id {task_id} done.")
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
+
+            if self.scheduler_metrics_logger and self._is_decode_stage(task):
+                self.scheduler_metrics_logger.on_decode_tokens(len(token_ids))
 
             if task.get("prefill_chunk_info", None) is not None:
                 prefill_chunk_num = task.get("prefill_chunk_num", 0)
@@ -946,13 +962,32 @@ class TokenProcessor:
                     )
                     if recovery_stop:
                         result.error_msg = "Recover is not supported, the result is incomplete!"
-                    llm_logger.info(
-                        f"Request: {task_id} finished, number of "
-                        f"generated tokens: {self.tokens_counter[task_id]}, token_id:{token_id},is_prefill:{is_prefill},recovery_stop:{recovery_stop}"
-                    )
+
+                    # Calculate statistics for the combined log
                     inference_start_time = task.metrics.get_inference_start_time(is_decode)
-                    token_ratio = self.tokens_counter[task_id] / (time.time() - inference_start_time)
-                    llm_logger.info(f"Request: {task_id} token ratio: {token_ratio}")
+                    task.metrics.cal_cost_time()
+                    e2e_time = current_time - inference_start_time
+                    token_ratio = self.tokens_counter[task_id] / e2e_time
+
+                    # Get cache information
+                    gpu_cache = getattr(task.metrics, "gpu_cache_token_num", 0)
+                    cpu_cache = getattr(task.metrics, "cpu_cache_token_num", 0)
+                    total_cached = gpu_cache + cpu_cache
+
+                    # Build cached detail dict
+                    cached_detail = f'{{"CachedToken": {total_cached}, "GPU": {gpu_cache}, "CPU": {cpu_cache}}}'
+
+                    # Print combined log with all required information
+                    ttft = task.metrics.first_token_time if task.metrics.first_token_time else 0
+                    ttft_s = ttft + task.metrics.time_in_queue
+                    llm_logger.info(
+                        f"Request={task_id}, InputToken={task.prompt_token_ids_len}, "
+                        f"CachedDetail={cached_detail}, OutputToken={self.tokens_counter[task_id]}, "
+                        f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, TTFT_S={ttft_s:.2f}, "
+                        f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
+                        f"PreemptedCount={getattr(task.metrics, 'preempted_count', 0)}"
+                    )
+
                     main_process_metrics.request_token_ratio.observe(token_ratio)
                     llm_logger.info(f"{self.resource_manager.info()}")
                     if self.cfg.speculative_config.method:

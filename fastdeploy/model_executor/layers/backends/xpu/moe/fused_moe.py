@@ -32,7 +32,6 @@ from fastdeploy.model_executor.ops.xpu import (
     moe_topk_select,
     quant2d_per_token,
     weight_quantize_xpu,
-    xpu_moe_layer,
 )
 from fastdeploy.model_executor.utils import (
     TensorTracker,
@@ -40,6 +39,8 @@ from fastdeploy.model_executor.utils import (
     free_tensor,
     set_weight_attrs,
 )
+
+from .utils import get_moe_scores
 
 
 class XPUMoEMethod(MoEMethodBase):
@@ -300,35 +301,7 @@ class XPUMoEMethod(MoEMethodBase):
         layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
         layer.down_proj_weight.set_value(stacked_down_proj_weights)
 
-    def apply_tp_fused_op(
-        self,
-        layer: nn.Layer,
-        x: paddle.Tensor,
-        gate: nn.Layer,
-        topk_ids_hookfunc: Callable = None,
-    ) -> paddle.Tensor:
-        """
-        Apply TP Fused Op.
-        """
-        fused_moe_out = xpu_moe_layer(
-            x,
-            gate.weight.transpose([1, 0]),
-            layer.gate_correction_bias,
-            layer.up_gate_proj_weight,
-            layer.down_proj_weight,
-            None,  # up_gate_proj bias
-            None,  # down_proj bias
-            getattr(layer, self.added_scale_attrs[0], None),
-            getattr(layer, self.added_scale_attrs[1], None),
-            getattr(layer, self.added_in_scale_attrs[0], None),
-            self.moe_quant_type,
-            layer.top_k,
-            False,  # moe group, used in deepseek
-        )
-
-        return fused_moe_out
-
-    def apply_tp_scatter_op(
+    def apply_tp(
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
@@ -339,12 +312,23 @@ class XPUMoEMethod(MoEMethodBase):
         Apply TP Scatter Op.
         """
         gate_out = gate(x.cast("float32"))
-        topk_idx, topk_weights = moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            layer.top_k,
-            True,
-        )
+        if layer.topk_method == "noaux_tc":
+            _, topk_idx, topk_weights = get_moe_scores(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                layer.top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+                layer.renormalize,
+            )
+        else:
+            topk_idx, topk_weights = moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                layer.top_k,
+                True,
+            )
         token_nums_per_expert_list = list(range(layer.num_local_experts))  # placeholder, not use
         (
             permute_input,
@@ -386,23 +370,6 @@ class XPUMoEMethod(MoEMethodBase):
         )
 
         return tmp_ffn_out
-
-    def apply_tp(
-        self,
-        layer: nn.Layer,
-        x: paddle.Tensor,
-        gate: nn.Layer,
-        topk_ids_hookfunc: Callable = None,
-    ) -> paddle.Tensor:
-        """
-        apply tp
-        """
-        if self.moe_quant_type in ["w16a16"]:
-            fused_moe_out = self.apply_tp_fused_op(layer, x, gate)
-        else:
-            fused_moe_out = self.apply_tp_scatter_op(layer, x, gate)
-
-        return fused_moe_out
 
     def compute_ffn(
         self,
@@ -453,8 +420,9 @@ class XPUMoEMethod(MoEMethodBase):
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
         # 2. Dynamic compute blockwise quantization scales
-        if "a_tokenwise_int8" in self.xpu_moe_quant_type and x.shape[0] > 0:
+        if "a_tokenwise_int8" in self.xpu_moe_quant_type:
             x, x_scale = quant2d_per_token(x)
+            x_scale = x_scale.unsqueeze(1)
         else:
             x_scale = None
 

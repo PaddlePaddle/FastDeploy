@@ -34,6 +34,7 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionToolsParam
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
+from fastdeploy.input.utils import validate_model_path
 from fastdeploy.utils import (
     deprecated_kwargs_warning,
     llm_logger,
@@ -89,6 +90,7 @@ class LLM:
         **kwargs,
     ):
         deprecated_kwargs_warning(**kwargs)
+        validate_model_path(model)
 
         model = retrive_model_from_server(model, revision)
         tool_parser_plugin = kwargs.get("tool_parser_plugin")

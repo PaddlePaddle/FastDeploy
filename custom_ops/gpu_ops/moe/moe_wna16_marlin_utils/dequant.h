@@ -92,7 +92,8 @@ __device__ inline uint32_t prmt(uint32_t a) {
   return res;
 }
 
-template <typename scalar_t2, MARLIN_NAMESPACE_NAME::ScalarTypeId w_type_id,
+template <typename scalar_t2,
+          MARLIN_NAMESPACE_NAME::ScalarTypeId w_type_id,
           bool skip_flop = false>
 __device__ inline void dequant(int q, scalar_t2* frag_b);
 
@@ -106,8 +107,8 @@ __device__ inline void dequant(int q, scalar_t2* frag_b);
 // https://github.com/NVIDIA/FasterTransformer/blob/release/v5.3_tag/src/fastertransformer/cutlass_extensions/include/cutlass_extensions/interleaved_numeric_conversion.h#L327-L385
 //
 template <>
-__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU4B8.id(), true>(int q,
-                                                              half2* frag_b) {
+__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU4B8.id(), true>(
+    int q, half2* frag_b) {
   const int MASK = 0x000f000f;
   const int EX = 0x64006400;
   // Guarantee that the `(a & b) | c` operations are LOP3s.
@@ -120,8 +121,8 @@ __device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU4B8.id(), true>(i
 }
 
 template <>
-__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU4B8.id(), false>(int q,
-                                                               half2* frag_b) {
+__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU4B8.id(), false>(
+    int q, half2* frag_b) {
   const int LO = 0x000f000f;
   const int HI = 0x00f000f0;
   const int EX = 0x64006400;
@@ -143,14 +144,14 @@ __device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU4B8.id(), false>(
 }
 
 template <>
-__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU4.id(), true>(int q,
-                                                            half2* frag_b) {
+__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU4.id(), true>(
+    int q, half2* frag_b) {
   dequant<half2, MARLIN_NAMESPACE_NAME::kU4B8.id(), true>(q, frag_b);
 }
 
 template <>
-__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU4.id(), false>(int q,
-                                                             half2* frag_b) {
+__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU4.id(), false>(
+    int q, half2* frag_b) {
   const int LO = 0x000f000f;
   const int HI = 0x00f000f0;
   const int EX = 0x64006400;
@@ -172,7 +173,8 @@ __device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU4.id(), false>(in
 }
 
 template <>
-__device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4B8.id(), true>(
+__device__ inline void
+dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4B8.id(), true>(
     int q, nv_bfloat162* frag_b) {
   static constexpr uint32_t MASK = 0x000f000f;
   static constexpr uint32_t EX = 0x43004300;
@@ -189,7 +191,8 @@ __device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4B8.id(), 
 }
 
 template <>
-__device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4B8.id(), false>(
+__device__ inline void
+dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4B8.id(), false>(
     int q, nv_bfloat162* frag_b) {
   dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4B8.id(), true>(q, frag_b);
 
@@ -200,13 +203,15 @@ __device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4B8.id(), 
 }
 
 template <>
-__device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4.id(), true>(
+__device__ inline void
+dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4.id(), true>(
     int q, nv_bfloat162* frag_b) {
   dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4B8.id(), true>(q, frag_b);
 }
 
 template <>
-__device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4.id(), false>(
+__device__ inline void
+dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4.id(), false>(
     int q, nv_bfloat162* frag_b) {
   dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4.id(), true>(q, frag_b);
 
@@ -225,8 +230,9 @@ __device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU4.id(), fa
 // https://github.com/NVIDIA/FasterTransformer/blob/release/v5.3_tag/src/fastertransformer/cutlass_extensions/include/cutlass_extensions/interleaved_numeric_conversion.h#L125-L175
 //
 template <>
-__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU8B128.id(), true>(int q,
-                                                                half2* frag_b) {
+__device__ inline void
+dequant<half2, MARLIN_NAMESPACE_NAME::kU8B128.id(), true>(int q,
+                                                          half2* frag_b) {
   static constexpr uint32_t mask_for_elt_01 = 0x5250;
   static constexpr uint32_t mask_for_elt_23 = 0x5351;
   static constexpr uint32_t start_byte_for_fp16 = 0x64646464;
@@ -239,8 +245,9 @@ __device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU8B128.id(), true>
 }
 
 template <>
-__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU8B128.id(), false>(
-    int q, half2* frag_b) {
+__device__ inline void
+dequant<half2, MARLIN_NAMESPACE_NAME::kU8B128.id(), false>(int q,
+                                                           half2* frag_b) {
   dequant<half2, MARLIN_NAMESPACE_NAME::kU8B128.id(), true>(q, frag_b);
 
   static constexpr uint32_t I8s_TO_F16s_MAGIC_NUM = 0x64806480;
@@ -251,14 +258,14 @@ __device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU8B128.id(), false
 }
 
 template <>
-__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU8.id(), true>(int q,
-                                                            half2* frag_b) {
+__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU8.id(), true>(
+    int q, half2* frag_b) {
   dequant<half2, MARLIN_NAMESPACE_NAME::kU8B128.id(), true>(q, frag_b);
 }
 
 template <>
-__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU8.id(), false>(int q,
-                                                             half2* frag_b) {
+__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU8.id(), false>(
+    int q, half2* frag_b) {
   dequant<half2, MARLIN_NAMESPACE_NAME::kU8.id(), true>(q, frag_b);
 
   static constexpr uint32_t I8s_TO_F16s_MAGIC_NUM = 0x64006400;
@@ -269,7 +276,8 @@ __device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kU8.id(), false>(in
 }
 
 template <>
-__device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU8B128.id(), false>(
+__device__ inline void
+dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU8B128.id(), false>(
     int q, nv_bfloat162* frag_b) {
   float fp32_intermediates[4];
   uint32_t* fp32_intermediates_casted =
@@ -287,14 +295,15 @@ __device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU8B128.id()
   fp32_intermediates[3] -= 8388736.f;
 
   uint32_t* bf16_result_ptr = reinterpret_cast<uint32_t*>(frag_b);
-  bf16_result_ptr[0] = __byte_perm(fp32_intermediates_casted[0],
-                                   fp32_intermediates_casted[1], 0x7632);
-  bf16_result_ptr[1] = __byte_perm(fp32_intermediates_casted[2],
-                                   fp32_intermediates_casted[3], 0x7632);
+  bf16_result_ptr[0] = __byte_perm(
+      fp32_intermediates_casted[0], fp32_intermediates_casted[1], 0x7632);
+  bf16_result_ptr[1] = __byte_perm(
+      fp32_intermediates_casted[2], fp32_intermediates_casted[3], 0x7632);
 }
 
 template <>
-__device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU8.id(), false>(
+__device__ inline void
+dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU8.id(), false>(
     int q, nv_bfloat162* frag_b) {
   float fp32_intermediates[4];
   uint32_t* fp32_intermediates_casted =
@@ -312,15 +321,16 @@ __device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kU8.id(), fa
   fp32_intermediates[3] -= 8388608.f;
 
   uint32_t* bf16_result_ptr = reinterpret_cast<uint32_t*>(frag_b);
-  bf16_result_ptr[0] = __byte_perm(fp32_intermediates_casted[0],
-                                   fp32_intermediates_casted[1], 0x7632);
-  bf16_result_ptr[1] = __byte_perm(fp32_intermediates_casted[2],
-                                   fp32_intermediates_casted[3], 0x7632);
+  bf16_result_ptr[0] = __byte_perm(
+      fp32_intermediates_casted[0], fp32_intermediates_casted[1], 0x7632);
+  bf16_result_ptr[1] = __byte_perm(
+      fp32_intermediates_casted[2], fp32_intermediates_casted[3], 0x7632);
 }
 
 template <>
-__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(), true>(
-    int q, half2* frag_b) {
+__device__ inline void
+dequant<half2, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(), true>(int q,
+                                                           half2* frag_b) {
   // Constants for FP8 (E4M3) and FP16 formats
   constexpr int FP8_EXPONENT = 4, FP16_EXPONENT = 5;
   constexpr int RIGHT_SHIFT = FP16_EXPONENT - FP8_EXPONENT;
@@ -337,8 +347,9 @@ __device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(), true
 }
 
 template <>
-__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(), false>(
-    int q, half2* frag_b) {
+__device__ inline void
+dequant<half2, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(), false>(int q,
+                                                            half2* frag_b) {
   dequant<half2, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(), true>(q, frag_b);
 
   // Constants for FP8 (E4M3) and FP16 formats
@@ -355,7 +366,8 @@ __device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(), fals
 }
 
 template <>
-__device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(), true>(
+__device__ inline void
+dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(), true>(
     int q, nv_bfloat162* frag_b) {
   // Constants for FP8 (E4M3) and BF16 formats
   constexpr int FP8_EXPONENT = 4, BF16_EXPONENT = 8;
@@ -374,7 +386,8 @@ __device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(
 }
 
 template <>
-__device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(), false>(
+__device__ inline void
+dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(), false>(
     int q, nv_bfloat162* frag_b) {
   dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(), true>(q, frag_b);
 
@@ -396,8 +409,9 @@ __device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE4M3fn.id(
 }
 
 template <>
-__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kFE2M1f.id(), true>(int q,
-                                                                half2* frag_b) {
+__device__ inline void
+dequant<half2, MARLIN_NAMESPACE_NAME::kFE2M1f.id(), true>(int q,
+                                                          half2* frag_b) {
   // Constants for FP4 (E2M1) and FP16 formats
   constexpr int FP4_EXPONENT = 2, FP16_EXPONENT = 5;
   constexpr int RIGHT_SHIFT = FP16_EXPONENT - FP4_EXPONENT;
@@ -414,8 +428,9 @@ __device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kFE2M1f.id(), true>
 }
 
 template <>
-__device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kFE2M1f.id(), false>(
-    int q, half2* frag_b) {
+__device__ inline void
+dequant<half2, MARLIN_NAMESPACE_NAME::kFE2M1f.id(), false>(int q,
+                                                           half2* frag_b) {
   dequant<half2, MARLIN_NAMESPACE_NAME::kFE2M1f.id(), true>(q, frag_b);
 
   // Constants for FP4 (E2M1) and FP16 formats
@@ -432,7 +447,8 @@ __device__ inline void dequant<half2, MARLIN_NAMESPACE_NAME::kFE2M1f.id(), false
 }
 
 template <>
-__device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE2M1f.id(), true>(
+__device__ inline void
+dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE2M1f.id(), true>(
     int q, nv_bfloat162* frag_b) {
   // Constants for FP4 (E2M1) and FP16 formats
   constexpr int FP4_EXPONENT = 2, BF16_EXPONENT = 8;
@@ -450,7 +466,8 @@ __device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE2M1f.id()
 }
 
 template <>
-__device__ inline void dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE2M1f.id(), false>(
+__device__ inline void
+dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE2M1f.id(), false>(
     int q, nv_bfloat162* frag_b) {
   dequant<nv_bfloat162, MARLIN_NAMESPACE_NAME::kFE2M1f.id(), true>(q, frag_b);
 

@@ -184,6 +184,7 @@ class Request:
         # status
         self.status = RequestStatus.WAITING
         self.task_type = RequestType.PREFILL
+        self.has_been_preempted_before = False
         self.idx = None
         self.need_prefill_tokens = self.prompt_token_ids_len
         self.audio_output_token_ids = []
@@ -481,8 +482,8 @@ class Request:
         for param in add_params:
             if getattr(self, param, None) is not None:
                 data[param] = getattr(self, param)
-
-        data.update(asdict(self.sampling_params))
+        if self.sampling_params is not None:
+            data.update(asdict(self.sampling_params))
         data.update(asdict(self.metrics))
         return data
 
@@ -873,6 +874,7 @@ class RequestMetrics:
     storage_cache_token_num: Optional[int] = 0
     cpu_cache_prepare_time: Optional[float] = None
     storage_cache_prepare_time: Optional[float] = None
+    preempted_count: int = 0
 
     def __post_init__(self):
         if self.arrival_time is None:

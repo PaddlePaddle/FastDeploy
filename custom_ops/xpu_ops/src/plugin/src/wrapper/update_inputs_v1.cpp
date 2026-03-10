@@ -76,7 +76,7 @@ static int xpu3_wrapper(Context* ctx,
     }
   }
   // kernel 内要做 reduce，只能用 1 个 cluster
-  update_inputs_v1<<<1, 64, ctx->xpu_stream>>>(
+  int32_t ret_xre = update_inputs_v1<<<1, 64, ctx->xpu_stream>>>(
       not_need_stop,
       seq_lens_this_time,
       seq_lens_encoder,
@@ -96,6 +96,7 @@ static int xpu3_wrapper(Context* ctx,
       block_num_per_seq,
       block_size,
       prefill_one_step_stop);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

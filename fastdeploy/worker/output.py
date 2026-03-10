@@ -121,9 +121,9 @@ class LogprobsTensors(NamedTuple):
         """
         with paddle.no_grad():
             return LogprobsTensors(
-                paddle.to_tensor(self.logprob_token_ids[start:end], place=self.logprob_token_ids.place),
-                paddle.to_tensor(self.logprobs[start:end], place=self.logprob_token_ids.place),
-                paddle.to_tensor(self.selected_token_ranks[start:end], place=self.logprob_token_ids.place),
+                paddle.to_tensor(self.logprob_token_ids.cpu()[start:end], place="cpu"),
+                paddle.to_tensor(self.logprobs.cpu()[start:end], place="cpu"),
+                paddle.to_tensor(self.selected_token_ranks.cpu()[start:end], place="cpu"),
             )
 
     def clone(self):
@@ -217,11 +217,6 @@ class ModelOutputData:
     max_dec_len: int
 
     """
-        Previous ids used for decoding
-    """
-    pre_ids: paddle.Tensor
-
-    """
         Sequence lengths for this step
     """
     seq_lens_this_time: paddle.Tensor
@@ -296,6 +291,16 @@ class ModelOutputData:
         the number of accepted tokens in current step
     """
     accept_num: paddle.Tensor
+
+    """
+        Tokens including prompts and generated tokens
+    """
+    token_ids_all: Optional[paddle.Tensor] = None
+
+    """
+        Previous generated tokens
+    """
+    pre_ids: Optional[paddle.Tensor] = None
 
     """
         the token ids of stop sequence

@@ -20,8 +20,8 @@ __global__ inline void min_length_logits_process(
     const int64_t *cur_len,
     const int64_t *min_len,
     const int64_t *eos_token_id,
-    const int *output_padding_offset,
-    const int *output_cum_offsets,
+    const int *batch_id_per_token_output,
+    const int *cu_seqlens_q_output,
     const int64_t token_num,
     const int64_t bs,
     const int64_t length,
@@ -29,9 +29,9 @@ __global__ inline void min_length_logits_process(
     const int max_seq_len) {
   const int token_idx = threadIdx.x;
   if (token_idx >= token_num) return;
-  const int bi = (token_idx + output_padding_offset[token_idx]) / max_seq_len;
+  const int bi = batch_id_per_token_output[token_idx];
   if (bi >= bs) return;
-  const int query_start_token_idx = bi * max_seq_len - output_cum_offsets[bi];
+  const int query_start_token_idx = cu_seqlens_q_output[bi];
 
   if (cur_len[bi] < 0) {
     return;
@@ -49,8 +49,8 @@ __global__ inline void min_length_logits_process<half>(
     const int64_t *cur_len,
     const int64_t *min_len,
     const int64_t *eos_token_id,
-    const int *output_padding_offset,
-    const int *output_cum_offsets,
+    const int *batch_id_per_token_output,
+    const int *cu_seqlens_q_output,
     const int64_t token_num,
     const int64_t bs,
     const int64_t length,
@@ -58,9 +58,9 @@ __global__ inline void min_length_logits_process<half>(
     const int max_seq_len) {
   const int token_idx = threadIdx.x;
   if (token_idx >= token_num) return;
-  const int bi = (token_idx + output_padding_offset[token_idx]) / max_seq_len;
+  const int bi = batch_id_per_token_output[token_idx];
   if (bi >= bs) return;
-  const int query_start_token_idx = bi * max_seq_len - output_cum_offsets[bi];
+  const int query_start_token_idx = cu_seqlens_q_output[bi];
 
   if (cur_len[bi] < 0) {
     return;
@@ -72,10 +72,11 @@ __global__ inline void min_length_logits_process<half>(
   }
 }
 
-__global__ void update_repeat_times(const int64_t *pre_ids,
+__global__ void update_repeat_times(const int64_t *token_ids_all,
+                                    const int64_t *prompt_lens,
                                     const int64_t *cur_len,
                                     int *repeat_times,
-                                    const int *output_padding_offset,
+                                    const int *batch_id_per_token_output,
                                     const int64_t token_num,
                                     const int64_t bs,
                                     const int64_t length,
@@ -83,13 +84,13 @@ __global__ void update_repeat_times(const int64_t *pre_ids,
                                     const int max_seq_len) {
   const int token_idx = blockIdx.x;
   if (token_idx >= token_num) return;
-  const int bi = (token_idx + output_padding_offset[token_idx]) / max_seq_len;
+  const int bi = batch_id_per_token_output[token_idx];
   if (bi >= bs) return;
   if (cur_len[bi] < 0) {
     return;
   }
   int tid = threadIdx.x;
-  const int64_t *pre_ids_now = pre_ids + bi * length_id;
+  const int64_t *pre_ids_now = token_ids_all + bi * length_id + prompt_lens[bi];
   int *repeat_times_now = repeat_times + token_idx * length;
   for (int i = tid; i < length_id; i += blockDim.x) {
     int64_t id = pre_ids_now[i];
@@ -99,20 +100,21 @@ __global__ void update_repeat_times(const int64_t *pre_ids,
 }
 
 template <typename T>
-__global__ void update_value_by_repeat_times(const int *repeat_times,
-                                             const T *penalty_scores,
-                                             const T *frequency_score,
-                                             const T *presence_score,
-                                             const float *temperatures,
-                                             T *logits,
-                                             const int *output_padding_offset,
-                                             const int64_t token_num,
-                                             const int64_t bs,
-                                             const int64_t length,
-                                             const int max_seq_len) {
+__global__ void update_value_by_repeat_times(
+    const int *repeat_times,
+    const T *penalty_scores,
+    const T *frequency_score,
+    const T *presence_score,
+    const float *temperatures,
+    T *logits,
+    const int *batch_id_per_token_output,
+    const int64_t token_num,
+    const int64_t bs,
+    const int64_t length,
+    const int max_seq_len) {
   const int token_idx = blockIdx.x;
   if (token_idx >= token_num) return;
-  const int bi = (token_idx + output_padding_offset[token_idx]) / max_seq_len;
+  const int bi = batch_id_per_token_output[token_idx];
   if (bi >= bs) return;
   int tid = threadIdx.x;
   T *logits_now = logits + token_idx * length;
@@ -135,7 +137,7 @@ template <typename T>
 __global__ void ban_bad_words(T *logits,
                               const int64_t *bad_tokens,
                               const int64_t *bad_tokens_len,
-                              const int *output_padding_offset,
+                              const int *batch_id_per_token_output,
                               const int64_t token_num,
                               const int64_t bs,
                               const int64_t length,
@@ -143,7 +145,7 @@ __global__ void ban_bad_words(T *logits,
                               const int max_seq_len) {
   const int token_idx = blockIdx.x;
   if (token_idx >= token_num) return;
-  const int bi = (token_idx + output_padding_offset[token_idx]) / max_seq_len;
+  const int bi = batch_id_per_token_output[token_idx];
 
   if (bi >= bs) return;
   int tid = threadIdx.x;
@@ -160,7 +162,8 @@ __global__ void ban_bad_words(T *logits,
 
 template <paddle::DataType D>
 void token_penalty_multi_scores_kernel(
-    const paddle::Tensor &pre_ids,
+    const paddle::Tensor &token_ids_all,
+    const paddle::Tensor &prompt_lens,
     const paddle::Tensor &logits,
     const paddle::Tensor &penalty_scores,
     const paddle::Tensor &frequency_score,
@@ -172,8 +175,8 @@ void token_penalty_multi_scores_kernel(
     const paddle::Tensor &min_len,
     const paddle::Tensor &eos_token_id,
     const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &output_padding_offset,
-    const paddle::Tensor &output_cum_offsets,
+    const paddle::Tensor &batch_id_per_token_output,
+    const paddle::Tensor &cu_seqlens_q_output,
     const int max_seq_len) {
   typedef PDTraits<D> traits_;
   typedef typename traits_::DataType DataType_;
@@ -181,11 +184,11 @@ void token_penalty_multi_scores_kernel(
   auto cu_stream = logits.stream();
   std::vector<int64_t> shape = logits.shape();
   auto repeat_times =
-      paddle::full(shape, 0, paddle::DataType::INT32, pre_ids.place());
+      paddle::full(shape, 0, paddle::DataType::INT32, token_ids_all.place());
   int64_t bs = seq_lens_this_time.shape()[0];
   int64_t token_num = shape[0];
   int64_t length = shape[1];
-  int64_t length_id = pre_ids.shape()[1];
+  int64_t length_id = token_ids_all.shape()[1];
   int64_t length_bad_words = bad_tokens.shape()[1];
 
   int64_t end_length = eos_token_id.shape()[0];
@@ -196,8 +199,8 @@ void token_penalty_multi_scores_kernel(
       cur_len.data<int64_t>(),
       min_len.data<int64_t>(),
       eos_token_id.data<int64_t>(),
-      output_padding_offset.data<int>(),
-      output_cum_offsets.data<int>(),
+      batch_id_per_token_output.data<int>(),
+      cu_seqlens_q_output.data<int>(),
       token_num,
       bs,
       length,
@@ -207,10 +210,11 @@ void token_penalty_multi_scores_kernel(
   block_size = (length_id + 32 - 1) / 32 * 32;
   block_size = min(block_size, 512);
   update_repeat_times<<<token_num, block_size, 0, cu_stream>>>(
-      pre_ids.data<int64_t>(),
+      token_ids_all.data<int64_t>(),
+      prompt_lens.data<int64_t>(),
       cur_len.data<int64_t>(),
       repeat_times.data<int>(),
-      output_padding_offset.data<int>(),
+      batch_id_per_token_output.data<int>(),
       token_num,
       bs,
       length,
@@ -231,7 +235,7 @@ void token_penalty_multi_scores_kernel(
           temperatures.data<float>(),
           reinterpret_cast<DataType_ *>(
               const_cast<data_t *>(logits.data<data_t>())),
-          output_padding_offset.data<int>(),
+          batch_id_per_token_output.data<int>(),
           token_num,
           bs,
           length,
@@ -243,7 +247,7 @@ void token_penalty_multi_scores_kernel(
           const_cast<data_t *>(logits.data<data_t>())),
       bad_tokens.data<int64_t>(),
       bad_tokens_len.data<int64_t>(),
-      output_padding_offset.data<int>(),
+      batch_id_per_token_output.data<int>(),
       token_num,
       bs,
       length,
@@ -251,25 +255,28 @@ void token_penalty_multi_scores_kernel(
       max_seq_len);
 }
 
-void SpecTokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
-                                 const paddle::Tensor &logits,
-                                 const paddle::Tensor &penalty_scores,
-                                 const paddle::Tensor &frequency_scores,
-                                 const paddle::Tensor &presence_scores,
-                                 const paddle::Tensor &temperatures,
-                                 const paddle::Tensor &bad_tokens,
-                                 const paddle::Tensor &bad_tokens_len,
-                                 const paddle::Tensor &cur_len,
-                                 const paddle::Tensor &min_len,
-                                 const paddle::Tensor &eos_token_id,
-                                 const paddle::Tensor &seq_lens_this_time,
-                                 const paddle::Tensor &output_padding_offset,
-                                 const paddle::Tensor &output_cum_offsets,
-                                 const int max_seq_len) {
+void SpecTokenPenaltyMultiScores(
+    const paddle::Tensor &token_ids_all,
+    const paddle::Tensor &prompt_lens,
+    const paddle::Tensor &logits,
+    const paddle::Tensor &penalty_scores,
+    const paddle::Tensor &frequency_scores,
+    const paddle::Tensor &presence_scores,
+    const paddle::Tensor &temperatures,
+    const paddle::Tensor &bad_tokens,
+    const paddle::Tensor &bad_tokens_len,
+    const paddle::Tensor &cur_len,
+    const paddle::Tensor &min_len,
+    const paddle::Tensor &eos_token_id,
+    const paddle::Tensor &seq_lens_this_time,
+    const paddle::Tensor &batch_id_per_token_output,
+    const paddle::Tensor &cu_seqlens_q_output,
+    const int max_seq_len) {
   switch (logits.type()) {
     case paddle::DataType::BFLOAT16: {
       return token_penalty_multi_scores_kernel<paddle::DataType::BFLOAT16>(
-          pre_ids,
+          token_ids_all,
+          prompt_lens,
           logits,
           penalty_scores,
           frequency_scores,
@@ -281,13 +288,14 @@ void SpecTokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
           min_len,
           eos_token_id,
           seq_lens_this_time,
-          output_padding_offset,
-          output_cum_offsets,
+          batch_id_per_token_output,
+          cu_seqlens_q_output,
           max_seq_len);
     }
     case paddle::DataType::FLOAT16: {
       return token_penalty_multi_scores_kernel<paddle::DataType::FLOAT16>(
-          pre_ids,
+          token_ids_all,
+          prompt_lens,
           logits,
           penalty_scores,
           frequency_scores,
@@ -299,13 +307,14 @@ void SpecTokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
           min_len,
           eos_token_id,
           seq_lens_this_time,
-          output_padding_offset,
-          output_cum_offsets,
+          batch_id_per_token_output,
+          cu_seqlens_q_output,
           max_seq_len);
     }
     case paddle::DataType::FLOAT32: {
       return token_penalty_multi_scores_kernel<paddle::DataType::FLOAT32>(
-          pre_ids,
+          token_ids_all,
+          prompt_lens,
           logits,
           penalty_scores,
           frequency_scores,
@@ -317,8 +326,8 @@ void SpecTokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
           min_len,
           eos_token_id,
           seq_lens_this_time,
-          output_padding_offset,
-          output_cum_offsets,
+          batch_id_per_token_output,
+          cu_seqlens_q_output,
           max_seq_len);
     }
     default: {
@@ -331,7 +340,8 @@ void SpecTokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
 }
 
 PD_BUILD_STATIC_OP(speculate_get_token_penalty_multi_scores)
-    .Inputs({"pre_ids",
+    .Inputs({"token_ids_all",
+             "prompt_lens",
              "logits",
              "penalty_scores",
              "frequency_scores",
@@ -343,8 +353,8 @@ PD_BUILD_STATIC_OP(speculate_get_token_penalty_multi_scores)
              "min_len",
              "eos_token_id",
              "seq_lens_this_time",
-             "output_padding_offset",
-             "output_cum_offsets"})
+             "batch_id_per_token_output",
+             "cu_seqlens_q_output"})
     .Outputs({"logits_out"})
     .Attrs({"max_seq_len: int"})
     .SetInplaceMap({{"logits", "logits_out"}})

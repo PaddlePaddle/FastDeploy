@@ -18,11 +18,11 @@ import unittest
 from unittest.mock import Mock, patch
 
 import paddle
+from utils import FakeModelConfig, get_default_test_fd_config
 
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.spec_decode.mtp import MTPProposer
-from tests.utils import FakeModelConfig, get_default_test_fd_config
 
 
 class TestMTPProposer(unittest.TestCase):
@@ -70,9 +70,9 @@ class TestMTPProposer(unittest.TestCase):
             "prompt_lens": paddle.zeros([2, 1], dtype="int64"),
             "step_idx": paddle.zeros([2, 1], dtype="int64"),
             "stop_flags": paddle.zeros([2, 1], dtype="bool"),
-            "pre_ids": paddle.zeros([2, 2048], dtype="int64"),
-            "output_cum_offsets": paddle.zeros([2], dtype="int32"),
-            "output_padding_offset": paddle.zeros([2], dtype="int32"),
+            "token_ids_all": paddle.zeros([2, 2048], dtype="int64"),
+            "cu_seqlens_q_output": paddle.zeros([3], dtype="int32"),
+            "batch_id_per_token_output": paddle.zeros([2], dtype="int32"),
             "ids_remove_padding": paddle.zeros([2], dtype="int64"),
             "batch_id_per_token": paddle.zeros([2], dtype="int32"),
             "cu_seqlens_q": paddle.zeros([3], dtype="int32"),
