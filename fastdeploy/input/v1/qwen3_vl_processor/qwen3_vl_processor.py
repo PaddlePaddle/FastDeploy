@@ -266,7 +266,9 @@ class Qwen3VLProcessor(TextProcessor):
         outputs = self.pack_outputs(outputs)
 
         request.prompt_token_ids = (
-            outputs["input_ids"].tolist() if not getattr(request, "prompt_token_ids", None) else request.prompt_token_ids
+            outputs["input_ids"].tolist()
+            if not getattr(request, "prompt_token_ids", None)
+            else request.prompt_token_ids
         )
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         request.multimodal_inputs = outputs
