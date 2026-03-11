@@ -120,6 +120,7 @@ class CudaGraphPiecewiseBackend:
             self.cuda_graph_manager = Dy2StCudaGraphManager()
 
         self.speculative_decoding = fd_config.speculative_config.method is not None
+        self.speculative_config = fd_config.speculative_config
         self.max_num_seqs = fd_config.scheduler_config.max_num_seqs
         self.real_bsz_to_captured_size = fd_config.graph_opt_config.real_bsz_to_captured_size
 
@@ -158,8 +159,9 @@ class CudaGraphPiecewiseBackend:
         ids_remove_padding: paddle.Tensor = kwargs["forward_meta"].ids_remove_padding
         real_shape = ids_remove_padding.shape[0]
         if self.speculative_decoding and all(self.real_bsz_to_captured_size.values()):
-            seq_lens_this_time: paddle.Tensor = kwargs["forward_meta"].seq_lens_this_time
-            num_running_requests = int((seq_lens_this_time.flatten() > 0).sum().item())
+            num_running_requests = (ids_remove_padding.shape[0] + self.speculative_config.num_speculative_tokens) // (
+                self.speculative_config.num_speculative_tokens + 1
+            )
             real_shape = self.real_bsz_to_captured_size[num_running_requests]
         exist_prefill = kwargs["forward_meta"].exist_prefill
         # Static split graph mode: use Static + CUDAGraph for prefill/mixed phase

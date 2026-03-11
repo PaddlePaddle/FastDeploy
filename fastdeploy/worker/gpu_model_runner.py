@@ -96,6 +96,7 @@ from fastdeploy.model_executor.pre_and_post_process import (
     pre_process,
     rebuild_padding,
     save_output_normal,
+    save_output_specualate,
 )
 from fastdeploy.output.pooler import PoolerOutput
 from fastdeploy.worker.model_runner_base import (
@@ -268,9 +269,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Cached token count for next batch prediction in overlap scheduling.
         # Used to avoid synchronization overhead when preparing inputs for the next batch.
         self._cached_launch_token_num = -1
-        self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule and (
-            not self.speculative_decoding
-        )
+        self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule
         if self.enable_overlap_schedule:
             logger.info("Using overlap schedule")
         self.current_launch_token_num = 0
@@ -2355,6 +2354,17 @@ class GPUModelRunner(ModelRunnerBase):
             if self.guided_backend is not None and sampler_output is not None:
                 self.sampler.post_process(sampler_output.sampled_token_ids)
 
+            # 5.1. Async cpy
+            post_process_event = paddle.device.cuda.create_event()
+            if not self.speculative_decoding:
+                self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
+            else:
+                self.share_inputs["accept_tokens_cpu"].copy_(self.share_inputs["accept_tokens"], False)
+                self.share_inputs["accept_num_cpu"].copy_(self.share_inputs["accept_num"], False)
+                self.share_inputs["seq_lens_decoder_cpu"].copy_(self.share_inputs["seq_lens_decoder"], False)
+                self.share_inputs["prompt_lens_cpu"].copy_(self.share_inputs["prompt_lens"], False)
+            post_process_event.record()
+
             # 6. Speculative decode -- proposer run (method="naive" has proposer=None, skip)
             # For naive mode: seq_lens_this_time is already reset to 1 inside
             # unified_update_model_status kernel. For MTP/Ngram, the proposer
@@ -2388,16 +2398,10 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["accept_num"],
                     self.share_inputs["accept_tokens"],
                     self.share_inputs["is_block_step"],
-                    self.share_inputs["not_need_stop"],
+                    self.share_inputs["not_need_stop_device"],
                     self.cache_config.block_size,
                     self.speculative_config.num_speculative_tokens,
                 )
-
-            # 8. Async cpy
-            post_process_event = paddle.device.cuda.create_event()
-            if not self.speculative_decoding:
-                self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
-                post_process_event.record()
 
         self.exist_prefill_flag = False
         # Routing replay
@@ -2416,13 +2420,24 @@ class GPUModelRunner(ModelRunnerBase):
         model_output_data,
         sampler_output,
     ):
-        save_output_normal(
-            model_output=model_output_data,
-            sampler_output=sampler_output,
-            share_inputs=self.share_inputs,
-            async_output_queue=self.async_output_queue,
-            save_each_rank=self.parallel_config.use_ep,
-        )
+        if self.speculative_decoding:
+            if self.spec_method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill":
+                # skip_save_output
+                return
+            save_output_specualate(
+                sampler_output=sampler_output,
+                model_output=model_output_data,
+                share_inputs=self.share_inputs,
+                save_each_rank=self.parallel_config.use_ep,
+            )
+        else:
+            save_output_normal(
+                model_output=model_output_data,
+                sampler_output=sampler_output,
+                share_inputs=self.share_inputs,
+                async_output_queue=self.async_output_queue,
+                save_each_rank=self.parallel_config.use_ep,
+            )
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
         num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
