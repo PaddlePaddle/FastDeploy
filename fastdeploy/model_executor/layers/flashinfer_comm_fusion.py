@@ -115,7 +115,7 @@ def flashinfer_allreduce_residual_rmsnorm(
     residual: paddle.Tensor,
     weight: paddle.Tensor,
     eps: float = 1e-6,
-    max_token_num: int = 4096,
+    max_token_num: int = 2048,
     use_oneshot: Optional[bool] = None,
     trigger_completion_at_end: bool = False,
     fp32_acc: bool = False,
