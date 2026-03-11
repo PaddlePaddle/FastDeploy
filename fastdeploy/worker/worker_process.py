@@ -280,7 +280,7 @@ class PaddleDisWorkerProc:
         # and CPU transfer when accessing GPU KV cache.
         self.gpu_cache_lock = IPCLock(
             name="gpu_cache_lock",
-            suffix=self.parallel_config.local_engine_worker_queue_port,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
 
