@@ -23,6 +23,7 @@ def draft_model_postprocess_cpu(
     base_model_draft_tokens,
     base_model_seq_lens_encoder,
     base_model_stop_flags,
+    batch_drop,
 ):
     bsz = base_model_draft_tokens.shape[0]
     base_model_draft_token_len = base_model_draft_tokens.shape[1]
@@ -35,7 +36,10 @@ def draft_model_postprocess_cpu(
                 if base_model_draft_tokens_now[i] != -1:
                     token_num += 1
 
-            base_model_seq_lens_this_time[tid] = token_num
+            if batch_drop[tid]:
+                base_model_seq_lens_this_time[tid] = 1
+            else:
+                base_model_seq_lens_this_time[tid] = token_num
         elif base_model_stop_flags[tid]:
             base_model_seq_lens_this_time[tid] = 0
 
@@ -54,11 +58,13 @@ class TestDraftModelPostProcess(unittest.TestCase):
         base_model_seq_lens_encoder = paddle.randint(low=0, high=2, shape=[batch_size], dtype="int32")
         random_floats = paddle.rand(shape=[batch_size])
         base_model_stop_flags = random_floats >= 0.5
+        batch_drop = paddle.zeros((batch_size), dtype=paddle.bool)
 
         base_model_seq_lens_this_time = draft_model_postprocess_cpu(
             base_model_draft_tokens,
             base_model_seq_lens_encoder,
             base_model_stop_flags,
+            batch_drop,
         )
         base_model_seq_lens_this_time_gpu = paddle.ones((batch_size), dtype=paddle.int32)
         draft_model_postprocess(
@@ -66,6 +72,7 @@ class TestDraftModelPostProcess(unittest.TestCase):
             base_model_seq_lens_this_time_gpu,
             base_model_seq_lens_encoder,
             base_model_stop_flags,
+            batch_drop,
         )
         np.testing.assert_allclose(base_model_seq_lens_this_time.numpy(), base_model_seq_lens_this_time_gpu.numpy())
 
