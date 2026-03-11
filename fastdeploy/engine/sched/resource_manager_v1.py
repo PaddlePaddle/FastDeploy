@@ -694,11 +694,11 @@ class ResourceManagerV1(ResourceManager):
         return False
 
     def cache_output_tokens(self, request):
-        if self.config.cache_config.enable_prefix_caching and self.config.cache_config.enable_output_caching:
-            # D instance does not maintain Radix Tree, skip cache_output_blocks
-            # D instance will write cache to storage in finish_requests() using write_cache_to_storage_decode()
-            if self.config.scheduler_config.splitwise_role == "decode":
-                return
+        if (
+            self.config.cache_config.enable_prefix_caching
+            and self.config.cache_config.enable_output_caching
+            and self.config.scheduler_config.splitwise_role != "decode"
+        ):
             with self.lock:
                 if request.num_computed_tokens >= request.need_prefill_tokens:  # request is decoding
                     self.cache_manager.cache_output_blocks(request, self.config.cache_config.block_size)
@@ -867,13 +867,13 @@ class ResourceManagerV1(ResourceManager):
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                     token_budget -= num_new_tokens
                     request.num_computed_tokens += num_new_tokens
-                    if self.config.cache_config.enable_prefix_caching:
-                        # D instance does not maintain Radix Tree, skip update_cache_blocks
-                        # D instance's KV Cache comes from P instance transfer, no need for local cache matching and update
-                        if self.config.scheduler_config.splitwise_role != "decode":
-                            self.cache_manager.update_cache_blocks(
-                                request, self.config.cache_config.block_size, request.num_computed_tokens
-                            )
+                    if (
+                        self.config.cache_config.enable_prefix_caching
+                        and self.config.scheduler_config.splitwise_role != "decode"
+                    ):
+                        self.cache_manager.update_cache_blocks(
+                            request, self.config.cache_config.block_size, request.num_computed_tokens
+                        )
                 req_index += 1
 
             # Second, schedule the WAITING requests.
@@ -946,12 +946,13 @@ class ResourceManagerV1(ResourceManager):
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
-                            if self.config.cache_config.enable_prefix_caching:
-                                # D instance does not maintain Radix Tree, skip update_cache_blocks
-                                if self.config.scheduler_config.splitwise_role != "decode":
-                                    self.cache_manager.update_cache_blocks(
-                                        request, self.config.cache_config.block_size, request.num_computed_tokens
-                                    )
+                            if (
+                                self.config.cache_config.enable_prefix_caching
+                                and self.config.scheduler_config.splitwise_role != "decode"
+                            ):
+                                self.cache_manager.update_cache_blocks(
+                                    request, self.config.cache_config.block_size, request.num_computed_tokens
+                                )
                             request.status = RequestStatus.RUNNING
                             if self.config.scheduler_config.splitwise_role == "mixed":
                                 allocated_position = self.get_available_position()
@@ -968,7 +969,10 @@ class ResourceManagerV1(ResourceManager):
                         request.need_prefill_tokens = (
                             request.num_total_tokens
                         )  # Before preempted task rescheduled, preempted task has been sent to engine, no more tokens are output, here num_total_tokens should be static and correct
-                        if self.config.cache_config.enable_prefix_caching:
+                        if (
+                            self.config.cache_config.enable_prefix_caching
+                            and self.config.scheduler_config.splitwise_role != "decode"
+                        ):
                             if (
                                 self.cache_manager.num_cpu_blocks > 0
                                 or self.config.cache_config.kvcache_storage_backend
@@ -1007,12 +1011,13 @@ class ResourceManagerV1(ResourceManager):
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
-                            if self.config.cache_config.enable_prefix_caching:
-                                # D instance does not maintain Radix Tree, skip update_cache_blocks
-                                if self.config.scheduler_config.splitwise_role != "decode":
-                                    self.cache_manager.update_cache_blocks(
-                                        request, self.config.cache_config.block_size, request.num_computed_tokens
-                                    )
+                            if (
+                                self.config.cache_config.enable_prefix_caching
+                                and self.config.scheduler_config.splitwise_role != "decode"
+                            ):
+                                self.cache_manager.update_cache_blocks(
+                                    request, self.config.cache_config.block_size, request.num_computed_tokens
+                                )
                             request.status = RequestStatus.RUNNING
                         else:
                             if self.config.cache_config.enable_prefix_caching:
