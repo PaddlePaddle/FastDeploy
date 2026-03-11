@@ -369,6 +369,12 @@ elif paddle.is_compiled_with_cuda():
 
     nvcc_version = get_nvcc_version()
     print(f"nvcc_version = {nvcc_version}")
+
+    # CUDA 13.0+ (CCCL 3.0) changes the default -static-global-template-stub behavior
+    # Restore old linking behavior to allow kernel symbols to be visible in shared libraries
+    if nvcc_version >= 13.0:
+        nvcc_compile_args += ["-static-global-template-stub=false"]
+
     if nvcc_version >= 12.0:
         sources += ["gpu_ops/sample_kernels/air_top_p_sampling.cu"]
     cc = max(get_sm_version(archs))

@@ -908,6 +908,8 @@ class TestAdditionalCoverage:
 
     def test_get_otlp_span_exporter_grpc(self):
         """Test get_otlp_span_exporter with grpc protocol"""
+        # Set environment variable for grpc protocol
+        os.environ["OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"] = "grpc"
         exporter = trace.get_otlp_span_exporter("http://localhost:4317", None)
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
             OTLPSpanExporter as GRPCSpanExporter,
