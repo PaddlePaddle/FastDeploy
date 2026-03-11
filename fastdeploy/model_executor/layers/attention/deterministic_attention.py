@@ -496,11 +496,8 @@ class DeterministicAttentionMixin:
             )
             q_roped = bufs.q_roped[:token_nums]
         elif forward_meta.step_use_cudagraph:
-            # gqa_rope_write_cache_inplace crashes at CUDA Graph replay
-            # (temporary tensor GC, cudaLaunchHostFunc incompatibility, etc.
-            #  see docs/cudagraph_rope_inplace_fix.md Section 4).
-            # Triton rope is the only safe path for cudagraph. If not eligible,
-            # fail fast instead of silently crashing at replay time.
+            # CUDA Graph requires Triton RoPE (no dynamic alloc).
+            # If not eligible, fail fast instead of silently crashing at replay time.
             raise AssertionError(
                 "Deterministic + CUDA Graph requires Triton RoPE, but current config "
                 "is not eligible. Possible causes: QK-norm enabled, cache quantization "
