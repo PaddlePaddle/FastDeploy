@@ -12,6 +12,7 @@ import random
 import traceback
 from dataclasses import dataclass
 from itertools import chain
+from typing import Dict, List, Optional
 from uuid import uuid4
 
 import aiohttp
@@ -114,23 +115,26 @@ class Router:
             raise RuntimeError(f"Instance {inst_info} is not healthy")
 
         async with self.lock:
-            if inst_info.role == InstanceRole.MIXED and inst_info not in self.mixed_servers:
-                self.mixed_servers.append(inst_info)
-                logger.info(
-                    f"Register mixed instance success: {inst_info}, " f"total mixed: {len(self.mixed_servers)}"
-                )
-            elif inst_info.role == InstanceRole.PREFILL and inst_info not in self.prefill_servers:
-                self.prefill_servers.append(inst_info)
-                logger.info(
-                    f"Register prefill instance success: {inst_info}, "
-                    f"prefill: {len(self.prefill_servers)}, decode: {len(self.decode_servers)}"
-                )
-            elif inst_info.role == InstanceRole.DECODE and inst_info not in self.decode_servers:
-                self.decode_servers.append(inst_info)
-                logger.info(
-                    f"Register decode instance success: {inst_info}, "
-                    f"prefill: {len(self.prefill_servers)}, decode: {len(self.decode_servers)}"
-                )
+            instance_key = inst_info.get_key()
+
+            if inst_info.role == InstanceRole.MIXED:
+                self._update_or_add_instance(self.mixed_servers, inst_info, instance_key, "mixed")
+            elif inst_info.role == InstanceRole.PREFILL:
+                self._update_or_add_instance(self.prefill_servers, inst_info, instance_key, "prefill")
+            elif inst_info.role == InstanceRole.DECODE:
+                self._update_or_add_instance(self.decode_servers, inst_info, instance_key, "decode")
+
+    def _update_or_add_instance(self, server_list: List, inst_info: InstanceInfo, key: str, role_name: str):
+        """Update existing instance or add new one based on key (host_ip:port)."""
+        for i, existing in enumerate(server_list):
+            if existing.get_key() == key:
+                if existing != inst_info:
+                    server_list[i] = inst_info
+                    logger.info(f"Updated {role_name} instance, key: {key}, inst_info: {inst_info}")
+                return
+
+        server_list.append(inst_info)
+        logger.info(f"Register {role_name} instance success: {inst_info}, total {role_name}: {len(server_list)}")
 
     async def registered_number(self):
         """Get number of registered instances"""
@@ -139,6 +143,14 @@ class Router:
             "prefill": len(self.prefill_servers),
             "decode": len(self.decode_servers),
         }
+
+    async def get_decode_instances(self, version: Optional[str] = None) -> List[Dict]:
+        """Get all registered decode instances, optionally filtered by version"""
+        async with self.lock:
+            instances = self.decode_servers
+            if version is not None:
+                instances = [inst for inst in instances if inst.version == version]
+            return [inst.to_dict() for inst in instances]
 
     async def select_pd(self):
         """Select one prefill and one decode server"""
@@ -454,6 +466,12 @@ async def register(instance_info_dict: dict):
 async def registered_number():
     """Get the number of registered prefill/decode/mixed servers"""
     return await app.state.router.registered_number()
+
+
+@app.get("/decode_instances")
+async def decode_instances(version: Optional[str] = None):
+    """Get all registered decode instances, optionally filtered by version"""
+    return await app.state.router.get_decode_instances(version)
 
 
 @app.post("/v1/chat/completions")
