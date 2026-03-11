@@ -29,11 +29,11 @@
 #define MAX_BSZ 512
 
 struct msgdata {
-    long mtype;
-    int mtext[MAX_BSZ + 2];  // stop_flag, bsz, tokens
+  long mtype;
+  int mtext[MAX_BSZ + 2];  // stop_flag, bsz, tokens
 };
 
 struct msgdatakv {
-    long mtype;
-    int mtext[MAX_BSZ * 3 + 2];  // encoder_count, layer_id, bid- pair
+  long mtype;
+  int mtext[MAX_BSZ * 3 + 2];  // encoder_count, layer_id, bid- pair
 };

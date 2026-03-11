@@ -20,10 +20,10 @@ namespace plugin {
 __attribute__((global)) void speculate_set_value_by_flag_and_id(
     int64_t *pre_ids_all,
     const int64_t *accept_tokens,
-    const int *accept_num,
+    int *accept_num,
     const bool *stop_flags,
     const int *seq_lens_encoder,
-    const int *seq_lens_decoder,
+    int *seq_lens_decoder,
     const int64_t *step_idx,
     int bs,
     int length,
@@ -39,28 +39,30 @@ namespace plugin {
 static int cpu_wrapper(Context *ctx,
                        int64_t *pre_ids_all,          // bs * length
                        const int64_t *accept_tokens,  // bs * max_draft_tokens
-                       const int *accept_num,         // bs
+                       int *accept_num,               // bs
                        const bool *stop_flags,
                        const int *seq_lens_encoder,
-                       const int *seq_lens_decoder,
+                       int *seq_lens_decoder,
                        const int64_t *step_idx,
                        int bs,
                        int length,
                        int max_draft_tokens) {
   for (int i = 0; i < bs; i++) {
-    if (stop_flags[i] || (seq_lens_encoder[i] == 0 && seq_lens_decoder[i] == 0))
-      continue;
-
-    int64_t *pre_ids_all_now = pre_ids_all + i * length;
-    const int64_t *accept_tokens_now = accept_tokens + i * max_draft_tokens;
-    int accept_num_now = accept_num[i];
-    int64_t step_idx_now = step_idx[i];
-
-    if (step_idx_now >= 0) {
-      for (int j = 0; j < accept_num_now; j++) {
-        pre_ids_all_now[step_idx_now - j] =
-            accept_tokens_now[accept_num_now - 1 - j];
+    if (!stop_flags[i]) {
+      int64_t *pre_ids_all_now = pre_ids_all + i * length;
+      const int64_t *accept_tokens_now = accept_tokens + i * max_draft_tokens;
+      int accept_num_now = accept_num[i];
+      int64_t step_idx_now = step_idx[i];
+      if (seq_lens_encoder[i] == 0 && seq_lens_decoder[i] == 0) continue;
+      if (step_idx_now >= 0) {
+        for (int j = 0; j < accept_num_now; j++) {
+          pre_ids_all_now[step_idx_now - j] =
+              accept_tokens_now[accept_num_now - 1 - j];
+        }
       }
+    } else {
+      accept_num[i] = 0;
+      seq_lens_decoder[i] = 0;
     }
   }
   return SUCCESS;
@@ -69,10 +71,10 @@ static int cpu_wrapper(Context *ctx,
 static int xpu2or3_wrapper(Context *ctx,
                            int64_t *pre_ids_all,
                            const int64_t *accept_tokens,
-                           const int *accept_num,
+                           int *accept_num,
                            const bool *stop_flags,
                            const int *seq_lens_encoder,
-                           const int *seq_lens_decoder,
+                           int *seq_lens_decoder,
                            const int64_t *step_idx,
                            int bs,
                            int length,
@@ -80,29 +82,31 @@ static int xpu2or3_wrapper(Context *ctx,
   ctx_guard RAII_GUARD(ctx);
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
 
-  xpu3::plugin::speculate_set_value_by_flag_and_id<<<ctx->ncluster(),
-                                                     64,
-                                                     ctx->xpu_stream>>>(
-      reinterpret_cast<XPU_INT64 *>(pre_ids_all),
-      reinterpret_cast<const XPU_INT64 *>(accept_tokens),
-      accept_num,
-      stop_flags,
-      seq_lens_encoder,
-      seq_lens_decoder,
-      reinterpret_cast<const XPU_INT64 *>(step_idx),
-      bs,
-      length,
-      max_draft_tokens);
+  int32_t ret_xre =
+      xpu3::plugin::speculate_set_value_by_flag_and_id<<<ctx->ncluster(),
+                                                         64,
+                                                         ctx->xpu_stream>>>(
+          reinterpret_cast<XPU_INT64 *>(pre_ids_all),
+          reinterpret_cast<const XPU_INT64 *>(accept_tokens),
+          accept_num,
+          stop_flags,
+          seq_lens_encoder,
+          seq_lens_decoder,
+          reinterpret_cast<const XPU_INT64 *>(step_idx),
+          bs,
+          length,
+          max_draft_tokens);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
 int speculate_set_value_by_flag_and_id(Context *ctx,
                                        int64_t *pre_ids_all,
                                        const int64_t *accept_tokens,
-                                       const int *accept_num,
+                                       int *accept_num,
                                        const bool *stop_flags,
                                        const int *seq_lens_encoder,
-                                       const int *seq_lens_decoder,
+                                       int *seq_lens_decoder,
                                        const int64_t *step_idx,
                                        int bs,
                                        int length,

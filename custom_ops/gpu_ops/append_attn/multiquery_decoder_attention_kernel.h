@@ -15,25 +15,34 @@
 
 #include "decode_attention_func.cuh"
 
-template <typename T, uint32_t GROUP_SIZE, uint32_t HEAD_DIM_QK, uint32_t HEAD_DIM_V, uint32_t BLOCK_SIZE, bool CAUSAL, uint32_t NUM_STAGE, uint32_t cache_bytes, uint32_t DEAL_EACH_TIME>
+template <typename T,
+          uint32_t GROUP_SIZE,
+          uint32_t HEAD_DIM_QK,
+          uint32_t HEAD_DIM_V,
+          uint32_t BLOCK_SIZE,
+          bool CAUSAL,
+          uint32_t NUM_STAGE,
+          uint32_t cache_bytes,
+          uint32_t DEAL_EACH_TIME>
 void MultiQueryDecoderAttention(
-  const AppendAttnMetaData& meta_data,
-  cudaStream_t &stream,
-  const paddle::Tensor &q,
-  const paddle::Tensor &cache_k, // [max_block_num, num_kv_heads, block_size, head_dim]
-  const paddle::Tensor &cache_v, // [num_kv_heads, head_dim]
-  const paddle::optional<paddle::Tensor>& attn_mask,
-  const paddle::optional<paddle::Tensor>& shift_bias,
-  const paddle::optional<paddle::Tensor>& smooth_weight,
-  const paddle::Tensor &seq_lens_q,
-  const paddle::Tensor &seq_lens_kv,
-  const paddle::Tensor &batch_id_per_token,
-  const paddle::Tensor &cu_seqlens_q,
-  const paddle::Tensor &block_table,
-  const int max_seq_len,
-  const int max_dec_len,
-  const float rope_scale,
-  const float rope_theta,
-  const float softmax_scale,
-  const float in_scale,
-  paddle::Tensor *out);
+    const AppendAttnMetaData &meta_data,
+    cudaStream_t &stream,
+    const paddle::Tensor &q,
+    const paddle::Tensor
+        &cache_k,  // [max_block_num, num_kv_heads, block_size, head_dim]
+    const paddle::Tensor &cache_v,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor> &attn_mask,
+    const paddle::optional<paddle::Tensor> &shift_bias,
+    const paddle::optional<paddle::Tensor> &smooth_weight,
+    const paddle::Tensor &seq_lens_q,
+    const paddle::Tensor &seq_lens_kv,
+    const paddle::Tensor &batch_id_per_token,
+    const paddle::Tensor &cu_seqlens_q,
+    const paddle::Tensor &block_table,
+    const int max_seq_len,
+    const int max_dec_len,
+    const float rope_scale,
+    const float rope_theta,
+    const float softmax_scale,
+    const float in_scale,
+    paddle::Tensor *out);

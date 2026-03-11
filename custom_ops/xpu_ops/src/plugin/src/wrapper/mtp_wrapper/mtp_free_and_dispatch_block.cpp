@@ -154,7 +154,7 @@ static int xpu2or3_wrapper(Context *ctx,
     WRAPPER_UNIMPLEMENTED(ctx);
   }
   auto mtp_free_and_dispatch_block = xpu3::plugin::mtp_free_and_dispatch_block;
-  mtp_free_and_dispatch_block<<<12, 64, ctx->xpu_stream>>>(
+  int32_t ret_xre = mtp_free_and_dispatch_block<<<12, 64, ctx->xpu_stream>>>(
       base_model_stop_flags,
       stop_flags,
       batch_drop,
@@ -169,6 +169,7 @@ static int xpu2or3_wrapper(Context *ctx,
       block_size,
       block_num_per_seq,
       max_draft_tokens);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

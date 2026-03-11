@@ -47,8 +47,8 @@ def _create_tokens_tensor(
     batch_size: int,
     max_seq_len: int,
 ) -> paddle.Tensor:
-    pre_token_ids = paddle.full(shape=[batch_size, max_seq_len], fill_value=-1, dtype="int64")
-    return pre_token_ids
+    token_ids_all = paddle.full(shape=[batch_size, max_seq_len], fill_value=-1, dtype="int64")
+    return token_ids_all
 
 
 def _create_default_sampling_metadata(
@@ -62,10 +62,9 @@ def _create_default_sampling_metadata(
         temperature=paddle.full(shape=[batch_size, 1], fill_value=0.9, dtype="float32"),
         top_p=paddle.full(shape=[batch_size, 1], fill_value=0.7, dtype="float32"),
         top_k=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int32"),
-        prompt_ids=paddle.full(shape=[batch_size, max_seq_len], fill_value=0, dtype="int64"),
-        prompt_lens=paddle.full(shape=[batch_size, 1], fill_value=5, dtype="int64"),
+        prompt_lens=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64"),
         step_idx=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64"),
-        pre_token_ids=_create_tokens_tensor(batch_size, max_seq_len),
+        token_ids_all=_create_tokens_tensor(batch_size, max_seq_len),
         frequency_penalties=_create_penalty_tensor(batch_size, 0.0),
         presence_penalties=_create_penalty_tensor(batch_size, 0.0),
         repetition_penalties=_create_penalty_tensor(batch_size, 1.0),
@@ -85,6 +84,7 @@ def _create_fd_config(max_model_len):
     model_config: Mock = Mock()
     model_config.max_model_len = max_model_len
     model_config.architectures = ["test_model"]
+    model_config.mm_max_tokens_per_item = None
     speculative_config = SpeculativeConfig({})
     graph_opt_config = GraphOptimizationConfig({})
     scheduler_config = SchedulerConfig({})
@@ -107,10 +107,11 @@ def _create_fd_config(max_model_len):
 def _create_share_inputs(max_num_seqs, max_draft_token_num, max_model_len, vocab_size):
     share_inputs = {}
     share_inputs["seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 2, dtype="int32")
-    share_inputs["output_cum_offsets"] = paddle.concat(
-        [(max_model_len - share_inputs["seq_lens_this_time"][i]) * i for i in range(max_num_seqs)]
-    )
-    share_inputs["output_padding_offset"] = paddle.repeat_interleave(share_inputs["output_cum_offsets"], 2)
+
+    cu_seqlens_q_output = [0] + paddle.cumsum(share_inputs["seq_lens_this_time"]).numpy().tolist()
+    share_inputs["cu_seqlens_q_output"] = paddle.to_tensor(cu_seqlens_q_output).cast("int32")
+    share_inputs["batch_id_per_token_output"] = paddle.arange(max_num_seqs, dtype="int32") * 2
+
     share_inputs["accept_tokens"] = paddle.full(
         shape=[max_num_seqs, max_draft_token_num + 1], fill_value=0, dtype="int64"
     )

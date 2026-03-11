@@ -78,7 +78,7 @@ static int xpu3_wrapper(Context* ctx,
                         int dim_embed,
                         int elem_nums,
                         T* out) {
-  xpu3::plugin::RebuildAppendPaddingKernel<T>
+  int32_t ret_xre = xpu3::plugin::RebuildAppendPaddingKernel<T>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(full_hidden_states,
                                                  cum_offsets,
                                                  seq_len_encoder,
@@ -88,6 +88,7 @@ static int xpu3_wrapper(Context* ctx,
                                                  dim_embed,
                                                  elem_nums,
                                                  out);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

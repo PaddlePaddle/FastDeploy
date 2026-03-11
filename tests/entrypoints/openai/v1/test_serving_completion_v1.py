@@ -564,7 +564,8 @@ class TestAsyncLLMOpenAIServingCompletionPreprocess(unittest.IsolatedAsyncioTest
         # Assert
         self.assertIsNone(result)
         self.assertEqual(len(ctx.preprocess_requests), 1)
-        self.assertEqual(ctx.preprocess_requests[0]["prompt"], [1, 2, 3, 4, 5])
+        self.assertEqual(ctx.preprocess_requests[0]["prompt_token_ids"], [1, 2, 3, 4, 5])
+        self.assertIsNone(ctx.preprocess_requests[0]["prompt"])
 
     async def test_preprocess_valid_prompt_nested_int_list(self):
         """Test _preprocess with prompt as nested list of ints"""
@@ -579,8 +580,10 @@ class TestAsyncLLMOpenAIServingCompletionPreprocess(unittest.IsolatedAsyncioTest
         self.assertIsNone(result)
         self.assertEqual(len(ctx.preprocess_requests), 2)
         # When prompt is [[1,2,3], [4,5,6]], it should be treated as token IDs for batch inference
-        self.assertEqual(ctx.preprocess_requests[0]["prompt"], [1, 2, 3])
-        self.assertEqual(ctx.preprocess_requests[1]["prompt"], [4, 5, 6])
+        self.assertEqual(ctx.preprocess_requests[0]["prompt_token_ids"], [1, 2, 3])
+        self.assertEqual(ctx.preprocess_requests[1]["prompt_token_ids"], [4, 5, 6])
+        self.assertIsNone(ctx.preprocess_requests[0]["prompt"])
+        self.assertIsNone(ctx.preprocess_requests[1]["prompt"])
 
     async def test_preprocess_valid_prompt_token_ids_int_list(self):
         """Test _preprocess with valid list of int token IDs"""
@@ -596,7 +599,8 @@ class TestAsyncLLMOpenAIServingCompletionPreprocess(unittest.IsolatedAsyncioTest
         # Assert
         self.assertIsNone(result)
         self.assertEqual(len(ctx.preprocess_requests), 1)
-        self.assertEqual(ctx.preprocess_requests[0]["prompt"], [1, 2, 3, 4, 5])
+        self.assertEqual(ctx.preprocess_requests[0]["prompt_token_ids"], [1, 2, 3, 4, 5])
+        self.assertIsNone(ctx.preprocess_requests[0]["prompt"])
         self.assertIsNone(request.prompt_token_ids)  # Should be reset
 
     async def test_preprocess_valid_prompt_token_ids_nested_list(self):
@@ -617,8 +621,10 @@ class TestAsyncLLMOpenAIServingCompletionPreprocess(unittest.IsolatedAsyncioTest
         self.assertIsNone(result)
         self.assertEqual(len(ctx.preprocess_requests), 2)
         # When prompt_token_ids is [[1,2,3], [4,5,6]], it should be treated as batch token IDs
-        self.assertEqual(ctx.preprocess_requests[0]["prompt"], [1, 2, 3])
-        self.assertEqual(ctx.preprocess_requests[1]["prompt"], [4, 5, 6])
+        self.assertEqual(ctx.preprocess_requests[0]["prompt_token_ids"], [1, 2, 3])
+        self.assertEqual(ctx.preprocess_requests[1]["prompt_token_ids"], [4, 5, 6])
+        self.assertIsNone(ctx.preprocess_requests[0]["prompt"])
+        self.assertIsNone(ctx.preprocess_requests[1]["prompt"])
         self.assertIsNone(request.prompt_token_ids)  # Should be reset
 
     async def test_preprocess_empty_prompt_token_ids(self):

@@ -124,7 +124,6 @@ def setup_and_run_server():
     print("start server0...")
     env_server_0 = os.environ.copy()
     env_server_0["CUDA_VISIBLE_DEVICES"] = "0"
-    env_server_0["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
     env_server_0["FD_LOG_DIR"] = "log_server_0"
     env_server_0["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT)
     log_path = "server_0.log"
@@ -169,7 +168,6 @@ def setup_and_run_server():
     print("start server 1...")
     env_server_1 = os.environ.copy()
     env_server_1["CUDA_VISIBLE_DEVICES"] = "1"
-    env_server_1["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
     env_server_1["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT + 1)
     env_server_1["FD_LOG_DIR"] = "log_server_1"
     log_path = "server_1.log"

@@ -30,45 +30,46 @@ class W4A8MoeGemmRunner {
   ~W4A8MoeGemmRunner();
 
   void moe_gemm_bias_act(const IntAType* A,
-                     const IntBType* B,
-                     cutlass::epilogue::QuantMode quant_mode,
-                     const OutputType* col_scale,
-                     const OutputType* row_scale,
-                     const OutputType* biases,
-                     const int32_t* nf4_look_up_table,
-                     OutputType* C,
-                     int64_t* total_rows_before_expert,
-                     int m,
-                     int n,
-                     int k,
-                     int num_experts,
-                     std::string activation_type,
-                     char* workspace_ptr,
-                     const size_t workspace_bytes,
-                     cudaStream_t stream);
+                         const IntBType* B,
+                         cutlass::epilogue::QuantMode quant_mode,
+                         const OutputType* col_scale,
+                         const OutputType* row_scale,
+                         const OutputType* biases,
+                         const int32_t* nf4_look_up_table,
+                         OutputType* C,
+                         int64_t* total_rows_before_expert,
+                         int m,
+                         int n,
+                         int k,
+                         int num_experts,
+                         std::string activation_type,
+                         char* workspace_ptr,
+                         const size_t workspace_bytes,
+                         cudaStream_t stream);
 
   void moe_gemm(const IntAType* A,
-            const IntBType* B,
-            cutlass::epilogue::QuantMode quant_mode,
-            const OutputType* col_scale,
-            const OutputType* row_scale,
-            const int32_t* nf4_look_up_table,
-            OutputType* C,
-            int64_t* total_rows_before_expert,
-            int64_t total_rows_in_ll_else_minus1,
-            int64_t total_rows,
-            int64_t gemm_n,
-            int64_t gemm_k,
-            char* workspace_ptr,
-            const size_t workspace_bytes,
-            int num_experts,
-            cudaStream_t stream,
-            CutlassGemmConfig gemm_config = CutlassGemmConfig{CutlassTileConfig::CtaShape64x128x64_WarpShape64x32x64,
-                                                              SplitKStyle::NO_SPLIT_K,
-                                                              1,
-                                                              5});
- private:
+                const IntBType* B,
+                cutlass::epilogue::QuantMode quant_mode,
+                const OutputType* col_scale,
+                const OutputType* row_scale,
+                const int32_t* nf4_look_up_table,
+                OutputType* C,
+                int64_t* total_rows_before_expert,
+                int64_t total_rows_in_ll_else_minus1,
+                int64_t total_rows,
+                int64_t gemm_n,
+                int64_t gemm_k,
+                char* workspace_ptr,
+                const size_t workspace_bytes,
+                int num_experts,
+                cudaStream_t stream,
+                CutlassGemmConfig gemm_config = CutlassGemmConfig{
+                    CutlassTileConfig::CtaShape64x128x64_WarpShape64x32x64,
+                    SplitKStyle::NO_SPLIT_K,
+                    1,
+                    5});
 
+ private:
   template <typename EpilogueTag>
   void dispatch_to_arch(const IntAType* A,
                         const IntBType* B,
@@ -108,8 +109,7 @@ class W4A8MoeGemmRunner {
                 cudaStream_t stream,
                 CutlassGemmConfig gemm_config);
 
-  int getWorkspaceSize(
-    const int m, const int n, const int k);
+  int getWorkspaceSize(const int m, const int n, const int k);
 
  private:
   static constexpr int split_k_limit = 4;

@@ -45,6 +45,27 @@ def natural_key(s: str):
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", s)]
 
 
+def layers_are_grouped(keys):
+
+    seen = set()
+    current_layer = None
+
+    for k in keys:
+        m = re.search(r"layers\.(\d+)", k)
+        if not m:
+            continue
+
+        layer = int(m.group(1))
+
+        if layer != current_layer:
+            if layer in seen:
+                return False
+            seen.add(layer)
+            current_layer = layer
+
+    return True
+
+
 def pdparams_weight_iterator(paddle_file_list: list[str]):
     for pdparams_file in tqdm(
         paddle_file_list,
@@ -76,10 +97,24 @@ def load_weights_from_cache(model, weights_iterator):
                 model_sublayer.process_weights_after_loading()
 
 
+def get_model_path(fd_config: FDConfig):
+    model_path = fd_config.model_config.model
+    rank_dirs = [
+        f for f in os.listdir(model_path) if f.startswith("rank") and os.path.isdir(os.path.join(model_path, f))
+    ]
+    if len(rank_dirs) > 1:
+        local_rank = fd_config.parallel_config.tensor_parallel_rank
+        if fd_config.parallel_config.tensor_parallel_size != len(rank_dirs):
+            raise ValueError(f"Your model only supports loading with tp{len(rank_dirs)}")
+        model_path = os.path.join(model_path, f"rank{local_rank}")
+        fd_config.load_config.is_pre_sharded = True
+    return model_path
+
+
 def get_weight_iterator(model_path: str):
-    files_list, ordered_weight_map, use_safetensors, is_key_ordered = get_all_weights_file(model_path)
+    files_list, ordered_weight_map, use_safetensors, is_layers_are_grouped = get_all_weights_file(model_path)
     if use_safetensors:
-        if is_key_ordered:
+        if is_layers_are_grouped:
             weights_iterator = safetensors_weights_iterator(files_list)
         else:
             weights_iterator = safetensors_weights_iterator_ordered(ordered_weight_map)
@@ -404,10 +439,8 @@ def load_pre_sharded_checkpoint(model_path: str, local_rank: int):
     """
     load_pre_sharded_checkpoint
     """
-
     state_dict = {}
-    safetensor_files, _, _, _ = get_all_weights_file(os.path.join(model_path, f"rank{local_rank}"))
-    weights_iterator = safetensors_weights_iterator(safetensor_files)
+    weights_iterator = get_weight_iterator(os.path.join(model_path, f"rank{local_rank}"))
     for name, weight in weights_iterator:
         state_dict[name] = weight.clone()
     return state_dict
@@ -431,21 +464,21 @@ def get_all_weights_file(model_path: str):
             with safe_open(safe_model_path, framework="np", device="cpu") as f:
                 key_name_list = sorted(f.keys(), key=natural_key)
             ordered_weight_map = {key: "model.safetensors" for key in key_name_list}
-            is_key_ordered = True
+            is_layers_are_grouped = True
             files_list = [str(safe_model_path)]
-            return files_list, ordered_weight_map, use_safetensors, is_key_ordered
+            return files_list, ordered_weight_map, use_safetensors, is_layers_are_grouped
         else:
             index_file = model_path / "model.safetensors.index.json"
             with index_file.open("r") as f:
                 weight_map = json.load(f)["weight_map"]
             keys = list(weight_map.keys())
-            is_key_ordered = keys == sorted(keys, key=natural_key)
+            is_layers_are_grouped = layers_are_grouped(keys)
             ordered_weight_map = {
                 key: str(model_path / weight_map[key]) for key in sorted(weight_map.keys(), key=natural_key)
             }
             weight_files_in_index = {str(model_path / weight_map[name]) for name in weight_map}
             files_list = sorted(weight_files_in_index)
-            return files_list, ordered_weight_map, use_safetensors, is_key_ordered
+            return files_list, ordered_weight_map, use_safetensors, is_layers_are_grouped
 
 
 def deal_state_dict(state_dict):

@@ -248,10 +248,11 @@ class PaddleOCRVLProcessor(TextProcessor):
             ]  # Leave space for at least 1 new token
 
         # Set default max_tokens if not specified
-        if request.sampling_params.max_tokens is None:
-            request.sampling_params.max_tokens = max(
-                1, max_model_len - len(request.prompt_token_ids)
-            )  # Ensure at least 1 token
+        max_tokens = max_model_len - len(request.prompt_token_ids)
+        if getattr(request.sampling_params, "max_tokens", None) is None:
+            request.sampling_params.max_tokens = max(1, max_tokens)
+        else:
+            request.sampling_params.max_tokens = min(max_tokens, request.sampling_params.max_tokens)
 
         if request.sampling_params.top_p is not None and request.sampling_params.top_p < _SAMPLING_EPS:
             request.sampling_params.top_p = _SAMPLING_EPS

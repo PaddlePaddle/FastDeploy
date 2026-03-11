@@ -76,6 +76,7 @@ class InputPreprocessor:
                 model_name_or_path=self.model_name_or_path,
                 reasoning_parser_obj=reasoning_parser_obj,
                 tool_parser_obj=tool_parser_obj,
+                mm_processor_kwargs=self.mm_processor_kwargs,
             )
         except:
             if not self.model_config.enable_mm:

@@ -16,18 +16,18 @@
 #include <cuda_runtime.h>
 #include "paddle/phi/core/enforce.h"
 
-namespace common
-{
+namespace common {
 
-inline int getSMVersion()
-{
-    int device{-1};
-    PADDLE_ENFORCE_GPU_SUCCESS(cudaGetDevice(&device));
-    int sm_major = 0;
-    int sm_minor = 0;
-    PADDLE_ENFORCE_GPU_SUCCESS(cudaDeviceGetAttribute(&sm_major, cudaDevAttrComputeCapabilityMajor, device));
-    PADDLE_ENFORCE_GPU_SUCCESS(cudaDeviceGetAttribute(&sm_minor, cudaDevAttrComputeCapabilityMinor, device));
-    return sm_major * 10 + sm_minor;
+inline int getSMVersion() {
+  int device{-1};
+  PADDLE_ENFORCE_GPU_SUCCESS(cudaGetDevice(&device));
+  int sm_major = 0;
+  int sm_minor = 0;
+  PADDLE_ENFORCE_GPU_SUCCESS(cudaDeviceGetAttribute(
+      &sm_major, cudaDevAttrComputeCapabilityMajor, device));
+  PADDLE_ENFORCE_GPU_SUCCESS(cudaDeviceGetAttribute(
+      &sm_minor, cudaDevAttrComputeCapabilityMinor, device));
+  return sm_major * 10 + sm_minor;
 }
 
-}
+}  // namespace common

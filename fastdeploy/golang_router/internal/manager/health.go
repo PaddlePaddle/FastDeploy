@@ -26,7 +26,7 @@ type healthMonitorResult struct {
 func CheckServiceHealth(ctx context.Context, baseURL string, timeout ...time.Duration) bool {
 	// Handle empty baseURL
 	if baseURL == "" {
-		logger.Error("empty baseURL provided")
+		logger.Error(ctx, "empty baseURL provided")
 		return false
 	}
 
@@ -42,7 +42,7 @@ func CheckServiceHealth(ctx context.Context, baseURL string, timeout ...time.Dur
 	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		logger.Error("failed to create request: %v", err)
+		logger.Error(ctx, "failed to create request: %v", err)
 		return false
 	}
 
@@ -51,7 +51,7 @@ func CheckServiceHealth(ctx context.Context, baseURL string, timeout ...time.Dur
 	resp, err := client.Do(req)
 
 	if err != nil {
-		logger.Error("failed to send request to %s with error: %v", url, err)
+		logger.Error(ctx, "failed to send request to %s with error: %v", url, err)
 		return false
 	}
 	defer resp.Body.Close()
@@ -59,7 +59,7 @@ func CheckServiceHealth(ctx context.Context, baseURL string, timeout ...time.Dur
 	// Read response body
 	_, err = io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Error("failed to read response body: %v", err)
+		logger.Error(ctx, "failed to read response body: %v", err)
 		return false
 	}
 
@@ -139,9 +139,9 @@ func HealthGenerate(c *gin.Context) {
 	for res := range results {
 		// Process each result
 		if !res.isHealthy {
-			logger.Warn("Server %s is not healthy", res.url)
+			logger.Warn(c.Request.Context(), "Server %s is not healthy", res.url)
 		} else {
-			logger.Info("Server %s is healthy", res.url)
+			logger.Info(c.Request.Context(), "Server %s is healthy", res.url)
 		}
 	}
 
@@ -158,26 +158,26 @@ func RemoveServers(ctx context.Context, prefillToRemove []string, decodeToRemove
 	for _, id := range prefillToRemove {
 		if worker, exists := DefaultManager.prefillWorkerMap[id]; exists {
 			delete(DefaultManager.prefillWorkerMap, id)
-			logger.Info("Removed unhealthy prefill instance: %s", worker.Url)
+			logger.Info(ctx, "Removed unhealthy prefill instance: %s", worker.Url)
 		}
 	}
 	for _, id := range decodeToRemove {
 		if worker, exists := DefaultManager.decodeWorkerMap[id]; exists {
 			delete(DefaultManager.decodeWorkerMap, id)
-			logger.Info("Removed unhealthy decode instance: %s", worker.Url)
+			logger.Info(ctx, "Removed unhealthy decode instance: %s", worker.Url)
 		}
 	}
 	for _, id := range mixedToRemove {
 		if worker, exists := DefaultManager.mixedWorkerMap[id]; exists {
 			delete(DefaultManager.mixedWorkerMap, id)
-			logger.Info("Removed unhealthy mixed instance: %s", worker.Url)
+			logger.Info(ctx, "Removed unhealthy mixed instance: %s", worker.Url)
 		}
 	}
 }
 
 func ReadServers(ctx context.Context) (prefillInstances, decodeInstances, mixedInstances []string) {
 	if DefaultManager == nil {
-		logger.Debug("Healthy instances: prefill=[], decode=[], mixed=[] (DefaultManager is nil)")
+		logger.Debug(ctx, "Healthy instances: prefill=[], decode=[], mixed=[] (DefaultManager is nil)")
 		return []string{}, []string{}, []string{}
 	}
 
@@ -199,7 +199,7 @@ func ReadServers(ctx context.Context) (prefillInstances, decodeInstances, mixedI
 	for _, w := range DefaultManager.mixedWorkerMap {
 		mixedInstances = append(mixedInstances, w.Url)
 	}
-	logger.Debug(
+	logger.Debug(ctx,
 		"Healthy instances: prefill=%v, decode=%v, mixed=%v",
 		prefillInstances,
 		decodeInstances,

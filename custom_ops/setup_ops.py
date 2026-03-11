@@ -270,7 +270,6 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/stop_generation.cu",
         "gpu_ops/stop_generation_multi_ends.cu",
         "gpu_ops/set_flags.cu",
-        "gpu_ops/set_stop.cu",
         "gpu_ops/update_inputs_v1.cu",
         "gpu_ops/recover_decode_task.cu",
         "gpu_ops/step.cu",
@@ -294,6 +293,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/cpp_extensions.cc",
         "gpu_ops/share_external_data.cu",
         "gpu_ops/fused_mask_swiglu_fp8_quant_kernel.cu",
+        "gpu_ops/per_token_quant_fp8.cu",
         "gpu_ops/update_split_fuse_input.cu",
         "gpu_ops/text_image_index_out.cu",
         "gpu_ops/text_image_gather_scatter.cu",
@@ -306,14 +306,14 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/noaux_tc_redundant.cu",
         "gpu_ops/custom_all_reduce/all_reduce.cu",
         "gpu_ops/merge_prefill_decode_output.cu",
-        "gpu_ops/limit_thinking_content_length_v1.cu",
-        "gpu_ops/limit_thinking_content_length_v2.cu",
+        "gpu_ops/limit_thinking_content_length.cu",
         "gpu_ops/update_attn_mask_offsets.cu",
         "gpu_ops/fused_neox_rope_embedding.cu",
         "gpu_ops/gelu_tanh.cu",
         "gpu_ops/sgemm_1.cu",
         "gpu_ops/sgemm_2.cu",
         "gpu_ops/reasoning_phase_token_constraint.cu",
+        "gpu_ops/get_attn_mask_q.cu",
     ]
 
     # pd_disaggregation
@@ -396,6 +396,8 @@ elif paddle.is_compiled_with_cuda():
         )
         sources += ["gpu_ops/append_attention.cu"]
         sources += find_end_files("gpu_ops/append_attn", ".cu")
+        # sparse indexer
+        sources += find_end_files("gpu_ops/sparse_indexer", ".cu")
         # mla
         sources += ["gpu_ops/multi_head_latent_attention.cu"]
         # gemm_dequant
@@ -559,18 +561,22 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "gpu_ops/text_image_index_out.cu",
                 "gpu_ops/text_image_gather_scatter.cu",
                 "gpu_ops/set_data_ipc.cu",
-                "gpu_ops/limit_thinking_content_length_v1.cu",
-                "gpu_ops/limit_thinking_content_length_v2.cu",
+                "gpu_ops/limit_thinking_content_length.cu",
                 "gpu_ops/recover_decode_task.cu",
                 "gpu_ops/update_inputs_v1.cu",
                 "gpu_ops/get_img_boundaries.cc",
+                "gpu_ops/fused_neox_rope_embedding.cu",
+                "gpu_ops/get_output_ep.cc",
                 "iluvatar_ops/moe_dispatch.cu",
                 "iluvatar_ops/moe_reduce.cu",
+                "iluvatar_ops/flash_attn_unpadded.cu",
                 "iluvatar_ops/paged_attn.cu",
                 "iluvatar_ops/prefill_fused_attn.cu",
                 "iluvatar_ops/mixed_fused_attn.cu",
                 "iluvatar_ops/w8a16_group_gemm.cu",
+                "iluvatar_ops/w8a16_group_gemv.cu",
                 "iluvatar_ops/runtime/iluvatar_context.cc",
+                "iluvatar_ops/cpp_extensions.cc",
             ],
             include_dirs=["iluvatar_ops/runtime", "gpu_ops"],
             extra_link_args=[
@@ -629,8 +635,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/text_image_gather_scatter.cu",
         "gpu_ops/text_image_index_out.cu",
         "gpu_ops/get_position_ids_and_mask_encoder_batch.cu",
-        "gpu_ops/limit_thinking_content_length_v1.cu",
-        "gpu_ops/limit_thinking_content_length_v2.cu",
+        "gpu_ops/limit_thinking_content_length.cu",
         "gpu_ops/update_attn_mask_offsets.cu",
         "gpu_ops/append_attn/mla_cache_kernel.cu",
         "gpu_ops/append_attn/get_block_shape_and_split_kv_block.cu",
@@ -646,7 +651,6 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/swap_cache_batch.cu",
         "gpu_ops/gelu_tanh.cu",
-        "gpu_ops/set_stop.cu",
         "metax_ops/moe_dispatch.cu",
         "metax_ops/moe_ffn.cu",
         "metax_ops/moe_reduce.cu",

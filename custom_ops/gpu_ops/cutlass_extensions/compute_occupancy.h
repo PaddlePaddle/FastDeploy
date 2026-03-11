@@ -20,66 +20,65 @@
 #include "cutlass/device_kernel.h"
 #include "common/cudaUtils.h"
 
-namespace cutlass_extensions
-{
+namespace cutlass_extensions {
 
 template <typename GemmKernel, bool enable_cutlass_3x = false>
-inline int compute_occupancy_for_kernel()
-{
+inline int compute_occupancy_for_kernel() {
+  int smem_size = int(sizeof(typename GemmKernel::SharedStorage));
 
-    int smem_size = int(sizeof(typename GemmKernel::SharedStorage));
-
-    if (smem_size > (48 << 10))
-    {
-        cudaFuncAttributes attr;
-        int device = 0;
-        int max_smem_per_block = 0;
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaGetDevice(&device));
-        PADDLE_ENFORCE_GPU_SUCCESS(
-            cudaDeviceGetAttribute(&max_smem_per_block, cudaDevAttrMaxSharedMemoryPerBlockOptin, device));
-        if constexpr (enable_cutlass_3x)
-        {
-            PADDLE_ENFORCE_GPU_SUCCESS(cudaFuncGetAttributes(&attr, cutlass::device_kernel<GemmKernel>));
-        }
-        else
-        {
-            PADDLE_ENFORCE_GPU_SUCCESS(cudaFuncGetAttributes(&attr, cutlass::Kernel<GemmKernel>));
-        }
-        if (smem_size + attr.sharedSizeBytes >= static_cast<size_t>(max_smem_per_block))
-        {
-            // This should mean that
-            // cudaFuncSetAttribute(cutlass::Kernel<GemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size)
-            // wouldn't work. In that case, we return an occupancy of 0. This will cause the heuristic to ignore this
-            // configuration.
-            return 0;
-        }
-
-        if constexpr (enable_cutlass_3x)
-        {
-            PADDLE_ENFORCE_GPU_SUCCESS(cudaFuncSetAttribute(
-                cutlass::device_kernel<GemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-        }
-        else
-        {
-            PADDLE_ENFORCE_GPU_SUCCESS(cudaFuncSetAttribute(
-                cutlass::Kernel<GemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
-        }
+  if (smem_size > (48 << 10)) {
+    cudaFuncAttributes attr;
+    int device = 0;
+    int max_smem_per_block = 0;
+    PADDLE_ENFORCE_GPU_SUCCESS(cudaGetDevice(&device));
+    PADDLE_ENFORCE_GPU_SUCCESS(cudaDeviceGetAttribute(
+        &max_smem_per_block, cudaDevAttrMaxSharedMemoryPerBlockOptin, device));
+    if constexpr (enable_cutlass_3x) {
+      PADDLE_ENFORCE_GPU_SUCCESS(
+          cudaFuncGetAttributes(&attr, cutlass::device_kernel<GemmKernel>));
+    } else {
+      PADDLE_ENFORCE_GPU_SUCCESS(
+          cudaFuncGetAttributes(&attr, cutlass::Kernel<GemmKernel>));
+    }
+    if (smem_size + attr.sharedSizeBytes >=
+        static_cast<size_t>(max_smem_per_block)) {
+      // This should mean that
+      // cudaFuncSetAttribute(cutlass::Kernel<GemmKernel>,
+      // cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size) wouldn't work.
+      // In that case, we return an occupancy of 0. This will cause the
+      // heuristic to ignore this configuration.
+      return 0;
     }
 
-    int max_active_blocks = -1;
-    if constexpr (enable_cutlass_3x)
-    {
-        PADDLE_ENFORCE_GPU_SUCCESS(
-            cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_active_blocks, cutlass::device_kernel<GemmKernel>,
-                128 * (GemmKernel::NumLoadWarpGroups + GemmKernel::NumMmaWarpGroups), smem_size));
+    if constexpr (enable_cutlass_3x) {
+      PADDLE_ENFORCE_GPU_SUCCESS(
+          cudaFuncSetAttribute(cutlass::device_kernel<GemmKernel>,
+                               cudaFuncAttributeMaxDynamicSharedMemorySize,
+                               smem_size));
+    } else {
+      PADDLE_ENFORCE_GPU_SUCCESS(
+          cudaFuncSetAttribute(cutlass::Kernel<GemmKernel>,
+                               cudaFuncAttributeMaxDynamicSharedMemorySize,
+                               smem_size));
     }
-    else
-    {
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-            &max_active_blocks, cutlass::Kernel<GemmKernel>, GemmKernel::kThreadCount, smem_size));
-    }
+  }
 
-    return max_active_blocks;
+  int max_active_blocks = -1;
+  if constexpr (enable_cutlass_3x) {
+    PADDLE_ENFORCE_GPU_SUCCESS(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+        &max_active_blocks,
+        cutlass::device_kernel<GemmKernel>,
+        128 * (GemmKernel::NumLoadWarpGroups + GemmKernel::NumMmaWarpGroups),
+        smem_size));
+  } else {
+    PADDLE_ENFORCE_GPU_SUCCESS(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+        &max_active_blocks,
+        cutlass::Kernel<GemmKernel>,
+        GemmKernel::kThreadCount,
+        smem_size));
+  }
+
+  return max_active_blocks;
 }
 
-} // namespace cutlass_extensions
+}  // namespace cutlass_extensions

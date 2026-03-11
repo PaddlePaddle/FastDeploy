@@ -96,9 +96,7 @@ class ExpertService:
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
-    def start(
-        self, ipc_signal_suffix, local_data_parallel_id, request_queues_for_dp_ipc=None, result_queues_for_dp_ipc=None
-    ):
+    def start(self, ipc_signal_suffix, local_data_parallel_id):
         """
         Initializes the engine and starts its sub-services.
         If `api_server_pid` is defined, will launch a thread
@@ -112,8 +110,7 @@ class ExpertService:
             self.engine.create_data_processor()
         if self.cfg.scheduler_config.name == "dp":
             self.cfg.init_cache_info()
-            assert (request_queues_for_dp_ipc is not None) and (result_queues_for_dp_ipc is not None)
-            self.engine.scheduler.start(local_data_parallel_id, request_queues_for_dp_ipc, result_queues_for_dp_ipc)
+            self.engine.scheduler.start(local_data_parallel_id)
 
         if ipc_signal_suffix is not None:
             self.api_server_pid = ipc_signal_suffix
@@ -197,26 +194,25 @@ class ExpertService:
             for p in self.cache_manager_processes:
                 self.llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
-                    os.killpg(p.pid, signal.SIGTERM)
-                except:
-                    pass
+                    pgid = os.getpgid(p.pid)
+                    os.killpg(pgid, signal.SIGTERM)
+                except Exception as e:
+                    console_logger.error(
+                        f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
+                    )
 
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
             self.zmq_server.close()
 
 
-def start_data_parallel_service(
-    cfg, local_data_parallel_id, ipc_signal_suffix=None, request_queues_for_dp_ipc=None, result_queues_for_dp_ipc=None
-):
+def start_data_parallel_service(cfg, local_data_parallel_id, ipc_signal_suffix=None):
     """
     Start expert service
     """
     expert_service = ExpertService(cfg, local_data_parallel_id, start_queue=False)
 
     try:
-        expert_service.start(
-            ipc_signal_suffix, local_data_parallel_id, request_queues_for_dp_ipc, result_queues_for_dp_ipc
-        )
+        expert_service.start(ipc_signal_suffix, local_data_parallel_id)
 
         def deamon_thread():
             while True:
@@ -227,3 +223,8 @@ def start_data_parallel_service(
         t_deamon.join()
     except Exception as e:
         llm_logger.exception(f"Expert service failed to start: {e}, {str(traceback.format_exc())}")
+    finally:
+        try:
+            expert_service._exit_sub_services()
+        except Exception:
+            pass

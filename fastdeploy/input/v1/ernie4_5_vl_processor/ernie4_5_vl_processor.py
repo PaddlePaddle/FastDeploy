@@ -242,6 +242,8 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
                             setattr(request, k, v)
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                if getattr(request, "enable_thinking") is None:
+                    setattr(request, "enable_thinking", True)
             outputs = self.ernie4_5_processor.request2ids(request)
             delattr(request, "chat_template_kwargs")
         else:
@@ -263,12 +265,11 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
             request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
 
-        if request.sampling_params.max_tokens is None:
-            request.sampling_params.max_tokens = max(1, max_model_len - len(request.prompt_token_ids))
+        max_tokens = max_model_len - len(request.prompt_token_ids)
+        if getattr(request.sampling_params, "max_tokens", None) is None:
+            request.sampling_params.max_tokens = max(1, max_tokens)
         else:
-            request.sampling_params.max_tokens = min(
-                max_model_len - len(request.prompt_token_ids), request.sampling_params.max_tokens
-            )
+            request.sampling_params.max_tokens = min(max_tokens, request.sampling_params.max_tokens)
         if request.sampling_params.reasoning_max_tokens is None:
             request.sampling_params.reasoning_max_tokens = max(int(request.sampling_params.max_tokens * 0.8), 1)
             request.reasoning_max_tokens = request.sampling_params.reasoning_max_tokens
@@ -288,6 +289,10 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request.enable_thinking = model_status == "think_start"
         if request.sampling_params.top_p is not None and request.sampling_params.top_p < _SAMPLING_EPS:
             request.sampling_params.top_p = _SAMPLING_EPS
+        if request.sampling_params.response_max_tokens is not None and request.enable_thinking is False:
+            request.sampling_params.max_tokens = min(
+                request.sampling_params.response_max_tokens, request.sampling_params.max_tokens
+            )
         return request
 
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):

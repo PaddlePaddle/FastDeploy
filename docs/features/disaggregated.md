@@ -67,12 +67,11 @@ bash build.sh
 
 **Quick Start**
 
-Start the Router service. The `--splitwise` parameter specifies the scheduling mode as disaggregated deployment. Log information is output to `log_router/router.log`.
+Start the Router service. The `--splitwise` parameter specifies the scheduling mode as disaggregated deployment. Log information is output to `log_router/router.log`. `fd-router` installation instructions can be found in the [Router documentation](../online_serving/router.md).
 
 ```bash
 export FD_LOG_DIR="log_router"
-python -m fastdeploy.router.launch \
-    --host 0.0.0.0 \
+/usr/local/bin/fd-router \
     --port 30000 \
     --splitwise
 

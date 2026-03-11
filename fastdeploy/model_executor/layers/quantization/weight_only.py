@@ -20,12 +20,12 @@ from typing import Optional
 
 import paddle
 from paddle.nn.quant import weight_quantize
-from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     MergedReplicatedLinear,
+    QKVGateParallelLinear,
     QKVParallelLinear,
 )
 from fastdeploy.model_executor.utils import (
@@ -180,7 +180,7 @@ class WeightOnlyConfig(QuantConfigBase):
                     and check_machete_supports_shape(layer.weight_shape[0], layer.weight_shape[1])
                 ):
                     self.group_size = query_machete_supported_group_size(layer.weight_shape[0])
-                    logger.info(f"Using Machete kernel for WeightOnlyLinearMethod, group size: {self.group_size}")
+                    # logger.info(f"Using Machete kernel for WeightOnlyLinearMethod, group size: {self.group_size}")
                     return MacheteWeightOnlyLinearMethod(self)
                 return GPUWeightOnlyLinearMethod(self)
 
@@ -252,6 +252,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
                 isinstance(layer, MergedColumnParallelLinear)
                 or isinstance(layer, QKVParallelLinear)
                 or isinstance(layer, MergedReplicatedLinear)
+                or isinstance(layer, QKVGateParallelLinear)
             ):
                 # Only MergedReplicatedLinear uses the default outdim.
                 tensor_output_dim = (self.model_format == "torch") ^ quant_attrs.get("output_dim", True)

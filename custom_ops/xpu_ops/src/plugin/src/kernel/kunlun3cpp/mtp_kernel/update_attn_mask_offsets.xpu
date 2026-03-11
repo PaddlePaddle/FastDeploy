@@ -1,0 +1,77 @@
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/xtdk_io.h"
+
+namespace xpu3 {
+namespace plugin {
+
+__global__ void update_attn_mask_offsets(int* attn_mask_offsets,
+                                         const int* seq_lens_this_time,
+                                         const int* seq_lens_encoder,
+                                         const int* seq_lens_decoder,
+                                         const int* cu_seqlens_q,
+                                         const int* attn_mask_offsets_full,
+                                         int* attn_mask_offsets_decoder,
+                                         const bool* is_block_step,
+                                         int* decode_states,
+                                         int* mask_rollback,
+                                         const int real_bsz,
+                                         const int max_model_len,
+                                         const int decode_states_len) {
+  int tid = core_id() * cluster_num() + cluster_id();
+  int nthreads = cluster_num() * core_num();
+
+  for (int bid = tid; bid < real_bsz; bid += nthreads) {
+    int seq_len_this_time = seq_lens_this_time[bid];
+    int seq_len_encoder = seq_lens_encoder[bid];
+    int seq_len_decoder = seq_lens_decoder[bid];
+    int query_start_id = cu_seqlens_q[bid];
+
+    __global_ptr__ const int* attn_mask_offsets_full_now =
+        attn_mask_offsets_full + bid * max_model_len;
+    __global_ptr__ int* decode_states_now =
+        decode_states + bid * decode_states_len;
+    if (!is_block_step[bid]) {
+      if (seq_len_encoder == 0 && seq_len_decoder == 0) {
+        // Status: stop
+      } else if (seq_len_encoder > 0) {
+        for (int i = 0; i < seq_len_this_time; i++) {
+          if (*decode_states_now == 2 && seq_len_decoder > 0) {
+            // Status: vision generate phase
+            attn_mask_offsets[(query_start_id + i) * 2 + 1] =
+                seq_len_decoder + seq_len_this_time;
+          } else {
+            // Status: prefill -- normal or chunk_prefill
+            attn_mask_offsets[(query_start_id + i) * 2 + 1] =
+                attn_mask_offsets_full_now[i] + 1;
+          }
+        }
+      } else if (seq_len_decoder > 0) {
+        // Status: decoder -- normal or chunk_prefill
+        // TODO: support speculative decoding.
+        attn_mask_offsets_decoder[bid] -= mask_rollback[bid];
+        mask_rollback[bid] = 0;
+        for (int i = 0; i < seq_len_this_time; i++) {
+          attn_mask_offsets[(query_start_id + i) * 2 + 1] =
+              attn_mask_offsets_decoder[bid] + 1 + i;
+        }
+        attn_mask_offsets_decoder[bid] += seq_len_this_time;
+
+        // Speculative decoding in text_generation
+        if (seq_len_this_time > 1) {
+          for (int i = 0; i < decode_states_len; i++) {
+            if (i < seq_len_this_time) {
+              decode_states_now[i] = 0;
+            } else {
+              decode_states_now[i] = -1;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+}  // namespace plugin
+}  // namespace xpu3
