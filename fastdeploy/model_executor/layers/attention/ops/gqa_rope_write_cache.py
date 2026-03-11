@@ -95,3 +95,88 @@ def gqa_rope_write_cache(
         return q, k, v, qkv_
     else:
         raise NotImplementedError
+
+
+def gqa_rope_write_cache_inplace(
+    qkv: paddle.Tensor,
+    key_cache: paddle.Tensor,
+    value_cache: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
+    cu_seqlens_k: paddle.Tensor,
+    rotary_embs: paddle.Tensor,
+    seq_lens_this_time: paddle.Tensor,
+    seq_lens_encoder: paddle.Tensor,
+    seq_lens_decoder: paddle.Tensor,
+    batch_id_per_token: paddle.Tensor,
+    block_tables: paddle.Tensor,
+    kv_batch_ids: paddle.Tensor,
+    kv_tile_ids_per_batch: paddle.Tensor,
+    kv_num_blocks: paddle.Tensor,
+    cache_batch_ids: paddle.Tensor,
+    cache_tile_ids_per_batch: paddle.Tensor,
+    cache_num_blocks: paddle.Tensor,
+    q_buf: paddle.Tensor,
+    k_buf: paddle.Tensor,
+    v_buf: paddle.Tensor,
+    qkv_out_buf: paddle.Tensor,
+    q_norm_weight: Optional[paddle.Tensor] = None,
+    k_norm_weight: Optional[paddle.Tensor] = None,
+    cache_k_quant_scales: Optional[paddle.Tensor] = None,
+    cache_v_quant_scales: Optional[paddle.Tensor] = None,
+    cache_k_dequant_scales: Optional[paddle.Tensor] = None,
+    cache_v_dequant_scales: Optional[paddle.Tensor] = None,
+    cache_k_zp: Optional[paddle.Tensor] = None,
+    cache_v_zp: Optional[paddle.Tensor] = None,
+    kv_signal_data: Optional[paddle.Tensor] = None,
+    kv_token_num: int = 1,
+    max_seq_len: int = 0,
+    rms_norm_eps: float = 1e-6,
+    use_neox_rotary_style: bool = False,
+    cache_quant_type: str = "none",
+    rope_3d: bool = False,
+):
+    """CUDA Graph safe version: writes into pre-allocated q/k/v/qkv_out buffers."""
+    if current_platform.is_cuda():
+        from fastdeploy.model_executor.ops.gpu import gqa_rope_write_cache_inplace
+
+        q, k, v, qkv_ = gqa_rope_write_cache_inplace(
+            qkv,
+            key_cache,
+            value_cache,
+            cu_seqlens_q,
+            cu_seqlens_k,
+            rotary_embs,
+            seq_lens_this_time,
+            seq_lens_encoder,
+            seq_lens_decoder,
+            batch_id_per_token,
+            block_tables,
+            kv_batch_ids,
+            kv_tile_ids_per_batch,
+            kv_num_blocks,
+            cache_batch_ids,
+            cache_tile_ids_per_batch,
+            cache_num_blocks,
+            q_buf,
+            k_buf,
+            v_buf,
+            qkv_out_buf,
+            q_norm_weight,
+            k_norm_weight,
+            cache_k_quant_scales,
+            cache_v_quant_scales,
+            cache_k_dequant_scales,
+            cache_v_dequant_scales,
+            cache_k_zp,
+            cache_v_zp,
+            kv_signal_data,
+            kv_token_num,
+            max_seq_len,
+            rms_norm_eps,
+            use_neox_rotary_style,
+            cache_quant_type,
+            rope_3d,
+        )
+        return q, k, v, qkv_
+    else:
+        raise NotImplementedError

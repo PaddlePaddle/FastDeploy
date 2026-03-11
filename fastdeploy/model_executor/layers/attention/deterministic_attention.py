@@ -32,6 +32,9 @@ from fastdeploy.model_executor.layers.attention.ops import (
     gqa_rope_write_cache,
     pre_cache_len_concat,
 )
+from fastdeploy.model_executor.layers.attention.ops.gqa_rope_write_cache import (
+    gqa_rope_write_cache_inplace,
+)
 from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
     _elementwise_add_kernel,
     _scatter_extend_kv_indices_kernel,
@@ -73,6 +76,10 @@ class DeterministicCudaGraphBuffers:
     output: Optional[paddle.Tensor] = None
     # q_roped buffer: gqa_rope_write_cache allocates internally; Triton needs fixed addr
     q_roped: Optional[paddle.Tensor] = None
+    # gqa_rope_write_cache inplace buffers (CUDA Graph safe)
+    k_buf: Optional[paddle.Tensor] = None
+    v_buf: Optional[paddle.Tensor] = None
+    qkv_out_buf: Optional[paddle.Tensor] = None
 
 
 class DeterministicAttentionMixin:
@@ -120,6 +127,13 @@ class DeterministicAttentionMixin:
         compute_dtype = paddle.get_default_dtype()
         bufs.q_roped = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=compute_dtype)
         bufs.output = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=compute_dtype)
+        # gqa_rope_write_cache inplace buffers (CUDA Graph safe: fixed addresses)
+        # k_buf/v_buf need max_total_kv_len because kv_token_num = sum(cache_len + extend_len)
+        # which can be much larger than max_capture_size during decode with large prefixes.
+        total_head_dim = (self.num_heads + 2 * self.kv_num_heads) * self.head_dim
+        bufs.k_buf = paddle.empty([max_total_kv_len, self.kv_num_heads, self.head_dim], dtype=compute_dtype)
+        bufs.v_buf = paddle.empty([max_total_kv_len, self.kv_num_heads, self.head_dim], dtype=compute_dtype)
+        bufs.qkv_out_buf = paddle.empty([max_capture_size, total_head_dim], dtype=compute_dtype)
 
         total_bytes = (
             7 * (max_bsz + 1) * 4
@@ -478,52 +492,89 @@ class DeterministicAttentionMixin:
                 f"[DIAG-ROPE] rotary_embs shape={list(forward_meta.rotary_embs.shape)} md5={self._diag_md5(forward_meta.rotary_embs[-57:])}"
             )
             _wlog.info(f"[DIAG-ROPE] block_tables[0]={forward_meta.block_tables[0, :15].cpu().numpy().tolist()}")
-        q_roped, _k_flat, _v_flat, _qkv_out = gqa_rope_write_cache(
-            qkv,
-            cache_k,
-            cache_v,
-            forward_meta.cu_seqlens_q,
-            cu_seqlens_k,
-            forward_meta.rotary_embs,
-            forward_meta.seq_lens_this_time,
-            seq_lens_encoder_for_rope,
-            forward_meta.seq_lens_decoder,
-            forward_meta.batch_id_per_token,
-            forward_meta.block_tables,
-            forward_meta.kv_batch_ids,
-            forward_meta.kv_tile_ids_per_batch,
-            forward_meta.kv_num_blocks_x_cpu,
-            pre_cache_batch_ids,
-            pre_cache_tile_ids_per_batch,
-            pre_cache_num_blocks_cpu,
-            q_norm_weight,
-            k_norm_weight,
-            cache_k_scales,
-            cache_v_scales,
-            getattr(layer, "cache_k_out_scale", None),
-            getattr(layer, "cache_v_out_scale", None),
-            getattr(layer, "cache_k_zp", None),
-            getattr(layer, "cache_v_zp", None),
-            metadata.kv_signal_data_list[layer.layer_id],
-            kv_token_num,
-            self.max_seq_len,
-            getattr(layer, "rms_norm_eps", 1e-6),
-            layer.use_neox_rotary_style,
-            getattr(layer, "cache_quant_type_str", "none"),
-            self.rope_3d,
-        )
-        # q_roped: [token_nums, num_heads, head_dim] with RoPE already applied
 
-        # CUDA Graph fix: gqa_rope_write_cache allocates q_roped internally (new address each call).
-        # Triton kernels record raw pointers during capture, so we must copy q_roped into a
-        # pre-allocated buffer with a fixed address for replay to work correctly.
-        if forward_meta.step_use_cudagraph:
-            token_nums = q_roped.shape[0]
-            if bufs.q_roped is None or bufs.q_roped.dtype != q_roped.dtype:
-                max_capture_size = self.fd_config.graph_opt_config.max_capture_size
-                bufs.q_roped = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=q_roped.dtype)
-            bufs.q_roped[:token_nums].copy_(q_roped, False)
-            q_roped = bufs.q_roped[:token_nums]
+        # --- Step 2: RoPE + KV cache write ---
+        _rope_common_args = dict(
+            qkv=qkv,
+            key_cache=cache_k,
+            value_cache=cache_v,
+            cu_seqlens_q=forward_meta.cu_seqlens_q,
+            cu_seqlens_k=cu_seqlens_k,
+            rotary_embs=forward_meta.rotary_embs,
+            seq_lens_this_time=forward_meta.seq_lens_this_time,
+            seq_lens_encoder=seq_lens_encoder_for_rope,
+            seq_lens_decoder=forward_meta.seq_lens_decoder,
+            batch_id_per_token=forward_meta.batch_id_per_token,
+            block_tables=forward_meta.block_tables,
+            kv_batch_ids=forward_meta.kv_batch_ids,
+            kv_tile_ids_per_batch=forward_meta.kv_tile_ids_per_batch,
+            kv_num_blocks=forward_meta.kv_num_blocks_x_cpu,
+            cache_batch_ids=pre_cache_batch_ids,
+            cache_tile_ids_per_batch=pre_cache_tile_ids_per_batch,
+            cache_num_blocks=pre_cache_num_blocks_cpu,
+            q_norm_weight=q_norm_weight,
+            k_norm_weight=k_norm_weight,
+            cache_k_quant_scales=cache_k_scales,
+            cache_v_quant_scales=cache_v_scales,
+            cache_k_dequant_scales=getattr(layer, "cache_k_out_scale", None),
+            cache_v_dequant_scales=getattr(layer, "cache_v_out_scale", None),
+            cache_k_zp=getattr(layer, "cache_k_zp", None),
+            cache_v_zp=getattr(layer, "cache_v_zp", None),
+            kv_signal_data=metadata.kv_signal_data_list[layer.layer_id],
+            kv_token_num=kv_token_num,
+            max_seq_len=self.max_seq_len,
+            rms_norm_eps=getattr(layer, "rms_norm_eps", 1e-6),
+            use_neox_rotary_style=layer.use_neox_rotary_style,
+            cache_quant_type=getattr(layer, "cache_quant_type_str", "none"),
+            rope_3d=self.rope_3d,
+        )
+        # --- Bisect skip for cudagraph debugging ---
+        # Usage: FD_DETER_GRAPH_SKIP=rope+index+attn (any combination)
+        _graph_skip = os.environ.get("FD_DETER_GRAPH_SKIP", "")
+        _skip_rope = "rope" in _graph_skip
+        _skip_index = "index" in _graph_skip
+        _skip_attn = "attn" in _graph_skip
+
+        _force_inplace = os.environ.get("FD_FORCE_INPLACE_ROPE", "0") == "1"
+        if _skip_rope:
+            # Dummy output for bisect: no rope, no KV cache write
+            token_nums = qkv.shape[0]
+            q_roped = paddle.zeros([token_nums, self.num_heads, self.head_dim], dtype=qkv.dtype)
+        elif forward_meta.step_use_cudagraph:
+            # Use inplace version: writes into pre-allocated buffers (CUDA Graph safe).
+            # Pass FULL buffers (not slices) to avoid temporary Python tensor objects
+            # that would get GC'd after capture. The C++ kernel uses token_num/kv_token_num
+            # scalars to control write range, so extra buffer space is harmless.
+            token_nums = qkv.shape[0]
+            assert (
+                token_nums <= bufs.q_roped.shape[0]
+            ), f"token_nums={token_nums} > q_roped buf={bufs.q_roped.shape[0]}"
+            assert kv_token_num <= bufs.k_buf.shape[0], f"kv_token_num={kv_token_num} > k_buf={bufs.k_buf.shape[0]}"
+            assert (
+                token_nums <= bufs.qkv_out_buf.shape[0]
+            ), f"token_nums={token_nums} > qkv_out_buf={bufs.qkv_out_buf.shape[0]}"
+            q_roped, _k_flat, _v_flat, _qkv_out = gqa_rope_write_cache_inplace(
+                **_rope_common_args,
+                q_buf=bufs.q_roped,
+                k_buf=bufs.k_buf,
+                v_buf=bufs.v_buf,
+                qkv_out_buf=bufs.qkv_out_buf,
+            )
+            # Slice result to actual size (kernel wrote only token_nums/kv_token_num elements)
+            q_roped = q_roped[:token_nums]
+        elif _force_inplace:
+            # Test path: use inplace op with temp buffers (not for CUDA Graph)
+            token_nums = qkv.shape[0]
+            total_head_dim = (self.num_heads + 2 * self.kv_num_heads) * self.head_dim
+            q_roped, _k_flat, _v_flat, _qkv_out = gqa_rope_write_cache_inplace(
+                **_rope_common_args,
+                q_buf=paddle.empty([token_nums, self.num_heads, self.head_dim], dtype=qkv.dtype),
+                k_buf=paddle.empty([kv_token_num, self.kv_num_heads, self.head_dim], dtype=qkv.dtype),
+                v_buf=paddle.empty([kv_token_num, self.kv_num_heads, self.head_dim], dtype=qkv.dtype),
+                qkv_out_buf=paddle.empty([token_nums, total_head_dim], dtype=qkv.dtype),
+            )
+        else:
+            q_roped, _k_flat, _v_flat, _qkv_out = gqa_rope_write_cache(**_rope_common_args)
 
         # --- DIAG: Layer 0 — 4 return values + paged cache ---
         # Enable with: export FD_DIAG_ATTN=1
@@ -566,48 +617,27 @@ class DeterministicAttentionMixin:
             if num_blocks_used > 11:
                 _wlog.info(f"[DIAG-L0] cache_k blk11 md5={self._diag_md5(cache_k[int(bt[0][11].item())])}")
 
-        # --- Debug: FD_DETER_GRAPH_SKIP controls which steps run inside CUDA Graph ---
-        # Values: "attn" (skip attention), "index+attn" (skip index+attention),
-        #         "rope+index+attn" (skip rope+index+attention)
-        # When a step is skipped, its output is replaced with zeros.
-        _graph_skip = os.environ.get("FD_DETER_GRAPH_SKIP", "") if forward_meta.step_use_cudagraph else ""
-        _skip_attn = "attn" in _graph_skip
-        _skip_index = "index" in _graph_skip
-        _skip_rope = "rope" in _graph_skip
-
-        if _skip_rope:
-            # Skip gqa_rope_write_cache output — replace q_roped with zeros
-            q_roped = bufs.q_roped[:1].zero_() if forward_meta.step_use_cudagraph else q_roped
-
         # --- Step 3: Triton unified attention for all tokens (prefill + decode) ---
-        if forward_meta.step_use_cudagraph:
-            if not _skip_index:
+        if not _skip_index:
+            if forward_meta.step_use_cudagraph:
                 (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
                     self._deterministic_build_triton_indices(forward_meta, bufs=bufs)
                 )
+                token_nums = q_roped.shape[0]
+                # Lazy-allocate output buffer with correct dtype on first use
+                if bufs.output is None or bufs.output.dtype != q_roped.dtype:
+                    max_capture_size = self.fd_config.graph_opt_config.max_capture_size
+                    bufs.output = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=q_roped.dtype)
+                o = bufs.output[:token_nums].zero_()
             else:
-                # Skip index building — use dummy indices
-                bs = forward_meta.deter_bs
-                max_extend_len = forward_meta.deter_max_extend_len
-                qo_indptr = bufs.qo_indptr[: bs + 1].zero_()
-                unified_kv_indptr = bufs.unified_kv_indptr[: bs + 1].zero_()
-                unified_kv_indices = bufs.unified_kv_indices[:1].zero_()
-                prefix_lens = bufs.prefix_lens_buf[:bs].zero_() if bs > 0 else bufs.prefix_lens_buf[:1].zero_()
-            token_nums = q_roped.shape[0]
-            # Lazy-allocate output buffer with correct dtype on first use
-            if bufs.output is None or bufs.output.dtype != q_roped.dtype:
-                max_capture_size = self.fd_config.graph_opt_config.max_capture_size
-                bufs.output = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=q_roped.dtype)
-            o = bufs.output[:token_nums].zero_()
-        else:
-            if "use_ref_indices" in os.environ.get("FD_OVERLAP_DIAG", ""):
-                (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
-                    self._deterministic_build_triton_indices_ref(forward_meta)
-                )
-            else:
-                (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
-                    self._deterministic_build_triton_indices(forward_meta)
-                )
+                if "use_ref_indices" in os.environ.get("FD_OVERLAP_DIAG", ""):
+                    (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
+                        self._deterministic_build_triton_indices_ref(forward_meta)
+                    )
+                else:
+                    (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
+                        self._deterministic_build_triton_indices(forward_meta)
+                    )
             # DIAG: compare indices with reference implementation (Layer 0 only)
             if os.environ.get("FD_DIAG_INDEX", "0") == "1" and layer.layer_id == 0:
                 (qo_ref, kv_indptr_ref, kv_indices_ref, plen_ref, bs_ref, mel_ref) = (
@@ -648,7 +678,11 @@ class DeterministicAttentionMixin:
             token_nums = q_roped.shape[0]
             o = paddle.zeros([token_nums, self.num_heads, self.head_dim], dtype=q_roped.dtype)
 
-        if not _skip_attn:
+        if _skip_index or _skip_attn:
+            # Bisect: skip index/attention, return dummy output
+            token_nums = q_roped.shape[0]
+            res = paddle.zeros([token_nums, self.num_heads * self.head_dim], dtype=q_roped.dtype)
+        else:
             # DIAG: lightweight metadata log for Layer 0
             if os.environ.get("FD_DIAG_ATTN", "0") == "1" and layer.layer_id == 0:
                 _pnp = prefix_lens[:bs].cpu().numpy().tolist() if bs > 0 else []
@@ -674,70 +708,61 @@ class DeterministicAttentionMixin:
                 self.causal,
             ).reshape([-1, self.num_heads * self.head_dim])
 
-            # DIAG: naive attention comparison (Layer 0, first seq only)
-            if os.environ.get("FD_DIAG_ATTN_CMP", "0") == "1" and layer.layer_id == 0 and bs > 0:
-                import numpy as np
+        # DIAG: naive attention comparison (Layer 0, first seq only)
+        if os.environ.get("FD_DIAG_ATTN_CMP", "0") == "1" and layer.layer_id == 0 and bs > 0:
+            import numpy as np
 
-                q_start = int(qo_indptr[0].item())
-                q_len = int(qo_indptr[1].item()) - q_start
-                kv_start = int(unified_kv_indptr[0].item())
-                kv_len = int(unified_kv_indptr[1].item()) - kv_start
-                plen = int(prefix_lens[0].item())
-                kv_idx = unified_kv_indices[kv_start : kv_start + kv_len].cpu().numpy()
-                sm_scale = 1.0 / (self.head_dim**0.5)
-                # Pick head 0 for comparison
-                h = 0
-                kv_h = h // (self.num_heads // self.kv_num_heads)
-                q_vec = q_roped[q_start : q_start + q_len, h, :].cpu().float().numpy()  # [q_len, D]
-                # Gather K,V from paged cache using kv_indices
-                block_size = cache_k.shape[2]
-                k_list, v_list = [], []
-                for idx in kv_idx:
-                    blk_id = idx // block_size
-                    off = idx % block_size
-                    k_list.append(cache_k[blk_id, kv_h, off, :].cpu().float().numpy())
-                    v_list.append(cache_v[blk_id, kv_h, off, :].cpu().float().numpy())
-                if not k_list:
-                    logger.info("[DIAG-ATTN-CMP] seq0 head0: SKIP (kv_len=0)")
-                else:
-                    k_mat = np.stack(k_list)  # [kv_len, D]
-                    v_mat = np.stack(v_list)  # [kv_len, D]
-                    # QK^T
-                    scores = q_vec @ k_mat.T * sm_scale  # [q_len, kv_len]
-                    # Causal mask
-                    if self.causal:
-                        for qi in range(q_len):
-                            for ki in range(kv_len):
-                                if ki >= plen and (ki - plen) > qi:
-                                    scores[qi, ki] = -1e20
-                    # Softmax
-                    scores_max = scores.max(axis=-1, keepdims=True)
-                    scores_exp = np.exp(scores - scores_max)
-                    scores_sum = scores_exp.sum(axis=-1, keepdims=True)
-                    attn_weights = scores_exp / scores_sum
-                    naive_out = attn_weights @ v_mat  # [q_len, D]
-                    # Compare with Triton output
-                    triton_out = (
-                        res[q_start : q_start + q_len, h * self.head_dim : (h + 1) * self.head_dim]
-                        .cpu()
-                        .float()
-                        .numpy()
-                    )
-                    diff = np.abs(naive_out - triton_out)
-                    logger.info(
-                        f"[DIAG-ATTN-CMP] seq0 head0: q_len={q_len} kv_len={kv_len} plen={plen} "
-                        f"max_diff={diff.max():.6f} mean_diff={diff.mean():.6f} "
-                        f"naive_norm={np.linalg.norm(naive_out):.4f} triton_norm={np.linalg.norm(triton_out):.4f}"
-                    )
-                    if diff.max() > 0.01:
-                        logger.info(f"[DIAG-ATTN-CMP] naive[0,:4]={naive_out[0,:4]} triton[0,:4]={triton_out[0,:4]}")
-                        logger.info(
-                            f"[DIAG-ATTN-CMP] naive[-1,:4]={naive_out[-1,:4]} triton[-1,:4]={triton_out[-1,:4]}"
-                        )
-        else:
-            # Skip Triton attention — return zeros
-            res = o.reshape([-1, self.num_heads * self.head_dim])
-
+            q_start = int(qo_indptr[0].item())
+            q_len = int(qo_indptr[1].item()) - q_start
+            kv_start = int(unified_kv_indptr[0].item())
+            kv_len = int(unified_kv_indptr[1].item()) - kv_start
+            plen = int(prefix_lens[0].item())
+            kv_idx = unified_kv_indices[kv_start : kv_start + kv_len].cpu().numpy()
+            sm_scale = 1.0 / (self.head_dim**0.5)
+            # Pick head 0 for comparison
+            h = 0
+            kv_h = h // (self.num_heads // self.kv_num_heads)
+            q_vec = q_roped[q_start : q_start + q_len, h, :].cpu().float().numpy()  # [q_len, D]
+            # Gather K,V from paged cache using kv_indices
+            block_size = cache_k.shape[2]
+            k_list, v_list = [], []
+            for idx in kv_idx:
+                blk_id = idx // block_size
+                off = idx % block_size
+                k_list.append(cache_k[blk_id, kv_h, off, :].cpu().float().numpy())
+                v_list.append(cache_v[blk_id, kv_h, off, :].cpu().float().numpy())
+            if not k_list:
+                logger.info("[DIAG-ATTN-CMP] seq0 head0: SKIP (kv_len=0)")
+            else:
+                k_mat = np.stack(k_list)  # [kv_len, D]
+                v_mat = np.stack(v_list)  # [kv_len, D]
+                # QK^T
+                scores = q_vec @ k_mat.T * sm_scale  # [q_len, kv_len]
+                # Causal mask
+                if self.causal:
+                    for qi in range(q_len):
+                        for ki in range(kv_len):
+                            if ki >= plen and (ki - plen) > qi:
+                                scores[qi, ki] = -1e20
+                # Softmax
+                scores_max = scores.max(axis=-1, keepdims=True)
+                scores_exp = np.exp(scores - scores_max)
+                scores_sum = scores_exp.sum(axis=-1, keepdims=True)
+                attn_weights = scores_exp / scores_sum
+                naive_out = attn_weights @ v_mat  # [q_len, D]
+                # Compare with Triton output
+                triton_out = (
+                    res[q_start : q_start + q_len, h * self.head_dim : (h + 1) * self.head_dim].cpu().float().numpy()
+                )
+                diff = np.abs(naive_out - triton_out)
+                logger.info(
+                    f"[DIAG-ATTN-CMP] seq0 head0: q_len={q_len} kv_len={kv_len} plen={plen} "
+                    f"max_diff={diff.max():.6f} mean_diff={diff.mean():.6f} "
+                    f"naive_norm={np.linalg.norm(naive_out):.4f} triton_norm={np.linalg.norm(triton_out):.4f}"
+                )
+                if diff.max() > 0.01:
+                    logger.info(f"[DIAG-ATTN-CMP] naive[0,:4]={naive_out[0,:4]} triton[0,:4]={triton_out[0,:4]}")
+                    logger.info(f"[DIAG-ATTN-CMP] naive[-1,:4]={naive_out[-1,:4]} triton[-1,:4]={triton_out[-1,:4]}")
         # --- DIAG: Layer 0 attention output ---
         # Enable with: export FD_DIAG_ATTN=1
         if os.environ.get("FD_DIAG_ATTN", "0") == "1" and layer.layer_id == 0:

@@ -1558,6 +1558,298 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
   return {q, k, v, qkv_out};
 }
 
+// Inplace version: uses caller-provided output buffers instead of
+// GetEmptyTensor. This is CUDA Graph safe because no new GPU memory is
+// allocated during execution.
+std::vector<paddle::Tensor> GQARopeWriteCacheInplaceKernel(
+    const paddle::Tensor &qkv,
+    const paddle::Tensor &key_cache,
+    const paddle::Tensor &value_cache,
+    const paddle::Tensor &cu_seqlens_q,
+    const paddle::Tensor &cu_seqlens_k,
+    const paddle::Tensor &rotary_embs,
+    const paddle::Tensor &seq_lens_this_time,
+    const paddle::Tensor &seq_lens_encoder,
+    const paddle::Tensor &seq_lens_decoder,
+    const paddle::Tensor &batch_id_per_token,
+    const paddle::Tensor &block_tables,
+    const paddle::Tensor &kv_batch_ids,
+    const paddle::Tensor &kv_tile_ids,
+    const paddle::Tensor &kv_num_blocks,
+    const paddle::Tensor &cache_batch_ids,
+    const paddle::Tensor &cache_tile_ids,
+    const paddle::Tensor &cache_num_blocks,
+    // Pre-allocated output buffers (must have correct shape/dtype)
+    paddle::Tensor &q_buf,
+    paddle::Tensor &k_buf,
+    paddle::Tensor &v_buf,
+    paddle::Tensor &qkv_out_buf,
+    const paddle::optional<paddle::Tensor> &q_norm_weight,
+    const paddle::optional<paddle::Tensor> &k_norm_weight,
+    const paddle::optional<paddle::Tensor> &cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor> &cache_v_quant_scales,
+    const paddle::optional<paddle::Tensor> &cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor> &cache_v_dequant_scales,
+    const paddle::optional<paddle::Tensor> &cache_k_zp,
+    const paddle::optional<paddle::Tensor> &cache_v_zp,
+    const paddle::optional<paddle::Tensor> &kv_signal_data,
+    const int kv_token_num,
+    const int max_seq_len,
+    const float rms_norm_eps,
+    const bool use_neox_rotary_style,
+    const std::string &cache_quant_type,
+    const bool rope_3d) {
+  typedef PDTraits<paddle::DataType::BFLOAT16> traits_;
+  typedef typename traits_::DataType DataType_;
+  typedef typename traits_::data_t data_t;
+
+  const int kv_num_blocks_data = kv_num_blocks.data<int>()[0];
+  const auto &qkv_dims = qkv.dims();
+  const auto &key_cache_dims = key_cache.dims();
+  const int token_num = qkv_dims[0];
+  const int max_blocks_per_seq = block_tables.dims()[1];
+  const int block_size = key_cache.dims()[2];
+  const int batch_size = seq_lens_this_time.dims()[0];
+  const int kv_num_heads = key_cache_dims[1];
+  const int head_dim = cache_quant_type == "cache_int4_zp"
+                           ? key_cache_dims[3] * 2
+                           : key_cache_dims[3];
+  const int num_heads =
+      qkv_dims[qkv_dims.size() - 1] / head_dim - 2 * kv_num_heads;
+  const float softmax_scale = 1.f / sqrt(head_dim);
+  int rotary_dim = head_dim;
+
+  PADDLE_ENFORCE_EQ(batch_id_per_token.dims().size(), 1);
+  PADDLE_ENFORCE_EQ(batch_id_per_token.dims()[0], token_num);
+
+  if (!rope_3d) {
+    PADDLE_ENFORCE_EQ(rotary_embs.dims().size(), 5);
+    PADDLE_ENFORCE_EQ(rotary_embs.dims()[0], 2);
+    PADDLE_ENFORCE_EQ(rotary_embs.dims()[1], 1);
+    PADDLE_ENFORCE_EQ(rotary_embs.dims()[2], max_seq_len);
+    PADDLE_ENFORCE_EQ(rotary_embs.dims()[3], 1);
+    if (use_neox_rotary_style) {
+      if (rotary_embs.dims()[4] == head_dim) {
+        rotary_dim = head_dim;
+      } else {
+        PADDLE_ENFORCE_EQ(rotary_embs.dims()[4], head_dim / 4);
+        rotary_dim = head_dim / 2;
+      }
+    } else {
+      PADDLE_ENFORCE_EQ(rotary_embs.dims()[4], head_dim / 2);
+    }
+  }
+
+  AppendAttnMetaData meta_data;
+  meta_data.token_nums = token_num;
+  meta_data.kv_num_heads = kv_num_heads;
+  meta_data.head_dims = head_dim;
+  meta_data.q_num_heads = num_heads;
+  meta_data.max_blocks_per_seq = max_blocks_per_seq;
+  meta_data.block_size = block_size;
+  meta_data.batch_size = seq_lens_this_time.dims()[0];
+
+  auto stream = qkv.stream();
+
+  // Use caller-provided buffers directly (no allocation)
+  paddle::Tensor &qkv_out = qkv_out_buf;
+  paddle::Tensor &q = q_buf;
+  paddle::Tensor &k = k_buf;
+  paddle::Tensor &v = v_buf;
+
+  // Bisect skip flags: FD_ROPE_KERNEL_SKIP=rope+append+cascade
+  static const char *_skip_env = std::getenv("FD_ROPE_KERNEL_SKIP");
+  static const std::string _skip_str = _skip_env ? _skip_env : "";
+  const bool _skip_rope = _skip_str.find("rope") != std::string::npos;
+  const bool _skip_append = _skip_str.find("append") != std::string::npos;
+  const bool _skip_cascade = _skip_str.find("cascade") != std::string::npos;
+
+  if (!_skip_rope) {
+    if (use_neox_rotary_style) {
+      if (rotary_dim == head_dim) {
+        gqa_rotary_qk_split_variable_qwen3<data_t>(
+            qkv_out.data<data_t>(),
+            q.data<data_t>(),
+            k.data<data_t>(),
+            v.data<data_t>(),
+            qkv.data<data_t>(),
+            rotary_embs.data<float>(),
+            batch_id_per_token.data<int>(),
+            seq_lens_encoder.data<int>(),
+            seq_lens_decoder.data<int>(),
+            cu_seqlens_q.data<int>(),
+            cu_seqlens_k.data<int>(),
+            token_num,
+            num_heads,
+            kv_num_heads,
+            rope_3d ? rotary_embs.dims()[3] : rotary_embs.dims()[2],
+            head_dim,
+            rope_3d,
+            stream);
+      } else {
+        gqa_neox_partial_rotary_qk_split_variable<data_t>(
+            qkv_out.data<data_t>(),
+            q.data<data_t>(),
+            k.data<data_t>(),
+            v.data<data_t>(),
+            qkv.data<data_t>(),
+            rotary_embs.data<float>(),
+            batch_id_per_token.data<int>(),
+            seq_lens_encoder.data<int>(),
+            seq_lens_decoder.data<int>(),
+            cu_seqlens_q.data<int>(),
+            cu_seqlens_k.data<int>(),
+            token_num,
+            num_heads,
+            kv_num_heads,
+            max_seq_len,
+            head_dim,
+            rotary_dim,
+            stream);
+      }
+    } else {
+      gqa_rotary_qk_split_variable<data_t>(
+          qkv_out.data<data_t>(),
+          q.data<data_t>(),
+          k.data<data_t>(),
+          v.data<data_t>(),
+          qkv.data<data_t>(),
+          rotary_embs.data<float>(),
+          q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
+          k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
+          batch_id_per_token.data<int>(),
+          seq_lens_encoder.data<int>(),
+          seq_lens_decoder.data<int>(),
+          cu_seqlens_q.data<int>(),
+          cu_seqlens_k.data<int>(),
+          token_num,
+          num_heads,
+          kv_num_heads,
+          max_seq_len,
+          rope_3d ? rotary_embs.dims()[3] : rotary_embs.dims()[2],
+          head_dim,
+          rope_3d,
+          rms_norm_eps,
+          stream);
+    }
+  }  // !_skip_rope
+
+  if (!_skip_append && token_num < kv_token_num) {
+    AppendCacheKV<data_t, 128, 64>(key_cache,
+                                   value_cache,
+                                   cache_k_dequant_scales.get(),
+                                   cache_v_dequant_scales.get(),
+                                   cache_k_zp.get(),
+                                   cache_v_zp.get(),
+                                   seq_lens_this_time,
+                                   seq_lens_decoder,
+                                   cu_seqlens_k,
+                                   block_tables,
+                                   cache_batch_ids,
+                                   cache_tile_ids,
+                                   cache_num_blocks,
+                                   max_blocks_per_seq,
+                                   kv_num_heads,
+                                   cache_quant_type,
+                                   &k,
+                                   &v,
+                                   stream);
+  }
+  if (!_skip_cascade) {
+    // write cache
+    if (cache_quant_type == "none") {
+      CascadeAppendWriteCacheKVQKV<data_t>(
+          meta_data,
+          qkv_out,
+          block_tables,
+          batch_id_per_token,
+          cu_seqlens_q,
+          seq_lens_encoder,
+          seq_lens_decoder,
+          max_seq_len,
+          stream,
+          const_cast<paddle::Tensor *>(&key_cache),
+          const_cast<paddle::Tensor *>(&value_cache));
+    } else if (cache_quant_type == "cache_int8" ||
+               cache_quant_type == "cache_fp8" ||
+               cache_quant_type == "block_wise_fp8") {
+      CascadeAppendWriteCacheKVC8QKV<data_t, 128, 64>(
+          meta_data,
+          *const_cast<paddle::Tensor *>(&key_cache),
+          *const_cast<paddle::Tensor *>(&value_cache),
+          qkv_out,
+          cache_k_quant_scales.get(),
+          cache_v_quant_scales.get(),
+          seq_lens_this_time,
+          seq_lens_decoder,
+          batch_id_per_token,
+          cu_seqlens_q,
+          block_tables,
+          kv_batch_ids,
+          kv_tile_ids,
+          kv_num_blocks_data,
+          max_seq_len,
+          false,  // is_scale_channel_wise
+          cache_quant_type,
+          stream,
+          const_cast<paddle::Tensor *>(&key_cache),
+          const_cast<paddle::Tensor *>(&value_cache));
+    } else if (cache_quant_type == "cache_int4_zp") {
+      CascadeAppendWriteCacheKVC4QKV<data_t, 128, 64>(
+          meta_data,
+          *const_cast<paddle::Tensor *>(&key_cache),
+          *const_cast<paddle::Tensor *>(&value_cache),
+          qkv_out,
+          cache_k_quant_scales.get(),
+          cache_v_quant_scales.get(),
+          cache_k_zp.get(),
+          cache_v_zp.get(),
+          seq_lens_this_time,
+          seq_lens_decoder,
+          batch_id_per_token,
+          cu_seqlens_q,
+          block_tables,
+          kv_batch_ids,
+          kv_tile_ids,
+          kv_num_blocks_data,
+          max_seq_len,
+          stream,
+          const_cast<paddle::Tensor *>(&key_cache),
+          const_cast<paddle::Tensor *>(&value_cache));
+    } else {
+      PD_THROW(
+          "cache_quant_type_str should be one of [none, cache_int8, cache_fp8, "
+          "cache_int4_zp]");
+    }
+  }  // !_skip_cascade
+  const char *fmt_write_cache_completed_signal_str =
+      std::getenv("FLAGS_fmt_write_cache_completed_signal");
+  const char *FLAGS_use_pd_disaggregation_per_chunk =
+      std::getenv("FLAGS_use_pd_disaggregation_per_chunk");
+  if (fmt_write_cache_completed_signal_str &&
+      (std::strcmp(fmt_write_cache_completed_signal_str, "true") == 0 ||
+       std::strcmp(fmt_write_cache_completed_signal_str, "1") == 0)) {
+    if (FLAGS_use_pd_disaggregation_per_chunk &&
+        (std::strcmp(FLAGS_use_pd_disaggregation_per_chunk, "true") == 0 ||
+         std::strcmp(FLAGS_use_pd_disaggregation_per_chunk, "1") == 0)) {
+      cudaLaunchHostFunc(
+          qkv.stream(),
+          &(RemoteCacheKvIpc::
+                save_cache_kv_complete_signal_layerwise_per_query),
+          (void *)nullptr);
+    } else {
+      if (kv_signal_data) {
+        cudaLaunchHostFunc(
+            qkv.stream(),
+            &RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise,
+            (void *)(const_cast<int64_t *>(
+                kv_signal_data.get().data<int64_t>())));
+      }
+    }
+  }
+  return {q, k, v, qkv_out};
+}
+
 PD_BUILD_STATIC_OP(gqa_rope_write_cache)
     .Inputs({"qkv",
              "key_cache",
@@ -1595,3 +1887,49 @@ PD_BUILD_STATIC_OP(gqa_rope_write_cache)
             "cache_quant_type: std::string",
             "rope_3d: bool"})
     .SetKernelFn(PD_KERNEL(GQARopeWriteCacheKernel));
+
+PD_BUILD_STATIC_OP(gqa_rope_write_cache_inplace)
+    .Inputs({"qkv",
+             "key_cache",
+             "value_cache",
+             "cu_seqlens_q",
+             "cu_seqlens_k",
+             "rotary_embs",
+             "seq_lens_this_time",
+             "seq_lens_encoder",
+             "seq_lens_decoder",
+             "batch_id_per_token",
+             "block_tables",
+             "kv_batch_ids",
+             "kv_tile_ids_per_batch",
+             "kv_num_blocks",
+             "cache_batch_ids",
+             "cache_tile_ids_per_batch",
+             "cache_num_blocks",
+             "q_buf",
+             "k_buf",
+             "v_buf",
+             "qkv_out_buf",
+             paddle::Optional("q_norm_weight"),
+             paddle::Optional("k_norm_weight"),
+             paddle::Optional("cache_k_quant_scales"),
+             paddle::Optional("cache_v_quant_scales"),
+             paddle::Optional("cache_k_dequant_scales"),
+             paddle::Optional("cache_v_dequant_scales"),
+             paddle::Optional("cache_k_zp"),
+             paddle::Optional("cache_v_zp"),
+             paddle::Optional("kv_signal_data")})
+    .Outputs({"q", "k", "v", "qkv_out", "key_cache_out", "value_cache_out"})
+    .SetInplaceMap({{"q_buf", "q"},
+                    {"k_buf", "k"},
+                    {"v_buf", "v"},
+                    {"qkv_out_buf", "qkv_out"},
+                    {"key_cache", "key_cache_out"},
+                    {"value_cache", "value_cache_out"}})
+    .Attrs({"kv_token_num: int",
+            "max_seq_len: int",
+            "rms_norm_eps: float",
+            "use_neox_rotary_style: bool",
+            "cache_quant_type: std::string",
+            "rope_3d: bool"})
+    .SetKernelFn(PD_KERNEL(GQARopeWriteCacheInplaceKernel));
