@@ -895,7 +895,10 @@ class RequestMetrics:
         """
         Convert the RequestMetrics object to a dictionary.
         """
-        return {k: v for k, v in asdict(self).items()}
+        # Optimized: Avoiding dataclasses.asdict() because its recursive deepcopy
+        # and validation overhead is a significant bottleneck for high-frequency calls.
+        # Iterating over __slots__ is significantly faster for flat structs.
+        return {k: getattr(self, k) for k in self.__slots__}
 
     def record_recv_first_token(self):
         cur_time = time.time()
