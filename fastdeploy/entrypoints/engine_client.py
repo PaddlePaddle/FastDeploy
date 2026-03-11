@@ -148,6 +148,7 @@ class EngineClient:
         self.connection_manager = DealerConnectionManager(
             pid, max_connections=int(os.getenv("FD_DEALER_CONNECTIONS", 50))
         )
+        self.worker_pid = os.getpid()
         self.connection_initialized = False
         self.clear_update_lock = FileLock(f"/tmp/fd_weight_clear_update_lock__pid{pid}_port{port}.lock")
 
@@ -549,8 +550,11 @@ class EngineClient:
         return True, ""
 
     async def run_control_method(self, request: ControlRequest):
-        api_server_logger.info(f"Start Run Control Method: {request}")
-        self.zmq_client.send_json(request.to_dict())
+        api_server_logger.info(f"Received control request: {request}")
+        req_dict = request.to_dict()
+        if envs.ZMQ_SEND_BATCH_DATA:
+            req_dict["zmq_worker_pid"] = self.worker_pid
+        self.zmq_client.send_json(req_dict)
         request_id = request.request_id
         dealer, response_queue = await self.connection_manager.get_connection(request_id)
         dealer.write([b"", request_id.encode("utf-8")])
@@ -558,16 +562,16 @@ class EngineClient:
             # todo: support user specified timeout. default 600s is enough for most control cases
             response = await asyncio.wait_for(response_queue.get(), timeout=600)
             response = ControlResponse.from_dict(response[0])
-            api_server_logger.info(f"End Run Control Method: {response}")
+            api_server_logger.info(f"Return control response: {response}")
             return response
         except asyncio.TimeoutError:
             error_response = ControlResponse(request_id, 500, "Timeout waiting for control method response")
-            api_server_logger.error(f"Error Run Control Method: {error_response}")
+            api_server_logger.error(f"Control request timed out: {error_response}")
             return error_response
         except Exception as e:
             import traceback
 
-            api_server_logger.error(f"Error in run_control_method: {str(e)}\n{traceback.format_exc()}")
+            api_server_logger.error(f"Unknown error in control method: {str(e)}\n{traceback.format_exc()}")
             error_response = ControlResponse(request_id, 500, str(e))
             return error_response
 

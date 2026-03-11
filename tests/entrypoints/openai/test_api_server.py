@@ -84,6 +84,7 @@ def _reload_api_server(args):
     fake_envs_mod.EXPORTER_OTLP_ENDPOINT = ""
     fake_envs_mod.EXPORTER_OTLP_HEADERS = ""
     fake_envs_mod.FD_SUPPORT_MAX_CONNECTIONS = 1024
+    fake_envs_mod.FD_ENABLE_V1_UPDATE_WEIGHTS = 0
     fake_envs_mod.environment_variables = _FakeEnvVars()
 
     # Save original sys.argv and replace with minimal valid args to avoid parse errors
@@ -98,9 +99,8 @@ def _reload_api_server(args):
             patch.dict("sys.modules", {"fastdeploy.envs": fake_envs_mod}),
             patch("fastdeploy.envs", fake_envs_mod),
         ):
-            from fastdeploy.entrypoints.openai import api_server as api_server_mod
-
-            return importlib.reload(api_server_mod)
+            sys.modules.pop("fastdeploy.entrypoints.openai.api_server", None)
+            return importlib.import_module("fastdeploy.entrypoints.openai.api_server")
     finally:
         sys.argv = original_argv
 
@@ -534,6 +534,53 @@ async def test_reward_embedding_and_weights():
     api_server.app.state.dynamic_load_weight = False
     assert api_server.update_model_weight(MagicMock()).status_code == 404
     assert api_server.clear_load_weight(MagicMock()).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_sleep_wakeup_and_v1_clear_load_weight_routes():
+    args = _build_args(dynamic_load_weight=True)
+    api_server = _reload_api_server(args)
+    api_server.app.state.dynamic_load_weight = True
+    api_server.app.state.event_loop = asyncio.get_running_loop()
+
+    mock_control_response = MagicMock()
+    mock_control_response.to_api_json_response.return_value = api_server.JSONResponse(
+        content={"ok": True}, status_code=200
+    )
+
+    api_server.app.state.engine_client = MagicMock()
+    api_server.app.state.engine_client.run_control_method = AsyncMock(return_value=mock_control_response)
+    api_server.app.state.engine_client.run_control_method_sync.return_value = mock_control_response
+
+    sleep_req = MagicMock()
+    sleep_req.body = AsyncMock(return_value=b'{"tags":"weight"}')
+    sleep_req.json = AsyncMock(return_value={"tags": "weight"})
+    sleep_resp = await api_server.sleep(sleep_req)
+    assert sleep_resp.status_code == 200
+    sleep_control_request = api_server.app.state.engine_client.run_control_method.await_args_list[0].args[0]
+    assert sleep_control_request.method == "sleep"
+    assert sleep_control_request.args == {"tags": "weight"}
+
+    wakeup_req = MagicMock()
+    wakeup_req.body = AsyncMock(return_value=b'{"tags":"weight,kv_cache"}')
+    wakeup_req.json = AsyncMock(return_value={"tags": "weight,kv_cache"})
+    wakeup_resp = await api_server.wakeup(wakeup_req)
+    assert wakeup_resp.status_code == 200
+    wakeup_control_request = api_server.app.state.engine_client.run_control_method.await_args_list[1].args[0]
+    assert wakeup_control_request.method == "wakeup"
+    assert wakeup_control_request.args == {"tags": "weight,kv_cache"}
+
+    invalid_req = MagicMock()
+    invalid_req.body = AsyncMock(return_value=b'{"tags":["weight"]}')
+    invalid_req.json = AsyncMock(return_value={"tags": ["weight"]})
+    invalid_resp = await api_server.sleep(invalid_req)
+    assert invalid_resp.status_code == 400
+
+    with patch.object(api_server.envs, "FD_ENABLE_V1_UPDATE_WEIGHTS", True):
+        clear_resp = api_server.clear_load_weight(MagicMock())
+    assert clear_resp.status_code == 200
+    sync_control_request = api_server.app.state.engine_client.run_control_method_sync.call_args.args[0]
+    assert sync_control_request.method == "sleep"
 
 
 @pytest.mark.asyncio

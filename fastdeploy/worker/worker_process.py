@@ -597,7 +597,8 @@ class PaddleDisWorkerProc:
                 )
 
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+                if req_dicts:
+                    self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
 
             if (
                 (not self.parallel_config.use_ep)
@@ -606,6 +607,18 @@ class PaddleDisWorkerProc:
             ):
                 self._tp_barrier_wait() if tp_size > 1 else None
 
+                time.sleep(0.001)
+                continue
+
+            # Check if worker is paused (V1 update weights flow)
+            if (
+                self.fd_config.load_config.dynamic_load_weight
+                and envs.FD_ENABLE_V1_UPDATE_WEIGHTS
+                and hasattr(self.worker.model_runner, "is_paused")
+                and self.worker.model_runner.is_paused
+            ):
+                if tp_size > 1:
+                    self._tp_barrier_wait() if tp_size > 1 else None
                 time.sleep(0.001)
                 continue
 

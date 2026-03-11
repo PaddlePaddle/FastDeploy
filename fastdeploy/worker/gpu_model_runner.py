@@ -145,6 +145,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_batch_reqs_list: list[Request] = [None for _ in range(self.scheduler_config.max_num_seqs)]
         self.cache_kvs_map: dict = {}
         self.exist_prefill_flag = False
+        self.is_paused = False
 
         # VL model config:
         if self.enable_mm:
@@ -2861,6 +2862,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.proposer.clear_mtp_cache()
             self.clear_cache()
         paddle.device.cuda.empty_cache()
+        self.is_paused = True
         logger.info(f"<<< finish offloading memory! time cost: {time.perf_counter()-start_time:.3f}s")
         print_gpu_memory_use(self.local_rank, f"After offloading memory [{tags}]")
 
@@ -2878,10 +2880,14 @@ class GPUModelRunner(ModelRunnerBase):
         if "kv_cache" in tags.split(","):
             self.initialize_kv_cache()
 
+        # Reset share_inputs to restore tensor shapes and values
+        self.share_inputs.reset_share_inputs()
+
         # Recapture CUDA graph if enabled
         if "weight" in tags.split(",") and self.use_cudagraph:
             self.capture_model()
 
+        self.is_paused = False
         logger.info(f"<<< finish reloading memory! time cost: {time.perf_counter()-start_time:.3f}s")
         print_gpu_memory_use(self.local_rank, f"After reloading memory [{tags}]")
 
