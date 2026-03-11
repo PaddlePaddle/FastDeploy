@@ -407,6 +407,34 @@ async def is_paused(request: Request) -> Response:
     return control_response.to_api_json_response()
 
 
+@app.post("/v1/sleep")
+async def sleep(request: Request) -> Response:
+    request_id = f"control-{uuid.uuid4()}"
+    request_data = await request.json() if await request.body() else {}
+
+    try:
+        control_request = ControlRequest(request_id, "sleep", request_data)
+    except TypeError as e:
+        return JSONResponse(status_code=400, content={"error": "Invalid parameter type", "message": str(e)})
+
+    control_response = await app.state.engine_client.run_control_method(control_request)
+    return control_response.to_api_json_response()
+
+
+@app.post("/v1/wakeup")
+async def wakeup(request: Request) -> Response:
+    request_id = f"control-{uuid.uuid4()}"
+    request_data = await request.json() if await request.body() else {}
+
+    try:
+        control_request = ControlRequest(request_id, "wakeup", request_data)
+    except TypeError as e:
+        return JSONResponse(status_code=400, content={"error": "Invalid parameter type", "message": str(e)})
+
+    control_response = await app.state.engine_client.run_control_method(control_request)
+    return control_response.to_api_json_response()
+
+
 @app.post("/v1/update_weights")
 async def update_weights(request: Request) -> Response:
     request_id = f"control-{uuid.uuid4()}"

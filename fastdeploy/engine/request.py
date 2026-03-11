@@ -575,12 +575,12 @@ class ControlRequest:
         self._post_init()
 
     def _post_init(self):
-        if self.method == "sleep":
-            if not self.args.get("tags"):
+        if self.method in ("sleep", "wakeup"):
+            tags = self.args.get("tags")
+            if tags is None or tags == "":
                 self.args["tags"] = "weight,kv_cache"
-        elif self.method == "wakeup":
-            if not self.args.get("tags"):
-                self.args["tags"] = "weight,kv_cache"
+            elif not isinstance(tags, str):
+                raise TypeError("tags must be a string")
 
     @classmethod
     def from_dict(cls, d: dict):
