@@ -554,15 +554,6 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         layer.down_proj_weight_scale = None
         create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
 
-    def swizzle_blockscale(self, scales):
-        """
-        Swizzle FP8 blockscale tensor into the layout expected by FlashInfer kernels.
-
-        This is a thin wrapper around the module-level `_process_scale_interleaved`
-        helper, kept for backward compatibility with existing tests and callers.
-        """
-        return _process_scale_interleaved(scales)
-
     def apply(
         self,
         layer,
