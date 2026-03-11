@@ -631,7 +631,9 @@ class DataProcessor(MMBaseDataProcessor):
 
         outputs["fps"].append(0)
 
-    def _add_video(self, frames, meta: Dict, outputs: Dict, uuid: Optional[str], token_len: Optional[int] = None) -> None:
+    def _add_video(
+        self, frames, meta: Dict, outputs: Dict, uuid: Optional[str], token_len: Optional[int] = None
+    ) -> None:
         """
         Add video data to model inputs dictionary.
 

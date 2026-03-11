@@ -497,7 +497,9 @@ class TestQwen3VLProcessor(unittest.TestCase):
         parsed_messages = [{"role": "user", "content": {"type": "image", "data": None, "uuid": "missing-image"}}]
 
         with self.subTest("missing_without_cache"):
-            with patch("fastdeploy.input.qwen3_vl_processor.process.parse_chat_messages", return_value=parsed_messages):
+            with patch(
+                "fastdeploy.input.qwen3_vl_processor.process.parse_chat_messages", return_value=parsed_messages
+            ):
                 with self.assertRaisesRegex(ValueError, "Missing items cannot be retrieved without processor cache."):
                     dp.prompt_token_ids2outputs(request)
 
@@ -507,7 +509,9 @@ class TestQwen3VLProcessor(unittest.TestCase):
             fake_context = MagicMock()
             fake_context.socket.return_value = MagicMock()
             try:
-                with patch("fastdeploy.input.qwen3_vl_processor.process.parse_chat_messages", return_value=parsed_messages):
+                with patch(
+                    "fastdeploy.input.qwen3_vl_processor.process.parse_chat_messages", return_value=parsed_messages
+                ):
                     with patch("fastdeploy.input.qwen3_vl_processor.process.zmq.Context", return_value=fake_context):
                         with patch.object(dp, "get_processor_cache", return_value=[None]):
                             with self.assertRaisesRegex(ValueError, "Missing item 0 not found in processor cache"):
@@ -516,6 +520,7 @@ class TestQwen3VLProcessor(unittest.TestCase):
                 dp.enable_processor_cache = old_enable_processor_cache
 
         with self.subTest("unexpected_multimodal_type"):
+
             class FlakyTypeItem:
                 def __init__(self):
                     self.calls = 0
@@ -531,7 +536,9 @@ class TestQwen3VLProcessor(unittest.TestCase):
                     return default
 
             parsed_messages = [{"role": "user", "content": FlakyTypeItem()}]
-            with patch("fastdeploy.input.qwen3_vl_processor.process.parse_chat_messages", return_value=parsed_messages):
+            with patch(
+                "fastdeploy.input.qwen3_vl_processor.process.parse_chat_messages", return_value=parsed_messages
+            ):
                 with self.assertRaisesRegex(ValueError, "Unsupported multimodal type: audio"):
                     dp.prompt_token_ids2outputs(request)
 
@@ -569,7 +576,9 @@ class TestQwen3VLProcessor(unittest.TestCase):
         fake_context.socket.return_value = fake_socket
 
         try:
-            with patch("fastdeploy.input.qwen3_vl_processor.process.parse_chat_messages", return_value=parsed_messages):
+            with patch(
+                "fastdeploy.input.qwen3_vl_processor.process.parse_chat_messages", return_value=parsed_messages
+            ):
                 with patch("fastdeploy.input.qwen3_vl_processor.process.zmq.Context", return_value=fake_context):
                     with patch.object(dp, "_compute_vision_positions", return_value=np.array([[0]], dtype=np.int64)):
                         with patch.object(
@@ -580,8 +589,12 @@ class TestQwen3VLProcessor(unittest.TestCase):
                                 "pixel_values": np.zeros((1, 3, 3), dtype=np.float32),
                             },
                         ):
-                            with patch.object(dp, "_load_and_process_video", return_value=mock_read_frames(4, 4, 2, 4)):
-                                with patch.object(dp, "get_processor_cache", return_value=[missing_image]) as cache_get:
+                            with patch.object(
+                                dp, "_load_and_process_video", return_value=mock_read_frames(4, 4, 2, 4)
+                            ):
+                                with patch.object(
+                                    dp, "get_processor_cache", return_value=[missing_image]
+                                ) as cache_get:
                                     with patch.object(dp, "update_processor_cache") as cache_update:
                                         outputs = dp.prompt_token_ids2outputs(request)
 
@@ -630,7 +643,9 @@ class TestQwen3VLProcessor(unittest.TestCase):
         fake_context.socket.return_value = fake_socket
 
         try:
-            with patch("fastdeploy.input.qwen3_vl_processor.process.parse_chat_messages", return_value=parsed_messages):
+            with patch(
+                "fastdeploy.input.qwen3_vl_processor.process.parse_chat_messages", return_value=parsed_messages
+            ):
                 with patch("fastdeploy.input.qwen3_vl_processor.process.zmq.Context", return_value=fake_context):
                     with patch.object(dp, "_compute_vision_positions", return_value=np.array([[0]], dtype=np.int64)):
                         with patch.object(
@@ -641,8 +656,12 @@ class TestQwen3VLProcessor(unittest.TestCase):
                                 "pixel_values": np.zeros((1, 3, 3), dtype=np.float32),
                             },
                         ):
-                            with patch.object(dp, "_load_and_process_video", return_value=mock_read_frames(4, 4, 2, 4)):
-                                with patch.object(dp, "get_processor_cache", return_value=[missing_image]) as cache_get:
+                            with patch.object(
+                                dp, "_load_and_process_video", return_value=mock_read_frames(4, 4, 2, 4)
+                            ):
+                                with patch.object(
+                                    dp, "get_processor_cache", return_value=[missing_image]
+                                ) as cache_get:
                                     with patch.object(dp, "update_processor_cache") as cache_update:
                                         with patch.object(
                                             self.processor.tokenizer,
@@ -829,7 +848,9 @@ class TestQwen3VLProcessor(unittest.TestCase):
 
         self.assertEqual(token_result["prompt_token_ids"], source_result["prompt_token_ids"])
         self.assertTrue(
-            np.equal(token_result["multimodal_inputs"]["grid_thw"], source_result["multimodal_inputs"]["grid_thw"]).all()
+            np.equal(
+                token_result["multimodal_inputs"]["grid_thw"], source_result["multimodal_inputs"]["grid_thw"]
+            ).all()
         )
         self.assertTrue(
             np.equal(
