@@ -522,10 +522,13 @@ def save_output_specualate(
             ["seq_lens_decoder", "prompt_lens"],
         )
         recover_share_inputs = recover_batch_index_for_output(
-            share_inputs, model_output.index_to_batch_id, model_output.enable_pd_reorder, ["preempted_idx"]
+            share_inputs,
+            model_output.index_to_batch_id,
+            model_output.enable_pd_reorder,
+            ["sampled_token_ids", "last_preempted_idx"],
         )
         speculate_save_output_topk(
-            sampler_output.sampled_token_ids,
+            recover_share_inputs["sampled_token_ids"],
             sampler_output.logprobs_tensors.logprob_token_ids,
             sampler_output.logprobs_tensors.logprobs,
             sampler_output.logprobs_tensors.selected_token_ranks,
@@ -534,11 +537,12 @@ def save_output_specualate(
             model_output.not_need_stop,
             recover_model_output_map["seq_lens_decoder"],
             recover_model_output_map["prompt_lens"],
-            recover_share_inputs["preempted_idx"],
+            recover_share_inputs["last_preempted_idx"],
             3,  # mtype
             model_output.mp_rank,
             save_each_rank,
         )
+    share_inputs["last_preempted_idx"][:] = 0
 
 
 def post_process(
