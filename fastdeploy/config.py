@@ -33,6 +33,7 @@ from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.transformer_utils.config import get_pooling_config
 from fastdeploy.utils import (
     ceil_div,
@@ -672,6 +673,10 @@ class ParallelConfig:
         else:
             self.pd_disaggregation_mode = "None"
 
+        # Prefill node one step stop (PD disaggregation specific)
+        # When enabled, prefill node stops after one decoding step
+        self.prefill_one_step_stop: bool = os.getenv("PREFILL_NODE_ONE_STEP_STOP", "0") == "1"
+
         # disable_sequence_parallel_moe: qkv_linear + attn + out_linear + allreduce
         # use_sequence_parallel_moe: allgather + qkv_linear + attn + all2all + out_linear
         self.use_sequence_parallel_moe = (
@@ -719,69 +724,118 @@ class SpeculativeConfig:
     Configuration for speculative decoding.
     """
 
+    # Class-level default values for all config options
+    _DEFAULTS = {
+        "method": None,
+        "mtp_strategy": "default",
+        "num_speculative_tokens": 1,
+        "num_model_steps": 1,
+        "max_candidate_len": 5,
+        "verify_window": 2,
+        "max_ngram_size": 5,
+        "min_ngram_size": 2,
+        # Suffix Decoding
+        "suffix_decoding_max_tree_depth": 64,
+        "suffix_decoding_max_cached_requests": -1,
+        "suffix_decoding_max_spec_factor": 1.0,
+        "suffix_decoding_min_token_prob": 0.1,
+        "model": None,
+        "quantization": None,
+        "num_gpu_block_expand_ratio": 1.0,
+        "model_type": "main",
+        "sharing_model": None,
+        "benchmark_mode": False,
+        "enf_gen_phase_tag": False,
+        "enable_draft_logprob": False,
+        "verify_strategy": "topp",
+        "accept_policy": "normal",
+    }
+
+    # Environment variable to config mapping for backward compatibility
+    # Format: env_var: (config_key, value_when_set)
+    _ENV_OVERRIDES = {
+        "SPECULATE_VERIFY_USE_TOPK": ("verify_strategy", "greedy"),
+        "SPECULATE_VERIFY_USE_TARGET_SAMPLING": ("verify_strategy", "target_match"),
+    }
+
     def __init__(
         self,
         args,
     ):
-        self.method_list = ["ngram_match", "mtp", "suffix"]
+        # Valid value lists (not defaults, but valid options)
+        self.method_list = ["ngram", "mtp", "naive", "suffix"]
         self.mtp_strategy_list = ["default", "with_ngram"]
 
-        # speculative method, choose in [None, "ngram_match", "mtp", "hybrid_mtp_ngram"]
-        self.method: Optional[str] = None
-        # mtp strategy in mtp-method
-        self.mtp_strategy = "default"
-        # the max length of speculative tokens
-        self.num_speculative_tokens: int = 1
-        # the model runner step of draft model/mtp...
-        self.num_model_steps: int = 1
-        # the max length of candidate tokens for speculative method
-        self.max_candidate_len: int = 5
-        # the max length of verify window for speculative method
-        self.verify_window: int = 2
-        # ngram match
-        self.max_ngram_size: int = 5
-        self.min_ngram_size: int = 2
-        # Suffix Decoding
-        # The maximum length of token sequences cached in suffix trees.
-        self.suffix_decoding_max_tree_depth: int = 64
-        # The limits of requests that can be stored in the cache.
-        self.suffix_decoding_max_cached_requests: int = -1
-        # The factor of matched length, calculated as num_draft_tokens = suffix_max_spec_factor * matched_length
-        self.suffix_decoding_max_spec_factor: float = 1.0
-        # The probability threshold for speculated tokens.
-        self.suffix_decoding_min_token_prob: float = 0.1
-        # model for mtp/eagle/draft_model
-        self.model: Optional[str] = None
-        # quantization of model
-        self.quantization: Optional[Dict[str, Any]] = None
-        # allocate more blocks to prevent mtp from finishing the block earlier than the main model
-        # Fixed now
-        self.num_gpu_block_expand_ratio: Optional[float] = 1
-        # To distinguish the main model and draft model(mtp/eagle/draftmodel)
-        # ["main", "mtp"]
-        self.model_type: Optional[str] = "main"
-        # TODO(liuzichang): To reduce memory usage, MTP shares the main model's lm_head and embedding layers.
-        # A trick method is currently used to enable this sharing.
-        # This will be replaced with a more standardized solution in the future.
-        self.sharing_model = None
-        # During benchmarking, we need to enforce that the number of accepted tokens is 1.
-        # This means no tokens from MTP are accepted.
-        # This ensures that the specified simulation acceptance rate is not affected.
-        self.benchmark_mode: bool = False
-        # Enable token constraint enforcement in generation phase
-        # When enabled, enforces specific tokens after the reasoning phase boundary pattern
-        self.enf_gen_phase_tag: bool = False
+        # Initialize from defaults
+        self._init_from_defaults()
 
+        # Apply user-provided arguments (highest priority)
+        self._apply_user_args(args)
+
+        # Read model config (overrides defaults but not user args)
+        self.read_model_config()
+        self._apply_model_config()
+
+        # Apply environment variable overrides (backward compatibility)
+        self._apply_env_overrides(args)
+
+        # Initialize computed fields
         self.num_extra_cache_layer = 0
 
-        self.enable_draft_logprob: bool = False
+        # Convert and validate all parameters
+        self._convert_and_validate()
 
+    def _init_from_defaults(self):
+        """Initialize all config options from class defaults."""
+        for key, value in self._DEFAULTS.items():
+            setattr(self, key, value)
+
+    def _apply_user_args(self, args: Dict[str, Any]):
+        """Apply user-provided arguments."""
+        if args is None:
+            return
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
-        self.read_model_config()
-        self.reset()
+    def _apply_model_config(self):
+        """Apply configuration from model config file."""
+        if not self.enabled_speculative_decoding():
+            return
+        if self.model is None:
+            return
+
+        # Model config can override certain defaults
+        # Currently no automatic overrides, but can be extended here
+        pass
+
+    def _apply_env_overrides(self, user_args: Dict[str, Any]):
+        """
+        Apply environment variable overrides for backward compatibility.
+        Only applies if user hasn't explicitly set the corresponding config.
+        """
+        for env_var, (config_key, env_value) in self._ENV_OVERRIDES.items():
+            if os.environ.get(env_var, "0") == "1":
+                # Only apply if user didn't explicitly set this config
+                if user_args is None or config_key not in user_args:
+                    setattr(self, config_key, env_value)
+
+    def _convert_and_validate(self):
+        """
+        Convert string configs to enums and validate all parameters.
+        """
+        # Convert method from string to SpecMethod enum
+        if self.method is not None:
+            from fastdeploy.spec_decode import SpecMethod
+
+            self.method = SpecMethod.from_string(self.method)
+
+            # Set method-specific computed values
+            if self.method == SpecMethod.MTP:
+                self.num_extra_cache_layer = 1
+
+        # Run validation (includes dependency validation)
+        self.check_legality_parameters()
 
     def read_model_config(self):
         """
@@ -798,24 +852,6 @@ class SpeculativeConfig:
         self.config_path = os.path.join(self.model, "config.json")
         if os.path.exists(self.config_path):
             self.model_config = json.load(open(self.config_path, "r", encoding="utf-8"))
-
-    def reset(self):
-        """
-        Reset configuration.
-        """
-
-        def reset_value(cls, value_name, key=None, default=None):
-            if key is not None and key in cls.model_config:
-                setattr(cls, value_name, cls.model_config[key])
-            elif getattr(cls, value_name, None) is None:
-                setattr(cls, value_name, default)
-
-        if not self.enabled_speculative_decoding():
-            return
-
-        # NOTE(liuzichang): We will support multi-layer in future
-        if self.method in ["mtp"]:
-            self.num_extra_cache_layer = 1
 
     def enabled_speculative_decoding(self):
         """
@@ -846,18 +882,21 @@ class SpeculativeConfig:
     ) -> None:
         """Check the legality of parameters passed in from the command line"""
         if self.method is not None:
-            assert (
-                self.method in self.method_list
-            ), f"speculative method only support {self.method_list} now, but get {self.method}."
+            from fastdeploy.spec_decode import SpecMethod
 
-            assert (
-                self.num_speculative_tokens >= 1 and self.num_speculative_tokens <= 5
-            ), f"num_speculative_tokens only support in range[1, 5], but get {self.num_speculative_tokens}."
-            assert (
-                self.num_model_steps >= 1 and self.num_model_steps <= 5
-            ), f"num_model_steps only support in range[1, 5], but get {self.num_model_steps}."
+            assert self.method in [
+                m.value for m in SpecMethod
+            ], f"speculative method only support {[m.value for m in SpecMethod]} now, but get {self.method}."
 
-            if self.method in ["mtp", "hybrid_mtp_ngram"]:
+            if self.method != SpecMethod.NAIVE:
+                assert (
+                    self.num_speculative_tokens >= 1 and self.num_speculative_tokens <= 5
+                ), f"num_speculative_tokens only support in range[1, 5], but get {self.num_speculative_tokens}."
+                assert (
+                    self.num_model_steps >= 1 and self.num_model_steps <= 5
+                ), f"num_model_steps only support in range[1, 5], but get {self.num_model_steps}."
+
+            if self.method == SpecMethod.MTP:
                 if self.num_speculative_tokens < self.num_model_steps:
                     logger.warning(
                         f"Get num_model_steps > num_speculative_tokens. Reset num_speculative_tokens to {self.num_model_steps}"
@@ -867,6 +906,79 @@ class SpeculativeConfig:
             assert (
                 self.mtp_strategy in self.mtp_strategy_list
             ), f"mtp_strategy_list only support {self.mtp_strategy_list}, but get {self.mtp_strategy}"
+
+            # Validate verify strategy and accept policy
+            # Support case-insensitive input for better user experience
+            from fastdeploy.spec_decode import VerifyStrategy
+
+            if not isinstance(self.verify_strategy, VerifyStrategy):
+                # Handle both string and int inputs
+                if isinstance(self.verify_strategy, int):
+                    # If it's already an int (enum value), convert directly
+                    self.verify_strategy = VerifyStrategy(self.verify_strategy)
+                else:
+                    # Assume it's a string
+                    self.verify_strategy = VerifyStrategy.from_string(self.verify_strategy)
+
+            # Support case-insensitive accept_policy
+            valid_accept_policies = ["normal", "accept_all", "reject_all"]
+            accept_policy_lower = self.accept_policy.lower()
+            assert (
+                accept_policy_lower in valid_accept_policies
+            ), f"accept_policy must be one of {valid_accept_policies} (case-insensitive), but got '{self.accept_policy}'."
+            self.accept_policy = accept_policy_lower
+
+        # Validate parameter dependencies after basic validation
+        self._validate_dependencies()
+
+    def _validate_dependencies(self) -> None:
+        """
+        Validate parameter dependencies across different speculative methods.
+        Called by check_legality_parameters after basic validation.
+        """
+        if not self.enabled_speculative_decoding():
+            return
+
+        from fastdeploy.spec_decode import SpecMethod
+
+        # Define parameter constraints for each speculative method
+        # Each constraint is a tuple: (dependent_param, operator, expected_relation)
+        constraints = {
+            SpecMethod.MTP: [
+                {
+                    "check": lambda: self.num_speculative_tokens >= self.num_model_steps,
+                    "message": f"MTP requires num_speculative_tokens >= num_model_steps, "
+                    f"but got {self.num_speculative_tokens} < {self.num_model_steps}",
+                    "auto_fix": lambda: setattr(self, "num_speculative_tokens", self.num_model_steps),
+                }
+            ],
+            SpecMethod.NGRAM: [
+                {
+                    "check": lambda: self.max_ngram_size >= self.min_ngram_size,
+                    "message": f"NGRAM requires max_ngram_size >= min_ngram_size, "
+                    f"but got {self.max_ngram_size} < {self.min_ngram_size}",
+                    "auto_fix": None,  # Cannot auto-fix, user must adjust
+                }
+            ],
+            SpecMethod.NAIVE: [
+                {
+                    "check": lambda: self.num_speculative_tokens == 0,
+                    "message": f"NAIVE mode requires num_speculative_tokens == 0, "
+                    f"but got {self.num_speculative_tokens}. Resetting to 0.",
+                    "auto_fix": lambda: setattr(self, "num_speculative_tokens", 0),
+                }
+            ],
+        }
+
+        if self.method in constraints:
+            method_constraints = constraints[self.method]
+            for constraint in method_constraints:
+                if not constraint["check"]():
+                    if constraint["auto_fix"] is not None:
+                        logger.warning(constraint["message"] + " Applying auto-fix.")
+                        constraint["auto_fix"]()
+                    else:
+                        raise ValueError(constraint["message"])
 
     def __str__(self) -> str:
         return self.to_json_string()
@@ -1710,7 +1822,10 @@ class FDConfig:
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
-        if self.speculative_config is not None and self.speculative_config.method in ["mtp", "suffix"]:
+        if self.speculative_config is not None and self.speculative_config.method in [
+            SpecMethod.MTP,
+            SpecMethod.SUFFIX,
+        ]:
             max_capture_shape = self.scheduler_config.max_num_seqs * (
                 self.speculative_config.num_speculative_tokens + 1
             )
@@ -1738,7 +1853,7 @@ class FDConfig:
                 max_capture_shape_prefill=max_capture_shape_prefill,
                 dec_token_per_query_per_step=dec_token_per_query_per_step,
             )
-        if self.speculative_config is not None and self.speculative_config.method in ["mtp", "suffix"]:
+        if self.speculative_config is not None and self.speculative_config.method is not None:
             real_bsz_to_captured_size = {}
             for capture_size in self.graph_opt_config.cudagraph_capture_sizes:
                 dummy_batch_size = int(capture_size / (self.speculative_config.num_speculative_tokens + 1))
@@ -1941,7 +2056,7 @@ class FDConfig:
             )
 
         # adjust speculative config
-        if self.speculative_config is not None and self.speculative_config.method == "mtp":
+        if self.speculative_config is not None and self.speculative_config.method == SpecMethod.MTP:
             if self.scheduler_config.splitwise_role == "prefill":
                 self.speculative_config.num_speculative_tokens = 1
                 self.speculative_config.num_model_steps = 1
