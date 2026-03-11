@@ -188,7 +188,7 @@ static int xpu3_wrapper(Context* ctx,
                         const bool splitwise_role_is_decode) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto kernel = xpu3::plugin::speculate_limit_thinking_content_length_kernel;
-  kernel<<<1, 64, ctx->xpu_stream>>>(
+  int32_t ret_xre = kernel<<<1, 64, ctx->xpu_stream>>>(
       reinterpret_cast<XPU_INT64*>(next_tokens),
       max_think_lens,
       max_reply_lens,
@@ -204,6 +204,7 @@ static int xpu3_wrapper(Context* ctx,
       eos_token_id_len,
       inject_len,
       splitwise_role_is_decode);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
