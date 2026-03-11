@@ -14,8 +14,9 @@
 # limitations under the License.
 """
 
+from numpy._typing._array_like import NDArray
 import queue
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import paddle
@@ -225,10 +226,11 @@ def _flatten_sampled_tokens(
     sampled_tokens: paddle.Tensor,
     accept_token_nums: np.ndarray,
 ):
-    sampled = sampled_tokens.cpu().numpy()
+    sampled_size = min(sampled_tokens.shape[0], len(accept_token_nums))
+    sampled: NDArray[Any] = sampled_tokens.cpu().numpy()
     if decode_mode == DecodeMode.DRAFT:
         return sampled
-    sampled = [sampled[i, : accept_token_nums[i]] for i in range(len(accept_token_nums)) if accept_token_nums[i] > 0]
+    sampled = [sampled[i, : accept_token_nums[i]] for i in range(sampled_size) if accept_token_nums[i] > 0]
     if not sampled:
         return np.empty(0, dtype="int64")
     return np.concatenate(sampled)
@@ -254,11 +256,11 @@ def async_generate_output(
     assert async_output_queue is not None, "async_output_queue must not be None"
 
     worker_logger.debug(
-        "async_generate_output detail:\n"
-        "  decode_mode: %s\n"
-        "  sampled_tokens shape: %s\n"
-        "  accept_token_nums: %s\n"
-        "  prompt_logprobs_list: %s\n"
+        "async_generate_output detail: \n" +
+        "  decode_mode: %s\n" +
+        "  sampled_tokens shape: %s\n" +
+        "  accept_token_nums: %s\n" +
+        "  prompt_logprobs_list: %s\n" +
         "  logprobs_tensors: %s",
         decode_mode,
         sampled_tokens,
@@ -435,7 +437,7 @@ def save_output_normal(
             accept_token_nums = np.ones(real_bsz, dtype=np.int32)
             async_generate_output(
                 async_output_queue=async_output_queue,
-                sampled_tokens=sampler_output.sampled_token_ids,
+                sampled_tokens=recover_share_inputs_map["sampled_token_ids"],
                 accept_token_nums=accept_token_nums,
                 prompt_logprobs_list=model_output.prompt_logprobs_list,
                 logprobs_tensors=sampler_output.logprobs_tensors,
@@ -538,7 +540,9 @@ def post_process_specualate(
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             recover_batch_index_for_sampler_output(
-                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+                sampler_output, 
+                model_output.index_to_batch_id, 
+                model_output.enable_pd_reorder
             )
             real_bsz = share_inputs["seq_lens_this_time"].shape[0]
             accept_token_nums = model_output.accept_num[:real_bsz].numpy()

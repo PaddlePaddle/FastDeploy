@@ -955,7 +955,7 @@ class MTPProposer(Proposer):
                     and substep == 0
                     and sampler_output.logprobs_tensors is not None
                 ):
-                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
+                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id, self.model_inputs.enable_pd_reorder)
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
                     if envs.FD_USE_GET_SAVE_OUTPUT_V1:
                         if self.parallel_config.use_ep or self.local_rank == 0:
@@ -971,9 +971,8 @@ class MTPProposer(Proposer):
                         recover_model_output_map = recover_batch_index_for_output(
                             self.model_inputs,
                             self.model_inputs.index_to_batch_id,
-                            self.model_inputs.enable_pd_reorder[
-                                "batch_token_num", "cu_batch_token_offset", "seq_lens_decoder", "prompt_lens"
-                            ],
+                            self.model_inputs.enable_pd_reorder,
+                            ["batch_token_num", "cu_batch_token_offset", "seq_lens_decoder", "prompt_lens"],
                         )
                         speculate_save_output_topk(
                             sampler_output.sampled_token_ids,
@@ -1070,7 +1069,7 @@ class MTPProposer(Proposer):
                 )
 
                 if substep == 0 and sampler_output.logprobs_tensors is not None:
-                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
+                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id, self.model_inputs.enable_pd_reorder)
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
                     if envs.FD_USE_GET_SAVE_OUTPUT_V1:
                         if self.parallel_config.use_ep or self.local_rank == 0:
@@ -1083,11 +1082,12 @@ class MTPProposer(Proposer):
                                 decode_mode=DecodeMode.DRAFT,
                             )
                     else:
-                        recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
+                        recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id, self.model_inputs.enable_pd_reorder)
                         recover_model_output_map = recover_batch_index_for_output(
                             self.model_inputs,
                             self.model_inputs.index_to_batch_id,
-                            self.model_inputs.enable_pd_reorder["batch_token_num", "cu_batch_token_offset"],
+                            self.model_inputs.enable_pd_reorder,
+                            ["batch_token_num", "cu_batch_token_offset"],
                         )
                         speculate_save_output_topk(
                             sampler_output.sampled_token_ids,

@@ -404,15 +404,14 @@ class TokenProcessor:
                     self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1
                 ) or (rank_id == 0):
                     model_runner_output = self.zmq_server.recv_pyobj()
+                    if model_runner_output is None:
+                        llm_logger.warning("model_runner_output is None")
+                        continue
                     llm_logger.debug(
                         "received bsz:%s, model_runner_output:%s",
                         len(model_runner_output.sampled_token_ids),
                         model_runner_output,
                     )
-
-                    if model_runner_output is None:
-                        llm_logger.warning("model_runner_output is None")
-                        continue
 
                     batch_result, batch_draft_result = self.process_model_runner_output(model_runner_output)
 
