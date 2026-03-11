@@ -94,7 +94,7 @@ static int xpu3_wrapper(Context *ctx,
                         const int input_ids_stride) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto update_inputs = xpu3::plugin::update_inputs;
-  update_inputs<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  int32_t ret_xre = update_inputs<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
       not_need_stop,
       seq_lens_this_time,
       seq_lens_encoder,
@@ -107,6 +107,7 @@ static int xpu3_wrapper(Context *ctx,
       bsz,
       max_bsz,
       input_ids_stride);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

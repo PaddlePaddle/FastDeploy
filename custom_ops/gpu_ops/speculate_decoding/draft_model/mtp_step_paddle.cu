@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "helper.h"  // NOLINT
+#include "helper.h"             // NOLINT
+#include "../../cccl_compat.h"  // CCCL 3.0 compatibility
 template <int NUM_THREADS, int MAX_BATCH_SIZE = 256>
 __global__ void mtp_free_and_dispatch_block(bool *base_model_stop_flags,
                                             bool *stop_flags,
@@ -110,7 +111,8 @@ __global__ void mtp_free_and_dispatch_block(bool *base_model_stop_flags,
     const int used_block_num =
         tid < bsz && !base_model_stop_flags[tid] ? used_list_len[tid] : 0;
     cub::KeyValuePair<int, int> kv_pair = {tid, used_block_num};
-    kv_pair = BlockReduce(temp_storage).Reduce(kv_pair, cub::ArgMax());
+    kv_pair =
+        BlockReduce(temp_storage).Reduce(kv_pair, fd_cub_compat::ArgMax());
 
     if (tid == 0) {
       const int encoder_block_len = encoder_block_lens[kv_pair.key];

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "helper.h"
+#include "cccl_compat.h"  // CCCL 3.0 compatibility
 
 __device__ bool in_need_block_list(const int &qid,
                                    int *need_block_list,
@@ -116,7 +117,8 @@ __global__ void free_and_dispatch_block(bool *stop_flags,
             ? used_list_len[tid]
             : 0;
     cub::KeyValuePair<int, int> kv_pair = {tid, used_block_num};
-    kv_pair = BlockReduce(temp_storage).Reduce(kv_pair, cub::ArgMax());
+    kv_pair =
+        BlockReduce(temp_storage).Reduce(kv_pair, fd_cub_compat::ArgMax());
 
     if (tid == 0) {
       if (kv_pair.value == 0) {

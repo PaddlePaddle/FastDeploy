@@ -29,6 +29,7 @@ from fastdeploy.model_executor.layers.quantization.nvfp4 import (
     ModelOptNvFp4Config,
     ModelOptNvFp4FusedMoE,
     ModelOptNvFp4LinearMethod,
+    _process_scale_interleaved,
     next_power_of_2,
 )
 
@@ -429,7 +430,7 @@ class TestModelOptNvFp4FusedMoE(unittest.TestCase):
             layer = DummyFusedMoELayer(num_local_experts=1, moe_intermediate_size=256, hidden_size=256)
             method.create_weights(layer)
             scale = paddle.ones([1, 64, 16], dtype=paddle.float16)
-            swizzled = method.swizzle_blockscale(scale)
+            swizzled = _process_scale_interleaved(scale)
         self.assertEqual(list(swizzled.shape), [1, 128, 16])
         self.assertTrue(method.load_up_proj_weight_first)
 

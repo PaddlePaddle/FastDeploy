@@ -17,22 +17,22 @@ Determinism offline inference tests using LLM.generate
 
 Test scenarios:
 1. Same-prompt repeatability (FD_DETERMINISTIC_MODE=1)
-2. Batch invariance (single vs. batch, different positions)
-3. Different batch sizes consistency
-4. Sampling-parameter combinations (temperature x top_p, parametrized)
-5. Long sequence generation (512-1024 tokens)
-6. Long input prompt handling
-7. Minimal output (max_tokens=1, early stop)
-8. Special characters & multi-language prompts
-9. Multi-turn conversation
-10. State isolation (interleaved / interference prompts)
-11. Non-deterministic validation (proves tests are effective)
+2. Different batch sizes consistency
+3. Sampling-parameter combinations (temperature x top_p, parametrized)
+4. Minimal output (max_tokens=1, early stop)
+5. Special characters & multi-language prompts
+6. Multi-turn conversation
+7. State isolation (interleaved / interference prompts)
+8. Non-deterministic validation (proves tests are effective)
+
+Long sequence / long prompt / batch invariance tests are in test_determinism_long.py.
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0 pytest tests/deterministic/test_determinism_offline.py -v
+    CUDA_VISIBLE_DEVICES=0,1,2,3 pytest tests/e2e/4cards_cases/test_determinism_offline.py -v
 """
 
 import os
+from contextlib import contextmanager
 
 import pytest
 
@@ -41,8 +41,34 @@ pytestmark = pytest.mark.gpu
 DEFAULT_MODEL_DIR = "./models"
 MODEL_NAME = "Qwen2-7B-Instruct"
 
-_ENV_CUDA_VISIBLE_DEVICES = "CUDA_VISIBLE_DEVICES"
-_ENV_FD_DETERMINISTIC_MODE = "FD_DETERMINISTIC_MODE"
+
+@contextmanager
+def env_override(mapping):
+    """Temporarily set env vars, restoring original values on exit."""
+    old = {k: os.environ.get(k) for k in mapping}
+    os.environ.update(mapping)
+    try:
+        yield
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+@pytest.fixture(scope="module")
+def model_path():
+    model_dir = os.getenv("MODEL_PATH", DEFAULT_MODEL_DIR)
+    return os.path.join(model_dir, MODEL_NAME)
+
+
+@pytest.fixture(autouse=True)
+def _reset_deterministic_mode():
+    """Ensure every test starts with deterministic mode ON."""
+    os.environ["FD_DETERMINISTIC_MODE"] = "1"
+    yield
+    os.environ["FD_DETERMINISTIC_MODE"] = "1"
 
 
 # ---------------------------------------------------------------------------
@@ -53,48 +79,28 @@ _ENV_FD_DETERMINISTIC_MODE = "FD_DETERMINISTIC_MODE"
 @pytest.fixture(scope="module", autouse=True)
 def _module_env():
     """Set env vars before importing fastdeploy (must happen first)."""
-    old_cuda = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES)
-    old_det = os.environ.get(_ENV_FD_DETERMINISTIC_MODE)
+    with env_override(
+        {
+            "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES", "0"),
+            "FD_DETERMINISTIC_MODE": "1",
+            "FD_CUSTOM_AR_MAX_SIZE_MB": "64",
+        }
+    ):
+        # Lazy import: env vars must be set before importing fastdeploy
+        global LLM, SamplingParams  # noqa: PLW0603
+        from fastdeploy import LLM, SamplingParams
 
-    os.environ[_ENV_CUDA_VISIBLE_DEVICES] = os.environ.get(_ENV_CUDA_VISIBLE_DEVICES, "0")
-    os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
-
-    global LLM, SamplingParams  # noqa: PLW0603
-    from fastdeploy import LLM, SamplingParams
-
-    yield
-
-    if old_cuda is None:
-        os.environ.pop(_ENV_CUDA_VISIBLE_DEVICES, None)
-    else:
-        os.environ[_ENV_CUDA_VISIBLE_DEVICES] = old_cuda
-    if old_det is None:
-        os.environ.pop(_ENV_FD_DETERMINISTIC_MODE, None)
-    else:
-        os.environ[_ENV_FD_DETERMINISTIC_MODE] = old_det
-
-
-@pytest.fixture(autouse=True)
-def _reset_deterministic_mode():
-    """Ensure every test starts with deterministic mode ON."""
-    os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
-    yield
-    os.environ[_ENV_FD_DETERMINISTIC_MODE] = "1"
-
-
-@pytest.fixture(scope="module")
-def model_path():
-    model_dir = os.getenv("MODEL_PATH", DEFAULT_MODEL_DIR)
-    return os.path.join(model_dir, MODEL_NAME)
+        yield
 
 
 @pytest.fixture(scope="module")
 def llm(model_path, _module_env):
     return LLM(
         model=model_path,
-        tensor_parallel_size=1,
+        tensor_parallel_size=4,
         max_model_len=8192,
         enable_prefix_caching=False,
+        graph_optimization_config={"use_cudagraph": os.getenv("USE_CUDAGRAPH", "0") == "1"},
     )
 
 
@@ -106,7 +112,7 @@ def llm(model_path, _module_env):
 def _generate_text(llm, prompt, sp):
     """Generate once, return (text, token_ids)."""
     out = llm.generate([prompt], sp)[0]
-    return out.outputs.text, out.outputs.token_ids
+    return out.outputs.text, list(out.outputs.token_ids)
 
 
 def _assert_deterministic(llm, prompt, sp, runs=2):
@@ -126,6 +132,18 @@ def test_deterministic_same_prompt(llm):
     """Same prompt + same seed produces identical output across 5 runs."""
     sp = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=50, seed=123)
     _assert_deterministic(llm, "Please introduce artificial intelligence in one sentence.", sp, runs=5)
+
+
+def test_deterministic_different_batch_sizes(llm):
+    """Same prompt is consistent across batch sizes 1 / 2 / 4 / 8."""
+    prompt = "What is machine learning?"
+    sp = SamplingParams(temperature=0.5, max_tokens=30, seed=789)
+
+    baseline, _ = _generate_text(llm, prompt, sp)
+
+    for bs in [2, 4, 8]:
+        outputs = llm.generate([prompt] * bs, sp)
+        assert outputs[0].outputs.text == baseline, f"Batch size {bs} differs from bs=1"
 
 
 def test_deterministic_batch_invariance(llm):
@@ -150,18 +168,6 @@ def test_deterministic_batch_invariance(llm):
         ), f"Batch config {i} (pos {idx}): result differs from single-request baseline"
 
 
-def test_deterministic_different_batch_sizes(llm):
-    """Same prompt is consistent across batch sizes 1 / 2 / 4 / 8."""
-    prompt = "What is machine learning?"
-    sp = SamplingParams(temperature=0.5, max_tokens=30, seed=789)
-
-    baseline, _ = _generate_text(llm, prompt, sp)
-
-    for bs in [2, 4, 8]:
-        outputs = llm.generate([prompt] * bs, sp)
-        assert outputs[0].outputs.text == baseline, f"Batch size {bs} differs from bs=1"
-
-
 # ===================== Sampling-parameter combinations =====================
 
 
@@ -182,37 +188,6 @@ def test_deterministic_param_combos(llm, temp, top_p, seed):
     """Determinism holds across various (temperature, top_p) combinations."""
     sp = SamplingParams(temperature=temp, top_p=top_p, max_tokens=30, seed=seed)
     _assert_deterministic(llm, "What is a neural network?", sp)
-
-
-# ===================== Long sequence tests =====================
-
-
-@pytest.mark.parametrize(
-    "temp,seed",
-    [
-        (0.0, 100),
-        (0.3, 130),
-        (0.5, 150),
-        (0.7, 170),
-    ],
-)
-@pytest.mark.skip(reason="Potential non-determinism in long sequences, will be fixed by gongweibao in next PR")
-def test_deterministic_long_sequence(llm, temp, seed):
-    """Long generation (512+ tokens) stays deterministic at various temperatures."""
-    prompt = "Please describe the history of AI in detail, including major milestones and key technical breakthroughs."
-    sp = SamplingParams(temperature=temp, top_p=0.95, max_tokens=512, seed=seed)
-
-    text, token_ids = _assert_deterministic(llm, prompt, sp)
-    assert len(token_ids) >= 100, f"Expected >= 100 tokens, got {len(token_ids)}"
-
-
-def test_deterministic_long_prompt(llm):
-    """Long input prompt (prefill-heavy) stays deterministic."""
-    base = "This is a description about natural language processing. "
-    long_prompt = (base * 50) + "Please summarize the above."
-    sp = SamplingParams(temperature=0.5, max_tokens=100, seed=2024)
-
-    _assert_deterministic(llm, long_prompt, sp)
 
 
 # ===================== Minimal / boundary output tests =====================
