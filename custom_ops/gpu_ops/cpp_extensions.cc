@@ -777,7 +777,7 @@ std::vector<paddle::Tensor> BuildSamplingParams(
     const paddle::Tensor& top_k,
     paddle::Tensor& infer_seed,
     const paddle::Tensor& seq_lens_this_time,
-    const paddle::Tensor& cur_seq_lens_q_output,
+    const paddle::Tensor& cu_seqlens_q_output,
     const int64_t token_num_output_cpu,
     const int64_t increment_value);
 

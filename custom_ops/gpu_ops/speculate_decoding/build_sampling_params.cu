@@ -27,12 +27,12 @@ __global__ void BuildSamplingParamsKernel(float *top_p_padding,
                                           const float *top_p,
                                           const int64_t *top_k,
                                           int64_t *infer_seed,
-                                          const int *cu_seq_lens_q_output,
+                                          const int *cu_seqlens_q_output,
                                           const int64_t increment_value) {
   const int tid = threadIdx.x;
   const int bi = blockIdx.x;
-  int cur_seq_len_q_output_start = cu_seq_lens_q_output[bi];
-  int cur_seq_len_q_output_end = cu_seq_lens_q_output[bi + 1];
+  int cur_seq_len_q_output_start = cu_seqlens_q_output[bi];
+  int cur_seq_len_q_output_end = cu_seqlens_q_output[bi + 1];
   const float bi_top_p = top_p[bi];
   const int64_t bi_top_k = top_k[bi];
   int64_t bi_infer_seed = (infer_seed[bi] + tid * 4) % MAX_INFER_SEED;
@@ -56,7 +56,7 @@ std::vector<paddle::Tensor> BuildSamplingParams(
     const paddle::Tensor &top_k,
     paddle::Tensor &infer_seed,
     const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &cur_seq_lens_q_output,
+    const paddle::Tensor &cu_seqlens_q_output,
     const int64_t token_num_output_cpu,
     const int64_t increment_value) {
   auto cu_stream = seq_lens_this_time.stream();
@@ -78,7 +78,7 @@ std::vector<paddle::Tensor> BuildSamplingParams(
       top_p.data<float>(),
       top_k.data<int64_t>(),
       infer_seed.data<int64_t>(),
-      cur_seq_lens_q_output.data<int>(),
+      cu_seqlens_q_output.data<int>(),
       increment_value);
 
   return {top_p_padding, top_k_padding, topp_seed};
@@ -89,7 +89,7 @@ PD_BUILD_STATIC_OP(build_sampling_params)
              "top_k",
              "infer_seed",
              "seq_lens_this_time",
-             "cur_seq_lens_q_output"})
+             "cu_seqlens_q_output"})
     .Outputs({"top_p_padding", "top_k_padding", "topp_seed"})
     .Attrs({"token_num_output_cpu: int64_t", "increment_value: int64_t"})
     .SetKernelFn(PD_KERNEL(BuildSamplingParams));
