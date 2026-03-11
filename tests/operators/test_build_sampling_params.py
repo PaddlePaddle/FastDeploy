@@ -122,13 +122,22 @@ def run_and_compare(tc, inputs, increment_value):
     token_num_output_cpu = inputs["token_num_output_cpu"]
 
     gpu_outs = build_sampling_params(
-        t_top_p, t_top_k, t_infer_seed, t_seq_lens_this_time,
-        t_cu_seq_lens_q_output, token_num_output_cpu, increment_value,
+        t_top_p,
+        t_top_k,
+        t_infer_seed,
+        t_seq_lens_this_time,
+        t_cu_seq_lens_q_output,
+        token_num_output_cpu,
+        increment_value,
     )
 
     ref_outs = build_sampling_params_ref(
-        inputs["top_p"], inputs["top_k"], inputs["infer_seed"],
-        inputs["cu_seq_lens_q_output"], token_num_output_cpu, increment_value,
+        inputs["top_p"],
+        inputs["top_k"],
+        inputs["infer_seed"],
+        inputs["cu_seq_lens_q_output"],
+        token_num_output_cpu,
+        increment_value,
     )
 
     np.testing.assert_allclose(gpu_outs[0].numpy(), ref_outs[0], rtol=1e-6, err_msg="Mismatch in top_p_padding")
@@ -159,8 +168,13 @@ class TestBuildSamplingParams(unittest.TestCase):
         t_cu_seq_lens_q_output = paddle.to_tensor(cu_seq_lens_q_output, dtype="int32")
 
         gpu_outs = build_sampling_params(
-            t_top_p, t_top_k, t_infer_seed, t_seq_lens_this_time,
-            t_cu_seq_lens_q_output, 3, 1,
+            t_top_p,
+            t_top_k,
+            t_infer_seed,
+            t_seq_lens_this_time,
+            t_cu_seq_lens_q_output,
+            3,
+            1,
         )
 
         np.testing.assert_allclose(gpu_outs[0].numpy().flatten(), [0.9, 0.9, 0.5], rtol=1e-6)
