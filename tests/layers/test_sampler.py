@@ -24,6 +24,8 @@ from unittest.mock import MagicMock
 import paddle
 import pytest
 
+import fastdeploy  # noqa: F401
+
 if not hasattr(paddle, "compat"):
     paddle.compat = types.SimpleNamespace(enable_torch_proxy=lambda *args, **kwargs: None)
 
