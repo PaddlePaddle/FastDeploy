@@ -342,108 +342,6 @@ class XPUMoEMethod(MoEMethodBase):
         layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
         layer.down_proj_weight.set_value(stacked_down_proj_weights)
 
-        # self.load_w4a8_scale_weights(
-        #     layer, layer.weight_key_map, state_dict, logical_expert_ids, ep_rank_to_expert_id_list
-        # )
-
-
-    # def load_w4a8_scale_weights(
-    #     self,
-    #     layer: nn.Layer,
-    #     weight_key_map: dict,
-    #     state_dict: dict,
-    #     logical_expert_ids: paddle.Tensor,
-    #     ep_rank_to_expert_id_list: list,
-    # ):
-    #     """
-    #     Get w4a8 weights from state dict and process them.
-    #     Args:
-    #         layer (nn.Layer): The layer to add parameters to.
-    #         weight_key_map (dict): The weight key map.
-    #         state_dict (dict): The state dict.
-    #     """
-
-    #     def _extract_scale_tensor(layer: nn.Layer, state_dict, key_template, expert_idx):
-    #         return get_tensor(
-    #             (
-    #                 state_dict.pop(key_template.format(expert_idx))
-    #                 if key_template.format(expert_idx) in state_dict
-    #                 else key_template.format(expert_idx)
-    #             ),
-    #             layer.fd_config.model_config.model,
-    #         )
-
-    #     def _process_in_scale(name: str, in_scales: list[paddle.Tensor]):
-    #         processed_in_scale = 1 / paddle.concat(in_scales)
-    #         getattr(layer, name).set_value(processed_in_scale)
-    #         return processed_in_scale
-
-    #     def _process_weight_scale(
-    #         name: str,
-    #         weight_scales: list[paddle.Tensor],
-    #         processed_in_scale: paddle.Tensor,
-    #     ):
-    #         processed_weight_scale = (
-    #             paddle.stack(weight_scales, axis=0) / (127 * 112) / processed_in_scale[:, None]
-    #         ).cast(paddle.get_default_dtype())
-    #         getattr(layer, name).set_value(processed_weight_scale)
-
-    #     # 1. Init scale containers and maps
-    #     up_gate_proj_weight_scales = []
-    #     down_proj_weight_scales = []
-    #     up_gate_proj_in_scales_all_experts = []
-    #     up_gate_proj_in_scales = []
-    #     down_proj_in_scales = []
-
-    #     scale_weight_map = {
-    #         "up_gate_proj_weight_scale": up_gate_proj_weight_scales,
-    #         "down_proj_weight_scale": down_proj_weight_scales,
-    #         "up_gate_proj_in_scale": up_gate_proj_in_scales,
-    #         "down_proj_in_scale": down_proj_in_scales,
-    #     }
-    #     scale_key_map = {
-    #         "up_gate_proj_weight_scale": weight_key_map.get("up_gate_proj_expert_weight_scale_key", None),
-    #         "down_proj_weight_scale": weight_key_map.get("down_proj_expert_weight_scale_key", None),
-    #         "up_gate_proj_in_scale": weight_key_map.get("up_gate_proj_expert_in_scale_key", None),
-    #         "down_proj_in_scale": weight_key_map.get("down_proj_expert_in_scale_key", None),
-    #     }
-    #     for name, value in scale_key_map.items():
-    #         if value is None:
-    #             raise ValueError(f"scale {name} should not be none in w4a8 mode.")
-
-    #     # 2. Extract scale tensor from state dict
-    #     if layer.ep_size > 1:
-    #         for expert_idx in ep_rank_to_expert_id_list:
-    #             scale_tensor = get_tensor(
-    #                 (
-    #                     state_dict[scale_key_map["up_gate_proj_in_scale"].format(expert_idx)]
-    #                     if scale_key_map["up_gate_proj_in_scale"].format(expert_idx) in state_dict
-    #                     else scale_key_map["up_gate_proj_in_scale"].format(expert_idx)
-    #                 ),
-    #                 layer.fd_config.model_config.model,
-    #             )
-    #             up_gate_proj_in_scales_all_experts.append(1 / scale_tensor)
-    #         getattr(layer, "up_gate_proj_in_scale_all_experts").set_value(
-    #             paddle.concat(up_gate_proj_in_scales_all_experts)
-    #         )
-
-    #     for expert_idx in logical_expert_ids:
-    #         for name, scale_key_template in scale_key_map.items():
-    #             scale_tensor = _extract_scale_tensor(layer, state_dict, scale_key_template, expert_idx)
-    #             scale_weight_map[name].append(scale_tensor)
-
-    #     # 3. Process scale tensor and set to layer
-    #     in_scales = []
-    #     for in_scale_name in ["up_gate_proj_in_scale", "down_proj_in_scale"]:
-    #         in_scales.append(_process_in_scale(in_scale_name, scale_weight_map[in_scale_name]))
-
-    #     for i, weight_scale_name in enumerate(["up_gate_proj_weight_scale", "down_proj_weight_scale"]):
-    #         _process_weight_scale(
-    #             weight_scale_name,
-    #             scale_weight_map[weight_scale_name],
-    #             in_scales[i],
-    #         )
-
     def apply_tp(
         self,
         layer: nn.Layer,
@@ -535,6 +433,13 @@ class XPUMoEMethod(MoEMethodBase):
         in_scale_2 = getattr(layer, self.added_in_scale_attrs[1], None)
         w_scale_1 = getattr(layer, self.added_scale_attrs[0], None)
         w_scale_2 = getattr(layer, self.added_scale_attrs[1], None)
+
+        print("getattr(layer, self.added_weight_attrs[0]):", getattr(layer, self.added_weight_attrs[0]))
+        print("getattr(layer, self.added_weight_attrs[1]):", getattr(layer, self.added_weight_attrs[1]))
+        print("getattr(layer, self.added_in_scale_attrs[1]):", getattr(layer, self.added_in_scale_attrs[1]))
+        print("getattr(layer, self.added_scale_attrs[0]):", getattr(layer, self.added_scale_attrs[0]))
+        print("getattr(layer, self.added_scale_attrs[1]):", getattr(layer, self.added_scale_attrs[1]))
+
         ffn_out = moe_expert_ffn(
             ffn1_x,
             token_num_lod,
@@ -585,7 +490,6 @@ class XPUMoEMethod(MoEMethodBase):
         print("self.added_in_scale_attrs[0]: ", getattr(layer, self.added_in_scale_attrs[0]))
         print("self.added_in_scale_attrs[1]: ", getattr(layer, self.added_in_scale_attrs[1]))
         print("x_scale: ", x_scale)
-        print("x:", x)
         # 3. EP Dispatch
         (
             recv_x,
@@ -638,10 +542,7 @@ class XPUMoEMethod(MoEMethodBase):
         )
         print(f"[DEBUG apply_ep_prefill] ep_moe_expert_dispatch done, ffn1_x_scale_per_token={ffn1_x_scale_per_token}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
-        if "a_expertwise_int8" in self.xpu_moe_quant_type:
-            # ffn1_x_scale = getattr(layer, self.added_in_scale_attrs[1])
-            ffn1_x_scale = ffn1_x_scale_per_token
-        elif "a_tokenwise_int8" in self.xpu_moe_quant_type:
+        if "a_expertwise_int8" in self.xpu_moe_quant_type or "a_tokenwise_int8" in self.xpu_moe_quant_type:
             ffn1_x_scale = ffn1_x_scale_per_token
         else:
             ffn1_x_scale = None
@@ -920,7 +821,11 @@ class XPUW4A8MoEMethod(XPUMoEMethod):
             for i in range(layer.num_local_experts):
                 weight_list.append(weight_tensor[i].transpose([1, 0]))  # transpone to [n, k]
             quanted_weight = paddle.stack(weight_list, axis=0)
-            getattr(layer, weight_name).set_value(quanted_weight)
+            print("###########################")
+            print(quanted_weight)
+            getattr(layer, weight_name).set_value(
+                self.paddle_swap_int4_pack_int4_0123_to_int8_1032in_int8(quanted_weight)
+            )
 
         self.load_w4a8_scale_weights(
             layer,

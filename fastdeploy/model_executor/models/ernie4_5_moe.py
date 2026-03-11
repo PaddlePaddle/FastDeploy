@@ -723,11 +723,11 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             # Get weight loader from parameter and set weight
             weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
             sig = inspect.signature(weight_loader)
-            # print("sig.parameters: ",sig.parameters)
-            # print("expert_id: ", expert_id)
-            # print("shard_id: ", shard_id)
-            # print("model_param_name: ", model_param_name)
-            # print("weight_loader: ", weight_loader)
+            print("sig.parameters: ",sig.parameters)
+            print("expert_id: ", expert_id)
+            print("shard_id: ", shard_id)
+            print("model_param_name: ", model_param_name)
+            print("weight_loader: ", weight_loader)
             if "expert_id" in sig.parameters:
                 weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
             else:

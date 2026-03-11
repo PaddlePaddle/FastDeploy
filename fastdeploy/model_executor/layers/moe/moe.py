@@ -348,6 +348,8 @@ class FusedMoE(nn.Layer):
             )
 
     def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None, is_sharded=False):
+        if loaded_weight.dtype == paddle.int8:
+            loaded_weight = self.paddle_swap_int4_pack_int4_0123_to_int8_1032in_int8(loaded_weight)
         if self.tp_size > 1 and not is_sharded and not self.fd_config.load_config.is_pre_sharded:
             tp_shard_dim = shard_dim
             weight_dim = -1 if tp_shard_dim else 0
@@ -406,6 +408,10 @@ class FusedMoE(nn.Layer):
         h2d_copy(dst=expert_param, src=loaded_weight)
 
     def _load_down_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
+        # print("debug point, _load_down_weight, param", param)
+        # print("debug point, _load_down_weight, loaded_weight", loaded_weight)
+        if loaded_weight.dtype == paddle.int8:
+            loaded_weight = self.paddle_swap_int4_pack_int4_0123_to_int8_1032in_int8(loaded_weight)
         if self.tp_size > 1 and shard_dim is not None and not self.fd_config.load_config.is_pre_sharded:
             tp_shard_dim = shard_dim
             dim = -1 if tp_shard_dim else 0
@@ -473,6 +479,16 @@ class FusedMoE(nn.Layer):
             expert_param[idx].set_value(loaded_weight)
         elif shard_id == "down":
             expert_param.set_value(loaded_weight)
+
+    def paddle_swap_int4_pack_int4_0123_to_int8_1032in_int8(self, weight_tensor: paddle.Tensor) -> paddle.Tensor:
+        """
+        Pack the last dimension of a tensor into int8 format by combining adjacent int4 values.
+        """
+        mask = paddle.full_like(weight_tensor, 0x0F, dtype="int8")
+        high_4bit = (weight_tensor >> 4) & mask
+        low_4bit = weight_tensor & mask
+        swapped = (low_4bit << 4) | high_4bit
+        return swapped
 
     def _load_expert_weight(
         self,
@@ -683,10 +699,18 @@ class FusedMoE(nn.Layer):
         """
         load_state_dict function.
         """
+        print("load_state_dict function.")
+        print(self.is_quantized)
+        print(self.fd_config.model_config.is_moe_quantized)
+        print(self.quant_method)
         if self.is_quantized or self.fd_config.model_config.is_moe_quantized:
             if getattr(self.fd_config.quant_config, "is_permuted", True):
+                print("111111111111111111111111")
+                print(self.quant_method)
                 self.quant_method.process_prequanted_weights(self, state_dict, is_rearrange)
             else:
+                print("222222222222222222222222")
+                print(self.quant_method)
                 self.quant_method.process_loaded_weights(self, state_dict)
         else:
             self.quant_method.process_loaded_weights(self, state_dict)
