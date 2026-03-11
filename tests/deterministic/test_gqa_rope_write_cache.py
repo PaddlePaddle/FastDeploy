@@ -139,10 +139,15 @@ def call_gqa_rope_write_cache(
     decoder_chunk_size_device = paddle.full([1], 64, dtype="int32")
     max_len_tensor_cpu = paddle.full([9], 0, dtype="int32").cpu()
 
-    # Encoder tiles: each batch item may need ceil(seq_len / chunk_size) tiles
-    total_token_nums = sum(int(seq_lens_this_time[i].item()) for i in range(bs))
-    encoder_chunk_size = 64
-    max_encoder_tiles = max((total_token_nums + encoder_chunk_size - 1) // encoder_chunk_size, 1)
+    group_size = num_heads // kv_num_heads
+
+    # Encoder tiles: C++ kernel memsets bsz * div_up(max_enc_dec_len * group_size, encoder_block_shape_q)
+    # elements, so we must allocate at least that many.
+    encoder_block_shape_q = 64
+    max_enc_dec_len = max(int(seq_lens_encoder[i].item()) + int(seq_lens_decoder[i].item()) for i in range(bs))
+    max_encoder_tiles = max(
+        bs * ((max_enc_dec_len * group_size + encoder_block_shape_q - 1) // encoder_block_shape_q), 1
+    )
     encoder_batch_ids = paddle.full([max_encoder_tiles], 0, dtype="int32")
     encoder_tile_ids = paddle.full([max_encoder_tiles], 0, dtype="int32")
     encoder_num_blocks_x_cpu = paddle.full([1], 0, dtype="int32").cpu()
@@ -150,8 +155,6 @@ def call_gqa_rope_write_cache(
     kv_batch_ids = paddle.full([max(max_blocks_total, 1)], 0, dtype="int32")
     kv_tile_ids = paddle.full([max(max_blocks_total, 1)], 0, dtype="int32")
     kv_num_blocks_x_cpu = paddle.full([1], 0, dtype="int32").cpu()
-
-    group_size = num_heads // kv_num_heads
 
     get_block_shape_and_split_kv_block(
         seq_lens_encoder,

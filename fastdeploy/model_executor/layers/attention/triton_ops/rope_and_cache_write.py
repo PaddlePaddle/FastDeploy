@@ -32,6 +32,7 @@ Supports two RoPE styles (via ROPE_STYLE constexpr):
           out[i+D/2]    = x[i+D/2]*cos[i] + x[i]*sin[i]
 """
 
+import paddle
 import triton
 import triton.language as tl
 
@@ -164,6 +165,23 @@ def _rope_and_cache_write_kernel(
 # ---------------------------------------------------------------------------
 
 
+def extract_cos_sin(rotary_embs, head_dim, use_neox_rotary_style=False):
+    """Pre-extract contiguous cos/sin 2D tensors from rotary_embs.
+
+    Call this OUTSIDE CUDA Graph capture to avoid dynamic allocation.
+    Returns (cos, sin, rope_style).
+    """
+    emb_last_dim = rotary_embs.shape[4]
+    if use_neox_rotary_style and emb_last_dim == head_dim:
+        rope_style = 1  # neox full (Qwen3)
+    else:
+        rope_style = 0  # standard interleaved
+
+    cos = rotary_embs[0, 0, :, 0, :].contiguous()  # [max_seq_len, emb_dim]
+    sin = rotary_embs[1, 0, :, 0, :].contiguous()  # [max_seq_len, emb_dim]
+    return cos, sin, rope_style
+
+
 def triton_rope_and_cache_write(
     qkv,  # [token_num, (q_heads + 2*kv_heads) * head_dim], bfloat16
     cache_k,  # [num_blocks, kv_heads, block_size, head_dim], bfloat16
@@ -180,28 +198,33 @@ def triton_rope_and_cache_write(
     head_dim,
     block_size,
     use_neox_rotary_style=False,
+    cos_2d=None,  # pre-extracted cos [max_seq_len, emb_dim], for CUDA Graph safety
+    sin_2d=None,  # pre-extracted sin [max_seq_len, emb_dim], for CUDA Graph safety
 ):
     """
     Fused RoPE + paged cache write (Triton).
 
     Writes q_out[:token_num], cache_k, cache_v in-place.
     Returns q_out for convenience.
+
+    For CUDA Graph compatibility, pass pre-extracted cos_2d/sin_2d
+    (from extract_cos_sin) to avoid .contiguous() allocation during capture.
     """
+    assert qkv.dtype == paddle.bfloat16, (
+        f"Triton rope kernel only supports bfloat16, got {qkv.dtype}. "
+        "Use non-cudagraph path or convert to bfloat16."
+    )
+
     token_num = qkv.shape[0]
     max_blocks_per_seq = block_tables.shape[1]
 
-    # Determine RoPE style
-    emb_last_dim = rotary_embs.shape[4]
-    if use_neox_rotary_style and emb_last_dim == head_dim:
-        rope_style = 1  # neox full (Qwen3)
+    # Use pre-extracted cos/sin if provided, otherwise extract here
+    if cos_2d is not None and sin_2d is not None:
+        cos, sin = cos_2d, sin_2d
+        emb_last_dim = cos.shape[1]
+        rope_style = 1 if (use_neox_rotary_style and emb_last_dim == head_dim) else 0
     else:
-        rope_style = 0  # standard interleaved
-
-    # Extract cos/sin as contiguous 2D tensors.
-    # Slice of [2, 1, max_seq_len, 1, emb_dim] may be non-contiguous;
-    # Triton kernel assumes linear addressing, so ensure contiguity.
-    cos = rotary_embs[0, 0, :, 0, :].contiguous()  # [max_seq_len, emb_dim]
-    sin = rotary_embs[1, 0, :, 0, :].contiguous()  # [max_seq_len, emb_dim]
+        cos, sin, rope_style = extract_cos_sin(rotary_embs, head_dim, use_neox_rotary_style)
 
     total_heads = q_num_heads + 2 * kv_num_heads
     grid = (token_num, total_heads)

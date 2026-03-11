@@ -33,6 +33,7 @@ from fastdeploy.model_executor.layers.attention.ops import (
     pre_cache_len_concat,
 )
 from fastdeploy.model_executor.layers.attention.triton_ops.rope_and_cache_write import (
+    extract_cos_sin,
     triton_rope_and_cache_write,
 )
 from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
@@ -477,6 +478,15 @@ class DeterministicAttentionMixin:
             assert (
                 token_nums <= bufs.q_roped.shape[0]
             ), f"token_nums={token_nums} > q_roped buf={bufs.q_roped.shape[0]}"
+
+            # Pre-extract cos/sin outside capture to avoid .contiguous() allocation
+            if not hasattr(self, "_rope_cos_sin_cache"):
+                cos_2d, sin_2d, _ = extract_cos_sin(
+                    forward_meta.rotary_embs, self.head_dim, layer.use_neox_rotary_style
+                )
+                self._rope_cos_sin_cache = (cos_2d, sin_2d)
+            cos_2d, sin_2d = self._rope_cos_sin_cache
+
             triton_rope_and_cache_write(
                 qkv,
                 cache_k,
@@ -493,17 +503,10 @@ class DeterministicAttentionMixin:
                 self.head_dim,
                 self.block_size,
                 use_neox_rotary_style=layer.use_neox_rotary_style,
+                cos_2d=cos_2d,
+                sin_2d=sin_2d,
             )
             q_roped = bufs.q_roped[:token_nums]
-        elif forward_meta.step_use_cudagraph:
-            # CUDA Graph requires Triton RoPE (no dynamic alloc).
-            # If not eligible, fail fast instead of silently crashing at replay time.
-            raise AssertionError(
-                "Deterministic + CUDA Graph requires Triton RoPE, but current config "
-                "is not eligible. Possible causes: QK-norm enabled, cache quantization "
-                "enabled, rope_3d enabled, or FD_USE_TRITON_ROPE=0. "
-                "Fix: disable cudagraph (--cudagraph 0) or disable deterministic mode."
-            )
         else:
             # Non-cudagraph: C++ gqa_rope_write_cache (dynamic alloc, safe)
             q_roped, _k_flat, _v_flat, _qkv_out = gqa_rope_write_cache(
@@ -604,6 +607,9 @@ class DeterministicAttentionMixin:
                     (qo_indptr, unified_kv_indptr, unified_kv_indices, prefix_lens, bs, max_extend_len) = (
                         self._deterministic_build_triton_indices(forward_meta)
                     )
+                # Non-cudagraph: dynamically allocate output buffer
+                token_nums = q_roped.shape[0]
+                o = paddle.zeros([token_nums, self.num_heads, self.head_dim], dtype=q_roped.dtype)
             # DIAG: compare indices with reference implementation (Layer 0 only)
             if os.environ.get("FD_DIAG_INDEX", "0") == "1" and layer.layer_id == 0:
                 (qo_ref, kv_indptr_ref, kv_indices_ref, plen_ref, bs_ref, mel_ref) = (
@@ -640,9 +646,6 @@ class DeterministicAttentionMixin:
                     logger.info(f"[DIAG-IDX] unified_kv_indices: EXACT MATCH len={len(tri_np)}")
                 _eq(prefix_lens[:bs], plen_ref[:bs_ref], "prefix_lens")
                 logger.info(f"[DIAG-IDX] bs={bs}/{bs_ref} max_extend_len={max_extend_len}/{mel_ref}")
-
-            token_nums = q_roped.shape[0]
-            o = paddle.zeros([token_nums, self.num_heads, self.head_dim], dtype=q_roped.dtype)
 
         if _skip_index or _skip_attn:
             # Bisect: skip index/attention, return dummy output
