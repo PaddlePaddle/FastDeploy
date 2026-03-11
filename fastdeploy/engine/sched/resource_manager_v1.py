@@ -46,6 +46,7 @@ from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.platforms import current_platform
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import download_from_bos, init_bos_client, llm_logger
@@ -229,6 +230,8 @@ class ResourceManagerV1(ResourceManager):
 
         if self.config.speculative_config.method is not None:
             block_num = min(block_num + 1, self.config.cache_config.max_block_num_per_seq)
+        else:
+            block_num = min(block_num, self.config.cache_config.max_block_num_per_seq)
         return block_num
 
     def _prepare_prefill_task(self, request, new_token_num):
@@ -926,7 +929,7 @@ class ResourceManagerV1(ResourceManager):
                         )
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
-                            if not request.get("skip_allocate", False):
+                            if num_new_block > 0:
                                 extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(
                                     num_new_block, request.request_id
                                 )
@@ -985,7 +988,7 @@ class ResourceManagerV1(ResourceManager):
                         )
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
-                            if not request.get("skip_allocate", False):
+                            if num_new_block > 0:
                                 extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(
                                     num_new_block, request.request_id
                                 )
@@ -1166,19 +1169,16 @@ class ResourceManagerV1(ResourceManager):
 
             request.cache_info = [matched_block_num, no_cache_block_num]
             request.block_tables = common_block_ids
-            request.skip_allocate = False
             request.num_cached_tokens = matched_token_num
             if self.config.cache_config.disable_chunked_mm_input:
                 if matched_token_num == request.need_prefill_tokens:
                     matched_token_num = matched_token_num - self.config.cache_config.block_size
-                    request.skip_allocate = True
                 request.num_computed_tokens = self.revert_chunked_mm_input(
                     request.multimodal_inputs, matched_token_num
                 )
             else:
                 if matched_token_num == request.need_prefill_tokens:
                     request.num_computed_tokens = matched_token_num - self.config.cache_config.block_size
-                    request.skip_allocate = True
                 else:
                     request.num_computed_tokens = matched_token_num
 
@@ -1360,7 +1360,7 @@ class ResourceManagerV1(ResourceManager):
             request.output_token_ids.append(request_output.outputs.token_ids[0])
             request.num_cached_tokens = request_output.num_cached_tokens
             if (
-                self.config.speculative_config.method in ["mtp"]
+                self.config.speculative_config.method == SpecMethod.MTP
                 and self.config.scheduler_config.splitwise_role == "decode"
             ):
                 request.draft_token_ids = copy.deepcopy(request_output.outputs.draft_token_ids)

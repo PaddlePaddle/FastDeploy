@@ -35,6 +35,8 @@ var healthEndpoint string
 var failureThreshold int
 var successThreshold int
 
+var selectWorkerMu sync.Mutex
+
 // Manager module initialization
 func Init(cfg *config.Config) {
 	manager := &Manager{
@@ -112,6 +114,9 @@ func (m *Manager) GetHealthyURLs(ctx context.Context) []string {
 }
 
 func SelectWorker(ctx context.Context, message string) (string, error) {
+	selectWorkerMu.Lock()
+	defer selectWorkerMu.Unlock()
+
 	workers := WorkerMapToList(ctx, "mixed")
 	selectedWorkerURL, err := scheduler_handler.SelectWorker(ctx, workers, message, "mixed")
 	if err != nil {
@@ -121,6 +126,9 @@ func SelectWorker(ctx context.Context, message string) (string, error) {
 }
 
 func SelectWorkerPair(ctx context.Context, message string) (string, string, error) {
+	selectWorkerMu.Lock()
+	defer selectWorkerMu.Unlock()
+
 	prefillWorkers := WorkerMapToList(ctx, "prefill")
 	decodeWorkers := WorkerMapToList(ctx, "decode")
 	if len(prefillWorkers) == 0 || len(decodeWorkers) == 0 {

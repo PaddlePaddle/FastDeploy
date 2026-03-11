@@ -243,6 +243,13 @@ class PDTraits<paddle::DataType::FLOAT8_E4M3FN> {
   typedef __nv_fp8_e4m3 DataType;
   typedef paddle::float8_e4m3fn data_t;
 };
+
+template <>
+class PDTraits<paddle::DataType::INT32> {
+ public:
+  typedef int32_t DataType;
+  typedef int32_t data_t;
+};
 #endif
 
 template <typename T, int Size>
@@ -662,7 +669,8 @@ inline const char *getEnvVar(const char *varName) {
 
 inline bool checkAttentionBackend() {
   const char *backend = getEnvVar("FD_ATTENTION_BACKEND");
-  if (backend && std::strcmp(backend, "MLA_ATTN") == 0) {
+  if (backend && (std::strcmp(backend, "MLA_ATTN") == 0 ||
+                  std::strcmp(backend, "DSA_ATTN") == 0)) {
     return true;
   }
   return false;

@@ -108,7 +108,7 @@ static int xpu3_wrapper(Context* ctx,
                         const int bsz,
                         const int actual_draft_token_num,
                         const int input_token_num) {
-  xpu3::plugin::ComputeOrderKernel<<<1, 1, ctx->xpu_stream>>>(
+  int32_t ret_xre = xpu3::plugin::ComputeOrderKernel<<<1, 1, ctx->xpu_stream>>>(
       seq_lens_this_time,
       seq_lens_encoder,
       base_model_seq_lens_this_time,
@@ -119,6 +119,7 @@ static int xpu3_wrapper(Context* ctx,
       bsz,
       actual_draft_token_num,
       input_token_num);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
