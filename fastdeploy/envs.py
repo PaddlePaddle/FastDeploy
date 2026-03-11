@@ -168,6 +168,19 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
     # Whether to use PFCCLab/DeepEP.
     "FD_USE_PFCC_DEEP_EP": lambda: bool(int(os.getenv("FD_USE_PFCC_DEEP_EP", "0"))),
+    "DO_NOT_TRACK": lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
+    # Usage stats server url
+    "FD_USAGE_STATS_SERVER": lambda: os.getenv(
+        "FD_USAGE_STATS_SERVER", "http://fd-stats.baidu-int.com/fd/report/periodic"
+    ),
+    # Usage stats source
+    "FD_USAGE_SOURCE": lambda: os.getenv("FD_USAGE_SOURCE", "Unknown"),
+    # Usage stats config root
+    "FD_CONFIG_ROOT": lambda: os.path.expanduser(
+        os.getenv("FD_CONFIG_ROOT", os.path.join(os.path.expanduser("~"), ".config", "fastdeploy"))
+    ),
+    # Suspend rollouting routing replay
+    "FD_SUSPEND_ROUTING_REPLAY": lambda: bool(int(os.getenv("FD_SUSPEND_ROUTING_REPLAY", "0"))),
 }
 
 

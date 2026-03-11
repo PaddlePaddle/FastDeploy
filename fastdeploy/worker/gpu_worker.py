@@ -184,6 +184,10 @@ class GpuWorker(WorkerBase):
         # accurate cache size
         self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
+        # Initialize routing replay manager
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.model_runner.initialize_routing_replay_manager()
+
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
