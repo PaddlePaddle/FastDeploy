@@ -54,7 +54,27 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ github.event.repository.name }}
-          JOB_NAME: 'CI_XPU'
+          JOB_NAME: 'xpu_build_test / xpu-build-test'
+
+      - name: Rerun run_xpu_4cards_cases
+        if: ${{ contains(github.event.comment.body, 'run_xpu_4cards_cases') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'xpu_4cards_case_test / run_xpu_4cards_cases'
+
+      - name: Rerun run_xpu_8cards_cases
+        if: ${{ contains(github.event.comment.body, 'run_xpu_8cards_cases') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'xpu_8cards_case_test / run_xpu_8cards_cases'
 
       - name: Rerun CI_HPU
         if: ${{ contains(github.event.comment.body, 'ci_hpu') }}
@@ -185,3 +205,13 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ github.event.repository.name }}
           JOB_NAME: 'Run Stable Tests / stable_tests'
+
+      - name: Rerun run_4_cards_tests
+        if: ${{ contains(github.event.comment.body, 'run_4_cards_tests') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Run Four Cards Tests / run_4_cards_tests'

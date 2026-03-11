@@ -271,8 +271,12 @@ class DataProcessor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
             request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
+
+        max_tokens = max_model_len - len(request.prompt_token_ids)
         if request.get("max_tokens") is None:
-            request.set("max_tokens", max(1, max_model_len - len(request.prompt_token_ids)))
+            request.set("max_tokens", max(1, max_tokens))
+        else:
+            request.set("max_tokens", min(max_tokens, request.get("max_tokens")))
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request.set("temperature", 1)
@@ -291,6 +295,8 @@ class DataProcessor(BaseDataProcessor):
                 self.model_status_dict[request.request_id] = model_status
             request.enable_thinking = model_status == "think_start"
 
+        if request.get("response_max_tokens") is not None and request.enable_thinking is False:
+            request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
         data_processor_logger.info(f"Processed request: {request}")
         return request
 
@@ -349,8 +355,12 @@ class DataProcessor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+
+        max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
+            request["max_tokens"] = max(1, max_tokens)
+        else:
+            request["max_tokens"] = min(max_tokens, request["max_tokens"])
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request["temperature"] = 1
@@ -403,7 +413,6 @@ class DataProcessor(BaseDataProcessor):
             tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
             if tool_call_info.tools_called:
                 response_dict.outputs.tool_calls = tool_call_info.tool_calls
-                response_dict.outputs.text = tool_call_info.content
         if req_id in self.model_status_dict:
             del self.model_status_dict[req_id]
         data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
@@ -446,7 +455,6 @@ class DataProcessor(BaseDataProcessor):
                 tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_calls"] = tool_call_info.tool_calls
-                    response_dict["outputs"]["text"] = tool_call_info.content
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
             if req_id in self.model_status_dict:

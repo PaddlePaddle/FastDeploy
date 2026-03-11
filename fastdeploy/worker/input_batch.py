@@ -199,7 +199,11 @@ class InputBatch:
         # Initialize thinking related buffers
         self.enable_thinking = paddle.full(shape=[max_num_seqs, 1], fill_value=True, dtype="bool")
         self.max_think_lens = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
+        self.max_reply_lens = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
         self.limit_think_status = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.inject_token_ids = paddle.to_tensor(self.model_config.think_truncate_prompt_ids, dtype="int64").reshape(
+            [-1, 1]
+        )
 
         # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> 100973 or <response> 100975
         # It is a hard code to cover up model's performance

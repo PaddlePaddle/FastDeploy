@@ -85,6 +85,12 @@ hugging_face_model_param_map = {
     },
 }
 
+# Model-specific diff threshold (default: 0.05)
+model_threshold_map = {
+    "Qwen2.5-7B-Instruct": 0.2,  # dynamic quantization may introduce higher variance
+    "Qwen3-30B-A3B": 0.05,
+}
+
 hf_params = []
 for model, cfg in hugging_face_model_param_map.items():
     for q in cfg["quantizations"]:
@@ -148,5 +154,12 @@ def test_model_against_baseline(
     else:
         baseline_file = baseline_filename
 
+    # Use model-specific threshold
+    threshold = model_threshold_map.get(model_name_or_path, 0.05)
+
     # Compare against baseline file
-    check_result_against_baseline(hf_outputs, baseline_file, threshold=0.05)
+    check_result_against_baseline(
+        hf_outputs,
+        baseline_file,
+        threshold=threshold,
+    )

@@ -179,6 +179,10 @@ class CacheTransferManager:
         if self.has_cache_scale:
             self.cache_scale_shape = [self.num_gpu_blocks, self.head_num, self.block_size]
 
+        # kv cache storage
+        self.storage_backend_type = args.kvcache_storage_backend
+        self.key_prefix = ""
+
         # extract other arg values
         self.model_id = os.path.basename(args.model_path.rstrip("/"))
         self.n_ranks = args.mp_num
@@ -230,7 +234,8 @@ class CacheTransferManager:
         self._init_gpu_cache(args)
         if self.num_cpu_blocks > 0:
             self._init_cpu_cache(args)
-        self._init_storage(args)
+        if self.storage_backend_type is not None:
+            self._init_storage(args)
 
         cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
         self.cache_task_broadcast_signal = IPCSignal(
@@ -295,11 +300,9 @@ class CacheTransferManager:
         self.cache_transfer_inited_signal.value[self.rank] = 1
 
     def _init_storage(self, args):
-        self.storage_backend_type = args.kvcache_storage_backend
-
         try:
             # TODO: support cache scale for other backend
-            if self.has_cache_scale:
+            if self.has_cache_scale and self.storage_backend_type is not None:
                 if self.storage_backend_type not in ["mooncake"]:
                     raise ValueError(
                         f"Unsupported storage backend ({self.storage_backend_type}) "
@@ -906,7 +909,7 @@ class CacheTransferManager:
                 v_scale_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value_scale" for key in task.keys]
 
             match_block_num = 0
-            if self.storage_backend_type == ("mooncake", "file"):
+            if self.storage_backend_type in ("mooncake", "file"):
                 match_block_num = self.storage_backend.query(
                     k_cache_keys, v_cache_keys, k_scale_keys, v_scale_keys, task.timeout
                 )
@@ -1329,6 +1332,7 @@ class CacheTransferManager:
                             time.sleep(0.1)
                         logger.info("[RL] stop waiting! gpu runner has unlinked cuda ipc")
                         paddle.set_device(f"gpu:{self.device}")
+                        paddle.set_flags({"FLAGS_selected_gpus": f"{self.device}"})
                         self.gpu_cache_kvs.clear()
                         self.gpu_cache_k_tensors.clear()
                         self.gpu_cache_v_tensors.clear()

@@ -84,7 +84,7 @@ from fastdeploy.utils import (
     retrive_model_from_server,
 )
 
-tracing.process_tracing_init()
+_tracing_inited = False
 
 parser = make_arg_parser(FlexibleArgumentParser())
 args = parser.parse_args()
@@ -170,7 +170,14 @@ async def lifespan(app: FastAPI):
     async context manager for FastAPI lifespan
     """
     global engine_args
+    global _tracing_inited
     import logging
+
+    # Initialize tracing in worker lifecycle instead of module import time.
+    # This avoids creating grpc/cygrpc state before gunicorn forks workers.
+    if not _tracing_inited:
+        tracing.process_tracing_init()
+        _tracing_inited = True
 
     uvicorn_access = logging.getLogger("uvicorn.access")
     uvicorn_access.handlers.clear()
@@ -660,6 +667,8 @@ def launch_api_server() -> None:
     api_server_logger.info(f"args: {args.__dict__}")
     # fd_start_span("FD_START")
 
+    # Set control_socket_disable=True to prevent gunicorn.ctl file conflicts when multiple
+    # instances (e.g., Prefill and Decode services) run in the same directory (gunicorn 25.1.0+)
     options = {
         "bind": f"{args.host}:{args.port}",
         "workers": args.workers,
@@ -667,6 +676,7 @@ def launch_api_server() -> None:
         "loglevel": "info",
         "graceful_timeout": args.timeout_graceful_shutdown,
         "timeout": args.timeout,
+        "control_socket_disable": True,
     }
 
     try:
