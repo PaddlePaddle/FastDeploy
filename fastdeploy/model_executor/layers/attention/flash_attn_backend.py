@@ -68,6 +68,8 @@ else:
     merge_prefill_decode_output = None
 
 
+from fastdeploy.spec_decode import SpecMethod
+
 FLASH_ATTN_VERSION = None
 
 
@@ -255,7 +257,7 @@ class FlashAttentionBackend(AttentionBackend):
         self.use_speculate = self.speculative_method is not None
         self.speculate_max_draft_token_num = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
+        self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
 
         self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode
 

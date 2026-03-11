@@ -10,7 +10,9 @@ This project implements an efficient **Speculative Decoding** inference framewor
 
 ### Supported
 
-- **Ngram**
+- **Naive**: Normal decoding mode that uses the speculative decoding code path without generating draft tokens, useful for testing the speculative decoding framework
+
+- **Ngram**: N-gram matching based speculative decoding
 
 - **Suffix Decoding**
 
@@ -54,11 +56,40 @@ This project implements an efficient **Speculative Decoding** inference framewor
 
 ## 🔧 Configuration Parameters
 
-- `method`: The speculative decoding strategy, currently supports `["mtp", "ngram", "suffix"]`.
+### Basic Parameters
+
+- `method`: The speculative decoding strategy, supports `["mtp", "ngram", "naive", "suffix"]`.
+  - `naive`: Normal decoding mode using speculative decoding code path without generating draft tokens
+  - `ngram`: N-gram matching based speculative decoding
+  - `mtp`: Multi-Token Prediction
+  - `suffix`: Suffix decoding based speculative decoding
 - `num_speculative_tokens`: Number of speculative tokens to generate; max is 5, currently MTP supports only 1.
+- `num_model_steps`: MTP model steps, must satisfy `num_speculative_tokens >= num_model_steps`
 - `model`: Path to the MTP draft model when using the `"mtp"` method.
 - `quantization`: Quantization method of the MTP model (e.g., WINT4).
 - Max `batch_size`: 256
+
+### Verification Strategy (verify_strategy)
+
+Controls how draft tokens are verified:
+- `topp` (default): Top-P sampling verification, draft token must be in top-p candidate set
+- `greedy`: Greedy verification, draft token must equal target model's argmax output
+- `target_match`: Target match verification, draft token must equal target model's sampled output
+
+```bash
+--speculative-config '{"method": "mtp", "verify_strategy": "greedy", "num_speculative_tokens": 1, "model": "${path_to_mtp_model}"}'
+```
+
+### Accept Policy (accept_policy)
+
+Controls draft token acceptance behavior:
+- `normal` (default): Normal verification flow
+- `accept_all`: Accept all draft tokens (for debugging)
+- `reject_all`: Reject all draft tokens (for debugging)
+
+```bash
+--speculative-config '{"method": "mtp", "accept_policy": "accept_all", "num_speculative_tokens": 1}'
+```
 
 ---
 
@@ -161,7 +192,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --model ${path_to_main_model} \
     --tensor-parallel-size 4 \
     --config ${path_to_FastDeploy}benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml \
-    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${mtp_model_path}"}'
+    --speculative-config '{"method": "ngram", "num_speculative_tokens": 1}'
 
 ```
 
@@ -196,3 +227,17 @@ self.suffix_decoding_max_spec_factor: float = 1.0
 # The probability threshold for speculated tokens.
 self.suffix_decoding_min_token_prob: float = 0.1
 ```
+---
+
+## 📝 Using Naive Mode (Normal Decoding)
+
+Naive mode uses the speculative decoding code path without generating draft tokens, useful for testing the correctness of the speculative decoding framework or establishing performance baselines.
+
+```bash
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model ${path_to_main_model} \
+    --tensor-parallel-size 4 \
+    --speculative-config '{"method": "naive", "num_speculative_tokens": 1}'
+```
+
+**Note**: In Naive mode, `num_speculative_tokens` will be forced to 0.

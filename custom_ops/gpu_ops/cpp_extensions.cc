@@ -800,6 +800,29 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor& accept_tokens,
                                const paddle::Tensor& end_ids,
                                const paddle::Tensor& min_tokens);
 
+void VerifyDraftTokens(const paddle::Tensor& step_output_ids,
+                       const paddle::Tensor& step_output_len,
+                       const paddle::Tensor& step_input_ids,
+                       const paddle::optional<paddle::Tensor>& target_tokens,
+                       const paddle::optional<paddle::Tensor>& candidate_ids,
+                       const paddle::optional<paddle::Tensor>& candidate_scores,
+                       const paddle::optional<paddle::Tensor>& candidate_lens,
+                       const paddle::Tensor& topp,
+                       const paddle::Tensor& stop_flags,
+                       const paddle::Tensor& seq_lens_encoder,
+                       const paddle::Tensor& seq_lens_this_time,
+                       const paddle::Tensor& end_tokens,
+                       const paddle::Tensor& is_block_step,
+                       const paddle::Tensor& cu_seqlens_q_output,
+                       const paddle::Tensor& reasoning_status,
+                       const paddle::Tensor& max_dec_len,
+                       const paddle::Tensor& step_idx,
+                       int max_seq_len,
+                       int verify_window,
+                       int verify_strategy,
+                       bool reject_all,
+                       bool accept_all);
+
 void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
                      const paddle::Tensor& accept_tokens,
                      const paddle::Tensor& accept_num,
@@ -836,6 +859,25 @@ void SpeculateUpdate(const paddle::Tensor& seq_lens_encoder,
                      const paddle::Tensor& seq_lens_this_time,
                      const paddle::Tensor& is_block_step,
                      const paddle::Tensor& mask_rollback);
+
+void UnifiedUpdateModelStatus(const paddle::Tensor& seq_lens_encoder,
+                              const paddle::Tensor& seq_lens_decoder,
+                              const paddle::Tensor& has_running_seqs,
+                              const paddle::Tensor& step_input_ids,
+                              const paddle::Tensor& adaptive_step_input_len,
+                              const paddle::Tensor& step_output_ids,
+                              const paddle::Tensor& step_output_len,
+                              const paddle::Tensor& stop_flags,
+                              const paddle::Tensor& seq_lens_this_time,
+                              const paddle::Tensor& is_paused,
+                              const paddle::Tensor& mask_rollback,
+                              const paddle::Tensor& token_ids_all,
+                              const paddle::Tensor& prompt_lens,
+                              const paddle::Tensor& step_idx,
+                              const paddle::Tensor& end_tokens,
+                              const paddle::Tensor& max_dec_len,
+                              const bool is_naive_mode,
+                              const bool prefill_one_step_stop);
 
 void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& token_ids_all,
                                     const paddle::Tensor& prompt_lens,
@@ -1675,10 +1717,17 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_set_stop_value_multi_seqs",
         &SpecGetStopFlagsMultiSeqs,
         "speculate_set_stop_value_multi_seqs function");
-
   m.def("speculate_verify", &SpeculateVerify, "speculate_verify function");
 
+  m.def("verify_draft_tokens",
+        &VerifyDraftTokens,
+        "verify_draft_tokens function");
+
   m.def("speculate_update", &SpeculateUpdate, "Speculate Update Kernel");
+
+  m.def("unified_update_model_status",
+        &UnifiedUpdateModelStatus,
+        "unified_update_model_status function");
 
   m.def("speculate_set_value_by_flags_and_idx",
         &SpeculateSetValueByFlagsAndIdx,

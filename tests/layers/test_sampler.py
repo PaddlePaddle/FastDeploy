@@ -58,6 +58,11 @@ def _disable_triton_cuda_path(monkeypatch):
     monkeypatch.setattr(
         "fastdeploy.model_executor.layers.sample.sampler.batched_count_greater_than", lambda x, y: (x >= y).sum(-1)
     )
+    # Also patch batched_count_greater_than in logprobs module itself, because
+    # build_output_logprobs -> gather_logprobs calls it from logprobs scope.
+    monkeypatch.setattr(
+        "fastdeploy.model_executor.layers.sample.logprobs.batched_count_greater_than", lambda x, y: (x >= y).sum(-1)
+    )
 
 
 @pytest.fixture
@@ -296,8 +301,15 @@ def test_speculative_sampler_basic(monkeypatch):
     fd_config = types.SimpleNamespace(
         model_config=types.SimpleNamespace(logprobs_mode="raw_logits", think_end_id=1, line_break_id=2),
         speculative_config=types.SimpleNamespace(
-            verify_window=2, max_candidate_len=4, benchmark_mode=False, enf_gen_phase_tag=False
+            method="ngram",
+            verify_window=2,
+            max_candidate_len=4,
+            benchmark_mode=False,
+            enf_gen_phase_tag=False,
+            verify_strategy="topp",
+            accept_policy="normal",
         ),
+        parallel_config=types.SimpleNamespace(prefill_one_step_stop=False),
     )
     monkeypatch.setattr("fastdeploy.model_executor.layers.sample.sampler.current_platform.is_cuda", lambda: True)
     monkeypatch.setattr("fastdeploy.model_executor.layers.sample.sampler.current_platform.is_xpu", lambda: False)

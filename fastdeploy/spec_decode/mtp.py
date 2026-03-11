@@ -16,14 +16,13 @@
 
 import os
 import time
-from typing import List
+from typing import TYPE_CHECKING, List
 
 import numpy as np
 import paddle
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
-from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -81,6 +80,9 @@ from fastdeploy.worker.input_batch import (
 
 from .base import Proposer
 
+if TYPE_CHECKING:
+    from fastdeploy.config import FDConfig
+
 
 class MTPProposer(Proposer):
     """
@@ -89,7 +91,7 @@ class MTPProposer(Proposer):
 
     def __init__(
         self,
-        fd_config: FDConfig,
+        fd_config: "FDConfig",
         main_model: ModelForCasualLM,
         local_rank: int,
         device_id: int,  # physical device id
@@ -724,7 +726,7 @@ class MTPProposer(Proposer):
             self.target_model_inputs["is_block_step"],
             self.target_model_inputs["draft_tokens"],
             self.num_model_steps,
-            self.speculative_method in ["eagle", "mtp"],
+            True,
             self.role == "prefill",
             use_v1_cache_scheduler,
         )
