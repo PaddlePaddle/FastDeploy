@@ -6,10 +6,12 @@ Uses the C++ gqa_rope_write_cache as reference oracle, comparing:
   - cache_k / cache_v: paged KV cache after write
 
 Coverage:
-  - RoPE styles: standard interleaved (Qwen2), neox full (Qwen3)
-  - Batch sizes: 1, 4
-  - Scenarios: pure prefill, prefill with prefix, mixed batch
+  - RoPE styles: standard interleaved (Qwen2, parameterized), neox full (Qwen3)
+  - Batch sizes: 1, 4, 5, 8
+  - Scenarios: pure prefill, pure decode (1 token + long prefix), mixed batch
   - Block tables: contiguous, non-contiguous, cross-block boundary
+  - Padding sentinel: batch_id_per_token tail filled with -1
+  - CUDA Graph replay: capture once, replay with different data
 
 Usage:
     CUDA_VISIBLE_DEVICES=0 python -m pytest tests/deterministic/test_triton_rope_and_cache_write.py -v -s
@@ -288,11 +290,18 @@ class TestTritonRopeAndCacheWrite:
         q_diff = float(paddle.max(paddle.abs(q_cpp.astype("float32") - q_tri.astype("float32"))).item())
         assert q_diff < 1e-3, f"Q RoPE neox full mismatch: {q_diff}"
 
-    # --- Q RoPE correctness: standard interleaved ---
-    def test_q_rope_standard(self):
+    # --- Q RoPE correctness: standard interleaved (parameterized) ---
+    @pytest.mark.parametrize(
+        "num_heads,kv_num_heads,head_dim,token_nums",
+        [
+            (8, 8, 128, 32),
+            (32, 8, 128, 16),
+            (28, 4, 128, 64),
+        ],
+        ids=["MHA-8h", "GQA-32q8kv", "GQA-28q4kv"],
+    )
+    def test_q_rope_standard(self, num_heads, kv_num_heads, head_dim, token_nums):
         """Q RoPE with standard interleaved style should match C++ reference."""
-        num_heads, kv_num_heads, head_dim = 8, 8, 128
-        token_nums = 32
         block_size, max_seq_len = 64, 512
         data = _make_test_data(
             num_heads,
@@ -704,6 +713,241 @@ class TestTritonRopeAndCacheWrite:
             )
             assert k_diff < 1e-3, f"Cross-block K mismatch at pos {pos}: {k_diff}"
             assert v_diff == 0.0, f"Cross-block V mismatch at pos {pos}: {v_diff}"
+
+    # --- Pure decode scenario (single token per seq, long prefix) ---
+    @pytest.mark.parametrize(
+        "num_heads,kv_num_heads,bs",
+        [
+            (8, 8, 1),
+            (32, 8, 4),
+            (8, 4, 8),
+        ],
+        ids=["MHA-bs1", "GQA-bs4", "GQA-bs8"],
+    )
+    def test_pure_decode(self, num_heads, kv_num_heads, bs):
+        """Pure decode: each seq has exactly 1 new token + long prefix."""
+        head_dim = 128
+        extend_lens = [1] * bs
+        prefix_lens = [100 + i * 50 for i in range(bs)]
+        block_size, max_seq_len = 64, 512
+        data = _make_test_data(
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            extend_lens=extend_lens,
+            prefix_lens=prefix_lens,
+            block_size=block_size,
+            max_seq_len=max_seq_len,
+            neox_full=True,
+            seed=77,
+        )
+        qkv, cache_k_ref, cache_v_ref, block_tables, enc, dec, stt, rotary_embs = data
+
+        cache_k_cpp = cache_k_ref.clone()
+        cache_v_cpp = cache_v_ref.clone()
+        q_cpp = _call_cpp_rope(
+            qkv,
+            cache_k_cpp,
+            cache_v_cpp,
+            block_tables,
+            enc,
+            dec,
+            stt,
+            rotary_embs,
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            block_size,
+            max_seq_len,
+        )
+
+        cache_k_tri = cache_k_ref.clone()
+        cache_v_tri = cache_v_ref.clone()
+        q_tri = _call_triton_rope(
+            qkv,
+            cache_k_tri,
+            cache_v_tri,
+            block_tables,
+            enc,
+            dec,
+            stt,
+            rotary_embs,
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            block_size,
+            max_seq_len,
+        )
+
+        q_diff = float(paddle.max(paddle.abs(q_cpp.astype("float32") - q_tri.astype("float32"))).item())
+        assert q_diff < 1e-3, f"Pure decode Q mismatch: {q_diff}"
+
+        # Check K/V at each decode position
+        for b in range(bs):
+            pos = prefix_lens[b]  # single decode token at this position
+            bid = int(block_tables[b, pos // block_size].item())
+            off = pos % block_size
+            k_diff = float(
+                paddle.max(
+                    paddle.abs(
+                        cache_k_cpp[bid, :, off, :].astype("float32") - cache_k_tri[bid, :, off, :].astype("float32")
+                    )
+                ).item()
+            )
+            v_diff = float(
+                paddle.max(
+                    paddle.abs(
+                        cache_v_cpp[bid, :, off, :].astype("float32") - cache_v_tri[bid, :, off, :].astype("float32")
+                    )
+                ).item()
+            )
+            assert k_diff < 1e-3, f"Pure decode K mismatch at batch {b}: {k_diff}"
+            assert v_diff == 0.0, f"Pure decode V not bit-exact at batch {b}: {v_diff}"
+
+    # --- Mixed batch (prefill + decode together) ---
+    def test_mixed_prefill_decode(self):
+        """Mixed batch: some seqs prefill (many tokens), some decode (1 token)."""
+        num_heads, kv_num_heads, head_dim = 32, 8, 128
+        extend_lens = [32, 1, 1, 16]
+        prefix_lens = [0, 192, 128, 0]
+        block_size, max_seq_len = 64, 512
+        data = _make_test_data(
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            extend_lens=extend_lens,
+            prefix_lens=prefix_lens,
+            block_size=block_size,
+            max_seq_len=max_seq_len,
+            neox_full=True,
+            seed=55,
+        )
+        qkv, cache_k_ref, cache_v_ref, block_tables, enc, dec, stt, rotary_embs = data
+
+        cache_k_cpp = cache_k_ref.clone()
+        cache_v_cpp = cache_v_ref.clone()
+        q_cpp = _call_cpp_rope(
+            qkv,
+            cache_k_cpp,
+            cache_v_cpp,
+            block_tables,
+            enc,
+            dec,
+            stt,
+            rotary_embs,
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            block_size,
+            max_seq_len,
+        )
+
+        cache_k_tri = cache_k_ref.clone()
+        cache_v_tri = cache_v_ref.clone()
+        q_tri = _call_triton_rope(
+            qkv,
+            cache_k_tri,
+            cache_v_tri,
+            block_tables,
+            enc,
+            dec,
+            stt,
+            rotary_embs,
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            block_size,
+            max_seq_len,
+        )
+
+        q_diff = float(paddle.max(paddle.abs(q_cpp.astype("float32") - q_tri.astype("float32"))).item())
+        assert q_diff < 1e-3, f"Mixed batch Q mismatch: {q_diff}"
+
+        v_diff = float(paddle.max(paddle.abs(cache_v_cpp.astype("float32") - cache_v_tri.astype("float32"))).item())
+        assert v_diff == 0.0, f"Mixed batch V not bit-exact: {v_diff}"
+
+        k_diff = float(paddle.max(paddle.abs(cache_k_cpp.astype("float32") - cache_k_tri.astype("float32"))).item())
+        assert k_diff < 1e-3, f"Mixed batch K mismatch: {k_diff}"
+
+    # --- Padding sentinel: batch_id_per_token with -1 tail ---
+    def test_padding_sentinel(self):
+        """batch_id_per_token buffer larger than token_num, tail filled with -1."""
+        num_heads, kv_num_heads, head_dim = 8, 8, 128
+        actual_tokens = 16
+        buf_size = 64  # larger buffer, tail is -1
+        block_size, max_seq_len = 64, 256
+        rotary_embs = _make_rotary_embs(max_seq_len, head_dim, neox_full=True)
+        max_blocks_per_seq = (max_seq_len + block_size - 1) // block_size
+        total_blocks = max_blocks_per_seq
+        total_dim = (num_heads + 2 * kv_num_heads) * head_dim
+
+        paddle.seed(42)
+        # Create qkv with buf_size rows (padded)
+        qkv = paddle.randn([buf_size, total_dim]).astype(COMPUTE_DTYPE)
+        q_out = paddle.empty([buf_size, num_heads, head_dim], dtype=COMPUTE_DTYPE)
+        cache_k = paddle.zeros([total_blocks, kv_num_heads, block_size, head_dim], dtype=COMPUTE_DTYPE)
+        cache_v = paddle.zeros([total_blocks, kv_num_heads, block_size, head_dim], dtype=COMPUTE_DTYPE)
+        block_tables = paddle.arange(max_blocks_per_seq, dtype="int32").unsqueeze(0)
+
+        # batch_id_per_token: valid for first actual_tokens, -1 for the rest
+        batch_ids = [0] * actual_tokens + [-1] * (buf_size - actual_tokens)
+        batch_id_per_token = paddle.to_tensor(batch_ids, dtype="int32")
+        cu_seqlens_q = paddle.to_tensor([0, actual_tokens], dtype="int32")
+        enc = paddle.to_tensor([actual_tokens], dtype="int32")
+        dec = paddle.to_tensor([0], dtype="int32")
+
+        triton_rope_and_cache_write(
+            qkv,
+            cache_k,
+            cache_v,
+            q_out,
+            rotary_embs,
+            batch_id_per_token,
+            cu_seqlens_q,
+            enc,
+            dec,
+            block_tables,
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            block_size,
+            use_neox_rotary_style=True,
+        )
+
+        # Compare with a clean run using only actual_tokens (no padding)
+        cache_k_ref = paddle.zeros([total_blocks, kv_num_heads, block_size, head_dim], dtype=COMPUTE_DTYPE)
+        cache_v_ref = paddle.zeros([total_blocks, kv_num_heads, block_size, head_dim], dtype=COMPUTE_DTYPE)
+        q_ref = paddle.empty([actual_tokens, num_heads, head_dim], dtype=COMPUTE_DTYPE)
+        batch_id_clean = paddle.to_tensor([0] * actual_tokens, dtype="int32")
+        triton_rope_and_cache_write(
+            qkv[:actual_tokens],
+            cache_k_ref,
+            cache_v_ref,
+            q_ref,
+            rotary_embs,
+            batch_id_clean,
+            cu_seqlens_q,
+            enc,
+            dec,
+            block_tables,
+            num_heads,
+            kv_num_heads,
+            head_dim,
+            block_size,
+            use_neox_rotary_style=True,
+        )
+
+        # Q for valid tokens should match exactly
+        q_diff = float(
+            paddle.max(paddle.abs(q_out[:actual_tokens].astype("float32") - q_ref.astype("float32"))).item()
+        )
+        assert q_diff == 0.0, f"Padding sentinel Q mismatch: {q_diff}"
+
+        # KV cache should match exactly
+        k_diff = float(paddle.max(paddle.abs(cache_k.astype("float32") - cache_k_ref.astype("float32"))).item())
+        v_diff = float(paddle.max(paddle.abs(cache_v.astype("float32") - cache_v_ref.astype("float32"))).item())
+        assert k_diff == 0.0, f"Padding sentinel K cache mismatch: {k_diff}"
+        assert v_diff == 0.0, f"Padding sentinel V cache mismatch: {v_diff}"
 
     # --- CUDA Graph replay test ---
     def test_cudagraph_replay(self):

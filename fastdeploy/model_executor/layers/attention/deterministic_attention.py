@@ -443,10 +443,10 @@ class DeterministicAttentionMixin:
             )
             kv_token_num = kv_token_num_cpu[0].item()
 
-        # --- Step 2: RoPE + KV cache write (no attention) ---
-        # DIAG: log gqa_rope_write_cache metadata for Layer 0
+        # --- Step 2: RoPE + KV cache write ---
+        # DIAG: log gqa_rope_write_cache metadata for Layer 0 (non-cudagraph only)
         # Enable with: export FD_DIAG_ATTN=1
-        if os.environ.get("FD_DIAG_ATTN", "0") == "1" and layer.layer_id == 0:
+        if os.environ.get("FD_DIAG_ATTN", "0") == "1" and layer.layer_id == 0 and not forward_meta.step_use_cudagraph:
             from fastdeploy.utils import get_logger as _gl
 
             _wlog = _gl("worker_process", "worker_process.log")
@@ -460,58 +460,12 @@ class DeterministicAttentionMixin:
             )
             _wlog.info(f"[DIAG-ROPE] block_tables[0]={forward_meta.block_tables[0, :15].cpu().numpy().tolist()}")
 
-        # --- Step 2: RoPE + KV cache write ---
-        _rope_common_args = dict(
-            qkv=qkv,
-            key_cache=cache_k,
-            value_cache=cache_v,
-            cu_seqlens_q=forward_meta.cu_seqlens_q,
-            cu_seqlens_k=cu_seqlens_k,
-            rotary_embs=forward_meta.rotary_embs,
-            seq_lens_this_time=forward_meta.seq_lens_this_time,
-            seq_lens_encoder=seq_lens_encoder_for_rope,
-            seq_lens_decoder=forward_meta.seq_lens_decoder,
-            batch_id_per_token=forward_meta.batch_id_per_token,
-            block_tables=forward_meta.block_tables,
-            kv_batch_ids=forward_meta.kv_batch_ids,
-            kv_tile_ids_per_batch=forward_meta.kv_tile_ids_per_batch,
-            kv_num_blocks=forward_meta.kv_num_blocks_x_cpu,
-            cache_batch_ids=pre_cache_batch_ids,
-            cache_tile_ids_per_batch=pre_cache_tile_ids_per_batch,
-            cache_num_blocks=pre_cache_num_blocks_cpu,
-            q_norm_weight=q_norm_weight,
-            k_norm_weight=k_norm_weight,
-            cache_k_quant_scales=cache_k_scales,
-            cache_v_quant_scales=cache_v_scales,
-            cache_k_dequant_scales=getattr(layer, "cache_k_out_scale", None),
-            cache_v_dequant_scales=getattr(layer, "cache_v_out_scale", None),
-            cache_k_zp=getattr(layer, "cache_k_zp", None),
-            cache_v_zp=getattr(layer, "cache_v_zp", None),
-            kv_signal_data=metadata.kv_signal_data_list[layer.layer_id],
-            kv_token_num=kv_token_num,
-            max_seq_len=self.max_seq_len,
-            rms_norm_eps=getattr(layer, "rms_norm_eps", 1e-6),
-            use_neox_rotary_style=layer.use_neox_rotary_style,
-            cache_quant_type=getattr(layer, "cache_quant_type_str", "none"),
-            rope_3d=self.rope_3d,
-        )
         # --- Bisect skip for cudagraph debugging ---
         # Usage: FD_DETER_GRAPH_SKIP=rope+index+attn (any combination)
         _graph_skip = os.environ.get("FD_DETER_GRAPH_SKIP", "")
         _skip_rope = "rope" in _graph_skip
         _skip_index = "index" in _graph_skip
         _skip_attn = "attn" in _graph_skip
-
-        _use_triton_rope = os.environ.get("FD_USE_TRITON_ROPE", "1") == "1"
-
-        # Check if Triton rope path is eligible
-        _triton_rope_eligible = (
-            _use_triton_rope
-            and forward_meta.step_use_cudagraph
-            and q_norm_weight is None  # no QK-norm
-            and getattr(layer, "cache_quant_type_str", "none") == "none"  # no cache quant
-            and not self.rope_3d  # no rope_3d
-        )
 
         if _skip_rope:
             # Dummy output for bisect: no rope, no KV cache write
@@ -554,11 +508,46 @@ class DeterministicAttentionMixin:
                 "Fix: disable cudagraph (--cudagraph 0) or disable deterministic mode."
             )
         else:
-            q_roped, _k_flat, _v_flat, _qkv_out = gqa_rope_write_cache(**_rope_common_args)
+            # Non-cudagraph: C++ gqa_rope_write_cache (dynamic alloc, safe)
+            q_roped, _k_flat, _v_flat, _qkv_out = gqa_rope_write_cache(
+                qkv=qkv,
+                key_cache=cache_k,
+                value_cache=cache_v,
+                cu_seqlens_q=forward_meta.cu_seqlens_q,
+                cu_seqlens_k=cu_seqlens_k,
+                rotary_embs=forward_meta.rotary_embs,
+                seq_lens_this_time=forward_meta.seq_lens_this_time,
+                seq_lens_encoder=seq_lens_encoder_for_rope,
+                seq_lens_decoder=forward_meta.seq_lens_decoder,
+                batch_id_per_token=forward_meta.batch_id_per_token,
+                block_tables=forward_meta.block_tables,
+                kv_batch_ids=forward_meta.kv_batch_ids,
+                kv_tile_ids_per_batch=forward_meta.kv_tile_ids_per_batch,
+                kv_num_blocks=forward_meta.kv_num_blocks_x_cpu,
+                cache_batch_ids=pre_cache_batch_ids,
+                cache_tile_ids_per_batch=pre_cache_tile_ids_per_batch,
+                cache_num_blocks=pre_cache_num_blocks_cpu,
+                q_norm_weight=q_norm_weight,
+                k_norm_weight=k_norm_weight,
+                cache_k_quant_scales=cache_k_scales,
+                cache_v_quant_scales=cache_v_scales,
+                cache_k_dequant_scales=getattr(layer, "cache_k_out_scale", None),
+                cache_v_dequant_scales=getattr(layer, "cache_v_out_scale", None),
+                cache_k_zp=getattr(layer, "cache_k_zp", None),
+                cache_v_zp=getattr(layer, "cache_v_zp", None),
+                kv_signal_data=metadata.kv_signal_data_list[layer.layer_id],
+                kv_token_num=kv_token_num,
+                max_seq_len=self.max_seq_len,
+                rms_norm_eps=getattr(layer, "rms_norm_eps", 1e-6),
+                use_neox_rotary_style=layer.use_neox_rotary_style,
+                cache_quant_type=getattr(layer, "cache_quant_type_str", "none"),
+                rope_3d=self.rope_3d,
+            )
 
-        # --- DIAG: Layer 0 — 4 return values + paged cache ---
+        # --- DIAG: Layer 0 — 4 return values + paged cache (C++ path only) ---
         # Enable with: export FD_DIAG_ATTN=1
-        if os.environ.get("FD_DIAG_ATTN", "0") == "1" and layer.layer_id == 0:
+        _is_cpp_path = not (_skip_rope or _triton_rope_eligible or forward_meta.step_use_cudagraph)
+        if os.environ.get("FD_DIAG_ATTN", "0") == "1" and layer.layer_id == 0 and _is_cpp_path:
             from fastdeploy.utils import get_logger as _gl
 
             _wlog = _gl("worker_process", "worker_process.log")
