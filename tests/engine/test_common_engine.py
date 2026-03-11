@@ -967,3 +967,167 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 eng._finalizer.detach()
             except Exception:
                 pass
+
+
+class TestCommonEngineMethods(unittest.TestCase):
+    """Test additional methods in EngineService for expanded coverage"""
+
+    def _make_cfg(self, **kwargs):
+        """Create a basic engine config for testing"""
+        dp = kwargs.get("data_parallel_size", 1)
+        engine_worker_queue_port = int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778"))
+        cache_queue_port = int(os.getenv("FD_CACHE_QUEUE_PORT", "6779"))
+        if dp and dp > 1:
+            engine_worker_queue_port = [engine_worker_queue_port + 21 + i for i in range(dp)]
+            cache_queue_port = [cache_queue_port + 21 + i for i in range(dp)]
+
+        args = EngineArgs(
+            model=MODEL_NAME,
+            max_model_len=128,
+            tensor_parallel_size=1,
+            engine_worker_queue_port=engine_worker_queue_port,
+            cache_queue_port=cache_queue_port,
+            enable_prefix_caching=True,
+            enable_chunked_prefill=True,
+            **kwargs,
+        )
+        if getattr(args, "max_num_batched_tokens", None) is None:
+            args.max_num_batched_tokens = 128
+        return args.create_engine_config()
+
+    def test_task_is_finished(self):
+        """Test task_is_finished method"""
+        cfg = self._make_cfg()
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        # Mock resource_manager with stop_flags
+        class DummyResourceManager:
+            def __init__(self):
+                self.stop_flags = np.array([False, False, True], dtype=bool)
+
+        eng.resource_manager = DummyResourceManager()
+
+        # Test when task is finished
+        self.assertTrue(eng.task_is_finished(2))
+        # Test when task is not finished
+        self.assertFalse(eng.task_is_finished(0))
+        self.assertFalse(eng.task_is_finished(1))
+        # Test assertion error case
+        with self.assertRaises(AssertionError):
+            eng.task_is_finished(10)  # index out of range
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_all_tasks_finished(self):
+        """Test all_tasks_finished method"""
+        cfg = self._make_cfg()
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        # Test when all tasks are finished
+        class FinishedRM:
+            stop_flags = np.array([True, True, True], dtype=bool)
+
+        eng.resource_manager = FinishedRM()
+        self.assertTrue(eng.all_tasks_finished())
+
+        # Test when some tasks are not finished
+        class NotFinishedRM:
+            stop_flags = np.array([True, False, True], dtype=bool)
+
+        eng.resource_manager = NotFinishedRM()
+        self.assertFalse(eng.all_tasks_finished())
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+
+class TestControlMethods(unittest.TestCase):
+    """Test control methods in EngineService"""
+
+    def _make_cfg(self, **kwargs):
+        """Create engine config"""
+        args = EngineArgs(
+            model=MODEL_NAME,
+            max_model_len=128,
+            tensor_parallel_size=1,
+            engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778")),
+            cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT", "6779")),
+            enable_chunked_prefill=True,
+            **kwargs,
+        )
+        if getattr(args, "max_num_batched_tokens", None) is None:
+            args.max_num_batched_tokens = 128
+        return args.create_engine_config()
+
+    def test_control_pause_not_supported_scheduler(self):
+        """Test _control_pause with non-local scheduler raises exception"""
+        cfg = self._make_cfg(scheduler_name="other")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        # Should raise when scheduler is not local
+        with patch("fastdeploy.engine.args_utils.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
+            eng.is_paused = False
+            control_req = Mock()
+
+            with self.assertRaises(Exception) as context:
+                eng._control_pause(control_req)
+
+            self.assertIn("local scheduler", str(context.exception))
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_control_resume_not_paused(self):
+        """Test _control_resume when not paused returns None"""
+        cfg = self._make_cfg()
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        eng.is_paused = False
+        control_req = Mock()
+
+        result = eng._control_resume(control_req)
+        self.assertIsNone(result)
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+
+if __name__ == "__main__":
+    unittest.main()
