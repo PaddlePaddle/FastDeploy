@@ -376,6 +376,13 @@ class CacheTransferManager:
 
         logger.info("Initialize cache storage successfully")
 
+    def _update_key_prefix(self):
+        # use key_prefix to distinguish cache for different version of weight in rl
+        version_file_path = os.path.join(args.model_path, "version.yaml")
+        assert os.path.exists(version_file_path), f"version.yaml not found at {version_file_path}"
+        self.key_prefix = get_key_prefix_from_version(version_file_path)
+        logger.info(f"Update key_prefix of cache storage to {self.key_prefix}")
+
     def _init_storage_buffer(self, args):
         """
         Initialize pinned memory buffer that can hold the cache for a longest request
@@ -1087,12 +1094,14 @@ class CacheTransferManager:
             if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                 self._clear_cpu_cache()
             self._clear_gpu_cache()
-            logger.info("Successfully offloaded caches")
+            logger.info("Successfully offloaded caches.")
         elif method == "wakeup":
             if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                 self._init_cpu_cache()
             self._init_gpu_cache()
-            logger.info("Successfully reload caches")
+            if self.storage_backend_type is not None:
+                self._update_key_prefix()
+            logger.info("Successfully reload caches.")
 
         self.cache_task_queue.barrier.wait()
         resp = ControlResponse(task.request_id, 200, "Success")
@@ -1413,12 +1422,9 @@ class CacheTransferManager:
                         self._init_cpu_cache()
                     self._init_gpu_cache()
 
+                    # update key prefix for kv cache backend
                     if self.storage_backend_type is not None:
-                        # use key_prefix to distinguish cache for different version of weight in rl
-                        version_file_path = os.path.join(args.model_path, "version.yaml")
-                        assert os.path.exists(version_file_path), f"version.yaml not found at {version_file_path}"
-                        self.key_prefix = get_key_prefix_from_version(version_file_path)
-                        logger.info(f"Update key_prefix of cache storage to {self.key_prefix}")
+                        self._update_key_prefix()
 
                     # resume transfer
                     self.resume()

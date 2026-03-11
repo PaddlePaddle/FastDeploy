@@ -2687,7 +2687,7 @@ class GPUModelRunner(ModelRunnerBase):
             if self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
                 self.dynamic_weight_manager.clear_communication_group()
         if "kv_cache" in tags.split(","):
-            if self.speculative_method in ["mtp"]:
+            if self.spec_method == SpecMethod.MTP:
                 self.proposer.clear_mtp_cache()
             self.clear_cache()
         paddle.device.cuda.empty_cache()
@@ -2707,9 +2707,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Reinitialize KV cache
         if "kv_cache" in tags.split(","):
+            if self.spec_method == SpecMethod.MTP:
+                self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
             self.initialize_kv_cache()
 
         # Reset share_inputs to restore tensor shapes and values
+        if self.spec_method == SpecMethod.MTP:
+            self.proposer.model_inputs.reset_model_inputs()
         self.share_inputs.reset_share_inputs()
 
         # Recapture CUDA graph if enabled
