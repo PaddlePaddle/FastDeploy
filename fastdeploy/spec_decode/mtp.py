@@ -1138,6 +1138,7 @@ class MTPProposer(Proposer):
             self.target_model_inputs["seq_lens_this_time"],
             self.target_model_inputs["seq_lens_encoder"],
             self.target_model_inputs["stop_flags"],
+            self.model_inputs["batch_drop"],
         )
         if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             mtp_step_paddle(

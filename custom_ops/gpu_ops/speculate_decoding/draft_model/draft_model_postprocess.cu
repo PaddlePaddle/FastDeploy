@@ -23,6 +23,7 @@ __global__ void draft_model_update_seq_lens_this_time_kernel(
     int* base_model_seq_lens_this_time,
     const int* base_model_seq_lens_encoder,
     const bool* base_model_stop_flags,
+    const bool* batch_drop,
     int bsz,
     int base_model_draft_token_len) {
   int tid = threadIdx.x;
@@ -37,7 +38,11 @@ __global__ void draft_model_update_seq_lens_this_time_kernel(
           token_num++;
         }
       }
-      base_model_seq_lens_this_time[tid] = token_num;
+      if (batch_drop[tid]) {
+        base_model_seq_lens_this_time[tid] = 1;
+      } else {
+        base_model_seq_lens_this_time[tid] = token_num;
+      }
     } else if (base_model_stop_flags[tid]) {
       base_model_seq_lens_this_time[tid] = 0;
     }
@@ -47,7 +52,8 @@ __global__ void draft_model_update_seq_lens_this_time_kernel(
 void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_this_time,
                            const paddle::Tensor& base_model_seq_lens_encoder,
-                           const paddle::Tensor& base_model_stop_flags) {
+                           const paddle::Tensor& base_model_stop_flags,
+                           const paddle::Tensor& batch_drop) {
   int real_bsz = base_model_seq_lens_this_time.shape()[0];
   auto cu_stream = base_model_seq_lens_this_time.stream();
   int block_size = (real_bsz + 32 - 1) / 32 * 32;
@@ -65,7 +71,8 @@ PD_BUILD_STATIC_OP(draft_model_postprocess)
     .Inputs({"base_model_draft_tokens",
              "base_model_seq_lens_this_time",
              "base_model_seq_lens_encoder",
-             "base_model_stop_flags"})
+             "base_model_stop_flags",
+             "batch_drop"})
     .Outputs({"base_model_draft_tokens_out",
               "base_model_seq_lens_this_time_out",
               "base_model_stop_flags_out"})

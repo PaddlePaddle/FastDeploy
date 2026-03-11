@@ -88,7 +88,9 @@ __global__ void draft_model_update_kernel(const int64_t* inter_next_tokens,
       } else if (step_idx[tid] >= max_dec_len[tid] - 2) {
         stop_flags[tid] = true;
         batch_drop[tid] = true;
-        draft_token_now[seq_len_this_time - 1] = end_ids[0];
+        if (seq_len_decoder > 0 && seq_len_encoder <= 0) {
+          draft_token_now[seq_len_this_time - 1] = end_ids[0];
+        }
         base_model_draft_tokens_now[substep + 1] = end_ids[0];
         stop_flag_now_int = 1;
       }

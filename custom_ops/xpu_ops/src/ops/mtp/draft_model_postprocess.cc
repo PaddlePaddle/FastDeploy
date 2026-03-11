@@ -24,7 +24,8 @@
 void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_this_time,
                            const paddle::Tensor& base_model_seq_lens_encoder,
-                           const paddle::Tensor& base_model_stop_flags) {
+                           const paddle::Tensor& base_model_stop_flags,
+                           const paddle::Tensor& batch_drop) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
   auto xpu_ctx = static_cast<const phi::XPUContext*>(dev_ctx);
@@ -45,7 +46,8 @@ PD_BUILD_STATIC_OP(draft_model_postprocess)
     .Inputs({"base_model_draft_tokens",
              "base_model_seq_lens_this_time",
              "base_model_seq_lens_encoder",
-             "base_model_stop_flags"})
+             "base_model_stop_flags",
+             "batch_drop"})
     .Outputs({"base_model_draft_tokens_out",
               "base_model_seq_lens_this_time_out",
               "base_model_stop_flags_out"})
