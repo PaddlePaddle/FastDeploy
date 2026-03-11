@@ -164,7 +164,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
         elif metadata._dtype == "float32":
             metadata._fuse_kernel_compute_dtype = "fp32"
 
-        forward_meta.attention_metadata = metadata
+        self.attention_metadata = metadata
 
     def forward_mixed(
         self,
@@ -177,7 +177,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
         layer: Attention,
         forward_meta: ForwardMeta,
     ):
-        metadata = forward_meta.attention_metadata
+        metadata = self.attention_metadata
 
         norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
         q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
