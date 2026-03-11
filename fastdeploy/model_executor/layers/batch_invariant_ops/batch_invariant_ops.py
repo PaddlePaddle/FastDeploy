@@ -717,7 +717,7 @@ def mean_batch_invariant(
 
 
 @triton.jit
-def _rms_norm_kernel(
+def _rms_norm_kernel(  # pragma: no cover
     input_ptr,
     weight_ptr,
     output_ptr,
