@@ -887,7 +887,8 @@ void HybridMtpNgram(const paddle::Tensor& input_ids,
 void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_this_time,
                            const paddle::Tensor& base_model_seq_lens_encoder,
-                           const paddle::Tensor& base_model_stop_flags);
+                           const paddle::Tensor& base_model_stop_flags,
+                           const paddle::Tensor& batch_drop);
 
 void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& input_ids,
