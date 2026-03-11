@@ -6,7 +6,9 @@
 ## ✅ 投机解码方法支持
 ### ✅ 支持列表
 
-- **Ngram**
+- **Naive**: 普通解码模式，走投机解码代码路径但不生成草稿Token，用于测试投机解码框架的正确性
+
+- **Ngram**: 基于n-gram匹配的投机解码方法
 
 - **后缀解码**
 
@@ -38,11 +40,38 @@
 - **高效 DraftModel/MTP 框架**：开发多个融合 Cuda Kernel，统一完成模型类方法的前后处理，相比传统的循环、切片方法，性能高效且易维护
 
 ## 🔧 参数说明
-- `method`: 解码策略，可选值为 `"mtp"` 、 `"ngram"` 或 `"suffix"`
+
+### 基础参数
+- `method`: 解码策略，可选值为 `"mtp"`、`"ngram"`、`"naive"` 或 `"suffix"`
+  - `naive`: 普通解码模式，走投机解码代码路径但不生成草稿Token
+  - `ngram`: 基于n-gram匹配的投机解码
+  - `mtp`: 多Token预测（Multi-Token Prediction）
+  - `suffix`: 基于后缀解码的投机解码
 - `num_speculative_tokens`: 每轮预测的 Token 数，最大支持 5（当前 MTP 仅支持 1）
+- `num_model_steps`: MTP 模型步数，需满足 `num_speculative_tokens >= num_model_steps`
 - `model`: 若选择 MTP，则需指定 MTP 模型路径
 - `quantization`: 模型量化方式，推荐使用 `wint8`
 - `batch_size`: 当前支持最大值为 256
+
+### 验证策略参数 (verify_strategy)
+控制草稿Token的验证方式：
+- `topp` (默认): Top-P采样验证，草稿Token需在Top-P候选集中
+- `greedy`: 贪婪验证，草稿Token需等于目标模型的argmax输出
+- `target_match`: 目标匹配验证，草稿Token需等于目标模型的采样输出
+
+```bash
+--speculative-config '{"method": "mtp", "verify_strategy": "greedy", "num_speculative_tokens": 1, "model": "${path_to_mtp_model}"}'
+```
+
+### 接受策略参数 (accept_policy)
+控制草稿Token的接受行为：
+- `normal` (默认): 正常验证流程
+- `accept_all`: 接受所有草稿Token（调试用）
+- `reject_all`: 拒绝所有草稿Token（调试用）
+
+```bash
+--speculative-config '{"method": "mtp", "accept_policy": "accept_all", "num_speculative_tokens": 1}'
+```
 
 ## 🚀 使用 Multi-Token-Prediction(MTP) 解码
 详见论文：[DeepSeek-V3](https://arxiv.org/pdf/2412.19437)
@@ -133,8 +162,20 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --model ${path_to_main_model} \
     --tensor-parallel-size 4 \
     --config ${path_to_FastDeploy}benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml \
-    --speculative-config '{"method": "ngram", "num_speculative_tokens": 1, "model": "${mtp_model_path}"}'
+    --speculative-config '{"method": "ngram", "num_speculative_tokens": 1}'
 ```
+
+## 📝 使用 Naive 模式（普通解码）
+Naive 模式走投机解码代码路径但不生成草稿 Token，用于测试投机解码框架的正确性或对比性能基线。
+
+```
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model ${path_to_main_model} \
+    --tensor-parallel-size 4 \
+    --speculative-config '{"method": "naive"}'
+```
+
+**注意**: Naive 模式下 `num_speculative_tokens` 会被强制设置为 0。
 
 ## 🌲 使用后缀解码 (Suffix Decoding)
 
@@ -149,7 +190,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --model ${path_to_main_model} \
     --tensor-parallel-size 4 \
     --config ${path_to_FastDeploy}benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml \
-    --speculative-config '{"method": "mtp", "num_speculative_tokens": 4, "suffix_decoding_max_tree_depth": 64, "suffix_decoding_max_cached_requests": 10000, "suffix_decoding_max_spec_factor": 1.0, "suffix_decoding_min_token_prob": 0.1}'
+    --speculative-config '{"method": "suffix", "num_speculative_tokens": 4, "suffix_decoding_max_tree_depth": 64, "suffix_decoding_max_cached_requests": 10000, "suffix_decoding_max_spec_factor": 1.0, "suffix_decoding_min_token_prob": 0.1}'
 ```
 
 参数描述

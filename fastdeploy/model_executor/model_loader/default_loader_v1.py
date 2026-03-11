@@ -30,7 +30,11 @@ from fastdeploy.model_executor.load_weight_utils import (
 from fastdeploy.model_executor.model_loader.base_loader import BaseModelLoader
 from fastdeploy.model_executor.models.adapters import as_embedding_model
 from fastdeploy.model_executor.models.model_base import ModelRegistry
-from fastdeploy.model_executor.utils import process_final_after_loading
+from fastdeploy.model_executor.utils import (
+    need_memory_reconstruction,
+    process_final_after_loading,
+    reconstruct_memory,
+)
 from fastdeploy.platforms import current_platform
 
 
@@ -99,4 +103,6 @@ class DefaultModelLoaderV1(BaseModelLoader):
         if fd_config.load_config.dynamic_load_weight:
             return model
         self.load_weights(model, fd_config, enable_cache)
+        if need_memory_reconstruction(fd_config):
+            reconstruct_memory(model)
         return model

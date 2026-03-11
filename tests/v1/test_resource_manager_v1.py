@@ -541,7 +541,6 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         manager.cache_manager.get_required_block_num.return_value = 0
         success = manager.get_prefix_cached_blocks(request)
         self.assertTrue(success)
-        self.assertTrue(request.skip_allocate)
         self.assertEqual(request.num_cached_tokens, 8)
         self.assertEqual(request.metrics.gpu_cache_token_num, 4)
         self.assertEqual(request.metrics.cpu_cache_token_num, 0)

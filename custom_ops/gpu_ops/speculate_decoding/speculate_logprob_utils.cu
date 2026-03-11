@@ -100,6 +100,7 @@ void SpeculateGetLogits(const paddle::Tensor& draft_logits,
       const_cast<int*>(&cu_batch_token_offset.data<int>()[1]),
       real_bsz,
       cu_stream);
+  cudaFree(temp_storage1);
 
   void* temp_storage2 = nullptr;
   size_t temp_storage_bytes2 = 0;
@@ -118,6 +119,7 @@ void SpeculateGetLogits(const paddle::Tensor& draft_logits,
       const_cast<int*>(&cu_next_token_offset.data<int>()[1]),
       real_bsz,
       cu_stream);
+  cudaFree(temp_storage2);
 
   constexpr int PackSize = VEC_16B / sizeof(float);
   dim3 grid_dim(real_bsz);
@@ -184,7 +186,7 @@ void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
 
 template <int VecSize>
 __global__ void speculate_get_target_logits_kernel(
-    float* target_logtis,
+    float* target_logits,
     const float* logits,
     const int* cu_batch_token_offset,
     const int* ori_cu_batch_token_offset,
@@ -197,18 +199,18 @@ __global__ void speculate_get_target_logits_kernel(
   const int bid = blockIdx.x;
   const int tid = threadIdx.x;
   if (bid < real_bsz) {
-    auto* target_logtis_now =
-        target_logtis + cu_batch_token_offset[bid] * vocab_size;
+    auto* target_logits_now =
+        target_logits + cu_batch_token_offset[bid] * vocab_size;
     auto* logits_now = logits + ori_cu_batch_token_offset[bid] * vocab_size;
     for (int i = tid * VecSize; i < vocab_size; i += blockDim.x * VecSize) {
       if (seq_lens_encoder[bid] > 0) {
         Load<float, VecSize>(&logits_now[i], &src_vec);
-        Store<float, VecSize>(src_vec, &target_logtis_now[i]);
+        Store<float, VecSize>(src_vec, &target_logits_now[i]);
       } else {
         for (int j = 0; j < accept_num[bid]; j++) {
           Load<float, VecSize>(&logits_now[j * vocab_size + i], &src_vec);
           Store<float, VecSize>(src_vec,
-                                &target_logtis_now[j * vocab_size + i]);
+                                &target_logits_now[j * vocab_size + i]);
         }
       }
     }

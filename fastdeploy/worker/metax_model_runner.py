@@ -76,7 +76,7 @@ from fastdeploy.model_executor.pre_and_post_process import (
     save_output_normal,
 )
 from fastdeploy.output.pooler import PoolerOutput
-from fastdeploy.spec_decode import MTPProposer, NgramProposer
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
 from fastdeploy.worker.model_runner_base import (
     DistributedOut,
@@ -209,8 +209,9 @@ class MetaxModelRunner(ModelRunnerBase):
         self.zmq_client = None
         self.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            logger.info(f"zmq client get_save_output_rank{local_rank}")
-            self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
+            port = self.fd_config.parallel_config.local_engine_worker_queue_port
+            logger.info(f"zmq client get_save_output_rank{local_rank}_{port}")
+            self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}_{port}", mode=zmq.PUSH)
             self.zmq_client.connect()
             self.zmq_client.socket.SNDTIMEO = 3000
             self.async_output_queue: queue.Queue = queue.Queue()
@@ -349,19 +350,16 @@ class MetaxModelRunner(ModelRunnerBase):
         """
         Init speculative proposer
         """
-        if self.speculative_method == "ngram":
-            self.proposer = NgramProposer(self.fd_config)
-        elif self.speculative_method == "mtp":
+        if self.speculative_method == SpecMethod.MTP:
             self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
-            self.proposer = MTPProposer(
-                self.fd_config,
-                self.get_model(),
-                self.local_rank,
-                self.device_id,
-                self.share_inputs,
-            )
-        else:
-            self.proposer = None
+
+        self.proposer = self.speculative_method.create_proposer(
+            self.fd_config,
+            main_model=self.get_model(),
+            local_rank=self.local_rank,
+            device_id=self.device_id,
+            share_inputs=self.share_inputs,
+        )
 
     def _init_logits_processor(self, request) -> tuple[Future[LogitsProcessorBase],]:
         """
@@ -885,7 +883,7 @@ class MetaxModelRunner(ModelRunnerBase):
             self.share_inputs["not_need_stop"][0] = True
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
             def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
@@ -969,7 +967,7 @@ class MetaxModelRunner(ModelRunnerBase):
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
 
     def get_input_length_list(
@@ -1205,7 +1203,7 @@ class MetaxModelRunner(ModelRunnerBase):
             self.share_inputs.condense()
             reorder_split_prefill_and_decode(input_batch=self.share_inputs)
             if self.speculative_decoding:
-                if self.speculative_method == "mtp":
+                if self.speculative_method == SpecMethod.MTP:
                     self.proposer.reorder_inputs()
 
     def load_model(self) -> None:
@@ -1686,7 +1684,7 @@ class MetaxModelRunner(ModelRunnerBase):
         )
         self.exist_prefill_flag = False
         if self.speculative_decoding:
-            if self.speculative_method == "mtp":
+            if self.speculative_method == SpecMethod.MTP:
                 self.proposer.run(
                     full_hidden_states=model_output,
                     step_use_cudagraph=self.forward_meta.step_use_cudagraph,
@@ -1728,7 +1726,7 @@ class MetaxModelRunner(ModelRunnerBase):
             max_dec_len_list=max_dec_len_list,
             block_num=block_num,
         )
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
                 batch_size=batch_size,
@@ -1816,7 +1814,7 @@ class MetaxModelRunner(ModelRunnerBase):
                     logger.info(
                         f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
                     )
-            elif self.speculative_decoding and self.speculative_method == "mtp":
+            elif self.speculative_decoding and self.speculative_method == SpecMethod.MTP:
                 # Capture Target Model without bsz 1
                 for capture_size in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
@@ -2233,7 +2231,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 enable_pd_reorder=getattr(self.share_inputs, "enable_pd_reorder", False),
             )
 
-            if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
+            if self.speculative_config.method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill":
                 skip_save_output = True
             else:
                 skip_save_output = False
@@ -2258,7 +2256,7 @@ class MetaxModelRunner(ModelRunnerBase):
 
             # 6. Speculative decode
             if self.speculative_decoding:
-                if self.speculative_method == "mtp":
+                if self.speculative_method == SpecMethod.MTP:
                     self.proposer.run(
                         full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
                     )
@@ -2386,7 +2384,7 @@ class MetaxModelRunner(ModelRunnerBase):
         # TODO(gongshaotian): Optimize the management logic of kvcache
         self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache(profile=True)
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
 
         # 1. Profile with multimodal encoder & encoder cache
@@ -2402,7 +2400,7 @@ class MetaxModelRunner(ModelRunnerBase):
         )
 
         # 3. gc
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.clear_mtp_cache(profile=True)
         self.clear_cache(profile=True)
 
@@ -2433,7 +2431,7 @@ class MetaxModelRunner(ModelRunnerBase):
             }
         )
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.update_mtp_block_num(num_gpu_blocks)
 
     def cal_theortical_kvcache(self):
@@ -2464,7 +2462,7 @@ class MetaxModelRunner(ModelRunnerBase):
         # NOTE(liuzichang): Implement multi-layer MTP architecture in the future
         num_layers = (
             self.model_config.num_hidden_layers + self.speculative_config.num_gpu_block_expand_ratio
-            if self.speculative_method in ["mtp"]
+            if self.speculative_method == SpecMethod.MTP
             else self.model_config.num_hidden_layers
         )
 
@@ -2517,7 +2515,7 @@ class MetaxModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.clear_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.clear_mtp_cache()
         self.clear_cache()
         paddle.device.empty_cache()
@@ -2540,7 +2538,7 @@ class MetaxModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.update_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
         # Recapture CUDAGraph

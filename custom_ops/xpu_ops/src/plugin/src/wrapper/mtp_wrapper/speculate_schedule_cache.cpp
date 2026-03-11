@@ -161,30 +161,32 @@ static int xpu3_wrapper(Context *ctx,
                         const bool prefill_one_step_stop) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   using XPU_TI = typename XPUIndexType<int64_t>::type;
-  xpu3::plugin::speculate_schedule_cache<<<1, 64, ctx->xpu_stream>>>(
-      (const XPU_TI *)draft_tokens,
-      block_tables,
-      stop_flags,
-      (const XPU_TI *)prompt_lens,
-      seq_lens_this_time,
-      seq_lens_encoder,
-      seq_lens_decoder,
-      step_seq_lens_decoder,
-      reinterpret_cast<XPU_TI *>(step_draft_tokens),
-      step_seq_lens_this_time,
-      accept_num,
-      reinterpret_cast<XPU_TI *>(accept_tokens),
-      is_block_step,
-      not_need_stop,
-      (const XPU_TI *)stop_nums,
-      real_bsz,
-      max_bsz,
-      max_next_step_tokens,
-      draft_tokens_len,
-      accept_tokens_len,
-      block_size,
-      block_num_per_seq,
-      prefill_one_step_stop);
+  int32_t ret_xre =
+      xpu3::plugin::speculate_schedule_cache<<<1, 64, ctx->xpu_stream>>>(
+          (const XPU_TI *)draft_tokens,
+          block_tables,
+          stop_flags,
+          (const XPU_TI *)prompt_lens,
+          seq_lens_this_time,
+          seq_lens_encoder,
+          seq_lens_decoder,
+          step_seq_lens_decoder,
+          reinterpret_cast<XPU_TI *>(step_draft_tokens),
+          step_seq_lens_this_time,
+          accept_num,
+          reinterpret_cast<XPU_TI *>(accept_tokens),
+          is_block_step,
+          not_need_stop,
+          (const XPU_TI *)stop_nums,
+          real_bsz,
+          max_bsz,
+          max_next_step_tokens,
+          draft_tokens_len,
+          accept_tokens_len,
+          block_size,
+          block_num_per_seq,
+          prefill_one_step_stop);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
