@@ -110,10 +110,10 @@ def save_routing_to_buffer(
     ep_size: int,
     tp_group: dist.communication.group.Group,
 ):
+    token_num_per_rank = topk_ids.shape[0]
+    if token_num_per_rank == 0:
+        return
     if tp_size > 1 and ep_size > 1:
-        token_num_per_rank = topk_ids.shape[0]
-        if token_num_per_rank == 0:
-            return
         topk_ids_all = paddle.zeros([token_num_per_rank * tp_size, topk_ids.shape[1]], dtype=topk_ids.dtype)
         paddle.distributed.all_gather(topk_ids_all, topk_ids, tp_group)
         topk_ids = topk_ids_all[: batch_id_per_token.shape[0], :]
