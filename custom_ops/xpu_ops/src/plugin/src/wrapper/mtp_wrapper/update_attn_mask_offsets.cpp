@@ -116,7 +116,7 @@ static int xpu3_wrapper(Context* ctx,
                         int real_bsz,
                         int max_model_len,
                         int decode_states_len) {
-  xpu3::plugin::
+  int32_t ret_xre = xpu3::plugin::
       update_attn_mask_offsets<<<ctx->ncluster(), 1, ctx->xpu_stream>>>(
           attn_mask_offsets,
           seq_lens_this_time,
@@ -131,6 +131,7 @@ static int xpu3_wrapper(Context* ctx,
           real_bsz,
           max_model_len,
           decode_states_len);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

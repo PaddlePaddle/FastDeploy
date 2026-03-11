@@ -17,6 +17,7 @@
 from unittest.mock import Mock
 
 import paddle
+import pytest
 
 from fastdeploy.config import (
     CacheConfig,
@@ -32,6 +33,22 @@ from fastdeploy.model_executor.layers.sample.sampler import (
     SpeculativeSampler,
     padding_sampling_params,
 )
+
+
+@pytest.fixture(autouse=True)
+def _ensure_triton_fallback(monkeypatch):
+    """Ensure batched_count_greater_than uses the non-triton fallback.
+
+    When test_sampler.py runs before this file in the same pytest session,
+    it installs a triton stub (triton.jit = lambda fn: fn) at module level,
+    which permanently turns count_greater_kernel into a plain function that
+    is not subscriptable.  Monkeypatching the logprobs module to use the
+    non-triton fallback avoids the resulting TypeError.
+    """
+    monkeypatch.setattr(
+        "fastdeploy.model_executor.layers.sample.logprobs.batched_count_greater_than",
+        lambda x, y: (x >= y).sum(-1),
+    )
 
 
 def _create_fake_logits(batch_size: int, vocab_size: int) -> paddle.Tensor:
@@ -80,12 +97,12 @@ def _create_default_sampling_metadata(
     return fake_sampling_metadata
 
 
-def _create_fd_config(max_model_len):
+def _create_fd_config(max_model_len, method=None):
     model_config: Mock = Mock()
     model_config.max_model_len = max_model_len
     model_config.architectures = ["test_model"]
     model_config.mm_max_tokens_per_item = None
-    speculative_config = SpeculativeConfig({})
+    speculative_config = SpeculativeConfig({"method": method} if method else {})
     graph_opt_config = GraphOptimizationConfig({})
     scheduler_config = SchedulerConfig({})
     parallel_config = ParallelConfig({})
@@ -169,7 +186,8 @@ def test_speculative_sampler():
     max_model_len = 1024
     max_draft_token_num = 1
 
-    fd_config = _create_fd_config(max_model_len)
+    # Use ngram method for speculative decoding
+    fd_config = _create_fd_config(max_model_len, method="ngram")
     sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len)
     logits = _create_fake_logits(batch_size * (max_draft_token_num + 1), vocab_size)
     share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
@@ -186,7 +204,8 @@ def test_speculative_sampler_logprobs():
     max_model_len = 1024
     max_draft_token_num = 1
 
-    fd_config = _create_fd_config(max_model_len)
+    # Use ngram method for speculative decoding
+    fd_config = _create_fd_config(max_model_len, method="ngram")
     share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
     sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len, max_num_logprobs=0)
     sampling_metadata.share_inputs = share_inputs

@@ -275,6 +275,8 @@ class DynamicWeightManager:
                     logger.warning(
                         f"name:[{name}] target_param.stride():[{target_param.stride()}] != new_param.stride():[{new_param.stride()}]"
                     )
+                    if not target_param._is_initialized():
+                        target_param[...] = paddle.empty(target_param.shape, dtype=target_param.dtype)
                     target_param[...] = new_param
                 else:
                     new_param._share_buffer_to(target_param)

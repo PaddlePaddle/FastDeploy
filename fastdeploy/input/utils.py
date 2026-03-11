@@ -19,11 +19,62 @@ __all__ = [
     "MAX_IMAGE_DIMENSION",
 ]
 
+import os
+import socket
+from typing import Any, Callable, Dict, List, Tuple
+from urllib.parse import urlparse
+
+from fastdeploy.utils import console_logger
+
 IDS_TYPE_FLAG = {"text": 0, "image": 1, "video": 2, "audio": 3}
 
 MAX_IMAGE_DIMENSION = 9999999
 
-from typing import Any, Callable, Dict, List, Tuple
+# Hub endpoints for connectivity check, keyed by DOWNLOAD_SOURCE value
+_HUB_ENDPOINTS = {
+    "huggingface": ("huggingface.co", 443),
+    "modelscope": ("modelscope.cn", 443),
+}
+
+
+def _get_hub_endpoint():
+    """Return (host, port, hub_name) for the active download hub."""
+    source = os.environ.get("DOWNLOAD_SOURCE", "huggingface")
+    if source == "aistudio":
+        url = os.environ.get("AISTUDIO_ENDPOINT", "http://git.aistudio.baidu.com")
+        parsed = urlparse(url)
+        host = parsed.hostname or "git.aistudio.baidu.com"
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        return host, port, "aistudio"
+    host, port = _HUB_ENDPOINTS.get(source, ("huggingface.co", 443))
+    return host, port, source
+
+
+def validate_model_path(model_name_or_path):
+    """
+    Validate model path before from_pretrained calls.
+    Give immediate feedback instead of letting users wait 50s+ for timeout.
+    """
+    if os.path.isdir(model_name_or_path) or os.path.isfile(model_name_or_path):
+        return  # Local path exists, no network needed
+
+    host, port, hub_name = _get_hub_endpoint()
+
+    console_logger.warning(
+        f"Model path '{model_name_or_path}' is not a local directory or file, "
+        f"will try to download from {hub_name} hub."
+    )
+
+    # Quick connectivity check — fail fast instead of waiting 50s
+    try:
+        sock = socket.create_connection((host, port), timeout=3)
+        sock.close()
+    except OSError:
+        console_logger.warning(
+            f"Cannot reach {host}. If the model is stored locally, "
+            f"please check the path '{model_name_or_path}'. Otherwise check "
+            f"network/proxy settings (DOWNLOAD_SOURCE={hub_name})."
+        )
 
 
 def process_stop_token_ids(

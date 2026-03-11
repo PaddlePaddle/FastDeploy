@@ -554,6 +554,24 @@ class PrefixCacheManager:
         else:
             heapq.heappush(self.cpu_free_block_list, cpu_block_ids)
 
+    def _acquire_kvcache_lock(self):
+        """Acquire the GPU KV cache lock for the transfer process.
+
+        Uses a file-based lock (fcntl.flock) to ensure mutual exclusion
+        between the worker and the CPU transfer process. This prevents
+        concurrent GPU KV cache access which may cause NaN errors under
+        certain DP+EP configurations.
+        """
+        if not envs.FD_USE_KVCACHE_LOCK:
+            return
+        self.gpu_cache_lock.acquire()
+
+    def _release_kvcache_lock(self):
+        """Release the GPU KV cache lock held by the transfer process."""
+        if not envs.FD_USE_KVCACHE_LOCK:
+            return
+        self.gpu_cache_lock.release()
+
     def issue_swap_task(
         self,
         transfer_task_id,
@@ -573,13 +591,15 @@ class PrefixCacheManager:
             event_type:       CacheStatus.SWAP2GPU or CacheStatus.SWAP2CPU
             is_sync:          bool, whether to wait for the result of the swap task
         """
-
+        assert is_sync, "Only support is sync for swap_task now."
+        self._acquire_kvcache_lock()
         self.task_swapping_event[transfer_task_id] = Event()
         self.cache_task_queue.put_transfer_task(
             (event_type, transfer_task_id, swap_node_ids, gpu_block_ids, cpu_block_ids)
         )
         if is_sync:
             self.sync_swap_task(transfer_task_id)
+        self._release_kvcache_lock()
 
     def sync_swap_task(self, transfer_task_id):
         """
@@ -719,7 +739,7 @@ class PrefixCacheManager:
         except Exception as e:
             if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                 logger.warning(
-                    f"update_cache_blocks: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    f"update_cache_blocks: an error occurred while prefix tree status is not normal, ignore it. {e}"
                 )
             else:
                 logger.error(f"update_cache_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
@@ -907,7 +927,7 @@ class PrefixCacheManager:
             except Exception as e:
                 if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                     logger.warning(
-                        f"request_match_blocks: an error occured while prefix tree status is not normal, ignore it. {e}"
+                        f"request_match_blocks: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
                     logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
@@ -1014,7 +1034,7 @@ class PrefixCacheManager:
             except Exception as e:
                 if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                     logger.warning(
-                        f"request_block_ids: an error occured while prefix tree status is not normal, ignore it. {e}"
+                        f"request_block_ids: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
                     logger.error(f"request_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
@@ -1075,7 +1095,7 @@ class PrefixCacheManager:
             except Exception as e:
                 if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                     logger.warning(
-                        f"release_block_ids: an error occured while prefix tree status is not normal, ignore it. {e}"
+                        f"release_block_ids: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
                     logger.error(f"release_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
@@ -1205,7 +1225,7 @@ class PrefixCacheManager:
             except Exception as e:
                 if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                     logger.warning(
-                        f"free_nodes_directly: an error occured while prefix tree status is not normal, ignore it. {e}"
+                        f"free_nodes_directly: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
                     logger.error(f"free_nodes_directly: error: {type(e)} {e}")
@@ -1403,7 +1423,7 @@ class PrefixCacheManager:
             except Exception as e:
                 if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                     logger.warning(
-                        f"free_block_ids_async: an error occured while prefix tree status is not normal, ignore it. {e}"
+                        f"free_block_ids_async: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
                     logger.error(f"free_block_ids_async: error: {type(e)} {e}, {str(traceback.format_exc())}")
@@ -2081,7 +2101,7 @@ class PrefixCacheManager:
             except Exception as e:
                 if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                     logger.warning(
-                        f"recv_data_transfer_result: an error occured while prefix tree status is not normal, ignore it. {e}"
+                        f"recv_data_transfer_result: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
                     logger.error(f"recv_data_transfer_result: {str(traceback.format_exc())}")
