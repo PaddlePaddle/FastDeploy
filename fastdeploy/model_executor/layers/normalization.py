@@ -246,7 +246,7 @@ class RMSNorm(nn.Layer):
                     return norm_out.astype(x_dtype), residual_out
                 norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
             # enable trtllm all reduce fusion
-            elif self.enable_all_reduce_fusion:
+            elif self.enable_all_reduce_fusion and x.shape[0] <= 2048:
                 norm_out = flashinfer_allreduce_residual_rmsnorm(
                     fd_config=self.fd_config, input_tensor=x, residual=residual_input, weight=self.weight, eps=self.eps
                 )
