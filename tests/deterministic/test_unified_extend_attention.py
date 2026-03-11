@@ -92,12 +92,11 @@ def _build_causal_mask(bs, q_len, kv_len, prefix_lens, is_causal):
     """Build causal mask: [bs, 1, q_len, kv_len] with -inf for masked positions."""
     mask = paddle.zeros([bs, 1, q_len, kv_len], dtype="float32")
     if is_causal:
-        for b in range(bs):
-            plen = int(prefix_lens[b].item())
-            for qi in range(q_len):
-                for ki in range(kv_len):
-                    if ki >= plen and qi < ki - plen:
-                        mask[b, :, qi, ki] = float("-inf")
+        qi_idx = paddle.arange(q_len, dtype="int32").reshape([1, 1, q_len, 1])
+        ki_idx = paddle.arange(kv_len, dtype="int32").reshape([1, 1, 1, kv_len])
+        plens = prefix_lens.reshape([bs, 1, 1, 1]).astype("int32")
+        cond = (ki_idx >= plens) & (qi_idx + plens < ki_idx)
+        mask = paddle.where(cond, paddle.full_like(mask, float("-inf")), mask)
     return mask
 
 
@@ -125,12 +124,12 @@ def naive_attention(q, k, v, prefix_lens, is_causal=True):
     scale = 1.0 / (head_dim**0.5)
     scores = paddle.einsum("bqhd,bkhd->bhqk", q, k) * scale
     if is_causal:
-        for b in range(bs):
-            plen = int(prefix_lens[b].item())
-            for qi in range(q_len):
-                for ki in range(kv_len):
-                    if ki >= plen and qi < ki - plen:
-                        scores[b, :, qi, ki] = float("-inf")
+        qi_idx = paddle.arange(q_len, dtype="int32").reshape([1, 1, q_len, 1])
+        ki_idx = paddle.arange(kv_len, dtype="int32").reshape([1, 1, 1, kv_len])
+        plens = prefix_lens.reshape([bs, 1, 1, 1])
+        # mask: ki >= plen AND qi < ki - plen  =>  qi + plen < ki
+        mask = (ki_idx >= plens) & (qi_idx + plens < ki_idx)
+        scores = paddle.where(mask, paddle.full_like(scores, float("-inf")), scores)
     attn = paddle.nn.functional.softmax(scores, axis=-1)
     return paddle.einsum("bhqk,bkhd->bqhd", attn, v)
 
