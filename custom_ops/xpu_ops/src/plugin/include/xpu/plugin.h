@@ -645,10 +645,10 @@ DLL_EXPORT int speculate_update_v3(Context* ctx,
                                    const int max_draft_tokens);
 
 DLL_EXPORT int speculate_update(Context* ctx,
-                                int* seq_lens_encoder,  // 输入 [B_max, ]
-                                int* seq_lens_decoder,  // 输出 [B_max, ]
-                                bool* not_need_stop,    // [1,]
-                                int64_t* draft_tokens,  // [B_max, T_max]
+                                int* seq_lens_encoder,         // 输入 [B_max, ]
+                                int* seq_lens_decoder,         // 输出 [B_max, ]
+                                bool* not_need_stop,           // [1,]
+                                int64_t* draft_tokens,         // [B_max, T_max]
                                 int* actual_draft_token_nums,  // [B_max, ]
                                 const int64_t* accept_tokens,  // [B_max, T_max]
                                 const int* accept_num,         // [B_max, ]
@@ -704,6 +704,28 @@ DLL_EXPORT int update_attn_mask_offsets(Context* ctx,
                                         int real_bsz,
                                         int max_model_len,
                                         int decode_states_len);
+DLL_EXPORT int speculate_get_target_logits(Context* ctx,
+                                           float* target_logtis,
+                                           const float* logits,
+                                           const int* cu_batch_token_offset,
+                                           const int* ori_cu_batch_token_offset,
+                                           const int* seq_lens_this_time,
+                                           const int* seq_lens_encoder,
+                                           const int* accept_num,
+                                           const int vocab_size,
+                                           const int real_bsz);
+
+DLL_EXPORT int speculate_insert_first_token(Context* ctx,
+                                            int64_t* token_ids,
+                                            const int64_t* accept_tokens,
+                                            const int64_t* next_tokens,
+                                            const int* cu_next_token_offset,
+                                            const int* cu_batch_token_offset,
+                                            const int* seq_lens_this_time,
+                                            const int* seq_lens_encoder,
+                                            const int max_draft_tokens,
+                                            const int real_bsz);
+
 /*--------------------------------------- MTP end
  * --------------------------------------------*/
 

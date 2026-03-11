@@ -46,3 +46,4 @@ class StreamTransferData:
     accept_num: Optional[np.array] = None
     # [num_reqs, hidden_size]
     pooler_output: Optional[np.array] = None
+    mtype: int = 3  # message type: 3=target, 4=draft

@@ -334,6 +334,20 @@ void SpeculateSaveWithOutputMsgDynamic(const paddle::Tensor& accept_tokens,
                                        bool save_each_rank,
                                        bool skip_prefill);
 
+void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
+                              const paddle::Tensor& logprob_token_ids,
+                              const paddle::Tensor& logprob_scores,
+                              const paddle::Tensor& logprob_ranks,
+                              const paddle::Tensor& token_num_per_batch,
+                              const paddle::Tensor& cu_batch_token_offset,
+                              const paddle::Tensor& not_need_stop,
+                              const paddle::Tensor& seq_lens_decoder,
+                              const paddle::Tensor& prompt_lens,
+                              const paddle::Tensor& preempted_idx,
+                              int message_flag,
+                              int64_t rank_id,
+                              bool save_each_rank);
+
 void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& input_ids,
                           const paddle::Tensor& stop_flags,
@@ -548,6 +562,22 @@ void SpeculateGetLogits(const paddle::Tensor& draft_logits,
                         const paddle::Tensor& first_token_logits,
                         const paddle::Tensor& seq_lens_this_time,
                         const paddle::Tensor& seq_lens_encoder);
+
+void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
+                              const paddle::Tensor& logits,
+                              const paddle::Tensor& cu_batch_token_offset,
+                              const paddle::Tensor& ori_cu_batch_token_offset,
+                              const paddle::Tensor& seq_lens_this_time,
+                              const paddle::Tensor& seq_lens_encoder,
+                              const paddle::Tensor& accept_num);
+
+void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
+                               const paddle::Tensor& accept_tokens,
+                               const paddle::Tensor& next_tokens,
+                               const paddle::Tensor& cu_next_token_offset,
+                               const paddle::Tensor& cu_batch_token_offset,
+                               const paddle::Tensor& seq_lens_this_time,
+                               const paddle::Tensor& seq_lens_encoder);
 
 void SaveOutMmsgStatic(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
@@ -1179,6 +1209,23 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("skip_prefill"),
         "speculate save output function dynamic");
 
+  m.def("speculate_save_output_topk",
+        &SpeculateSaveOutMmsgTopK,
+        py::arg("sampled_token_ids"),
+        py::arg("logprob_token_ids"),
+        py::arg("logprob_scores"),
+        py::arg("logprob_ranks"),
+        py::arg("token_num_per_batch"),
+        py::arg("cu_batch_token_offset"),
+        py::arg("not_need_stop"),
+        py::arg("seq_lens_decoder"),
+        py::arg("prompt_lens"),
+        py::arg("preempted_idx"),
+        py::arg("message_flag"),
+        py::arg("rank_id"),
+        py::arg("save_each_rank"),
+        "speculate save output topk function");
+
   m.def("speculate_clear_accept_nums",
         &SpeculateClearAcceptNums,
         py::arg("accept_num"),
@@ -1354,6 +1401,28 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_this_time"),
         py::arg("seq_lens_encoder"),
         "speculate get logits function");
+
+  m.def("speculate_get_target_logits",
+        &SpeculateGetTargetLogits,
+        py::arg("target_logits"),
+        py::arg("logits"),
+        py::arg("cu_batch_token_offset"),
+        py::arg("ori_cu_batch_token_offset"),
+        py::arg("seq_lens_this_time"),
+        py::arg("seq_lens_encoder"),
+        py::arg("accept_num"),
+        "speculate get target logits function");
+
+  m.def("speculate_insert_first_token",
+        &SpeculateInsertFirstToken,
+        py::arg("token_ids"),
+        py::arg("accept_tokens"),
+        py::arg("next_tokens"),
+        py::arg("cu_next_token_offset"),
+        py::arg("cu_batch_token_offset"),
+        py::arg("seq_lens_this_time"),
+        py::arg("seq_lens_encoder"),
+        "speculate insert first token function");
 
   m.def("text_image_gather_scatter",
         &TextImageGatherScatter,
