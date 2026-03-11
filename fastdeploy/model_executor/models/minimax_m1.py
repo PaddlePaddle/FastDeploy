@@ -482,8 +482,12 @@ class MiniMaxM1LightningAttention(nn.Layer):
     """
     Lightning Attention for MiniMax-M1
     
-    This is a simplified implementation. Full Lightning Attention
-    requires custom CUDA kernels for optimal performance.
+    Reference: https://github.com/MiniMax-AI/MiniMax-M1
+    
+    This implements the block-wise Lightning Attention algorithm:
+    - Processes sequences in blocks of 256 tokens
+    - Uses linear attention with causal masking via decay factors
+    - Maintains KV state across blocks for efficiency
     """
 
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = ""):
@@ -494,6 +498,9 @@ class MiniMaxM1LightningAttention(nn.Layer):
         self.hidden_size = fd_config.model_config.hidden_size
         self.num_heads = fd_config.model_config.num_attention_heads
         self.head_dim = fd_config.model_config.head_dim
+        
+        # Activation function
+        self.act = self._get_activation_fn(fd_config.model_config.hidden_act)
         
         # QKV projection
         self.qkv_proj = ColumnParallelLinear(
@@ -523,7 +530,7 @@ class MiniMaxM1LightningAttention(nn.Layer):
             layer_id=layer_id,
         )
         
-        # Norm
+        # Norm layer for output
         self.norm = RMSNorm(
             fd_config=fd_config,
             hidden_size=self.num_heads * self.head_dim,
@@ -532,6 +539,22 @@ class MiniMaxM1LightningAttention(nn.Layer):
         )
         
         self.prefix = prefix
+        self.block_size = 256  # MiniMax-M1 uses block size of 256
+        
+        # Inference state
+        self.kv_state = None
+        self.offset = 0
+
+    def _get_activation_fn(self, activation: str):
+        """Get activation function"""
+        if activation == "silu" or activation == "swish":
+            return paddle.nn.functional.silu
+        elif activation == "gelu":
+            return paddle.nn.functional.gelu
+        elif activation == "relu":
+            return paddle.nn.functional.relu
+        else:
+            return paddle.nn.functional.silu
 
     def forward(
         self,
@@ -541,50 +564,147 @@ class MiniMaxM1LightningAttention(nn.Layer):
         slope_rate: paddle.Tensor | None = None,
     ):
         """
-        Simplified Lightning Attention forward pass
+        Lightning Attention forward pass
         
-        Note: This is a placeholder. Full Lightning Attention implementation
-        requires custom kernels for the linear attention mechanism.
-        For production use, consider using the Triton or CUDA implementation.
+        This is a Paddle implementation of the block-wise Lightning Attention.
+        For optimal performance, custom CUDA/Triton kernels are recommended.
         """
-        logger.warning(
-            f"Lightning Attention for layer {self.layer_id} is using simplified implementation. "
-            "For optimal performance, custom kernels are required."
-        )
-        
-        # Linear attention (simplified version)
-        # In practice, this would use the specific Lightning Attention algorithm
+        # hidden_states: [batch, seq_len, hidden_size]
         batch_size, seq_len, _ = hidden_states.shape
         
-        # QKV projection
-        qkv = self.qkv_proj(hidden_states)
-        qkv = qkv.reshape([batch_size, seq_len, self.num_heads, 3 * self.head_dim])
-        q, k, v = paddle.split(qkv, 3, axis=-1)
+        # Linear map
+        qkv = self.act(self.qkv_proj(hidden_states))
+        new_shape = qkv.shape[:-1] + (self.num_heads, -1)
+        qkv = qkv.reshape(new_shape)
+        q, k, v = paddle.split(qkv, [self.head_dim] * 3, axis=-1)
         
-        # Simplified attention computation (fallback to standard)
-        # In production, this would use the custom Lightning Attention kernel
-        attn_output = paddle.matmul(q, k.transpose([0, 1, 3, 2])) / (self.head_dim ** 0.5)
+        # Transpose: [batch, num_heads, seq_len, head_dim]
+        q = q.transpose([0, 2, 1, 3])
+        k = k.transpose([0, 2, 1, 3])
+        v = v.transpose([0, 2, 1, 3])
         
-        if attention_mask is not None:
-            attn_output = attn_output + attention_mask
-            
-        attn_output = paddle.nn.functional.softmax(attn_output, axis=-1)
-        attn_output = paddle.matmul(attn_output, v)
+        # Compute decay ratio
+        if slope_rate is not None:
+            ratio = paddle.exp(-slope_rate)
+        else:
+            ratio = paddle.ones([1], dtype="float32")
         
-        # Reshape
-        attn_output = attn_output.reshape([batch_size, seq_len, -1])
+        # First time seeing this sequence
+        if self.kv_state is None or self.offset == 0:
+            self.offset = q.shape[-2]
+            output = self._forward_first_time(q, k, v, attention_mask, ratio)
+        else:
+            # Continuing from previous sequence
+            self.offset += 1
+            output = self._forward_with_cache(q, k, v, ratio)
         
-        # Norm
-        attn_output = self.norm(attn_output)
+        # Reshape: [batch, seq_len, num_heads * head_dim]
+        output = output.transpose([0, 2, 1, 3])
+        output = output.reshape([batch_size, seq_len, -1])
+        
+        # Normalize
+        output = self.norm(output)
         
         # Gate
         gate = paddle.nn.functional.sigmoid(self.output_gate(hidden_states))
-        attn_output = gate * attn_output
+        output = gate * output
         
         # Output projection
-        output = self.out_proj(attn_output)
+        output = self.out_proj(output)
         
         return output, None, None
+
+    def _forward_first_time(
+        self,
+        q: paddle.Tensor,
+        k: paddle.Tensor,
+        v: paddle.Tensor,
+        attention_mask: paddle.Tensor | None,
+        ratio: paddle.Tensor,
+    ):
+        """
+        Forward pass for the first time seeing a sequence
+        Uses block-wise computation for efficiency
+        """
+        batch_size, num_heads, seq_len, head_dim = q.shape
+        
+        # Number of blocks
+        num_blocks = (seq_len + self.block_size - 1) // self.block_size
+        
+        # Prepare decay arrays
+        block_indices = paddle.arange(self.block_size).astype("float32")
+        q_decay = paddle.exp(-ratio * block_indices.reshape([-1, 1]))
+        k_decay = paddle.exp(-ratio * (self.block_size - block_indices.reshape([-1, 1])))
+        
+        # Create diagonal decay matrix
+        indices = block_indices[:, None] - block_indices[None, :]
+        s_indices = ratio * indices
+        s_indices = paddle.where(indices >= 0, -s_indices, paddle.full_like(s_indices, float("-inf")))
+        diag_decay = paddle.exp(s_indices)
+        
+        # Initialize KV state and output
+        kv = paddle.zeros([batch_size, num_heads, head_dim, head_dim], dtype="float32")
+        output = paddle.empty_like(q, dtype=q.dtype)
+        
+        for i in range(num_blocks):
+            si = i * self.block_size
+            ei = min(si + self.block_size, seq_len)
+            m = ei - si
+            
+            qi = q[:, :, si:ei].contiguous()
+            ki = k[:, :, si:ei].contiguous()
+            vi = v[:, :, si:ei].contiguous()
+            
+            # Non-diagonal part
+            qkv_none_diag = paddle.matmul(qi * q_decay[:, :m], kv.astype(qi.dtype)).astype("float32")
+            
+            # Diagonal part
+            qk = paddle.matmul(qi, ki.transpose([0, 1, 3, 2])).astype("float32") * diag_decay[:, :, :m, :m]
+            qkv_diag = paddle.matmul(qk, vi.astype("float32"))
+            
+            # Block decay
+            block_decay = paddle.exp(-ratio * m)
+            output[:, :, si:ei] = (qkv_none_diag + qkv_diag).astype(q.dtype)
+            kv = block_decay * kv + paddle.matmul(
+                (ki * k_decay[:, -m:]).transpose([0, 1, 3, 2]).astype(vi.dtype), vi
+            )
+        
+        self.kv_state = kv
+        return output
+
+    def _forward_with_cache(
+        self,
+        q: paddle.Tensor,
+        k: paddle.Tensor,
+        v: paddle.Tensor,
+        ratio: paddle.Tensor,
+    ):
+        """
+        Forward pass with KV cache (for continues generation)
+        """
+        batch_size, num_heads, seq_len, head_dim = q.shape
+        
+        # Get KV state
+        kv = self.kv_state
+        
+        output_list = []
+        for i in range(seq_len):
+            # Update KV state: kv = ratio * kv + k_i * v_i^T
+            kv = ratio * kv + paddle.einsum(
+                "... n d, ... n e -> ... d e",
+                k[:, :, i:i + 1],
+                v[:, :, i:i + 1],
+            )
+            # Compute output: q_i @ kv
+            qkv = paddle.einsum(
+                "... n e, ... e d -> ... n d",
+                q[:, :, i:i + 1],
+                kv.astype(q.dtype)
+            )
+            output_list.append(qkv)
+        
+        output = paddle.concat(output_list, axis=-2)
+        return output
 
 
 class MiniMaxM1MLP(nn.Layer):
