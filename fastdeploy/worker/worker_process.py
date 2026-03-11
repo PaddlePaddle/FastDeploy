@@ -589,10 +589,7 @@ class PaddleDisWorkerProc:
             self._acquire_kvcache_lock(tp_rank)
             self.worker.execute_model(req_dicts, max_occupied_batch_index)
             self._release_kvcache_lock(tp_rank)
-
-            # Only v0 use this signal
-            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
+            self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
     def initialize_kv_cache(self) -> None:
