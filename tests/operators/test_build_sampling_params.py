@@ -53,7 +53,7 @@ def build_sampling_params_ref(
         bi_top_k = top_k[bi]
 
         for tid in range(BLOCK_DIM):
-            bi_infer_seed = (infer_seed[bi] + tid * 4) % (MAX_INFER_SEED + 1)
+            bi_infer_seed = (infer_seed[bi] + tid * 4) % MAX_INFER_SEED
             i = tid
             while i < cur_end - cur_start:
                 pad_idx = cur_start + i
