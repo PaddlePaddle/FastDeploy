@@ -63,6 +63,7 @@ void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
       const_cast<int*>(base_model_seq_lens_this_time.data<int>()),
       base_model_seq_lens_encoder.data<int>(),
       base_model_stop_flags.data<bool>(),
+      batch_drop.data<bool>(),
       real_bsz,
       base_model_draft_token_len);
 }
