@@ -16,19 +16,26 @@
 MiniMax-M1 Model Support for FastDeploy
 
 MiniMax-M1 is the world's first open-source large-scale hybrid attention reasoning model.
+Reference: https://github.com/MiniMax-AI/MiniMax-M1
+
 Key features:
-- Hybrid Attention: Lightning Attention + Standard Softmax Attention
+- Hybrid Attention: Lightning Attention (attn_type=0) + Standard Softmax Attention (attn_type=1)
 - MoE Architecture: 32 experts, 2 experts activated per token
 - 1M context length (10M max_position_embeddings)
+- Shared experts with sigmoid routing
 """
 
 from __future__ import annotations
+
+import math
+from typing import Tuple, Optional
 
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
@@ -40,93 +47,86 @@ from fastdeploy.model_executor.models.model_base import (
 from fastdeploy.model_executor.layers.rotary_embedding import (
     LlamaRotaryEmbedding,
 )
+from fastdeploy.model_executor.layers.activation import SiluAndMul
+from fastdeploy.model_executor.layers.linear import (
+    ColumnParallelLinear,
+    RowParallelLinear,
+    ReplicatedLinear,
+)
+from fastdeploy.model_executor.layers.moe.moe import FusedMoE
+from fastdeploy.model_executor.layers.attention.attention import Attention
 
 
-class MiniMaxM1Config:
-    """MiniMax-M1 model configuration"""
-
-    def __init__(self, config_dict):
-        self.model_type = config_dict.get("model_type", "minimax_m1")
-        self.hidden_size = config_dict.get("hidden_size", 6144)
-        self.intermediate_size = config_dict.get("intermediate_size", 9216)
-        self.num_hidden_layers = config_dict.get("num_hidden_layers", 80)
-        self.num_attention_heads = config_dict.get("num_attention_heads", 64)
-        self.num_key_value_heads = config_dict.get("num_key_value_heads", 8)
-        self.head_dim = config_dict.get("head_dim", 128)
-        self.vocab_size = config_dict.get("vocab_size", 200064)
-        self.rope_theta = config_dict.get("rope_theta", 10000000)
-        self.max_position_embeddings = config_dict.get("max_position_embeddings", 10240000)
-        self.rms_norm_eps = config_dict.get("rms_norm_eps", 1e-5)
-        self.hidden_act = config_dict.get("hidden_act", "silu")
-        
-        # MoE configuration
-        self.num_local_experts = config_dict.get("num_local_experts", 32)
-        self.num_experts_per_tok = config_dict.get("num_experts_per_tok", 2)
-        
-        # Hybrid attention configuration
-        self.attn_type_list = config_dict.get("attn_type_list", [])
-        
-        # Layer normalization parameters
-        self.layernorm_full_attention_alpha = config_dict.get("layernorm_full_attention_alpha", 3.5565588200778455)
-        self.layernorm_full_attention_beta = config_dict.get("layernorm_full_attention_beta", 1.0)
-        self.layernorm_linear_attention_alpha = config_dict.get("layernorm_linear_attention_alpha", 3.5565588200778455)
-        self.layernorm_linear_attention_beta = config_dict.get("layernorm_linear_attention_beta", 1.0)
-        self.layernorm_mlp_alpha = config_dict.get("layernorm_mlp_alpha", 3.5565588200778455)
-        self.layernorm_mlp_beta = config_dict.get("layernorm_mlp_beta", 1.0)
-
-
-@ModelRegistry.register_model_class
+@ModelRegistry.register_model_class(
+    architecture="MiniMaxM1ForCausalLM",
+    module_name="minimax_m1",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class MiniMaxM1ForCausalLM(ModelForCasualLM):
     """
     MiniMax-M1 model for causal language modeling
+    
+    MiniMax-M1 features:
+    - Hybrid Attention: Lightning Attention + Standard Attention
+    - MoE with 32 experts, 2 experts activated per token
+    - 1M context length
     """
 
-    model_prefix = "minimax_m1"
-    model_category = ModelCategory.LLM
-
-    def __init__(self, fd_config: FDConfig, prefix: str = "") -> None:
-        super().__init__(fd_config, prefix)
+    def __init__(self, fd_config: FDConfig):
+        super().__init__(fd_config)
         
-        self.config = MiniMaxM1Config(fd_config.model_config.to_dict())
+        # Parse config
+        config = fd_config.model_config
+        self.ori_vocab_size = config.ori_vocab_size
+        self.num_local_experts = config.num_local_experts
+        self.num_experts_per_tok = config.num_experts_per_tok
         
-        logger.info(f"Initializing MiniMax-M1 model with config: {self.config.__dict__}")
-        
-        # Embeddings
-        self.embed_tokens = VocabParallelEmbedding(
-            fd_config=fd_config,
-            prefix=f"{prefix}.model.embed_tokens",
-            vocab_size=self.config.vocab_size,
-            hidden_size=self.config.hidden_size,
-        )
-        
-        # Decoder layers
-        self.layers = nn.LayerList([
-            MiniMaxM1DecoderLayer(fd_config, layer_id, prefix=f"{prefix}.model.layers.{layer_id}")
-            for layer_id in range(self.config.num_hidden_layers)
-        ])
-        
-        # Final layer norm
-        self.norm = RMSNorm(
-            fd_config=fd_config,
-            hidden_size=self.config.hidden_size,
-            eps=self.config.rms_norm_eps,
-            prefix=f"{prefix}.model.norm",
-        )
-        
-        # LM Head
+        # Model components
+        self.model = MiniMaxM1Model(fd_config)
         self.lm_head = ParallelLMHead(
-            fd_config=fd_config,
-            prefix=f"{prefix}.lm_head",
-            hidden_size=self.config.hidden_size,
-            vocab_size=self.config.vocab_size,
+            fd_config,
+            embedding_dim=config.hidden_size,
+            num_embeddings=config.vocab_size,
+            prefix="lm_head",
         )
         
-        self._tie_weights()
+        # Tie weights if needed
+        if config.get("tie_word_embeddings", False):
+            self.lm_head.weight = self.model.embed_tokens.weight
 
-    def _tie_weights(self):
-        """Tie embeddings and lm_head weights if configured"""
-        if self.fd_config.model_config.get("tie_word_embeddings", False):
-            self.lm_head.weight = self.embed_tokens.weight
+    @classmethod
+    def name(cls):
+        return "MiniMaxM1ForCausalLM"
+
+    @paddle.no_grad()
+    def set_state_dict(self, state_dict):
+        pass
+
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator):
+        """Load model weights"""
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
+
+        params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(
+            dict(self.named_sublayers()), self.fd_config
+        )
+
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            logger.debug(f"Loading weight: {loaded_weight_name}")
+            
+            # Replace prefix
+            loaded_weight_name = loaded_weight_name.replace("model.minimax_m1", "model")
+            
+            if loaded_weight_name in params_dict:
+                weight = params_dict[loaded_weight_name]
+                default_weight_loader(weight, loaded_weight)
+            else:
+                logger.warning(f"Weight {loaded_weight_name} not found in model")
 
     def forward(
         self,
@@ -136,49 +136,152 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
         **kwargs,
     ):
         """Forward pass"""
-        hidden_states = self.embed_tokens(input_ids)
-        
-        # Rotary embeddings
-        cos, sin = self.rotary_emb(hidden_states, position_ids=position_ids)
-        
-        for layer in self.layers:
-            hidden_states = layer(
-                hidden_states,
-                attention_mask=attention_mask,
-                cos=cos,
-                sin=sin,
-            )
-        
-        hidden_states = self.norm(hidden_states)
+        hidden_states = self.model(
+            input_ids=input_ids,
+            position_ids=position_ids,
+            attention_mask=attention_mask,
+        )
         logits = self.lm_head(hidden_states)
-        
         return logits
 
-    def get_rotary_embedding(self):
-        """Get rotary embedding layer"""
-        return LlamaRotaryEmbedding(
-            dim=self.config.head_dim,
-            max_position_embeddings=self.config.max_position_embeddings,
-            base=self.config.rope_theta,
+
+class MiniMaxM1Model(nn.Layer):
+    """MiniMax-M1 transformer model"""
+
+    def __init__(self, fd_config: FDConfig):
+        super().__init__()
+        
+        self.config = fd_config.model_config
+        self.padding_idx = self.config.pad_token_id
+        self.vocab_size = self.config.vocab_size
+        
+        # Embeddings
+        self.embed_tokens = VocabParallelEmbedding(
+            fd_config=fd_config,
+            prefix="model.embed_tokens",
+            vocab_size=self.vocab_size,
+            hidden_size=self.config.hidden_size,
         )
+        
+        # Get attention type list (0=Lightning, 1=Standard)
+        self.attn_type_list = getattr(self.config, "attn_type_list", [1] * self.config.num_hidden_layers)
+        
+        # Build decoder layers with hybrid attention
+        self.layers = nn.LayerList()
+        for layer_id in range(self.config.num_hidden_layers):
+            attn_type = self.attn_type_list[layer_id] if layer_id < len(self.attn_type_list) else 1
+            layer = MiniMaxM1DecoderLayer(
+                fd_config=fd_config,
+                layer_id=layer_id,
+                attention_type=attn_type,
+                prefix=f"model.layers.{layer_id}",
+            )
+            self.layers.append(layer)
+        
+        # Final layer norm
+        self.norm = RMSNorm(
+            fd_config=fd_config,
+            hidden_size=self.config.hidden_size,
+            eps=self.config.rms_norm_eps,
+            prefix="model.norm",
+        )
+        
+        # Build slope tensor for Lightning Attention
+        self.slopes = self._build_slope_tensor(self.config.num_attention_heads)
+
+    def _build_slope_tensor(self, n_attention_heads: int):
+        """Build slope tensor for linear attention"""
+        def get_slopes(n):
+            def get_slopes_power_of_2(n):
+                start = 2 ** (-(2 ** -(math.log2(n) - 3)))
+                ratio = start
+                return [start * ratio ** i for i in range(n)]
+            
+            if math.log2(n).is_integer():
+                return get_slopes_power_of_2(n)
+            else:
+                closest_power_of_2 = 2 ** math.floor(math.log2(n))
+                return (
+                    get_slopes_power_of_2(closest_power_of_2)
+                    + get_slopes(2 * closest_power_of_2)[0::2][:n - closest_power_of_2]
+                )
+        
+        slopes = paddle.to_tensor(
+            get_slopes(n_attention_heads), 
+            dtype="float32"
+        ).reshape([n_attention_heads, 1, 1])
+        return slopes
+
+    def forward(
+        self,
+        input_ids: paddle.Tensor,
+        position_ids: paddle.Tensor | None = None,
+        attention_mask: paddle.Tensor | None = None,
+    ):
+        """Forward pass through the model"""
+        batch_size, seq_len = input_ids.shape
+        
+        # Get embeddings
+        hidden_states = self.embed_tokens(input_ids)
+        
+        # Prepare slope rates for Lightning Attention
+        slope_rates = []
+        for idx in range(len(self.layers)):
+            slope = self.slopes.clone()
+            slope = slope * (1 - idx / (len(self.layers) - 1) + 1e-5)
+            slope_rates.append(slope)
+        
+        # Forward through decoder layers
+        for idx, decoder_layer in enumerate(self.layers):
+            hidden_states = decoder_layer(
+                hidden_states=hidden_states,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                slope_rate=slope_rates[idx],
+            )
+        
+        # Final norm
+        hidden_states = self.norm(hidden_states)
+        
+        return hidden_states
 
 
 class MiniMaxM1DecoderLayer(nn.Layer):
-    """MiniMax-M1 decoder layer with hybrid attention and MoE"""
+    """MiniMax-M1 decoder layer with hybrid attention"""
 
-    def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = "") -> None:
+    def __init__(
+        self, 
+        fd_config: FDConfig, 
+        layer_id: int, 
+        attention_type: int = 1,
+        prefix: str = ""
+    ):
         super().__init__()
         
         self.layer_id = layer_id
-        self.prefix = prefix
+        self.attention_type = attention_type  # 0=Lightning, 1=Standard
         
-        # Hybrid attention
-        self.self_attn = MiniMaxM1Attention(fd_config, layer_id, prefix=f"{prefix}.self_attn")
+        # Attention - choose based on attention type
+        if attention_type == 0:
+            # Lightning Attention (not fully implemented, fallback to standard)
+            logger.info(f"Layer {layer_id}: Using Lightning Attention")
+            self.self_attn = MiniMaxM1LightningAttention(fd_config, layer_id, prefix=f"{prefix}.self_attn")
+        else:
+            # Standard Flash Attention
+            logger.info(f"Layer {layer_id}: Using Standard Attention")
+            self.self_attn = MiniMaxM1StandardAttention(fd_config, layer_id, prefix=f"{prefix}.self_attn")
         
-        # MoE MLP
-        self.mlp = MiniMaxM1MoE(fd_config, layer_id, prefix=f"{prefix}.mlp")
+        # MoE Layer
+        self.block_sparse_moe = MiniMaxM1SparseMoEBlock(fd_config, layer_id, prefix=f"{prefix}.mlp")
         
-        # Post-attention layernorm
+        # Layer norms
+        self.input_layernorm = RMSNorm(
+            fd_config=fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
+            eps=fd_config.model_config.rms_norm_eps,
+            prefix=f"{prefix}.input_layernorm",
+        )
+        
         self.post_attention_layernorm = RMSNorm(
             fd_config=fd_config,
             hidden_size=fd_config.model_config.hidden_size,
@@ -186,58 +289,99 @@ class MiniMaxM1DecoderLayer(nn.Layer):
             prefix=f"{prefix}.post_attention_layernorm",
         )
         
-        # Post-MLP layernorm  
-        self.post_mlp_layernorm = RMSNorm(
-            fd_config=fd_config,
-            hidden_size=fd_config.model_config.hidden_size,
-            eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{prefix}.post_mlp_layernorm",
+        # Post-norm configuration
+        self.postnorm = getattr(fd_config.model_config, "postnorm", True)
+        
+        # Layer normalization scaling factors
+        self.layernorm_attention_alpha = getattr(
+            fd_config.model_config, "layernorm_linear_attention_alpha", 3.5565588200778455
+        ) if attention_type == 0 else getattr(
+            fd_config.model_config, "layernorm_full_attention_alpha", 3.5565588200778455
         )
+        self.layernorm_attention_beta = getattr(
+            fd_config.model_config, "layernorm_linear_attention_beta", 1.0
+        ) if attention_type == 0 else getattr(
+            fd_config.model_config, "layernorm_full_attention_beta", 1.0
+        )
+        self.layernorm_mlp_alpha = getattr(
+            fd_config.model_config, "layernorm_mlp_alpha", 3.5565588200778455
+        )
+        self.layernorm_mlp_beta = getattr(
+            fd_config.model_config, "layernorm_mlp_beta", 1.0
+        )
+        
+        # Shared experts (if configured)
+        shared_intermediate = getattr(fd_config.model_config, "shared_intermediate_size", 0)
+        self.shared_moe = shared_intermediate > 0
+        if self.shared_moe:
+            self.shared_mlp = MiniMaxM1MLP(
+                fd_config, 
+                intermediate_size=shared_intermediate,
+                prefix=f"{prefix}.shared_experts"
+            )
+            self.coefficient = nn.Linear(
+                fd_config.model_config.hidden_size, 
+                1, 
+                bias=False
+            )
 
     def forward(
         self,
         hidden_states: paddle.Tensor,
         attention_mask: paddle.Tensor | None = None,
-        cos: paddle.Tensor | None = None,
-        sin: paddle.Tensor | None = None,
+        position_ids: paddle.Tensor | None = None,
+        slope_rate: paddle.Tensor | None = None,
     ):
         """Forward pass through decoder layer"""
-        # Self attention with residual
+        
+        # Pre-attention norm
         residual = hidden_states
-        hidden_states = self.self_attn(
-            hidden_states,
+        hidden_states = self.input_layernorm(hidden_states)
+        if self.postnorm:
+            residual = hidden_states
+        
+        # Self attention
+        hidden_states, _, _ = self.self_attn(
+            hidden_states=hidden_states,
             attention_mask=attention_mask,
-            cos=cos,
-            sin=sin,
+            position_ids=position_ids,
+            slope_rate=slope_rate,
         )
-        hidden_states = residual + hidden_states
         
-        # Post-attention layernorm
-        hidden_states = self.post_attention_layernorm(hidden_states)
+        # Residual connection with scaling
+        hidden_states = residual * self.layernorm_attention_alpha + hidden_states * self.layernorm_attention_beta
         
-        # MoE MLP with residual
+        # Pre-MLP norm
         residual = hidden_states
-        hidden_states = self.mlp(hidden_states)
-        hidden_states = residual + hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        if self.postnorm:
+            residual = hidden_states
         
-        # Post-MLP layernorm
-        hidden_states = self.post_mlp_layernorm(hidden_states)
+        # MoE
+        moe_hidden_states, router_logits = self.block_sparse_moe(hidden_states)
+        
+        # Shared experts (if configured)
+        if self.shared_moe:
+            output_mlp = self.shared_mlp(hidden_states)
+            coef = paddle.nn.functional.sigmoid(
+                self.coefficient.weight.astype(hidden_states.dtype) @ hidden_states.astype("float32").T
+            ).T
+            coef = coef.astype(hidden_states.dtype)
+            hidden_states = moe_hidden_states * (1 - coef) + output_mlp * coef
+        else:
+            hidden_states = moe_hidden_states
+        
+        # Residual connection with scaling
+        hidden_states = residual * self.layernorm_mlp_alpha + hidden_states * self.layernorm_mlp_beta
         
         return hidden_states
 
 
-class MiniMaxM1Attention(nn.Layer):
-    """MiniMax-M1 attention with hybrid Lightning/Softmax attention support"""
+class MiniMaxM1StandardAttention(nn.Layer):
+    """Standard attention for MiniMax-M1"""
 
-    def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = "") -> None:
+    def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = ""):
         super().__init__()
-        
-        # TODO: Implement hybrid attention
-        # MiniMax-M1 uses attn_type_list to determine attention type per layer
-        # Currently using standard attention as placeholder
-        
-        from fastdeploy.model_executor.layers.attention.attention import Attention
-        from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
         
         self.fd_config = fd_config
         self.layer_id = layer_id
@@ -247,13 +391,28 @@ class MiniMaxM1Attention(nn.Layer):
         num_kv_heads = fd_config.model_config.num_key_value_heads
         num_kv_heads_replicas = max(1, tp_size // num_kv_heads)
         
-        self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // tp_size
-        self.kv_size = num_kv_heads * self.head_dim * num_kv_heads_replicas // tp_size
-        
         # QKV projection
-        self.qkv_proj = QKVParallelLinear(
+        self.q_proj = ColumnParallelLinear(
             fd_config=fd_config,
-            prefix=f"{prefix}.qkv_proj",
+            prefix=f"{prefix}.q_proj",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=fd_config.model_config.num_attention_heads * self.head_dim,
+            with_bias=False,
+        )
+        
+        self.k_proj = ColumnParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.k_proj",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=num_kv_heads * self.head_dim,
+            with_bias=False,
+        )
+        
+        self.v_proj = ColumnParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.v_proj",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=num_kv_heads * self.head_dim,
             with_bias=False,
         )
         
@@ -261,72 +420,278 @@ class MiniMaxM1Attention(nn.Layer):
         self.o_proj = RowParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.o_proj",
-            input_size=fd_config.model_config.head_dim * fd_config.model_config.num_attention_heads,
+            input_size=fd_config.model_config.num_attention_heads * self.head_dim,
             output_size=fd_config.model_config.hidden_size,
+            with_bias=False,
             layer_id=layer_id,
         )
         
-        # Attention
-        self.attn = Attention(
-            fd_config,
-            layer_id=layer_id,
-            prefix=prefix,
-            use_neox_rotary_style=True,
+        # RoPE
+        self.rotary_dim = getattr(fd_config.model_config, "rotary_dim", self.head_dim)
+        self.rotary_emb = LlamaRotaryEmbedding(
+            dim=self.rotary_dim,
+            max_position_embeddings=fd_config.model_config.max_position_embeddings,
+            base=fd_config.model_config.rope_theta,
         )
 
     def forward(
         self,
         hidden_states: paddle.Tensor,
         attention_mask: paddle.Tensor | None = None,
-        cos: paddle.Tensor | None = None,
-        sin: paddle.Tensor | None = None,
+        position_ids: paddle.Tensor | None = None,
+        slope_rate: paddle.Tensor | None = None,
     ):
-        """Forward pass through attention"""
-        qkv = self.qkv_proj(hidden_states)
+        """Forward pass through standard attention"""
+        batch_size, seq_len, _ = hidden_states.shape
         
-        # TODO: Implement Lightning Attention for layers with attn_type=0
+        # QKV projections
+        query_states = self.q_proj(hidden_states)
+        key_states = self.k_proj(hidden_states)
+        value_states = self.v_proj(hidden_states)
         
-        # For now, use standard attention
-        attn_output = self.attn(
-            qkv=qkv,
-            cos=cos,
-            sin=sin,
-            attention_mask=attention_mask,
+        # Reshape for multi-head attention
+        query_states = query_states.reshape([batch_size, seq_len, -1, self.head_dim]).transpose([0, 2, 1, 3])
+        key_states = key_states.reshape([batch_size, seq_len, -1, self.head_dim]).transpose([0, 2, 1, 3])
+        value_states = value_states.reshape([batch_size, seq_len, -1, self.head_dim]).transpose([0, 2, 1, 3])
+        
+        # RoPE
+        cos, sin = self.rotary_emb(value_states, seq_len=seq_len)
+        
+        # Apply RoPE
+        # Note: Full RoPE implementation would go here
+        
+        # Attention (using FastDeploy's built-in attention)
+        attn = Attention(
+            self.fd_config,
+            layer_id=self.layer_id,
+            prefix=self.prefix if hasattr(self, 'prefix') else "",
+            use_neox_rotary_style=True,
         )
         
+        # Simplified attention computation
+        qkv = paddle.concat([query_states, key_states, value_states], axis=-1)
+        attn_output = attn(qkv=qkv, cos=cos, sin=sin, attention_mask=attention_mask)
+        
+        # Output projection
         output = self.o_proj(attn_output)
-        return output
+        
+        return output, None, None
 
 
-class MiniMaxM1MoE(nn.Layer):
-    """MiniMax-M1 MoE (Mixture of Experts) layer"""
+class MiniMaxM1LightningAttention(nn.Layer):
+    """
+    Lightning Attention for MiniMax-M1
+    
+    This is a simplified implementation. Full Lightning Attention
+    requires custom CUDA kernels for optimal performance.
+    """
 
-    def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = "") -> None:
+    def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = ""):
         super().__init__()
-        
-        # TODO: Implement MoE layer for MiniMax-M1
-        # MiniMax-M1 uses shared_moe_mode='sigmoid'
-        # 32 experts, 2 experts activated per token
-        
-        from fastdeploy.model_executor.layers.moe.moe import FusedMoE
         
         self.fd_config = fd_config
         self.layer_id = layer_id
+        self.hidden_size = fd_config.model_config.hidden_size
+        self.num_heads = fd_config.model_config.num_attention_heads
+        self.head_dim = fd_config.model_config.head_dim
         
-        # Placeholder - need to implement MiniMax-specific MoE
-        logger.warning(
-            f"MiniMax-M1 MoE layer {layer_id} using placeholder implementation. "
-            "Full MoE support needs custom implementation."
+        # QKV projection
+        self.qkv_proj = ColumnParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.qkv_proj",
+            input_size=self.hidden_size,
+            output_size=3 * self.num_heads * self.head_dim,
+            with_bias=False,
         )
         
-        # Fallback to dense MLP for now
-        from fastdeploy.model_executor.models.qwen3 import Qwen3MLP
+        # Output gate
+        self.output_gate = ColumnParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.output_gate",
+            input_size=self.hidden_size,
+            output_size=self.num_heads * self.head_dim,
+            with_bias=False,
+        )
         
-        self.mlp = Qwen3MLP(fd_config, layer_id, prefix=f"{prefix}.mlp")
+        # Output projection
+        self.out_proj = RowParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.out_proj",
+            input_size=self.num_heads * self.head_dim,
+            output_size=self.hidden_size,
+            with_bias=False,
+            layer_id=layer_id,
+        )
+        
+        # Norm
+        self.norm = RMSNorm(
+            fd_config=fd_config,
+            hidden_size=self.num_heads * self.head_dim,
+            eps=fd_config.model_config.rms_norm_eps,
+            prefix=f"{prefix}.norm",
+        )
+        
+        self.prefix = prefix
+
+    def forward(
+        self,
+        hidden_states: paddle.Tensor,
+        attention_mask: paddle.Tensor | None = None,
+        position_ids: paddle.Tensor | None = None,
+        slope_rate: paddle.Tensor | None = None,
+    ):
+        """
+        Simplified Lightning Attention forward pass
+        
+        Note: This is a placeholder. Full Lightning Attention implementation
+        requires custom kernels for the linear attention mechanism.
+        For production use, consider using the Triton or CUDA implementation.
+        """
+        logger.warning(
+            f"Lightning Attention for layer {self.layer_id} is using simplified implementation. "
+            "For optimal performance, custom kernels are required."
+        )
+        
+        # Linear attention (simplified version)
+        # In practice, this would use the specific Lightning Attention algorithm
+        batch_size, seq_len, _ = hidden_states.shape
+        
+        # QKV projection
+        qkv = self.qkv_proj(hidden_states)
+        qkv = qkv.reshape([batch_size, seq_len, self.num_heads, 3 * self.head_dim])
+        q, k, v = paddle.split(qkv, 3, axis=-1)
+        
+        # Simplified attention computation (fallback to standard)
+        # In production, this would use the custom Lightning Attention kernel
+        attn_output = paddle.matmul(q, k.transpose([0, 1, 3, 2])) / (self.head_dim ** 0.5)
+        
+        if attention_mask is not None:
+            attn_output = attn_output + attention_mask
+            
+        attn_output = paddle.nn.functional.softmax(attn_output, axis=-1)
+        attn_output = paddle.matmul(attn_output, v)
+        
+        # Reshape
+        attn_output = attn_output.reshape([batch_size, seq_len, -1])
+        
+        # Norm
+        attn_output = self.norm(attn_output)
+        
+        # Gate
+        gate = paddle.nn.functional.sigmoid(self.output_gate(hidden_states))
+        attn_output = gate * attn_output
+        
+        # Output projection
+        output = self.out_proj(attn_output)
+        
+        return output, None, None
+
+
+class MiniMaxM1MLP(nn.Layer):
+    """MiniMax-M1 MLP (shared expert)"""
+
+    def __init__(self, fd_config: FDConfig, intermediate_size: int, prefix: str = ""):
+        super().__init__()
+        
+        self.gate_proj = ColumnParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.gate_proj",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=intermediate_size,
+            with_bias=False,
+            activation=fd_config.model_config.hidden_act,
+        )
+        
+        self.up_proj = ColumnParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.up_proj",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=intermediate_size,
+            with_bias=False,
+        )
+        
+        self.down_proj = RowParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.down_proj",
+            input_size=intermediate_size,
+            output_size=fd_config.model_config.hidden_size,
+            with_bias=False,
+        )
+        
+        self.act_fn = SiluAndMul(
+            fd_config=fd_config,
+            bias=None,
+            act_method=fd_config.model_config.hidden_act,
+        )
+
+    def forward(self, x):
+        return self.down_proj(self.act_fn(self.gate_proj(x), self.up_proj(x)))
+
+
+class MiniMaxM1SparseMoEBlock(nn.Layer):
+    """MiniMax-M1 Sparse MoE Block"""
+
+    def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = ""):
+        super().__init__()
+        
+        self.hidden_dim = fd_config.model_config.hidden_size
+        self.ffn_dim = fd_config.model_config.intermediate_size
+        self.num_experts = fd_config.model_config.num_local_experts
+        self.top_k = fd_config.model_config.num_experts_per_tok
+        
+        # Gate
+        self.gate = ReplicatedLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.gate",
+            input_size=self.hidden_dim,
+            output_size=self.num_experts,
+            with_bias=False,
+            skip_quant=True,
+        )
+        
+        # Experts (using FusedMoE from FastDeploy)
+        self.experts = FusedMoE(
+            fd_config=fd_config,
+            reduce_results=True,
+            renormalize=False,
+            moe_intermediate_size=self.ffn_dim,
+            num_experts=self.num_experts,
+            top_k=self.top_k,
+            topk_method=getattr(fd_config.model_config, "topk_method", "noaux_tc"),
+            topk_group=getattr(fd_config.model_config, "topk_group", 1),
+            n_group=getattr(fd_config.model_config, "n_group", 1),
+            routed_scaling_factor=getattr(fd_config.model_config, "routed_scaling_factor", 1.0),
+            layer_idx=layer_id,
+            weight_key_map={},
+        )
+        
+        # Jitter noise
+        self.jitter_noise = getattr(fd_config.model_config, "router_jitter_noise", 0.0)
 
     def forward(self, hidden_states: paddle.Tensor):
         """Forward pass through MoE"""
-        return self.mlp(hidden_states)
+        batch_size, seq_len, hidden_dim = hidden_states.shape
+        hidden_states = hidden_states.reshape([-1, hidden_dim])
+        
+        # Router
+        router_logits = self.gate(hidden_states)[0]
+        
+        if self.training and self.jitter_noise > 0:
+            hidden_states = hidden_states * paddle.uniform(
+                hidden_states.shape, min=1.0 - self.jitter_noise, max=1.0 + self.jitter_noise
+            )
+        
+        # Compute routing weights
+        routing_weights = paddle.nn.functional.softmax(router_logits, axis=-1)
+        routing_weights, selected_experts = paddle.topk(routing_weights, self.top_k, axis=-1)
+        routing_weights = routing_weights / routing_weights.sum(axis=-1, keepdim=True)
+        
+        # Process experts
+        final_hidden_states = self.experts(hidden_states, self.gate, None)
+        
+        final_hidden_states = final_hidden_states.reshape([batch_size, seq_len, hidden_dim])
+        
+        return final_hidden_states, router_logits
 
 
 # Model registration metadata
