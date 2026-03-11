@@ -1133,6 +1133,47 @@ std::vector<paddle::Tensor> get_attn_mask_q(
     const paddle::optional<paddle::Tensor>& attn_mask_kv,
     const int kv_token_num);
 
+void RadixTopkRaggedTransform(
+    paddle::Tensor& input,
+    paddle::Tensor& output_indices,
+    const paddle::Tensor& offsets,
+    paddle::Tensor& lengths,
+    paddle::optional<paddle::Tensor>& seq_len_decoder,
+    paddle::optional<paddle::Tensor>& batch_id_per_token,
+    paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
+    int top_k,
+    int q_num_heads = 0);
+
+std::vector<paddle::Tensor> DSMLAWriteCacheKernel(
+    const paddle::Tensor& kv_nope,
+    const paddle::Tensor& kv_pe,
+    const paddle::Tensor& kv_cache,
+    const paddle::Tensor& slot_mapping,
+    const paddle::Tensor& seq_lens,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::optional<paddle::Tensor>& kv_signal_data,
+    const paddle::optional<paddle::Tensor>& scale,
+    const std::string& cache_quant_type_str,
+    const int max_seq_len,
+    const bool is_prefill);
+
+std::vector<paddle::Tensor> IndexerKQuantAndCacheKernel(
+    const paddle::Tensor& k,
+    const paddle::Tensor& kv_cache,
+    const paddle::Tensor& slot_mapping,
+    const int64_t quant_block_size,
+    const std::string& scale_fmt);
+
+std::vector<paddle::Tensor> CpGatherIndexerKQuantCacheKernel(
+    const paddle::Tensor& kv_cache,
+    paddle::Tensor& dst_k,
+    paddle::Tensor& dst_scale,
+    const paddle::Tensor& block_table,
+    const paddle::Tensor& cu_seq_lens);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
         &GetExpertTokenNum,
@@ -1736,4 +1777,18 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("custom_numpy_to_tensor",
         &CustomNumpyToTensor,
         "custom_numpy_to_tensor function");
+
+  m.def("radix_topk_ragged_transform",
+        &RadixTopkRaggedTransform,
+        "radix_topk_ragged_transform function");
+
+  m.def("dsk_attn_write_cache", &DSMLAWriteCacheKernel, "dsk_attn_write_cache");
+
+  m.def("indexer_k_quant_and_cache",
+        &IndexerKQuantAndCacheKernel,
+        "indexer_k_quant_and_cache");
+
+  m.def("cp_gather_indexer_k_quant_cache",
+        &CpGatherIndexerKQuantCacheKernel,
+        "cp_gather_indexer_k_quant_cache");
 }

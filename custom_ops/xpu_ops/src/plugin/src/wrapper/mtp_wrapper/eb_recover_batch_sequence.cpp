@@ -104,7 +104,9 @@ static int xpu3_wrapper(api::Context *ctx,
   auto eb_recover_batch_sequence_kernel =
       xpu3::plugin::eb_recover_batch_sequence<TX, TY>;
   // NOTE: Don't change 16 to 64, because kernel use gsm
-  eb_recover_batch_sequence_kernel<<<ctx->ncluster(), 16, ctx->xpu_stream>>>(
+  int32_t ret_xre = eb_recover_batch_sequence_kernel<<<ctx->ncluster(),
+                                                       16,
+                                                       ctx->xpu_stream>>>(
       const_cast<TX *>(x),
       y,
       encoder_seqs_lods.xpu,
@@ -114,6 +116,7 @@ static int xpu3_wrapper(api::Context *ctx,
       en_batch,
       de_batch,
       hidden_dim);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

@@ -353,6 +353,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		c.Writer.Header().Set("X-Router-Prefill-URL", prefillURL)
 		c.Writer.Header().Set("X-Router-Decode-URL", decodeURL)
 	} else {
+		logger.Info(ctx, "Parsing completed; starting worker selection.")
 		// Non-PD mode: use Mixed instance
 		logger.Info(ctx, "Parsing completed; starting worker selection.")
 		dest, err := manager.SelectWorker(ctx, "")
