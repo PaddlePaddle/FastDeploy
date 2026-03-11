@@ -32,8 +32,8 @@ from fastdeploy.model_executor.layers.attention.ops import (
     gqa_rope_write_cache,
     pre_cache_len_concat,
 )
-from fastdeploy.model_executor.layers.attention.ops.gqa_rope_write_cache import (
-    gqa_rope_write_cache_inplace,
+from fastdeploy.model_executor.layers.attention.triton_ops.rope_and_cache_write import (
+    triton_rope_and_cache_write,
 )
 from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
     _elementwise_add_kernel,
@@ -41,7 +41,6 @@ from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attent
     build_kv_indices_from_block_tables,
     build_unified_kv_indices,
     extend_attention_fwd_unified,
-    pre_cache_len_concat_triton,
     triton_cumsum_with_zero_prefix,
 )
 from fastdeploy.utils import get_logger
@@ -53,13 +52,6 @@ logger = get_logger("deterministic_attention", "deterministic_attention.log")
 class DeterministicCudaGraphBuffers:
     """Pre-allocated GPU buffers for CUDA Graph-compatible deterministic attention."""
 
-    # pre_cache_len_concat_triton
-    cu_seqlens_k: Optional[paddle.Tensor] = None
-    pre_cache_batch_ids: Optional[paddle.Tensor] = None
-    pre_cache_tile_ids: Optional[paddle.Tensor] = None
-    cache_len: Optional[paddle.Tensor] = None
-    loop_times: Optional[paddle.Tensor] = None
-    gridx_offset: Optional[paddle.Tensor] = None
     # index building
     qo_indptr: Optional[paddle.Tensor] = None
     prefix_kv_indptr: Optional[paddle.Tensor] = None
@@ -74,12 +66,8 @@ class DeterministicCudaGraphBuffers:
     total_seq_lens_buf: Optional[paddle.Tensor] = None
     # attention output
     output: Optional[paddle.Tensor] = None
-    # q_roped buffer: gqa_rope_write_cache allocates internally; Triton needs fixed addr
+    # q_roped buffer: Triton rope writes here at fixed address for CUDA Graph
     q_roped: Optional[paddle.Tensor] = None
-    # gqa_rope_write_cache inplace buffers (CUDA Graph safe)
-    k_buf: Optional[paddle.Tensor] = None
-    v_buf: Optional[paddle.Tensor] = None
-    qkv_out_buf: Optional[paddle.Tensor] = None
 
 
 class DeterministicAttentionMixin:
@@ -96,21 +84,11 @@ class DeterministicAttentionMixin:
 
         max_bsz = self.fd_config.scheduler_config.max_num_seqs
         max_model_len = self.max_seq_len
-        block_size = self.block_size
         max_total_kv_len = max(max_bsz * max_model_len, 1)
-        max_tile_per_bs = (max_model_len + block_size - 1) // block_size
-        max_pre_cache_size = max(max_bsz * max_tile_per_bs, 1)
         max_capture_size = self.fd_config.graph_opt_config.max_capture_size
 
         bufs = DeterministicCudaGraphBuffers()
-        # pre_cache_len_concat_triton buffers
-        bufs.cu_seqlens_k = paddle.empty([max_bsz + 1], dtype="int32")
-        bufs.pre_cache_batch_ids = paddle.empty([max_pre_cache_size], dtype="int32")
-        bufs.pre_cache_tile_ids = paddle.empty([max_pre_cache_size], dtype="int32")
-        bufs.cache_len = paddle.empty([max_bsz], dtype="int32")
-        bufs.loop_times = paddle.empty([max_bsz], dtype="int32")
-        bufs.gridx_offset = paddle.empty([max_bsz + 1], dtype="int32")
-        # Index building buffers
+        # Index building buffers (always needed)
         bufs.qo_indptr = paddle.empty([max_bsz + 1], dtype="int32")
         bufs.prefix_kv_indptr = paddle.empty([max_bsz + 1], dtype="int32")
         bufs.prefix_kv_indices = paddle.empty([max_total_kv_len], dtype="int32")
@@ -122,26 +100,18 @@ class DeterministicAttentionMixin:
         bufs.prefix_lens_buf = paddle.empty([max_bsz], dtype="int32")
         bufs.unified_lens_buf = paddle.empty([max_bsz], dtype="int32")
         bufs.total_seq_lens_buf = paddle.empty([max_bsz], dtype="int32")
-        # q_roped and output buffers: use model's compute dtype (not hardcoded bfloat16).
-        # paddle.get_default_dtype() returns the dtype set by the model loading code.
+        # q_roped and output buffers (always needed)
         compute_dtype = paddle.get_default_dtype()
         bufs.q_roped = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=compute_dtype)
         bufs.output = paddle.empty([max_capture_size, self.num_heads, self.head_dim], dtype=compute_dtype)
-        # gqa_rope_write_cache inplace buffers (CUDA Graph safe: fixed addresses)
-        # k_buf/v_buf need max_total_kv_len because kv_token_num = sum(cache_len + extend_len)
-        # which can be much larger than max_capture_size during decode with large prefixes.
-        total_head_dim = (self.num_heads + 2 * self.kv_num_heads) * self.head_dim
-        bufs.k_buf = paddle.empty([max_total_kv_len, self.kv_num_heads, self.head_dim], dtype=compute_dtype)
-        bufs.v_buf = paddle.empty([max_total_kv_len, self.kv_num_heads, self.head_dim], dtype=compute_dtype)
-        bufs.qkv_out_buf = paddle.empty([max_capture_size, total_head_dim], dtype=compute_dtype)
 
+        # Estimate total allocated bytes
+        elem_size = 2  # bfloat16
         total_bytes = (
             7 * (max_bsz + 1) * 4
             + 5 * max_bsz * 4
-            + 3 * max_total_kv_len * 4
-            + max_bsz * 4
-            + 2 * max_pre_cache_size * 4
-            + max_capture_size * self.num_heads * self.head_dim * 2
+            + 5 * max_total_kv_len * 4
+            + 2 * max_capture_size * self.num_heads * self.head_dim * elem_size
         )
         logger.info(
             f"[DeterministicAttention] Pre-allocated CUDA Graph buffers: "
@@ -430,6 +400,16 @@ class DeterministicAttentionMixin:
         enc = forward_meta.seq_lens_encoder
         seq_lens_encoder_for_rope = paddle.where(enc == 0, paddle.ones_like(enc), enc)
 
+        # Check Triton rope eligibility early to skip unnecessary pre_cache_len_concat
+        _use_triton_rope = os.environ.get("FD_USE_TRITON_ROPE", "1") == "1"
+        _triton_rope_eligible = (
+            _use_triton_rope
+            and forward_meta.step_use_cudagraph
+            and q_norm_weight is None  # no QK-norm
+            and getattr(layer, "cache_quant_type_str", "none") == "none"  # no cache quant
+            and not self.rope_3d  # no rope_3d
+        )
+
         # Use Triton GPU-only version when CUDA Graph is active (no D2H copy).
         # CPU scalars come from forward_meta (pre-computed outside capture region).
         if forward_meta.step_use_cudagraph:
@@ -438,28 +418,15 @@ class DeterministicAttentionMixin:
                 self._init_cudagraph_buffers()
             bufs = self._cudagraph_bufs
 
-            bsz = forward_meta.seq_lens_this_time.shape[0]
-            max_dec_len = int(forward_meta.max_len_tensor_cpu[2])
-            max_tile_per_bs = (max_dec_len + self.block_size - 1) // self.block_size
-            cu_seqlens_k, pre_cache_batch_ids, pre_cache_tile_ids_per_batch = pre_cache_len_concat_triton(
-                seq_lens_encoder_for_rope,
-                forward_meta.seq_lens_decoder,
-                forward_meta.seq_lens_this_time,
-                bsz,
-                self.block_size,
-                max_tile_per_bs,
-                cu_seqlens_k_buf=bufs.cu_seqlens_k,
-                batch_ids_buf=bufs.pre_cache_batch_ids,
-                tile_ids_buf=bufs.pre_cache_tile_ids,
-                cache_len_buf=bufs.cache_len,
-                loop_times_buf=bufs.loop_times,
-                gridx_offset_buf=bufs.gridx_offset,
-            )
-            # Build CPU tensors directly (no D2H copy), needed by gqa_rope_write_cache C++ op
-            pre_cache_num_blocks_cpu = paddle.to_tensor(
-                [forward_meta.deter_pre_cache_num_blocks], dtype="int32", place=paddle.CPUPlace()
-            )
-            kv_token_num = forward_meta.deter_kv_token_num
+            if not _triton_rope_eligible:
+                # cudagraph + Triton not eligible: C++ inplace crashes at replay.
+                # Fail fast here before wasting compute on pre_cache metadata.
+                raise AssertionError(
+                    "Deterministic + CUDA Graph requires Triton RoPE, but current config "
+                    "is not eligible. Possible causes: QK-norm enabled, cache quantization "
+                    "enabled, rope_3d enabled, or FD_USE_TRITON_ROPE=0. "
+                    "Fix: disable cudagraph (--cudagraph 0) or disable deterministic mode."
+                )
         else:
             (
                 cu_seqlens_k,
@@ -535,43 +502,56 @@ class DeterministicAttentionMixin:
         _skip_index = "index" in _graph_skip
         _skip_attn = "attn" in _graph_skip
 
-        _force_inplace = os.environ.get("FD_FORCE_INPLACE_ROPE", "0") == "1"
+        _use_triton_rope = os.environ.get("FD_USE_TRITON_ROPE", "1") == "1"
+
+        # Check if Triton rope path is eligible
+        _triton_rope_eligible = (
+            _use_triton_rope
+            and forward_meta.step_use_cudagraph
+            and q_norm_weight is None  # no QK-norm
+            and getattr(layer, "cache_quant_type_str", "none") == "none"  # no cache quant
+            and not self.rope_3d  # no rope_3d
+        )
+
         if _skip_rope:
             # Dummy output for bisect: no rope, no KV cache write
             token_nums = qkv.shape[0]
             q_roped = paddle.zeros([token_nums, self.num_heads, self.head_dim], dtype=qkv.dtype)
-        elif forward_meta.step_use_cudagraph:
-            # Use inplace version: writes into pre-allocated buffers (CUDA Graph safe).
-            # Pass FULL buffers (not slices) to avoid temporary Python tensor objects
-            # that would get GC'd after capture. The C++ kernel uses token_num/kv_token_num
-            # scalars to control write range, so extra buffer space is harmless.
+        elif _triton_rope_eligible:
+            # Triton path: fused RoPE + paged cache write, no k_buf/v_buf/qkv_out_buf needed
             token_nums = qkv.shape[0]
             assert (
                 token_nums <= bufs.q_roped.shape[0]
             ), f"token_nums={token_nums} > q_roped buf={bufs.q_roped.shape[0]}"
-            assert kv_token_num <= bufs.k_buf.shape[0], f"kv_token_num={kv_token_num} > k_buf={bufs.k_buf.shape[0]}"
-            assert (
-                token_nums <= bufs.qkv_out_buf.shape[0]
-            ), f"token_nums={token_nums} > qkv_out_buf={bufs.qkv_out_buf.shape[0]}"
-            q_roped, _k_flat, _v_flat, _qkv_out = gqa_rope_write_cache_inplace(
-                **_rope_common_args,
-                q_buf=bufs.q_roped,
-                k_buf=bufs.k_buf,
-                v_buf=bufs.v_buf,
-                qkv_out_buf=bufs.qkv_out_buf,
+            triton_rope_and_cache_write(
+                qkv,
+                cache_k,
+                cache_v,
+                bufs.q_roped,
+                forward_meta.rotary_embs,
+                forward_meta.batch_id_per_token,
+                forward_meta.cu_seqlens_q,
+                seq_lens_encoder_for_rope,
+                forward_meta.seq_lens_decoder,
+                forward_meta.block_tables,
+                self.num_heads,
+                self.kv_num_heads,
+                self.head_dim,
+                self.block_size,
+                use_neox_rotary_style=layer.use_neox_rotary_style,
             )
-            # Slice result to actual size (kernel wrote only token_nums/kv_token_num elements)
-            q_roped = q_roped[:token_nums]
-        elif _force_inplace:
-            # Test path: use inplace op with temp buffers (not for CUDA Graph)
-            token_nums = qkv.shape[0]
-            total_head_dim = (self.num_heads + 2 * self.kv_num_heads) * self.head_dim
-            q_roped, _k_flat, _v_flat, _qkv_out = gqa_rope_write_cache_inplace(
-                **_rope_common_args,
-                q_buf=paddle.empty([token_nums, self.num_heads, self.head_dim], dtype=qkv.dtype),
-                k_buf=paddle.empty([kv_token_num, self.kv_num_heads, self.head_dim], dtype=qkv.dtype),
-                v_buf=paddle.empty([kv_token_num, self.kv_num_heads, self.head_dim], dtype=qkv.dtype),
-                qkv_out_buf=paddle.empty([token_nums, total_head_dim], dtype=qkv.dtype),
+            q_roped = bufs.q_roped[:token_nums]
+        elif forward_meta.step_use_cudagraph:
+            # gqa_rope_write_cache_inplace crashes at CUDA Graph replay
+            # (temporary tensor GC, cudaLaunchHostFunc incompatibility, etc.
+            #  see docs/cudagraph_rope_inplace_fix.md Section 4).
+            # Triton rope is the only safe path for cudagraph. If not eligible,
+            # fail fast instead of silently crashing at replay time.
+            raise AssertionError(
+                "Deterministic + CUDA Graph requires Triton RoPE, but current config "
+                "is not eligible. Possible causes: QK-norm enabled, cache quantization "
+                "enabled, rope_3d enabled, or FD_USE_TRITON_ROPE=0. "
+                "Fix: disable cudagraph (--cudagraph 0) or disable deterministic mode."
             )
         else:
             q_roped, _k_flat, _v_flat, _qkv_out = gqa_rope_write_cache(**_rope_common_args)
