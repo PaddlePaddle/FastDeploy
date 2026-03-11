@@ -18,7 +18,6 @@ Unit tests for unified_update_model_status kernel.
 Kernel semantics (from unified_update_model_status.cu):
   - Launched as <<<1, 1024>>>, one thread per batch slot (max_bsz <= 1024).
   - real_bsz = seq_lens_this_time.shape[0], max_bsz = stop_flags.shape[0].
-  - has_running_seqs is a CPU tensor (copied to GPU, kernel writes, copied back).
   - Padding slots (batch_id >= real_bsz): only counted as stopped, NO state modified.
   - Stopped/paused real slots: set stop_flags=true, seq_lens_decoder=0,
     seq_lens_this_time=0, step_output_len=0.
@@ -48,9 +47,6 @@ def to_paddle_inputs(inputs: Dict[str, Any]) -> Dict[str, Any]:
     for k, v in inputs.items():
         if isinstance(v, (int, bool, float, str)):
             paddle_inputs[k] = v
-        elif k == "has_running_seqs":
-            # Kernel host function: has_running_seqs.copy_to(GPU) → kernel → copy_to(CPU)
-            paddle_inputs[k] = paddle.to_tensor(v, place=CPU_PLACE)
         elif v is not None:
             paddle_inputs[k] = paddle.to_tensor(v, place=CUDA_PLACE)
         else:

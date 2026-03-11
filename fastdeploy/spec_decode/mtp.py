@@ -141,6 +141,7 @@ class MTPProposer(Proposer):
         self.forward_meta = None
 
         self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule
+        self.cached_num_running_requests = -1
         self.cached_token_num = -1
         self.exist_prefill_flag = False
 
@@ -162,8 +163,9 @@ class MTPProposer(Proposer):
             or self.cached_token_num <= 0
         ):
             token_num_event.synchronize()
-            return self.model_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
-        return self.cached_token_num
+            seq_lens_this_time_cpu = self.model_inputs["seq_lens_this_time_cpu"].numpy()
+            return (seq_lens_this_time_cpu > 0).sum().item(), seq_lens_this_time_cpu.sum().item()
+        return self.cached_num_running_requests, self.cached_token_num
 
     def _predict_next_launch_token_num(self) -> int:
         """
@@ -176,11 +178,13 @@ class MTPProposer(Proposer):
         Returns -1 if prediction is not applicable (non-overlap or prefill exists).
         """
         if self.exist_prefill():
-            return -1
-        return (
-            self.model_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
-            + self.model_inputs["is_block_step_cpu"].numpy().sum().item()
-        )
+            return -1, -1
+
+        seq_lens_this_time_cpu = self.model_inputs["seq_lens_this_time_cpu"].numpy()
+        is_block_step_cpu = self.model_inputs["is_block_step_cpu"].numpy()
+        next_num_running_requests = (seq_lens_this_time_cpu > 0).sum().item() + (is_block_step_cpu > 0).sum().item()
+        next_launch_token_num = seq_lens_this_time_cpu.sum().item() + is_block_step_cpu.sum().item()
+        return next_num_running_requests, next_launch_token_num
 
     def _update_mtp_config(self, main_model):
         """
@@ -671,7 +675,13 @@ class MTPProposer(Proposer):
         self.model_inputs["not_need_stop"][0] = True
         self.model_inputs.seq_lens_this_time = self.model_inputs["seq_lens_this_time_buffer"]
 
-    def _initialize_forward_meta(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False, substep: int = 0):
+    def _initialize_forward_meta(
+        self,
+        step_use_cudagraph: bool = False,
+        is_dummy_run: bool = False,
+        substep: int = 0,
+        num_running_requests: int = -1,
+    ):
         """
         Initialize forward meta and attention meta data
         """
@@ -701,6 +711,7 @@ class MTPProposer(Proposer):
             kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
             attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.enable_mm else None,
+            num_running_requests=num_running_requests,
         )
 
         # Initialzie attention meta data
@@ -848,7 +859,7 @@ class MTPProposer(Proposer):
                 self.model_inputs["step_idx"],
             )
 
-    def _propose_cuda(self, full_hidden_states, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
+    def _propose_cuda(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
         """
         Main process for MTP inference.
         Args:
@@ -861,7 +872,7 @@ class MTPProposer(Proposer):
             self.model_inputs["is_block_step_cpu"].copy_(self.model_inputs["is_block_step"], False)
             token_num_event = paddle.device.cuda.create_event()
             token_num_event.record()
-            token_num_cpu = self._resolve_current_launch_token_num(token_num_event, is_dummy_run)
+            num_running_requests, token_num_cpu = self._resolve_current_launch_token_num(token_num_event, is_dummy_run)
             if token_num_cpu > 0:
                 self.model_inputs["substep"] = substep
                 # Remove padding
@@ -914,7 +925,10 @@ class MTPProposer(Proposer):
 
                 # Initialize forward meta data
                 self._initialize_forward_meta(
-                    step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run, substep=substep
+                    step_use_cudagraph=step_use_cudagraph,
+                    is_dummy_run=is_dummy_run,
+                    substep=substep,
+                    num_running_requests=num_running_requests,
                 )
                 self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
 
@@ -949,26 +963,13 @@ class MTPProposer(Proposer):
                 if self.num_model_steps > 1:
                     self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
 
-                # target_hidden_states = eagle_get_hidden_states(
-                #     full_hidden_states,
-                #     self.model_inputs["seq_lens_this_time"],
-                #     self.model_inputs["seq_lens_encoder"],
-                #     self.model_inputs["seq_lens_decoder"],
-                #     self.model_inputs["stop_flags"],
-                #     self.target_model_inputs["accept_num"],
-                #     self.target_model_inputs["seq_lens_this_time"],
-                #     self.target_model_inputs["seq_lens_encoder"],
-                #     self.num_model_steps,
-                # )
-                # self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
-
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
                     previous_hidden_states=self.model_inputs["target_hidden_states"],
                     forward_meta=self.forward_meta,
                 )
                 token_num_event.synchronize()
-                self.cached_token_num = self._predict_next_launch_token_num()
+                self.cached_num_running_requests, self.cached_token_num = self._predict_next_launch_token_num()
                 if self.model_inputs["seq_lens_this_time_cpu"].numpy().sum().item() <= 0:
                     return
                 if self.forward_meta.step_use_cudagraph:
@@ -1060,7 +1061,7 @@ class MTPProposer(Proposer):
                     self.model.empty_input_forward(forward_meta=self.forward_meta)
             self.exist_prefill_flag = False
 
-    def _propose_xpu(self, full_hidden_states, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
+    def _propose_xpu(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
         """
         Main process for MTP inference.
         Args:
@@ -1251,10 +1252,8 @@ class MTPProposer(Proposer):
         self, full_hidden_states: paddle.Tensor, step_use_cudagraph: bool = False, is_dummy_run: bool = False
     ):
         """Execute Draft Model"""
-        self._prepare_inputs(full_hidden_states=full_hidden_states)
-        self._propose(
-            full_hidden_states=full_hidden_states, step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run
-        )
+        self._prepare_inputs(full_hidden_states)
+        self._propose(step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run)
         self._update_status()
         if self.hybrid_mode:
             self._extend_draft_token_with_ngram_match()

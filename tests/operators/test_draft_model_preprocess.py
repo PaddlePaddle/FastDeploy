@@ -353,7 +353,7 @@ class TestDraftModelPreprocess(unittest.TestCase):
         step_idx = paddle.randint(0, 100, [bsz], dtype="int64")
         seq_lens_encoder_record = paddle.randint(0, 100, [bsz], dtype="int32")  # noqa: F841
         seq_lens_decoder_record = paddle.randint(0, 100, [bsz], dtype="int32")  # noqa: F841
-        not_need_stop = paddle.zeros([1], dtype="bool").cpu()
+        not_need_stop = paddle.zeros([1], dtype="bool")
         is_block_step = paddle.zeros([bsz], dtype="bool")
         batch_drop = paddle.zeros([bsz], dtype="bool")
         mask_rollback = paddle.zeros([bsz], dtype="int32")

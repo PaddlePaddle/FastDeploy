@@ -160,6 +160,8 @@ class ForwardMeta:
 
     position_ids: Optional[paddle.Tensor] = None
 
+    num_running_requests: int = -1
+
     def clear_caches(self):
         """Safely clean up the caches"""
         if self.caches:

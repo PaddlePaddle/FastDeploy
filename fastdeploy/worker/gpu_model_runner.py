@@ -269,6 +269,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Cached token count for next batch prediction in overlap scheduling.
         # Used to avoid synchronization overhead when preparing inputs for the next batch.
         self._cached_launch_token_num = -1
+        self._cached_num_running_requests = -1
         self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule
         if self.enable_overlap_schedule:
             logger.info("Using overlap schedule")
@@ -298,7 +299,7 @@ class GPUModelRunner(ModelRunnerBase):
         return ((seq_lens_decoder > 0) & ~stop_flags).any().cpu().numpy().item()
 
     def _resolve_current_launch_token_num(
-        self, cached_token_num: int, token_num_event, is_dummy_or_profile_run: bool
+        self, cached_num_running_requests: int, cached_token_num: int, token_num_event, is_dummy_or_profile_run: bool
     ) -> int:
         """
         Resolve token count for current batch.
@@ -317,8 +318,9 @@ class GPUModelRunner(ModelRunnerBase):
             or cached_token_num <= 0
         ):
             token_num_event.synchronize()
-            return self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
-        return cached_token_num
+            seq_lens_this_time_cpu = self.share_inputs["seq_lens_this_time_cpu"].numpy()
+            return (seq_lens_this_time_cpu > 0).sum().item(), seq_lens_this_time_cpu.sum().item()
+        return cached_num_running_requests, cached_token_num
 
     def _predict_next_launch_token_num(self) -> int:
         """
@@ -331,11 +333,13 @@ class GPUModelRunner(ModelRunnerBase):
         Returns -1 if prediction is not applicable (non-overlap or prefill exists).
         """
         if self.exist_prefill():
-            return -1
-        return (
-            self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
-            + self.share_inputs["is_block_step_cpu"].numpy().sum().item()
-        )
+            return -1, -1
+
+        seq_lens_this_time_cpu = self.share_inputs["seq_lens_this_time_cpu"].numpy()
+        is_block_step_cpu = self.share_inputs["is_block_step_cpu"].numpy()
+        next_num_running_requests = (seq_lens_this_time_cpu > 0).sum().item() + (is_block_step_cpu > 0).sum().item()
+        next_launch_token_num = seq_lens_this_time_cpu.sum().item() + is_block_step_cpu.sum().item()
+        return next_num_running_requests, next_launch_token_num
 
     def only_prefill(self):
         """
@@ -1104,7 +1108,9 @@ class GPUModelRunner(ModelRunnerBase):
             )
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
 
-    def _prepare_inputs(self, cached_token_num=-1, is_dummy_or_profile_run=False) -> None:
+    def _prepare_inputs(
+        self, cached_num_running_requests=-1, cached_token_num=-1, is_dummy_or_profile_run=False
+    ) -> None:
         """Prepare the model inputs"""
         if self.enable_mm and self.share_inputs["image_features_list"] is not None:
             tensor_feats = [t for t in self.share_inputs["image_features_list"] if isinstance(t, paddle.Tensor)]
@@ -1152,7 +1158,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["is_block_step_cpu"].copy_(self.share_inputs["is_block_step"], False)
         token_num_event = paddle.device.cuda.create_event()
         token_num_event.record()
-        token_num = self._resolve_current_launch_token_num(cached_token_num, token_num_event, is_dummy_or_profile_run)
+        num_running_requests, token_num = self._resolve_current_launch_token_num(
+            cached_num_running_requests, cached_token_num, token_num_event, is_dummy_or_profile_run
+        )
         (
             ids_remove_padding,
             batch_id_per_token,
@@ -1186,7 +1194,9 @@ class GPUModelRunner(ModelRunnerBase):
             self.output_token_num_event.record()
 
         # Initialize forward meta data
-        self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
+        self.initialize_forward_meta(
+            is_dummy_or_profile_run=is_dummy_or_profile_run, num_running_requests=num_running_requests
+        )
 
         # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
@@ -1217,7 +1227,7 @@ class GPUModelRunner(ModelRunnerBase):
             logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
         )
-        return token_num, token_num_event
+        return num_running_requests, token_num, token_num_event
 
     def _process_reorder(self) -> None:
         if self.attn_backends and getattr(self.attn_backends[0], "enable_ids_reorder", False):
@@ -1257,7 +1267,7 @@ class GPUModelRunner(ModelRunnerBase):
         """Get current model"""
         return self.model
 
-    def initialize_forward_meta(self, is_dummy_or_profile_run=False):
+    def initialize_forward_meta(self, is_dummy_or_profile_run=False, num_running_requests=-1):
         """
         Initialize forward meta, attention meta data and update some config.
         """
@@ -1292,6 +1302,7 @@ class GPUModelRunner(ModelRunnerBase):
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             routing_replay_table=routing_replay_table,
+            num_running_requests=num_running_requests,
         )
 
         dist_status = self.collect_distributed_status()
@@ -2053,7 +2064,7 @@ class GPUModelRunner(ModelRunnerBase):
     ) -> None:
         # preprocess and execute model (current batch)
         model_output, p_done_idxs, token_num_event = self._preprocess_and_execute_model(
-            model_forward_batch, num_running_requests, self._cached_launch_token_num
+            model_forward_batch, num_running_requests, self._cached_num_running_requests, self._cached_launch_token_num
         )
 
         # save output (last batch)
@@ -2069,7 +2080,7 @@ class GPUModelRunner(ModelRunnerBase):
         # synchronizes the async DtoH copies of seq_lens_this_time_cpu and is_block_step_cpu,
         # ensuring that the token count for the current batch is ready to be computed and reused in the subsequent batch.
         token_num_event.synchronize()
-        next_launch_token_num = self._predict_next_launch_token_num()
+        next_num_running_requests, next_launch_token_num = self._predict_next_launch_token_num()
         if self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item() > 0 and model_output is not None:
             model_output_data, sampler_output, post_process_event = self._postprocess(
                 model_output, p_done_idxs, model_forward_batch, num_running_requests
@@ -2082,11 +2093,13 @@ class GPUModelRunner(ModelRunnerBase):
             self._cached_sampler_output = None
             self._cached_post_process_event = None
         self._cached_launch_token_num = next_launch_token_num
+        self._cached_num_running_requests = next_num_running_requests
 
     def _preprocess_and_execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
         num_running_requests: int = None,
+        cached_num_running_requests: int = -1,
         cached_token_num: int = -1,
     ) -> None:
         if self.deterministic_logger is not None:
@@ -2096,7 +2109,9 @@ class GPUModelRunner(ModelRunnerBase):
         self._process_reorder()
 
         # 1. Prepare inputs of model and sampler.
-        current_launch_token_num, token_num_event = self._prepare_inputs(cached_token_num)
+        current_num_running_requests, current_launch_token_num, token_num_event = self._prepare_inputs(
+            cached_num_running_requests, cached_token_num
+        )
         self.current_launch_token_num = current_launch_token_num
 
         # NOTE(sunxin):

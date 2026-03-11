@@ -159,9 +159,10 @@ class CudaGraphPiecewiseBackend:
         ids_remove_padding: paddle.Tensor = kwargs["forward_meta"].ids_remove_padding
         real_shape = ids_remove_padding.shape[0]
         if self.speculative_decoding and all(self.real_bsz_to_captured_size.values()):
-            num_running_requests = (ids_remove_padding.shape[0] + self.speculative_config.num_speculative_tokens) // (
-                self.speculative_config.num_speculative_tokens + 1
-            )
+            num_running_requests = kwargs["forward_meta"].num_running_requests
+            if num_running_requests < 0:
+                seq_lens_this_time: paddle.Tensor = kwargs["forward_meta"].seq_lens_this_time
+                num_running_requests = int((seq_lens_this_time.flatten() > 0).sum().item())
             real_shape = self.real_bsz_to_captured_size[num_running_requests]
         exist_prefill = kwargs["forward_meta"].exist_prefill
         # Static split graph mode: use Static + CUDAGraph for prefill/mixed phase
