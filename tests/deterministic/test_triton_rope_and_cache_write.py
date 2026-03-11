@@ -808,6 +808,8 @@ class TestTritonRopeAndCacheWrite:
     def test_mixed_prefill_decode(self):
         """Mixed batch: some seqs prefill (many tokens), some decode (1 token)."""
         num_heads, kv_num_heads, head_dim = 32, 8, 128
+        # NOTE: prefix=200 triggers a C++ get_block_shape_and_split_kv_block crash
+        # when combined with extend=1, so we use block-aligned prefix values here.
         extend_lens = [32, 1, 1, 16]
         prefix_lens = [0, 192, 128, 0]
         block_size, max_seq_len = 64, 512
