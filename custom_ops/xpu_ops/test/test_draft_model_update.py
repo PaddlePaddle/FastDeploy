@@ -48,6 +48,7 @@ def run_paddle_test(device="cpu"):
     output_cum_offsets = paddle.randint(0, 2, shape=(max_bsz,), dtype="int32")
     output_cum_offsets[0] = 0  # 确保第一个偏移量为0
     stop_flags = paddle.zeros([max_bsz], dtype="bool")
+    drop_batch = paddle.zeros([max_bsz], dtype="bool")
     not_need_stop = paddle.zeros([1], dtype="bool")
     max_dec_len = paddle.randint(100, 102, shape=(max_bsz,), dtype="int64")
     end_ids = paddle.to_tensor([2], dtype="int64")
@@ -80,6 +81,7 @@ def run_paddle_test(device="cpu"):
         step_idx,
         output_cum_offsets,
         stop_flags,
+        drop_batch,
         not_need_stop,
         max_dec_len,
         end_ids,
