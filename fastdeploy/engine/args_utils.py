@@ -565,7 +565,7 @@ class EngineArgs:
         if (
             not current_platform.is_cuda()
             or self.speculative_config is not None
-            or self.splitwise_role != "mixed"
+            or self.splitwise_role == "prefill"
             or self.dynamic_load_weight
         ):
             self.enable_overlap_schedule = False
