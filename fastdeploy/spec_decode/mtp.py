@@ -1348,7 +1348,7 @@ class MTPProposer(Proposer):
             self.model_inputs["step_idx"][idx : idx + 1] = 0
             self.model_inputs["seq_lens_decoder"][idx : idx + 1] = start_idx + task.get("seq_lens_decoder", 0)
 
-    def _update_status(self):
+    def _update_status(self, is_dummy_run: bool = False):
         """
         Update main-model's forward info in next step.
         Allocate/Free block of MPT.
@@ -1359,6 +1359,7 @@ class MTPProposer(Proposer):
             self.target_model_inputs["seq_lens_encoder"],
             self.target_model_inputs["stop_flags"],
             self.model_inputs["batch_drop"],
+            is_dummy_run,
         )
         if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             mtp_step_paddle(
@@ -1407,7 +1408,7 @@ class MTPProposer(Proposer):
         """Execute Draft Model"""
         self._prepare_inputs(full_hidden_states)
         self._propose(step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run)
-        self._update_status()
+        self._update_status(is_dummy_run)
         if self.hybrid_mode:
             self._extend_draft_token_with_ngram_match()
 
