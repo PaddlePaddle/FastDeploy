@@ -34,6 +34,7 @@ from fastdeploy.model_executor.layers.backends.metax.attention.flash_attention_i
 from fastdeploy.model_executor.ops.gpu import cache_kv_with_rope
 from fastdeploy.model_executor.ops.gpu import merge_qkv as merge_qkv_cu
 from fastdeploy.model_executor.ops.gpu import split_qkv as split_qkv_cu
+from fastdeploy.spec_decode import SpecMethod
 
 
 @dataclass
@@ -102,11 +103,11 @@ class FlashAttentionBackend(AttentionBackend):
         )
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
-        self.speculative_method: str = fd_config.speculative_config.method
+        self.speculative_method = fd_config.speculative_config.method
         self.use_speculate: bool = self.speculative_method is not None
         self.speculate_max_draft_token_num: int = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
+        self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
         self.encoder_block_shape_q: int = encoder_block_shape_q
         self.decoder_block_shape_q: int = decoder_block_shape_q
 
@@ -165,7 +166,7 @@ class FlashAttentionBackend(AttentionBackend):
         if self.has_prefill:
             batch_ids_prefill = self.prefill_info_dict["batch_ids"]
 
-            seq_lens_this_time_prefill = forward_meta.seq_lens_this_time[batch_ids_prefill, 0]
+            seq_lens_this_time_prefill = forward_meta.seq_lens_this_time[batch_ids_prefill]
             self.prefill_info_dict["cu_seqlens_q"] = paddle.concat(
                 [paddle.zeros([1], dtype="int32"), paddle.cumsum(seq_lens_this_time_prefill, axis=0).astype("int32")],
                 axis=0,
@@ -180,7 +181,7 @@ class FlashAttentionBackend(AttentionBackend):
         if self.has_decode:
             batch_ids_decode = self.decode_info_dict["batch_ids"]
 
-            seq_lens_this_time_decode = forward_meta.seq_lens_this_time[batch_ids_decode, 0]
+            seq_lens_this_time_decode = forward_meta.seq_lens_this_time[batch_ids_decode]
             cu_seqlens_q_decode = paddle.concat(
                 [paddle.zeros([1], dtype="int32"), paddle.cumsum(seq_lens_this_time_decode, axis=0).astype("int32")],
                 axis=0,
@@ -193,7 +194,7 @@ class FlashAttentionBackend(AttentionBackend):
             self.attention_metadata.cu_seqlens_q_decode[: self.decode_len + 1].copy_(cu_seqlens_q_decode)
             self.attention_metadata.batch_ids_per_token_decode[: self.decode_len].copy_(batch_ids_per_token_decode)
             self.attention_metadata.seq_lens_decode[: self.decode_len].copy_(
-                forward_meta.seq_lens_decoder[batch_ids_decode, 0]
+                forward_meta.seq_lens_decoder[batch_ids_decode]
             )
             self.attention_metadata.block_table_decode[: self.decode_len].copy_(
                 forward_meta.block_tables[batch_ids_decode, :]

@@ -76,13 +76,15 @@ static int xpu3_wrapper(Context* ctx,
                         int* output_token_num,
                         int bsz) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  xpu3::plugin::ComputeSelfOrderKernel<<<1, 1, ctx->xpu_stream>>>(
-      last_seq_lens_this_time,
-      seq_lens_this_time,
-      reinterpret_cast<const XPU_INT64*>(step_idx),
-      src_map,
-      output_token_num,
-      bsz);
+  int32_t ret_xre =
+      xpu3::plugin::ComputeSelfOrderKernel<<<1, 1, ctx->xpu_stream>>>(
+          last_seq_lens_this_time,
+          seq_lens_this_time,
+          reinterpret_cast<const XPU_INT64*>(step_idx),
+          src_map,
+          output_token_num,
+          bsz);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
@@ -94,6 +96,7 @@ int compute_self_order(Context* ctx,
                        int* output_token_num,
                        int bsz) {
   WRAPPER_CHECK_CTX(ctx);
+  WRAPPER_DUMP_FUNCTION_T1(ctx, "compute_self_order", int);
   WRAPPER_DUMP_PARAM6(ctx,
                       last_seq_lens_this_time,
                       seq_lens_this_time,
@@ -102,7 +105,6 @@ int compute_self_order(Context* ctx,
                       output_token_num,
                       bsz);
   WRAPPER_DUMP(ctx);
-
   WRAPPER_CHECK_PTR(ctx, int, bsz, last_seq_lens_this_time);
   WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_this_time);
   WRAPPER_CHECK_PTR(ctx, int64_t, bsz, step_idx);

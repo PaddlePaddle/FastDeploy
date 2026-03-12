@@ -209,7 +209,7 @@ class TestExpertService(unittest.TestCase):
 
         # 验证 ExpertService 创建和启动
         mock_expert_service.assert_called_once_with(mock_cfg, local_data_parallel_id, start_queue=False)
-        mock_expert_instance.start.assert_called_once_with(None, local_data_parallel_id, None, None)
+        mock_expert_instance.start.assert_called_once_with(None, local_data_parallel_id)
 
     @patch("fastdeploy.engine.expert_service.ExpertService")
     @patch("fastdeploy.engine.expert_service.llm_logger")

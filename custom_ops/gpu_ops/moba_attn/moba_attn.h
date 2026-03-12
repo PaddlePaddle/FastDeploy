@@ -39,7 +39,7 @@ void MobaDecoderAttnWriteCacheKv(
     const int kv_head_num,
     const int head_dim,
     const int max_input_length,
-    const std::string &cache_quant_type_str);
+    const std::string& cache_quant_type_str);
 
 void MobaEncoderAttnWriteCacheKv(
     const paddle::Tensor& k_input,
@@ -60,7 +60,7 @@ void MobaEncoderAttnWriteCacheKv(
     const int kv_head_num,
     const int head_dim,
     const int max_seq_q,
-    const std::string &cache_quant_type_str);
+    const std::string& cache_quant_type_str);
 
 void MobaDecoderAttn(
     const paddle::Tensor& q_input,
@@ -86,28 +86,26 @@ void MobaDecoderAttn(
     const int use_moba_seq_limit,
     const int max_seq_q,
     const int max_seq_k,
-    const std::string &cache_quant_type_str);
+    const std::string& cache_quant_type_str);
 
-
-void FusedBlockMeanAndRope(
-    const paddle::Tensor& qkv_out,
-    const paddle::Tensor& k_block_means,
-    const paddle::Tensor& q_input,
-    const paddle::Tensor& k_input,
-    const paddle::Tensor& v_input,
-    const paddle::Tensor& rotary_embs,
-    const paddle::Tensor& seq_len_encoder,
-    const paddle::Tensor& seq_len_decoder,
-    const paddle::Tensor& cu_seq_q,
-    const paddle::Tensor& cu_seq_k,
-    const paddle::optional<paddle::Tensor>& qkv_bias,
-    const int head_num,
-    const int kv_head_num,
-    const int head_dim,
-    const int max_input_length,
-    const int max_seq_q,
-    const int max_seq_k,
-    const std::string &cache_quant_type_str);
+void FusedBlockMeanAndRope(const paddle::Tensor& qkv_out,
+                           const paddle::Tensor& k_block_means,
+                           const paddle::Tensor& q_input,
+                           const paddle::Tensor& k_input,
+                           const paddle::Tensor& v_input,
+                           const paddle::Tensor& rotary_embs,
+                           const paddle::Tensor& seq_len_encoder,
+                           const paddle::Tensor& seq_len_decoder,
+                           const paddle::Tensor& cu_seq_q,
+                           const paddle::Tensor& cu_seq_k,
+                           const paddle::optional<paddle::Tensor>& qkv_bias,
+                           const int head_num,
+                           const int kv_head_num,
+                           const int head_dim,
+                           const int max_input_length,
+                           const int max_seq_q,
+                           const int max_seq_k,
+                           const std::string& cache_quant_type_str);
 
 std::vector<paddle::Tensor> GetCurCuSeqLenk(
     const paddle::Tensor& seq_lens_encoder,
@@ -115,29 +113,27 @@ std::vector<paddle::Tensor> GetCurCuSeqLenk(
     const paddle::Tensor& seq_lens_this_time,
     const int pack_size);
 
-std::vector<paddle::Tensor> MobaQKGemm(
-    const paddle::Tensor& q_input,
-    const paddle::Tensor& k_block_means,
-    const paddle::Tensor& seq_len_encoder,
-    const paddle::Tensor& seq_len_decoder,
-    const paddle::Tensor& cu_seq_q,
-    const paddle::Tensor& cu_seq_k,
-    const int max_seq_q,
-    const int max_seq_k,
-    const int head_num,
-    const int kv_head_num,
-    const bool is_split_kv,
-    const int use_moba_seq_limit);
+std::vector<paddle::Tensor> MobaQKGemm(const paddle::Tensor& q_input,
+                                       const paddle::Tensor& k_block_means,
+                                       const paddle::Tensor& seq_len_encoder,
+                                       const paddle::Tensor& seq_len_decoder,
+                                       const paddle::Tensor& cu_seq_q,
+                                       const paddle::Tensor& cu_seq_k,
+                                       const int max_seq_q,
+                                       const int max_seq_k,
+                                       const int head_num,
+                                       const int kv_head_num,
+                                       const bool is_split_kv,
+                                       const int use_moba_seq_limit);
 
-std::vector<paddle::Tensor> QkSortDecoder(
-    const paddle::Tensor& qk_gate_weight,
-    const paddle::Tensor& seq_len_encoder,
-    const paddle::Tensor& seq_len_decoder,
-    const int head_num,
-    const int kv_head_num,
-    const int top_k_left,
-    const int top_k_right,
-    const int use_moba_seq_limit);
+std::vector<paddle::Tensor> QkSortDecoder(const paddle::Tensor& qk_gate_weight,
+                                          const paddle::Tensor& seq_len_encoder,
+                                          const paddle::Tensor& seq_len_decoder,
+                                          const int head_num,
+                                          const int kv_head_num,
+                                          const int top_k_left,
+                                          const int top_k_right,
+                                          const int use_moba_seq_limit);
 
 void GetKVFromCache(
     const paddle::Tensor& k_input,
@@ -157,42 +153,39 @@ void GetKVFromCache(
     const int head_dim,
     const int max_input_length,
     const int max_seq_k,
-    const std::string &cache_quant_type_str);
+    const std::string& cache_quant_type_str);
 
+void MobaEncoderAttn(const paddle::Tensor& q_input,
+                     const paddle::Tensor& k_input,
+                     const paddle::Tensor& v_input,
+                     const paddle::Tensor& qk_gate_topk_idx,
+                     const paddle::Tensor& cu_seq_q,
+                     const paddle::Tensor& cu_seq_k,
+                     const paddle::Tensor& cu_seq_q_pack,
+                     const paddle::Tensor& seq_len_encoder,
+                     const paddle::Tensor& seq_len_decoder,
+                     const paddle::Tensor& out,
+                     const int max_seq_q,
+                     const int max_seq_k,
+                     const int head_num,
+                     const int kv_head_num,
+                     const int head_dim,
+                     const int max_input_length);
 
-void MobaEncoderAttn(
-    const paddle::Tensor& q_input,
-    const paddle::Tensor& k_input,
-    const paddle::Tensor& v_input,
-    const paddle::Tensor& qk_gate_topk_idx,
-    const paddle::Tensor& cu_seq_q,
-    const paddle::Tensor& cu_seq_k,
-    const paddle::Tensor& cu_seq_q_pack,
-    const paddle::Tensor& seq_len_encoder,
-    const paddle::Tensor& seq_len_decoder,
-    const paddle::Tensor& out,
-    const int max_seq_q,
-    const int max_seq_k,
-    const int head_num,
-    const int kv_head_num,
-    const int head_dim,
-    const int max_input_length);
-
-std::vector<paddle::Tensor> QkSortEncoder(
-    const paddle::Tensor& qk_gate_weight,
-    const paddle::Tensor& seq_len_encoder,
-    const paddle::Tensor& seq_len_decoder,
-    const paddle::Tensor& cu_seq_q,
-    const paddle::Tensor& cu_seq_k,
-    const paddle::Tensor& cu_seq_q_pack,
-    const paddle::Tensor& q_pack_tokens,
-    const int max_seq_q,
-    const int max_seq_k,
-    const int head_num,
-    const int kv_head_num,
-    const int top_k_left,
-    const int top_k_right,
-    const int use_moba_seq_limit);
+std::vector<paddle::Tensor> QkSortEncoder(const paddle::Tensor& qk_gate_weight,
+                                          const paddle::Tensor& seq_len_encoder,
+                                          const paddle::Tensor& seq_len_decoder,
+                                          const paddle::Tensor& cu_seq_q,
+                                          const paddle::Tensor& cu_seq_k,
+                                          const paddle::Tensor& cu_seq_q_pack,
+                                          const paddle::Tensor& q_pack_tokens,
+                                          const int max_seq_q,
+                                          const int max_seq_k,
+                                          const int head_num,
+                                          const int kv_head_num,
+                                          const int top_k_left,
+                                          const int top_k_right,
+                                          const int use_moba_seq_limit);
 
 std::vector<paddle::Tensor> MobaMlpEinsum(
     const paddle::Tensor& k_input,

@@ -38,7 +38,7 @@ from paddleformers.transformers.image_utils import (
     to_numpy_array,
     valid_images,
 )
-from paddleformers.transformers.tokenizer_utils_base import TensorType
+from paddleformers.transformers.legacy.tokenizer_utils_base import TensorType
 from PIL import Image
 
 from fastdeploy.utils import data_processor_logger

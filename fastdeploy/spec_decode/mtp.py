@@ -16,14 +16,13 @@
 
 import os
 import time
-from typing import List
+from typing import TYPE_CHECKING, List
 
 import numpy as np
 import paddle
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
-from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -81,6 +80,9 @@ from fastdeploy.worker.input_batch import (
 
 from .base import Proposer
 
+if TYPE_CHECKING:
+    from fastdeploy.config import FDConfig
+
 
 class MTPProposer(Proposer):
     """
@@ -89,7 +91,7 @@ class MTPProposer(Proposer):
 
     def __init__(
         self,
-        fd_config: FDConfig,
+        fd_config: "FDConfig",
         main_model: ModelForCasualLM,
         local_rank: int,
         device_id: int,  # physical device id
@@ -124,6 +126,10 @@ class MTPProposer(Proposer):
         self.sampler = MTPSampler(fd_config)
         self.model_inputs = ProposerInputBatch(self.fd_config, self.target_model_inputs)
         self.model_inputs.init_share_inputs()
+
+        if current_platform.is_cuda() or current_platform.is_maca():
+            self._real_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
+            self.output_token_num_event = paddle.device.cuda.Event()
 
         # CUDA Graph
         self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph
@@ -722,7 +728,7 @@ class MTPProposer(Proposer):
             self.target_model_inputs["is_block_step"],
             self.target_model_inputs["draft_tokens"],
             self.num_model_steps,
-            self.speculative_method in ["eagle", "mtp"],
+            True,
             self.role == "prefill",
             use_v1_cache_scheduler,
         )
@@ -817,6 +823,7 @@ class MTPProposer(Proposer):
                     cu_seqlens_k,
                     cu_seqlens_q_output,
                     batch_id_per_token_output,
+                    real_output_token_num,
                 ) = pre_process(
                     token_num_cpu,
                     self.model_inputs["input_ids"],
@@ -853,6 +860,8 @@ class MTPProposer(Proposer):
                 # For speculative decoding
                 self.model_inputs["cu_seqlens_q_output"].copy_(cu_seqlens_q_output, False)
                 self.model_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
+                self._real_output_token_num_host.copy_(real_output_token_num, False)
+                self.output_token_num_event.record()
 
                 # Initialize forward meta data
                 self._initialize_forward_meta(
@@ -873,6 +882,7 @@ class MTPProposer(Proposer):
                     token_ids_all=self.model_inputs["token_ids_all"],
                     pre_token_ids=self.model_inputs["pre_ids"],
                     prompt_lens=self.model_inputs["prompt_lens"],
+                    fake_prompt_lens=self.model_inputs["fake_prompt_lens"],
                     frequency_penalties=self.model_inputs["frequency_score"],
                     presence_penalties=self.model_inputs["presence_score"],
                     repetition_penalties=self.model_inputs["penalty_score"],
@@ -897,13 +907,17 @@ class MTPProposer(Proposer):
                 )
                 if self.forward_meta.step_use_cudagraph:
                     model_output = model_output[: self.real_token_num]
+
+                self.output_token_num_event.synchronize()
+                real_num = int(self._real_output_token_num_host)
+                real_batch_id_per_token_output = self.model_inputs["batch_id_per_token_output"][:real_num]
                 hidden_states = rebuild_padding(
                     model_output,
                     self.model_inputs["cu_seqlens_q"],
                     self.model_inputs["seq_lens_this_time"],
                     self.model_inputs["seq_lens_decoder"],
                     self.model_inputs["seq_lens_encoder"],
-                    self.model_inputs["batch_id_per_token_output"],
+                    real_batch_id_per_token_output,
                     self.model_inputs["cu_seqlens_q_output"],
                     self.model_inputs["first_token_hidden_states"],
                     self.enable_logprob if substep == 0 else False,
@@ -976,7 +990,7 @@ class MTPProposer(Proposer):
                 if substep != self.num_model_steps - 1:
                     self._get_self_hidden_states(hidden_states)
             else:
-                if hasattr(self.model, "empty_input_forward"):
+                if hasattr(self.model, "empty_input_forward") and not is_dummy_run:
                     self.model.empty_input_forward(forward_meta=self.forward_meta)
 
     def _propose_xpu(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
@@ -1073,7 +1087,7 @@ class MTPProposer(Proposer):
                 if substep != self.num_model_steps - 1:
                     self._get_self_hidden_states(hidden_states)
             else:
-                if hasattr(self.model, "empty_input_forward"):
+                if hasattr(self.model, "empty_input_forward") and not is_dummy_run:
                     self.model.empty_input_forward(self.forward_meta)
 
     def _get_self_hidden_states(self, hidden_states):

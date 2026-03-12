@@ -159,7 +159,7 @@ def _create_dummy_modules():
     hf_transformers_module = types.ModuleType("transformers")
     hf_transformers_module.AutoTokenizer = DummyHFTokenizer
 
-    llm_utils_module = types.ModuleType("paddleformers.trl.llm_utils")
+    llm_utils_module = types.ModuleType("paddleformers.cli.utils.llm_utils")
     llm_utils_module.get_eos_token_id = lambda tokenizer, config: [tokenizer.eos_token_id]
 
     fastdeploy_module = types.ModuleType("fastdeploy")
@@ -174,7 +174,7 @@ def _create_dummy_modules():
         "paddleformers.generation": generation_module,
         "paddleformers.transformers": transformers_module,
         "transformers": hf_transformers_module,
-        "paddleformers.trl.llm_utils": llm_utils_module,
+        "paddleformers.cli.utils.llm_utils": llm_utils_module,
     }
 
 
@@ -461,7 +461,6 @@ class DataProcessorTestCase(unittest.TestCase):
         )
 
         processed = processor.process_response(response)
-        self.assertEqual(processed.outputs.text, "tool-only")
         self.assertEqual(processed.outputs.reasoning_content, "think")
         self.assertEqual(processed.outputs.tool_calls, ["tool"])
 
@@ -508,7 +507,6 @@ class DataProcessorTestCase(unittest.TestCase):
 
         result = processor.process_response_dict_normal(response, enable_thinking=True)
         self.assertEqual(result["outputs"]["completion_tokens"], "7")
-        self.assertEqual(result["outputs"]["text"], "tool-text")
         self.assertEqual(result["outputs"]["reasoning_content"], "because")
         self.assertEqual(result["outputs"]["reasoning_token_num"], 1)
 

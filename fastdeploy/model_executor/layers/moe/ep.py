@@ -58,12 +58,9 @@ def load_deep_ep() -> ModuleType:
             return deep_ep
     except Exception as e:
         logger.error(
-            "import deep_ep failed! FD_USE_PFCC_DEEP_EP=%s. type=%s, err=%s",
-            envs.FD_USE_PFCC_DEEP_EP,
-            type(e).__name__,
-            e,
+            f"import deep_ep failed! FD_USE_PFCC_DEEP_EP={envs.FD_USE_PFCC_DEEP_EP}. type={type(e).__name__}, err={e}"
         )
-        logger.error("Traceback:\n%s", traceback.format_exc())
+        logger.error(f"Traceback:{traceback.format_exc()}")
         raise
 
 
@@ -196,10 +193,13 @@ class DeepEPBuffer:
     def _create_low_latency_buffer(self):
         if self.deepep_buffer is None:
             assert self.num_experts % self.ep_size == 0
-            if self.ep_size // 8 > 1:
-                num_qps_per_rank_now = self.ep_size // 8
+            if envs.FD_USE_PFCC_DEEP_EP:
+                num_qps_per_rank_now = self.num_experts // self.ep_size
             else:
-                num_qps_per_rank_now = 1
+                if self.ep_size // 8 > 1:
+                    num_qps_per_rank_now = self.ep_size // 8
+                else:
+                    num_qps_per_rank_now = 1
             self.deepep_buffer = deep_ep.Buffer(
                 self.group,
                 self.num_nvl_bytes,
@@ -583,6 +583,7 @@ class EPPrefillRunner(EPRunner):
         moe_phase: MoEPhase = MoEPhase("prefill"),
         ep_group=None,
         use_internode_ll_two_stage: bool = False,
+        prefill_num_worst_tokens: int = 0,
     ):
         super().__init__(
             top_k,
@@ -597,6 +598,8 @@ class EPPrefillRunner(EPRunner):
             ep_group=ep_group,
             use_internode_ll_two_stage=use_internode_ll_two_stage,
         )
+        self.num_worst_tokens = prefill_num_worst_tokens
+        logger.info(f"prefill_num_worst_tokens {prefill_num_worst_tokens}")
 
     def set_allocate_on_comm_stream(allocate_on_comm_stream: bool = False):
         if EPPrefillRunner.allocate_on_comm_stream == allocate_on_comm_stream:
@@ -647,6 +650,8 @@ class EPPrefillRunner(EPRunner):
             "expert_alignment": expert_alignment,
             "allocate_on_comm_stream": EPPrefillRunner.allocate_on_comm_stream,
             "previous_event": event,
+            "num_worst_tokens": self.num_worst_tokens,
+            "skip_x_record_stream": self.num_worst_tokens > 0,
         }
         return buffer.dispatch(**dispatch_args)
 
@@ -669,6 +674,7 @@ class EPPrefillRunner(EPRunner):
             "topk_weights": recv_topk_weights,
             "previous_event": event,
             "allocate_on_comm_stream": EPPrefillRunner.allocate_on_comm_stream,
+            "skip_x_record_stream": self.num_worst_tokens > 0,
         }
         fused_moe_out, _, event = buffer.combine(**combine_args)
         return fused_moe_out, event

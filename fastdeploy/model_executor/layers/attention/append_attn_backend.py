@@ -45,6 +45,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 from fastdeploy.platforms import current_platform
+from fastdeploy.spec_decode import SpecMethod
 
 
 @dataclass
@@ -143,16 +144,26 @@ class AppendAttentionBackend(AttentionBackend):
         if fd_config.speculative_config.model_type != "main":
             self.rope_3d = False
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
-        self.speculative_method: str = fd_config.speculative_config.method
+        self.speculative_method = fd_config.speculative_config.method
         self.speculate_max_draft_token_num: int = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
+        self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
 
         self.kv_num_heads: int = kv_num_heads
         self.num_heads: int = num_heads
         self.group_size: int = self.num_heads // self.kv_num_heads
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
+
+        # head wise sliding window attention
+        self.window_size: int = getattr(fd_config.model_config, "window_size", 0)
+        self.sink_size: int = getattr(fd_config.model_config, "sink_size", 0)
+        self.window_attn_skip_freq: int = getattr(fd_config.model_config, "window_attn_skip_freq", 0)
+        self.head_wise_swa_ratio: float = getattr(fd_config.model_config, "head_wise_swa_ratio", 0.0)
+
+        if self.head_wise_swa_ratio > 0.0:
+            self.head_wise_full_hidden = int((1 - self.head_wise_swa_ratio) * self.num_heads * self.head_dim)
+
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
         self.encoder_block_shape_q: int = encoder_block_shape_q
         self.decoder_block_shape_q: int = decoder_block_shape_q
@@ -280,7 +291,7 @@ class AppendAttentionBackend(AttentionBackend):
         if rope_already_applied and forward_meta.rotary_embs is not None:
             forward_meta.rotary_embs = self._get_identity_rotary_embs(forward_meta.rotary_embs)
 
-        sliding_window = layer.sliding_window
+        sliding_window = self.window_size if self.window_size > 0 else layer.sliding_window
 
         norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
         q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
@@ -484,5 +495,7 @@ class AppendAttentionBackend(AttentionBackend):
                 self.causal,
                 self.speculative_method is not None,
                 sliding_window,
+                self.sink_size,
+                self.head_wise_full_hidden if self.head_wise_swa_ratio > 0 else 0,
             )
         return res

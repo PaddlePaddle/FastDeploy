@@ -440,7 +440,7 @@ class EngineArgs:
     """
     SplitWise Use, Results Writer Batch Size
     """
-    enable_overlap_schedule: bool = False
+    enable_overlap_schedule: bool = True
     """
     Flag to enable overlapping schedule. Default is False (disabled).
     """
@@ -546,6 +546,11 @@ class EngineArgs:
     Flag to enable entropy output. Default is False (disabled).
     """
 
+    ep_prefill_use_worst_num_tokens: bool = False
+    """
+    Flag to enable prefill_use_worst_num_tokens. Default is False (disabled).
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -562,6 +567,13 @@ class EngineArgs:
             and not current_platform.is_maca()
         ):
             self.enable_prefix_caching = False
+        if (
+            not current_platform.is_cuda()
+            or self.speculative_config is not None
+            or self.splitwise_role == "prefill"
+            or self.dynamic_load_weight
+        ):
+            self.enable_overlap_schedule = False
         if self.enable_logprob:
             if not current_platform.is_cuda() and not current_platform.is_xpu():
                 raise NotImplementedError("Only CUDA and XPU platforms support logprob.")
@@ -1053,6 +1065,12 @@ class EngineArgs:
             default=EngineArgs.shutdown_comm_group_if_worker_idle,
             help="Shutdown communication group when worker is idle.",
         )
+        parallel_group.add_argument(
+            "--ep-prefill-use-worst-num-tokens",
+            action="store_true",
+            default=EngineArgs.ep_prefill_use_worst_num_tokens,
+            help="Enable prefill use worst num tokens for EP.",
+        )
 
         # Load group
         load_group = parser.add_argument_group("Load Configuration")
@@ -1330,7 +1348,7 @@ class EngineArgs:
 
         scheduler_group.add_argument(
             "--enable-overlap-schedule",
-            action="store_true",
+            action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_overlap_schedule,
             help="Enable overlapping schedule.",
         )
@@ -1447,7 +1465,7 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                if current_platform.is_maca():
+                if current_platform.is_maca() or current_platform.is_iluvatar():
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM

@@ -61,19 +61,18 @@ elif current_platform.is_maca():
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
-        speculate_get_seq_lens_output,
         speculate_limit_thinking_content_length,
+        speculate_pre_process,
         speculate_save_output,
         speculate_save_output_topk,
         speculate_set_stop_value_multi_seqs,
-        speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
         speculate_step_reschedule,
         speculate_step_system_cache,
-        speculate_update,
         step_paddle,
         step_reschedule,
         step_system_cache,
+        unified_update_model_status,
         update_inputs,
         update_inputs_v1,
     )
@@ -85,14 +84,13 @@ else:
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
-        speculate_get_seq_lens_output,
+        speculate_pre_process,
         speculate_save_output,
         speculate_save_output_topk,
-        speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
         speculate_step_system_cache,
-        speculate_update,
         speculate_set_stop_value_multi_seqs,
+        unified_update_model_status,
         step_paddle,
         step_system_cache,
         update_inputs,
@@ -101,6 +99,7 @@ else:
         speculate_step_reschedule,
         limit_thinking_content_length,
         speculate_limit_thinking_content_length,
+        custom_numpy_to_tensor,
     )
 
 from fastdeploy.model_executor.entropy_utils import (
@@ -113,6 +112,37 @@ from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferD
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
+
+if current_platform.is_cuda():
+
+    def async_set_value(tgt, src):
+        if isinstance(src, (int, float, bool)):
+            src = paddle.full(tgt.shape, fill_value=src, dtype=tgt.dtype)
+        elif isinstance(src, (list, np.array)):
+            dtype_str = str(tgt.dtype).split(".")[1]
+            if isinstance(src, list):
+                src = np.array(src, dtype=dtype_str if dtype_str != "bfloat16" else "float32")
+            if str(src.dtype) != dtype_str:
+                srt_tensor = paddle.empty(tgt.shape, dtype=str(src.dtype))
+                src = custom_numpy_to_tensor(src, srt_tensor)
+            else:
+                return custom_numpy_to_tensor(src, tgt)
+        elif isinstance(src, paddle.Tensor):
+            pass
+        else:
+            raise ValueError("async_set_value unsupported src type: {}".format(type(src)))
+        if src.shape != tgt.shape:
+            src = src.reshape(tgt.shape)
+        if src.dtype != tgt.dtype:
+            src = src.cast(tgt.dtype)
+        if src.place != tgt.place:
+            src = src.to(tgt.place)
+        tgt.copy_(src, blocking=False)
+
+else:
+
+    def async_set_value(*args, **kwargs):
+        raise RuntimeError("async_set_value is only available on CUDA")
 
 
 def pre_process(
@@ -152,6 +182,7 @@ def pre_process(
             cu_seqlens_k,
             None,
             None,
+            None,
         )
     # Remove padding
     if speculative_decoding:
@@ -160,27 +191,12 @@ def pre_process(
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = get_padding_offset(input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, token_num_cpu)
-
-        # compute each batch's output token num
-        seq_lens_output = speculate_get_seq_lens_output(
-            seq_lens_this_time,
-            seq_lens_encoder,
-            seq_lens_decoder,
+            cu_seqlens_q_output,
+            batch_id_per_token_output,
+            real_output_token_num,
+        ) = speculate_pre_process(
+            token_num_cpu, input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, seq_lens_decoder
         )
-        if isinstance(seq_lens_output, list):
-            seq_lens_output = seq_lens_output[0]
-        output_token_num = paddle.sum(seq_lens_output)
-
-        useless_input_ids = input_ids
-        _, batch_id_per_token_output, cu_seqlens_q_output, _ = get_padding_offset(
-            useless_input_ids,
-            seq_lens_output,
-            None,
-            None,
-            output_token_num.item(),
-        )
-
     return (
         ids_remove_padding,
         batch_id_per_token,
@@ -188,6 +204,7 @@ def pre_process(
         cu_seqlens_k,
         cu_seqlens_q_output,
         batch_id_per_token_output,
+        real_output_token_num,
     )
 
 
@@ -202,7 +219,7 @@ def _build_stream_transfer_data(
     stream_transfer_datas = []
     if output_tokens is not None:
 
-        output_tokens = output_tokens.reshape([-1]).numpy()
+        output_tokens = output_tokens.numpy().reshape([-1])
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
@@ -344,11 +361,17 @@ def save_output_normal(
     # In the future, we will abandon this approach.
     if envs.FD_USE_GET_SAVE_OUTPUT_V1:
         if save_each_rank or model_output.mp_rank == 0:
+            recover_share_inputs_map = recover_batch_index_for_output(
+                share_inputs,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["sampled_token_ids"],
+            )
             recover_batch_index_for_sampler_output(
                 sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
             )
             output = _build_stream_transfer_data(
-                sampler_output.sampled_token_ids,
+                recover_share_inputs_map["sampled_token_ids"],
                 logprobs=sampler_output.logprobs_tensors,
                 prompt_logprobs_list=model_output.prompt_logprobs_list,
             )
@@ -400,6 +423,8 @@ def post_process_specualate(
     think_end_id: int = -1,
     splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
+    is_naive_mode: bool = False,
+    prefill_one_step_stop: bool = False,
 ):
     if think_end_id > 0:
         speculate_limit_thinking_content_length(
@@ -432,18 +457,30 @@ def post_process_specualate(
     if enable_entropy:
         speculate_calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
 
-    speculate_update(
-        model_output.seq_lens_encoder,
-        model_output.seq_lens_decoder,
-        model_output.not_need_stop,
-        model_output.draft_tokens,
-        model_output.actual_draft_token_num,
-        model_output.accept_tokens,
-        model_output.accept_num,
-        model_output.stop_flags,
-        model_output.seq_lens_this_time,
-        model_output.is_block_step,
-        model_output.mask_rollback,
+    # Unified state update: merges speculate_update + speculate_set_value_by_flags_and_idx
+    # into a single kernel launch. For MTP/ngram paths, verify_draft_tokens has already
+    # handled EOS/max_dec_len detection (replacing tokens + updating step_idx), so
+    # unified_update_model_status acts as a no-op for those checks. For naive mode
+    # (which skips verify), this kernel handles EOS/max_dec_len detection.
+    unified_update_model_status(
+        model_output.seq_lens_encoder,  # seq_lens_encoder
+        model_output.seq_lens_decoder,  # seq_lens_decoder
+        model_output.not_need_stop,  # has_running_seqs
+        model_output.draft_tokens,  # step_input_ids
+        model_output.actual_draft_token_num,  # adaptive_step_input_len
+        model_output.accept_tokens,  # step_output_ids (read-write)
+        model_output.accept_num,  # step_output_len (read-write)
+        model_output.stop_flags,  # stop_flags (read-write)
+        model_output.seq_lens_this_time,  # seq_lens_this_time
+        model_output.is_block_step,  # is_paused
+        model_output.mask_rollback,  # mask_rollback
+        model_output.token_ids_all,  # token_ids_all
+        model_output.prompt_lens,  # prompt_lens
+        model_output.step_idx,  # step_idx (read-write)
+        model_output.eos_token_id,  # end_tokens
+        model_output.max_dec_len,  # max_dec_len
+        is_naive_mode,  # is_naive_mode
+        prefill_one_step_stop,  # prefill_one_step_stop
     )
 
     if not skip_save_output:
@@ -497,20 +534,6 @@ def post_process_specualate(
                 save_each_rank,
             )
 
-    # Update token_ids_all through accept tokens
-
-    speculate_set_value_by_flags_and_idx(
-        model_output.token_ids_all,
-        model_output.prompt_lens,
-        model_output.accept_tokens,
-        model_output.accept_num,
-        model_output.stop_flags,
-        model_output.seq_lens_this_time,
-        model_output.seq_lens_encoder,
-        model_output.seq_lens_decoder,
-        model_output.step_idx,
-    )
-
 
 def post_process(
     sampler_or_pooler_output: Union[SamplerOutput, PoolerOutput],
@@ -525,6 +548,8 @@ def post_process(
     think_end_id: int = -1,
     splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
+    is_naive_mode: bool = False,
+    prefill_one_step_stop: bool = False,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
 
@@ -550,6 +575,8 @@ def post_process(
                 think_end_id,
                 splitwise_role_is_decode,
                 enable_entropy,
+                is_naive_mode,
+                prefill_one_step_stop,
             )
         else:
             post_process_normal(
@@ -883,7 +910,7 @@ def post_process_pooling(
             )
             update_inputs_v1(
                 model_output.stop_flags,
-                model_output.not_need_stop,
+                model_output.not_need_stop_device,
                 model_output.seq_lens_this_time,
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
