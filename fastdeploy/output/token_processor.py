@@ -42,6 +42,7 @@ from fastdeploy.engine.request import (
 from fastdeploy.inter_communicator import ZmqIpcServer
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import llm_logger, spec_logger
@@ -72,9 +73,12 @@ class TokenProcessor:
         self.split_connector = split_connector
 
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            llm_logger.debug(f"create zmq get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}")
+            port = self.cfg.parallel_config.local_engine_worker_queue_port
+            llm_logger.debug(
+                f"create zmq get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}_{port}"
+            )
             self.zmq_server = ZmqIpcServer(
-                name=f"get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}", mode=zmq.PULL
+                name=f"get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}_{port}", mode=zmq.PULL
             )
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
@@ -584,7 +588,7 @@ class TokenProcessor:
                 f" average accept len: {self.number_of_output_tokens / self.total_step}"
             )
 
-            if self.cfg.speculative_config.method in ["mtp"]:
+            if self.cfg.speculative_config.method == SpecMethod.MTP:
                 single_head_acceptance_rates = []
                 for i in range(1, self.cfg.speculative_config.num_speculative_tokens + 1):
                     if self.accept_token_num_per_head[i - 1] != 0:
@@ -1028,12 +1032,12 @@ class TokenProcessor:
         main_process_metrics.spec_decode_num_accepted_tokens_total.set(self.num_accepted_tokens)
         main_process_metrics.spec_decode_num_emitted_tokens_total.set(self.num_emitted_tokens)
 
-        if self.cfg.speculative_config.method in ["ngram"]:
+        if self.cfg.speculative_config.method == SpecMethod.NGRAM:
             main_process_metrics.spec_decode_draft_acceptance_rate.set(
                 self.num_accepted_tokens / self.num_emitted_tokens
             )
 
-        if self.cfg.speculative_config.method in ["mtp"]:
+        if self.cfg.speculative_config.method == SpecMethod.MTP:
             num_draft_tokens = len(real_accept_num) * self.cfg.speculative_config.num_speculative_tokens
             self.num_draft_tokens += num_draft_tokens
 

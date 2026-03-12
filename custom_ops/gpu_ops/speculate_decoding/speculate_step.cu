@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "helper.h"  // NOLINT
+#include "helper.h"          // NOLINT
+#include "../cccl_compat.h"  // CCCL 3.0 compatibility
 
 // #define DEBUG_STEP
 
@@ -121,7 +122,8 @@ __global__ void speculate_free_and_dispatch_block(
             ? used_list_len[tid]
             : 0;
     cub::KeyValuePair<int, int> kv_pair = {tid, used_block_num};
-    kv_pair = BlockReduce(temp_storage).Reduce(kv_pair, cub::ArgMax());
+    kv_pair =
+        BlockReduce(temp_storage).Reduce(kv_pair, fd_cub_compat::ArgMax());
 
     if (tid == 0) {
       if (kv_pair.value == 0) {

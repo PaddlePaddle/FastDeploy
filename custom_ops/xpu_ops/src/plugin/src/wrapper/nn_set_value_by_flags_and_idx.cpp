@@ -99,7 +99,9 @@ static int xpu3_wrapper(Context *ctx,
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto set_value_by_flags_and_idx_kernel =
       xpu3::plugin::set_value_by_flags_and_idx;
-  set_value_by_flags_and_idx_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  int32_t ret_xre = set_value_by_flags_and_idx_kernel<<<ctx->ncluster(),
+                                                        64,
+                                                        ctx->xpu_stream>>>(
       stop_flags,
       reinterpret_cast<XPU_INT64 *>(pre_ids_all),
       reinterpret_cast<const XPU_INT64 *>(input_ids),
@@ -109,6 +111,7 @@ static int xpu3_wrapper(Context *ctx,
       bs,
       length,
       length_input_ids);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

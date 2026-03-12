@@ -546,6 +546,11 @@ class EngineArgs:
     Flag to enable entropy output. Default is False (disabled).
     """
 
+    ep_prefill_use_worst_num_tokens: bool = False
+    """
+    Flag to enable prefill_use_worst_num_tokens. Default is False (disabled).
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -565,7 +570,7 @@ class EngineArgs:
         if (
             not current_platform.is_cuda()
             or self.speculative_config is not None
-            or self.splitwise_role != "mixed"
+            or self.splitwise_role == "prefill"
             or self.dynamic_load_weight
         ):
             self.enable_overlap_schedule = False
@@ -1062,6 +1067,12 @@ class EngineArgs:
             action=argparse.BooleanOptionalAction,
             default=EngineArgs.shutdown_comm_group_if_worker_idle,
             help="Shutdown communication group when worker is idle.",
+        )
+        parallel_group.add_argument(
+            "--ep-prefill-use-worst-num-tokens",
+            action="store_true",
+            default=EngineArgs.ep_prefill_use_worst_num_tokens,
+            help="Enable prefill use worst num tokens for EP.",
         )
 
         # Load group

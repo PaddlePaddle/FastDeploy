@@ -63,22 +63,24 @@ static int xpu3_wrapper(Context *ctx,
                         const int num_extra_tokens) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto recover_spec_decode_task = xpu3::plugin::recover_spec_decode_task;
-  recover_spec_decode_task<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
-      stop_flags,
-      seq_lens_this_time,
-      seq_lens_encoder,
-      seq_lens_decoder,
-      step_seq_lens_decoder,
-      block_tables,
-      is_block_step,
-      reinterpret_cast<XPU_INT64 *>(draft_tokens),
-      reinterpret_cast<const XPU_INT64 *>(step_draft_tokens),
-      step_seq_lens_this_time,
-      bsz,
-      block_num_per_seq,
-      block_size,
-      draft_tokens_len,
-      num_extra_tokens);
+  int32_t ret_xre =
+      recover_spec_decode_task<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+          stop_flags,
+          seq_lens_this_time,
+          seq_lens_encoder,
+          seq_lens_decoder,
+          step_seq_lens_decoder,
+          block_tables,
+          is_block_step,
+          reinterpret_cast<XPU_INT64 *>(draft_tokens),
+          reinterpret_cast<const XPU_INT64 *>(step_draft_tokens),
+          step_seq_lens_this_time,
+          bsz,
+          block_num_per_seq,
+          block_size,
+          draft_tokens_len,
+          num_extra_tokens);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

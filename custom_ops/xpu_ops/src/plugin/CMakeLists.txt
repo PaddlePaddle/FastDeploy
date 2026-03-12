@@ -360,7 +360,7 @@ foreach(xpu_wrapper IN LISTS xpu_wrappers)
       -I${CMAKE_CURRENT_SOURCE_DIR}/src/wrapper -D_GNU_SOURCE
       -D__STDC_LIMIT_MACROS -DNDEBUG ${TOOLCHAIN_ARGS} --target=${TARGET_ARCH}
       -fPIC -Wunused-variable -Werror -Wreorder -fvisibility=hidden
-      --xpu-host-only ${HOST_XPU_FLAGS}
+      -fxpu-launch-return --xpu-host-only ${HOST_XPU_FLAGS}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS wrapper_build/${wrapper_name}.wrapper.d
     COMMENT wrapper_build/${wrapper_name}.wrapper.o
