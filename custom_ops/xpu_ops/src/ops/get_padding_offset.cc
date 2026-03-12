@@ -51,7 +51,8 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
                                                cum_offsets.data<int>(),
                                                seq_len.data<int>(),
                                                seq_length,
-                                               bsz);
+                                               bsz,
+                                               token_num_data);
     PD_CHECK(r == 0, "fastdeploy::plugin::get_padding_offset failed.");
   }
 

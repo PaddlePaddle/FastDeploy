@@ -62,7 +62,7 @@ void MTPStepPaddle(
       block_size,
       block_num_per_seq,
       max_draft_tokens);
-  PD_CHECK(r == 0, "free_and_dispatch_block failed.");
+  PD_CHECK(r == 0, "mtp_free_and_dispatch_block failed.");
   if (base_model_stop_flags.is_cpu() && ctx != nullptr) {
     delete ctx;
   }

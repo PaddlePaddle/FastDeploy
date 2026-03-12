@@ -81,6 +81,11 @@ int speculate_get_seq_lens_output(api::Context* ctx,
                       seq_lens_decoder,
                       real_bsz);
   WRAPPER_DUMP(ctx);
+  WRAPPER_ASSERT_GT(ctx, real_bsz, 0);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_output);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_this_time);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_encoder);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_decoder);
 
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper(ctx,
@@ -98,7 +103,6 @@ int speculate_get_seq_lens_output(api::Context* ctx,
                         seq_lens_decoder,
                         real_bsz);
   }
-
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 

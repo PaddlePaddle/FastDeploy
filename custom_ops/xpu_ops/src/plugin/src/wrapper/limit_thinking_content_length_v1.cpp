@@ -123,8 +123,15 @@ int limit_thinking_content_length_kernel_v1(api::Context* ctx,
                       eos_token_ids,
                       limit_think_status);
   WRAPPER_DUMP_PARAM4(ctx, stop_flags, think_end_id, bs, eos_token_id_len);
-
   WRAPPER_DUMP(ctx);
+  WRAPPER_ASSERT_GT(ctx, bs, 0);
+  WRAPPER_ASSERT_GT(ctx, eos_token_id_len, 0);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bs, next_tokens);
+  WRAPPER_CHECK_PTR(ctx, int, bs, max_think_lens);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bs, step_idx);
+  WRAPPER_CHECK_PTR(ctx, int64_t, eos_token_id_len, eos_token_ids);
+  WRAPPER_CHECK_PTR(ctx, int, bs, limit_think_status);
+  WRAPPER_CHECK_PTR(ctx, bool, bs, stop_flags);
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper(ctx,
                        next_tokens,
