@@ -36,7 +36,10 @@ import triton.language as tl
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig, RoutingReplayConfig
-from fastdeploy.model_executor.ops.triton_ops.triton_utils import enable_compat_on_triton_kernel
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
+
 
 @enable_compat_on_triton_kernel
 @triton.jit
