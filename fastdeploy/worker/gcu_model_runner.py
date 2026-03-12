@@ -45,6 +45,7 @@ from fastdeploy.model_executor.pre_and_post_process import (
     pre_process,
     rebuild_padding,
 )
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
 
@@ -118,9 +119,9 @@ class GCUModelRunner(ModelRunnerBase):
         """
         Init speculative proposer
         """
-        if self.speculative_method == "ngram":
+        if self.speculative_method == SpecMethod.NGRAM:
             raise NotImplementedError("NgramProposer is not support by GCUModelRunner.")
-        elif self.speculative_method == "mtp":
+        elif self.speculative_method == SpecMethod.MTP:
             raise NotImplementedError("MTPProposer is not support by GCUModelRunner.")
         else:
             self.proposer = None
@@ -290,7 +291,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.insert_prefill_inputs(req_dicts)
         self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
@@ -740,7 +741,7 @@ class GCUModelRunner(ModelRunnerBase):
             batch_size=batch_size,
             expected_decode_len=expected_decode_len,
         )
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
                 batch_size=batch_size,
@@ -840,7 +841,7 @@ class GCUModelRunner(ModelRunnerBase):
             )
 
             if self.speculative_decoding:
-                if self.speculative_method == "mtp":
+                if self.speculative_method == SpecMethod.MTP:
                     self.proposer.run(full_hidden_states=model_output)
                 else:
                     self.proposer.run(share_inputs=self.share_inputs)
@@ -1061,7 +1062,7 @@ class GCUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
         )
 
-        if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
+        if self.speculative_config.method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill":
             skip_save_output = True
         else:
             skip_save_output = False
@@ -1077,7 +1078,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         # 6. Speculative decode
         if self.speculative_decoding:
-            if self.speculative_method == "mtp":
+            if self.speculative_method == SpecMethod.MTP:
                 self.proposer.run(full_hidden_states=model_output)
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
@@ -1120,7 +1121,7 @@ class GCUModelRunner(ModelRunnerBase):
         # 3. gc
         self.clear_cache()
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.clear_dummy_input()
         # paddle.device.cuda.synchronize()
 
@@ -1151,7 +1152,7 @@ class GCUModelRunner(ModelRunnerBase):
             }
         )
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.update_block_num(num_gpu_blocks)
 
     def cal_theortical_kvcache(self):
@@ -1180,7 +1181,7 @@ class GCUModelRunner(ModelRunnerBase):
         hidden_dim = self.model_config.head_dim * self.model_config.kv_num_heads
         num_layers = (
             self.model_config.num_hidden_layers + self.speculative_config.num_gpu_block_expand_ratio
-            if self.speculative_method in ["mtp"]
+            if self.speculative_method == SpecMethod.MTP
             else self.model_config.num_hidden_layers
         )
         required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
