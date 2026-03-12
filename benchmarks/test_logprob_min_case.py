@@ -1,5 +1,6 @@
 import json
 import time
+
 import requests
 
 XPU_URL = "http://127.0.0.1:8188/v1/chat/completions"

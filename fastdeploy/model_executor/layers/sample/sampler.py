@@ -1053,10 +1053,10 @@ class SpeculativeSampler(nn.Layer):
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
     ) -> paddle.Tensor:
-        from fastdeploy.model_executor.ops.xpu import speculate_verify, top_p_candidates
         from fastdeploy.model_executor.layers.sample.ops.speculate_logprob_utils import (
             speculate_get_target_logits,
         )
+        from fastdeploy.model_executor.ops.xpu import speculate_verify, top_p_candidates
 
         logits = apply_speculative_penalty_multi_scores(
             sampling_metadata.token_ids_all,
@@ -1138,9 +1138,9 @@ class SpeculativeSampler(nn.Layer):
                 share_inputs["seq_lens_this_time"],
             ).flatten()
             share_inputs["batch_token_num"] = batch_token_num
-            ori_cu_batch_token_offset = paddle.concat(
-                [paddle.to_tensor([0]), paddle.cumsum(batch_token_num)]
-            ).astype("int32")
+            ori_cu_batch_token_offset = paddle.concat([paddle.to_tensor([0]), paddle.cumsum(batch_token_num)]).astype(
+                "int32"
+            )
             cu_batch_token_offset = paddle.concat(
                 [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:real_bsz])]
             ).astype("int32")

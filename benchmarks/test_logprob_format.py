@@ -9,19 +9,13 @@ import requests
 DEFAULT_GPU_URL = "http://10.174.137.88:8188/v1/chat/completions"
 DEFAULT_XPU_URL = "http://0.0.0.0:8188/v1/chat/completions"
 
-HEADERS = {
-    "Content-Type": "application/json"
-}
+HEADERS = {"Content-Type": "application/json"}
 
 DEFAULT_TIMEOUT = 30
 DEFAULT_LOG_FILE = "gpu_xpu_format_test.log"
 
 # ========= 默认推理参数（可覆盖） =========
-DEFAULT_GEN_PARAMS = {
-    "logprobs": True,
-    "top_logprobs": 0,
-    "max_tokens": 5
-}
+DEFAULT_GEN_PARAMS = {"logprobs": True, "top_logprobs": 0, "max_tokens": 5}
 
 
 # ========= HTTP =========
@@ -45,10 +39,8 @@ def extract_structure(obj: Any) -> Any:
 def compare_structure(gpu: Any, xpu: Any, path: str = "") -> List[str]:
     diffs = []
 
-    if type(gpu) != type(xpu):
-        diffs.append(
-            f"{path or '$'}: type mismatch ({type(gpu).__name__} vs {type(xpu).__name__})"
-        )
+    if type(gpu) is not type(xpu):
+        diffs.append(f"{path or '$'}: type mismatch ({type(gpu).__name__} vs {type(xpu).__name__})")
         return diffs
 
     if isinstance(gpu, dict):
@@ -61,19 +53,11 @@ def compare_structure(gpu: Any, xpu: Any, path: str = "") -> List[str]:
             diffs.append(f"{path}.{k}: extra in XPU")
 
         for k in gpu_keys & xpu_keys:
-            diffs.extend(compare_structure(
-                gpu[k],
-                xpu[k],
-                path=f"{path}.{k}" if path else k
-            ))
+            diffs.extend(compare_structure(gpu[k], xpu[k], path=f"{path}.{k}" if path else k))
 
     elif isinstance(gpu, list):
         if gpu and xpu:
-            diffs.extend(compare_structure(
-                gpu[0],
-                xpu[0],
-                path=f"{path}[0]"
-            ))
+            diffs.extend(compare_structure(gpu[0], xpu[0], path=f"{path}[0]"))
 
     else:
         if gpu != xpu:
@@ -104,10 +88,7 @@ def run_test(
     if gen_params:
         params.update(gen_params)
 
-    payload = {
-        "messages": messages,
-        **params
-    }
+    payload = {"messages": messages, **params}
 
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -138,7 +119,7 @@ def run_test(
         "request": payload,
         "xpu_response": xpu_resp,
         "format_match": format_match,
-        "format_diffs": diffs
+        "format_diffs": diffs,
     }
     if gpu_resp is not None:
         record["gpu_response"] = gpu_resp
@@ -170,79 +151,61 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     test_cases = [
-        {
-            "messages": [
-                {"role": "user", "content": "你叫什么？"}
-            ]
-        },
+        {"messages": [{"role": "user", "content": "你叫什么？"}]},
         {
             "messages": [
                 {"role": "system", "content": "你是一个有帮助的助手"},
-                {"role": "user", "content": "给我讲一个笑话"}
+                {"role": "user", "content": "给我讲一个笑话"},
             ],
-            "gen_params": {
-                "max_tokens": 32
-            }
+            "gen_params": {"max_tokens": 32},
         },
         {
             "messages": [
                 {"role": "user", "content": "先自我介绍"},
                 {"role": "assistant", "content": "我是一个AI"},
-                {"role": "user", "content": "你能做什么？"}
+                {"role": "user", "content": "你能做什么？"},
             ],
-            "gen_params": {
-                "logprobs": False
-            }
+            "gen_params": {"logprobs": False},
         },
         {
             "messages": [
                 {"role": "user", "content": "先自我介绍"},
                 {"role": "assistant", "content": "我是一个AI"},
-                {"role": "user", "content": "你能做什么？"}
+                {"role": "user", "content": "你能做什么？"},
             ],
-            "gen_params": {
-                "top_logprobs": 1
-            }
+            "gen_params": {"top_logprobs": 1},
         },
         {
             "messages": [
                 {"role": "user", "content": "先自我介绍"},
                 {"role": "assistant", "content": "我是一个AI"},
-                {"role": "user", "content": "你能做什么？"}
+                {"role": "user", "content": "你能做什么？"},
             ],
-            "gen_params": {
-                "top_logprobs": 2
-            }
+            "gen_params": {"top_logprobs": 2},
         },
         {
             "messages": [
                 {"role": "user", "content": "先自我介绍"},
                 {"role": "assistant", "content": "我是一个AI"},
-                {"role": "user", "content": "你能做什么？"}
+                {"role": "user", "content": "你能做什么？"},
             ],
-            "gen_params": {
-                "top_logprobs": 20
-            }
+            "gen_params": {"top_logprobs": 20},
         },
         {
             "messages": [
                 {"role": "user", "content": "先自我介绍"},
                 {"role": "assistant", "content": "我是一个AI"},
-                {"role": "user", "content": "你能做什么？"}
+                {"role": "user", "content": "你能做什么？"},
             ],
-            "gen_params": {
-                "top_logprobs": -1
-            }
+            "gen_params": {"top_logprobs": -1},
         },
         {
             "messages": [
                 {"role": "user", "content": "先自我介绍"},
                 {"role": "assistant", "content": "我是一个AI"},
-                {"role": "user", "content": "你能做什么？"}
+                {"role": "user", "content": "你能做什么？"},
             ],
-            "gen_params": {
-                "top_logprobs": 21
-            }
+            "gen_params": {"top_logprobs": 21},
         },
     ]
 
