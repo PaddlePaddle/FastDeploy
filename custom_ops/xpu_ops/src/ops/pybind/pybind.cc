@@ -381,6 +381,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
 
 std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& input,
+    const paddle::Tensor& last_seq_lens_encoder,
     const paddle::Tensor& last_seq_lens_this_time,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& step_idx);
@@ -815,6 +816,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("eagle_get_self_hidden_states",
         &EagleGetSelfHiddenStates,
         py::arg("input"),
+        py::arg("last_seq_lens_encoder"),
         py::arg("last_seq_lens_this_time"),
         py::arg("seq_lens_this_time"),
         py::arg("step_idx"),

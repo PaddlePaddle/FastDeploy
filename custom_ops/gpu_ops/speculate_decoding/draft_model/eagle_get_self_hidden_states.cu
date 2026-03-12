@@ -18,7 +18,8 @@
 
 // #define DEBUG_EAGLE_KERNEL
 
-__global__ void computeOrderKernel(const int* last_seq_lens_this_time,
+__global__ void computeOrderKernel(const int* last_seq_lens_encoder,
+                                   const int* last_seq_lens_this_time,
                                    const int* seq_lens_this_time,
                                    const int64_t* step_idx,
                                    int* src_map,
@@ -39,7 +40,7 @@ __global__ void computeOrderKernel(const int* last_seq_lens_this_time,
           cur_last_seq_lens_this_time);
 #endif
       // 1. encoder
-      if (step_idx[i] == 1 && cur_seq_lens_this_time > 0) {
+      if (last_seq_lens_encoder[i] > 0 && cur_seq_lens_this_time > 0) {
 #ifdef DEBUG_EAGLE_KERNEL
         printf("batch %d last_step is encoder \n", i);
 #endif
@@ -106,6 +107,7 @@ __global__ void rebuildSelfHiddenStatesKernel(
 template <paddle::DataType D>
 std::vector<paddle::Tensor> DispatchDtype(
     const paddle::Tensor input,
+    const paddle::Tensor last_seq_lens_encoder,
     const paddle::Tensor last_seq_lens_this_time,
     const paddle::Tensor seq_lens_this_time,
     const paddle::Tensor step_idx) {
@@ -124,6 +126,7 @@ std::vector<paddle::Tensor> DispatchDtype(
       {1}, 0, seq_lens_this_time.dtype(), seq_lens_this_time.place());
 
   computeOrderKernel<<<1, 1, 0, seq_lens_this_time.stream()>>>(
+      last_seq_lens_encoder.data<int>(),
       last_seq_lens_this_time.data<int>(),
       seq_lens_this_time.data<int>(),
       step_idx.data<int64_t>(),
@@ -164,23 +167,33 @@ std::vector<paddle::Tensor> DispatchDtype(
 
 std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& input,
+    const paddle::Tensor& last_seq_lens_encoder,
     const paddle::Tensor& last_seq_lens_this_time,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& step_idx) {
   switch (input.dtype()) {
     case paddle::DataType::BFLOAT16:
-      return DispatchDtype<paddle::DataType::BFLOAT16>(
-          input, last_seq_lens_this_time, seq_lens_this_time, step_idx);
+      return DispatchDtype<paddle::DataType::BFLOAT16>(input,
+                                                       last_seq_lens_encoder,
+                                                       last_seq_lens_this_time,
+                                                       seq_lens_this_time,
+                                                       step_idx);
     case paddle::DataType::FLOAT16:
-      return DispatchDtype<paddle::DataType::FLOAT16>(
-          input, last_seq_lens_this_time, seq_lens_this_time, step_idx);
+      return DispatchDtype<paddle::DataType::FLOAT16>(input,
+                                                      last_seq_lens_encoder,
+                                                      last_seq_lens_this_time,
+                                                      seq_lens_this_time,
+                                                      step_idx);
     default:
       PD_THROW("Not support this data type");
   }
 }
 
 PD_BUILD_STATIC_OP(eagle_get_self_hidden_states)
-    .Inputs(
-        {"input", "last_seq_lens_this_time", "seq_lens_this_time", "step_idx"})
+    .Inputs({"input",
+             "last_seq_lens_encoder",
+             "last_seq_lens_this_time",
+             "seq_lens_this_time",
+             "step_idx"})
     .Outputs({"out"})
     .SetKernelFn(PD_KERNEL(EagleGetSelfHiddenStates));
