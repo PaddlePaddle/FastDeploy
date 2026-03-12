@@ -772,6 +772,15 @@ std::vector<paddle::Tensor> SpeculatePreProcess(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder);
 
+std::vector<paddle::Tensor> BuildSamplingParams(
+    const paddle::Tensor& top_p,
+    const paddle::Tensor& top_k,
+    paddle::Tensor& infer_seed,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& cu_seqlens_q_output,
+    const int64_t token_num_output_cpu,
+    const int64_t increment_value);
+
 void SpecTokenPenaltyMultiScores(
     const paddle::Tensor& token_ids_all,
     const paddle::Tensor& prompt_lens,
@@ -1726,6 +1735,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_pre_process",
         &SpeculatePreProcess,
         "speculate_pre_process function");
+
+  m.def("build_sampling_params",
+        &BuildSamplingParams,
+        "build_sampling_params function");
 
   m.def("speculate_get_token_penalty_multi_scores",
         &SpecTokenPenaltyMultiScores,
