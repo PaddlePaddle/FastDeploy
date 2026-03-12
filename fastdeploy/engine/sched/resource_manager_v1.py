@@ -46,6 +46,7 @@ from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.platforms import current_platform
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import download_from_bos, init_bos_client, llm_logger
@@ -1359,7 +1360,7 @@ class ResourceManagerV1(ResourceManager):
             request.output_token_ids.append(request_output.outputs.token_ids[0])
             request.num_cached_tokens = request_output.num_cached_tokens
             if (
-                self.config.speculative_config.method in ["mtp"]
+                self.config.speculative_config.method == SpecMethod.MTP
                 and self.config.scheduler_config.splitwise_role == "decode"
             ):
                 request.draft_token_ids = copy.deepcopy(request_output.outputs.draft_token_ids)

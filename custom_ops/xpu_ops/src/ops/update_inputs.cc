@@ -23,7 +23,6 @@ void UpdateInputs(const paddle::Tensor& stop_flags,
                   const paddle::Tensor& seq_lens_encoder,
                   const paddle::Tensor& seq_lens_decoder,
                   const paddle::Tensor& input_ids,
-                  const paddle::Tensor& stop_nums,
                   const paddle::Tensor& next_tokens,
                   const paddle::Tensor& is_block_step) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
@@ -47,7 +46,6 @@ void UpdateInputs(const paddle::Tensor& stop_flags,
       const_cast<int*>(seq_lens_encoder.data<int>()),
       const_cast<int*>(seq_lens_decoder.data<int>()),
       const_cast<int64_t*>(input_ids.data<int64_t>()),
-      stop_nums.data<int64_t>(),
       stop_flags.data<bool>(),
       is_block_step.data<bool>(),
       next_tokens.data<int64_t>(),
@@ -68,7 +66,6 @@ PD_BUILD_OP(update_inputs)
              "seq_lens_encoder",
              "seq_lens_decoder",
              "input_ids",
-             "stop_nums",
              "next_tokens",
              "is_block_step"})
     .Outputs({"not_need_stop_out",

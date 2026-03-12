@@ -170,7 +170,7 @@ int speculate_update(Context *ctx,
                      const int max_bsz,
                      const int max_draft_tokens) {
   WRAPPER_CHECK_CTX(ctx);
-  WRAPPER_DUMP_FUNCTION_T1(ctx, "speculate_update_v3", int);
+  WRAPPER_DUMP_FUNCTION_T1(ctx, "speculate_update", int);
   WRAPPER_DUMP_PARAM4(
       ctx, seq_lens_encoder, seq_lens_decoder, not_need_stop, draft_tokens);
   WRAPPER_DUMP_PARAM4(

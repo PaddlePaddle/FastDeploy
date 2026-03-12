@@ -166,7 +166,7 @@ func RegisterInstanceCore(ctx context.Context, rawInstance *InstanceInfo) error 
 
 	// Check instance health status
 	if !CheckWorkerHealth(ctx, instance.URL()) {
-		return fmt.Errorf("service is not healthy")
+		return fmt.Errorf("%s service is not healthy",instance.URL())
 	}
 
 	allServers := GetAllMapServers(ctx)

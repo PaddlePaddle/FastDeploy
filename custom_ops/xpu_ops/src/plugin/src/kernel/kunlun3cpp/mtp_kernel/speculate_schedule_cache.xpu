@@ -53,7 +53,6 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
                                          int64_t *accept_tokens,
                                          bool *is_block_step,
                                          bool *not_need_stop,
-                                         const int64_t *stop_nums,
                                          const int real_bsz,
                                          const int max_bsz,
                                          const int max_next_step_tokens,
@@ -166,11 +165,8 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
   // reduce stop_sum_now
   if (cid == 0) {
     int stop_sum = ClusterReduce(stop_flag_now_int_sm, 64);
-    int stop_nums_lm;
-    GM2LM_ASYNC(stop_nums, &stop_nums_lm, sizeof(int));
-    mfence();
     sync_all();
-    if (stop_sum < stop_nums_lm) {
+    if (stop_sum < max_bsz) {
       LM2GM_ASYNC(&value_true, not_need_stop, sizeof(bool));
     } else {
       LM2GM_ASYNC(&value_false, not_need_stop, sizeof(bool));
