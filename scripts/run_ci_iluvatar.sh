@@ -5,7 +5,7 @@ echo "$DIR"
 ixsmi
 
 #先kill一遍
-ps -efww | grep -E 'run_ernie300B_4layer' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+ps -efww | grep -E 'run_ernie_21b' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 
 unset http_proxy
 unset https_proxy
@@ -41,7 +41,7 @@ echo "Run paddle.utils.run_check()"
 python -c "import paddle; paddle.utils.run_check()"
 
 INCLUDE_FOLDERS=(
-    "ERNIE_300B_4L"
+    # "ERNIE_300B_4L"
     "ERNIE-4.5-21B-A3B-Paddle"
     "ERNIE-4.5-VL-28B-A3B-Paddle"
     "PaddleOCR-VL"
@@ -59,15 +59,22 @@ for filename in "${INCLUDE_FOLDERS[@]}"; do
     cp -r $file $MODEL_DIR
 done
 
+CONTAINER_PP_DOC_DIR=/root/.paddlex/official_models
+mkdir -p $CONTAINER_PP_DOC_DIR
+echo "start copy $SOURCE_DIR/PP-DocLayoutV2 into $CONTAINER_PP_DOC_DIR"
+cp -r $SOURCE_DIR/PP-DocLayoutV2 $CONTAINER_PP_DOC_DIR
+
 echo "copy done"
 echo "ls $MODEL_DIR"
 ls $MODEL_DIR
+echo "ls $CONTAINER_PP_DOC_DIR"
+ls $CONTAINER_PP_DOC_DIR
 
 echo "build whl"
 bash build.sh || exit 1
 
 function print_error_message() {
-    if [ -f "log/launch_worker.0" ]; then
+    if [ -f "log/launch_worker.log" ]; then
         echo "------------------- log/launch_worker.log -----------------"
         cat log/launch_worker.log
     fi
@@ -92,7 +99,7 @@ export FD_SAMPLING_CLASS=rejection
 ################# Test offline ###################
 
 offline_ci_list=(
-    ${CI_PATH}/run_ernie300B_4layer.py
+    ${CI_PATH}/run_ernie_21b.py
     ${CI_PATH}/run_ernie_vl_28B.py
 )
 echo "test offline ci files: ${offline_ci_list[@]}"
