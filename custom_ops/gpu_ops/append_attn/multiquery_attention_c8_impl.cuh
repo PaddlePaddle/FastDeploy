@@ -273,14 +273,11 @@ __global__ void multi_query_append_attention_c8_kernel(
           wid * 8 + tid / 4, tid % 4);  // 4 * 128 / 8 = 64
 
   uint32_t kv_idx_base = chunk_start;
-  int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
   // In head-wise mode, cache_k and cache_v don't have the head dimension in
   // stride
   const uint32_t const_offset =
       (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
       (wid * 8 + tid / 4) * kv_b_stride + tid % 8 * num_elems_per_128b<T>();
-  T *cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
-  T *cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
 
   produce_k_blockwise_c8<SharedMemFillMode::kNoFill,
                          NUM_WARPS,
@@ -289,7 +286,7 @@ __global__ void multi_query_append_attention_c8_kernel(
                          num_frags_z,
                          NUM_WARP_Q>(k_smem,
                                      &k_smem_offset_w,
-                                     &cache_k_now,
+                                     cache_k,
                                      block_table_now,
                                      kv_head_idx,
                                      kv_n_stride,
@@ -319,7 +316,7 @@ __global__ void multi_query_append_attention_c8_kernel(
                          num_frags_z,
                          NUM_WARP_Q>(v_smem,
                                      &v_smem_offset_w,
-                                     &cache_v_now,
+                                     cache_v,
                                      block_table_now,
                                      kv_head_idx,
                                      kv_n_stride,
@@ -421,7 +418,8 @@ __global__ void multi_query_append_attention_c8_kernel(
                                                            kv_idx_base,
                                                            kv_num_heads,
                                                            kv_head_idx,
-                                                           chunk_end);
+                                                           chunk_end,
+                                                           use_head_wise);
     }
     commit_group();
     wait_group<1>();
@@ -470,7 +468,8 @@ __global__ void multi_query_append_attention_c8_kernel(
                                                            kv_idx_base,
                                                            kv_num_heads,
                                                            kv_head_idx,
-                                                           chunk_end);
+                                                           chunk_end,
+                                                           use_head_wise);
     }
     commit_group();
   }
@@ -983,7 +982,8 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                                            kv_idx_base,
                                                            kv_num_heads,
                                                            kv_head_idx,
-                                                           chunk_end);
+                                                           chunk_end,
+                                                           use_head_wise);
     }
     commit_group();
     wait_group<1>();
@@ -1032,7 +1032,8 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                                            kv_idx_base,
                                                            kv_num_heads,
                                                            kv_head_idx,
-                                                           chunk_end);
+                                                           chunk_end,
+                                                           use_head_wise);
     }
     commit_group();
   }
