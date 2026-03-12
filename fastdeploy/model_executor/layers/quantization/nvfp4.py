@@ -155,10 +155,10 @@ class ModelOptNvFp4Config(QuantConfigBase):
         """
         Get quantization method.
         """
+
         if envs.FD_MOE_BACKEND == "flashinfer-cutedsl":
             return ModelOptNvFp4FusedMoECuteDSL(self)
-
-        if isinstance(layer, FusedMoE):
+        elif isinstance(layer, FusedMoE):
             return ModelOptNvFp4FusedMoE(self)
         else:
             return ModelOptNvFp4LinearMethod(self)

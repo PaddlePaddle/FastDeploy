@@ -82,6 +82,13 @@ class UnquantizedLinearMethod(QuantMethodBase):
         layer.weight.set_value(weights)
 
     def apply(self, layer: nn.Layer, x: paddle.Tensor) -> paddle.Tensor:
+        # Debug output for first call
+        if not hasattr(layer, "_debug_printed"):
+            print(f"[DEBUG] UnquantizedLinearMethod.apply: layer.prefix={layer.prefix}")
+            print(f"[DEBUG]   x.shape={x.shape}, x.dtype={x.dtype}")
+            print(f"[DEBUG]   layer.weight.shape={layer.weight.shape}, layer.weight.dtype={layer.weight.dtype}")
+            print(f"[DEBUG]   layer.weight min/max={layer.weight.min().item():.6f}/{layer.weight.max().item():.6f}")
+            layer._debug_printed = True
         linear_out = paddle.matmul(x, layer.weight)
         if layer.with_bias:
             linear_out = paddle.add(linear_out, layer.bias)
@@ -142,10 +149,27 @@ class LinearBase(nn.Layer):
         self.is_quantized = fd_config.model_config.is_quantized and not (
             fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.dense_quant_type is None
         )
+
+        # Check if this layer should be quantized or excluded
+        # This needs to be determined before setting weight_key
+        modules_result = modules_to_convert(prefix, self.fd_config)
+        if "self_attn" in prefix or "mlp" in prefix:
+            print(f"[DEBUG] LinearBase.__init__: prefix={prefix}, modules_to_convert={modules_result}")
+        should_quantize = (
+            fd_config.quant_config
+            and not skip_quant
+            and modules_result
+            and fd_config.quant_config.get_quant_method(self) is not None
+        )
+        if "self_attn" in prefix or "mlp" in prefix:
+            print(
+                f"[DEBUG] LinearBase.__init__: prefix={prefix}, should_quantize={should_quantize}, weight_key will be {'quant_weight' if should_quantize else 'weight'}"
+            )
+
         # key
         if weight_key:
             self.weight_key = f"{prefix}.{weight_key}"
-        elif self.is_quantized and not skip_quant:
+        elif self.is_quantized and not skip_quant and should_quantize:
             self.weight_key = f"{prefix}.quant_weight"
             self.weight_scale_key = f"{prefix}.weight_scale"
             self.act_scale_key = f"{prefix}.activation_scale"
@@ -168,12 +192,7 @@ class LinearBase(nn.Layer):
             self.output_size,
         ]
 
-        if (
-            fd_config.quant_config
-            and not skip_quant
-            and modules_to_convert(prefix, self.fd_config)
-            and fd_config.quant_config.get_quant_method(self)
-        ):
+        if should_quantize:
             self.quant_method = fd_config.quant_config.get_quant_method(self)
         else:
             self.quant_method: Optional[QuantMethodBase] = UnquantizedLinearMethod()
