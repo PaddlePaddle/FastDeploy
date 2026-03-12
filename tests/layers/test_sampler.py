@@ -435,7 +435,7 @@ def test_top_k_top_p_sampling_resets_cuda_rng_in_deterministic_mode(monkeypatch)
 
 
 def test_top_k_1_returns_argmax(monkeypatch):
-    """top_k=1 should produce argmax results under FD_DETERMINISTIC_MODE."""
+    """top_k=1 should produce argmax results regardless of FD_DETERMINISTIC_MODE."""
     import sys
 
     import fastdeploy.envs as envs
@@ -475,8 +475,8 @@ def test_top_k_1_returns_argmax(monkeypatch):
     assert ids_mixed[1, 0].item() == 99, f"mixed row1: expected 99, got {ids_mixed[1, 0].item()}"
 
 
-def test_top_k_1_no_argmax_when_deterministic_off(monkeypatch):
-    """top_k=1 should NOT trigger argmax fast-path when FD_DETERMINISTIC_MODE is False."""
+def test_top_k_1_returns_argmax_without_deterministic_mode(monkeypatch):
+    """top_k=1 should trigger argmax even when FD_DETERMINISTIC_MODE is False."""
     import sys
 
     import fastdeploy.envs as envs
@@ -489,20 +489,28 @@ def test_top_k_1_no_argmax_when_deterministic_off(monkeypatch):
 
     probs = paddle.to_tensor([[0.1, 0.2, 0.7], [0.6, 0.3, 0.1]], dtype="float32")
     top_p = paddle.to_tensor([[0.9], [0.9]], dtype="float32")
+    expected = paddle.argmax(probs, axis=-1, keepdim=True)
+
+    # --- All-greedy ---
     top_k = paddle.to_tensor([[1], [1]], dtype="int64")
     top_k_list = [1, 1]
 
-    # Mock base sampling to return a WRONG token (99) — if argmax kicks in it would return 2/0
+    _, ids = sampling_mod.top_k_top_p_sampling(probs, top_p, top_k, top_k_list)
+    assert paddle.equal_all(ids, expected), f"all-greedy: {ids.numpy()} != {expected.numpy()}"
+
+    # --- Mixed batch: row0 greedy, row1 sampled ---
+    top_k_mixed = paddle.to_tensor([[1], [50]], dtype="int64")
+    top_k_list_mixed = [1, 50]
+
     monkeypatch.setattr(
         sampling_mod.paddle.tensor,
         "top_p_sampling",
         lambda *a, **k: (None, paddle.to_tensor([[99], [99]], dtype="int64")),
     )
 
-    _, ids = sampling_mod.top_k_top_p_sampling(probs, top_p, top_k, top_k_list)
-    # Without deterministic mode, argmax fast-path should NOT fire — backend result preserved
-    assert ids[0, 0].item() == 99, f"row0: expected 99 (no argmax override), got {ids[0, 0].item()}"
-    assert ids[1, 0].item() == 99, f"row1: expected 99 (no argmax override), got {ids[1, 0].item()}"
+    _, ids_mixed = sampling_mod.top_k_top_p_sampling(probs, top_p, top_k_mixed, top_k_list_mixed)
+    assert ids_mixed[0, 0].item() == 2, f"mixed row0: expected 2, got {ids_mixed[0, 0].item()}"
+    assert ids_mixed[1, 0].item() == 99, f"mixed row1: expected 99, got {ids_mixed[1, 0].item()}"
 
 
 if __name__ == "__main__":
