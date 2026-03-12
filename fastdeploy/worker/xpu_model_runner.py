@@ -742,6 +742,8 @@ class XPUModelRunner(ModelRunnerBase):
             request = req_dicts[i]
             idx = request.idx
             length = len(request.prompt_token_ids)
+            print("==========> length: ", length)
+            print("==========> prompt_token_ids: ", request.prompt_token_ids)
             assert length > 0, "The prompt requested must not be empty."
 
             # Is Decode Node
