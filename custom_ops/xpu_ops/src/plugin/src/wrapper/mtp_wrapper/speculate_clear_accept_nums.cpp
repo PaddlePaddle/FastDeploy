@@ -42,8 +42,10 @@ static int xpu2or3_wrapper(Context* ctx,
                            const int* seq_lens_decoder,
                            const int max_bsz) {
   ctx_guard RAII_GUARD(ctx);
-  xpu3::plugin::speculate_clear_accept_nums<<<1, 64, ctx->xpu_stream>>>(
-      accept_num, seq_lens_decoder, max_bsz);
+  int32_t ret_xre =
+      xpu3::plugin::speculate_clear_accept_nums<<<1, 64, ctx->xpu_stream>>>(
+          accept_num, seq_lens_decoder, max_bsz);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
 
   return api::SUCCESS;
 }

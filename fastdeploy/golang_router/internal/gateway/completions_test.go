@@ -265,7 +265,7 @@ func TestGetClientWithRetry(t *testing.T) {
 
 		reqBody := []byte(`{"test": "data"}`)
 
-		resp, err := GetClientWithRetry(c, reqBody, ts.URL)
+		resp, err := GetClientWithRetry(c, reqBody, ts.URL, "chat/completions")
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -293,7 +293,7 @@ func TestGetClientWithRetry(t *testing.T) {
 
 		reqBody := []byte(`{"test": "data"}`)
 
-		resp, err := GetClientWithRetry(c, reqBody, ts.URL)
+		resp, err := GetClientWithRetry(c, reqBody, ts.URL, "chat/completions")
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 	})
@@ -314,7 +314,7 @@ func TestGetClientWithRetry(t *testing.T) {
 
 		reqBody := []byte(`{"test": "data"}`)
 
-		resp, err := GetClientWithRetry(c, reqBody, ts.URL)
+		resp, err := GetClientWithRetry(c, reqBody, ts.URL, "chat/completions")
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)

@@ -9,6 +9,8 @@
 #include <cub/cub.cuh>
 #include <cuda_runtime.h>
 
+#include "../cccl_compat.h"  // CCCL 3.0 compatibility
+
 namespace fastdeploy {
 
 // Vectorization containers
