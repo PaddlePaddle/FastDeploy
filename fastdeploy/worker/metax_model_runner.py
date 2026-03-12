@@ -350,9 +350,13 @@ class MetaxModelRunner(ModelRunnerBase):
         """
         Init speculative proposer
         """
+        if self.speculative_method is None:
+            self.proposer = None
+            return
+
+        # MTP-specific: swap seq_lens_this_time to the buffer tensor
         if self.speculative_method == SpecMethod.MTP:
             self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
-
         self.proposer = self.speculative_method.create_proposer(
             self.fd_config,
             main_model=self.get_model(),
