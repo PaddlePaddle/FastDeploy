@@ -1089,6 +1089,8 @@ class CacheTransferManager:
             logger.info("Successfully paused transfer.")
         elif method == "resume":
             self.resume()
+            if self.storage_backend_type is not None:
+                self._update_key_prefix()
             logger.info("Successfully resumed transfer.")
         elif method == "sleep":
             if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
@@ -1099,8 +1101,6 @@ class CacheTransferManager:
             if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                 self._init_cpu_cache()
             self._init_gpu_cache()
-            if self.storage_backend_type is not None:
-                self._update_key_prefix()
             logger.info("Successfully reload caches.")
 
         self.cache_task_queue.barrier.wait()
