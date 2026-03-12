@@ -5,3 +5,4 @@ graph_optimization_config:
   use_cudagraph: True
   draft_model_use_cudagraph: True
 load_choices: "default_v1"
+max_num_batched_tokens: 2048
