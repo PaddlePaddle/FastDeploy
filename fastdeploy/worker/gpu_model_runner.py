@@ -870,7 +870,8 @@ class GPUModelRunner(ModelRunnerBase):
                     cache_ids_2d = getattr(request, "block_tables_3d", None)
                     if cache_ids_2d is None and request.block_tables and isinstance(request.block_tables[0], list):
                         cache_ids_2d = request.block_tables
-                    if cache_ids_2d is not None and getattr(request, "block_tables_3d", None) is None:
+                    cache_ids_2d = self._compact_head_wise_cache_ids_2d(cache_ids_2d)
+                    if cache_ids_2d is not None:
                         request.block_tables_3d = cache_ids_2d
                     if cache_ids_2d:
                         encoder_block_num = len(cache_ids_2d[0])
@@ -940,7 +941,8 @@ class GPUModelRunner(ModelRunnerBase):
                     cache_ids_2d = getattr(request, "block_tables_3d", None)
                     if cache_ids_2d is None and request.block_tables and isinstance(request.block_tables[0], list):
                         cache_ids_2d = request.block_tables
-                    if cache_ids_2d is not None and getattr(request, "block_tables_3d", None) is None:
+                    cache_ids_2d = self._compact_head_wise_cache_ids_2d(cache_ids_2d)
+                    if cache_ids_2d is not None:
                         request.block_tables_3d = cache_ids_2d
                     # Keep cached request metadata in sync for subsequent forward_meta assembly.
                     cached_req = self.forward_batch_reqs_list[idx]
@@ -949,9 +951,8 @@ class GPUModelRunner(ModelRunnerBase):
                         if cache_ids_2d is not None:
                             cached_req.block_tables_3d = cache_ids_2d
                     else:
-                        logger.warning(
-                            f"[headwise decode] missing cached request at batch idx={idx}, request_id={request.request_id}"
-                        )
+                        # Keep metadata for requests that enter decode path directly.
+                        self.forward_batch_reqs_list[idx] = request
                     if cache_ids_2d:
                         encoder_block_num = len(cache_ids_2d[0])
                     else:
@@ -1122,32 +1123,42 @@ class GPUModelRunner(ModelRunnerBase):
             return
 
         max_blocks_per_head = block_tables_3d.shape[1]
+        has_request_level_tables = False
         per_req_head_lens = []
-        for b in range(num_running_requests):
-            req = self.forward_batch_reqs_list[b]
-            cache_ids_2d = getattr(req, "block_tables_3d", None) if req is not None else None
-            if cache_ids_2d and len(cache_ids_2d) > 0:
-                head_lens = [len(head_ids) if head_ids is not None else 0 for head_ids in cache_ids_2d]
-                per_req_head_lens.append(head_lens)
-            else:
-                per_req_head_lens.append([])
+        req_list = getattr(self, "forward_batch_reqs_list", None)
 
         for b in range(num_running_requests):
-            req = self.forward_batch_reqs_list[b]
+            if req_list is None or b >= len(req_list):
+                per_req_head_lens.append([])
+                continue
+
+            req = req_list[b]
             cache_ids_2d = getattr(req, "block_tables_3d", None) if req is not None else None
             if cache_ids_2d is None:
                 if self.head_wise_debug_log and _debug_logging_enabled():
                     logger.debug(f"[headwise _prepare_block_tables_3d] req {b}: cache_ids_2d=None, keep rows as -1")
+                per_req_head_lens.append([])
                 continue
+
+            has_request_level_tables = True
+            head_lens = []
             for h in range(self.kv_num_heads):
                 if h >= len(cache_ids_2d) or cache_ids_2d[h] is None:
+                    head_lens.append(0)
                     continue
-                else:
-                    row = list(cache_ids_2d[h])
-                    copy_len = min(len(row), max_blocks_per_head)
-                    if copy_len > 0:
-                        row_idx = b * self.kv_num_heads + h
-                        block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(row[:copy_len], dtype="int32")
+
+                row = cache_ids_2d[h]
+                compact_row = [cid for cid in row if cid is not None and cid >= 0]
+                head_lens.append(len(compact_row))
+                copy_len = min(len(compact_row), max_blocks_per_head)
+                if copy_len > 0:
+                    row_idx = b * self.kv_num_heads + h
+                    block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(compact_row[:copy_len], dtype="int32")
+            per_req_head_lens.append(head_lens)
+
+        # Fallback for dummy/profile or missing request cache metadata.
+        if not has_request_level_tables:
+            self._prepare_block_tables_3d_from_flat_tables(num_running_requests)
 
         active_rows = block_tables_3d[: num_running_requests * self.kv_num_heads]
         rows_np = active_rows.numpy()
@@ -1186,6 +1197,18 @@ class GPUModelRunner(ModelRunnerBase):
                 f"[headwise _prepare_block_tables_3d details] per_req_head_lens={per_req_head_lens[:num_running_requests]}"
             )
             self._head_wise_debug_log_count += 1
+
+    def _compact_head_wise_cache_ids_2d(self, cache_ids_2d):
+        """Remove recycled holes (-1) from per-head cache rows."""
+        if cache_ids_2d is None:
+            return None
+        compact_cache_ids_2d = []
+        for head_tables in cache_ids_2d:
+            if head_tables is None:
+                compact_cache_ids_2d.append([])
+                continue
+            compact_cache_ids_2d.append([cid for cid in head_tables if cid is not None and cid >= 0])
+        return compact_cache_ids_2d
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         raise NotImplementedError("GPUs only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")
