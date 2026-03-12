@@ -31,7 +31,7 @@ import triton.language as tl
 # ---------------------------------------------------------------------------
 
 
-@triton.jit
+@triton.jit  # pragma: no cover
 def _cumsum_with_zero_prefix_kernel(input_ptr, output_ptr, n, BLOCK: tl.constexpr):
     """
     output[0] = 0, output[1:n+1] = cumsum(input[0:n]).
@@ -70,7 +70,7 @@ def triton_cumsum_with_zero_prefix(x, n=None, out_buf=None):
 # ---------------------------------------------------------------------------
 
 
-@triton.jit
+@triton.jit  # pragma: no cover
 def _indptr_to_lens_kernel(indptr_ptr, lens_ptr, n, BLOCK: tl.constexpr):
     """Compute lens[i] = indptr[i+1] - indptr[i] for i in [0, n)."""
     idx = tl.arange(0, BLOCK)
@@ -80,7 +80,7 @@ def _indptr_to_lens_kernel(indptr_ptr, lens_ptr, n, BLOCK: tl.constexpr):
     tl.store(lens_ptr + idx, a - b, mask=mask)
 
 
-@triton.jit
+@triton.jit  # pragma: no cover
 def _elementwise_add_kernel(a_ptr, b_ptr, out_ptr, n, BLOCK: tl.constexpr):
     """Compute out[i] = a[i] + b[i] for i in [0, n)."""
     idx = tl.arange(0, BLOCK)
@@ -95,7 +95,7 @@ def _elementwise_add_kernel(a_ptr, b_ptr, out_ptr, n, BLOCK: tl.constexpr):
 # ---------------------------------------------------------------------------
 
 
-@triton.jit
+@triton.jit  # pragma: no cover
 def _copy_unified_indices_kernel(
     prefix_kv_indptr,
     prefix_kv_indices,
@@ -197,7 +197,7 @@ def build_unified_kv_indices(
     return unified_kv_indptr, unified_kv_indices, prefix_lens
 
 
-@triton.jit
+@triton.jit  # pragma: no cover
 def _build_kv_indices_kernel(
     block_tables_ptr,
     seq_lens_ptr,
@@ -229,7 +229,7 @@ def _build_kv_indices_kernel(
         tl.store(kv_indices_ptr + dst_start + t, idx, mask=mask)
 
 
-@triton.jit
+@triton.jit  # pragma: no cover
 def _scatter_extend_kv_indices_kernel(
     all_kv_indices_ptr,
     all_kv_indptr_ptr,
@@ -321,7 +321,7 @@ def build_kv_indices_from_block_tables_ref(block_tables, seq_lens, block_size, b
 # ---------------------------------------------------------------------------
 
 
-@triton.jit
+@triton.jit  # pragma: no cover
 def _pre_cache_cu_seqlens_kernel(
     seq_lens_encoder_ptr,
     seq_lens_decoder_ptr,
@@ -356,7 +356,7 @@ def _pre_cache_cu_seqlens_kernel(
     tl.store(loop_times_ptr + bid, lt, mask=mask)
 
 
-@triton.jit
+@triton.jit  # pragma: no cover
 def _pre_cache_scatter_kernel(
     loop_times_ptr,
     gridx_offset_ptr,
@@ -482,7 +482,7 @@ def pre_cache_len_concat_ref(
 # ---------------------------------------------------------------------------
 
 
-@triton.jit
+@triton.jit  # pragma: no cover
 def _fwd_kernel_unified(
     Q,
     O,
