@@ -1346,10 +1346,7 @@ class MTPSampler(nn.Layer):
             sampling_metadata.pre_token_ids,
         )
         probs = F.softmax(logits)
-
-        _, next_tokens = top_k_top_p_sampling(
-            probs, sampling_metadata.top_p, sampling_metadata.top_k, sampling_metadata.top_k_list
-        )
+        next_tokens = paddle.argmax(probs, axis=-1)
         # TODO(chenhuan09): add support for logprobs
         token_ids = None
         logprobs_tensors = None

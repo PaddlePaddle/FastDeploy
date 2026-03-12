@@ -17,6 +17,10 @@
 #include "paddle/phi/core/enforce.h"
 #include "xpu/plugin.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 void UpdateInputsV1(const paddle::Tensor& stop_flags,
                     const paddle::Tensor& not_need_stop,  // only on cpu
                     const paddle::Tensor& seq_lens_this_time,
@@ -27,7 +31,6 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
                     const paddle::Tensor& topk_ids,
                     const paddle::Tensor& input_ids,
                     const paddle::Tensor& block_tables,
-                    const paddle::Tensor& stop_nums,
                     const paddle::Tensor& next_tokens,
                     const paddle::Tensor& is_block_step,
                     const int block_size) {
@@ -52,7 +55,6 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
       const_cast<int64_t*>(topk_ids.data<int64_t>()),
       const_cast<int64_t*>(input_ids.data<int64_t>()),
       const_cast<int*>(block_tables.data<int>()),
-      stop_nums.data<int64_t>(),
       const_cast<bool*>(stop_flags.data<bool>()),
       const_cast<bool*>(is_block_step.data<bool>()),
       next_tokens.data<int64_t>(),
@@ -68,7 +70,7 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
   not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
 
-PD_BUILD_OP(update_inputs_v1)
+PD_BUILD_STATIC_OP(update_inputs_v1)
     .Inputs({"stop_flags",
              "not_need_stop",
              "seq_lens_this_time",
@@ -79,7 +81,6 @@ PD_BUILD_OP(update_inputs_v1)
              "topk_ids",
              "input_ids",
              "block_tables",
-             "stop_nums",
              "next_tokens",
              "is_block_step"})
     .Attrs({"block_size: int"})
