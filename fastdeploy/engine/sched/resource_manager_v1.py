@@ -834,7 +834,7 @@ class ResourceManagerV1(ResourceManager):
             head_recycled_str = ",".join(f"h{h}:{c}" for h, c in head_recycled.items())
             head_progress_str = ",".join(f"h{h}:{s}->{e}" for h, (s, e) in head_progress.items())
             if total_recycled > 0:
-                llm_logger.info(
+                llm_logger.debug(
                     f"[SWA_RECYCLE] request_id={request.request_id}, total_tokens={total_tokens}, "
                     f"start_block={start_block}, end_block={end_block}, recycled_blocks={total_recycled}, "
                     f"swa_heads={len(self.swa_kv_head_indices)}, recycled_by_head={head_recycled_str}, "
