@@ -768,17 +768,17 @@ class ResourceManagerV1(ResourceManager):
         end_block_idx,
     ):
         if not hasattr(request, "block_tables_3d") or not request.block_tables_3d:
-            return
+            return start_block_idx, 0
         if head_idx >= len(request.block_tables_3d):
-            return
+            return start_block_idx, 0
 
         row = request.block_tables_3d[head_idx]
         if start_block_idx >= len(row):
-            return
+            return start_block_idx, 0
 
         end_block_idx = min(end_block_idx, len(row))
         if end_block_idx <= start_block_idx:
-            return
+            return start_block_idx, 0
 
         cache_ids_to_recycle = []
         for i in range(start_block_idx, end_block_idx):
@@ -789,6 +789,7 @@ class ResourceManagerV1(ResourceManager):
 
         if cache_ids_to_recycle:
             self.cache_manager.recycle_gpu_blocks(cache_ids_to_recycle, request.request_id)
+        return end_block_idx, len(cache_ids_to_recycle)
 
     def recycle_request_swa_head_cache(self, request):
         if not self.enable_head_wise_kv_cache:
@@ -812,12 +813,40 @@ class ResourceManagerV1(ResourceManager):
             self.request_head_recycle_upto[request.request_id] = [0] * self.kv_num_heads
 
         recycle_upto = self.request_head_recycle_upto[request.request_id]
+        total_recycled = 0
+        head_recycled = {}
+        head_progress = {}
+        window_moved = False
 
         for head_idx in self.swa_kv_head_indices:
             old_upto = max(recycle_upto[head_idx], start_block)
             if end_block > old_upto:
-                self._recycle_request_swa_head_cache_helper(request, head_idx, old_upto, end_block)
-                recycle_upto[head_idx] = end_block
+                window_moved = True
+                new_upto, recycled_count = self._recycle_request_swa_head_cache_helper(
+                    request, head_idx, old_upto, end_block
+                )
+                recycle_upto[head_idx] = max(recycle_upto[head_idx], new_upto)
+                total_recycled += recycled_count
+                head_recycled[head_idx] = recycled_count
+                head_progress[head_idx] = (old_upto, new_upto)
+
+        if window_moved:
+            head_recycled_str = ",".join(f"h{h}:{c}" for h, c in head_recycled.items())
+            head_progress_str = ",".join(f"h{h}:{s}->{e}" for h, (s, e) in head_progress.items())
+            if total_recycled > 0:
+                llm_logger.info(
+                    f"[SWA_RECYCLE] request_id={request.request_id}, total_tokens={total_tokens}, "
+                    f"start_block={start_block}, end_block={end_block}, recycled_blocks={total_recycled}, "
+                    f"swa_heads={len(self.swa_kv_head_indices)}, recycled_by_head={head_recycled_str}, "
+                    f"recycle_upto_by_head={head_progress_str}"
+                )
+            else:
+                llm_logger.debug(
+                    f"[SWA_RECYCLE] request_id={request.request_id}, total_tokens={total_tokens}, "
+                    f"start_block={start_block}, end_block={end_block}, recycled_blocks=0, "
+                    f"swa_heads={len(self.swa_kv_head_indices)}, recycled_by_head={head_recycled_str}, "
+                    f"recycle_upto_by_head={head_progress_str}"
+                )
 
     def exist_mm_prefill(self, scheduled_reqs):
         for request in scheduled_reqs:
