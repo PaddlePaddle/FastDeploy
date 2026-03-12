@@ -643,6 +643,8 @@ class ParallelConfig:
         self.disable_sequence_parallel_moe: bool = False
         # shutdown comm group if worker idle
         self.shutdown_comm_group_if_worker_idle: bool = None
+        # ep_prefill_use_worst_num_tokens
+        self.ep_prefill_use_worst_num_tokens: bool = False
 
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
