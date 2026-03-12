@@ -297,10 +297,71 @@ class PrefixCacheManagerTest(unittest.TestCase):
             mock_free.assert_called_once_with(1)
 
     def test_check_validity_raises_when_memory_is_insufficient(self):
-        manager = _create_manager(num_gpu_blocks=2)
+        manager = _create_manager(num_gpu_blocks=2, enable_prefix_caching=False)
 
         with self.assertRaises(Exception):
             manager._check_validity("req-1", match_gpu_blocks_num=0, expected_block_num=3)
+
+    def test_check_validity_evicts_prefill_cache_before_raising(self):
+        """When prefix caching is enabled and GPU memory is tight, _check_validity
+        should call free_block_ids to attempt eviction before raising an OOM exception."""
+        manager = _create_manager(num_gpu_blocks=2, enable_prefix_caching=True)
+        manager.gpu_free_block_list.clear()
+
+        with patch.object(manager, "free_block_ids") as mock_free:
+            # free_block_ids restores enough free blocks so no exception is raised
+            def _free(n):
+                for i in range(n):
+                    manager.gpu_free_block_list.append(i)
+
+            mock_free.side_effect = _free
+            # Should not raise because free_block_ids made room
+            manager._check_validity("req-ok", match_gpu_blocks_num=0, expected_block_num=1)
+            mock_free.assert_called_once_with(1)
+
+    def test_check_validity_raises_when_eviction_insufficient(self):
+        """When free_block_ids cannot provide enough blocks, _check_validity should
+        still raise an exception."""
+        manager = _create_manager(num_gpu_blocks=2, enable_prefix_caching=True)
+        manager.gpu_free_block_list.clear()
+
+        with patch.object(manager, "free_block_ids"):
+            # free_block_ids is a no-op – no blocks freed
+            with self.assertRaises(Exception):
+                manager._check_validity("req-oom", match_gpu_blocks_num=0, expected_block_num=1)
+
+    def test_check_validity_gpu_only_eviction_no_deadlock(self):
+        """_check_validity should evict GPU-only Prefill Cache via free_block_ids
+        (which internally uses the reentrant lock) without deadlocking."""
+        from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
+        from fastdeploy.utils import get_hash_str
+
+        manager = _create_manager(num_gpu_blocks=4, num_cpu_blocks=0, enable_prefix_caching=True)
+        # Consume all free GPU blocks
+        manager.gpu_free_block_list.clear()
+
+        # Build a cached leaf node eligible for GPU-only eviction
+        node_hash = get_hash_str([1, 2])
+        node = BlockNode(
+            node_id=0,
+            input_ids=[1, 2],
+            input_hash_value=node_hash,
+            depth=1,
+            block_id=0,
+            token_num=2,
+            hash_value=node_hash,
+            last_used_time=0,
+            parent=manager.radix_tree_root,
+        )
+        node.shared_count = 0
+        manager.radix_tree_root.children[node_hash] = node
+        manager.gpu_lru_leaf_heap.append(node)
+        manager.gpu_lru_leaf_set.add(node)
+
+        # _check_validity should free the cached node and not raise
+        manager._check_validity("req-gpu-only", match_gpu_blocks_num=0, expected_block_num=1)
+        # The node's GPU block (id 0) should now be back in the free list
+        self.assertIn(0, manager.gpu_free_block_list)
 
     def test_prepare_cache_allocates_for_cpu_matches(self):
         manager = _create_manager(num_gpu_blocks=6)

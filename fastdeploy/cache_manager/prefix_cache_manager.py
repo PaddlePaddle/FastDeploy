@@ -24,7 +24,7 @@ import traceback
 import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from threading import Event, Lock
+from threading import Event, Lock, RLock
 
 import numpy as np
 
@@ -107,7 +107,9 @@ class PrefixCacheManager:
         self.cpu_lru_leaf_set = set()
 
         # swap in/out data structure
-        self.request_release_lock = Lock()
+        # RLock (reentrant) is required so that _check_validity can call free_block_ids
+        # (which also acquires this lock) from within request_block_ids without deadlocking.
+        self.request_release_lock = RLock()
         self.task_swapping_event = {}
 
         self.node_map = {}
@@ -615,16 +617,24 @@ class PrefixCacheManager:
 
     def _check_validity(self, req_id, match_gpu_blocks_num, expected_block_num):
         """
-        check enough gpu memory to allocate cache
+        Check if there is enough GPU memory to allocate cache.
+        When prefix caching is enabled, attempt to evict cached prefill blocks
+        (GPU-only eviction when num_cpu_blocks == 0) before raising an exception.
         """
-        if expected_block_num - match_gpu_blocks_num > len(self.gpu_free_block_list):
-            msg = (
-                f"request_block_ids: request block for req_id {req_id} failed. "
-                + f"matched gpu block num: {match_gpu_blocks_num} require extra gpu block num: "
-                + f"{expected_block_num - match_gpu_blocks_num} > free block num: {len(self.gpu_free_block_list)}"
-            )
-            logger.info(msg)
-            raise Exception("Not enough GPU memory to allocate cache")
+        needed = expected_block_num - match_gpu_blocks_num
+        if needed > len(self.gpu_free_block_list):
+            if self.cache_config.enable_prefix_caching:
+                # Attempt to free cached prefill blocks (GPU-only: direct recycle;
+                # hierarchical: GPU -> CPU swap) before declaring OOM.
+                self.free_block_ids(needed)
+            if needed > len(self.gpu_free_block_list):
+                msg = (
+                    f"request_block_ids: request block for req_id {req_id} failed. "
+                    + f"matched gpu block num: {match_gpu_blocks_num} require extra gpu block num: "
+                    + f"{needed} > free block num: {len(self.gpu_free_block_list)}"
+                )
+                logger.info(msg)
+                raise Exception("Not enough GPU memory to allocate cache")
 
     def _prepare_cpu_cache(
         self,
