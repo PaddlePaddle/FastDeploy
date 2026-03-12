@@ -1471,7 +1471,7 @@ class EngineService:
             executors.add("worker")
         if "kv_cache" in tags:
             executors.add("worker")
-            if self.cfg.cache_config.swap_space or self.cfg.cache_config.kvcache_storage_backend:
+            if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
                 executors.add("cache_transfer")
 
         # Dispatch wakeup request to executors
