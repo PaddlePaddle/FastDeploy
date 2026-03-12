@@ -172,8 +172,6 @@ class PaddleDisWorkerProc:
             not self.speculative_decoding
         )
 
-        self.is_paused = False
-
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
         queue_name = f"ctrl_w2e_rank{self.local_rank}_{engine_worker_queue_port}"
@@ -614,8 +612,8 @@ class PaddleDisWorkerProc:
             if (
                 self.fd_config.load_config.dynamic_load_weight
                 and envs.FD_ENABLE_V1_UPDATE_WEIGHTS
-                and hasattr(self.worker.model_runner, "is_paused")
-                and self.worker.model_runner.is_paused
+                and hasattr(self.worker.model_runner, "is_sleeping")
+                and self.worker.model_runner.is_sleeping
             ):
                 if tp_size > 1:
                     self._tp_barrier_wait() if tp_size > 1 else None

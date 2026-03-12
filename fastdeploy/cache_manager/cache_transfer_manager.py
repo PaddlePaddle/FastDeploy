@@ -292,6 +292,7 @@ class CacheTransferManager:
         threading.Thread(target=self.check_cache_status, args=[args], daemon=True).start()
 
         self.is_paused = False  # transfer manager state
+        self.is_sleeping = False
         self.inflight = 0  # number of inflight transfer tasks
         self.inflight_tasks = {}
 
@@ -532,7 +533,7 @@ class CacheTransferManager:
             while np.sum(self.cache_ready_signal.value) != self.n_ranks:
                 time.sleep(0.1)
 
-        logger.info("✅ GPU KV cache is initialized")
+        logger.info("GPU KV cache is initialized")
 
     def _clear_gpu_cache(self):
         if self.create_cache_tensor:
@@ -1080,32 +1081,76 @@ class CacheTransferManager:
             logger.debug(f"_do_swap_to_gpu_task: put_transfer_done_signal {result}")
             logger.info(f"_do_swap_to_gpu_task: put_transfer_done_signal for transfer_task_id {transfer_task_id}")
 
+    def _handle_pause(self):
+        if self.is_paused:
+            logger.info("💡 Cache transfer manager is already paused, no need to pause again!")
+        else:
+            self.pause()
+            logger.info("✅ Successfully paused transfer")
+        return True
+
+    def _handle_resume(self):
+        if not self.is_paused:
+            logger.info("💡 Cache transfer manager is not paused, no need to resume!")
+        else:
+            self.resume()
+            if self.storage_backend_type is not None:
+                self._update_key_prefix()
+            logger.info("✅ Successfully resumed transfer")
+        return True
+
+    def _handle_sleep(self):
+        if self.is_sleeping:
+            logger.info("💡 Cache transfer manager is already sleeping, no need to sleep again!")
+        else:
+            if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
+                self._clear_cpu_cache()
+            self._clear_gpu_cache()
+            self.is_sleeping = True
+            logger.info("✅ Successfully fell asleep (offloaded caches)")
+        return True
+
+    def _handle_wakeup(self):
+        if not self.is_sleeping:
+            logger.info("💡 Cache transfer manager is not sleeping, no need to wakeup!")
+        else:
+            if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
+                self._init_cpu_cache()
+            self._init_gpu_cache()
+            self.is_sleeping = False
+            logger.info("✅ Successfully wakeup (reload caches)")
+        return True
+
     def control_task(self, task: ControlRequest):
         method = task.get_method()
         tags = task.args.get("tags", {})
         logger.info(f"Received control task: {method}, tags: {tags}")
 
-        if method == "pause":
-            self.pause()
-            logger.info("Successfully paused transfer.")
-        elif method == "resume":
-            self.resume()
-            if self.storage_backend_type is not None:
-                self._update_key_prefix()
-            logger.info("Successfully resumed transfer.")
-        elif method == "sleep":
-            if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
-                self._clear_cpu_cache()
-            self._clear_gpu_cache()
-            logger.info("Successfully offloaded caches.")
-        elif method == "wakeup":
-            if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
-                self._init_cpu_cache()
-            self._init_gpu_cache()
-            logger.info("Successfully reload caches.")
+        handlers = {
+            "pause": self._handle_pause,
+            "resume": self._handle_resume,
+            "sleep": self._handle_sleep,
+            "wakeup": self._handle_wakeup,
+        }
+
+        handler = handlers.get(method)
+        error_code = 200
+        error_message = "Success"
+
+        if handler:
+            try:
+                handler()
+            except Exception as e:
+                error_code = 500
+                error_message = f"Failed to execute {method}: {str(e)}"
+                logger.error(f"Error in control_task: {traceback.format_exc()}")
+        else:
+            error_code = 400
+            error_message = f"Unknown control method: {method}"
+            logger.warning(error_message)
 
         self.cache_task_queue.barrier.wait()
-        resp = ControlResponse(task.request_id, 200, "Success")
+        resp = ControlResponse(task.request_id, error_code, error_message)
         asyncio.run(self.ctrl_output_queue.put(resp))
         logger.info(f"Put response into output queue {self.ctrl_output_queue.name}: {resp}")
 
