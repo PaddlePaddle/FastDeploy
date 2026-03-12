@@ -343,8 +343,10 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
 
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
         loaded_weight = fd_cast(loaded_weight, param)
-        if param.shape != loaded_weight.shape:
+        import math
+        if param.shape != loaded_weight.shape and math.prod(param.shape) == math.prod(loaded_weight.shape):
             # for e_score_correction_bias
+            print("reshape: ", loaded_weight.shape, param.shape)
             loaded_weight = loaded_weight.reshape(param.shape)
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"

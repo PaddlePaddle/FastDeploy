@@ -27,7 +27,7 @@ from fastdeploy.model_executor.layers.quantization.quant_base import (
     QuantMethodBase,
 )
 from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.model_executor.utils import set_weight_attrs
+from fastdeploy.model_executor.utils import set_weight_attrs, default_weight_loader
 
 
 class XPUKvCacheQuantConfig(QuantConfigBase):
@@ -139,6 +139,8 @@ class XPUKVCacheMethodBase(QuantMethodBase):
         scale_shape = [layer.fd_config.model_config.num_key_value_heads]
         if self.cache_quant_config.is_channel_wise:
             scale_shape = [layer.kv_num_heads * layer.head_dim]
+            print("scale_shape: ", scale_shape)
+            extra_weight_attrs={**extra_weight_attrs,"output_dim":1,"weight_loader":default_weight_loader(layer.fd_config)}
 
         layer.cache_k_scale = layer.create_parameter(
             shape=scale_shape,
