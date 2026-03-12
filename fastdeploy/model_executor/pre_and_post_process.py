@@ -14,12 +14,12 @@
 # limitations under the License.
 """
 
-from numpy._typing._array_like import NDArray
 import queue
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import paddle
+from numpy._typing._array_like import NDArray
 
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
@@ -254,12 +254,12 @@ def async_generate_output(
     assert async_output_queue is not None, "async_output_queue must not be None"
 
     worker_logger.debug(
-        "async_generate_output detail: \n" +
-        "  decode_mode: %s\n" +
-        "  sampled_tokens shape: %s\n" +
-        "  accept_token_nums: %s\n" +
-        "  prompt_logprobs_list: %s\n" +
-        "  logprobs_tensors: %s",
+        "async_generate_output detail: \n"
+        + "  decode_mode: %s\n"
+        + "  sampled_tokens shape: %s\n"
+        + "  accept_token_nums: %s\n"
+        + "  prompt_logprobs_list: %s\n"
+        + "  logprobs_tensors: %s",
         decode_mode,
         sampled_tokens,
         accept_token_nums,
@@ -552,9 +552,7 @@ def post_process_specualate(
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             recover_batch_index_for_sampler_output(
-                sampler_output, 
-                model_output.index_to_batch_id, 
-                model_output.enable_pd_reorder
+                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
             )
             real_bsz = share_inputs["seq_lens_this_time"].shape[0]
             accept_token_nums = model_output.accept_num[:real_bsz].numpy()
