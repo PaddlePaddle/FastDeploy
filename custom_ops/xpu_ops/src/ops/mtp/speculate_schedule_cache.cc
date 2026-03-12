@@ -89,7 +89,7 @@ void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
       block_num_per_seq,
       prefill_one_step_stop);
   // kernel launch
-  PD_CHECK(r == 0, "speculate_free_and_reschedule  failed.");
+  PD_CHECK(r == 0, "speculate_schedule_cache failed.");
 
   auto not_need_stop_cpu =
       not_need_stop_gpu.copy_to(not_need_stop.place(), true);

@@ -58,7 +58,8 @@ std::vector<paddle::Tensor> RebuildAppendPadding(
           dim_embed,
           elem_nums,
           reinterpret_cast<XPUTypeBF16*>(out.data<bf16_data_t>()));
-      PD_CHECK(r == 0, "xpu::plugin::speculate_rebuild_append_padding failed.");
+      PD_CHECK(r == 0,
+               "fastdeploy::plugin::speculate_rebuild_append_padding failed.");
       return {out};
     case paddle::DataType::FLOAT16:
       using XPUTypeFP16 = typename XPUTypeTrait<float16>::Type;
@@ -75,7 +76,8 @@ std::vector<paddle::Tensor> RebuildAppendPadding(
           dim_embed,
           elem_nums,
           reinterpret_cast<XPUTypeFP16*>(out.data<fp16_data_t>()));
-      PD_CHECK(r == 0, "xpu::plugin::speculate_rebuild_append_padding failed.");
+      PD_CHECK(r == 0,
+               "fastdeploy::plugin::speculate_rebuild_append_padding failed.");
       return {out};
     case paddle::DataType::FLOAT32:
       r = fastdeploy::plugin::speculate_rebuild_append_padding<float>(
@@ -89,7 +91,8 @@ std::vector<paddle::Tensor> RebuildAppendPadding(
           dim_embed,
           elem_nums,
           out.data<float>());
-      PD_CHECK(r == 0, "xpu::plugin::speculate_rebuild_append_padding failed.");
+      PD_CHECK(r == 0,
+               "fastdeploy::plugin::speculate_rebuild_append_padding failed.");
       return {out};
     default:
       PD_THROW("Unsupported data type.");

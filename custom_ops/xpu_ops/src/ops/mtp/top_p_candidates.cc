@@ -86,7 +86,7 @@ std::vector<paddle::Tensor> TopPCandidates(
                 token_num,
                 candidates_len,
                 max_seq_len);
-            PD_CHECK(r == 0, "xpu::plugin::top_p_candidates failed.");
+            PD_CHECK(r == 0, "fastdeploy::plugin::top_p_candidates failed.");
             return {verify_scores, verify_tokens, actual_candidate_lens});
       }
     case paddle::DataType::FLOAT16:
@@ -109,7 +109,7 @@ std::vector<paddle::Tensor> TopPCandidates(
                 token_num,
                 candidates_len,
                 max_seq_len);
-            PD_CHECK(r == 0, "xpu::plugin::top_p_candidates failed.");
+            PD_CHECK(r == 0, "fastdeploy::plugin::top_p_candidates failed.");
             return {verify_scores, verify_tokens, actual_candidate_lens});
       }
     case paddle::DataType::FLOAT32:
@@ -128,7 +128,7 @@ std::vector<paddle::Tensor> TopPCandidates(
                     token_num,
                     candidates_len,
                     max_seq_len);
-            PD_CHECK(r == 0, "xpu::plugin::top_p_candidates failed.");
+            PD_CHECK(r == 0, "fastdeploy::plugin::top_p_candidates failed.");
             return {verify_scores, verify_tokens, actual_candidate_lens});
       }
     default:

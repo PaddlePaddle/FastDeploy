@@ -41,7 +41,7 @@ void SetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
       bs,
       length,
       length_input_ids);
-  PD_CHECK(r == 0, "xpu::plugin::set_value_by_flags_and_idx failed.");
+  PD_CHECK(r == 0, "fastdeploy::plugin::set_value_by_flags_and_idx failed.");
 }
 
 PD_BUILD_OP(set_value_by_flags_and_idx)

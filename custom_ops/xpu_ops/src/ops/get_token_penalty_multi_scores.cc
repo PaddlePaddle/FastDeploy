@@ -62,7 +62,8 @@ void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
           length_id,
           end_length,
           length_bad_words);
-      PD_CHECK(r == 0, "xpu::plugin::token_penalty_multi_scores failed.");
+      PD_CHECK(r == 0,
+               "fastdeploy::plugin::token_penalty_multi_scores failed.");
     } break;
     case paddle::DataType::FLOAT32: {
       int r = fastdeploy::plugin::token_penalty_multi_scores(
@@ -82,7 +83,8 @@ void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
           length_id,
           end_length,
           length_bad_words);
-      PD_CHECK(r == 0, "xpu::plugin::token_penalty_multi_scores failed.");
+      PD_CHECK(r == 0,
+               "fastdeploy::plugin::token_penalty_multi_scores failed.");
     } break;
     default:
       PD_THROW(

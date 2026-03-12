@@ -59,7 +59,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
       bsz,
       actual_draft_token_num,
       input_token_num);
-  PD_CHECK(r == 0, "xpu::plugin::compute_order failed.");
+  PD_CHECK(r == 0, "fastdeploy::plugin::compute_order failed.");
 
   int output_token_num_cpu =
       output_token_num.copy_to(paddle::CPUPlace(), false).data<int>()[0];
@@ -81,7 +81,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
           dim_embed,
           elem_cnt,
           output_token_num_cpu);
-      PD_CHECK(r == 0, "xpu::plugin::rebuild_hidden_states failed.");
+      PD_CHECK(r == 0, "fastdeploy::plugin::rebuild_hidden_states failed.");
       return {out};
     case paddle::DataType::FLOAT16:
       using XPUTypeFP16 = typename XPUTypeTrait<float16>::Type;
@@ -94,7 +94,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
           dim_embed,
           elem_cnt,
           output_token_num_cpu);
-      PD_CHECK(r == 0, "xpu::plugin::rebuild_hidden_states failed.");
+      PD_CHECK(r == 0, "fastdeploy::plugin::rebuild_hidden_states failed.");
       return {out};
     case paddle::DataType::FLOAT32:
       r = fastdeploy::plugin::rebuild_hidden_states(
@@ -105,7 +105,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
           dim_embed,
           elem_cnt,
           output_token_num_cpu);
-      PD_CHECK(r == 0, "xpu::plugin::rebuild_hidden_states failed.");
+      PD_CHECK(r == 0, "fastdeploy::plugin::rebuild_hidden_states failed.");
       return {out};
     default:
       PD_THROW("Unsupported data type.");

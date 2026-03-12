@@ -38,7 +38,7 @@ void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
       const_cast<bool*>(base_model_stop_flags.data<bool>()),
       real_bsz,
       base_model_draft_token_len);
-  PADDLE_ENFORCE_XDNN_SUCCESS(r, "");
+  PADDLE_ENFORCE_XDNN_SUCCESS(r, "draft_model_postprocess");
 }
 
 PD_BUILD_STATIC_OP(draft_model_postprocess)

@@ -99,7 +99,7 @@ std::vector<paddle::Tensor> GatherNextToken(
         encoder_batch_map_vp,
         decoder_batch_map_vp,
         dim);
-    PD_CHECK(r == 0, "xpu::plugin::gather_next_token failed.");
+    PD_CHECK(r == 0, "fastdeploy::plugin::gather_next_token failed.");
   } else {
     int r = fastdeploy::plugin::eb_gather_next_token<XPUType, XPUType>(
         ctx,
@@ -109,7 +109,7 @@ std::vector<paddle::Tensor> GatherNextToken(
         encoder_batch_map_vp,
         decoder_batch_map_vp,
         dim);
-    PD_CHECK(r == 0, "xpu::plugin::gather_next_token failed.");
+    PD_CHECK(r == 0, "fastdeploy::plugin::gather_next_token failed.");
   }
   return {out};
 }

@@ -49,7 +49,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
       bs_now,
       end_length,
       beam_search);
-  PD_CHECK(r == 0, "xpu::plugin::set_stop_value_multi_ends failed.");
+  PD_CHECK(r == 0, "fastdeploy::plugin::set_stop_value_multi_ends failed.");
 }
 
 PD_BUILD_OP(set_stop_value_multi_ends)

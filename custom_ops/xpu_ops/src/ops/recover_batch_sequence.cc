@@ -75,7 +75,7 @@ std::vector<paddle::Tensor> RecoverBatchSequenceKernel(
       encoder_batch_map_vp,
       decoder_batch_map_vp,
       dim);
-  PD_CHECK(r == 0, "xpu::plugin::eb_recover_batch_sequence failed.");
+  PD_CHECK(r == 0, "fastdeploy::plugin::eb_recover_batch_sequence failed.");
   return {out};
 }
 

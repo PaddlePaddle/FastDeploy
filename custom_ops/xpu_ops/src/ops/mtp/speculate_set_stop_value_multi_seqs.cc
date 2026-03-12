@@ -67,7 +67,8 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
       stop_seqs_bs,
       stop_seqs_max_len,
       pre_ids_len);
-  PD_CHECK(r == 0, "xpu::plugin::speculate_set_stop_value_multi_seqs failed.");
+  PD_CHECK(r == 0,
+           "fastdeploy::plugin::speculate_set_stop_value_multi_seqs failed.");
 }
 
 PD_BUILD_STATIC_OP(speculate_set_stop_value_multi_seqs)
