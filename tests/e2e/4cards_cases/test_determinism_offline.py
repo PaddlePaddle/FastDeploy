@@ -99,7 +99,7 @@ def llm(model_path, _module_env):
         model=model_path,
         tensor_parallel_size=4,
         max_model_len=8192,
-        enable_overlap_schedule=False,
+        enable_overlap_schedule=True,
         enable_prefix_caching=True,
         graph_optimization_config={"use_cudagraph": os.getenv("USE_CUDAGRAPH", "0") == "1"},
     )
