@@ -1351,6 +1351,7 @@ class EngineService:
         with self._pause_cond:
             if self.is_paused:
                 self.llm_logger.info("Pause Request Generation: already paused.")
+                return
             self.is_paused = True
 
         self.llm_logger.info("Start Abort Running Requests")

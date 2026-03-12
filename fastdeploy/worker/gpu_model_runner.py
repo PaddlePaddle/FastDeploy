@@ -142,7 +142,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_batch_reqs_list: list[Request] = [None for _ in range(self.scheduler_config.max_num_seqs)]
         self.cache_kvs_map: dict = {}
         self.exist_prefill_flag = False
-        self.is_paused = False
+
+        self.is_kvcache_sleeping = False
+        self.is_weight_sleeping = False
 
         if self.speculative_decoding:
             self._real_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
@@ -289,6 +291,10 @@ class GPUModelRunner(ModelRunnerBase):
         check whether prefill stage exist
         """
         return self.exist_prefill_flag
+
+    @property
+    def is_sleeping(self):
+        return self.is_weight_sleeping or self.is_kvcache_sleeping
 
     def exist_decode(self):
         """
@@ -2676,8 +2682,14 @@ class GPUModelRunner(ModelRunnerBase):
         return self.dynamic_weight_manager.update_weights_by_rdma(version, rsync_config)
 
     def sleep(self, tags):
+        if self.is_sleeping:
+            logger.info("GPU model runner is already sleeping, no need to sleep again!")
+            return
+
         logger.info(f">>> start offloading memory, tags: {tags}")
         start_time = time.perf_counter()
+
+        # Clear weights, deepep_buffer, cudagraph, etc.
         if "weight" in tags.split(","):
             if self.use_cudagraph:
                 self.model.clear_grpah_opt_backend()
@@ -2686,41 +2698,50 @@ class GPUModelRunner(ModelRunnerBase):
             self.dynamic_weight_manager.clear_model_weight()
             if self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
                 self.dynamic_weight_manager.clear_communication_group()
+            self.is_weight_sleeping = True
+
+        # Clear KV cache
         if "kv_cache" in tags.split(","):
             if self.spec_method == SpecMethod.MTP:
                 self.proposer.clear_mtp_cache()
             self.clear_cache()
+            self.is_kvcache_sleeping = True
+
         paddle.device.cuda.empty_cache()
-        self.is_paused = True
         logger.info(f"<<< finish offloading memory! time cost: {time.perf_counter()-start_time:.3f}s")
         print_gpu_memory_use(self.local_rank, f"After offloading memory [{tags}]")
 
     def wakeup(self, tags):
+        if not self.is_kvcache_sleeping:
+            logger.info("GPU model runner is not sleeping, no need to wakeup!")
+            return
+
         logger.info(f">>> start reloading memory, tags: {tags}")
         start_time = time.perf_counter()
-        if "weight" in tags.split(","):
-            if self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
-                self.dynamic_weight_manager.restart_communication_group()
-            if self.fd_config.parallel_config.enable_expert_parallel:
-                self.dynamic_weight_manager.recreate_deepep_buffer()
-            self.dynamic_weight_manager.reload_model_weights()
-
-        # Reinitialize KV cache
-        if "kv_cache" in tags.split(","):
-            if self.spec_method == SpecMethod.MTP:
-                self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
-            self.initialize_kv_cache()
 
         # Reset share_inputs to restore tensor shapes and values
         if self.spec_method == SpecMethod.MTP:
             self.proposer.model_inputs.reset_model_inputs()
         self.share_inputs.reset_share_inputs()
 
-        # Recapture CUDA graph if enabled
-        if "weight" in tags.split(",") and self.use_cudagraph:
-            self.capture_model()
+        # Reinitialize KV cache
+        if "kv_cache" in tags.split(","):
+            if self.spec_method == SpecMethod.MTP:
+                self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
+            self.initialize_kv_cache()
+            self.is_kvcache_sleeping = False
 
-        self.is_paused = False
+        # Reload weights, deepep_buffer, cudagraph, etc.
+        if "weight" in tags.split(","):
+            if self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                self.dynamic_weight_manager.restart_communication_group()
+            if self.fd_config.parallel_config.enable_expert_parallel:
+                self.dynamic_weight_manager.recreate_deepep_buffer()
+            self.dynamic_weight_manager.reload_model_weights()
+            if self.use_cudagraph:
+                self.capture_model()
+            self.is_weight_sleeping = False
+
         logger.info(f"<<< finish reloading memory! time cost: {time.perf_counter()-start_time:.3f}s")
         print_gpu_memory_use(self.local_rank, f"After reloading memory [{tags}]")
 
