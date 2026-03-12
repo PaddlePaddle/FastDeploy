@@ -65,6 +65,7 @@ from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.router.utils import check_service_health
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.trace.constants import LoggingEventName
@@ -575,7 +576,10 @@ class EngineService:
             req_out.metrics.decode_preallocate_req_time = cur_req.metrics.decode_preallocate_req_time
             cur_req.metrics = req_out.metrics
             cur_req.metrics.decode_inference_start_time = time.time()
-            if self.cfg.speculative_config.method in ["mtp"] and self.cfg.scheduler_config.splitwise_role == "decode":
+            if (
+                self.cfg.speculative_config.method == SpecMethod.MTP
+                and self.cfg.scheduler_config.splitwise_role == "decode"
+            ):
                 cur_req.draft_token_ids = copy.deepcopy(req_out.outputs.draft_token_ids)
 
             if req_out.error_code != 200:

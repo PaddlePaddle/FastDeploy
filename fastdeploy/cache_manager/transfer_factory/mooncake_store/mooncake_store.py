@@ -28,6 +28,7 @@ from fastdeploy.cache_manager.transfer_factory.kvcache_storage import (
 )
 from fastdeploy.cache_manager.transfer_factory.utils import get_rdma_nics
 from fastdeploy.platforms import current_platform
+from fastdeploy.utils import get_host_ip
 
 DEFAULT_GLOBAL_SEGMENT_SIZE = 1024 * 1024 * 1024  # 1 GiB
 DEFAULT_LOCAL_BUFFER_SIZE = 128 * 1024 * 1024  # 128MB
@@ -48,9 +49,10 @@ class MooncakeStoreConfig:
         """Load the config from a JSON file or environment variables."""
         config = {}
         file_path = os.getenv("MOONCAKE_CONFIG_PATH")
+        host_ip = get_host_ip()
 
         if file_path is None:
-            local_hostname = os.environ.get("MOONCAKE_LOCAL_HOSTNAME", "localhost")
+            local_hostname = os.environ.get("MOONCAKE_LOCAL_HOSTNAME", host_ip)
             metadata_server = os.environ.get("MOONCAKE_METADATA_SERVER")
             global_segment_size = int(os.environ.get("MOONCAKE_GLOBAL_SEGMENT_SIZE", DEFAULT_GLOBAL_SEGMENT_SIZE))
             local_buffer_size = int(os.environ.get("MOONCAKE_LOCAL_BUFFER_SIZE", DEFAULT_LOCAL_BUFFER_SIZE))
@@ -63,7 +65,7 @@ class MooncakeStoreConfig:
             with open(file_path) as fin:
                 config = json.load(fin)
 
-            local_hostname = config.get("local_hostname", "localhost")
+            local_hostname = config.get("local_hostname", host_ip)
             metadata_server = config.get("metadata_server")
             global_segment_size = int(config.get("global_segment_size", DEFAULT_GLOBAL_SEGMENT_SIZE))
             local_buffer_size = int(config.get("local_buffer_size", DEFAULT_LOCAL_BUFFER_SIZE))
@@ -99,6 +101,11 @@ class MooncakeStore(KVCacheStorage):
     def __init__(self, tp_rank=None):
         super().__init__()
         self.tp_rank = tp_rank
+
+        # Set MC_TCP_BIND_ADDRESS for mooncake store to bind to the correct host IP
+        host_ip = get_host_ip()
+        os.environ["MC_TCP_BIND_ADDRESS"] = host_ip
+        logger.info(f"Set MC_TCP_BIND_ADDRESS to {host_ip}")
 
         try:
             from mooncake.store import MooncakeDistributedStore
@@ -139,8 +146,10 @@ class MooncakeStore(KVCacheStorage):
     def warmup(self):
         warmup_key = "fastdeploy_mooncake_store_warmup_key" + str(uuid.uuid4())
         warmup_value = bytes(1 * 1024 * 1024)  # 1 MB
-        self.store.put(warmup_key, warmup_value)
-        assert self.store.is_exist(warmup_key) == 1
+        rc = self.store.put(warmup_key, warmup_value)
+        assert rc == 0, f"Failed to put warmup key, key:{warmup_key}, error code: {rc}"
+        rc = self.store.is_exist(warmup_key)
+        assert rc == 1, f"Failed to check existence, key:{warmup_key}, error code: {rc}"
         self.store.get(warmup_key)
         self.store.remove(warmup_key)
 

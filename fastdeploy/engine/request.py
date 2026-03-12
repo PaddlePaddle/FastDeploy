@@ -865,6 +865,7 @@ class RequestMetrics:
     llm_engine_recv_req_timestamp: Optional[float] = None
     llm_engine_send_req_to_engine_timestamp: Optional[float] = None
     llm_engine_recv_latest_token_timestamp: Optional[float] = None
+    llm_engine_recv_token_timestamp: Optional[float] = None
 
     speculate_metrics: Optional[SpeculateMetrics] = None
 
@@ -933,6 +934,7 @@ class RequestMetrics:
         # for compatibility with old metrics
         self.llm_engine_recv_req_timestamp = self.engine_get_req_time
         self.llm_engine_send_req_to_engine_timestamp = self.inference_start_time
+        self.llm_engine_recv_token_timestamp = self.engine_recv_first_token_time
 
     def get(self, key: str, default_value=None):
         if hasattr(self, key):
