@@ -25,6 +25,7 @@ prometheus-client
 decord
 moviepy
 wheel
+triton
 use-triton-in-paddle
 crcmod
 msgpack
