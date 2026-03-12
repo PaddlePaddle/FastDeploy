@@ -59,6 +59,8 @@ class IluvatarModelRunner(GPUModelRunner):
         assert not self.cache_config.enable_prefix_caching, "Iluvatar does not support prefix caching"
         self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         assert not self.mla_cache, "Iluvatar does not support MLA"
+        self.dsa_cache = envs.FD_ATTENTION_BACKEND == "DSA_ATTN"
+        assert not self.dsa_cache, "Iluvatar does not support DSA_ATTN"
         if self.enable_mm:
             assert (
                 not self.cache_config.enable_chunked_prefill

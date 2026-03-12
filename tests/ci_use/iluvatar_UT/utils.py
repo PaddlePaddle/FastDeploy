@@ -23,6 +23,3 @@ def timeout(seconds):
         return wrapper
 
     return decorator
-
-
-TIMEOUT_MSG = "The timeout exit may be due to multiple processes sharing the same gpu card. You can check this using ixsmi on the device."

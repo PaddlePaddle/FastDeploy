@@ -303,6 +303,130 @@ class DataProcessor(MMBaseDataProcessor):
 
         return outputs
 
+    def prompt_token_ids2outputs(
+        self, request: Dict[str, Any], tgts: List[str] = None
+    ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
+        outputs = {
+            "input_ids": [],
+            "token_type_ids": [],
+            "position_ids": [],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "labels": [],
+            "cur_position": 0,
+            "video_cnt": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+            "fps": [],
+            "mm_positions": [],
+            "mm_hashes": [],
+        }
+        prompt_token_ids = request.get("prompt_token_ids", [])
+        prompt_token_ids_len = len(prompt_token_ids)
+
+        if not request.get("messages"):
+            self._add_text(prompt_token_ids, outputs)
+            return outputs
+
+        messages = parse_chat_messages(request.get("messages"))
+        mm_items = []
+        for msg in messages:
+            role = msg.get("role")
+            assert role in self.role_prefixes, f"Unsupported role: {role}"
+
+            content = msg.get("content")
+            if not isinstance(content, list):
+                content = [content]
+            for item in content:
+                if item.get("type") in ["image", "video"]:
+                    mm_items.append(item)
+
+        missing_hashes, missing_idx = [], []
+        for idx, item in enumerate(mm_items):
+            if not item.get("data"):
+                missing_hashes.append(item.get("uuid"))
+                missing_idx.append(idx)
+
+        if len(missing_hashes) > 0 and not self.enable_processor_cache:
+            raise ValueError("Missing items cannot be retrieved without processor cache.")
+
+        dealer = None
+        if self.enable_processor_cache:
+            context = zmq.Context()
+            dealer = context.socket(zmq.DEALER)
+            dealer.connect("ipc:///dev/shm/processor_cache.ipc")
+
+            missing_items = self.get_processor_cache(dealer, missing_hashes)
+            for idx in range(len(missing_items)):
+                if not missing_items[idx]:
+                    raise ValueError(f"Missing item {idx} not found in processor cache")
+                mm_items[missing_idx[idx]]["data"] = missing_items[idx]
+
+        st, mm_idx = 0, 0
+        while st < prompt_token_ids_len:
+            if prompt_token_ids[st] != self.image_token_id:
+                cur_idx = st
+                while cur_idx < prompt_token_ids_len and prompt_token_ids[cur_idx] != self.image_token_id:
+                    cur_idx += 1
+                self._add_text(prompt_token_ids[st:cur_idx], outputs)
+                st = cur_idx
+                continue
+
+            if mm_idx >= len(mm_items):
+                raise ValueError("prompt token ids has more multimodal placeholder than in messages")
+
+            cur_idx = st
+            while cur_idx < prompt_token_ids_len and prompt_token_ids[cur_idx] == self.image_token_id:
+                cur_idx += 1
+
+            item = mm_items[mm_idx]
+            uuid = item.get("uuid")
+            token_len = cur_idx - st
+            if item.get("type") == "image":
+                image = item.get("data")
+                if not isinstance(image, tuple):
+                    self._add_image(image, outputs, uuid, token_len)
+                else:
+                    self._add_processed_image(image, outputs, uuid, token_len)
+            elif item.get("type") == "video":
+                video = item.get("data")
+                if not isinstance(video, tuple):
+                    if isinstance(video, dict):
+                        frames, meta = self._load_and_process_video(video["video"], video)
+                    else:
+                        frames, meta = self._load_and_process_video(video, {})
+                    self._add_video(frames, meta, outputs, uuid, token_len)
+                else:
+                    self._add_processed_video(video, outputs, uuid, token_len)
+            else:
+                raise ValueError(f"Unsupported multimodal type: {item.get('type')}")
+            mm_idx += 1
+            st = cur_idx
+
+        if mm_idx != len(mm_items):
+            raise ValueError("number of multimodal items does not match prompt token ids")
+
+        if self.enable_processor_cache:
+            missing_idx = set(missing_idx)
+            hashes_to_cache, items_to_cache = [], []
+            for idx in range(len(mm_items)):
+                if idx in missing_idx:
+                    continue
+                meta = {}
+                grid_thw = np.asarray(outputs["grid_thw"][idx])
+                if grid_thw.ndim > 1:
+                    t, h, w = grid_thw[0]
+                else:
+                    t, h, w = grid_thw
+                meta["thw"] = (int(t), int(h), int(w))
+                meta["fps"] = outputs["fps"][idx]
+                hashes_to_cache.append(outputs["mm_hashes"][idx])
+                items_to_cache.append((outputs["images"][idx], meta))
+            if hashes_to_cache:
+                self.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
+        return outputs
+
     def request2ids(
         self, request: Dict[str, Any], tgts: List[str] = None
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
@@ -389,12 +513,17 @@ class DataProcessor(MMBaseDataProcessor):
                 if idx in missing_idx:
                     continue
                 meta = {}
-                t, h, w = outputs["grid_thw"][idx]
-                meta["thw"] = (t, h, w)
+                grid_thw = np.asarray(outputs["grid_thw"][idx])
+                if grid_thw.ndim > 1:
+                    t, h, w = grid_thw[0]
+                else:
+                    t, h, w = grid_thw
+                meta["thw"] = (int(t), int(h), int(w))
                 meta["fps"] = outputs["fps"][idx]
                 hashes_to_cache.append(outputs["mm_hashes"][idx])
                 items_to_cache.append((outputs["images"][idx], meta))
-            self.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
+            if hashes_to_cache:
+                self.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
 
         return outputs
 
@@ -441,7 +570,7 @@ class DataProcessor(MMBaseDataProcessor):
         position = text_index + start_pos
         return position
 
-    def _add_image(self, img, outputs: Dict, uuid: Optional[str]) -> None:
+    def _add_image(self, img, outputs: Dict, uuid: Optional[str], token_len: Optional[int] = None) -> None:
         """
         Add image data to model inputs dictionary.
 
@@ -457,6 +586,8 @@ class DataProcessor(MMBaseDataProcessor):
         ret = self.image_processor.preprocess(images=[img.convert("RGB")])
         num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
         grid_thw = ret["grid_thw"].tolist()
+        if token_len is not None and token_len != num_tokens:
+            raise ValueError("image tokens num not match the size")
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
         outputs["input_ids"].extend([self.image_token_id] * num_tokens)
@@ -479,12 +610,16 @@ class DataProcessor(MMBaseDataProcessor):
 
         outputs["fps"].append(0)
 
-    def _add_processed_image(self, img_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str) -> None:
+    def _add_processed_image(
+        self, img_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str, token_len: Optional[int] = None
+    ) -> None:
         img, meta = img_cache
         num_tokens = img.shape[0] // self.image_processor.merge_size**2
+        if token_len is not None and token_len != num_tokens:
+            raise ValueError("image tokens num not match the size")
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
 
         _, h, w = meta["thw"]
@@ -499,7 +634,9 @@ class DataProcessor(MMBaseDataProcessor):
 
         outputs["fps"].append(0)
 
-    def _add_video(self, frames, meta: Dict, outputs: Dict, uuid: Optional[str]) -> None:
+    def _add_video(
+        self, frames, meta: Dict, outputs: Dict, uuid: Optional[str], token_len: Optional[int] = None
+    ) -> None:
         """
         Add video data to model inputs dictionary.
 
@@ -520,6 +657,8 @@ class DataProcessor(MMBaseDataProcessor):
 
         num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
         grid_thw = ret["grid_thw"].tolist()
+        if token_len is not None and token_len != num_tokens:
+            raise ValueError("video tokens num not match the size")
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
         # Hack code. In order to adapt to the framework, only image_token can be passed
@@ -546,9 +685,13 @@ class DataProcessor(MMBaseDataProcessor):
 
         outputs["fps"].append(fps)
 
-    def _add_processed_video(self, frames_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str) -> None:
+    def _add_processed_video(
+        self, frames_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str, token_len: Optional[int] = None
+    ) -> None:
         frames, meta = frames_cache
         num_tokens = frames.shape[0] // self.image_processor.merge_size**2
+        if token_len is not None and token_len != num_tokens:
+            raise ValueError("video tokens num not match the size")
 
         t, h, w = meta["thw"]
         outputs["images"].append(frames)
@@ -556,7 +699,7 @@ class DataProcessor(MMBaseDataProcessor):
         outputs["grid_thw"].append(np.array([[t, h, w]]))
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
         outputs["image_type_ids"].extend([1] * t)
 
