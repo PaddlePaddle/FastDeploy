@@ -89,7 +89,7 @@ class TestPerTokenQuant(unittest.TestCase):
 
     def test_per_token_quant(self):
         paddle_output, paddle_output_scale = per_token_quant_paddle(self.input_tensor, self.block_size)
-        output, output_scale = per_token_quant(self.input_tensor, self.block_size)
+        output, output_scale = per_token_quant(self.input_tensor, self.block_size, False)
 
         np.testing.assert_allclose(paddle_output_scale.numpy(), output_scale.numpy(), rtol=1e-6)
 
@@ -139,7 +139,7 @@ class TestPerTokenQuantPadding(TestPerTokenQuant):
         paddle_output, paddle_output_scale = per_token_quant_padding_paddle(
             self.input_tensor, self.block_size, self.dtype
         )
-        output, output_scale = per_token_quant_padding(self.input_tensor, self.block_size)
+        output, output_scale = per_token_quant_padding(self.input_tensor, self.block_size, False)
 
         self.assertEqual(paddle_output_scale.shape, output_scale.shape)
         np.testing.assert_allclose(

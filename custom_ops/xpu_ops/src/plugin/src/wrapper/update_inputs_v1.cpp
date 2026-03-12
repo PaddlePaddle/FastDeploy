@@ -29,7 +29,6 @@ __attribute__((global)) void update_inputs_v1(bool* not_need_stop,
                                               int64_t* topk_ids,
                                               int64_t* input_ids,
                                               int* block_tables,
-                                              const int64_t* stop_nums,
                                               bool* stop_flags,
                                               bool* is_block_step,
                                               const int64_t* next_tokens,
@@ -58,7 +57,6 @@ static int xpu3_wrapper(Context* ctx,
                         int64_t* topk_ids,
                         int64_t* input_ids,
                         int* block_tables,
-                        const int64_t* stop_nums,
                         bool* stop_flags,
                         bool* is_block_step,
                         const int64_t* next_tokens,
@@ -86,7 +84,6 @@ static int xpu3_wrapper(Context* ctx,
       reinterpret_cast<XPU_INT64*>(topk_ids),
       reinterpret_cast<XPU_INT64*>(input_ids),
       block_tables,
-      reinterpret_cast<const XPU_INT64*>(stop_nums),
       stop_flags,
       is_block_step,
       reinterpret_cast<const XPU_INT64*>(next_tokens),
@@ -110,7 +107,6 @@ int update_inputs_v1(Context* ctx,
                      int64_t* topk_ids,
                      int64_t* input_ids,
                      int* block_tables,
-                     const int64_t* stop_nums,
                      bool* stop_flags,
                      bool* is_block_step,
                      const int64_t* next_tokens,
@@ -127,11 +123,10 @@ int update_inputs_v1(Context* ctx,
                       seq_lens_encoder,
                       seq_lens_decoder,
                       step_seq_lens_decoder);
-  WRAPPER_DUMP_PARAM5(
-      ctx, prompt_lens, topk_ids, input_ids, block_tables, stop_nums);
+  WRAPPER_DUMP_PARAM4(ctx, prompt_lens, topk_ids, input_ids, block_tables);
   WRAPPER_DUMP_PARAM3(ctx, stop_flags, is_block_step, next_tokens);
-  WRAPPER_DUMP_PARAM5(
-      ctx, bsz, max_bsz, input_ids_stride, block_num_per_seq, block_size);
+  WRAPPER_DUMP_PARAM4(
+      ctx, bsz, input_ids_stride, block_num_per_seq, block_size);
   WRAPPER_DUMP(ctx);
   if (ctx->dev().type() == api::kCPU) {
     assert(false);
@@ -147,7 +142,6 @@ int update_inputs_v1(Context* ctx,
                         topk_ids,
                         input_ids,
                         block_tables,
-                        stop_nums,
                         stop_flags,
                         is_block_step,
                         next_tokens,

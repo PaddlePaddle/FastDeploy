@@ -200,6 +200,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
     # Whether to use phi FP8 quantization,if 1,use paddle default.
     "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
+    # Whether to use phi MOE permute,if 1,use paddle default.
+    "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))),
+    # Control class SiluAndMul to use swiglu or fusid_bias_act operator in the forward_cuda function
+    "FD_SiluAndMul_USE_PHI_SWIGLU": lambda: bool(int(os.getenv("FD_SiluAndMul_USE_PHI_SWIGLU", "0"))),
     # Reserve output blocks for decoding requests when schedule new prefill requests
     "FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
         os.getenv("FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "16")
@@ -233,7 +237,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Under certain DP+EP configurations, concurrent access (even read-only)
     # has been observed to cause NaN computation errors.
     # Set to 1 to enable the lock; defaults to 0 (disabled).
-    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("USE_KVCACHE_LOCK", "0"))),
+    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
 }
 
 

@@ -84,11 +84,8 @@ class TestSiluAndMul(unittest.TestCase):
         layer = SiluAndMul(fd_config)
         x = paddle.ones([2, 2])
         out = layer.forward(x)
-        if layer.bias is None and layer.quant_scale == -1:
-            self.assertTrue((out.numpy() == 0.73105854).all())
-        else:
-            self.assertTrue((out.numpy() == 1).all())
-            mock_fused.assert_called_once()
+        self.assertTrue((out.numpy() == 1).all())
+        mock_fused.assert_called_once()
 
     # Test forward computation on GCU platform
     @patch(
