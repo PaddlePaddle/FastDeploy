@@ -233,7 +233,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Under certain DP+EP configurations, concurrent access (even read-only)
     # has been observed to cause NaN computation errors.
     # Set to 1 to enable the lock; defaults to 0 (disabled).
-    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("USE_KVCACHE_LOCK", "0"))),
+    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
 }
 
 
