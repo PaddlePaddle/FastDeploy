@@ -2,16 +2,16 @@
 set -e
 
 # =============================================================================
-# PD 分离 + 全局 Cache 池化测试脚本
-# 参考: start_v1_tp1.sh (PD 分离) + run.sh (Mooncake Cache 池化)
-# 注意修改：PD实例的CUDA_VISIBLE_DEVICES环境变量
+# PD Disaggregation + Global Cache Pooling Test Script
+# Reference: start_v1_tp1.sh (PD Disaggregation) + run.sh (Mooncake Cache Pooling)
+# Note: Modify CUDA_VISIBLE_DEVICES environment variables for PD instances
 # =============================================================================
 
-# ======================== 环境变量配置 ========================
+# ======================== Environment Variables Configuration ========================
 export MODEL_NAME="/work/models/PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
 export FD_DEBUG=1
 
-# Mooncake 配置（使用环境变量方式）
+# Mooncake Configuration (using environment variables)
 master_ip="127.0.0.1"
 master_port=15001
 metadata_port=15002
@@ -23,26 +23,26 @@ export MOONCAKE_GLOBAL_SEGMENT_SIZE="50000000000"
 export MOONCAKE_PROTOCOL="rdma"
 # export MOONCAKE_RDMA_DEVICES="mlx5_0"
 
-# ======================== 端口配置 ========================
+# ======================== Port Configuration ========================
 P_PORT=52400
 D_PORT=52500
 ROUTER_PORT=52700
 LOG_DATE=$(date +%Y%m%d_%H%M%S)
 
-# ======================== 清理和准备 ========================
+# ======================== Cleanup and Preparation ========================
 unset http_proxy && unset https_proxy
 rm -rf log_*
 
 source ./utils.sh
 
-# 检查端口
+# Check ports
 ports=($P_PORT $D_PORT $ROUTER_PORT $master_port $metadata_port)
 check_ports "${ports[@]}" || {
     echo "❌ Some ports are in use. Please release them."
     exit 1
 }
 
-# ======================== 启动 Mooncake Master ========================
+# ======================== Start Mooncake Master ========================
 echo "=== Starting Mooncake Master ==="
 export FD_LOG_DIR="log_master"
 mkdir -p ${FD_LOG_DIR}
@@ -54,9 +54,9 @@ nohup mooncake_master \
     --http_metadata_server_port=${metadata_port} \
     2>&1 > ${FD_LOG_DIR}/nohup &
 
-sleep 2  # 等待 Mooncake Master 启动
+sleep 2  # Wait for Mooncake Master to start
 
-# ======================== 启动 Router ========================
+# ======================== Start Router ========================
 echo "=== Starting Router ==="
 export FD_LOG_DIR="log_router"
 mkdir -p ${FD_LOG_DIR}
@@ -67,9 +67,9 @@ nohup python -m fastdeploy.router.launch \
     --splitwise \
     2>&1 > ${FD_LOG_DIR}/nohup &
 
-sleep 2  # 等待 Router 启动
+sleep 2  # Wait for Router to start
 
-# ======================== 启动 P 实例（Prefill） ========================
+# ======================== Start P Instance (Prefill) ========================
 echo "=== Starting Prefill Instance ==="
 export CUDA_VISIBLE_DEVICES=3
 export FD_LOG_DIR="log_prefill"
@@ -88,7 +88,7 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
     2>&1 > ${FD_LOG_DIR}/nohup &
 
 
-# ======================== 启动 D 实例（Decode） ========================
+# ======================== Start D Instance (Decode) ========================
 echo "=== Starting Decode Instance ==="
 export CUDA_VISIBLE_DEVICES=7
 export FD_LOG_DIR="log_decode"
@@ -108,26 +108,26 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
     2>&1 > ${FD_LOG_DIR}/nohup &
 
 
-# ======================== 等待服务就绪 ========================
+# ======================== Wait for Services to be Ready ========================
 echo "=== Waiting for services to be ready ==="
 wait_for_health ${P_PORT}
 wait_for_health ${D_PORT}
 
-# 等待服务注册到 Router
+# Wait for services to register to Router
 sleep 10
 echo "✅ All services are ready!"
 
-# ======================== 发送测试请求 ========================
-# 验证场景：多轮对话，验证 D 实例写入的 output cache 能被 P 实例读取
+# ======================== Send Test Requests ========================
+# Test scenario: Multi-turn conversation, verify that output cache written by D instance can be read by P instance
 #
-# 流程：
-# 1. Request 1: 发送第一轮问题，D 实例生成回答并写入全局 Cache（prompt + output）
-# 2. Request 2: 发送第二轮对话（第一轮问答 + 追问），P 实例应从全局 Cache 命中第一轮的完整 KV Cache
+# Flow:
+# 1. Request 1: Send first round question, D instance generates answer and writes to global cache (prompt + output)
+# 2. Request 2: Send second round conversation (first round Q&A + follow-up), P instance should hit global cache for first round's complete KV cache
 #
 echo ""
 echo "=== Multi-turn Conversation Test for Global Cache Pooling ==="
 
-# 第一轮问题
+# First round question
 msg1="深圳是中国经济实力最强的城市之一。近年来，深圳 GDP 持续稳步增长，2023 年突破 3.4 万亿元人民币，2024 年接近 3.7 万亿元，长期位居全国城市前列。深圳经济以第二产业和第三产业为主，高端制造业、电子信息产业和现代服务业发达，形成了以科技创新为核心的产业结构。依托华为、腾讯、大疆等龙头企业，深圳在数字经济、人工智能、新能源等领域具有显著优势。同时，深圳进出口总额常年位居全国城市第一，是中国对外开放和高质量发展的重要引擎。深圳2024年 GDP 是多少？"
 
 echo ""
@@ -135,7 +135,7 @@ echo ">>> Request 1: First round question"
 echo "    Purpose: D instance generates output and writes to global cache (prompt + output)"
 echo ""
 
-# 发送第一轮请求，获取回答
+# Send first round request and get response
 response1=$(curl -s -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d "{
@@ -151,7 +151,7 @@ response1=$(curl -s -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" 
 echo "Response 1:"
 echo "${response1}" | python3 -m json.tool 2>/dev/null || echo "${response1}"
 
-# 提取第一轮回答内容
+# Extract first round response content
 assistant_reply=$(echo "${response1}" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['choices'][0]['message']['content'])" 2>/dev/null || echo "")
 
 if [ -z "${assistant_reply}" ]; then
@@ -159,18 +159,18 @@ if [ -z "${assistant_reply}" ]; then
     exit 1
 fi
 
-# JSON 转义 assistant_reply，避免换行符、引号等特殊字符破坏 JSON 格式
+# JSON escape assistant_reply to prevent newlines, quotes, and other special characters from breaking JSON format
 assistant_reply_escaped=$(python3 -c "import json,sys; print(json.dumps(sys.stdin.read().strip()))" <<< "${assistant_reply}")
 
 echo ""
 echo "Assistant reply extracted: ${assistant_reply}..."
 
-# 等待 D 实例将 output cache 写入全局存储
+# Wait for D instance to write output cache to global storage
 echo ""
 echo ">>> Waiting for D instance to write output cache to global storage..."
 sleep 5
 
-# 第二轮追问
+# Second round follow-up question
 msg2="那深圳2023年的GDP是多少？和2024年相比增长了多少？"
 
 echo ""
@@ -179,7 +179,7 @@ echo "    Purpose: P instance should hit global cache including D's output from 
 echo "    Check log_prefill/nohup for 'storage_match' to verify cache hit"
 echo ""
 
-# 发送第二轮请求（包含完整的多轮对话历史）
+# Send second round request (including complete multi-turn conversation history)
 response2=$(curl -s -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d "{
@@ -196,7 +196,7 @@ response2=$(curl -s -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" 
 echo "Response 2:"
 echo "${response2}" | python3 -m json.tool 2>/dev/null || echo "${response2}"
 
-# 提取第二轮回答内容并显示
+# Extract second round response content and display
 assistant_reply2=$(echo "${response2}" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['choices'][0]['message']['content'])" 2>/dev/null || echo "")
 echo ""
 echo "Assistant reply 2: ${assistant_reply2}"
