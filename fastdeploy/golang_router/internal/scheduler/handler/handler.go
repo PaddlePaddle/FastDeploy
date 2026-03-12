@@ -182,7 +182,7 @@ func CleanupUnhealthyCounter(ctx context.Context, unhealthyRootURL string) {
 
 	delete(DefaultScheduler.IdCounterMap, unhealthyRootURL)
 	delete(DefaultScheduler.tokenMap, unhealthyRootURL)
-	logger.Info(ctx, "After cleanup unhealthy counter: %v", DefaultScheduler.IdCounterMap)
+	logger.Info(ctx, "cleanup unhealthy worker counter: %s", unhealthyRootURL)
 }
 
 // CleanupInvalidCounters removes counters for invalid or unreachable workers
@@ -206,9 +206,11 @@ func CleanupInvalidCounters(ctx context.Context) {
 	DefaultScheduler.mu.Lock()
 	defer DefaultScheduler.mu.Unlock()
 
+	var removed []string
 	for rootURL := range DefaultScheduler.IdCounterMap {
 		if _, exists := healthyMap[rootURL]; !exists {
 			delete(DefaultScheduler.IdCounterMap, rootURL)
+			removed = append(removed, rootURL)
 		}
 	}
 
@@ -218,7 +220,9 @@ func CleanupInvalidCounters(ctx context.Context) {
 		}
 	}
 
-	logger.Info(ctx, "After cleanup invalid counters: %v", DefaultScheduler.IdCounterMap)
+	if len(removed) > 0 {
+		logger.Info(ctx, "removed counters for %d unhealthy workers: %v", len(removed), removed)
+	}
 }
 
 // StartBackupCleanupTask starts a background task for cleaning up invalid counters
