@@ -503,6 +503,7 @@ class MTPProposer(Proposer):
             # Reset last sequence lengths if applicable
             if self.num_model_steps > 1:
                 fill_paddle_tensor(self.model_inputs, "last_seq_lens_this_time", -1)
+                fill_paddle_tensor(self.model_inputs, "last_seq_lens_encoder", -1)
 
             # Reset input IDs length
             fill_paddle_tensor(self.model_inputs, "input_ids_len", 0)
@@ -668,6 +669,9 @@ class MTPProposer(Proposer):
         if self.num_model_steps > 1:
             self.last_seq_lens_this_time = paddle.full_like(
                 self.target_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
+            )
+            self.last_seq_lens_encoder = paddle.full_like(
+                self.target_model_inputs["seq_lens_encoder"], fill_value=-1, dtype="int32"
             )
         self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()
         self.model_inputs["temp_scaled_logprobs"] = self.target_model_inputs["temp_scaled_logprobs"]
@@ -1133,7 +1137,7 @@ class MTPProposer(Proposer):
                 # paddle.clone would raise error 700 in cudaGraph mode
                 if self.num_model_steps > 1:
                     self.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
-
+                    self.last_seq_lens_encoder.copy_(self.model_inputs["seq_lens_encoder"], False)
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
                     previous_hidden_states=self.model_inputs["target_hidden_states"],
@@ -1308,6 +1312,7 @@ class MTPProposer(Proposer):
     def _get_self_hidden_states(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(
             hidden_states,
+            self.last_seq_lens_encoder,
             self.last_seq_lens_this_time,
             self.model_inputs["seq_lens_this_time"],
             self.model_inputs["step_idx"],

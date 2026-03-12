@@ -222,23 +222,23 @@ __global__ void draft_model_preprocess_kernel(
             is_block_step[tid] = false;
           }
         }
+        int recompute_limit = max(base_model_seq_len_this_time - 2, 0);
+        const int recompute_token_num_now =
+            min(recompute_token_num[tid], recompute_limit);
         if (stop_flags[tid]) {
           // Recover MTP infer when eos_token in last draft tokens.
           stop_flags[tid] = false;
           seq_lens_decoder[tid] = base_model_seq_len_decoder - accept_num_now;
           step_idx[tid] = base_model_step_idx[tid] - accept_num_now;
         } else {
-          int recompute_limit = max(base_model_seq_len_this_time - 2, 0);
-          const int recompute_token_num_now =
-              min(recompute_token_num[tid], recompute_limit);
           // Last base model generated token and first MTP token
           seq_lens_decoder[tid] -= recompute_token_num_now;
           step_idx[tid] -= recompute_token_num_now;
-          mask_rollback[tid] += recompute_token_num_now;
-          // NOTE(liuzichang): Used for PD-split mode and future dynamic
-          // strategies.
-          recompute_token_num[tid] = num_model_step - 1;
         }
+        mask_rollback[tid] += recompute_token_num_now;
+        // NOTE(liuzichang): Used for PD-split mode and future dynamic
+        // strategies.
+        recompute_token_num[tid] = num_model_step - 1;
 
         for (int i = 0; i < accept_num_now; i++) {
           draft_tokens_now[i] = accept_tokens_now[i];
