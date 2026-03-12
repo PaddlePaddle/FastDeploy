@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import time
 import traceback
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, fields, is_dataclass
 from enum import Enum
 from typing import Any, Dict, Generic, Optional
 from typing import TypeVar as TypingTypeVar
@@ -895,7 +895,14 @@ class RequestMetrics:
         """
         Convert the RequestMetrics object to a dictionary.
         """
-        return {k: v for k, v in asdict(self).items()}
+        d = {}
+        for k in self.__dataclass_fields__:
+            val = getattr(self, k)
+            if val is not None and is_dataclass(val):
+                d[k] = asdict(val)
+            else:
+                d[k] = val
+        return d
 
     def record_recv_first_token(self):
         cur_time = time.time()
