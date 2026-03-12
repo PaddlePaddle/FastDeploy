@@ -74,18 +74,20 @@ static int xpu3_wrapper(Context* ctx,
                         const int vocab_size,
                         const int real_bsz) {
   ctx_guard RAII_GUARD(ctx);
-  xpu3::plugin::speculate_get_target_logits_kernel<<<ctx->ncluster(),
-                                                     64,
-                                                     ctx->xpu_stream>>>(
-      target_logtis,
-      logits,
-      cu_batch_token_offset,
-      ori_cu_batch_token_offset,
-      seq_lens_this_time,
-      seq_lens_encoder,
-      accept_num,
-      vocab_size,
-      real_bsz);
+  int32_t ret_xre =
+      xpu3::plugin::speculate_get_target_logits_kernel<<<ctx->ncluster(),
+                                                         64,
+                                                         ctx->xpu_stream>>>(
+          target_logtis,
+          logits,
+          cu_batch_token_offset,
+          ori_cu_batch_token_offset,
+          seq_lens_this_time,
+          seq_lens_encoder,
+          accept_num,
+          vocab_size,
+          real_bsz);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

@@ -60,18 +60,20 @@ static int xpu3_wrapper(Context* ctx,
                         const int real_bsz) {
   ctx_guard RAII_GUARD(ctx);
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  xpu3::plugin::speculate_insert_first_token_kernel<<<ctx->ncluster(),
-                                                      64,
-                                                      ctx->xpu_stream>>>(
-      reinterpret_cast<XPU_INT64*>(token_ids),
-      reinterpret_cast<const XPU_INT64*>(accept_tokens),
-      reinterpret_cast<const XPU_INT64*>(next_tokens),
-      cu_next_token_offset,
-      cu_batch_token_offset,
-      seq_lens_this_time,
-      seq_lens_encoder,
-      max_draft_tokens,
-      real_bsz);
+  int32_t ret_xre =
+      xpu3::plugin::speculate_insert_first_token_kernel<<<ctx->ncluster(),
+                                                          64,
+                                                          ctx->xpu_stream>>>(
+          reinterpret_cast<XPU_INT64*>(token_ids),
+          reinterpret_cast<const XPU_INT64*>(accept_tokens),
+          reinterpret_cast<const XPU_INT64*>(next_tokens),
+          cu_next_token_offset,
+          cu_batch_token_offset,
+          seq_lens_this_time,
+          seq_lens_encoder,
+          max_draft_tokens,
+          real_bsz);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
