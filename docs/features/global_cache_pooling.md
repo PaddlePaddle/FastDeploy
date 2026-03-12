@@ -1,25 +1,25 @@
-[English](README.md) | 中文文档
+[中文文档](../../zh/features/global_cache_pooling.md) | English
 
-# FastDeploy MooncakeStore 使用指南
+# Global Cache Pooling
 
-本文档介绍如何将 MooncakeStore 作为 FastDeploy 的 KV Cache 存储后端，实现多推理实例间的**全局缓存池化**。
+This document describes how to use MooncakeStore as the KV Cache storage backend for FastDeploy, enabling **Global Cache Pooling** across multiple inference instances.
 
-## 概述
+## Overview
 
-### 什么是全局缓存池化？
+### What is Global Cache Pooling?
 
-全局缓存池化允许多个 FastDeploy 实例通过分布式存储层共享 KV Cache，具有以下优势：
+Global Cache Pooling allows multiple FastDeploy instances to share KV Cache through a distributed storage layer. This enables:
 
-- **跨实例缓存复用**：一个实例计算的 KV Cache 可被其他实例复用
-- **PD 分离架构优化**：Prefill 和 Decode 实例可无缝共享缓存
-- **减少重复计算**：避免跨请求的重复前缀计算
+- **Cross-instance cache reuse**: KV Cache computed by one instance can be reused by another
+- **PD Disaggregation optimization**: Prefill and Decode instances can share cache seamlessly
+- **Reduced computation**: Avoid redundant prefix computation across requests
 
-### 架构图
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     Mooncake Master 服务                         │
-│              (元数据与协调服务)                                    │
+│                     Mooncake Master Server                       │
+│              (Metadata & Coordination Service)                   │
 └────────────────────────────┬────────────────────────────────────┘
                              │
          ┌───────────────────┼───────────────────┐
@@ -35,48 +35,55 @@
                              │
                     ┌────────▼────────┐
                     │  MooncakeStore  │
-                    │  (共享 KV       │
-                    │   Cache 池)     │
+                    │  (Shared KV     │
+                    │   Cache Pool)   │
                     └─────────────────┘
 ```
 
-## 环境要求
+## Example Scripts
 
-### 硬件要求
+Ready-to-use example scripts are available in [examples/cache_storage/](../../../examples/cache_storage/).
 
-- 支持 CUDA 的 NVIDIA GPU
-- RDMA 网络（生产环境推荐）或 TCP 网络
+| Script | Scenario | Description |
+|--------|----------|-------------|
+| `run.sh` | Multi-Instance | Two standalone instances sharing cache |
+| `run_03b_pd_storage.sh` | PD Disaggregation | P+D instances with global cache pooling |
 
-### 软件要求
+## Prerequisites
+
+### Hardware Requirements
+
+- NVIDIA GPU with CUDA support
+- RDMA network (recommended for production) or TCP
+
+### Software Requirements
 
 - Python 3.8+
 - CUDA 11.8+
-- FastDeploy（见下方安装说明）
+- FastDeploy (see installation below)
 
-## 安装步骤
+## Installation
 
-### 1. 安装 FastDeploy
-
-参考 [NVIDIA CUDA GPU 安装指南](https://paddlepaddle.github.io/FastDeploy/get_started/installation/nvidia_gpu/) 安装 FastDeploy。
+Refer to [NVIDIA CUDA GPU Installation](https://paddlepaddle.github.io/FastDeploy/get_started/installation/nvidia_gpu/) for FastDeploy installation.
 
 ```bash
-# 方式一：从 PyPI 安装
+# Option 1: Install from PyPI
 pip install fastdeploy-gpu
 
-# 方式二：从源码编译
+# Option 2: Build from source
 bash build.sh
 pip install ./dist/fastdeploy*.whl
 ```
 
-安装FastDeploy后自动安装了MooncakeStore。
+MooncakeStore is automatically installed when you install FastDeploy.
 
-## 配置说明
+## Configuration
 
-我们支持两种方式配置MooncakeStore，一是通过配置文件`mooncake_config.json`，二是通过环境变量进行配置。
+We support two ways to configure MooncakeStore: via configuration file `mooncake_config.json` or via environment variables.
 
-### Mooncake 配置文件
+### Mooncake Configuration File
 
-创建 `mooncake_config.json` 配置文件：
+Create a `mooncake_config.json` file:
 
 ```json
 {
@@ -89,42 +96,43 @@ pip install ./dist/fastdeploy*.whl
 }
 ```
 
-设置MOONCAKE_CONFIG_PATH环境变量后，配置文件生效：
+Set the `MOONCAKE_CONFIG_PATH` environment variable to enable the configuration:
+
 ```bash
 export MOONCAKE_CONFIG_PATH=path/to/mooncake_config.json
 ```
 
-配置参数说明：
+Configuration parameters:
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `metadata_server` | HTTP 元数据服务地址 | 必填 |
-| `master_server_addr` | Master 服务地址 | 必填 |
-| `global_segment_size` | 每个TP进程给全局共享内存共享的内存空间（字节） | 1GB |
-| `local_buffer_size` | 数据传输本地缓冲区大小（字节） | 128MB |
-| `protocol` | 传输协议：`rdma` 或 `tcp` | `rdma` |
-| `rdma_devices` | RDMA 设备名称（逗号分隔） | 自动检测 |
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `metadata_server` | HTTP metadata server URL | Required |
+| `master_server_addr` | Master server address | Required |
+| `global_segment_size` | Memory space each TP process shares to global shared memory (bytes) | 1GB |
+| `local_buffer_size` | Local buffer size for data transfer (bytes) | 128MB |
+| `protocol` | Transfer protocol: `rdma` or `tcp` | `rdma` |
+| `rdma_devices` | RDMA device names (comma-separated) | Auto-detect |
 
-### 环境变量配置
+### Environment Variables
 
-Mooncake 也支持通过环境变量进行配置：
+Mooncake can also be configured via environment variables:
 
-| 环境变量 | 说明 |
-|----------|------|
-| `MOONCAKE_MASTER_SERVER_ADDR` | Master 服务地址（如 `10.0.0.1:15001`） |
-| `MOONCAKE_METADATA_SERVER` | 元数据服务 URL |
-| `MOONCAKE_GLOBAL_SEGMENT_SIZE` | 每个TP进程给全局共享内存共享的内存空间（字节） |
-| `MOONCAKE_LOCAL_BUFFER_SIZE` | 本地缓冲区大小（字节） |
-| `MOONCAKE_PROTOCOL` | 传输协议（`rdma` 或 `tcp`） |
-| `MOONCAKE_RDMA_DEVICES` | RDMA 设备名称 |
+| Variable | Description |
+|----------|-------------|
+| `MOONCAKE_MASTER_SERVER_ADDR` | Master server address (e.g., `10.0.0.1:15001`) |
+| `MOONCAKE_METADATA_SERVER` | Metadata server URL |
+| `MOONCAKE_GLOBAL_SEGMENT_SIZE` | Memory space each TP process shares to global shared memory (bytes) |
+| `MOONCAKE_LOCAL_BUFFER_SIZE` | Local buffer size (bytes) |
+| `MOONCAKE_PROTOCOL` | Transfer protocol (`rdma` or `tcp`) |
+| `MOONCAKE_RDMA_DEVICES` | RDMA device names |
 
-## 使用场景
+## Usage Scenarios
 
-### 场景一：多实例缓存共享
+### Scenario 1: Multi-Instance Cache Sharing
 
-运行多个 FastDeploy 实例，共享全局 KV Cache 池。
+Run multiple FastDeploy instances sharing a global KV Cache pool.
 
-**步骤 1：启动 Mooncake Master**
+**Step 1: Start Mooncake Master**
 
 ```bash
 mooncake_master \
@@ -135,9 +143,9 @@ mooncake_master \
     --metrics_port=15003
 ```
 
-**步骤 2：启动 FastDeploy 实例**
+**Step 2: Start FastDeploy Instances**
 
-实例 0：
+Instance 0:
 ```bash
 export MOONCAKE_CONFIG_PATH="./mooncake_config.json"
 export CUDA_VISIBLE_DEVICES=0
@@ -150,7 +158,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --kvcache-storage-backend mooncake
 ```
 
-实例 1：
+Instance 1:
 ```bash
 export MOONCAKE_CONFIG_PATH="./mooncake_config.json"
 export CUDA_VISIBLE_DEVICES=1
@@ -163,35 +171,35 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --kvcache-storage-backend mooncake
 ```
 
-**步骤 3：测试缓存复用**
+**Step 3: Test Cache Reuse**
 
-向两个实例发送相同的 prompt，第二个实例应能复用第一个实例计算的 KV Cache。
+Send the same prompt to both instances. The second instance should reuse the KV Cache computed by the first instance.
 
 ```bash
-# 请求实例 0
+# Request to Instance 0
 curl -X POST "http://0.0.0.0:52700/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "Hello, world!"}], "max_tokens": 50}'
 
-# 请求实例 1（应命中缓存）
+# Request to Instance 1 (should hit cached KV)
 curl -X POST "http://0.0.0.0:52800/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "Hello, world!"}], "max_tokens": 50}'
 ```
 
-### 场景二：PD 分离 + 全局缓存池
+### Scenario 2: PD Disaggregation with Global Cache
 
-此场景将 **PD 分离架构** 与 **全局缓存池化** 结合，实现：
+This scenario combines **PD Disaggregation** with **Global Cache Pooling**, enabling:
 
-- Prefill 实例可读取 Decode 实例的输出缓存
-- 优化多轮对话性能
+- Prefill instances to read Decode instances' output cache
+- Optimal multi-turn conversation performance
 
-**架构图：**
+**Architecture:**
 
 ```
          ┌──────────────────────────────────────────┐
          │              Router                       │
-         │           (负载均衡器)                    │
+         │         (Load Balancer)                   │
          └─────────────────┬────────────────────────┘
                            │
            ┌───────────────┴───────────────┐
@@ -207,11 +215,11 @@ curl -X POST "http://0.0.0.0:52800/v1/chat/completions" \
                            │
                   ┌────────▼────────┐
                   │  MooncakeStore  │
-                  │  (全局缓存池)   │
+                  │  (Global Cache) │
                   └─────────────────┘
 ```
 
-**步骤 1：启动 Mooncake Master**
+**Step 1: Start Mooncake Master**
 
 ```bash
 mooncake_master \
@@ -221,7 +229,7 @@ mooncake_master \
     --http_metadata_server_port=15002
 ```
 
-**步骤 2：启动 Router**
+**Step 2: Start Router**
 
 ```bash
 python -m fastdeploy.router.launch \
@@ -229,7 +237,7 @@ python -m fastdeploy.router.launch \
     --splitwise
 ```
 
-**步骤 3：启动 Prefill 实例**
+**Step 3: Start Prefill Instance**
 
 ```bash
 export MOONCAKE_MASTER_SERVER_ADDR="127.0.0.1:15001"
@@ -248,7 +256,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --kvcache-storage-backend mooncake
 ```
 
-**步骤 4：启动 Decode 实例**
+**Step 4: Start Decode Instance**
 
 ```bash
 export MOONCAKE_MASTER_SERVER_ADDR="127.0.0.1:15001"
@@ -268,7 +276,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --kvcache-storage-backend mooncake
 ```
 
-**步骤 5：通过 Router 发送请求**
+**Step 5: Send Requests via Router**
 
 ```bash
 curl -X POST "http://0.0.0.0:52700/v1/chat/completions" \
@@ -276,106 +284,85 @@ curl -X POST "http://0.0.0.0:52700/v1/chat/completions" \
   -d '{"messages": [{"role": "user", "content": "Hello!"}], "max_tokens": 50}'
 ```
 
-### 快速启动脚本
+## FastDeploy Parameters for Mooncake
 
-本目录提供了开箱即用的脚本：
+| Parameter | Description |
+|-----------|-------------|
+| `--kvcache-storage-backend mooncake` | Enable Mooncake as KV Cache storage backend |
+| `--enable-output-caching` | Enable output token caching (Decode instance recommended) |
+| `--cache-transfer-protocol rdma` | Use RDMA for KV transfer between P and D |
+| `--splitwise-role prefill/decode` | Set instance role in PD disaggregation |
+| `--router` | Router address for PD disaggregation |
 
-| 脚本 | 场景 | 说明 |
-|------|------|------|
-| `run.sh` | 多实例缓存共享 | 两个独立实例共享缓存 |
-| `run_03b_pd_storage.sh` | PD 分离 | P+D 实例配合全局缓存池 |
+## Verification
 
-```bash
-# 多实例场景
-bash run.sh
+### Check Cache Hit
 
-# PD 分离场景
-bash run_03b_pd_storage.sh
-```
-
-## FastDeploy Mooncake 相关参数
-
-| 参数 | 说明 |
-|------|------|
-| `--kvcache-storage-backend mooncake` | 启用 Mooncake 作为 KV Cache 存储后端 |
-| `--enable-output-caching` | 启用输出 token 缓存（推荐 Decode 实例开启） |
-| `--cache-transfer-protocol rdma` | P 和 D 之间使用 RDMA 进行 KV 传输 |
-| `--splitwise-role prefill/decode` | 设置实例在 PD 分离中的角色 |
-| `--router` | PD 分离场景下的 Router 地址 |
-
-## 验证方法
-
-### 检查缓存命中
-
-通过日志验证缓存命中情况：
+To verify cache hit in logs:
 
 ```bash
-# 多实例场景
+# For multi-instance scenario
 grep -E "storage_cache_token_num" log_*/api_server.log
 
-# PD 分离场景
+# For PD disaggregation scenario
 grep -E "storage_cache_token_num" log_prefill/api_server.log
 ```
 
-如果 `storage_cache_token_num > 0`，表示实例成功从全局池读取了缓存的 KV 块。
+If `storage_cache_token_num > 0`, the instance successfully read cached KV blocks from the global pool.
 
-### 监控 Mooncake Master
+### Monitor Mooncake Master
 
 ```bash
-# 检查 master 状态
+# Check master status
 curl http://localhost:15002/metadata
 
-# 检查指标（如配置了 metrics_port）
+# Check metrics (if metrics_port is configured)
 curl http://localhost:15003/metrics
 ```
 
-## 故障排查
+## Troubleshooting
 
-### 常见问题
+### Common Issues
 
-**1. 端口被占用**
+**1. Port Already in Use**
 
 ```bash
-# 检查端口使用情况
+# Check port usage
 ss -ltn | grep 15001
 
-# 终止占用进程
+# Kill existing process
 kill -9 $(lsof -t -i:15001)
 ```
 
-**2. RDMA 连接失败**
+**2. RDMA Connection Failed**
 
-- 检查 RDMA 设备：`ibv_devices`
-- 检查 RDMA 网络：`ibv_devinfo`
-- 降级使用 TCP：设置 `MOONCAKE_PROTOCOL=tcp`
+- Verify RDMA devices: `ibv_devices`
+- Check RDMA network: `ibv_devinfo`
+- Fallback to TCP: Set `MOONCAKE_PROTOCOL=tcp`
 
-**3. 缓存未共享**
+**3. Cache Not Being Shared**
 
-- 确认所有实例连接到同一个 Mooncake master
-- 检查元数据服务 URL 是否一致
-- 确认 `global_segment_size` 足够大
+- Verify all instances connect to the same Mooncake master
+- Check metadata server URL is consistent
+- Verify `global_segment_size` is large enough
 
-**4. /dev/shm 权限不足**
+**4. Permission Denied on /dev/shm**
 
 ```bash
-# 清理残留的共享内存文件
+# Clean up stale shared memory files
 find /dev/shm -type f -print0 | xargs -0 rm -f
 ```
 
-### 调试模式
+### Debug Mode
 
-开启调试日志：
+Enable debug logging:
 
 ```bash
 export FD_DEBUG=1
 ```
 
-### 更多资源
+## More Resources
 
-- [Mooncake 官方文档](https://github.com/kvcache-ai/Mooncake)
-- [Mooncake 故障排查指南](https://github.com/kvcache-ai/Mooncake/blob/main/docs/source/troubleshooting/troubleshooting.md)
-- [FastDeploy 文档](https://paddlepaddle.github.io/FastDeploy/)
-
-## 许可证
-
-本项目基于 Apache 2.0 许可证。
+- [Mooncake Official Documentation](https://github.com/kvcache-ai/Mooncake)
+- [Mooncake Troubleshooting Guide](https://github.com/kvcache-ai/Mooncake/blob/main/docs/source/troubleshooting/troubleshooting.md)
+- [FastDeploy Documentation](https://paddlepaddle.github.io/FastDeploy/)
