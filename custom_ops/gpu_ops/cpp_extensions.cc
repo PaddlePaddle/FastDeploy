@@ -943,6 +943,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
 
 std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& input,
+    const paddle::Tensor& last_seq_lens_encoder,
     const paddle::Tensor& last_seq_lens_this_time,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& step_idx);

@@ -783,6 +783,9 @@ class ProposerInputBatch(InputBatch):
             self.last_seq_lens_this_time = paddle.full_like(
                 self.target_model_input_batch["seq_lens_this_time"], fill_value=-1, dtype="int32"
             )
+            self.last_seq_lens_encoder = paddle.full_like(
+                self.target_model_inputs["seq_lens_encoder"], fill_value=-1, dtype="int32"
+            )
         self.input_ids_len = paddle.zeros(shape=[self.scheduler_config.max_num_seqs, 1], dtype="int64").cpu()
         self.temp_scaled_logprobs = self.target_model_input_batch["temp_scaled_logprobs"]
         self.top_p_normalized_logprobs = self.target_model_input_batch["top_p_normalized_logprobs"]
@@ -862,6 +865,7 @@ class ProposerInputBatch(InputBatch):
 
         if self.num_model_steps > 1:
             swap_data(self.last_seq_lens_this_time, i1, i2)
+            swap_data(self.last_seq_lens_encoder, i1, i2)
 
         swap_data(self.input_ids_len, i1, i2)
         swap_data(self.first_token_hidden_states, i1, i2)
@@ -969,6 +973,7 @@ class ProposerInputBatch(InputBatch):
             # Reset last sequence lengths if applicable
             if self.num_model_steps > 1:
                 fill_paddle_tensor(self, "last_seq_lens_this_time", -1)
+                fill_paddle_tensor(self, "last_seq_lens_encoder", -1)
 
             # Reset input IDs length
             fill_paddle_tensor(self, "input_ids_len", 0)
