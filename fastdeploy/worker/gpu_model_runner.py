@@ -2712,7 +2712,7 @@ class GPUModelRunner(ModelRunnerBase):
         print_gpu_memory_use(self.local_rank, f"After offloading memory [{tags}]")
 
     def wakeup(self, tags):
-        if not self.is_kvcache_sleeping:
+        if not self.is_sleeping:
             logger.info("GPU model runner is not sleeping, no need to wakeup!")
             return
 
