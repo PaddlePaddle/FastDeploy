@@ -65,21 +65,21 @@ func CacheAwarePrefillSelectWorker(ctx context.Context, workers []string, messag
 	tokens, err := strategy.tokenize(ctx, message)
 	if err != nil || len(tokens) == 0 {
 		if err != nil {
-			logger.Warn("cache-aware prefill: tokenizer failed, fallback to process_tokens: %v", err)
+			logger.Warn(ctx, "cache-aware prefill: tokenizer failed, fallback to process_tokens: %v", err)
 		}
 		return ProcessTokensSelectWorker(ctx, workers, message)
 	}
 
 	// 3) Compute prefix tree hit rate
 	hitRatios := strategy.cache.Match(tokens, toWorkerSet(workers))
-	logger.Debug("cache-aware prefill: hashes=%d workers=%d load=%v hit=%v", len(strategy.cache.hasher.prefixHashes(tokens)), len(workers), loads, hitRatios)
+	logger.Debug(ctx, "cache-aware prefill: hashes=%d workers=%d load=%v hit=%v", len(strategy.cache.hasher.prefixHashes(tokens)), len(workers), loads, hitRatios)
 
 	// 4) Compute weighted score from hit rate and load
 	selected := strategy.chooseByScore(ctx, workers, loads, hitRatios)
 
 	// 5) Record prefix
 	strategy.cache.Record(tokens, selected)
-	logger.Debug("cache-aware prefill: selected=%s", selected)
+	logger.Debug(ctx, "cache-aware prefill: selected=%s", selected)
 	return selected, nil
 }
 
@@ -94,10 +94,10 @@ func (p *prefillCacheStrategy) tokenize(ctx context.Context, message string) ([]
 	}
 	tokens, err := p.tokenizer.Tokenize(ctx, message)
 	if err != nil {
-		logger.Warn("cache-aware prefill: tokenizer failed, fallback to char tokens: %v", err)
+		logger.Warn(ctx, "cache-aware prefill: tokenizer failed, fallback to char tokens: %v", err)
 		return charsToTokens(message), nil
 	}
-	logger.Debug("cache-aware prefill: tokenizer tokens=%v", tokens)
+	logger.Debug(ctx, "cache-aware prefill: tokenizer tokens=%v", tokens)
 	return tokens, nil
 }
 
@@ -153,7 +153,7 @@ func (p *prefillCacheStrategy) chooseByScore(ctx context.Context, workers []stri
 		}
 
 		score := (100.0-hit)/100*p.hitRatioWeight + loadRatio*p.loadBalanceWeight
-		logger.Debug("cache-aware score: worker=%s hit=%.1f loadRatio=%.3f score=%.3f", w, hit, loadRatio, score)
+		logger.Debug(ctx, "cache-aware score: worker=%s hit=%.1f loadRatio=%.3f score=%.3f", w, hit, loadRatio, score)
 
 		if score < bestScore {
 			bestScore = score
@@ -243,7 +243,7 @@ func (c *radixPrefixCache) Match(tokens []int, allowed map[string]struct{}) map[
 	c.mu.RLock()
 	node, matched := c.matchPrefixHelper(c.root, hashes)
 	length := matched
-	logger.Debug("radix match: hashes=%d matched_len=%d node_children=%d", len(hashes), matched, len(node.children))
+	logger.Debug(context.Background(), "radix match: hashes=%d matched_len=%d node_children=%d", len(hashes), matched, len(node.children))
 	for n := node; n != nil; n = n.parent {
 		ratio := 0
 		if len(hashes) > 0 {
@@ -291,7 +291,7 @@ func (c *radixPrefixCache) Record(tokens []int, worker string) {
 		}
 		n.workers[worker] = now
 	}
-	logger.Debug("radix record: worker=%s hashes=%d node_depth=%d", worker, len(hashes), node.contextLen)
+	logger.Debug(context.Background(), "radix record: worker=%s hashes=%d node_depth=%d", worker, len(hashes), node.contextLen)
 }
 
 // evictionWorker periodically evicts inactive nodes
@@ -313,7 +313,7 @@ func (c *radixPrefixCache) evictExpired() {
 		removed += c.evictSubtreeIfExpired(c.root, childKey, child, now)
 	}
 	if removed > 0 {
-		logger.Debug("radix eviction: removed=%d nodeCount=%d", removed, c.nodeCount)
+		logger.Debug(context.Background(), "radix eviction: removed=%d nodeCount=%d", removed, c.nodeCount)
 	}
 }
 

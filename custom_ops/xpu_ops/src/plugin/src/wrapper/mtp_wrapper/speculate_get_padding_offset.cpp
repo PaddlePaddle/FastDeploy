@@ -112,7 +112,7 @@ static int xpu3_wrapper_remove_padding(Context* ctx,
                                        int bsz,
                                        int token_num_data) {
   using XPU_T = typename XPUIndexType<T>::type;
-  xpu3::plugin::speculate_remove_padding<XPU_T>
+  int32_t ret_xre = xpu3::plugin::speculate_remove_padding<XPU_T>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           static_cast<XPU_T*>(static_cast<void*>(output_data)),
           static_cast<const XPU_T*>(static_cast<const void*>(input_data)),
@@ -124,6 +124,7 @@ static int xpu3_wrapper_remove_padding(Context* ctx,
           max_draft_tokens,
           bsz,
           token_num_data);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
 
   return api::SUCCESS;
 }
@@ -137,7 +138,7 @@ static int xpu3_wrapper_get_padding_offset(Context* ctx,
                                            const int* seq_lens,
                                            const int max_seq_len,
                                            int bsz) {
-  xpu3::plugin::
+  int32_t ret_xre = xpu3::plugin::
       speculate_get_padding_offset<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           batch_id_per_token,
           cum_offsets_out,
@@ -147,6 +148,7 @@ static int xpu3_wrapper_get_padding_offset(Context* ctx,
           seq_lens,
           max_seq_len,
           bsz);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

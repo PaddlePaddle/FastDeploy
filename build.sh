@@ -20,7 +20,6 @@ function show_help() {
   echo "BUILD_WHEEL modes:"
   echo "  0  Build custom ops only (no wheel packaging or pip install)"
   echo "  1  Full build: compile C++ ops + build wheel + pip install (default)"
-  echo "  2  Python-only: sync .py files to site-packages (skip C++ compilation)"
   echo ""
   echo "Arguments:"
   echo "  PYTHON            Python executable (default: python)"
@@ -31,7 +30,6 @@ function show_help() {
   echo ""
   echo "Examples:"
   echo "  bash build.sh 1 python false \"[90]\"   # Full build for SM90"
-  echo "  bash build.sh 2 python                 # Python-only quick install"
   echo "  bash build.sh 0 python false \"[80,90]\" # Build ops only"
   exit 0
 }
@@ -367,111 +365,6 @@ function build_and_install() {
   echo -e "${BLUE}[build]${NONE} ${GREEN}build fastdeploy wheel success${NONE}\n"
 }
 
-function find_install_dir() {
-  INSTALL_DIR=$(${python} -c "
-import sys, os, importlib.util
-# Remove cwd and project root from sys.path to avoid finding local source
-project_root = os.path.abspath('.')
-sys.path = [p for p in sys.path if os.path.abspath(p) != project_root and p != '']
-spec = importlib.util.find_spec('fastdeploy')
-if spec and spec.submodule_search_locations:
-    print(os.path.dirname(spec.submodule_search_locations[0]))
-" 2>/dev/null)
-
-  if [ -z "$INSTALL_DIR" ] || [ ! -d "${INSTALL_DIR}/fastdeploy" ]; then
-    echo -e "${RED}[FAIL]${NONE} fastdeploy is not installed. Please run a full build first (BUILD_WHEEL=1)."
-    exit 1
-  fi
-  echo -e "${BLUE}[python-only]${NONE} Detected install directory: ${GREEN}${INSTALL_DIR}/fastdeploy/${NONE}"
-}
-
-function check_same_directory() {
-  SRC_REAL=$(cd fastdeploy && pwd -P)
-  if [ -d "${INSTALL_DIR}/fastdeploy" ]; then
-    DST_REAL=$(cd ${INSTALL_DIR}/fastdeploy && pwd -P)
-    if [ "$SRC_REAL" = "$DST_REAL" ]; then
-      echo -e "${GREEN}[SKIP]${NONE} Source and target are the same directory: ${SRC_REAL}"
-      echo -e "${GREEN}[SKIP]${NONE} No sync needed (you may be using an editable install or running from site-packages)."
-      return 1
-    fi
-  fi
-  return 0
-}
-
-function sync_python_files() {
-  # --exclude='__pycache__/' must come before --include='*/' so rsync ignores __pycache__ entirely
-  # --filter protects all non-.py files (.so, .txt, etc.) from being deleted
-  RSYNC_OUTPUT=$(rsync -avc --exclude='__pycache__/' --include='*/' --include='*.py' --filter='P *.so' --filter='P *.txt' --filter='P *.sh' --filter='P *.h' --filter='P *.hpp' --exclude='*' --delete fastdeploy/ ${INSTALL_DIR}/fastdeploy/ 2>&1)
-  RSYNC_EXIT=$?
-
-  if [ $RSYNC_EXIT -ne 0 ]; then
-    echo "$RSYNC_OUTPUT"
-    echo -e "${RED}[FAIL]${NONE} rsync failed"
-    exit 1
-  fi
-
-  CHANGED_FILES=$(echo "$RSYNC_OUTPUT" | grep '\.py$' || true)
-  DELETED_FILES=$(echo "$RSYNC_OUTPUT" | grep '^deleting .*\.py$' || true)
-}
-
-function verify_package_mapping() {
-  PKG_NAME=$(${python} -c "
-import importlib.metadata
-dist = importlib.metadata.packages_distributions()['fastdeploy'][0]
-print(dist)
-" 2>/dev/null) || true
-
-  if [ -n "$PKG_NAME" ]; then
-    OUTSIDE_FILES=$(${python} -m pip show -f ${PKG_NAME} 2>/dev/null \
-      | awk '/^Files:/{found=1; next} found && /\.py$/' \
-      | grep -v '^\.\.\/' | grep -v '^  fastdeploy/' | grep -v '^  __pycache__' || true)
-    if [ -n "$OUTSIDE_FILES" ]; then
-      echo -e "${YELLOW}[WARNING]${NONE} Detected .py files installed outside fastdeploy/ directory:"
-      echo "$OUTSIDE_FILES"
-      echo -e "${YELLOW}[WARNING]${NONE} setup.py package mapping may have changed. Please run a full build (BUILD_WHEEL=1) instead."
-      exit 1
-    fi
-  fi
-}
-
-function print_sync_summary() {
-  PY_COUNT=$(find fastdeploy/ -name '*.py' | wc -l)
-
-  echo ""
-  echo -e "${BLUE}======== Sync Summary ========${NONE}"
-  if [ -n "$CHANGED_FILES" ]; then
-    CHANGED_COUNT=$(echo "$CHANGED_FILES" | wc -l)
-    echo -e "${GREEN}[UPDATED]${NONE} ${CHANGED_COUNT} file(s) synced:"
-    echo "$CHANGED_FILES" | sed 's/^/  /'
-  fi
-  if [ -n "$DELETED_FILES" ]; then
-    DEL_COUNT=$(echo "$DELETED_FILES" | wc -l)
-    echo -e "${YELLOW}[DELETED]${NONE} ${DEL_COUNT} file(s) removed from site-packages:"
-    echo "$DELETED_FILES" | sed 's/^deleting /  /'
-  fi
-  if [ -z "$CHANGED_FILES" ] && [ -z "$DELETED_FILES" ]; then
-    echo -e "${GREEN}[NO CHANGE]${NONE} All ${PY_COUNT} Python files are already up-to-date."
-  else
-    echo -e "${BLUE}[TOTAL]${NONE} ${PY_COUNT} Python files tracked, target: ${INSTALL_DIR}/fastdeploy/"
-  fi
-  echo -e "${BLUE}==============================${NONE}"
-}
-
-function install_python_only() {
-  if ! command -v rsync &>/dev/null; then
-    echo -e "${RED}[FAIL]${NONE} 'rsync' is not installed. Please install it first (e.g. apt-get install rsync / yum install rsync)."
-    exit 1
-  fi
-
-  echo -e "${BLUE}[python-only]${NONE} Syncing Python files to installed site-packages..."
-
-  find_install_dir
-  check_same_directory || return 0
-  sync_python_files
-  verify_package_mapping
-  print_sync_summary
-}
-
 function version_info() {
   output_file="fastdeploy/version.txt"
   fastdeploy_git_commit_id=$(git rev-parse HEAD)
@@ -589,6 +482,4 @@ elif [ "$BUILD_WHEEL" -eq 0 ]; then
   version_info
   rm -rf $BUILD_DIR $EGG_DIR
   rm -rf $OPS_SRC_DIR/$BUILD_DIR $OPS_SRC_DIR/$EGG_DIR
-elif [ "$BUILD_WHEEL" -eq 2 ]; then
-  install_python_only
 fi

@@ -81,15 +81,24 @@ __global__ void update_repeat_times(const int64_t *token_ids_all,
   const int64_t prompt_len_now = prompt_len[bi];
   const int64_t *token_ids_now = token_ids_all + bi * max_model_len;
   int *repeat_times_now = repeat_times + bi * vocab_size;
-  for (int64_t i = tid; i < max_model_len; i += blockDim.x) {
+
+  // Pass 1: mark prompt tokens (set slot to -1 if absent from generated)
+  for (int64_t i = tid; i < prompt_len_now; i += blockDim.x) {
+    int64_t id = token_ids_now[i];
+    if (id >= 0) {
+      atomicCAS(&repeat_times_now[id], 0, -1);
+    }
+  }
+  // Ensure all prompt marks complete before counting generated tokens,
+  // otherwise atomicCAS can race with atomicMax+atomicAdd for the same slot.
+  __syncthreads();
+
+  // Pass 2: count generated tokens
+  for (int64_t i = prompt_len_now + tid; i < max_model_len; i += blockDim.x) {
     int64_t id = token_ids_now[i];
     if (id < 0) continue;
-    if (i < prompt_len_now) {
-      atomicCAS(&repeat_times_now[id], 0, -1);
-    } else {
-      atomicMax(&repeat_times_now[id], 0);
-      atomicAdd(&repeat_times_now[id], 1);
-    }
+    atomicMax(&repeat_times_now[id], 0);
+    atomicAdd(&repeat_times_now[id], 1);
   }
 }
 

@@ -104,16 +104,18 @@ static int xpu3_wrapper(api::Context *ctx,
   auto eb_mtp_gather_next_token_kernel =
       xpu3::plugin::eb_mtp_gather_next_token<TX, TY>;
   // NOTE: Don't change 16 to 64, because kernel use gsm
-  eb_mtp_gather_next_token_kernel<<<ctx->ncluster(), 16, ctx->xpu_stream>>>(
-      const_cast<TX *>(x),
-      y,
-      encoder_seqs_lods.xpu,
-      decoder_seqs_lods.xpu,
-      encoder_batch_map.xpu,
-      decoder_batch_map.xpu,
-      en_batch,
-      de_batch,
-      hidden_dim);
+  int32_t ret_xre =
+      eb_mtp_gather_next_token_kernel<<<ctx->ncluster(), 16, ctx->xpu_stream>>>(
+          const_cast<TX *>(x),
+          y,
+          encoder_seqs_lods.xpu,
+          decoder_seqs_lods.xpu,
+          encoder_batch_map.xpu,
+          decoder_batch_map.xpu,
+          en_batch,
+          de_batch,
+          hidden_dim);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
