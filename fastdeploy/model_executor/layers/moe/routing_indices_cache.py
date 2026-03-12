@@ -116,10 +116,10 @@ def save_routing_to_buffer(
     ep_size: int,
     tp_group: dist.communication.group.Group,
 ):
+    token_num_per_rank = topk_ids.shape[0]
+    if token_num_per_rank == 0:
+        return
     if tp_size > 1 and ep_size > 1:
-        token_num_per_rank = topk_ids.shape[0]
-        if token_num_per_rank == 0:
-            return
         topk_ids_all = paddle.zeros([token_num_per_rank * tp_size, topk_ids.shape[1]], dtype=topk_ids.dtype)
         paddle.distributed.all_gather(topk_ids_all, topk_ids, tp_group)
         topk_ids = topk_ids_all[: batch_id_per_token.shape[0], :]
@@ -162,6 +162,7 @@ class RoutingReplayManager:
         self.num_moe_layers = fd_config.model_config.num_hidden_layers - fd_config.model_config.moe_layer_start_index
         self.only_last_turn = fd_config.routing_replay_config.only_last_turn
         self.use_fused_put = fd_config.routing_replay_config.use_fused_put
+        logger.info(f"[R3] Rollout Routing Replay Congfig: {fd_config.routing_replay_config}")
         if fd_config.model_config.architectures[0] == "Glm4MoeForCausalLM":
             self.moe_top_k = fd_config.model_config.num_experts_per_tok
         else:
@@ -181,6 +182,17 @@ class RoutingReplayManager:
                 fd_config=fd_config,
             )
             self._store_wrapper.start_store_warpper()
+
+        # Suspend Routing Replay
+        self.suspend_routing_replay = False
+        self.update_suspend_routing_replay()
+
+    def update_suspend_routing_replay(self):
+        """Allow RL to use R3 in different training rounds"""
+        # TODO(gongshaotian): Delete this func
+        suspend_routing_replay = os.environ.get("FD_SUSPEND_ROUTING_REPLAY", "0")
+        self.suspend_routing_replay = bool(int(suspend_routing_replay))
+        logger.info(f"[R3] Update FD_SUSPEND_ROUTING_REPLAY: {self.suspend_routing_replay}")
 
     def _init_routing_cache(self, dtype: str, total_block_num: int):
         """Initialize the device buffer and host buffer."""
@@ -337,6 +349,11 @@ class RoutingReplayManager:
         seq_lens_decoder,
     ):
         if self.tp_rank == 0:
+            # TODO(gongshaotian): Delete the suspend func
+            if self.suspend_routing_replay:
+                logger.info(f"[R3] Suspend Routing Replay is enabled, skip putting request {request_id} to store")
+                return
+
             before_put_request_time = time.perf_counter()
 
             # Collect the routing of finished request
@@ -347,16 +364,19 @@ class RoutingReplayManager:
 
             if self.use_fused_put:
                 self._store_wrapper.submit_put_task(routing_indices=batch_buffer, rollout_id=rollout_id)
+                # Only store the routing of last turn
+                if self.only_last_turn:
+                    self._store_wrapper.submit_clear_prefix_batch_task(rollout_id=rollout_id)
+
             else:
                 for layer_id in range(self.num_moe_layers):
                     layer_buffer = batch_buffer[layer_id]
                     self._store_wrapper.submit_put_task(
                         routing_indices=layer_buffer, rollout_id=rollout_id, layer_idx=layer_id
                     )
-
-            # Only store the routing of last turn
-            if self.only_last_turn:
-                self._store_wrapper.submit_clear_prefix_batch_task(rollout_id=rollout_id)
+                    # Only store the routing of last turn
+                    if self.only_last_turn:
+                        self._store_wrapper.submit_clear_prefix_batch_task(rollout_id=rollout_id, layer_idx=layer_id)
 
             logger.info(f"[R3] Submit {request_id} time cost: {time.perf_counter() - before_put_request_time}")
 
@@ -477,7 +497,6 @@ class StoreWrapper(object):
             if qsize > self.queue_max_size * 0.8:
                 logger.warning(
                     f"[Monitor] Queue load is HIGH: {qsize}/{self.queue_max_size}. "
-                    f"Dropped tasks so far: {self._dropped_tasks}. "
                     "Consider increasing max_workers or queue_max_size."
                 )
             logger.debug(f"[Monitor] Queue load: {qsize}/{self.queue_max_size}")
@@ -519,22 +538,26 @@ class StoreWrapper(object):
             raise RuntimeError("Queue is FULL. Dropping put task for key: clear_store. ")
         logger.info(f"[R3] Submit clear task, cost time: {time.perf_counter()-start_time} s")
 
-    def submit_clear_prefix_batch_task(self, rollout_id) -> None:
+    def submit_clear_prefix_batch_task(self, rollout_id, layer_idx: int = None) -> None:
         """Submit clear prefix batch task"""
         if not self._sotre_process_running:
             raise RuntimeError("Store not started.")
-        prefix_batch = self.get_needed_clear_ids(rollout_id)
-
-        if prefix_batch is None:
+        prefix_batch_id = self.get_needed_clear_ids(rollout_id)
+        if prefix_batch_id is None:
             return
         start_time = time.perf_counter()
-        task: StoreTask = {"task_type": "clear_prefix_batch", "key": prefix_batch, "data": None}
+        if layer_idx is not None:
+            rdma_rollout_key = f"{prefix_batch_id}_{layer_idx}"
+        else:
+            rdma_rollout_key = prefix_batch_id
+
+        task: StoreTask = {"task_type": "clear_prefix_batch", "key": rdma_rollout_key, "data": None}
         try:
             self._task_queue.put_nowait(task)
         except Exception:
             raise RuntimeError("Queue is FULL. Dropping put task for key: clear_store. ")
         logger.info(
-            f"[R3] Submit clear prefix batch task for key: {prefix_batch}, cost time: {time.perf_counter()-start_time} s"
+            f"[R3] Submit clear prefix batch task for key: {prefix_batch_id}, cost time: {time.perf_counter()-start_time} s"
         )
 
     def get_needed_clear_ids(self, roullout_id: str) -> Optional[str]:
@@ -611,7 +634,7 @@ class StoreProcess(Process):
                     self._task_queue.task_done()
                     raise RuntimeError(f"Error during processing task. {e}")
 
-        logger.info(f"[Consumer Process {Process.current_process().pid}] Shutdown.")
+        logger.info("RoutingReplay Consumer Process Shutdown.")
 
     def process_put_task(self, store_task: StoreTask) -> None:
         try:
@@ -834,13 +857,18 @@ class RoutingStoreRDMA(RoutingStoreBase):
     async def put(self, routing_key: str, routing_indices: np.ndarray) -> None:
         """Put the routing indices into store"""
         time_before_put = time.perf_counter()
-        result = await self.p2p_client.put(routing_key, routing_indices)
+        if len(routing_indices.shape) == 3:
+            # NOTE(gongshaotian) Fused put with bytes data
+            routing_bytes = routing_indices.tobytes()
+            result = await self.p2p_client.put(routing_key, routing_bytes)
+        else:
+            result = await self.p2p_client.put(routing_key, routing_indices)
         logger.info(f"[R3] The routing key {routing_key}, put cost is {time.perf_counter()-time_before_put}s")
         return result
 
     async def clear_prefix_batch(self, routing_prefix_key: str):
         time_before_clear = time.perf_counter()
-        result = await self.p2p_client.delete_prefix_batch([routing_prefix_key])
+        result = await self.p2p_client.delete_batch([routing_prefix_key])
         logger.info(
             f"[R3] The clear routing prefix key {routing_prefix_key}, cost is {time.perf_counter()-time_before_clear}s"
         )
