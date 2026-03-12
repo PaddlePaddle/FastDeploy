@@ -971,9 +971,7 @@ class GPUModelRunner(ModelRunnerBase):
                     else:
                         tables = request.block_tables
                     if current_platform.is_cuda():
-                        async_set_value(
-                            self.share_inputs["block_tables"][idx : idx + 1, : len(tables)], tables
-                        )
+                        async_set_value(self.share_inputs["block_tables"][idx : idx + 1, : len(tables)], tables)
                     else:
                         self.share_inputs["block_tables"][idx : idx + 1, : len(tables)] = np.array(
                             tables, dtype="int32"
@@ -1672,7 +1670,11 @@ class GPUModelRunner(ModelRunnerBase):
             )
             indexer_cache_shape = []
         if kv_cache_quant_type == "block_wise_fp8":
-            kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
+            if self.enable_head_wise_kv_cache:
+                # head-wise: scale layout [max_cache_ids, block_size]
+                kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1]]
+            else:
+                kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         # Check if gpu runner needs to create kv cache

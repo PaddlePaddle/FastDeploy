@@ -395,7 +395,8 @@ __device__ __forceinline__ void produce_kv_dynamic_scale_gmem2smem_async(
     const uint32_t kv_idx,
     const uint32_t kv_num_heads,
     const uint32_t kv_head_idx,
-    const uint32_t chunk_end) {
+    const uint32_t chunk_end,
+    const bool use_head_wise) {
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
   const uint32_t tid = ty * 32 + tx;
   if constexpr (NUM_WARP_Q == 4) {
@@ -403,9 +404,11 @@ __device__ __forceinline__ void produce_kv_dynamic_scale_gmem2smem_async(
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
     if (block_id < 0) block_id = 0;
     if (tid < block_size / 8) {
-      const T* cache_k_scale_now = cache_kv_scale +
-                                   block_id * kv_num_heads * block_size +
-                                   kv_head_idx * block_size + tid * 8;
+      const T* cache_k_scale_now =
+          use_head_wise
+              ? cache_kv_scale + block_id * block_size + tid * 8
+              : cache_kv_scale + block_id * kv_num_heads * block_size +
+                    kv_head_idx * block_size + tid * 8;
       const int kv_idx_this_thread = kv_idx + tid * 8;
       kv_scale_smem.load_128b_async<fill_mode>(
           tid, cache_k_scale_now, kv_idx_this_thread < chunk_end);
@@ -417,9 +420,11 @@ __device__ __forceinline__ void produce_kv_dynamic_scale_gmem2smem_async(
       int block_id = __ldg(&block_table_now[kv_idx_now / block_size]);
       if (block_id < 0) block_id = 0;
       const int kv_idx_this_thread = kv_idx + tid * 8;
-      const T* cache_k_scale_now = cache_kv_scale +
-                                   block_id * kv_num_heads * block_size +
-                                   kv_head_idx * block_size + tid % 8 * 8;
+      const T* cache_k_scale_now =
+          use_head_wise
+              ? cache_kv_scale + block_id * block_size + tid % 8 * 8
+              : cache_kv_scale + block_id * kv_num_heads * block_size +
+                    kv_head_idx * block_size + tid % 8 * 8;
       kv_scale_smem.load_128b_async<fill_mode>(
           tid, cache_k_scale_now, kv_idx_this_thread < chunk_end);
     }

@@ -286,8 +286,8 @@ class AppendAttentionBackend(AttentionBackend):
         Calculate kv cache shape
         """
         if self.enable_head_wise_kv_cache:
-            if kv_cache_quant_type is not None and kv_cache_quant_type != "none":
-                raise NotImplementedError("Head-wise KV cache does not support quantized cache.")
+            if kv_cache_quant_type is not None and kv_cache_quant_type not in ("none", "block_wise_fp8"):
+                raise NotImplementedError(f"Head-wise KV cache does not support {kv_cache_quant_type} cache.")
             key_cache_shape = [max_num_blocks * self.kv_num_heads, self.block_size, self.head_dim]
             value_cache_shape = key_cache_shape
             return key_cache_shape, value_cache_shape
