@@ -114,13 +114,13 @@ class DynamicWeightManager:
         """Update using IPC snapshot strategy for elastic recovery."""
         model_path = os.path.join(
             self.fd_config.model_config.model,
-            f"model_state.tp0{self.meta_src_id}.pdparams",
+            f"model_state.tp{paddle.distributed.get_rank()}{self.meta_src_id}.pdparams",
         )
 
         try:
             ipc_state_dict = paddle.load(model_path, safetensors=True)
         except FileNotFoundError:
-            fallback_path = f"/shared_ipc_meta/model_state.tp0{self.meta_src_id}.pdparams"
+            fallback_path = f"/shared_ipc_meta/model_state.tp{paddle.distributed.get_rank()}{self.meta_src_id}.pdparams"
             ipc_state_dict = paddle.load(fallback_path)
 
         self._update_model_from_state(ipc_state_dict, "snapshot")
