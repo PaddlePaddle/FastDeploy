@@ -45,7 +45,7 @@ std::vector<paddle::Tensor> GroupGemv(const paddle::Tensor& x,
   PD_CHECK(ws_dims[1] == n);
   PD_CHECK(prefix_sum_dims[0] == n_experts);
 
-  PD_CHECK(prefix_sum.dtype() == paddle::DataType::INT64);
+  PD_CHECK(prefix_sum.dtype() == paddle::DataType::INT32);
   PD_CHECK(x.dtype() == paddle::DataType::BFLOAT16 ||
            x.dtype() == paddle::DataType::FLOAT16);
   PD_CHECK(weight.dtype() == paddle::DataType::INT8);
@@ -54,14 +54,7 @@ std::vector<paddle::Tensor> GroupGemv(const paddle::Tensor& x,
   PD_CHECK(weight.is_contiguous());
   PD_CHECK(weight_scale.is_contiguous());
 
-  //   const int64_t* prefix_sum_ptr = prefix_sum.data<int64_t>();
   auto output = GetEmptyTensor({m, n}, x.dtype(), x.place());
-  //   int16_t* out_data = static_cast<int16_t*>(output.data());
-  //   const int16_t* x_data = static_cast<const int16_t*>(x.data());
-  //   const int8_t* weight_data = weight.data<int8_t>();
-  //   const int16_t* weight_scale_data =
-  //       static_cast<const int16_t*>(weight_scale.data());
-
   cuinferHandle_t handle = iluvatar::getContextInstance()->getIxInferHandle();
   cuinferPointerMode_t cuinfer_ptr_mode = CUINFER_POINTER_MODE_HOST;
   cuinferOperation_t transa = CUINFER_OP_T;
@@ -81,16 +74,20 @@ std::vector<paddle::Tensor> GroupGemv(const paddle::Tensor& x,
   cuinferGEMMCustomOption_t customOption = CUINFER_BLAS_GEMM_CUSTOM_NONE;
 
   cuinferQuantGEMMHostParam cust_host_param;
+  cuinferCustomGemmHostParamInit(&cust_host_param);
   cust_host_param.size = sizeof(cuinferQuantGEMMHostParam);
   cust_host_param.persistent = 0;
   cust_host_param.groupSize = group_size;
-  cust_host_param.strideScaleA = n;
+  // cust_host_param.strideScaleA = n;
   cust_host_param.expertCount = n_experts;
+  cust_host_param.type = 2;
 
   cuinferQuantGEMMDeviceParam cust_device_param;
+  cust_device_param.size = sizeof(cuinferQuantGEMMDeviceParam);
+  cust_device_param.sortedId = nullptr;
   cust_device_param.bias = nullptr;
-  cust_device_param.scale = reinterpret_cast<const void*>(weight_scale.data());
-  cust_device_param.nSize = reinterpret_cast<const void*>(prefix_sum.data());
+  cust_device_param.scale = weight_scale.data();
+  cust_device_param.nSize = prefix_sum.data<int32_t>();
 
   int lda = k;
   int ldb = k;
@@ -123,36 +120,35 @@ std::vector<paddle::Tensor> GroupGemv(const paddle::Tensor& x,
     cust_device_param.workspace = nullptr;
   }
 
-  CUINFER_CHECK(
-      cuinferCustomGemmEx(handle,
-                          stream,
-                          cuinfer_ptr_mode,
-                          transa,
-                          transb,
-                          n,
-                          m,
-                          k,
-                          &alpha,
-                          reinterpret_cast<const void*>(weight.data()),
-                          Atype,
-                          lda,
-                          0,  // lda,
-                          reinterpret_cast<const void*>(x.data()),
-                          Btype,
-                          ldb,
-                          0,  // ldb,
-                          &beta,
-                          reinterpret_cast<void*>(output.data()),
-                          Ctype,
-                          ldc,
-                          0,  // ldc,
-                          batch_count,
-                          computeType,
-                          scaleType,
-                          &cust_host_param,
-                          &cust_device_param,
-                          customOption,
-                          cust_device_param.workspace));
+  CUINFER_CHECK(cuinferCustomGemmEx(handle,
+                                    stream,
+                                    cuinfer_ptr_mode,
+                                    transa,
+                                    transb,
+                                    n,
+                                    m,
+                                    k,
+                                    &alpha,
+                                    weight.data(),
+                                    Atype,
+                                    lda,
+                                    0,
+                                    x.data(),
+                                    Btype,
+                                    ldb,
+                                    0,
+                                    &beta,
+                                    output.data(),
+                                    Ctype,
+                                    ldc,
+                                    0,
+                                    batch_count,
+                                    computeType,
+                                    scaleType,
+                                    &cust_host_param,
+                                    &cust_device_param,
+                                    customOption,
+                                    cust_device_param.workspace));
   return {output};
 }
 
