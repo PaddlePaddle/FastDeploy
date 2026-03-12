@@ -71,9 +71,9 @@ std::vector<paddle::Tensor> TopPCandidates(
       typedef paddle::bfloat16 bf16_data_t;
       switch (candidates_len) {
         FIXED_TOPK(
-            r = api::plugin::top_p_candidates<XPUTypeBF16,
-                                              TopKMaxLength,
-                                              kTopK>(
+            r = fastdeploy::plugin::top_p_candidates<XPUTypeBF16,
+                                                     TopKMaxLength,
+                                                     kTopK>(
                 ctx,
                 reinterpret_cast<const XPUTypeBF16*>(probs.data<bf16_data_t>()),
                 reinterpret_cast<const XPUTypeBF16*>(top_p.data<bf16_data_t>()),
@@ -94,9 +94,9 @@ std::vector<paddle::Tensor> TopPCandidates(
       typedef paddle::float16 fp16_data_t;
       switch (candidates_len) {
         FIXED_TOPK(
-            r = api::plugin::top_p_candidates<XPUTypeFP16,
-                                              TopKMaxLength,
-                                              kTopK>(
+            r = fastdeploy::plugin::top_p_candidates<XPUTypeFP16,
+                                                     TopKMaxLength,
+                                                     kTopK>(
                 ctx,
                 reinterpret_cast<const XPUTypeFP16*>(probs.data<fp16_data_t>()),
                 reinterpret_cast<const XPUTypeFP16*>(top_p.data<fp16_data_t>()),
@@ -115,18 +115,19 @@ std::vector<paddle::Tensor> TopPCandidates(
     case paddle::DataType::FLOAT32:
       switch (candidates_len) {
         FIXED_TOPK(
-            r = api::plugin::top_p_candidates<float, TopKMaxLength, kTopK>(
-                ctx,
-                probs.data<float>(),
-                top_p.data<float>(),
-                output_padding_offset.data<int>(),
-                verify_tokens.data<int64_t>(),
-                verify_scores.data<float>(),
-                actual_candidate_lens.data<int>(),
-                vocab_size,
-                token_num,
-                candidates_len,
-                max_seq_len);
+            r = fastdeploy::plugin::
+                top_p_candidates<float, TopKMaxLength, kTopK>(
+                    ctx,
+                    probs.data<float>(),
+                    top_p.data<float>(),
+                    output_padding_offset.data<int>(),
+                    verify_tokens.data<int64_t>(),
+                    verify_scores.data<float>(),
+                    actual_candidate_lens.data<int>(),
+                    vocab_size,
+                    token_num,
+                    candidates_len,
+                    max_seq_len);
             PD_CHECK(r == 0, "xpu::plugin::top_p_candidates failed.");
             return {verify_scores, verify_tokens, actual_candidate_lens});
       }

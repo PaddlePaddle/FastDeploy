@@ -63,7 +63,7 @@ void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
   }
   auto not_need_stop_gpu = not_need_stop.copy_to(stop_flags.place(), false);
 
-  int r = baidu::xpu::api::plugin::speculate_schedule_cache(
+  int r = fastdeploy::plugin::speculate_schedule_cache(
       ctx,
       draft_tokens.data<int64_t>(),
       const_cast<int *>(block_tables.data<int>()),

@@ -90,7 +90,7 @@ std::vector<paddle::Tensor> GatherNextToken(
   }
 
   if (output_padding_offset) {
-    int r = baidu::xpu::api::plugin::eb_mtp_gather_next_token<XPUType, XPUType>(
+    int r = fastdeploy::plugin::eb_mtp_gather_next_token<XPUType, XPUType>(
         ctx,
         reinterpret_cast<const XPUType*>(x.data<data_t>()),
         reinterpret_cast<XPUType*>(out.data<data_t>()),
@@ -101,7 +101,7 @@ std::vector<paddle::Tensor> GatherNextToken(
         dim);
     PD_CHECK(r == 0, "xpu::plugin::gather_next_token failed.");
   } else {
-    int r = baidu::xpu::api::plugin::eb_gather_next_token<XPUType, XPUType>(
+    int r = fastdeploy::plugin::eb_gather_next_token<XPUType, XPUType>(
         ctx,
         reinterpret_cast<const XPUType*>(x.data<data_t>()),
         reinterpret_cast<XPUType*>(out.data<data_t>()),

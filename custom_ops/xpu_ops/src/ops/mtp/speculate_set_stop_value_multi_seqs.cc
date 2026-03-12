@@ -50,7 +50,7 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
   int pre_ids_len = pre_ids.shape()[1];
   int accept_tokens_len = accept_tokens.shape()[1];
 
-  int r = baidu::xpu::api::plugin::speculate_set_stop_value_multi_seqs(
+  int r = fastdeploy::plugin::speculate_set_stop_value_multi_seqs(
       ctx,
       const_cast<bool *>(stop_flags.data<bool>()),
       const_cast<int64_t *>(accept_tokens.data<int64_t>()),

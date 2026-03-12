@@ -46,7 +46,7 @@ std::vector<paddle::Tensor> RebuildAppendPadding(
     case paddle::DataType::BFLOAT16:
       using XPUTypeBF16 = typename XPUTypeTrait<bfloat16>::Type;
       typedef paddle::bfloat16 bf16_data_t;
-      r = api::plugin::speculate_rebuild_append_padding<XPUTypeBF16>(
+      r = fastdeploy::plugin::speculate_rebuild_append_padding<XPUTypeBF16>(
           ctx,
           const_cast<XPUTypeBF16*>(reinterpret_cast<const XPUTypeBF16*>(
               full_hidden_states.data<bf16_data_t>())),
@@ -63,7 +63,7 @@ std::vector<paddle::Tensor> RebuildAppendPadding(
     case paddle::DataType::FLOAT16:
       using XPUTypeFP16 = typename XPUTypeTrait<float16>::Type;
       typedef paddle::float16 fp16_data_t;
-      r = api::plugin::speculate_rebuild_append_padding<XPUTypeFP16>(
+      r = fastdeploy::plugin::speculate_rebuild_append_padding<XPUTypeFP16>(
           ctx,
           const_cast<XPUTypeFP16*>(reinterpret_cast<const XPUTypeFP16*>(
               full_hidden_states.data<fp16_data_t>())),
@@ -78,7 +78,7 @@ std::vector<paddle::Tensor> RebuildAppendPadding(
       PD_CHECK(r == 0, "xpu::plugin::speculate_rebuild_append_padding failed.");
       return {out};
     case paddle::DataType::FLOAT32:
-      r = api::plugin::speculate_rebuild_append_padding<float>(
+      r = fastdeploy::plugin::speculate_rebuild_append_padding<float>(
           ctx,
           const_cast<float*>(full_hidden_states.data<float>()),
           const_cast<int*>(cum_offsets.data<int>()),

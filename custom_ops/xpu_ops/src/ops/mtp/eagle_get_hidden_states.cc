@@ -47,17 +47,18 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
   auto output_token_num = paddle::empty(
       {1}, seq_lens_this_time.dtype(), seq_lens_this_time.place());
 
-  int r = api::plugin::compute_order(ctx,
-                                     seq_lens_this_time.data<int>(),
-                                     seq_lens_encoder.data<int>(),
-                                     base_model_seq_lens_this_time.data<int>(),
-                                     base_model_seq_lens_encoder.data<int>(),
-                                     accept_nums.data<int>(),
-                                     position_map.data<int>(),
-                                     output_token_num.data<int>(),
-                                     bsz,
-                                     actual_draft_token_num,
-                                     input_token_num);
+  int r = fastdeploy::plugin::compute_order(
+      ctx,
+      seq_lens_this_time.data<int>(),
+      seq_lens_encoder.data<int>(),
+      base_model_seq_lens_this_time.data<int>(),
+      base_model_seq_lens_encoder.data<int>(),
+      accept_nums.data<int>(),
+      position_map.data<int>(),
+      output_token_num.data<int>(),
+      bsz,
+      actual_draft_token_num,
+      input_token_num);
   PD_CHECK(r == 0, "xpu::plugin::compute_order failed.");
 
   int output_token_num_cpu =
@@ -72,7 +73,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
     case paddle::DataType::BFLOAT16:
       using XPUTypeBF16 = typename XPUTypeTrait<bfloat16>::Type;
       typedef paddle::bfloat16 bf16_data_t;
-      r = api::plugin::rebuild_hidden_states(
+      r = fastdeploy::plugin::rebuild_hidden_states(
           ctx,
           reinterpret_cast<const XPUTypeBF16*>(input.data<bf16_data_t>()),
           position_map.data<int>(),
@@ -85,7 +86,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
     case paddle::DataType::FLOAT16:
       using XPUTypeFP16 = typename XPUTypeTrait<float16>::Type;
       typedef paddle::float16 fp16_data_t;
-      r = api::plugin::rebuild_hidden_states(
+      r = fastdeploy::plugin::rebuild_hidden_states(
           ctx,
           reinterpret_cast<const XPUTypeFP16*>(input.data<fp16_data_t>()),
           position_map.data<int>(),
@@ -96,7 +97,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
       PD_CHECK(r == 0, "xpu::plugin::rebuild_hidden_states failed.");
       return {out};
     case paddle::DataType::FLOAT32:
-      r = api::plugin::rebuild_hidden_states(
+      r = fastdeploy::plugin::rebuild_hidden_states(
           ctx,
           reinterpret_cast<const float*>(input.data<float>()),
           position_map.data<int>(),

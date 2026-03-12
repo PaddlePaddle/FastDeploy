@@ -43,7 +43,7 @@ std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
   auto output_token_num = paddle::empty(
       {1}, seq_lens_this_time.dtype(), seq_lens_this_time.place());
 
-  int r = api::plugin::compute_self_order(
+  int r = fastdeploy::plugin::compute_self_order(
       ctx,
       reinterpret_cast<const int*>(last_seq_lens_this_time.data<int>()),
       reinterpret_cast<const int*>(seq_lens_this_time.data<int>()),
@@ -67,7 +67,7 @@ std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     case paddle::DataType::BFLOAT16:
       using XPUTypeBF16 = typename XPUTypeTrait<bfloat16>::Type;
       typedef paddle::bfloat16 bf16_data_t;
-      r = api::plugin::rebuild_self_hidden_states(
+      r = fastdeploy::plugin::rebuild_self_hidden_states(
           ctx,
           reinterpret_cast<const XPUTypeBF16*>(input.data<bf16_data_t>()),
           src_map.data<int>(),
@@ -80,7 +80,7 @@ std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     case paddle::DataType::FLOAT16:
       using XPUTypeFP16 = typename XPUTypeTrait<float16>::Type;
       typedef paddle::float16 fp16_data_t;
-      r = api::plugin::rebuild_self_hidden_states(
+      r = fastdeploy::plugin::rebuild_self_hidden_states(
           ctx,
           reinterpret_cast<const XPUTypeFP16*>(input.data<fp16_data_t>()),
           src_map.data<int>(),
@@ -91,7 +91,7 @@ std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
       PD_CHECK(r == 0, "xpu::plugin::rebuild_self_hidden_states failed.");
       return {out};
     case paddle::DataType::FLOAT32:
-      r = api::plugin::rebuild_self_hidden_states(
+      r = fastdeploy::plugin::rebuild_self_hidden_states(
           ctx,
           reinterpret_cast<const float*>(input.data<float>()),
           src_map.data<int>(),

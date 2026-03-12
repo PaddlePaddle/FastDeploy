@@ -58,7 +58,7 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
   PD_CHECK(seq_len.is_contiguous(), "Seq lens tensor must be contiguous");
 
   if (token_num_data > 0) {
-    int r = baidu::xpu::api::plugin::speculate_get_padding_offset(
+    int r = fastdeploy::plugin::speculate_get_padding_offset(
         xpu_ctx->x_context(),
         batch_id_per_token.data<int>(),
         cum_offsets_out.data<int>(),
@@ -70,7 +70,7 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
         bsz);
     PD_CHECK(r == 0, "XPU speculate_get_padding_offset failed");
 
-    r = baidu::xpu::api::plugin::speculate_remove_padding<int64_t>(
+    r = fastdeploy::plugin::speculate_remove_padding<int64_t>(
         xpu_ctx->x_context(),
         x_remove_padding.data<int64_t>(),
         input_ids.data<int64_t>(),

@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 template <typename T>
 __attribute__((global)) void speculate_min_length_logits_process(
@@ -81,12 +80,9 @@ __attribute__((global)) void speculate_ban_bad_words(
     const int64_t token_num,
     const int64_t max_seq_len);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 void update_repeat_times_cpu(const int64_t* pre_ids,
@@ -138,7 +134,7 @@ void ban_bad_words_cpu(float* logits,
 }
 
 template <typename T>
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        const int64_t* pre_ids,
                        T* logits,
                        const T* penalty_scores,
@@ -229,7 +225,7 @@ static int cpu_wrapper(Context* ctx,
 }
 
 template <typename T>
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         const int64_t* pre_ids,
                         T* logits,
                         const T* penalty_scores,
@@ -250,17 +246,17 @@ static int xpu3_wrapper(Context* ctx,
                         const int64_t token_num,
                         const int64_t max_seq_len) {
   api::ctx_guard RAII_GUARD(ctx);
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
   auto min_length_logits_process_kernel =
-      xpu3::plugin::speculate_min_length_logits_process<T>;
-  auto update_repeat_times_kernel = xpu3::plugin::speculate_update_repeat_times;
+      fd_xpu3::speculate_min_length_logits_process<T>;
+  auto update_repeat_times_kernel = fd_xpu3::speculate_update_repeat_times;
   auto update_value_by_repeat_times_kernel =
-      xpu3::plugin::speculate_update_value_by_repeat_times<T>;
+      fd_xpu3::speculate_update_value_by_repeat_times<T>;
   if (length % 16 == 0) {
     update_value_by_repeat_times_kernel =
-        xpu3::plugin::speculate_update_value_by_repeat_times_simd<T>;
+        fd_xpu3::speculate_update_value_by_repeat_times_simd<T>;
   }
-  auto ban_bad_words_kernel = xpu3::plugin::speculate_ban_bad_words<T>;
+  auto ban_bad_words_kernel = fd_xpu3::speculate_ban_bad_words<T>;
 
   int* repeat_times = RAII_GUARD.alloc_l3_or_gm<int>(token_num * length);
   WRAPPER_ASSERT_WORKSPACE(ctx, repeat_times);
@@ -327,7 +323,7 @@ static int xpu3_wrapper(Context* ctx,
 }
 
 template <typename T>
-int speculate_token_penalty_multi_scores(Context* ctx,
+int speculate_token_penalty_multi_scores(api::Context* ctx,
                                          const int64_t* pre_ids,
                                          T* logits,
                                          const T* penalty_scores,
@@ -452,7 +448,7 @@ int speculate_token_penalty_multi_scores(Context* ctx,
 }
 
 template int speculate_token_penalty_multi_scores<float>(
-    Context* ctx,
+    api::Context* ctx,
     const int64_t* pre_ids,
     float* logits,
     const float* penalty_scores,
@@ -473,7 +469,7 @@ template int speculate_token_penalty_multi_scores<float>(
     const int64_t token_num,
     const int64_t max_seq_len);
 template int speculate_token_penalty_multi_scores<float16>(
-    Context* ctx,
+    api::Context* ctx,
     const int64_t* pre_ids,
     float16* logits,
     const float16* penalty_scores,
@@ -494,7 +490,7 @@ template int speculate_token_penalty_multi_scores<float16>(
     const int64_t token_num,
     const int64_t max_seq_len);
 template int speculate_token_penalty_multi_scores<bfloat16>(
-    Context* ctx,
+    api::Context* ctx,
     const int64_t* pre_ids,
     bfloat16* logits,
     const bfloat16* penalty_scores,
@@ -516,6 +512,4 @@ template int speculate_token_penalty_multi_scores<bfloat16>(
     const int64_t max_seq_len);
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy
