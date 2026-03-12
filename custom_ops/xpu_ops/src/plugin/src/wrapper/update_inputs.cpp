@@ -24,7 +24,6 @@ __attribute__((global)) void update_inputs(bool *not_need_stop,
                                            int *seq_lens_encoder,
                                            int *seq_lens_decoder,
                                            int64_t *input_ids,
-                                           const int64_t *stop_nums,
                                            const bool *stop_flags,
                                            const bool *is_block_step,
                                            const int64_t *next_tokens,
@@ -43,7 +42,6 @@ static int cpu_wrapper(api::Context *ctx,
                        int *seq_lens_encoder,
                        int *seq_lens_decoder,
                        int64_t *input_ids,
-                       const int64_t *stop_nums,
                        const bool *stop_flags,
                        const bool *is_block_step,
                        const int64_t *next_tokens,
@@ -71,7 +69,7 @@ static int cpu_wrapper(api::Context *ctx,
   for (size_t i = 0; i < stop_flag_now_int.size(); i++) {
     stop_sum += stop_flag_now_int[i];
   }
-  not_need_stop[0] = stop_sum < stop_nums[0];
+  not_need_stop[0] = stop_sum < max_bsz;
   return api::SUCCESS;
 }
 
@@ -81,7 +79,6 @@ static int xpu3_wrapper(api::Context *ctx,
                         int *seq_lens_encoder,
                         int *seq_lens_decoder,
                         int64_t *input_ids,
-                        const int64_t *stop_nums,
                         const bool *stop_flags,
                         const bool *is_block_step,
                         const int64_t *next_tokens,
@@ -96,7 +93,6 @@ static int xpu3_wrapper(api::Context *ctx,
       seq_lens_encoder,
       seq_lens_decoder,
       reinterpret_cast<XPU_INT64 *>(input_ids),
-      reinterpret_cast<const XPU_INT64 *>(stop_nums),
       stop_flags,
       is_block_step,
       reinterpret_cast<const XPU_INT64 *>(next_tokens),
@@ -113,7 +109,6 @@ int update_inputs(api::Context *ctx,
                   int *seq_lens_encoder,
                   int *seq_lens_decoder,
                   int64_t *input_ids,
-                  const int64_t *stop_nums,
                   const bool *stop_flags,
                   const bool *is_block_step,
                   const int64_t *next_tokens,
@@ -128,7 +123,7 @@ int update_inputs(api::Context *ctx,
                       seq_lens_encoder,
                       seq_lens_decoder,
                       input_ids);
-  WRAPPER_DUMP_PARAM4(ctx, stop_nums, stop_flags, is_block_step, next_tokens);
+  WRAPPER_DUMP_PARAM3(ctx, stop_flags, is_block_step, next_tokens);
   WRAPPER_DUMP_PARAM3(ctx, bsz, max_bsz, input_ids_stride);
   WRAPPER_DUMP(ctx);
   if (ctx->dev().type() == api::kCPU) {
@@ -138,7 +133,6 @@ int update_inputs(api::Context *ctx,
                        seq_lens_encoder,
                        seq_lens_decoder,
                        input_ids,
-                       stop_nums,
                        stop_flags,
                        is_block_step,
                        next_tokens,
@@ -153,7 +147,6 @@ int update_inputs(api::Context *ctx,
                         seq_lens_encoder,
                         seq_lens_decoder,
                         input_ids,
-                        stop_nums,
                         stop_flags,
                         is_block_step,
                         next_tokens,

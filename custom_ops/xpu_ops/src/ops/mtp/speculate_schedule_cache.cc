@@ -36,7 +36,6 @@ void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
                             const paddle::Tensor &accept_tokens,
                             const paddle::Tensor &is_block_step,
                             const paddle::Tensor &not_need_stop,
-                            const paddle::Tensor &stop_nums,
                             const int block_size,
                             const int max_draft_tokens) {
   namespace api = baidu::xpu::api;
@@ -79,7 +78,6 @@ void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
       const_cast<int64_t *>(accept_tokens.data<int64_t>()),
       const_cast<bool *>(is_block_step.data<bool>()),
       const_cast<bool *>(not_need_stop_gpu.data<bool>()),
-      stop_nums.data<int64_t>(),
       real_bsz,
       max_bsz,
       max_next_step_tokens,
@@ -97,8 +95,7 @@ void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
   not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
 
-// PD_BUILD_STATIC_OP(speculate_schedule_cache)
-PD_BUILD_OP(speculate_schedule_cache)
+PD_BUILD_STATIC_OP(speculate_schedule_cache)
     .Inputs({"draft_tokens",
              "block_tables",
              "stop_flags",
@@ -112,8 +109,7 @@ PD_BUILD_OP(speculate_schedule_cache)
              "accept_num",
              "accept_tokens",
              "is_block_step",
-             "not_need_stop",
-             "stop_nums"})
+             "not_need_stop"})
     .Attrs({"block_size: int", "max_draft_tokens: int"})
     .Outputs({"draft_tokens_out",
               "block_tables_out",
