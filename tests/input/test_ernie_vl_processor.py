@@ -147,7 +147,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
                     "fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.GenerationConfig"
                 ) as mock_gen_config:
                     mock_gen_config.from_pretrained.return_value = MagicMock()
-                    with patch("paddleformers.trl.llm_utils.get_eos_token_id") as mock_get_eos:
+                    with patch("paddleformers.cli.utils.llm_utils.get_eos_token_id") as mock_get_eos:
                         mock_get_eos.return_value = [1, 2]
 
                         # Test normal initialization

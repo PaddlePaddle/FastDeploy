@@ -98,15 +98,17 @@ static int xpu3_wrapper(Context* ctx,
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   auto limit_thinking_content_length_kernel_v2 =
       xpu3::plugin::limit_thinking_content_length_kernel_v2;
-  limit_thinking_content_length_kernel_v2<<<1, 64, ctx->xpu_stream>>>(
-      reinterpret_cast<XPU_INT64*>(next_tokens),
-      max_think_lens,
-      reinterpret_cast<const XPU_INT64*>(step_idx),
-      limit_think_status,
-      stop_flags,
-      think_end_id,
-      line_break_id,
-      bs);
+  int32_t ret_xre =
+      limit_thinking_content_length_kernel_v2<<<1, 64, ctx->xpu_stream>>>(
+          reinterpret_cast<XPU_INT64*>(next_tokens),
+          max_think_lens,
+          reinterpret_cast<const XPU_INT64*>(step_idx),
+          limit_think_status,
+          stop_flags,
+          think_end_id,
+          line_break_id,
+          bs);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

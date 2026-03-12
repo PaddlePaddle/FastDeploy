@@ -58,13 +58,14 @@ static int xpu2or3_wrapper(Context* ctx,
                            const int* seq_lens_decoder,
                            const int real_bsz) {
   ctx_guard RAII_GUARD(ctx);
-  xpu3::plugin::
+  int32_t ret_xre = xpu3::plugin::
       speculate_get_seq_lens_output<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           seq_lens_output,
           seq_lens_this_time,
           seq_lens_encoder,
           seq_lens_decoder,
           real_bsz);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
 
   return api::SUCCESS;
 }

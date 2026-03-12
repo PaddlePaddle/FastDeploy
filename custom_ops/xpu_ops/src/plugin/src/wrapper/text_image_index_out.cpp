@@ -55,8 +55,10 @@ static int xpu3_wrapper(Context* ctx,
                         int* text_index,            // y1
                         int* image_index,           // y2
                         const int64_t token_num) {
-  xpu3::plugin::text_image_index_out_kernel<<<1, 1, ctx->xpu_stream>>>(
-      token_type_ids, text_index, image_index, token_num);
+  int32_t ret_xre =
+      xpu3::plugin::text_image_index_out_kernel<<<1, 1, ctx->xpu_stream>>>(
+          token_type_ids, text_index, image_index, token_num);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 

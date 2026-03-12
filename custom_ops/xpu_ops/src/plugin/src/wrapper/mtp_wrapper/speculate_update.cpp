@@ -135,7 +135,7 @@ static int xpu3_wrapper(Context *ctx,
                         const int max_draft_tokens) {
   constexpr int BlockSize = 512;
   using XPU_TI = typename XPUIndexType<int64_t>::type;
-  xpu3::plugin::speculate_update<BlockSize>
+  int32_t ret_xre = xpu3::plugin::speculate_update<BlockSize>
       <<<1, 64, ctx->xpu_stream>>>(seq_lens_encoder,
                                    seq_lens_decoder,
                                    not_need_stop,
@@ -150,6 +150,7 @@ static int xpu3_wrapper(Context *ctx,
                                    real_bsz,
                                    max_bsz,
                                    max_draft_tokens);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
@@ -169,7 +170,7 @@ int speculate_update(Context *ctx,
                      const int max_bsz,
                      const int max_draft_tokens) {
   WRAPPER_CHECK_CTX(ctx);
-  WRAPPER_DUMP_FUNCTION_T1(ctx, "speculate_update_v3", int);
+  WRAPPER_DUMP_FUNCTION_T1(ctx, "speculate_update", int);
   WRAPPER_DUMP_PARAM4(
       ctx, seq_lens_encoder, seq_lens_decoder, not_need_stop, draft_tokens);
   WRAPPER_DUMP_PARAM4(

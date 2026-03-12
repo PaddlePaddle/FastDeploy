@@ -61,6 +61,9 @@ class CUDAPlatform(Platform):
         elif selected_backend == _Backend.MLA_ATTN:
             logger.info("Using MLA ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.MLAAttentionBackend"
+        elif selected_backend == _Backend.DSA_ATTN:
+            logger.info("Using DSA ATTN backend.")
+            return "fastdeploy.model_executor.layers.attention.DSAAttentionBackend"
         elif selected_backend == _Backend.FLASH_ATTN:
             logger.info("Using FLASH ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.FlashAttentionBackend"

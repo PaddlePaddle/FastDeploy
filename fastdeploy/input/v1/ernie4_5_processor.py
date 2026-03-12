@@ -68,7 +68,10 @@ class Ernie4_5Processor(BaseDataProcessor):
                                    {self.tokenizer.bos_token_id}, \
                                    eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
         )
-        from paddleformers.trl.llm_utils import get_eos_token_id
+        try:
+            from paddleformers.trl.llm_utils import get_eos_token_id
+        except Exception:
+            from paddleformers.cli.utils.llm_utils import get_eos_token_id
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
         self.eos_token_id_len = len(self.eos_token_ids)
