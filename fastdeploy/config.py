@@ -1431,9 +1431,6 @@ class RouterConfig:
         self.api_server_host = get_host_ip()
         self.api_server_port = args["port"]
 
-    def __str__(self):
-        return json.dumps({key: value for key, value in self.__dict__.items()})
-
 
 class CommitConfig:
     """
@@ -1546,9 +1543,6 @@ class RoutingReplayConfig:
         Convert routing replay config to json string.
         """
         return json.dumps({key: value for key, value in self.__dict__.items()})
-
-    def __str__(self):
-        return self.to_json_string()
 
 
 class FDConfig:
@@ -1742,6 +1736,9 @@ class FDConfig:
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
+        if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
+            # TODO(gongshaotian): R3 support prefix caching
+            self.cache_config.enable_prefix_caching = False
         if (
             self.structured_outputs_config is not None
             and self.structured_outputs_config.guided_decoding_backend != "off"
@@ -1811,9 +1808,6 @@ class FDConfig:
             else:
                 # It will hang when real batch_size < tp_size
                 self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
-
-        if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
-            assert self.model_config.runner_type != "pooling", "Routing replay can only work with non-pooling models."
 
         if ErnieArchitectures.is_ernie5_arch(self.model_config.architectures):
             # ernie5 model not support chunked_mm_input

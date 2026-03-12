@@ -581,7 +581,7 @@ class PaddleDisWorkerProc:
 
             if num_blocks_local <= 0:
                 raise ValueError(
-                    f"The total number of blocks cannot be less than zero bug got {num_blocks_local}. "
+                    "The total number of blocks cannot be less than zero. "
                     "Please increase gpu_memory_utilization "
                     "Or decrease max_num_batched_tokens(max model length)."
                 )
