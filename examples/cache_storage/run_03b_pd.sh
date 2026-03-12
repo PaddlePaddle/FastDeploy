@@ -19,7 +19,6 @@ metadata_port=15002
 export MOONCAKE_MASTER_SERVER_ADDR="${master_ip}:${master_port}"
 export MOONCAKE_METADATA_SERVER="http://${master_ip}:${metadata_port}/metadata"
 export MOONCAKE_GLOBAL_SEGMENT_SIZE="50000000000"
-export MOONCAKE_LOCAL_HOSTNAME="localhost"
 # export MOONCAKE_PROTOCOL="tcp"
 export MOONCAKE_PROTOCOL="rdma"
 # export MOONCAKE_RDMA_DEVICES="mlx5_0"
@@ -33,8 +32,6 @@ LOG_DATE=$(date +%Y%m%d_%H%M%S)
 # ======================== 清理和准备 ========================
 unset http_proxy && unset https_proxy
 rm -rf log_*
-find /dev/shm -type f -print0 2>/dev/null | xargs -0 rm -f 2>/dev/null || true
-bash stop.sh 2>/dev/null || true
 
 source ./utils.sh
 
@@ -87,11 +84,9 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
     --splitwise-role prefill \
     --cache-transfer-protocol rdma \
     --router "0.0.0.0:${ROUTER_PORT}" \
-    --enable-prefix-caching \
     --kvcache-storage-backend mooncake \
     2>&1 > ${FD_LOG_DIR}/nohup &
 
-    # --kvcache-storage-backend mooncake \
 
 # ======================== 启动 D 实例（Decode） ========================
 echo "=== Starting Decode Instance ==="
@@ -112,7 +107,6 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
     --kvcache-storage-backend mooncake \
     2>&1 > ${FD_LOG_DIR}/nohup &
 
-    # --kvcache-storage-backend mooncake \
 
 # ======================== 等待服务就绪 ========================
 echo "=== Waiting for services to be ready ==="
