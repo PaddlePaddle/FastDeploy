@@ -607,6 +607,8 @@ def reconstruct_memory(model):
     reconstruct_memory to avoid memory chunks
     """
     if paddle.is_compiled_with_cuda():
+        paddle.distributed.communication.group.Group.__deepcopy__ = lambda self, _: self
+        paddle.distributed.communication.group.Group.to_json = lambda self: repr(self)
         _offload_model(model)
         paddle.device.cuda.empty_cache()
         _reload_model(model)

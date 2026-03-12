@@ -26,7 +26,7 @@ from fastdeploy.utils import set_random_seed
 tests_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, tests_dir)
 
-from ci_use.iluvatar_UT.utils import TIMEOUT_MSG, timeout
+from ci_use.iluvatar_UT.utils import timeout
 
 
 @timeout(240)
@@ -97,7 +97,6 @@ if __name__ == "__main__":
         result = offline_infer_check()
         sys.exit(0)
     except TimeoutError:
-        print(TIMEOUT_MSG)
         sys.exit(124)
     except Exception:
         sys.exit(1)
