@@ -285,7 +285,7 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
-        
+
         # gpu_cache_lock: file-based lock for mutual exclusion between worker
         # and CPU transfer when accessing GPU KV cache.
         self.gpu_cache_lock = IPCLock(
@@ -605,7 +605,7 @@ class PaddleDisWorkerProc:
             start_execute_time = time.time()
 
             self._acquire_kvcache_lock(tp_rank)
-            self.worker.execute_model(req_dicts, max_occupied_batch_index)
+            self.worker.execute_model(req_dicts, self.max_occupied_batch_index)
             self._release_kvcache_lock(tp_rank)
 
             # Only v0 use this signal
