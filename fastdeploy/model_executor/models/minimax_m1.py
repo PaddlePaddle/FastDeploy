@@ -44,33 +44,31 @@ from fastdeploy.model_executor.models.model_base import (
     ModelForCasualLM,
     ModelRegistry,
 )
-from fastdeploy.model_executor.layers.rotary_embedding import (
-    QwenRotaryEmbedding,
-)
 from fastdeploy.model_executor.layers.activation import SiluAndMul
 from fastdeploy.model_executor.layers.linear import (
     ColumnParallelLinear,
-    RowParallelLinear,
+    MergedColumnParallelLinear,
+    QKVParallelLinear,
     ReplicatedLinear,
+    RowParallelLinear,
 )
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.attention.attention import Attention
+from fastdeploy.model_executor.utils import (
+    WeightsMapper,
+    default_weight_loader,
+)
 
 
 @ModelRegistry.register_model_class(
     architecture="MiniMaxM1ForCausalLM",
     module_name="minimax_m1",
-    category=ModelCategory.TEXT_GENERATION,
+    category=[ModelCategory.TEXT_GENERATION],
     primary_use=ModelCategory.TEXT_GENERATION,
 )
 class MiniMaxM1ForCausalLM(ModelForCasualLM):
     """
     MiniMax-M1 model for causal language modeling
-    
-    MiniMax-M1 features:
-    - Hybrid Attention: Lightning Attention + Standard Attention
-    - MoE with 32 experts, 2 experts activated per token
-    - 1M context length
     """
 
     def __init__(self, fd_config: FDConfig):
@@ -79,8 +77,6 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
         # Parse config
         config = fd_config.model_config
         self.ori_vocab_size = getattr(config, "ori_vocab_size", getattr(config, "vocab_size", None))
-        self.num_local_experts = config.num_local_experts
-        self.num_experts_per_tok = config.num_experts_per_tok
         
         # Model components
         self.model = MiniMaxM1Model(fd_config)
@@ -100,62 +96,41 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
         return "MiniMaxM1ForCausalLM"
 
     @paddle.no_grad()
-    def set_state_dict(self, state_dict):
-        pass
-
-    @paddle.no_grad()
     def load_weights(self, weights_iterator):
-        """Load model weights"""
-        from fastdeploy.model_executor.utils import (
-            default_weight_loader,
-            process_weights_after_loading,
-        )
-
+        """Load model weights using WeightsMapper"""
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(
-            dict(self.named_sublayers()), self.fd_config
-        )
-
+        mapper = WeightsMapper()
+        
         for loaded_weight_name, loaded_weight in weights_iterator:
-            logger.debug(f"Loading weight: {loaded_weight_name}")
-            
-            # Replace prefix
+            # Standard prefix replacement
             loaded_weight_name = loaded_weight_name.replace("model.minimax_m1", "model")
             
-            if loaded_weight_name in params_dict:
-                weight = params_dict[loaded_weight_name]
+            mapped_name = mapper.map_name(loaded_weight_name)
+            if mapped_name in params_dict:
+                weight = params_dict[mapped_name]
                 default_weight_loader(weight, loaded_weight)
             else:
                 logger.warning(f"Weight {loaded_weight_name} not found in model")
+
+    def forward(
+        self,
+        ids_remove_padding: paddle.Tensor,
+        forward_meta: ForwardMeta,
+    ):
+        """Forward pass using standard FastDeploy signature"""
+        hidden_states = self.model(
+            ids_remove_padding=ids_remove_padding,
+            forward_meta=forward_meta,
+        )
+        return hidden_states
 
     def compute_logits(self, hidden_states: paddle.Tensor, **logits_processor_kwargs):
         """Compute logits from hidden states"""
         logits = self.lm_head(hidden_states)
         logits = logits.astype(paddle.float32)
         if hasattr(self, "ori_vocab_size") and getattr(self, "ori_vocab_size") is not None:
-            logits[:, self.ori_vocab_size :] = -float("inf")
-        return logits
-
-    def forward(
-        self,
-        input_ids: paddle.Tensor,
-        position_ids: paddle.Tensor | None = None,
-        attention_mask: paddle.Tensor | None = None,
-        **kwargs,
-    ):
-        """Forward pass"""
-        hidden_states = self.model(
-            input_ids=input_ids,
-            position_ids=position_ids,
-            attention_mask=attention_mask,
-        )
-        logits = self.lm_head(hidden_states)
-        return logits
-
-    def compute_logits(self, hidden_states: paddle.Tensor):
-        """Compute logits from hidden states."""
-        logits = self.lm_head(hidden_states)
-        logits = logits.astype(paddle.float32)
+            if logits.shape[-1] > self.ori_vocab_size:
+                logits[:, self.ori_vocab_size :] = -float("inf")
         return logits
 
 
@@ -166,7 +141,6 @@ class MiniMaxM1Model(nn.Layer):
         super().__init__()
         
         self.config = fd_config.model_config
-        self.padding_idx = self.config.pad_token_id
         self.vocab_size = self.config.vocab_size
         
         # Embeddings
@@ -180,7 +154,7 @@ class MiniMaxM1Model(nn.Layer):
         # Get attention type list (0=Lightning, 1=Standard)
         self.attn_type_list = getattr(self.config, "attn_type_list", [1] * self.config.num_hidden_layers)
         
-        # Build decoder layers with hybrid attention
+        # Build decoder layers
         self.layers = nn.LayerList()
         for layer_id in range(self.config.num_hidden_layers):
             attn_type = self.attn_type_list[layer_id] if layer_id < len(self.attn_type_list) else 1
@@ -228,35 +202,29 @@ class MiniMaxM1Model(nn.Layer):
 
     def forward(
         self,
-        input_ids: paddle.Tensor,
-        position_ids: paddle.Tensor | None = None,
-        attention_mask: paddle.Tensor | None = None,
+        ids_remove_padding: paddle.Tensor,
+        forward_meta: ForwardMeta,
     ):
-        """Forward pass through the model"""
-        batch_size, seq_len = input_ids.shape
+        """Forward pass"""
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         
-        # Get embeddings
-        hidden_states = self.embed_tokens(input_ids)
-        
-        # Prepare slope rates for Lightning Attention
+        # Prepare slope rates
         slope_rates = []
         for idx in range(len(self.layers)):
             slope = self.slopes.clone()
             slope = slope * (1 - idx / (len(self.layers) - 1) + 1e-5)
             slope_rates.append(slope)
         
-        # Forward through decoder layers
+        residual = None
         for idx, decoder_layer in enumerate(self.layers):
-            hidden_states = decoder_layer(
+            hidden_states, residual = decoder_layer(
                 hidden_states=hidden_states,
-                attention_mask=attention_mask,
-                position_ids=position_ids,
+                residual=residual,
+                forward_meta=forward_meta,
                 slope_rate=slope_rates[idx],
             )
         
-        # Final norm
-        hidden_states = self.norm(hidden_states)
-        
+        hidden_states, _ = self.norm(hidden_states, residual_input=residual, forward_meta=forward_meta)
         return hidden_states
 
 
@@ -273,22 +241,15 @@ class MiniMaxM1DecoderLayer(nn.Layer):
         super().__init__()
         
         self.layer_id = layer_id
-        self.attention_type = attention_type  # 0=Lightning, 1=Standard
+        self.attention_type = attention_type
         
-        # Attention - choose based on attention type
         if attention_type == 0:
-            # Lightning Attention (not fully implemented, fallback to standard)
-            logger.info(f"Layer {layer_id}: Using Lightning Attention")
             self.self_attn = MiniMaxM1LightningAttention(fd_config, layer_id, prefix=f"{prefix}.self_attn")
         else:
-            # Standard Flash Attention
-            logger.info(f"Layer {layer_id}: Using Standard Attention")
             self.self_attn = MiniMaxM1StandardAttention(fd_config, layer_id, prefix=f"{prefix}.self_attn")
         
-        # MoE Layer
         self.block_sparse_moe = MiniMaxM1SparseMoEBlock(fd_config, layer_id, prefix=f"{prefix}.mlp")
         
-        # Layer norms
         self.input_layernorm = RMSNorm(
             fd_config=fd_config,
             hidden_size=fd_config.model_config.hidden_size,
@@ -303,10 +264,7 @@ class MiniMaxM1DecoderLayer(nn.Layer):
             prefix=f"{prefix}.post_attention_layernorm",
         )
         
-        # Post-norm configuration
-        self.postnorm = getattr(fd_config.model_config, "postnorm", True)
-        
-        # Layer normalization scaling factors
+        # Scaling factors for residual connections
         self.layernorm_attention_alpha = getattr(
             fd_config.model_config, "layernorm_linear_attention_alpha", 3.5565588200778455
         ) if attention_type == 0 else getattr(
@@ -324,7 +282,6 @@ class MiniMaxM1DecoderLayer(nn.Layer):
             fd_config.model_config, "layernorm_mlp_beta", 1.0
         )
         
-        # Shared experts (if configured)
         shared_intermediate = getattr(fd_config.model_config, "shared_intermediate_size", 0)
         self.shared_moe = shared_intermediate > 0
         if self.shared_moe:
@@ -333,62 +290,53 @@ class MiniMaxM1DecoderLayer(nn.Layer):
                 intermediate_size=shared_intermediate,
                 prefix=f"{prefix}.shared_experts"
             )
-            self.coefficient = nn.Linear(
-                fd_config.model_config.hidden_size, 
-                1, 
-                bias=False
+            self.coefficient = ReplicatedLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.coefficient",
+                input_size=fd_config.model_config.hidden_size,
+                output_size=1,
+                with_bias=False,
             )
 
     def forward(
         self,
         hidden_states: paddle.Tensor,
-        attention_mask: paddle.Tensor | None = None,
-        position_ids: paddle.Tensor | None = None,
+        residual: paddle.Tensor | None,
+        forward_meta: ForwardMeta,
         slope_rate: paddle.Tensor | None = None,
     ):
-        """Forward pass through decoder layer"""
+        # Self Attention block
+        norm_hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
         
-        # Pre-attention norm
-        residual = hidden_states
-        hidden_states = self.input_layernorm(hidden_states)
-        if self.postnorm:
-            residual = hidden_states
-        
-        # Self attention
-        hidden_states, _, _ = self.self_attn(
-            hidden_states=hidden_states,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
+        attn_output = self.self_attn(
+            hidden_states=norm_hidden_states,
+            forward_meta=forward_meta,
             slope_rate=slope_rate,
         )
         
         # Residual connection with scaling
-        hidden_states = residual * self.layernorm_attention_alpha + hidden_states * self.layernorm_attention_beta
+        hidden_states = residual * self.layernorm_attention_alpha + attn_output * self.layernorm_attention_beta
+        residual = None
         
-        # Pre-MLP norm
-        residual = hidden_states
-        hidden_states = self.post_attention_layernorm(hidden_states)
-        if self.postnorm:
-            residual = hidden_states
+        # MLP / MoE block
+        norm_hidden_states, residual = self.post_attention_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
         
-        # MoE
-        moe_hidden_states, router_logits = self.block_sparse_moe(hidden_states)
+        moe_output, _ = self.block_sparse_moe(norm_hidden_states, forward_meta)
         
-        # Shared experts (if configured)
         if self.shared_moe:
-            output_mlp = self.shared_mlp(hidden_states)
-            coef = paddle.nn.functional.sigmoid(
-                self.coefficient.weight.astype(hidden_states.dtype) @ hidden_states.astype("float32").T
-            ).T
-            coef = coef.astype(hidden_states.dtype)
-            hidden_states = moe_hidden_states * (1 - coef) + output_mlp * coef
-        else:
-            hidden_states = moe_hidden_states
+            shared_output = self.shared_mlp(norm_hidden_states)
+            # Sigmoid routing
+            coef = paddle.nn.functional.sigmoid(self.coefficient(norm_hidden_states))
+            moe_output = moe_output * (1.0 - coef) + shared_output * coef
         
-        # Residual connection with scaling
-        hidden_states = residual * self.layernorm_mlp_alpha + hidden_states * self.layernorm_mlp_beta
+        hidden_states = residual * self.layernorm_mlp_alpha + moe_output * self.layernorm_mlp_beta
+        residual = None
         
-        return hidden_states
+        return hidden_states, residual
 
 
 class MiniMaxM1StandardAttention(nn.Layer):
@@ -396,155 +344,48 @@ class MiniMaxM1StandardAttention(nn.Layer):
 
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = ""):
         super().__init__()
-        
-        self.fd_config = fd_config
-        self.layer_id = layer_id
-        self.head_dim = fd_config.model_config.head_dim
-        tp_size = fd_config.parallel_config.tensor_parallel_size
-        
-        num_kv_heads = fd_config.model_config.num_key_value_heads
-        num_kv_heads_replicas = max(1, tp_size // num_kv_heads)
-        
-        # QKV projection
-        self.q_proj = ColumnParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.q_proj",
-            input_size=fd_config.model_config.hidden_size,
-            output_size=fd_config.model_config.num_attention_heads * self.head_dim,
-            with_bias=False,
-        )
-        
-        self.k_proj = ColumnParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.k_proj",
-            input_size=fd_config.model_config.hidden_size,
-            output_size=num_kv_heads * self.head_dim,
-            with_bias=False,
-        )
-        
-        self.v_proj = ColumnParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.v_proj",
-            input_size=fd_config.model_config.hidden_size,
-            output_size=num_kv_heads * self.head_dim,
-            with_bias=False,
-        )
-        
-        # Output projection
+        self.qkv_proj = QKVParallelLinear(fd_config=fd_config, prefix=f"{prefix}.qkv_proj", with_bias=False)
         self.o_proj = RowParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.o_proj",
-            input_size=fd_config.model_config.num_attention_heads * self.head_dim,
+            input_size=fd_config.model_config.hidden_size,
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
-            layer_id=layer_id,
         )
-        
-        # RoPE
-        self.rotary_dim = getattr(fd_config.model_config, "rotary_dim", self.head_dim)
-        self.rotary_emb = QwenRotaryEmbedding(
-            dim=self.rotary_dim,
-            max_position_embeddings=fd_config.model_config.max_position_embeddings,
-            base=fd_config.model_config.rope_theta,
-        )
+        self.attn = Attention(fd_config=fd_config, layer_id=layer_id, prefix=prefix, use_neox_rotary_style=True)
 
-    def forward(
-        self,
-        hidden_states: paddle.Tensor,
-        attention_mask: paddle.Tensor | None = None,
-        position_ids: paddle.Tensor | None = None,
-        slope_rate: paddle.Tensor | None = None,
-    ):
-        """Forward pass through standard attention"""
-        batch_size, seq_len, _ = hidden_states.shape
-        
-        # QKV projections
-        query_states = self.q_proj(hidden_states)
-        key_states = self.k_proj(hidden_states)
-        value_states = self.v_proj(hidden_states)
-        
-        # Reshape for multi-head attention
-        query_states = query_states.reshape([batch_size, seq_len, -1, self.head_dim]).transpose([0, 2, 1, 3])
-        key_states = key_states.reshape([batch_size, seq_len, -1, self.head_dim]).transpose([0, 2, 1, 3])
-        value_states = value_states.reshape([batch_size, seq_len, -1, self.head_dim]).transpose([0, 2, 1, 3])
-        
-        # RoPE
-        cos, sin = self.rotary_emb(value_states, seq_len=seq_len)
-        
-        # Apply RoPE
-        # Note: Full RoPE implementation would go here
-        
-        # Attention (using FastDeploy's built-in attention)
-        attn = Attention(
-            self.fd_config,
-            layer_id=self.layer_id,
-            prefix=self.prefix if hasattr(self, 'prefix') else "",
-            use_neox_rotary_style=True,
-        )
-        
-        # Simplified attention computation
-        qkv = paddle.concat([query_states, key_states, value_states], axis=-1)
-        attn_output = attn(qkv=qkv, cos=cos, sin=sin, attention_mask=attention_mask)
-        
-        # Output projection
-        output = self.o_proj(attn_output)
-        
-        return output, None, None
+    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta, slope_rate: paddle.Tensor | None = None):
+        qkv_out = self.qkv_proj(hidden_states)
+        attn_output = self.attn(qkv=qkv_out, forward_meta=forward_meta)
+        return self.o_proj(attn_output)
 
 
 class MiniMaxM1LightningAttention(nn.Layer):
-    """
-    Lightning Attention for MiniMax-M1
-    
-    Reference: https://github.com/MiniMax-AI/MiniMax-M1
-    
-    This implements the block-wise Lightning Attention algorithm:
-    - Processes sequences in blocks of 256 tokens
-    - Uses linear attention with causal masking via decay factors
-    - Maintains KV state across blocks for efficiency
-    """
+    """Lightning Attention for MiniMax-M1"""
 
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = ""):
         super().__init__()
-        
         self.fd_config = fd_config
-        self.layer_id = layer_id
-        self.hidden_size = fd_config.model_config.hidden_size
-        self.num_heads = fd_config.model_config.num_attention_heads
+        self.num_heads = fd_config.model_config.num_attention_heads // fd_config.parallel_config.tensor_parallel_size
         self.head_dim = fd_config.model_config.head_dim
         
-        # Activation function
-        self.act = self._get_activation_fn(fd_config.model_config.hidden_act)
+        self.act = getattr(paddle.nn.functional, fd_config.model_config.hidden_act, paddle.nn.functional.silu)
         
-        # QKV projection
-        self.qkv_proj = ColumnParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.qkv_proj",
-            input_size=self.hidden_size,
-            output_size=3 * self.num_heads * self.head_dim,
-            with_bias=False,
-        )
-        
-        # Output gate
+        self.qkv_proj = QKVParallelLinear(fd_config=fd_config, prefix=f"{prefix}.qkv_proj", with_bias=False)
         self.output_gate = ColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.output_gate",
-            input_size=self.hidden_size,
+            input_size=fd_config.model_config.hidden_size,
             output_size=self.num_heads * self.head_dim,
             with_bias=False,
         )
-        
-        # Output projection
         self.out_proj = RowParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.out_proj",
             input_size=self.num_heads * self.head_dim,
-            output_size=self.hidden_size,
+            output_size=fd_config.model_config.hidden_size,
             with_bias=False,
-            layer_id=layer_id,
         )
-        
-        # Norm layer for output
         self.norm = RMSNorm(
             fd_config=fd_config,
             hidden_size=self.num_heads * self.head_dim,
@@ -552,198 +393,94 @@ class MiniMaxM1LightningAttention(nn.Layer):
             prefix=f"{prefix}.norm",
         )
         
-        self.prefix = prefix
-        self.block_size = 256  # MiniMax-M1 uses block size of 256
-        
-        # Inference state
-        self.kv_state = None
-        self.offset = 0
+        self.block_size = 256
+        self.kv_states = {} # State per sequence index
 
-    def _get_activation_fn(self, activation: str):
-        """Get activation function"""
-        if activation == "silu" or activation == "swish":
-            return paddle.nn.functional.silu
-        elif activation == "gelu":
-            return paddle.nn.functional.gelu
-        elif activation == "relu":
-            return paddle.nn.functional.relu
-        else:
-            return paddle.nn.functional.silu
-
-    def forward(
-        self,
-        hidden_states: paddle.Tensor,
-        attention_mask: paddle.Tensor | None = None,
-        position_ids: paddle.Tensor | None = None,
-        slope_rate: paddle.Tensor | None = None,
-    ):
-        """
-        Lightning Attention forward pass
-        
-        This is a Paddle implementation of the block-wise Lightning Attention.
-        For optimal performance, custom CUDA/Triton kernels are recommended.
-        """
-        # hidden_states: [batch, seq_len, hidden_size]
-        batch_size, seq_len, _ = hidden_states.shape
-        
-        # Linear map
+    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta, slope_rate: paddle.Tensor | None = None):
         qkv = self.act(self.qkv_proj(hidden_states))
-        new_shape = qkv.shape[:-1] + (self.num_heads, -1)
-        qkv = qkv.reshape(new_shape)
-        q, k, v = paddle.split(qkv, [self.head_dim] * 3, axis=-1)
+        q, k, v = paddle.split(qkv, 3, axis=-1)
         
-        # Transpose: [batch, num_heads, seq_len, head_dim]
-        q = q.transpose([0, 2, 1, 3])
-        k = k.transpose([0, 2, 1, 3])
-        v = v.transpose([0, 2, 1, 3])
+        q = q.reshape([-1, self.num_heads, self.head_dim])
+        k = k.reshape([-1, self.num_heads, self.head_dim])
+        v = v.reshape([-1, self.num_heads, self.head_dim])
         
-        # Compute decay ratio
-        if slope_rate is not None:
-            ratio = paddle.exp(-slope_rate)
+        ratio = paddle.exp(-slope_rate) if slope_rate is not None else paddle.ones([1], dtype="float32")
+        
+        if not forward_meta.forward_mode.is_decode():
+            output = self._forward_prefill(q, k, v, ratio, forward_meta)
         else:
-            ratio = paddle.ones([1], dtype="float32")
+            output = self._forward_decode(q, k, v, ratio, forward_meta)
         
-        # First time seeing this sequence
-        if self.kv_state is None or self.offset == 0:
-            self.offset = q.shape[-2]
-            output = self._forward_first_time(q, k, v, attention_mask, ratio)
-        else:
-            # Continuing from previous sequence
-            self.offset += 1
-            output = self._forward_with_cache(q, k, v, ratio)
-        
-        # Reshape: [batch, seq_len, num_heads * head_dim]
-        output = output.transpose([0, 2, 1, 3])
-        output = output.reshape([batch_size, seq_len, -1])
-        
-        # Normalize
-        output = self.norm(output)
-        
-        # Gate
+        output = output.reshape([-1, self.num_heads * self.head_dim])
+        output = self.norm(output)[0]
         gate = paddle.nn.functional.sigmoid(self.output_gate(hidden_states))
-        output = gate * output
-        
-        # Output projection
-        output = self.out_proj(output)
-        
-        return output, None, None
+        return self.out_proj(gate * output)
 
-    def _forward_first_time(
-        self,
-        q: paddle.Tensor,
-        k: paddle.Tensor,
-        v: paddle.Tensor,
-        attention_mask: paddle.Tensor | None,
-        ratio: paddle.Tensor,
-    ):
-        """
-        Forward pass for the first time seeing a sequence
-        Uses block-wise computation for efficiency
-        """
+    def _forward_prefill(self, q, k, v, ratio, forward_meta):
+        output = paddle.empty_like(q)
+        cu_seqlens = forward_meta.cu_seqlens_q
+        for i in range(len(cu_seqlens) - 1):
+            start, end = cu_seqlens[i], cu_seqlens[i+1]
+            qi = q[start:end].transpose([1, 0, 2]).unsqueeze(0)
+            ki = k[start:end].transpose([1, 0, 2]).unsqueeze(0)
+            vi = v[start:end].transpose([1, 0, 2]).unsqueeze(0)
+            
+            out_i, state_i = self._compute_lightning_attention_core(qi, ki, vi, ratio)
+            output[start:end] = out_i.squeeze(0).transpose([1, 0, 2])
+            self.kv_states[i] = state_i 
+        return output
+
+    def _forward_decode(self, q, k, v, ratio, forward_meta):
+        batch_size = q.shape[0]
+        output = paddle.empty_like(q)
+        for i in range(batch_size):
+            state = self.kv_states.get(i, paddle.zeros([self.num_heads, self.head_dim, self.head_dim]))
+            qi = q[i].unsqueeze(0)
+            ki = k[i].unsqueeze(0)
+            vi = v[i].unsqueeze(0)
+            state = ratio * state + paddle.matmul(ki.transpose([0, 2, 1]), vi)
+            out_i = paddle.matmul(qi, state)
+            output[i] = out_i.squeeze(0)
+            self.kv_states[i] = state
+        return output
+
+    def _compute_lightning_attention_core(self, q, k, v, ratio):
         batch_size, num_heads, seq_len, head_dim = q.shape
-        
-        # Number of blocks
         num_blocks = (seq_len + self.block_size - 1) // self.block_size
-        
-        # Prepare decay arrays
-        block_indices = paddle.arange(self.block_size).astype("float32")
-        q_decay = paddle.exp(-ratio * block_indices.reshape([-1, 1]))
-        k_decay = paddle.exp(-ratio * (self.block_size - block_indices.reshape([-1, 1])))
-        
-        # Create diagonal decay matrix
-        indices = block_indices[:, None] - block_indices[None, :]
-        s_indices = ratio * indices
-        s_indices = paddle.where(indices >= 0, -s_indices, paddle.full_like(s_indices, float("-inf")))
-        diag_decay = paddle.exp(s_indices)
-        
-        # Initialize KV state and output
-        kv = paddle.zeros([batch_size, num_heads, head_dim, head_dim], dtype="float32")
+        block_indices = paddle.arange(self.block_size).astype("float32").reshape([1, 1, -1, 1])
+        q_decay = paddle.exp(-ratio * block_indices)
+        k_decay = paddle.exp(-ratio * (self.block_size - block_indices))
+        indices = paddle.arange(self.block_size).astype("float32")
+        mask = indices[:, None] - indices[None, :]
+        diag_decay = paddle.exp(paddle.where(mask >= 0, -ratio * mask.unsqueeze(0), paddle.full_like(mask, float("-inf")).unsqueeze(0)))
+        kv_state = paddle.zeros([batch_size, num_heads, head_dim, head_dim], dtype="float32")
         output = paddle.empty_like(q, dtype=q.dtype)
-        
         for i in range(num_blocks):
-            si = i * self.block_size
-            ei = min(si + self.block_size, seq_len)
+            si, ei = i * self.block_size, min((i + 1) * self.block_size, seq_len)
             m = ei - si
-            
-            qi = q[:, :, si:ei].contiguous()
-            ki = k[:, :, si:ei].contiguous()
-            vi = v[:, :, si:ei].contiguous()
-            
-            # Non-diagonal part
-            qkv_none_diag = paddle.matmul(qi * q_decay[:, :m], kv.astype(qi.dtype)).astype("float32")
-            
-            # Diagonal part
+            qi, ki, vi = q[:, :, si:ei], k[:, :, si:ei], v[:, :, si:ei]
+            qkv_inter = paddle.matmul(qi * q_decay[:, :, :m], kv_state.astype(qi.dtype)).astype("float32")
             qk = paddle.matmul(qi, ki.transpose([0, 1, 3, 2])).astype("float32") * diag_decay[:, :, :m, :m]
-            qkv_diag = paddle.matmul(qk, vi.astype("float32"))
-            
-            # Block decay
+            qkv_intra = paddle.matmul(qk, vi.astype("float32"))
+            output[:, :, si:ei] = (qkv_inter + qkv_intra).astype(q.dtype)
             block_decay = paddle.exp(-ratio * m)
-            output[:, :, si:ei] = (qkv_none_diag + qkv_diag).astype(q.dtype)
-            kv = block_decay * kv + paddle.matmul(
-                (ki * k_decay[:, -m:]).transpose([0, 1, 3, 2]).astype(vi.dtype), vi
-            )
-        
-        self.kv_state = kv
-        return output
-
-    def _forward_with_cache(
-        self,
-        q: paddle.Tensor,
-        k: paddle.Tensor,
-        v: paddle.Tensor,
-        ratio: paddle.Tensor,
-    ):
-        """
-        Forward pass with KV cache (for continues generation)
-        """
-        batch_size, num_heads, seq_len, head_dim = q.shape
-        
-        # Get KV state
-        kv = self.kv_state
-        
-        output_list = []
-        for i in range(seq_len):
-            # Update KV state: kv = ratio * kv + k_i * v_i^T
-            kv = ratio * kv + paddle.einsum(
-                "... n d, ... n e -> ... d e",
-                k[:, :, i:i + 1],
-                v[:, :, i:i + 1],
-            )
-            # Compute output: q_i @ kv
-            qkv = paddle.einsum(
-                "... n e, ... e d -> ... n d",
-                q[:, :, i:i + 1],
-                kv.astype(q.dtype)
-            )
-            output_list.append(qkv)
-        
-        output = paddle.concat(output_list, axis=-2)
-        return output
+            kv_state = block_decay * kv_state + paddle.matmul((ki * k_decay[:, :, -m:]).transpose([0, 1, 3, 2]).astype(vi.dtype), vi)
+        return output, kv_state
 
 
 class MiniMaxM1MLP(nn.Layer):
-    """MiniMax-M1 MLP (shared expert)"""
+    """Shared expert MLP"""
 
     def __init__(self, fd_config: FDConfig, intermediate_size: int, prefix: str = ""):
         super().__init__()
-        
-        self.gate_proj = ColumnParallelLinear(
+        self.up_gate_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
-            prefix=f"{prefix}.gate_proj",
+            prefix=f"{prefix}.up_gate_proj",
             input_size=fd_config.model_config.hidden_size,
-            output_size=intermediate_size,
+            output_size=intermediate_size * 2,
             with_bias=False,
             activation=fd_config.model_config.hidden_act,
         )
-        
-        self.up_proj = ColumnParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.up_proj",
-            input_size=fd_config.model_config.hidden_size,
-            output_size=intermediate_size,
-            with_bias=False,
-        )
-        
         self.down_proj = RowParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.down_proj",
@@ -751,82 +488,50 @@ class MiniMaxM1MLP(nn.Layer):
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
         )
-        
-        self.act_fn = SiluAndMul(
-            fd_config=fd_config,
-            bias=None,
-            act_method=fd_config.model_config.hidden_act,
-        )
+        self.act_fn = SiluAndMul(fd_config=fd_config, bias=None, act_method=fd_config.model_config.hidden_act)
 
     def forward(self, x):
-        return self.down_proj(self.act_fn(self.gate_proj(x), self.up_proj(x)))
+        return self.down_proj(self.act_fn(self.up_gate_proj(x)))
 
 
 class MiniMaxM1SparseMoEBlock(nn.Layer):
-    """MiniMax-M1 Sparse MoE Block"""
+    """Sparse MoE Block"""
 
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = ""):
         super().__init__()
-        
-        self.hidden_dim = fd_config.model_config.hidden_size
-        self.ffn_dim = fd_config.model_config.intermediate_size
         self.num_experts = fd_config.model_config.num_local_experts
-        self.top_k = fd_config.model_config.num_experts_per_tok
-        
-        # Gate
         self.gate = ReplicatedLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.gate",
-            input_size=self.hidden_dim,
+            input_size=fd_config.model_config.hidden_size,
             output_size=self.num_experts,
             with_bias=False,
             skip_quant=True,
+            weight_dtype="float32",
         )
-        
-        # Experts (using FusedMoE from FastDeploy)
+        weight_key_map = {
+            "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
+            "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
+        }
         self.experts = FusedMoE(
             fd_config=fd_config,
             reduce_results=True,
             renormalize=False,
-            moe_intermediate_size=self.ffn_dim,
+            moe_intermediate_size=fd_config.model_config.intermediate_size,
             num_experts=self.num_experts,
-            top_k=self.top_k,
+            top_k=fd_config.model_config.num_experts_per_tok,
             topk_method=getattr(fd_config.model_config, "topk_method", "noaux_tc"),
             topk_group=getattr(fd_config.model_config, "topk_group", 1),
             n_group=getattr(fd_config.model_config, "n_group", 1),
             routed_scaling_factor=getattr(fd_config.model_config, "routed_scaling_factor", 1.0),
             layer_idx=layer_id,
-            weight_key_map={},
+            weight_key_map=weight_key_map,
         )
-        
-        # Jitter noise
-        self.jitter_noise = getattr(fd_config.model_config, "router_jitter_noise", 0.0)
 
-    def forward(self, hidden_states: paddle.Tensor):
-        """Forward pass through MoE"""
-        batch_size, seq_len, hidden_dim = hidden_states.shape
-        hidden_states = hidden_states.reshape([-1, hidden_dim])
-        
-        # Router
-        router_logits = self.gate(hidden_states)[0]
-        
-        if self.training and self.jitter_noise > 0:
-            hidden_states = hidden_states * paddle.uniform(
-                hidden_states.shape, min=1.0 - self.jitter_noise, max=1.0 + self.jitter_noise
-            )
-        
-        # Compute routing weights
-        routing_weights = paddle.nn.functional.softmax(router_logits, axis=-1)
-        routing_weights, selected_experts = paddle.topk(routing_weights, self.top_k, axis=-1)
-        routing_weights = routing_weights / routing_weights.sum(axis=-1, keepdim=True)
-        
-        # Process experts
-        final_hidden_states = self.experts(hidden_states, self.gate, None)
-        
-        final_hidden_states = final_hidden_states.reshape([batch_size, seq_len, hidden_dim])
-        
+    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
+        router_logits = self.gate(hidden_states)
+        final_hidden_states = self.experts(hidden_states, self.gate, forward_meta)
         return final_hidden_states, router_logits
 
 
-# Model registration metadata
 MiniMaxM1ForCausalLM.arch_name = "MiniMax-M1"
