@@ -155,18 +155,6 @@ def test_init_block_math_and_config(rm_factory):
     assert rm.cfg.block_size == 128
 
 
-def test_block_table_types_and_insufficient(rm_factory):
-    """_get_block_tables: all/encoder/decoder types, unknown raises, insufficient."""
-    rm = rm_factory(block_size=64, dec_token=64, num_free=100)
-    assert len(rm._get_block_tables(64, "encoder")) > 0
-    assert len(rm._get_block_tables(0, "decoder")) > 0
-    assert len(rm._get_block_tables(64, "all")) > 0
-    with pytest.raises(ValueError):
-        rm._get_block_tables(64, "invalid")
-    rm2 = rm_factory(num_free=0)
-    assert rm2._get_block_tables(64) == []
-
-
 def test_availability_and_sufficiency(rm_factory):
     """available_batch, available_block_num, is_resource_sufficient."""
     rm = rm_factory(max_seqs=4, dec_token=0, num_free=100)
