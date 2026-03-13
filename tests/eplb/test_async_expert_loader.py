@@ -12,15 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import contextlib
 import ctypes
 import json
-from unittest.mock import MagicMock, patch
+import logging
+import os
 
 import numpy as np
 import paddle
 import pytest
 
+import fastdeploy.eplb.async_expert_loader as _ael_mod
 from fastdeploy.config import EPLBConfig
 from fastdeploy.eplb.async_expert_loader import (
     AsyncEPLoader,
@@ -30,6 +31,95 @@ from fastdeploy.eplb.async_expert_loader import (
     load_tensor_from_shm_mem,
     save_tensor_to_shm_mem,
 )
+
+_logger = logging.getLogger("test_eplb")
+
+
+# -- Lightweight stubs (real objects, no MagicMock) --
+
+
+class _StubSafeFile:
+    """Safetensors file context-manager stub with real tensors."""
+
+    def __init__(self, tensors):
+        self._tensors = tensors
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def keys(self):
+        return list(self._tensors)
+
+    def get_tensor(self, name):
+        return self._tensors[name]
+
+
+class _CudaErr:
+    cudaSuccess = 0
+    cudaErrorInvalidValue = 1
+
+
+class _StubCudart:
+    """Cudart stub with minimal register/error interface."""
+
+    cudaError_t = _CudaErr
+
+    def __init__(self, ok=True):
+        self._ret = _CudaErr.cudaSuccess if ok else _CudaErr.cudaErrorInvalidValue
+
+    def cudaHostRegister(self, addr, size, flags):
+        return (self._ret,)
+
+    def cudaGetErrorString(self, err):
+        return (_CudaErr.cudaSuccess, b"err")
+
+
+class _StubLibc:
+    """Libc stub — only mmap is needed."""
+
+    def __init__(self, mmap_ret=-1):
+        self._ret = mmap_ret
+
+    def mmap(self, *a):
+        return self._ret
+
+
+class _StubPtr:
+    """Pointer stub for ctypes.cast result."""
+
+    contents = None
+
+
+class _DummyFileCtx:
+    """Minimal file object returned by builtins.open stub."""
+
+    def close(self):
+        pass
+
+
+class _StubConn:
+    """Multiprocessing Connection stub — records sent data."""
+
+    def __init__(self, messages=None):
+        self._msgs = list(messages or [])
+        self._i = 0
+        self.sent = []
+
+    def recv(self):
+        if self._i >= len(self._msgs):
+            raise KeyboardInterrupt
+        msg = self._msgs[self._i]
+        self._i += 1
+        return msg
+
+    def send(self, data):
+        self.sent.append(data)
+
+
+# -- Helpers --
 
 
 def _eplb_config(**overrides):
@@ -51,7 +141,7 @@ def _make_loader(safetensors=False, **kw):
         expert_per_rank=2,
         moe_layer_start_index=1,
         moe_quant_type="",
-        logger=MagicMock(),
+        logger=_logger,
     )
     defaults.update(kw)
     return AsyncEPLoader(**defaults)
@@ -141,42 +231,49 @@ def test_loader_init_and_reset():
     assert loader.cached_weights == []
 
 
-def test_load_experts_weight_paths():
+def test_load_experts_weight_paths(monkeypatch):
     """load_experts_weight_from_disk: bf16 path, safetensor path, failure."""
     loader = _make_loader(safetensors=False)
     loader.old_model_ep_rank_to_expert_id_list = np.array([[0, 1], [0, 1]])
     loader.new_model_ep_rank_to_expert_id_list = np.array([[0, 1], [2, 3]])
-    with patch.object(loader, "load_weight_bf16_from_disk", return_value=(True, "ok")):
-        ok, _ = loader.load_experts_weight_from_disk()
-        assert ok
+    monkeypatch.setattr(loader, "load_weight_bf16_from_disk", lambda *a: (True, "ok"))
+    ok, _ = loader.load_experts_weight_from_disk()
+    assert ok
     # safetensor path
     loader2 = _make_loader(safetensors=True)
     loader2.old_model_ep_rank_to_expert_id_list = np.array([[0, 1], [0, 1]])
     loader2.new_model_ep_rank_to_expert_id_list = np.array([[0, 1], [2, 3]])
-    with patch.object(loader2, "load_safetensor_fp8_from_disk", return_value=(True, "ok")):
-        assert loader2.load_experts_weight_from_disk()[0]
+    monkeypatch.setattr(loader2, "load_safetensor_fp8_from_disk", lambda *a: (True, "ok"))
+    assert loader2.load_experts_weight_from_disk()[0]
     # failure path
     loader3 = _make_loader()
     loader3.old_model_ep_rank_to_expert_id_list = np.array([[0, 1], [0, 1]])
     loader3.new_model_ep_rank_to_expert_id_list = np.array([[0, 1], [2, 3]])
-    with patch.object(loader3, "load_weight_bf16_from_disk", return_value=(False, "err")):
-        ok, msg = loader3.load_experts_weight_from_disk()
-        assert not ok
+    monkeypatch.setattr(loader3, "load_weight_bf16_from_disk", lambda *a: (False, "err"))
+    ok, msg = loader3.load_experts_weight_from_disk()
+    assert not ok
 
 
 def test_bf16_from_disk(tmp_path):
     """load_weight_bf16_from_disk: success + exception."""
-    loader = _make_loader(model_dir=str(tmp_path), expert_per_rank=8, moe_layer_start_index=3)
-    with patch("paddle.device.get_device", return_value="cpu"), patch("paddle.set_device"):
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(paddle.device, "get_device", lambda: "cpu")
+        mp.setattr(paddle, "set_device", lambda *a: None)
+        loader = _make_loader(model_dir=str(tmp_path), expert_per_rank=8, moe_layer_start_index=3)
         ok, _ = loader.load_weight_bf16_from_disk([(3, 0), (4, 1)])
         assert ok and len(loader.moe_file_names) == 4
-    loader2 = _make_loader(model_dir=str(tmp_path))
-    with patch("paddle.device.get_device", side_effect=RuntimeError("boom")):
+
+    def _boom():
+        raise RuntimeError("boom")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(paddle.device, "get_device", _boom)
+        loader2 = _make_loader(model_dir=str(tmp_path))
         ok, msg = loader2.load_weight_bf16_from_disk([(3, 0)])
         assert not ok and "boom" in msg
 
 
-def test_fp8_from_disk(tmp_path):
+def test_fp8_from_disk(tmp_path, monkeypatch):
     """load_safetensor_fp8_from_disk."""
     loader = _make_loader(safetensors=True, model_dir=str(tmp_path), expert_per_rank=8, moe_layer_start_index=3)
     fake_map = {}
@@ -186,134 +283,98 @@ def test_fp8_from_disk(tmp_path):
             n = f"ernie.layers.3.mlp.experts.0.{proj}.{quant}"
             fake_map[n] = str(tmp_path / "shard.safetensors")
             names.append(n)
-    mock_file = MagicMock()
-    mock_file.__enter__ = MagicMock(return_value=mock_file)
-    mock_file.__exit__ = MagicMock(return_value=False)
-    mock_file.keys.return_value = names
-    mock_file.get_tensor.return_value = paddle.ones([4], dtype="float32")
-    with (
-        patch("fastdeploy.eplb.async_expert_loader.load_ep_checkpoint", return_value=fake_map),
-        patch("safetensors.safe_open", return_value=mock_file),
-        patch("paddle.device.get_device", return_value="cpu"),
-        patch("paddle.set_device"),
-    ):
-        ok, _ = loader.load_safetensor_fp8_from_disk([(3, 0)])
-        assert ok and len(loader.cached_weights) == 4
+    tensors = {n: paddle.ones([4], dtype="float32") for n in names}
+    stub_file = _StubSafeFile(tensors)
+    monkeypatch.setattr(_ael_mod, "load_ep_checkpoint", lambda path: fake_map)
+    monkeypatch.setattr("safetensors.safe_open", lambda *a, **kw: stub_file)
+    monkeypatch.setattr(paddle.device, "get_device", lambda: "cpu")
+    monkeypatch.setattr(paddle, "set_device", lambda *a: None)
+    ok, _ = loader.load_safetensor_fp8_from_disk([(3, 0)])
+    assert ok and len(loader.cached_weights) == 4
 
 
 # -- create_mmap --
 
 
-def _mock_cudart(register_ok=True):
-    m = MagicMock()
-
-    class Err:
-        cudaSuccess = 0
-        cudaErrorInvalidValue = 1
-
-    m.cudaError_t = Err
-    ret = Err.cudaSuccess if register_ok else Err.cudaErrorInvalidValue
-    m.cudaHostRegister.return_value = (ret,)
-    m.cudaGetErrorString.return_value = (Err.cudaSuccess, b"err")
-    return m
-
-
 def test_create_mmap_errors():
     """create_mmap: mmap failure, cudart=None, cuda register failure."""
-    with (
-        patch("fastdeploy.eplb.async_expert_loader.cudart", _mock_cudart()),
-        patch("fastdeploy.eplb.async_expert_loader.libc") as ml,
-        patch("os.path.isfile", return_value=True),
-        patch("os.open", return_value=5),
-        patch("os.ftruncate"),
-    ):
-        ml.mmap.return_value = -1
+    # mmap failure
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(_ael_mod, "cudart", _StubCudart())
+        mp.setattr(_ael_mod, "libc", _StubLibc(mmap_ret=-1))
+        mp.setattr(os.path, "isfile", lambda p: True)
+        mp.setattr(os, "open", lambda *a: 5)
+        mp.setattr(os, "ftruncate", lambda *a: None)
         with pytest.raises(OSError):
             create_mmap(["m"], 0, 1, "u", _eplb_config())
     # cudart=None
-    with (
-        patch("fastdeploy.eplb.async_expert_loader.cudart", None),
-        patch("fastdeploy.eplb.async_expert_loader.libc") as ml,
-        patch("os.path.isfile", return_value=False),
-        patch("builtins.open", MagicMock()),
-        patch("os.open", return_value=5),
-        patch("os.ftruncate"),
-    ):
-        ml.mmap.return_value = 12345
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(_ael_mod, "cudart", None)
+        mp.setattr(_ael_mod, "libc", _StubLibc(mmap_ret=12345))
+        mp.setattr(os.path, "isfile", lambda p: False)
+        mp.setattr("builtins.open", lambda *a, **kw: _DummyFileCtx())
+        mp.setattr(os, "open", lambda *a: 5)
+        mp.setattr(os, "ftruncate", lambda *a: None)
         with pytest.raises(ImportError):
             create_mmap(["m"], 0, 1, "u", _eplb_config())
     # cuda register failure
-    with (
-        patch("fastdeploy.eplb.async_expert_loader.cudart", _mock_cudart(register_ok=False)),
-        patch("fastdeploy.eplb.async_expert_loader.libc") as ml,
-        patch("os.path.isfile", return_value=False),
-        patch("builtins.open", MagicMock()),
-        patch("os.open", return_value=5),
-        patch("os.ftruncate"),
-        patch("ctypes.cast"),
-        patch("ctypes.addressof", return_value=0x1000),
-    ):
-        ml.mmap.return_value = 12345
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(_ael_mod, "cudart", _StubCudart(ok=False))
+        mp.setattr(_ael_mod, "libc", _StubLibc(mmap_ret=12345))
+        mp.setattr(os.path, "isfile", lambda p: False)
+        mp.setattr("builtins.open", lambda *a, **kw: _DummyFileCtx())
+        mp.setattr(os, "open", lambda *a: 5)
+        mp.setattr(os, "ftruncate", lambda *a: None)
+        mp.setattr(ctypes, "cast", lambda ptr, typ: _StubPtr())
+        mp.setattr(ctypes, "addressof", lambda obj: 0x1000)
         with pytest.raises(RuntimeError):
             create_mmap(["m"], 0, 1, "u", _eplb_config())
 
 
 def test_create_mmap_success():
-    """create_mmap: success path + default shmem size."""
-    with (
-        patch("fastdeploy.eplb.async_expert_loader.cudart", _mock_cudart()),
-        patch("fastdeploy.eplb.async_expert_loader.libc") as ml,
-        patch("os.path.isfile", return_value=False),
-        patch("builtins.open", MagicMock()),
-        patch("os.open", return_value=5),
-        patch("os.ftruncate"),
-        patch("ctypes.cast"),
-        patch("ctypes.addressof", return_value=0x1000),
-    ):
-        ml.mmap.return_value = 12345
-        result = create_mmap(["m"], 0, 1, "u", _eplb_config(), MagicMock())
+    """create_mmap: success path."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(_ael_mod, "cudart", _StubCudart())
+        mp.setattr(_ael_mod, "libc", _StubLibc(mmap_ret=12345))
+        mp.setattr(os.path, "isfile", lambda p: False)
+        mp.setattr("builtins.open", lambda *a, **kw: _DummyFileCtx())
+        mp.setattr(os, "open", lambda *a: 5)
+        mp.setattr(os, "ftruncate", lambda *a: None)
+        mp.setattr(ctypes, "cast", lambda ptr, typ: _StubPtr())
+        mp.setattr(ctypes, "addressof", lambda obj: 0x1000)
+        result = create_mmap(["m"], 0, 1, "u", _eplb_config(), _logger)
         assert "m" in result
 
 
 # -- load_model_weights_process --
 
 
-def _run_process(disk_ok=True, disk_exc=False):
-    mg = MagicMock()
-    data = MagicMock()
-    mg.recv.side_effect = [
-        {
-            "old_model_ep_rank_to_expert_id_list": np.array([[0, 1]]),
-            "new_model_ep_rank_to_expert_id_list": np.array([[0, 1]]),
-        },
-        KeyboardInterrupt,
-    ]
-    patches = [
-        patch("setproctitle.setproctitle"),
-        patch("faulthandler.enable"),
-        patch("paddle.set_device"),
-        patch("fastdeploy.utils.get_logger", return_value=MagicMock()),
-    ]
-    if disk_exc:
-        patches.append(patch.object(AsyncEPLoader, "load_experts_weight_from_disk", side_effect=RuntimeError("boom")))
-    else:
-        patches.append(
-            patch.object(
-                AsyncEPLoader,
-                "load_experts_weight_from_disk",
-                return_value=(disk_ok, "ok" if disk_ok else "fail"),
-            )
+def _run_process(disk_ok=True):
+    mg = _StubConn(
+        [
+            {
+                "old_model_ep_rank_to_expert_id_list": np.array([[0, 1]]),
+                "new_model_ep_rank_to_expert_id_list": np.array([[0, 1]]),
+            }
+        ]
+    )
+    data = _StubConn()
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("setproctitle.setproctitle", lambda *a: None)
+        mp.setattr("faulthandler.enable", lambda *a: None)
+        mp.setattr(paddle, "set_device", lambda *a: None)
+        mp.setattr("fastdeploy.utils.get_logger", lambda *a, **kw: _logger)
+        mp.setattr(
+            AsyncEPLoader,
+            "load_experts_weight_from_disk",
+            lambda self: (disk_ok, "ok" if disk_ok else "fail"),
         )
-    if disk_ok and not disk_exc:
-        patches.append(
-            patch(
-                "fastdeploy.eplb.async_expert_loader.save_tensor_to_shm_mem",
-                return_value=[("w", 0, 4, [1], paddle.float32)],
+        if disk_ok:
+            mp.setattr(
+                _ael_mod,
+                "save_tensor_to_shm_mem",
+                lambda *a, **kw: [("w", 0, 4, [1], paddle.float32)],
             )
-        )
-    with contextlib.ExitStack() as stack:
-        for p in patches:
-            stack.enter_context(p)
         try:
             load_model_weights_process(0, "/fake", 8, 3, "", "uuid", _eplb_config(), data, mg)
         except KeyboardInterrupt:
@@ -324,8 +385,12 @@ def _run_process(disk_ok=True, disk_exc=False):
 def test_load_model_weights_process():
     """load_model_weights_process: success + failure paths."""
     data = _run_process(disk_ok=True)
-    data.send.assert_called_once()
-    assert data.send.call_args[0][0]["result"] is True
+    assert len(data.sent) == 1
+    assert data.sent[0]["result"] is True
     data2 = _run_process(disk_ok=False)
-    data2.send.assert_called_once()
-    assert data2.send.call_args[0][0]["result"] is False
+    assert len(data2.sent) == 1
+    assert data2.sent[0]["result"] is False
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
