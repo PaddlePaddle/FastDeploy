@@ -131,8 +131,11 @@ class MTPProposer(Proposer):
         self.model_inputs.init_share_inputs()
 
         if current_platform.is_cuda() or current_platform.is_maca():
-            self._real_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
-            self.output_token_num_event = paddle.device.cuda.Event()
+            self._target_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
+            self._draft_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
+
+            self._target_output_token_num_event = paddle.device.cuda.Event()
+            self._draft_output_token_num_event = paddle.device.cuda.Event()
 
         # CUDA Graph
         self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph
@@ -784,7 +787,7 @@ class MTPProposer(Proposer):
             use_v1_cache_scheduler,
         )
 
-        target_hidden_states = eagle_get_hidden_states(
+        target_hidden_states, output_token_num = eagle_get_hidden_states(
             full_hidden_states,
             self.model_inputs["seq_lens_this_time"],
             self.model_inputs["seq_lens_encoder"],
@@ -795,6 +798,8 @@ class MTPProposer(Proposer):
             self.target_model_inputs["seq_lens_encoder"],
             self.num_model_steps,
         )
+        self._target_output_token_num_host.copy_(output_token_num, False)
+        self._target_output_token_num_event.record()
 
         self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
@@ -911,8 +916,8 @@ class MTPProposer(Proposer):
                 # For speculative decoding
                 self.model_inputs["cu_seqlens_q_output"].copy_(cu_seqlens_q_output, False)
                 self.model_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
-                self._real_output_token_num_host.copy_(real_output_token_num, False)
-                self.output_token_num_event.record()
+                self._draft_output_token_num_host.copy_(real_output_token_num, False)
+                self._draft_output_token_num_event.record()
 
                 # Initialize forward meta data
                 self._initialize_forward_meta(
@@ -951,16 +956,19 @@ class MTPProposer(Proposer):
                 if self.num_model_steps > 1:
                     self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
 
+                self._target_output_token_num_event.synchronize()
+                real_num = int(self._target_output_token_num_host)
+                target_hidden_states = self.model_inputs["target_hidden_states"][:real_num]
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
-                    previous_hidden_states=self.model_inputs["target_hidden_states"],
+                    previous_hidden_states=target_hidden_states,
                     forward_meta=self.forward_meta,
                 )
                 if self.forward_meta.step_use_cudagraph:
                     model_output = model_output[: self.real_token_num]
 
-                self.output_token_num_event.synchronize()
-                real_num = int(self._real_output_token_num_host)
+                self._draft_output_token_num_event.synchronize()
+                real_num = int(self._draft_output_token_num_host)
                 real_batch_id_per_token_output = self.model_inputs["batch_id_per_token_output"][:real_num]
                 hidden_states = rebuild_padding(
                     model_output,
@@ -1038,7 +1046,7 @@ class MTPProposer(Proposer):
 
                 self._post_process(sampled_token_ids)
                 if substep != self.num_model_steps - 1:
-                    self._get_self_hidden_states(hidden_states)
+                    self._get_self_hidden_states_cuda(hidden_states)
             else:
                 if hasattr(self.model, "empty_input_forward") and not is_dummy_run:
                     self.model.empty_input_forward(forward_meta=self.forward_meta)
@@ -1153,18 +1161,29 @@ class MTPProposer(Proposer):
 
                 self._post_process(sampled_token_ids)
                 if substep != self.num_model_steps - 1:
-                    self._get_self_hidden_states(hidden_states)
+                    self._get_self_hidden_states_xpu(hidden_states)
             else:
                 if hasattr(self.model, "empty_input_forward") and not is_dummy_run:
                     self.model.empty_input_forward(self.forward_meta)
 
-    def _get_self_hidden_states(self, hidden_states):
+    def _get_self_hidden_states_xpu(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(
             hidden_states,
             self.model_inputs.last_seq_lens_this_time,
             self.model_inputs["seq_lens_this_time"],
             self.model_inputs["step_idx"],
         )
+        self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
+
+    def _get_self_hidden_states_cuda(self, hidden_states):
+        target_hidden_states, output_token_num = eagle_get_self_hidden_states(
+            hidden_states,
+            self.model_inputs.last_seq_lens_this_time,
+            self.model_inputs["seq_lens_this_time"],
+            self.model_inputs["step_idx"],
+        )
+        self._target_output_token_num_host.copy_(output_token_num, False)
+        self._target_output_token_num_event.record()
         self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
     def update_task_chunk_prefill(self, task):
