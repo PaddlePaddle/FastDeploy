@@ -35,7 +35,7 @@ from fastdeploy.eplb.async_expert_loader import (
 _logger = logging.getLogger("test_eplb")
 
 
-# -- Lightweight stubs (real objects, no MagicMock) --
+# -- Lightweight stubs (real objects, no mocking) --
 
 
 class _StubSafeFile:
@@ -147,8 +147,12 @@ def _make_loader(safetensors=False, **kw):
     return AsyncEPLoader(**defaults)
 
 
+_GC_GUARD: list = []  # prevents ctypes buffers from being garbage-collected
+
+
 def _shm_buffer(data_bytes):
     buf = (ctypes.c_byte * len(data_bytes))(*data_bytes)
+    _GC_GUARD.append(buf)
     return ctypes.cast(buf, ctypes.POINTER(ctypes.c_int8))
 
 
