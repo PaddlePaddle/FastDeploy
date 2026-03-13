@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import fcntl
+import os
 from multiprocessing.shared_memory import SharedMemory
 
 import numpy as np
@@ -114,3 +116,58 @@ class IPCSignal:
         if shared_memory_exists(self.shm.name):
             self.shm.close()
             self.shm.unlink()
+
+
+class IPCLock:
+    """A file-based inter-process lock using fcntl.flock.
+
+    Provides mutual exclusion between processes that may be spawned via
+    subprocess (not just fork/multiprocessing). Lock files are stored in
+    /dev/shm/ for performance, falling back to /tmp/.
+
+    Args:
+        name: Unique identifier for the lock.
+        suffix: Optional suffix appended to the name to avoid conflicts
+            when multiple engines are launched.
+        create: If True, creates the lock file; otherwise opens an
+            existing one.
+    """
+
+    def __init__(self, name: str, suffix: int = None, create: bool = True) -> None:
+        if suffix is not None:
+            name = f"{name}.{suffix}"
+
+        lock_dir = "/dev/shm" if os.path.isdir("/dev/shm") else "/tmp"
+        self._lock_path = os.path.join(lock_dir, f"fd_lock_{name}")
+
+        if create:
+            llm_logger.debug(f"creating ipc lock: {self._lock_path}")
+            # Use restrictive permissions to avoid other users acquiring the lock.
+            self._fd = os.open(self._lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        else:
+            llm_logger.debug(f"attaching ipc lock: {self._lock_path}")
+            try:
+                self._fd = os.open(self._lock_path, os.O_RDWR)
+            except FileNotFoundError as e:
+                llm_logger.error(
+                    f"Failed to attach IPC lock: {self._lock_path} does not exist. "
+                    "Ensure that the lock has been created (create=True) with the same "
+                    "name and suffix before attaching."
+                )
+                raise RuntimeError(f"IPC lock file not found: {self._lock_path}") from e
+
+    def acquire(self) -> None:
+        """Acquire the lock (blocking). Uses kernel-level flock for atomicity."""
+        fcntl.flock(self._fd, fcntl.LOCK_EX)
+
+    def release(self) -> None:
+        """Release the lock."""
+        fcntl.flock(self._fd, fcntl.LOCK_UN)
+
+    def clear(self) -> None:
+        """Close the file descriptor and remove the lock file."""
+        os.close(self._fd)
+        try:
+            os.unlink(self._lock_path)
+        except FileNotFoundError:
+            pass

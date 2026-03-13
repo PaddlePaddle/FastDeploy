@@ -14,12 +14,16 @@
 # limitations under the License.
 """
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
-from fastdeploy.config import FDConfig
 from fastdeploy.utils import spec_logger
 
 from .base import Proposer
+
+if TYPE_CHECKING:
+    from fastdeploy.config import FDConfig
 
 try:
     from arctic_inference.suffix_decoding import SuffixDecodingCache
@@ -34,7 +38,7 @@ class SuffixProposer(Proposer):
     Uses SuffixDecodingCache to generate draft tokens based on suffix tree matching.
     """
 
-    def __init__(self, fd_config: FDConfig):
+    def __init__(self, fd_config: "FDConfig"):
         super().__init__(fd_config)
 
         if SuffixDecodingCache is None:
