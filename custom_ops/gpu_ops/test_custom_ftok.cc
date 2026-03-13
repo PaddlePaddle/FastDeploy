@@ -16,19 +16,7 @@
 #include <cstdio>
 #include <set>
 #include <string>
-#include <sys/ipc.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-
-// Inline the function under test directly to avoid paddle dependencies.
-inline key_t custom_ftok(const char* path, int id) {
-  struct stat st;
-  if (stat(path, &st) < 0) {
-    return static_cast<key_t>(-1);
-  }
-  return static_cast<key_t>(((st.st_dev & 0xff) << 24) |
-                            ((st.st_ino & 0xff) << 16) | (id & 0xffff));
-}
+#include "custom_ftok.h"
 
 // Test 1: ids in [0, 65536) must produce unique keys for the same path.
 void test_unique_keys_for_same_path() {

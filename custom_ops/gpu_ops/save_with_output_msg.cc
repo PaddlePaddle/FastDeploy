@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "save_with_output_msg.h"
+#include "custom_ftok.h"
 
 void save_kernel(const paddle::Tensor& x,
                  const paddle::Tensor& not_need_stop,
