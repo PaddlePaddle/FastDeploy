@@ -20,7 +20,7 @@ import paddle
 from fastdeploy.model_executor.ops.gpu import eagle_get_self_hidden_states
 
 
-def computeOrderKernel(last_seq_lens_this_time, seq_lens_this_time, step_idx, src_map, output_token_num, bsz):
+def computeOrderKernel(last_seq_lens_this_time, seq_lens_this_time, step_idx, position_map, output_token_num, bsz):
     in_offset = 0
     out_offset = 0
     for i in range(bsz):
@@ -28,13 +28,13 @@ def computeOrderKernel(last_seq_lens_this_time, seq_lens_this_time, step_idx, sr
         cur_last_seq_lens_this_time = last_seq_lens_this_time[i]
         # 1. encoder
         if step_idx[i] == 1 and cur_seq_lens_this_time > 0:
+            position_map[in_offset] = out_offset
             in_offset += 1
-            src_map[out_offset] = in_offset - 1
             out_offset += 1
         # 2. decoder
         elif cur_seq_lens_this_time > 0:  # =1
+            position_map[in_offset + cur_last_seq_lens_this_time - 1] = out_offset
             in_offset += cur_last_seq_lens_this_time
-            src_map[out_offset] = in_offset - 1
             out_offset += 1
         # 3. stop
         else:
@@ -47,30 +47,30 @@ def computeOrderKernel(last_seq_lens_this_time, seq_lens_this_time, step_idx, sr
     output_token_num[0] = out_offset
 
 
-def rebuildSelfHiddenStatesKernel(input, src_map, output, dim_embed, elem_cnt):
-    for elem_id in range(elem_cnt):
-        output_token_idx = int(elem_id / dim_embed)
-        input_token_idx = src_map[output_token_idx]
-        offset = elem_id % dim_embed
-        output[output_token_idx][offset] = input[input_token_idx][offset]
+def rebuildSelfHiddenStatesKernel(input, position_map, out, dim_embed, elem_cnt):
+    for elem_idx in range(elem_cnt):
+        ori_token_idx = int(elem_idx / dim_embed)
+        token_idx = position_map[ori_token_idx]
+        if token_idx >= 0:
+            offset = elem_idx % dim_embed
+            out[token_idx][offset] = input[ori_token_idx][offset]
 
 
 def eagle_get_self_hidden_states_ref(input, last_seq_lens_this_time, seq_lens_this_time, step_idx):
     input_token_num = input.shape[0]
     dim_embed = input.shape[1]
     bsz = seq_lens_this_time.shape[0]
-    src_map = paddle.full([input_token_num], -1, seq_lens_this_time.dtype)
+    position_map = paddle.full([input_token_num], -1, seq_lens_this_time.dtype)
     output_token_num = paddle.full([1], 0, seq_lens_this_time.dtype)
 
-    computeOrderKernel(last_seq_lens_this_time, seq_lens_this_time, step_idx, src_map, output_token_num, bsz)
+    computeOrderKernel(last_seq_lens_this_time, seq_lens_this_time, step_idx, position_map, output_token_num, bsz)
 
-    output_token_num_cpu = output_token_num[0]
-    out = paddle.full([output_token_num_cpu, dim_embed], -1, input.dtype)
+    out = paddle.empty([input_token_num, dim_embed], input.dtype)
 
-    elem_cnt = output_token_num_cpu * dim_embed
-    rebuildSelfHiddenStatesKernel(input, src_map, out, dim_embed, elem_cnt)
+    elem_cnt = input_token_num * dim_embed
+    rebuildSelfHiddenStatesKernel(input, position_map, out, dim_embed, elem_cnt)
 
-    return out
+    return out, output_token_num
 
 
 class TestEagleGetSelfHiddenStates(unittest.TestCase):
@@ -91,19 +91,20 @@ class TestEagleGetSelfHiddenStates(unittest.TestCase):
 
         input = np.random.randint(0, 10, (input_token_num, dim_embed), dtype=np.int32)
         input_tensor = paddle.to_tensor(input, dtype=paddle.float16)
-        out = eagle_get_self_hidden_states(
+        out, output_token_num = eagle_get_self_hidden_states(
             input_tensor,
             last_seq_lens_this_time_tensor,
             seq_lens_this_time_tensor,
             step_idx_tensor,
         )
-        out_ref = eagle_get_self_hidden_states_ref(
+        out_ref, output_token_num_ref = eagle_get_self_hidden_states_ref(
             input_tensor,
             last_seq_lens_this_time_tensor,
             seq_lens_this_time_tensor,
             step_idx_tensor,
         )
-        np.testing.assert_allclose(out.numpy(), out_ref.numpy())
+        actual_num = int(output_token_num)
+        np.testing.assert_allclose(out[:actual_num].numpy(), out_ref[:actual_num].numpy())
 
 
 if __name__ == "__main__":
