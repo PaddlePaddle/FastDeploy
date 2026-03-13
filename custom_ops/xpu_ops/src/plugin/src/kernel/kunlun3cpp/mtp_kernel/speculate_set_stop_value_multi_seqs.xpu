@@ -4,8 +4,7 @@
 #include "xpu/kernel/xtdk_math.h"
 #include "xpu/kernel/xtdk_simd.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
                                                     int64_t *accept_tokens,
@@ -99,5 +98,5 @@ __global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
     }
   }
 }
-}  // namespace plugin
-}  // namespace xpu3
+
+}  // namespace fd_xpu3

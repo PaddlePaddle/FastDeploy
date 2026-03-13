@@ -20,8 +20,7 @@
 #include "xpu/kernel/cluster_primitive.h"
 #include "xpu/kernel/xtdk_io.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __global__ void speculate_clear_accept_nums(int* accept_num,
                                             const int* seq_lens_decoder,
@@ -40,5 +39,4 @@ __global__ void speculate_clear_accept_nums(int* accept_num,
   }
 }
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

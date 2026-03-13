@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __attribute__((global)) void update_inputs_v1(bool* not_need_stop,
                                               int* seq_lens_this_time,
@@ -39,15 +38,12 @@ __attribute__((global)) void update_inputs_v1(bool* not_need_stop,
                                               const int block_size,
                                               bool prefill_one_step_stop);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         bool* not_need_stop,
                         int* seq_lens_this_time,
                         int* seq_lens_encoder,
@@ -65,8 +61,8 @@ static int xpu3_wrapper(Context* ctx,
                         const int input_ids_stride,
                         const int block_num_per_seq,
                         const int block_size) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  auto update_inputs_v1 = xpu3::plugin::update_inputs_v1;
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  auto update_inputs_v1 = fd_xpu3::update_inputs_v1;
   bool prefill_one_step_stop = false;
   if (const char* env_p = std::getenv("PREFILL_NODE_ONE_STEP_STOP_V1")) {
     if (env_p[0] == '1') {
@@ -97,7 +93,7 @@ static int xpu3_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-int update_inputs_v1(Context* ctx,
+int update_inputs_v1(api::Context* ctx,
                      bool* not_need_stop,
                      int* seq_lens_this_time,
                      int* seq_lens_encoder,
@@ -131,7 +127,7 @@ int update_inputs_v1(Context* ctx,
   if (ctx->dev().type() == api::kCPU) {
     assert(false);
   }
-  if (ctx->dev().type() == api::kXPU2 || ctx->dev().type() == api::kXPU3) {
+  if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper(ctx,
                         not_need_stop,
                         seq_lens_this_time,
@@ -155,6 +151,4 @@ int update_inputs_v1(Context* ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

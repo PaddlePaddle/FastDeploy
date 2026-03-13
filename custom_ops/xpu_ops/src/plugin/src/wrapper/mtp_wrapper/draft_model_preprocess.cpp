@@ -17,8 +17,7 @@
 #include "xpu/refactor/impl_public/wrapper_check.h"
 #include "xpu/xdnn.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 __attribute__((global)) void draft_model_preprocess(
     int64_t* draft_tokens,
     int64_t* input_ids,
@@ -50,16 +49,9 @@ __attribute__((global)) void draft_model_preprocess(
     const bool truncate_first_token,
     const bool splitwise_prefill,
     const bool kvcache_scheduler_v1);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace xpu2 {
-namespace plugin {}  // namespace plugin
-}  // namespace xpu2
-
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 static int cpu_wrapper(api::Context* ctx,
@@ -237,41 +229,40 @@ static int xpu3_wrapper(api::Context* ctx,
                         const bool truncate_first_token,
                         const bool splitwise_prefill,
                         const bool kvcache_scheduler_v1) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
 
   // NOTE: Don't change 16 to 64, because kernel use gsm
-  int32_t ret_xre =
-      xpu3::plugin::draft_model_preprocess<<<1, 64, ctx->xpu_stream>>>(
-          reinterpret_cast<XPU_INT64*>(draft_tokens),
-          reinterpret_cast<XPU_INT64*>(input_ids),
-          stop_flags,
-          seq_lens_this_time,
-          seq_lens_encoder,
-          seq_lens_decoder,
-          reinterpret_cast<XPU_INT64*>(step_idx),
-          not_need_stop,
-          is_block_step,
-          batch_drop,
-          reinterpret_cast<XPU_INT64*>(pre_ids),
-          reinterpret_cast<const XPU_INT64*>(accept_tokens),
-          accept_num,
-          base_model_seq_lens_this_time,
-          base_model_seq_lens_encoder,
-          base_model_seq_lens_decoder,
-          reinterpret_cast<const XPU_INT64*>(base_model_step_idx),
-          base_model_stop_flags,
-          base_model_is_block_step,
-          reinterpret_cast<XPU_INT64*>(base_model_draft_tokens),
-          bsz,
-          num_model_step,
-          accept_tokens_len,
-          draft_tokens_len,
-          input_ids_len,
-          base_model_draft_tokens_len,
-          pre_ids_len,
-          truncate_first_token,
-          splitwise_prefill,
-          kvcache_scheduler_v1);
+  int32_t ret_xre = fd_xpu3::draft_model_preprocess<<<1, 64, ctx->xpu_stream>>>(
+      reinterpret_cast<XPU_INT64*>(draft_tokens),
+      reinterpret_cast<XPU_INT64*>(input_ids),
+      stop_flags,
+      seq_lens_this_time,
+      seq_lens_encoder,
+      seq_lens_decoder,
+      reinterpret_cast<XPU_INT64*>(step_idx),
+      not_need_stop,
+      is_block_step,
+      batch_drop,
+      reinterpret_cast<XPU_INT64*>(pre_ids),
+      reinterpret_cast<const XPU_INT64*>(accept_tokens),
+      accept_num,
+      base_model_seq_lens_this_time,
+      base_model_seq_lens_encoder,
+      base_model_seq_lens_decoder,
+      reinterpret_cast<const XPU_INT64*>(base_model_step_idx),
+      base_model_stop_flags,
+      base_model_is_block_step,
+      reinterpret_cast<XPU_INT64*>(base_model_draft_tokens),
+      bsz,
+      num_model_step,
+      accept_tokens_len,
+      draft_tokens_len,
+      input_ids_len,
+      base_model_draft_tokens_len,
+      pre_ids_len,
+      truncate_first_token,
+      splitwise_prefill,
+      kvcache_scheduler_v1);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
@@ -416,6 +407,4 @@ int draft_model_preprocess(api::Context* ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

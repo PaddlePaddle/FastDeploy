@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __attribute__((global)) void free_and_dispatch_block(
     bool *stop_flags,
@@ -42,15 +41,12 @@ __attribute__((global)) void free_and_dispatch_block(
     const int block_num_per_seq,
     const int max_decoder_block_num);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        bool *stop_flags,
                        int *seq_lens_this_time,
                        int *seq_lens_decoder,
@@ -171,7 +167,7 @@ static int cpu_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context *ctx,
+static int xpu3_wrapper(api::Context *ctx,
                         bool *stop_flags,
                         int *seq_lens_this_time,
                         int *seq_lens_decoder,
@@ -192,8 +188,8 @@ static int xpu3_wrapper(Context *ctx,
                         const int block_size,
                         const int block_num_per_seq,
                         const int max_decoder_block_num) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  auto free_and_dispatch_block_kernel = xpu3::plugin::free_and_dispatch_block;
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  auto free_and_dispatch_block_kernel = fd_xpu3::free_and_dispatch_block;
   int32_t ret_xre =
       free_and_dispatch_block_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           stop_flags,
@@ -220,7 +216,7 @@ static int xpu3_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-int free_and_dispatch_block(Context *ctx,
+int free_and_dispatch_block(api::Context *ctx,
                             bool *stop_flags,
                             int *seq_lens_this_time,
                             int *seq_lens_decoder,
@@ -285,7 +281,7 @@ int free_and_dispatch_block(Context *ctx,
                        block_num_per_seq,
                        max_decoder_block_num);
   }
-  if (ctx->dev().type() == api::kXPU2 || ctx->dev().type() == api::kXPU3) {
+  if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper(ctx,
                         stop_flags,
                         seq_lens_this_time,
@@ -312,6 +308,4 @@ int free_and_dispatch_block(Context *ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

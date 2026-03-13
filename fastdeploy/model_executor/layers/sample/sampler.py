@@ -50,6 +50,9 @@ from fastdeploy.reasoning import ReasoningParser
 from fastdeploy.spec_decode import SpecMethod, VerifyStrategy
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import build_sampling_params
+
 
 def top_p_normalize_probs_paddle(
     probs: paddle.Tensor,
@@ -772,6 +775,8 @@ class SpeculativeSampler(nn.Layer):
         sampling_metadata: SamplingMetadata,
         max_model_len: int,
         share_inputs: List[paddle.Tensor],
+        token_num_output_cpu: int,
+        increment_value: int,
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
     ) -> SamplerOutput:
@@ -806,12 +811,14 @@ class SpeculativeSampler(nn.Layer):
 
         if self.verify_strategy == VerifyStrategy.TARGET_MATCH:
             # Only TARGET_MATCH needs stochastic sampling
-            top_p, top_k, topp_seed = padding_sampling_params(
+            top_p, top_k, topp_seed = build_sampling_params(
                 sampling_metadata.top_p,
                 sampling_metadata.top_k,
                 sampling_metadata.seed,
                 share_inputs["seq_lens_this_time"],
-                share_inputs["seq_lens_encoder"],
+                share_inputs["cu_seqlens_q_output"],
+                token_num_output_cpu,
+                increment_value,
             )
             _, target_tokens = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, topp_seed=topp_seed)
         elif self.verify_strategy == VerifyStrategy.GREEDY:
@@ -922,6 +929,8 @@ class SpeculativeSampler(nn.Layer):
         sampling_metadata: SamplingMetadata,
         max_model_len: int,
         share_inputs: List[paddle.Tensor],
+        token_num_output_cpu: int,
+        increment_value: int,
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
     ) -> SamplerOutput:
@@ -1001,6 +1010,8 @@ class SpeculativeSampler(nn.Layer):
                 sampling_metadata,
                 max_model_len,
                 share_inputs,
+                token_num_output_cpu,
+                increment_value,
                 accept_all_drafts,
                 reject_all_drafts,
             )

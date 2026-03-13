@@ -15,8 +15,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 __attribute__((global)) void ComputeOrderKernel(
     const int* seq_lens_this_time,
     const int* seq_lens_encoder,
@@ -28,15 +27,12 @@ __attribute__((global)) void ComputeOrderKernel(
     const int bsz,
     const int actual_draft_token_num,
     const int input_token_num);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        const int* seq_lens_this_time,
                        const int* seq_lens_encoder,
                        const int* base_model_seq_lens_this_time,
@@ -97,7 +93,7 @@ static int cpu_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         const int* seq_lens_this_time,
                         const int* seq_lens_encoder,
                         const int* base_model_seq_lens_this_time,
@@ -108,7 +104,7 @@ static int xpu3_wrapper(Context* ctx,
                         const int bsz,
                         const int actual_draft_token_num,
                         const int input_token_num) {
-  int32_t ret_xre = xpu3::plugin::ComputeOrderKernel<<<1, 1, ctx->xpu_stream>>>(
+  int32_t ret_xre = fd_xpu3::ComputeOrderKernel<<<1, 1, ctx->xpu_stream>>>(
       seq_lens_this_time,
       seq_lens_encoder,
       base_model_seq_lens_this_time,
@@ -123,7 +119,7 @@ static int xpu3_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-int compute_order(Context* ctx,
+int compute_order(api::Context* ctx,
                   const int* seq_lens_this_time,
                   const int* seq_lens_encoder,
                   const int* base_model_seq_lens_this_time,
@@ -187,6 +183,4 @@ int compute_order(Context* ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

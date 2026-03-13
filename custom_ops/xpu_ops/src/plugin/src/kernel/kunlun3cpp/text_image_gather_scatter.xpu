@@ -3,8 +3,7 @@
 #include "xpu/kernel/cluster_primitive.h"
 #include "xpu/kernel/xtdk_io.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 template <typename T>
 static __device__ inline void text_image_gather(
@@ -215,5 +214,4 @@ __global__ void text_image_gather_scatter(T* input,
 
 _XPU_DEF_TEXT_IMAGE_GATHER_SCATTER(bfloat16);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

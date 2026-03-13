@@ -72,7 +72,7 @@ std::vector<paddle::Tensor> AdjustBatchKernel(
 
   auto out = paddle::empty({token_num, dim}, x.type(), x.place());
   if (token_num > 0) {
-    int r = baidu::xpu::api::plugin::eb_adjust_batch<XPUType, XPUType>(
+    int r = fastdeploy::plugin::eb_adjust_batch<XPUType, XPUType>(
         ctx,
         reinterpret_cast<const XPUType *>(x.data<data_t>()),
         reinterpret_cast<XPUType *>(out.data<data_t>()),
