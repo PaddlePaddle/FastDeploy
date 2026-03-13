@@ -26,6 +26,7 @@ from paddle.distributed.fleet.meta_parallel import (
     ColumnParallelLinear,
     RowParallelLinear,
 )
+from paddle.distributed.fleet.utils import recompute
 from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.model_executor.layers.utils import divide, get_tensor
@@ -643,12 +644,17 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         else:
             cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
 
+        vit_num_recompute_layers = getattr(self.config, "vit_num_recompute_layers", self.config.depth)
+
         for idx, blk in enumerate(self.blocks):
-            hidden_states = blk(
-                hidden_states,
-                cu_seqlens=cu_seqlens,
-                rotary_pos_emb=rotary_pos_emb,
-            )
+            if self.config.recompute and self.training and idx < vit_num_recompute_layers:
+                hidden_states = recompute(blk, hidden_states, cu_seqlens, rotary_pos_emb)
+            else:
+                hidden_states = blk(
+                    hidden_states,
+                    cu_seqlens=cu_seqlens,
+                    rotary_pos_emb=rotary_pos_emb,
+                )
 
         # ret = self.merger(hidden_states)
         # ret = hidden_states

@@ -17,8 +17,6 @@ import sys
 import unittest
 from unittest.mock import MagicMock
 
-import fastdeploy  # noqa: F401
-
 mock_torch = MagicMock()
 mock_xgrammar = MagicMock()
 
