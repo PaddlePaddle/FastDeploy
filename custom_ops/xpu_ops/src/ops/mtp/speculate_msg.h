@@ -14,14 +14,11 @@
 
 #pragma once
 
-#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/stat.h>
 #include <sys/types.h>
-#include "../custom_ftok.h"
 #include "paddle/extension.h"
 
 #define MAX_BSZ 256
