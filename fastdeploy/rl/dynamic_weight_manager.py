@@ -205,8 +205,8 @@ class DynamicWeightManager:
         """Update using IPC snapshot strategy for elastic recovery.
 
         Loading priority:
-          1. Chunked part files  (model_state.tpR{id}.part{N}.pdparams)
-          2. Single full file    (model_state.tpR{id}.pdparams)
+          1. Chunked part files  (model_state.tp{rank}{id}.part{N}.pdparams)
+          2. Single full file    (model_state.tp{rank}{id}.pdparams)
           3. Shared fallback dir (/shared_ipc_meta/...)
         """
         model_dir = self.fd_config.model_config.model
