@@ -17,11 +17,9 @@
 namespace fastdeploy {
 
 // Tile configs for Gate GEMM (N=256, K=7168)
-// bf16/fp16: 128x64x64 — 4 N-tiles for N=256, requires Cooperative
-// (M_tile>=128)
-//   TileShape<64,32,64> would be ideal but Cooperative requires M>=128
-//   and non-Cooperative doesn't support StreamKScheduler.
-using TileShape_bf16 = cute::Shape<cute::_128, cute::_64, cute::_64>;
+// bf16/fp16: 128x32x64 — 8 N-tiles for N=256, requires Cooperative
+// (M_tile>=128). Smaller N-tile doubles CTA count vs 128x64x64.
+using TileShape_bf16 = cute::Shape<cute::_128, cute::_32, cute::_64>;
 // fp32: 128x128x64 — smaller N-tile due to larger element size
 using TileShape_fp32 = cute::Shape<cute::_128, cute::_128, cute::_64>;
 using ClusterShape_1x1x1 = cute::Shape<cute::_1, cute::_1, cute::_1>;
