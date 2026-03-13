@@ -70,7 +70,7 @@ void SpeculateStepSchedule(
       paddle::full({1}, 0, paddle::DataType::INT32, stop_flags.place());
   auto step_bs_list =
       paddle::full({bsz}, 0, paddle::DataType::INT32, stop_flags.place());
-  int r = baidu::xpu::api::plugin::speculate_free_and_reschedule(
+  int r = fastdeploy::plugin::speculate_free_and_reschedule(
       ctx,
       const_cast<bool *>(stop_flags.data<bool>()),
       const_cast<int *>(seq_lens_this_time.data<int>()),

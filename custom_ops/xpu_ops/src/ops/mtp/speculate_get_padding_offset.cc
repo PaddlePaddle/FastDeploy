@@ -39,16 +39,16 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
   auto cpu_token_num = token_num.copy_to(paddle::CPUPlace(), false);
 
   const int token_num_data = cpu_token_num.data<int64_t>()[0];
-  auto x_remove_padding = paddle::empty(
-      {token_num_data}, paddle::DataType::INT64, input_ids.place());
-  auto padding_offset = paddle::empty(
-      {token_num_data}, paddle::DataType::INT32, input_ids.place());
-  auto batch_id_per_token = paddle::empty(
-      {token_num_data}, paddle::DataType::INT32, input_ids.place());
+  auto x_remove_padding = paddle::full(
+      {token_num_data}, 0, paddle::DataType::INT64, input_ids.place());
+  auto padding_offset = paddle::full(
+      {token_num_data}, 0, paddle::DataType::INT32, input_ids.place());
+  auto batch_id_per_token = paddle::full(
+      {token_num_data}, 0, paddle::DataType::INT32, input_ids.place());
   auto cu_seqlens_q =
-      paddle::empty({bsz + 1}, paddle::DataType::INT32, input_ids.place());
+      paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
   auto cu_seqlens_k =
-      paddle::empty({bsz + 1}, paddle::DataType::INT32, input_ids.place());
+      paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
 
   PD_CHECK(input_ids.is_contiguous(), "Input ids tensor must be contiguous");
   PD_CHECK(draft_tokens.is_contiguous(),
@@ -58,7 +58,7 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
   PD_CHECK(seq_len.is_contiguous(), "Seq lens tensor must be contiguous");
 
   if (token_num_data > 0) {
-    int r = baidu::xpu::api::plugin::speculate_get_padding_offset(
+    int r = fastdeploy::plugin::speculate_get_padding_offset(
         xpu_ctx->x_context(),
         batch_id_per_token.data<int>(),
         cum_offsets_out.data<int>(),
@@ -70,7 +70,7 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
         bsz);
     PD_CHECK(r == 0, "XPU speculate_get_padding_offset failed");
 
-    r = baidu::xpu::api::plugin::speculate_remove_padding<int64_t>(
+    r = fastdeploy::plugin::speculate_remove_padding<int64_t>(
         xpu_ctx->x_context(),
         x_remove_padding.data<int64_t>(),
         input_ids.data<int64_t>(),

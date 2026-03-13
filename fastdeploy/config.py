@@ -643,6 +643,8 @@ class ParallelConfig:
         self.disable_sequence_parallel_moe: bool = False
         # shutdown comm group if worker idle
         self.shutdown_comm_group_if_worker_idle: bool = None
+        # ep_prefill_use_worst_num_tokens
+        self.ep_prefill_use_worst_num_tokens: bool = False
 
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
@@ -1991,9 +1993,6 @@ class FDConfig:
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
         self.cache_config.postprocess(self.get_max_chunk_tokens(), self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            self.cache_config.enable_prefix_caching = False
-        if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
-            # TODO(gongshaotian): R3 support prefix caching
             self.cache_config.enable_prefix_caching = False
         if (
             self.structured_outputs_config is not None

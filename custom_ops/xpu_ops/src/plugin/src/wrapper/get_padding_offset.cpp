@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __attribute__((global)) void get_padding_offset(int *padding_offset,
                                                 int *cum_offsets_out,
@@ -35,12 +34,9 @@ __attribute__((global)) void remove_padding(int64_t *x_remove_padding,
                                             const int sequence_length,
                                             const int bs);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 static int get_padding_offset_cpu(int *padding_offset,
@@ -80,7 +76,7 @@ static int remove_padding_cpu(int64_t *x_remove_padding,
   return api::SUCCESS;
 }
 
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        int *padding_offset,
                        int *cum_offsets_out,
                        int *cu_seqlens_q,
@@ -104,7 +100,7 @@ static int cpu_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context *ctx,
+static int xpu3_wrapper(api::Context *ctx,
                         int *padding_offset,
                         int *cum_offsets_out,
                         int *cu_seqlens_q,
@@ -115,9 +111,9 @@ static int xpu3_wrapper(Context *ctx,
                         const int *seq_lens,
                         const int max_seq_len,
                         const int bs) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  auto get_padding_offset = xpu3::plugin::get_padding_offset;
-  auto remove_padding = xpu3::plugin::remove_padding;
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  auto get_padding_offset = fd_xpu3::get_padding_offset;
+  auto remove_padding = fd_xpu3::remove_padding;
   int32_t ret_xre =
       get_padding_offset<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           padding_offset,
@@ -140,7 +136,7 @@ static int xpu3_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-int get_padding_offset(Context *ctx,
+int get_padding_offset(api::Context *ctx,
                        int *padding_offset,
                        int *cum_offsets_out,
                        int *cu_seqlens_q,
@@ -171,7 +167,7 @@ int get_padding_offset(Context *ctx,
                        max_seq_len,
                        bs);
   }
-  if (ctx->dev().type() == api::kXPU2 || ctx->dev().type() == api::kXPU3) {
+  if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper(ctx,
                         padding_offset,
                         cum_offsets_out,
@@ -188,6 +184,4 @@ int get_padding_offset(Context *ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

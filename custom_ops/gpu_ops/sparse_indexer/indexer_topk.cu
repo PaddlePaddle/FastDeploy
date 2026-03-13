@@ -75,7 +75,7 @@ void RadixTopkRaggedTransform(
   unsigned int num_rows = input.dims()[0];
   unsigned int max_len = input.dims()[1];
 
-  static cudaStream_t stream = input.stream();
+  cudaStream_t stream = input.stream();
   cudaError_t status;
   auto input_dtype = input.dtype();
 
@@ -129,6 +129,8 @@ void RadixTopkRaggedTransform(
                                                      max_len,
                                                      row_states_ptr,
                                                      stream);
+  } else {
+    PD_THROW("input_dtype should be one of [bf16, float]");
   }
 }
 

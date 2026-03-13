@@ -15,23 +15,19 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 __attribute__((global)) void speculate_get_seq_lens_output(
     int* seq_lens_output,
     const int* seq_lens_this_time,
     const int* seq_lens_encoder,
     const int* seq_lens_decoder,
     const int real_bsz);
-}
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        int* seq_lens_output,
                        const int* seq_lens_this_time,
                        const int* seq_lens_encoder,
@@ -48,17 +44,17 @@ static int cpu_wrapper(Context* ctx,
       seq_lens_output[bid] = seq_lens_this_time[bid];
     }
   }
-  return SUCCESS;
+  return api::SUCCESS;
 }
 
-static int xpu2or3_wrapper(Context* ctx,
-                           int* seq_lens_output,
-                           const int* seq_lens_this_time,
-                           const int* seq_lens_encoder,
-                           const int* seq_lens_decoder,
-                           const int real_bsz) {
-  ctx_guard RAII_GUARD(ctx);
-  int32_t ret_xre = xpu3::plugin::
+static int xpu3_wrapper(api::Context* ctx,
+                        int* seq_lens_output,
+                        const int* seq_lens_this_time,
+                        const int* seq_lens_encoder,
+                        const int* seq_lens_decoder,
+                        const int real_bsz) {
+  api::ctx_guard RAII_GUARD(ctx);
+  int32_t ret_xre = fd_xpu3::
       speculate_get_seq_lens_output<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           seq_lens_output,
           seq_lens_this_time,
@@ -70,7 +66,7 @@ static int xpu2or3_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-int speculate_get_seq_lens_output(Context* ctx,
+int speculate_get_seq_lens_output(api::Context* ctx,
                                   int* seq_lens_output,
                                   const int* seq_lens_this_time,
                                   const int* seq_lens_encoder,
@@ -95,18 +91,16 @@ int speculate_get_seq_lens_output(Context* ctx,
                        real_bsz);
   }
   if (ctx->dev().type() == api::kXPU3) {
-    return xpu2or3_wrapper(ctx,
-                           seq_lens_output,
-                           seq_lens_this_time,
-                           seq_lens_encoder,
-                           seq_lens_decoder,
-                           real_bsz);
+    return xpu3_wrapper(ctx,
+                        seq_lens_output,
+                        seq_lens_this_time,
+                        seq_lens_encoder,
+                        seq_lens_decoder,
+                        real_bsz);
   }
 
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

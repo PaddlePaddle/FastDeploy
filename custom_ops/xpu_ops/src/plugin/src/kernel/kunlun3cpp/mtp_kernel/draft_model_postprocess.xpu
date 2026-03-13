@@ -4,8 +4,7 @@
 #include "xpu/kernel/cluster_primitive_template.h"
 #include "xpu/kernel/cluster_simd.h"
 #include "xpu/kernel/xtdk_io.h"
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 static inline __device__ int v_reduce(int32x16_t v) {
   auto v0 = vsrlp_int32x16(256, v);
@@ -185,5 +184,4 @@ __global__ void draft_model_postprocess(const int64_t* base_model_draft_tokens,
     sync_cluster();
   }
 }
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
