@@ -27,6 +27,9 @@ from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
     paddle.enable_compat(scope={"flash_mla"})
+    import flash_mla
+    from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
+
 
 from fastdeploy.model_executor.layers.attention.ops import (
     get_block_shape_and_split_kv_block,
@@ -339,41 +342,14 @@ class DSAAttentionBackend(AttentionBackend):
 
         latent_cache = forward_meta.caches[2 * layer.layer_id] if hasattr(forward_meta, "caches") else None
 
-        if current_platform.is_cuda():
-            import flash_mla
-
-            from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
+        metadata.slot_mapping = compute_slot_mapping(
+            forward_meta.block_tables,
+            forward_meta.position_ids,
+            forward_meta.batch_id_per_token,
+            self.block_size,
+        )
 
         if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
-
-            # def calc_kv_scales(self, q: paddle.Tensor, kv_c_normed: paddle.Tensor, k_pe: paddle.Tensor) -> None:
-            #     """Optional scale calculation for MLA inputs.
-
-            #     Mirrors Attention.calc_kv_scales. Not all MLA backends require this
-            #     """
-            #     # Use safe defaults if ranges are not present
-            #     q_range = paddle.tensor(200.0)
-            #     k_range = paddle.tensor(200.0)
-            #     v_range = paddle.tensor(100.0)
-
-            #     self._q_scale.copy_(paddle.abs(q).max() / q_range)
-
-            #     kv_abs_max = paddle.abs(kv_c_normed).max()
-            #     self._k_scale.copy_(kv_abs_max / k_range)
-            #     self._v_scale.copy_(kv_abs_max / v_range)
-            #     self._q_scale_float = self._q_scale.item()
-            #     self._k_scale_float = self._k_scale.item()
-            #     self._v_scale_float = self._v_scale.item()
-            #     self.calculate_kv_scales = False
-
-            metadata.slot_mapping = compute_slot_mapping(
-                forward_meta.block_tables,
-                forward_meta.position_ids,
-                forward_meta.batch_id_per_token,
-                self.block_size,
-            )
-            k_range = paddle.tensor(200.0)
-            scale = paddle.abs(compressed_kv).max() / k_range
 
             dsk_attn_write_cache(
                 compressed_kv,
@@ -386,7 +362,7 @@ class DSAAttentionBackend(AttentionBackend):
                 forward_meta.cu_seqlens_q,
                 metadata.block_tables,
                 None,
-                scale.cast(paddle.float32),
+                None,  # scale.cast(paddle.float32),
                 "fp8_ds_mla",
                 self.max_seq_len,
                 True,
@@ -402,17 +378,7 @@ class DSAAttentionBackend(AttentionBackend):
             return fmha_out_prefill
 
         # Decode
-        # if k is None:
         if forward_meta.max_len_tensor_cpu[2]:  # max_enc_len_this_time
-
-            metadata.slot_mapping = compute_slot_mapping(
-                forward_meta.block_tables,
-                forward_meta.position_ids,
-                forward_meta.batch_id_per_token,
-                self.block_size,
-            )
-            k_range = paddle.tensor(200.0)
-            scale = paddle.abs(compressed_kv).max() / k_range
 
             dsk_attn_write_cache(
                 compressed_kv,
@@ -425,7 +391,7 @@ class DSAAttentionBackend(AttentionBackend):
                 forward_meta.cu_seqlens_q,
                 metadata.block_tables,
                 None,
-                scale.cast(paddle.float32),
+                None,  # scale.cast(paddle.float32),
                 "fp8_ds_mla",
                 self.max_seq_len,
                 False,

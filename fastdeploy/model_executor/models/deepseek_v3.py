@@ -72,6 +72,7 @@ if current_platform.is_cuda():
     )
 
     paddle.enable_compat(scope={"deep_gemm"})
+    import deep_gemm
 
 
 class DeepSeekV3MLP(nn.Layer):
@@ -474,7 +475,7 @@ class Indexer(nn.Layer):
         prefix: str = "",
     ):
         super().__init__()
-        self.config = fd_config
+
         self.layer_id = layer_id
         self.max_model_len = fd_config.model_config.max_model_len
 
@@ -492,8 +493,6 @@ class Indexer(nn.Layer):
             input_size=self.q_lora_rank,
             output_size=self.index_head_dim * self.index_n_heads,
             with_bias=False,
-            skip_quant=True,
-            weight_dtype="bfloat16",
         )
         self.wk = ReplicatedLinear(
             fd_config=fd_config,
@@ -501,8 +500,6 @@ class Indexer(nn.Layer):
             input_size=self.hidden_size,
             output_size=self.index_head_dim,
             with_bias=False,
-            skip_quant=True,
-            weight_dtype="bfloat16",
         )
         self.k_norm = RMSNorm(fd_config, self.index_head_dim, eps=1e-6, prefix=f"{prefix}.k_norm")
         # self.k_norm = LayerNorm(self.head_dim, eps=1e-6)
@@ -513,8 +510,6 @@ class Indexer(nn.Layer):
             input_size=self.hidden_size,
             output_size=self.index_n_heads,
             with_bias=False,
-            skip_quant=True,
-            weight_dtype="bfloat16",
         )
 
         self.softmax_scale = self.index_head_dim**-0.5
@@ -532,7 +527,7 @@ class Indexer(nn.Layer):
         self.indexer_cache = forward_meta.caches[2 * self.layer_id + 1]
 
         q = self.wq_b(qr)
-        q = q.view(-1, self.index_n_heads, self.index_head_dim)
+        q = q.reshape([-1, self.index_n_heads, self.index_head_dim])
         q_pe, q_nope = paddle.split(q, [self.rope_dim, self.index_head_dim - self.rope_dim], axis=-1)
 
         k = self.wk(hidden_states)
@@ -543,21 +538,18 @@ class Indexer(nn.Layer):
         q_pe = q_pe.reshape(-1, self.index_n_heads, self.rope_dim)
         k_pe = k_pe.reshape(-1, 1, self.rope_dim)
 
-        # `rotary_emb` is shape-preserving; `q_pe` is already
-        # [num_tokens, n_head, rope_dim].
-        q = paddle.cat([q_pe, q_nope], dim=-1)
-        # `k_pe` is [num_tokens, 1, rope_dim] (MQA).
-        k = paddle.cat([k_pe.squeeze(-2), k_nope], dim=-1)
+        q = paddle.concat([q_pe, q_nope], axis=-1).reshape([-1, self.index_head_dim])
+        k = paddle.concat([k_pe.squeeze(-2), k_nope], axis=-1)
 
-        q = q.view(-1, self.index_head_dim)
+        # indexer q_quant
         q_fp8, q_scale = per_token_group_quant_fp8(
             q,
             self.quant_block_size,
             column_major_scales=False,
             use_ue8m0=self.scale_fmt is not None,
         )
-        q_fp8 = q_fp8.view(-1, self.index_n_heads, self.index_head_dim)
-        q_scale = q_scale.view(-1, self.index_n_heads, 1)
+        q_fp8 = q_fp8.reshape([-1, self.index_n_heads, self.index_head_dim])
+        q_scale = q_scale.reshape([-1, self.index_n_heads, 1])
 
         weights = self.weights_proj(hidden_states)
         weights = weights.unsqueeze(-1) * q_scale * self.softmax_scale * self.index_n_heads**-0.5
@@ -571,43 +563,24 @@ class Indexer(nn.Layer):
         )
 
         indexer_top_k = paddle.full([q_fp8.shape[0], self.index_topk], -1, dtype="int32")
-        import deep_gemm
+
+        # indexer write_cache
+        indexer_k_quant_and_cache(k, self.indexer_cache, slot_mapping, self.quant_block_size, self.scale_fmt)
 
         if forward_meta.max_len_tensor_cpu[1]:
-
-            # def ceil_to_ue8m0(x: paddle.Tensor):
-            #     return paddle.pow(paddle.full([1], 2.0, device=x.place), paddle.ceil(paddle.log2(x.abs())))
-
-            # def per_custom_dims_cast_to_fp8(
-            #     x: paddle.Tensor, dims: Tuple, use_ue8m0: bool
-            # ) -> Tuple[paddle.Tensor, paddle.Tensor]:
-            #     excluded_dims = tuple([i for i in range(x.dim()) if i not in set(dims)])
-            #     x_amax = x.abs().float().amax(dim=excluded_dims, keepdim=True).clamp(1e-4)
-            #     sf = x_amax / 448.0
-            #     sf = ceil_to_ue8m0(sf) if use_ue8m0 else sf
-            #     x_scaled = (x * (1.0 / sf)).to(paddle.float8_e4m3fn)
-            #     return x_scaled, sf.squeeze()
-
-            # kv_fp8 = per_custom_dims_cast_to_fp8(k, (0,), False)
-
-            # ===================================== cache =============================================
-            # encoder write cache
-            indexer_k_quant_and_cache(k, self.indexer_cache, slot_mapping, self.quant_block_size, self.scale_fmt)
-
-            # encoder read cache
+            # indexer_prefill read_cache
             k_fp8_cache = paddle.zeros_like(k, dtype=paddle.uint8)
             k_scale_cache = paddle.zeros([k.shape[0], 4], dtype=paddle.float32)
             cp_gather_indexer_k_quant_cache(
                 self.indexer_cache, k_fp8_cache, k_scale_cache, forward_meta.block_tables, forward_meta.cu_seqlens_k
             )
-
             k_scale_cache = k_scale_cache.flatten()[: k.shape[0]]
             k_cache = k_fp8_cache.view(paddle.float8_e4m3fn), k_scale_cache
-            # ===================================== cache =============================================
 
+            token_num = q_fp8.shape[0]
             # ks,ke = forward_meta.attn_mask_offsets[::2].contiguous(),forward_meta.attn_mask_offsets[1::2].contiguous()
-            ks = paddle.zeros(forward_meta.seq_lens_encoder, dtype=paddle.int32)
-            ke = paddle.arange(forward_meta.seq_lens_encoder, dtype=paddle.int32) + 1  # + (seq_len_kv - seq_len)
+            ks = paddle.zeros(token_num, dtype=paddle.int32)
+            ke = paddle.arange(token_num, dtype=paddle.int32) + 1  # + (seq_len_kv - seq_len)
             max_seqlen_k = (ke - ks).max().item()
 
             logits = deep_gemm.fp8_mqa_logits(
@@ -615,12 +588,9 @@ class Indexer(nn.Layer):
             )
 
             # To save GPU global memory usage
-            assert logits.size() == (forward_meta.seq_lens_encoder, max_seqlen_k)
-            tmp = paddle.full(
-                (forward_meta.seq_lens_encoder, forward_meta.seq_lens_encoder),
-                float("-inf"),
-            )
-            for i in range(forward_meta.seq_lens_encoder):
+            assert list(logits.shape) == [token_num, max_seqlen_k]
+            tmp = paddle.full((token_num, token_num), float("-inf"))
+            for i in range(token_num):
                 tmp[i, ks[i] : ke[i]] = logits[i, : ke[i] - ks[i]]
             logits = tmp
 
@@ -639,7 +609,6 @@ class Indexer(nn.Layer):
         if forward_meta.max_len_tensor_cpu[2]:
 
             seq_len_kv = forward_meta.seq_lens_decoder + forward_meta.seq_lens_this_time
-            indexer_k_quant_and_cache(k, self.indexer_cache, slot_mapping, self.quant_block_size, self.scale_fmt)
 
             schedule_metadata = deep_gemm.get_paged_mqa_logits_metadata(seq_len_kv, 64, deep_gemm.get_num_sms())
 
@@ -843,10 +812,14 @@ class DeepseekV32DSAAttention(nn.Layer):
         query, compressed_kv, key_pe = qkv_a_out.split(
             [self.q_lora_rank, self.kv_lora_rank, self.qk_rope_head_dim], axis=-1
         )
-        key_pe.reshape_([-1, 1, self.qk_rope_head_dim])
+        key_pe.reshape_([-1, 1, self.qk_rope_head_dim]).contiguous()
 
-        query = self.q_a_layernorm(query)[0]
-        qr = query
+        query = self.q_a_layernorm(query.contiguous())[0]
+
+        indexer_top_k = self.indexer(
+            forward_meta, hidden_states, query.contiguous(), position_ids, rotary_emb=self.indexer_rotary_emb
+        )
+
         query = self.q_b_proj(query)
         query.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
         query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
@@ -858,10 +831,6 @@ class DeepseekV32DSAAttention(nn.Layer):
         compressed_kv = self.kv_a_layernorm(compressed_kv)[0]
         kv = paddle.concat([compressed_kv, key_pe.squeeze(1)], axis=-1)
 
-        # DSA indexer
-        indexer_top_k = self.indexer(forward_meta, hidden_states, qr, position_ids, rotary_emb=self.indexer_rotary_emb)
-
-        # dsa attention
         fmha_out = self.dsa_attn(
             q=q_input.contiguous(),
             k=kv.unsqueeze(1).contiguous(),

@@ -18,6 +18,7 @@ import paddle
 import triton
 from paddleformers.utils.log import logger
 
+from fastdeploy.model_executor.ops.gpu import per_token_group_fp8_quant
 from fastdeploy.model_executor.ops.triton_ops import _per_token_group_quant_fp8
 from fastdeploy.platforms import current_platform
 
@@ -177,30 +178,31 @@ def per_token_group_quant_fp8(
     shape = x.shape[:-1] + (x.shape[-1] // group_size,)
     x_s = paddle.empty(shape, dtype=paddle.float32)
 
-    # torch.ops._C.per_token_group_fp8_quant(
-    #     x.contiguous(), x_q, x_s, group_size, eps, fp8_min, fp8_max, use_ue8m0
-    # )
-    # return x_q, x_s
-    M = x.numel() // group_size
-    N = group_size
-    BLOCK = triton.next_power_of_2(N)
-    # heuristics for number of warps
-    num_warps = min(max(BLOCK // 256, 1), 8)
-    num_stages = 1
-    _per_token_group_quant_fp8[(M,)](
-        x,
-        x_q,
-        x_s,
-        group_size,
-        x.shape[1],
-        x.stride(0),
-        eps,
-        fp8_min=fp8_min,
-        fp8_max=fp8_max,
-        use_ue8m0=use_ue8m0,
-        BLOCK=BLOCK,
-        num_warps=num_warps,
-        num_stages=num_stages,
-    )
+    if current_platform.is_cuda():
+
+        per_token_group_fp8_quant(x.contiguous(), x_q, x_s, group_size, eps, fp8_min, fp8_max, use_ue8m0)
+
+    else:
+        M = x.numel() // group_size
+        N = group_size
+        BLOCK = triton.next_power_of_2(N)
+        # heuristics for number of warps
+        num_warps = min(max(BLOCK // 256, 1), 8)
+        num_stages = 1
+        _per_token_group_quant_fp8[(M,)](
+            x.contiguous(),
+            x_q,
+            x_s,
+            group_size,
+            x.shape[1],
+            x.stride(0),
+            eps,
+            fp8_min=fp8_min,
+            fp8_max=fp8_max,
+            use_ue8m0=use_ue8m0,
+            BLOCK=BLOCK,
+            num_warps=num_warps,
+            num_stages=num_stages,
+        )
 
     return x_q, x_s
