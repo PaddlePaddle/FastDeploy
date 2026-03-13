@@ -86,6 +86,7 @@ def form_model_get_output_topp0(
     quantization,
     load_choices,
     prompts,
+    speculative_config,
     result_queue,
 ):
     try:
@@ -96,6 +97,7 @@ def form_model_get_output_topp0(
             max_model_len=max_model_len,
             load_choices=load_choices,
             quantization=quantization,
+            speculative_config=speculative_config,
         ) as fd_model:
             fd_outputs = fd_model.generate_topp0(prompts, max_tokens=max_tokens)
             result_queue.put(fd_outputs)
