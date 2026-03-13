@@ -58,6 +58,11 @@ class TestFileDiscovery:
             "layer.10.weight",
         ]
 
+    def test_is_layers_grouped(self):
+        assert lwu.layers_are_grouped(["layers.0.w", "layers.0.b", "layers.1.w", "layers.1.b"]) is True
+        assert lwu.layers_are_grouped(["layers.0.w", "layers.1.w", "layers.0.b"]) is False
+        assert lwu.layers_are_grouped(["embed.weight"]) is True
+
     def test_measure_time(self):
         @lwu.measure_time("T")
         def dummy():
@@ -161,6 +166,25 @@ class TestCaching:
         monkeypatch.setenv("FD_ENABLE_MODEL_LOAD_CACHE", "1")
         assert dummy_load(mock_model, cfg) == {"loaded": True}
 
+    def test_save_model_bf16_cache(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("FD_ENABLE_MODEL_LOAD_CACHE", "1")
+        cfg = _cfg()
+        cfg.model_config.model = str(tmp_path)
+        cfg.quant_config.is_checkpoint_bf16 = True
+        cfg.parallel_config.tensor_parallel_rank = 0
+
+        saved = {}
+        monkeypatch.setattr("paddle.save", lambda sd, p: saved.update({"path": p}))
+
+        @lwu.save_model()
+        def dummy_load(model, fd_config):
+            return {"loaded": True}
+
+        mock_model = SimpleNamespace(state_dict=lambda: {"w": 1})
+        result = dummy_load(mock_model, cfg)
+        assert result == {"loaded": True}
+        assert "path" in saved
+
 
 class TestCompositeLoading:
     def test_load_kv_cache_scale(self, tmp_path):
@@ -214,3 +238,46 @@ class TestCompositeLoading:
         mock_cls = SimpleNamespace(_get_tensor_parallel_mappings=lambda _: {})
         result = lwu.load_ep_checkpoint(mock_cls, str(tmp_path), cfg, return_numpy=True)
         np.testing.assert_allclose(result["w"], [1.0, 2.0], rtol=1e-6)
+
+    def test_composite_checkpoint_ep(self, tmp_path, monkeypatch):
+        save_file({"w": np.array([1.0], dtype=np.float32)}, str(tmp_path / "s1.safetensors"))
+        index = {"weight_map": {"w": "s1.safetensors"}}
+        with open(str(tmp_path / "model.safetensors.index.json"), "w") as f:
+            json.dump(index, f)
+        cfg = _cfg()
+        cfg.parallel_config.use_ep = True
+        cfg.parallel_config.num_experts_start_offset = 0
+        cfg.parallel_config.num_experts_per_rank = 1
+        cfg.model_config.moe_num_experts = 1
+        cfg.model_config.moe_layer_start_index = 0
+        cfg.speculative_config = SimpleNamespace(model_type="main")
+        mock_cls = SimpleNamespace(_get_tensor_parallel_mappings=lambda _: {})
+        result = lwu.load_composite_checkpoint(str(tmp_path), mock_cls, cfg, return_numpy=True)
+        assert "w" in result
+
+    def test_composite_checkpoint_rank_mismatch(self, tmp_path):
+        (tmp_path / "rank0").mkdir()
+        (tmp_path / "rank1").mkdir()
+        (tmp_path / "rank2").mkdir()
+        cfg = _cfg()
+        cfg.parallel_config.tensor_parallel_size = 2  # doesn't match 3 rank dirs
+        mock_cls = SimpleNamespace(_get_tensor_parallel_mappings=lambda _: {})
+        with pytest.raises(ValueError, match="tp3"):
+            lwu.load_composite_checkpoint(str(tmp_path), mock_cls, cfg)
+
+    def test_composite_checkpoint_kv_quant(self, tmp_path, monkeypatch):
+        save_file({"w": np.random.randn(4, 4).astype(np.float32)}, str(tmp_path / "model.safetensors"))
+        cfg = _cfg()
+        cfg.model_config.model = str(tmp_path)
+        cfg.quant_config.kv_cache_quant_type = "float8_e4m3fn"
+        cfg.model_config.kv_cache_quant_scale_path = str(tmp_path / "nonexistent.json")
+        monkeypatch.setattr(
+            "fastdeploy.model_executor.load_weight_utils.load_tp_checkpoint", lambda *a, **kw: {"w": np.ones((4, 4))}
+        )
+        mock_cls = SimpleNamespace(_get_tensor_parallel_mappings=lambda _: {})
+        result = lwu.load_composite_checkpoint(str(tmp_path), mock_cls, cfg, return_numpy=True)
+        assert "w" in result
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
