@@ -1,4 +1,3 @@
-"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
 
 import os
 import sys
@@ -20,6 +18,7 @@ import types
 from types import SimpleNamespace
 
 import paddle
+import pytest
 
 # ── Stub GPU-only modules ───────────────────────────────────────────────────
 _gpu = sys.modules.get("fastdeploy.model_executor.ops.gpu")
@@ -385,3 +384,7 @@ def test_apply_ep_decode(monkeypatch):
     x = paddle.ones([2, H], dtype="float32")
     out = m.apply_ep_decode(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
     assert out.shape[-1] == H
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
