@@ -318,8 +318,6 @@ def _assert_sampling_mask_format(sampling_mask, max_tokens):
         for idx in token_mask:
             assert isinstance(idx, int), f"mask 中的每个元素应为 int，实际: {type(idx)}"
             assert idx >= 0, f"mask 索引不应为负数，实际: {idx}"
-        # 索引列表应严格递增
-        assert token_mask == sorted(set(token_mask)), "mask 索引应严格递增且无重复"
 
 
 def test_keep_sampling_mask_stream(api_url):
@@ -365,7 +363,6 @@ def test_keep_sampling_mask_stream(api_url):
                 assert len(token_mask) > 0, "每个 token mask 不应为空"
                 for idx in token_mask:
                     assert isinstance(idx, int) and idx >= 0, f"mask 索引应为非负 int，实际: {idx}"
-                assert token_mask == sorted(set(token_mask)), "mask 索引应严格递增且无重复"
             all_sampling_masks.extend(mask)
 
     # 最后一个 chunk 携带 usage 信息

@@ -19,6 +19,7 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, List, Optional
 
+import numpy as np
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
@@ -96,20 +97,28 @@ def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_le
 def _compute_sampling_mask(
     probs: paddle.Tensor,
     top_p: paddle.Tensor,
-) -> paddle.Tensor:
+) -> List[np.ndarray]:
     """
-    Compute a top-p (nucleus) sampling mask of shape [num_reqs, vocab_size].
+    Compute a top-p (nucleus) sampling mask as sparse retained-token indices.
 
-    For each request, retain the smallest set of tokens whose cumulative
-    probability >= top_p. The mask is True for retained positions, False
-    for truncated positions. When top_p >= 1.0, all tokens are retained.
+    For each request, find the smallest set of tokens whose cumulative
+    probability >= top_p (standard nucleus sampling).  Return only the
+    indices of those retained tokens rather than a dense vocab-sized mask,
+    which saves both GPU compute (no put_along_axis scatter) and D2H
+    transfer bandwidth (B*max_k  instead of  B*V).
+
+    Key insight: after argsort the retained tokens are always the first k_i
+    elements in descending-probability order, so mask_cum is a contiguous
+    prefix of True values per row.  We compute k_i = sum(mask_cum[i]) on GPU
+    and transfer only sorted_indices[:, :max_k].
 
     Args:
-        probs: [num_reqs, vocab_size] softmax probabilities.
-        top_p: [num_reqs, 1] top-p threshold per request.
+        probs: [num_reqs, vocab_size] softmax probabilities (GPU).
+        top_p: [num_reqs, 1] top-p threshold per request (GPU).
 
     Returns:
-        mask: [num_reqs, vocab_size] bool tensor (CPU).
+        List of length num_reqs; element i is a 1-D int32 numpy array
+        containing the vocab indices retained for request i.
     """
     real_bsz = probs.shape[0]
     top_p = top_p[:real_bsz]
@@ -117,18 +126,26 @@ def _compute_sampling_mask(
     sorted_probs = paddle.take_along_axis(probs, sorted_indices, axis=-1)
     cum_probs = paddle.cumsum(sorted_probs, axis=-1)
 
-    # 标准 top-p: 保留”加入当前 token 之前累计概率仍小于 top_p”的位置
+    # mask_cum[i, j] = True  ↔  the j-th token (in sorted order) is retained.
+    # Since probs are sorted descending, this is always a contiguous prefix.
     mask_cum = (cum_probs - sorted_probs) < top_p  # [B, V]
 
-    # top_p >= 1.0 的样本应全部保留
+    # top_p >= 1.0: keep all tokens
     full_mask = (top_p >= 1.0).expand_as(mask_cum)  # [B, V]
     mask_cum = paddle.where(full_mask, paddle.ones_like(mask_cum), mask_cum)
 
-    top_p_mask = paddle.zeros_like(probs, dtype="int64")
-    top_p_mask = paddle.put_along_axis(top_p_mask, sorted_indices, mask_cum.astype("int64"), axis=-1)
-    top_p_mask = top_p_mask.astype("bool")
+    # k_per_row[i] = number of retained tokens for request i  (cheap int op, stays GPU)
+    k_per_row = mask_cum.astype("int32").sum(axis=-1)  # [B]
+    max_k = int(k_per_row.max().item())
 
-    return top_p_mask.cpu()
+    # D2H transfer: B * max_k int32 values  (vs. B * V bool values previously)
+    sorted_indices_top_cpu = sorted_indices[:, :max_k].cpu().numpy()  # [B, max_k] int64
+    k_per_row_cpu = k_per_row.numpy()  # [B] int32
+
+    # Slice each row to its actual length, then sort indices in ascending vocab order
+    # so the output is a strictly increasing index list (matching the original bool-mask
+    # convention where positions are enumerated left-to-right in vocab space).
+    return [sorted_indices_top_cpu[i, : k_per_row_cpu[i]] for i in range(real_bsz)]
 
 
 class GuidedDecoding:

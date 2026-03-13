@@ -210,10 +210,8 @@ def _build_stream_transfer_data(
         output_tokens = output_tokens.reshape([-1]).numpy()
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
-        # Convert sampling_mask to numpy if present: shape [num_reqs, vocab_size]
-        sampling_mask_np = None
-        if sampling_mask is not None:
-            sampling_mask_np = sampling_mask.numpy()
+        # Convert sampling_mask to numpy if present: now a List[np.ndarray] of sparse indices
+        sampling_mask_list = sampling_mask  # already List[np.ndarray] or None
 
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
             stream_transfer_data = StreamTransferData(
@@ -223,8 +221,8 @@ def _build_stream_transfer_data(
                 stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
             if prompt_logprobs_list:
                 stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
-            if sampling_mask_np is not None:
-                stream_transfer_data.sampling_mask = sampling_mask_np[bid]
+            if sampling_mask_list is not None:
+                stream_transfer_data.sampling_mask = sampling_mask_list[bid]
             stream_transfer_datas.append(stream_transfer_data)
     elif pooler_outputs is not None:
         for bid, pooler_output in enumerate(pooler_outputs):
@@ -402,9 +400,8 @@ def post_process_normal(
                 )
             # Send sampling_mask via ZMQ side-channel when enabled.
             if sampler_output.sampling_mask is not None and model_output.mp_rank == 0:
-                # Convert bool tensor to dict {batch_id: list[bool]} for easy consumption.
-                mask_np = sampler_output.sampling_mask.numpy()  # [num_reqs, vocab_size], bool
-                mask_dict = {i: mask_np[i].tolist() for i in range(mask_np.shape[0])}
+                # sampling_mask is List[np.ndarray] of sparse int indices, one array per request.
+                mask_dict = {i: arr.tolist() for i, arr in enumerate(sampler_output.sampling_mask)}
                 sampling_mask_zmq_client.send_pyobj(mask_dict)
 
 
@@ -517,8 +514,8 @@ def post_process_specualate(
             )
         # Send sampling_mask via ZMQ side-channel when enabled.
         if sampler_output.sampling_mask is not None and model_output.mp_rank == 0:
-            # sampling_mask shape: [total_accepted_tokens, vocab_size] (MTP may accept >1 token per request)
-            mask_np = sampler_output.sampling_mask.numpy()
+            # sampling_mask is List[np.ndarray] of sparse int indices, length = total_accepted_tokens.
+            # Group by request using accept_num so each entry is List[np.ndarray] (n arrays per req).
             real_bsz = model_output.accept_num.shape[0]
             accept_nums = model_output.accept_num[:real_bsz].flatten().tolist()
             mask_dict = {}
@@ -526,8 +523,8 @@ def post_process_specualate(
             for i, n in enumerate(accept_nums):
                 n = int(n)
                 if n > 0:
-                    # List of n masks, each of shape [vocab_size]
-                    mask_dict[i] = mask_np[offset : offset + n].tolist()
+                    # List of n sparse index arrays, one per accepted token
+                    mask_dict[i] = [arr.tolist() for arr in sampler_output.sampling_mask[offset : offset + n]]
                 offset += n
             sampling_mask_zmq_client.send_pyobj(mask_dict)
 

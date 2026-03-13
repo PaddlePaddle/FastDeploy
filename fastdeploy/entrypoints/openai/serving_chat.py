@@ -972,14 +972,15 @@ class OpenAIServingChat:
 
     @staticmethod
     def _make_sampling_mask_list(sampling_mask) -> List[List[int]]:
-        """Convert sampling_mask to a list of per-token index lists.
+        """Wrap sampling_mask into a uniform List[List[int]] format.
 
-        Non-MTP: sampling_mask is List[bool] (1 token/step)  → [[idx, ...]]
-        MTP:     sampling_mask is List[List[bool]] (N tokens) → [[idx, ...], ...]
+        sampling_mask is already in sparse-index form (no bool-to-index conversion needed):
+          Non-MTP: List[int]        (indices for 1 token/step)  → [[idx, ...]]
+          MTP:     List[List[int]]  (indices for N tokens/step) → [[idx, ...], ...]
         """
         assert sampling_mask is not None
         if sampling_mask and isinstance(sampling_mask[0], list):
-            # MTP: list of per-accepted-token bool masks
-            return [[i for i, v in enumerate(mask) if v] for mask in sampling_mask]
-        # Non-MTP: single-token bool mask, wrap in outer list for uniform format
-        return [[i for i, v in enumerate(sampling_mask) if v]]
+            # MTP: already List[List[int]], return as-is
+            return sampling_mask
+        # Non-MTP: already List[int], wrap in outer list for uniform format
+        return [sampling_mask]
