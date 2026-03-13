@@ -200,7 +200,7 @@ def _build_stream_transfer_data(
     pooler_outputs: List[PoolingSequenceGroupOutput] = None,
     logprobs: Optional[LogprobsTensors] = None,
     prompt_logprobs_list: Optional[LogprobsTensors] = None,
-    sampling_mask: Optional[paddle.Tensor] = None,
+    sampling_mask: Optional[List[np.ndarray]] = None,
 ):
     """Split output_tokens and output"""
 
@@ -210,8 +210,7 @@ def _build_stream_transfer_data(
         output_tokens = output_tokens.reshape([-1]).numpy()
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
-        # Convert sampling_mask to numpy if present: now a List[np.ndarray] of sparse indices
-        sampling_mask_list = sampling_mask  # already List[np.ndarray] or None
+        sampling_mask_list = sampling_mask
 
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
             stream_transfer_data = StreamTransferData(

@@ -1190,12 +1190,6 @@ class MTPSampler(nn.Layer):
         )
         probs = F.softmax(logits)
 
-        # Compute sampling mask BEFORE top_k_top_p_sampling modifies probs.
-        # Binary mask [num_reqs, vocab_size]: 1 = retained by top_k/top_p, 0 = truncated.
-        sampling_mask = None
-        if sampling_metadata.keep_sampling_mask:
-            sampling_mask = _compute_sampling_mask(probs, sampling_metadata.top_p)
-
         next_tokens = paddle.argmax(probs, axis=-1)
 
         token_ids = None
@@ -1219,7 +1213,6 @@ class MTPSampler(nn.Layer):
             logprobs_tensors=logprobs_tensors,
             token_num_per_batch=share_inputs["batch_token_num"][:real_bsz],
             cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
-            sampling_mask=sampling_mask,
         )
         return next_tokens, sampler_output
 
