@@ -93,9 +93,9 @@ def draft_model_update_kernel(
                 # seq_lens_decoder[tid] = seq_lens_encoder[tid]
                 seq_lens_decoder[tid] = seq_len_encoder + seq_len_decoder
                 seq_lens_encoder[tid] = 0
+                step_idx[tid] += 1
                 if seq_lens_decoder[tid] >= prompt_lens[tid]:
                     pre_ids_now[1] = token_this_time
-                    step_idx[tid] += 1
                     draft_token_now[0] = token_this_time
                     base_model_draft_tokens_now[substep + 1] = token_this_time
                 else:
