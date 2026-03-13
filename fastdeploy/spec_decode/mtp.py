@@ -127,10 +127,10 @@ class MTPProposer(Proposer):
         self.model_inputs.init_share_inputs()
 
         if current_platform.is_cuda() or current_platform.is_maca():
-            self._target_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
+            self._mtp_input_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
             self._draft_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
 
-            self._target_output_token_num_event = paddle.device.cuda.Event()
+            self._mtp_input_token_num_event = paddle.device.cuda.Event()
             self._draft_output_token_num_event = paddle.device.cuda.Event()
 
         # CUDA Graph
@@ -747,8 +747,8 @@ class MTPProposer(Proposer):
             self.target_model_inputs["seq_lens_encoder"],
             self.num_model_steps,
         )
-        self._target_output_token_num_host.copy_(output_token_num, False)
-        self._target_output_token_num_event.record()
+        self._mtp_input_token_num_host.copy_(output_token_num, False)
+        self._mtp_input_token_num_event.record()
 
         self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
@@ -905,8 +905,8 @@ class MTPProposer(Proposer):
                 if self.num_model_steps > 1:
                     self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
 
-                self._target_output_token_num_event.synchronize()
-                real_num = int(self._target_output_token_num_host)
+                self._mtp_input_token_num_event.synchronize()
+                real_num = int(self._mtp_input_token_num_host)
                 target_hidden_states = self.model_inputs["target_hidden_states"][:real_num]
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
@@ -1131,8 +1131,8 @@ class MTPProposer(Proposer):
             self.model_inputs["seq_lens_this_time"],
             self.model_inputs["step_idx"],
         )
-        self._target_output_token_num_host.copy_(output_token_num, False)
-        self._target_output_token_num_event.record()
+        self._mtp_input_token_num_host.copy_(output_token_num, False)
+        self._mtp_input_token_num_event.record()
         self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
     def update_task_chunk_prefill(self, task):
