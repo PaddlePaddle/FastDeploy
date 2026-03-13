@@ -240,7 +240,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("USE_KVCACHE_LOCK", "0"))),
     # Whether to use batch send data in zmq
     "ZMQ_SEND_BATCH_DATA": lambda: int(os.getenv("ZMQ_SEND_BATCH_DATA", "1")),
-    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
 }
 
 
