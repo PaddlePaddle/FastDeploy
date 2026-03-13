@@ -18,8 +18,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 typedef uint32_t curandStatePhilox4_32_10_t;
 
 template <bool ENABLE_TOPP, bool USE_TOPK>
@@ -53,12 +52,9 @@ __attribute__((global)) void speculate_verify(
     const bool benchmark_mode,
     const bool accept_all_drafts,
     const bool use_target_sampling);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 static inline bool is_in_end(const int64_t id,
@@ -115,7 +111,7 @@ static int64_t topp_sampling_kernel(const int64_t *candidate_ids,
 }
 
 template <bool ENABLE_TOPP, bool USE_TOPK>
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        const int64_t *sampled_token_ids,
                        int64_t *accept_tokens,
                        int *accept_num,
@@ -351,7 +347,7 @@ static int cpu_wrapper(Context *ctx,
 }
 
 template <bool ENABLE_TOPP, bool USE_TOPK>
-static int xpu3_wrapper(Context *ctx,
+static int xpu3_wrapper(api::Context *ctx,
                         const int64_t *sampled_token_ids,
                         int64_t *accept_tokens,
                         int *accept_num,
@@ -381,8 +377,8 @@ static int xpu3_wrapper(Context *ctx,
                         const bool benchmark_mode,
                         const bool accept_all_drafts,
                         const bool use_target_sampling) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  int32_t ret_xre = xpu3::plugin::speculate_verify<ENABLE_TOPP, USE_TOPK>
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  int32_t ret_xre = fd_xpu3::speculate_verify<ENABLE_TOPP, USE_TOPK>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           reinterpret_cast<const XPU_INT64 *>(sampled_token_ids),
           reinterpret_cast<XPU_INT64 *>(accept_tokens),
@@ -417,7 +413,7 @@ static int xpu3_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 template <bool ENABLE_TOPP, bool USE_TOPK>
-int speculate_verify(Context *ctx,
+int speculate_verify(api::Context *ctx,
                      const int64_t *sampled_token_ids,
                      int64_t *accept_tokens,
                      int *accept_num,
@@ -576,39 +572,38 @@ int speculate_verify(Context *ctx,
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
-#define INSTANTIATE_SPECULATE_VERIFY(ENABLE_TOPP, USE_TOPK)         \
-  template int                                                      \
-  baidu::xpu::api::plugin::speculate_verify<ENABLE_TOPP, USE_TOPK>( \
-      baidu::xpu::api::Context *, /* xpu_ctx */                     \
-      const int64_t *,            /* sampled_token_ids */           \
-      int64_t *,                  /* accept_tokens */               \
-      int *,                      /* accept_num */                  \
-      int64_t *,                  /* step_idx */                    \
-      bool *,                     /* stop_flags */                  \
-      const int *,                /* seq_lens_encoder */            \
-      const int *,                /* seq_lens_decoder */            \
-      const int64_t *,            /* draft_tokens */                \
-      const int *,                /* actual_draft_token_nums */     \
-      const float *,              /* dev_curand_states or topp */   \
-      const float *,              /* topp or nullptr */             \
-      const int *,                /* seq_lens_this_time */          \
-      const int64_t *,            /* verify_tokens */               \
-      const float *,              /* verify_scores */               \
-      const int64_t *,            /* max_dec_len */                 \
-      const int64_t *,            /* end_tokens */                  \
-      const bool *,               /* is_block_step */               \
-      const int *,                /* output_cum_offsets */          \
-      const int *,                /* actual_candidate_len */        \
-      int,                        /* real_bsz */                    \
-      int,                        /* max_draft_tokens */            \
-      int,                        /* end_length */                  \
-      int,                        /* max_seq_len */                 \
-      int,                        /* max_candidate_len */           \
-      int,                        /* verify_window */               \
-      bool,                       /* prefill_one_step_stop */       \
-      bool,                       /* benchmark_mode */              \
-      bool,                       /* accept_all_drafts */           \
-      bool                        /* use_target_sampling */         \
+#define INSTANTIATE_SPECULATE_VERIFY(ENABLE_TOPP, USE_TOPK)                 \
+  template int fastdeploy::plugin::speculate_verify<ENABLE_TOPP, USE_TOPK>( \
+      fastdeploy::plugin::api::Context *, /* xpu_ctx */                     \
+      const int64_t *,                    /* sampled_token_ids */           \
+      int64_t *,                          /* accept_tokens */               \
+      int *,                              /* accept_num */                  \
+      int64_t *,                          /* step_idx */                    \
+      bool *,                             /* stop_flags */                  \
+      const int *,                        /* seq_lens_encoder */            \
+      const int *,                        /* seq_lens_decoder */            \
+      const int64_t *,                    /* draft_tokens */                \
+      const int *,                        /* actual_draft_token_nums */     \
+      const float *,                      /* dev_curand_states or topp */   \
+      const float *,                      /* topp or nullptr */             \
+      const int *,                        /* seq_lens_this_time */          \
+      const int64_t *,                    /* verify_tokens */               \
+      const float *,                      /* verify_scores */               \
+      const int64_t *,                    /* max_dec_len */                 \
+      const int64_t *,                    /* end_tokens */                  \
+      const bool *,                       /* is_block_step */               \
+      const int *,                        /* output_cum_offsets */          \
+      const int *,                        /* actual_candidate_len */        \
+      int,                                /* real_bsz */                    \
+      int,                                /* max_draft_tokens */            \
+      int,                                /* end_length */                  \
+      int,                                /* max_seq_len */                 \
+      int,                                /* max_candidate_len */           \
+      int,                                /* verify_window */               \
+      bool,                               /* prefill_one_step_stop */       \
+      bool,                               /* benchmark_mode */              \
+      bool,                               /* accept_all_drafts */           \
+      bool                                /* use_target_sampling */         \
   );
 
 INSTANTIATE_SPECULATE_VERIFY(false, false)
@@ -617,6 +612,4 @@ INSTANTIATE_SPECULATE_VERIFY(true, false)
 INSTANTIATE_SPECULATE_VERIFY(true, true)
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

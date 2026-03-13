@@ -8,7 +8,7 @@ on:
         description: "Build Images"
         required: true
         type: string
-        default: "iregistry.baidu-int.com/tiangexiao/base-images:paddlecloud-ubuntu24.04-gcc13.3-cuda12.9-cudnn9.9-bccl1.4.1.4-nccl2.26.5-openmpi4.1.5-FleetY13.0.0-rc2"
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda130-manylinux"
       FASTDEPLOY_ARCHIVE_URL:
         description: "URL of the compressed FastDeploy code archive."
         required: true
@@ -48,16 +48,21 @@ on:
         required: false
         type: string
         default: ""
+      FD_UNIFY_BUILD:
+        description: "Enable unified build mode; build once without arch-specific compilation"
+        required: false
+        type: string
+        default: ""
     outputs:
-      wheel_path_rl:
+      wheel_path_cu130:
         description: "Output path of the generated wheel"
-        value: ${{ jobs.fd-build-rl.outputs.wheel_path_rl }}
+        value: ${{ jobs.fd-build-cu130.outputs.wheel_path_cu130 }}
 jobs:
-  fd-build-rl:
-    runs-on: [self-hosted, GPU-Build]
+  fd-build-cu130:
+    runs-on: [self-hosted, GPU-Build-Cu130]
     timeout-minutes: 360
     outputs:
-      wheel_path_rl: ${{ steps.set_output.outputs.wheel_path_rl }}
+      wheel_path_cu130: ${{ steps.set_output.outputs.wheel_path_cu130 }}
     steps:
       - name: Code Prepare
         shell: bash
@@ -118,6 +123,7 @@ jobs:
           PADDLEVERSION: ${{ inputs.PADDLEVERSION }}
           PADDLE_WHL_URL: ${{ inputs.PADDLE_WHL_URL }}
           WITH_NIGHTLY_BUILD: ${{ inputs.WITH_NIGHTLY_BUILD }}
+          FD_UNIFY_BUILD: ${{ inputs.FD_UNIFY_BUILD }}
         run: |
             set -x
             runner_name="${{ runner.name }}"
@@ -140,13 +146,14 @@ jobs:
             --cap-add=SYS_PTRACE --privileged --shm-size=64G \
             -v $(pwd):/workspace -w /workspace \
             -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
-            -v "${CACHE_DIR}/.cache_rl:/root/.cache" \
-            -v "${CACHE_DIR}/.ccache_rl:/root/.ccache" \
+            -v "${CACHE_DIR}/.cache:/root/.cache" \
+            -v "${CACHE_DIR}/.ccache:/root/.ccache" \
             -v "${CACHE_DIR}/ConfigDir:/root/.config" \
             -e TZ="Asia/Shanghai" \
             -e "COMPILE_ARCH=${compile_arch}" \
             -e "FD_VERSION=${fd_version}" \
             -e "WITH_NIGHTLY_BUILD=${WITH_NIGHTLY_BUILD}" \
+            -e "FD_UNIFY_BUILD=${FD_UNIFY_BUILD}" \
             -e "PADDLEVERSION=${PADDLEVERSION}" \
             -e "PADDLE_WHL_URL=${PADDLE_WHL_URL}" \
             -e "BRANCH_REF=${BRANCH_REF}" \
@@ -160,10 +167,21 @@ jobs:
             git config --global --add safe.directory /workspace/FastDeploy
             chown -R $(whoami) /workspace/FastDeploy
             cd FastDeploy
-
-            python -m pip uninstall paddlepaddle-gpu -y || true
-            wget -q --no-proxy https://paddle-qa.bj.bcebos.com/paddle-pipeline/Develop-TagBuild-Training-Linux-Gpu-Cuda12.9-Cudnn9.9-Trt10.5-Mkl-Avx-Gcc11-SelfBuiltPypiUse/latest/paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
-            python -m pip install paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
+            if [[ "${WITH_NIGHTLY_BUILD}" == "ON" ]];then
+              GIT_COMMIT_TIME=$(git --no-pager show -s --format=%ci HEAD)
+              DATE_ONLY=$(echo $GIT_COMMIT_TIME | sed "s/ .*//;s/-//g")
+              echo "Git Commit Time: $GIT_COMMIT_TIME"
+              echo "Date Only: $DATE_ONLY"
+              export FASTDEPLOY_VERSION="${FASTDEPLOY_VERSION}.dev${DATE_ONLY}"
+            fi
+            # 针对不同分支和tag使用不同的PaddlePaddle安装包
+            if [[ "${PADDLE_WHL_URL}" != "" ]];then
+              python -m pip install ${PADDLE_WHL_URL}
+            elif [[ "${PADDLEVERSION}" != "" ]];then
+              python -m pip install paddlepaddle-gpu==${PADDLEVERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu130/
+            else
+              python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu130/
+            fi
 
             pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
@@ -172,7 +190,13 @@ jobs:
             python -m pip install wheel
             # 编译RDMA
             export FD_ENABLE_RDMA_COMPILE=1
-            bash build.sh 1 python false [${COMPILE_ARCH}]
+            export FD_UNIFY_BUILD="${FD_UNIFY_BUILD}"
+
+            if [[ "${FD_UNIFY_BUILD}" == "true" ]]; then
+              bash build.sh 1 python false
+            else
+              bash build.sh 1 python false [${COMPILE_ARCH}]
+            fi
             ls ./dist/*.whl
             '
       - name: Package Upload
@@ -181,11 +205,20 @@ jobs:
           compile_arch: ${{ inputs.COMPILE_ARCH }}
         run: |
             set -x
-            commit_id=${{ github.sha }}
-            branch_name=${{ github.ref_name }}
-            target_path=paddle-github-action/BRANCH/FastDeploy_RL/${branch_name}/${commit_id}/SM${compile_arch//,/_}
-
-            wget -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+            if [[ "${{ github.event_name }}" == "pull_request" ]];then
+              commit_id=${{ github.event.pull_request.head.sha }}
+              pr_num=${{ github.event.pull_request.number }}
+              target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/SM${compile_arch//,/_}/cu130
+            elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+              commit_id=${{ github.sha }}
+              tag_name=${{ github.ref_name }}
+              target_path=paddle-github-action/TAG/FastDeploy/${tag_name}/${commit_id}/SM${compile_arch//,/_}/cu130
+            else
+              commit_id=${{ github.sha }}
+              branch_name=${{ github.ref_name }}
+              target_path=paddle-github-action/BRANCH/FastDeploy/${branch_name}/${commit_id}/SM${compile_arch//,/_}/cu130
+            fi
+            wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
             push_file=$(realpath bos_tools.py)
             python --version
             python -m pip install bce-python-sdk==0.9.29
@@ -201,4 +234,4 @@ jobs:
             python ${push_file} fastdeploy*.whl ${target_path}
             target_path_stripped="${target_path#paddle-github-action/}"
             WHEEL_PATH=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
-            echo "wheel_path_rl=${WHEEL_PATH}" >> $GITHUB_OUTPUT
+            echo "wheel_path_cu130=${WHEEL_PATH}" >> $GITHUB_OUTPUT

@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __attribute__((global)) void speculate_get_logits(
     float* draft_logits,
@@ -32,12 +31,9 @@ __attribute__((global)) void speculate_get_logits(
     const int* seq_lens_encoder,
     const int real_bsz,
     const int vocab_size);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 static int cpu_wrapper(float* draft_logits,
@@ -84,7 +80,7 @@ static int cpu_wrapper(float* draft_logits,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         float* draft_logits,
                         int* next_token_num,
                         int* batch_token_num,
@@ -96,8 +92,8 @@ static int xpu3_wrapper(Context* ctx,
                         const int* seq_lens_encoder,
                         const int real_bsz,
                         const int vocab_size) {
-  int32_t ret_xre = xpu3::plugin::
-      speculate_get_logits<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  int32_t ret_xre =
+      fd_xpu3::speculate_get_logits<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           draft_logits,
           next_token_num,
           batch_token_num,
@@ -113,7 +109,7 @@ static int xpu3_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-int speculate_get_logits(Context* ctx,
+int speculate_get_logits(api::Context* ctx,
                          float* draft_logits,
                          int* next_token_num,
                          int* batch_token_num,
@@ -181,6 +177,4 @@ int speculate_get_logits(Context* ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

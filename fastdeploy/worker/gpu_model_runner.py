@@ -198,11 +198,11 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize input batch
         self.share_inputs = InputBatch(self.fd_config)
         self.share_inputs.init_share_inputs()
-        increment_value = (
+        self.increment_value = (
             4 if not self.speculative_decoding else (self.speculative_config.num_speculative_tokens + 1) * 4
         )
         self.infer_seed_increment = paddle.full(
-            shape=[self.scheduler_config.max_num_seqs, 1], fill_value=increment_value, dtype="int64", device="cpu"
+            shape=[self.scheduler_config.max_num_seqs, 1], fill_value=self.increment_value, dtype="int64", device="cpu"
         )
 
         self.restore_chunked_prefill_request = dict()
@@ -1667,6 +1667,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.sampling_metadata,
                 self.model_config.max_model_len,
                 self.share_inputs,
+                int(self._real_output_token_num_host),
+                self.increment_value,
                 accept_all_drafts,
                 reject_all_drafts,
             )
@@ -1836,8 +1838,9 @@ class GPUModelRunner(ModelRunnerBase):
                 self._dummy_sampler_run(hidden_states, model_output, batch_size, accept_all_drafts, reject_all_drafts)
 
             # 7. Updata 'infer_seed' and step_cuda()
-            self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-            self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+            if not self.speculative_decoding:
+                self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
+                self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
 
@@ -2270,6 +2273,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self.sampling_metadata,
                     self.model_config.max_model_len,
                     self.share_inputs,
+                    int(self._real_output_token_num_host),
+                    self.increment_value,
                 )
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
@@ -2369,8 +2374,9 @@ class GPUModelRunner(ModelRunnerBase):
                     self.proposer.run(share_inputs=self.share_inputs)
 
             # 7. Update 'infer_seed' and step_cuda()
-            self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-            self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+            if not self.speculative_decoding:
+                self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
+                self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
             if self.speculative_decoding:
                 speculate_schedule_cache(
                     self.share_inputs["draft_tokens"],
