@@ -1003,6 +1003,7 @@ __global__ void append_decode_cache_T_int8_neox_rope_kernel(
   block_table_now = block_tables + bid * max_blocks_per_seq;
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
+  if (block_idx < 0 && head_idx >= num_heads) return;
 
   float thread_m2 = 0.0f;
   float warp_m2 = 0.0f;
@@ -1325,6 +1326,7 @@ __global__ void append_decode_cache_int8_rope_qk_norm_kernel(
   block_table_now = block_tables + bid * max_blocks_per_seq;
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
+  if (block_idx < 0 && head_idx >= num_heads) return;
 
   float thread_m2 = 0.0f;
   float warp_m2 = 0.0f;
@@ -1637,6 +1639,7 @@ __global__ void append_decode_cache_int8_rope_kernel(
   block_table_now = block_tables + bid * max_blocks_per_seq;
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
+  if (block_idx < 0 && head_idx >= num_heads) return;
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
 #endif
@@ -1894,6 +1897,7 @@ __global__ void int_append_decode_cache_int8_rope_kernel(
   block_table_now = block_tables + bid * max_blocks_per_seq;
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
+  if (block_idx < 0 && head_idx >= num_heads) return;
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
 #endif
@@ -2222,6 +2226,7 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
   block_table_now = block_tables + bid * max_blocks_per_seq;
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
+  if (block_idx < 0 && head_idx >= num_heads) return;
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
 #endif
@@ -2546,6 +2551,7 @@ __global__ void int_append_decode_cache_int8_neox_rope_kernel(
   block_table_now = block_tables + bid * max_blocks_per_seq;
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
+  if (block_idx < 0 && head_idx >= num_heads) return;
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
 #endif
@@ -2955,6 +2961,7 @@ __global__ void append_decode_cache_int4_rope_kernel(
 
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
+  if (block_idx < 0 && head_idx >= num_heads) return;
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
 #endif
@@ -3247,6 +3254,7 @@ __global__ void int_append_decode_cache_int4_rope_kernel(
 
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
+  if (block_idx < 0 && head_idx >= num_heads) return;
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
 #endif
@@ -3590,6 +3598,7 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
 
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
+  if (block_idx < 0 && head_idx >= num_heads) return;
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
 #endif
@@ -3984,6 +3993,7 @@ __global__ void int_append_decode_cache_int4_neox_rope_kernel(
 
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
+  if (block_idx < 0 && head_idx >= num_heads) return;
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
 #endif

@@ -870,7 +870,7 @@ class GPUModelRunner(ModelRunnerBase):
                     cache_ids_2d = getattr(request, "block_tables_3d", None)
                     if cache_ids_2d is None and request.block_tables and isinstance(request.block_tables[0], list):
                         cache_ids_2d = request.block_tables
-                    cache_ids_2d = self._compact_head_wise_cache_ids_2d(cache_ids_2d)
+                    cache_ids_2d = self._normalize_head_wise_cache_ids_2d(cache_ids_2d)
                     if cache_ids_2d is not None:
                         request.block_tables_3d = cache_ids_2d
                     if cache_ids_2d:
@@ -887,6 +887,8 @@ class GPUModelRunner(ModelRunnerBase):
                         # block_tables format: [bsz, kv_num_heads * max_blocks_per_head]
                         tables = []
                         for head_tables in cache_ids_2d:
+                            if head_tables is None:
+                                continue
                             tables.extend(head_tables)
                         if self.head_wise_debug_log and _debug_logging_enabled():
                             logger.debug(f"[headwise prefill] req {idx} cache_ids_2d={cache_ids_2d} tables={tables}")
@@ -941,7 +943,7 @@ class GPUModelRunner(ModelRunnerBase):
                     cache_ids_2d = getattr(request, "block_tables_3d", None)
                     if cache_ids_2d is None and request.block_tables and isinstance(request.block_tables[0], list):
                         cache_ids_2d = request.block_tables
-                    cache_ids_2d = self._compact_head_wise_cache_ids_2d(cache_ids_2d)
+                    cache_ids_2d = self._normalize_head_wise_cache_ids_2d(cache_ids_2d)
                     if cache_ids_2d is not None:
                         request.block_tables_3d = cache_ids_2d
                     # Keep cached request metadata in sync for subsequent forward_meta assembly.
@@ -967,6 +969,8 @@ class GPUModelRunner(ModelRunnerBase):
                         # block_tables format: [bsz, kv_num_heads * max_blocks_per_head]
                         tables = []
                         for head_tables in cache_ids_2d:
+                            if head_tables is None:
+                                continue
                             tables.extend(head_tables)
                     else:
                         tables = request.block_tables
@@ -1097,19 +1101,18 @@ class GPUModelRunner(ModelRunnerBase):
         flat_block_tables = self.share_inputs["block_tables"][:num_running_requests].numpy()
         max_blocks_per_head = block_tables_3d.shape[1]
         for b in range(num_running_requests):
-            valid_blocks = flat_block_tables[b][flat_block_tables[b] >= 0]
-            if valid_blocks.size == 0:
-                continue
-            blocks_per_head = int(valid_blocks.size) // self.kv_num_heads
-            if blocks_per_head <= 0:
-                continue
-            copy_len = min(blocks_per_head, max_blocks_per_head)
             for h in range(self.kv_num_heads):
-                start = h * blocks_per_head
-                end = start + copy_len
-                if end <= valid_blocks.size:
-                    row_idx = b * self.kv_num_heads + h
-                    block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(valid_blocks[start:end], dtype="int32")
+                start = h * max_blocks_per_head
+                if start >= flat_block_tables.shape[1]:
+                    break
+                end = min(start + max_blocks_per_head, flat_block_tables.shape[1])
+                copy_len = end - start
+                if copy_len <= 0:
+                    continue
+                row_idx = b * self.kv_num_heads + h
+                block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(
+                    flat_block_tables[b][start:end], dtype="int32"
+                )
 
     def _prepare_block_tables_3d(self, num_running_requests: int):
         if not self.enable_head_wise_kv_cache:
@@ -1146,12 +1149,15 @@ class GPUModelRunner(ModelRunnerBase):
                     continue
 
                 row = cache_ids_2d[h]
-                compact_row = [cid for cid in row if cid is not None and cid >= 0]
-                head_lens.append(len(compact_row))
-                copy_len = min(len(compact_row), max_blocks_per_head)
+                valid_cnt = sum(1 for cid in row if cid is not None and cid >= 0)
+                head_lens.append(valid_cnt)
+                normalized_row = [(-1 if cid is None else int(cid)) for cid in row]
+                copy_len = min(len(normalized_row), max_blocks_per_head)
                 if copy_len > 0:
                     row_idx = b * self.kv_num_heads + h
-                    block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(compact_row[:copy_len], dtype="int32")
+                    block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(
+                        normalized_row[:copy_len], dtype="int32"
+                    )
             per_req_head_lens.append(head_lens)
 
         # Fallback for dummy/profile or missing request cache metadata.
@@ -1196,17 +1202,17 @@ class GPUModelRunner(ModelRunnerBase):
             )
             self._head_wise_debug_log_count += 1
 
-    def _compact_head_wise_cache_ids_2d(self, cache_ids_2d):
-        """Remove recycled holes (-1) from per-head cache rows."""
+    def _normalize_head_wise_cache_ids_2d(self, cache_ids_2d):
+        """Keep sparse per-head rows while normalizing None entries to -1."""
         if cache_ids_2d is None:
             return None
-        compact_cache_ids_2d = []
+        normalized_cache_ids_2d = []
         for head_tables in cache_ids_2d:
             if head_tables is None:
-                compact_cache_ids_2d.append([])
+                normalized_cache_ids_2d.append([])
                 continue
-            compact_cache_ids_2d.append([cid for cid in head_tables if cid is not None and cid >= 0])
-        return compact_cache_ids_2d
+            normalized_cache_ids_2d.append([(-1 if cid is None else int(cid)) for cid in head_tables])
+        return normalized_cache_ids_2d
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         raise NotImplementedError("GPUs only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")
