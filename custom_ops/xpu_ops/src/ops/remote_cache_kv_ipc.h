@@ -20,7 +20,8 @@
 #include <unistd.h>
 #include <cstdint>
 #include <vector>
-#include "msg_utils.h"  // NOLINT
+#include "custom_ftok.h"  // NOLINT
+#include "msg_utils.h"    // NOLINT
 
 struct RemoteCacheKvIpc {
   struct save_cache_kv_complete_signal_layerwise_meta_data {

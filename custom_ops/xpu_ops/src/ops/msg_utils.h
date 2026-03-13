@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,7 +24,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include "custom_ftok.h"
 #include "paddle/extension.h"
 
 #define MAX_BSZ 512

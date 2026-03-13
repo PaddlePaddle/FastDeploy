@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "custom_ftok.h"
 #include "driver_types.h"
 #include "msg_utils.h"
 #include "paddle/extension.h"
