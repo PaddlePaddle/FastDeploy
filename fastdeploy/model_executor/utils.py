@@ -147,9 +147,9 @@ def process_weight_transpose(layer, weight_name):
         return
 
     if len(weight.shape) == 2:
-        weight_transpose = weight.transpose([1, 0])
+        weight_transpose = weight.transpose([1, 0]).contiguous()
     elif len(weight.shape) == 3:
-        weight_transpose = weight.transpose([0, 2, 1])
+        weight_transpose = weight.transpose([0, 2, 1]).contiguous()
     weight_tmp.copy_(weight_transpose, False)
     free_tensor(weight)
     setattr(layer, weight_name, weight_tmp)
@@ -161,7 +161,10 @@ def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
     """
 
     def fn(model_sublayer_name: str, param=None):
-        from fastdeploy.model_executor.layers.linear import KVBatchLinear
+        from fastdeploy.model_executor.layers.linear import (
+            KVBatchLinear,
+            UnquantizedLinearMethod,
+        )
         from fastdeploy.model_executor.layers.moe.moe import get_moe_method
 
         if model_sublayer_name not in sublayers_dict:
@@ -179,7 +182,7 @@ def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
                 unquant_moe_cls = object
             else:
                 unquant_moe_cls = type(unquant_moe_layer)
-            if type(quant_method) is unquant_moe_cls:
+            if type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls:
                 # skip unquantized moe
                 return
             if not hasattr(quant_method, "process_weights_after_loading"):

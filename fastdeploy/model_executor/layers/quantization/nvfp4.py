@@ -100,12 +100,26 @@ class ModelOptNvFp4Config(QuantConfigBase):
     @classmethod
     def from_config(cls, config: dict) -> "ModelOptNvFp4Config":
         quant_config = config
-        quant_method = quant_config.get("quant_algo", "")
+
+        # Handle both dict and QuantizationConfig object
+        if hasattr(quant_config, "to_dict"):
+            quant_config_dict = quant_config.to_dict()
+        else:
+            quant_config_dict = quant_config if isinstance(quant_config, dict) else {}
+
+        # Try to get quant_algo from config or from nested structure
+        quant_method = quant_config_dict.get("quant_algo", "")
+        if not quant_method:
+            # Try from nested quantization key
+            if "quantization" in quant_config_dict:
+                quant_method = quant_config_dict["quantization"].get("quant_algo", "")
         if not quant_method:
             raise ValueError("Missing 'quant_algo' in quantization config")
 
         # Handle kv_cache_quant_algo with proper type validation
-        kv_cache_quant_algo_raw = quant_config.get("kv_cache_quant_algo")
+        kv_cache_quant_algo_raw = quant_config_dict.get("kv_cache_quant_algo")
+        if kv_cache_quant_algo_raw is None and "quantization" in quant_config_dict:
+            kv_cache_quant_algo_raw = quant_config_dict["quantization"].get("kv_cache_quant_algo")
         if kv_cache_quant_algo_raw is None:
             # No KV cache quantization by default
             kv_cache_quant_algo = None
@@ -115,7 +129,9 @@ class ModelOptNvFp4Config(QuantConfigBase):
             raise ValueError(f"kv_cache_quant_algo must be a string, got " f"{type(kv_cache_quant_algo_raw)}")
 
         # Handle group_size with proper type validation
-        group_size_raw = quant_config.get("group_size")
+        group_size_raw = quant_config_dict.get("group_size")
+        if group_size_raw is None and "quantization" in quant_config_dict:
+            group_size_raw = quant_config_dict["quantization"].get("group_size")
         if group_size_raw is None:
             group_size = 16  # Default value
         elif isinstance(group_size_raw, int):
@@ -127,7 +143,9 @@ class ModelOptNvFp4Config(QuantConfigBase):
                 raise ValueError(f"group_size must be an integer, got {type(group_size_raw)}") from None
 
         # "exclude_modules" is the key in the legacy hf_quant_config.json
-        exclude_modules = quant_config.get("exclude_modules", [])
+        exclude_modules = quant_config_dict.get("exclude_modules", [])
+        if not exclude_modules and "quantization" in quant_config_dict:
+            exclude_modules = quant_config_dict["quantization"].get("exclude_modules", [])
         if not isinstance(exclude_modules, list):
             raise ValueError(f"exclude_modules must be a list, got {type(exclude_modules)}")
 

@@ -118,31 +118,57 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
     if quant_config_name is None:
         quant_config = None
     else:
-        if not quantization_config.get("is_quantized"):
-            quantization_config["is_quantized"] = model_config.is_quantized
+        # Handle both dict and QuantizationConfig object
+        if hasattr(quantization_config, "to_dict"):
+            quantization_config_dict = quantization_config.to_dict()
+        else:
+            quantization_config_dict = quantization_config if isinstance(quantization_config, dict) else {}
+
+        if not quantization_config_dict.get("is_quantized"):
+            quantization_config_dict["is_quantized"] = model_config.is_quantized
         if args.dynamic_load_weight and quantization_config is not None:
-            quantization_config["is_quantized"] = True
+            quantization_config_dict["is_quantized"] = True
         quant_cls = get_quantization_config(quant_config_name)
-        quant_config = quant_cls.from_config(quantization_config)
+        quant_config = quant_cls.from_config(quantization_config_dict)
     return quant_config
 
 
 def _get_offline_quant_config_name(quantization_config, is_torch_weight, is_v1_loader):
     if is_torch_weight:
         # only support block_wise_fp8 now
-        quant_method = quantization_config.get("quant_method")
-        has_block_size = "weight_block_size" in quantization_config
+        # Handle both dict and QuantizationConfig object
+        if hasattr(quantization_config, "quant_method"):
+            quant_method = quantization_config.quant_method
+        else:
+            quant_method = quantization_config.get("quant_method")
+
+        has_block_size = (
+            "weight_block_size" in quantization_config
+            if isinstance(quantization_config, dict)
+            else hasattr(quantization_config, "weight_block_size")
+            and quantization_config.weight_block_size is not None
+        )
+
         if quant_method == "fp8" and has_block_size:
             quant_config_name = "block_wise_fp8"
         elif quant_method == "modelopt":
-            if quantization_config.get("quant_algo", "") == "NVFP4":
+            # Try to get quant_algo from dict or from to_dict() method
+            quant_algo = None
+            if isinstance(quantization_config, dict):
+                quant_algo = quantization_config.get("quant_algo", "")
+            elif hasattr(quantization_config, "to_dict"):
+                quant_algo = quantization_config.to_dict().get("quant_algo", "")
+
+            if quant_algo == "NVFP4":
                 quant_config_name = "modelopt_fp4"
             else:
-                raise ValueError("modelopt only supports NVFP4 quantization.")
+                raise ValueError(f"modelopt only supports NVFP4 quantization, got quant_algo={quant_algo}")
         elif quant_method == "mxfp4":
             quant_config_name = "mxfp4"
         else:
-            raise ValueError("Torch weight offline quantization only supports block-wise FP8.")
+            raise ValueError(
+                f"Torch weight offline quantization only supports block-wise FP8, modelopt NVFP4, or mxfp4. Got quant_method={quant_method}"
+            )
     else:
         quant_config_name = quantization_config["quantization"]
     return quant_config_name
