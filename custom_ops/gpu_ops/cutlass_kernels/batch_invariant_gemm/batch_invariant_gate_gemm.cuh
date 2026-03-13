@@ -202,6 +202,9 @@ void launch_gate_gemm(
   }
 
   cutlass::KernelHardwareInfo hw_info;
+  hw_info.sm_count =
+      cutlass::KernelHardwareInfo::query_device_multiprocessor_count(
+          hw_info.device_id);
   typename GemmKernel::Arguments args{cutlass::gemm::GemmUniversalMode::kGemm,
                                       prob_shape,
                                       mainloop_args,
@@ -211,14 +214,23 @@ void launch_gate_gemm(
   // SplitK + Deterministic reduce: K boundaries are fixed (M-independent),
   // daisy-chain accumulation ensures fixed FP order → batch invariance.
   //
-  // Auto-compute splits to maximize SM utilization:
-  // - K_tile is the 3rd element of TileShape (compile-time constant)
-  // - k_iters = ceil(K / K_tile)
-  // - splits = min(k_iters, sm_count) for maximum parallelism per output tile
+  // Optimal splits from benchmark (H800, K=7168, TileShape 128x256x64):
+  //   T(s) = T_compute/s + (s-1)*T_reduce_step,  s_opt =
+  //   sqrt(T_compute/T_reduce) Measured: T_compute=68μs, T_reduce_step≈3.4μs →
+  //   s_opt≈4.5 splits=4: 31μs (2.2x faster than persistent 68μs)
+  // Consistent across all M (1~2048), batch-invariant since splits is
+  // M-independent. Override via CUTLASS_GATE_GEMM_SPLITS env var for tuning.
+  constexpr int DEFAULT_SPLITS = 4;
   using TileShapeType = typename GemmKernel::TileShape;
   constexpr int K_TILE = cute::size<2>(TileShapeType{});
   int k_iters = (K + K_TILE - 1) / K_TILE;
-  int splits = std::min(k_iters, hw_info.sm_count);
+  int splits;
+  const char *env_splits = std::getenv("CUTLASS_GATE_GEMM_SPLITS");
+  if (env_splits) {
+    splits = std::max(1, std::min(std::atoi(env_splits), k_iters));
+  } else {
+    splits = std::min(DEFAULT_SPLITS, k_iters);
+  }
 
   using StreamKParams =
       cutlass::gemm::kernel::detail::PersistentTileSchedulerSm90StreamKParams;
