@@ -156,6 +156,32 @@ def test_create_weights(monkeypatch):
     )
     assert out.shape == [2, 4]
 
+    # call_prefill_permute_to_masked_gemm — covers L76-81
+    monkeypatch.setattr(
+        dgb,
+        "prefill_permute_to_masked_gemm",
+        lambda x, s, ids, ne, mt: (x, s, paddle.zeros([2, 1], "int32"), paddle.zeros([ne], "int32")),
+    )
+    px_in = paddle.ones([2, 4], "float32")
+    ps_in = paddle.ones([2, 2], "float32")
+    ids32 = paddle.zeros([2, 1], dtype="int32")
+    px, ps, imap, tnpe = dgb.call_prefill_permute_to_masked_gemm(px_in, ps_in, ids32, 1, 4)
+    assert px.shape == [2, 4]
+
+    # call_depermute_prefill_combine — covers L102-104
+    monkeypatch.setattr(
+        dgb,
+        "depermute_prefill_combine",
+        lambda x, im, tw, n: paddle.zeros([n, x.shape[-1]], "float32"),
+    )
+    dp_out = dgb.call_depermute_prefill_combine(
+        x=paddle.ones([1, 4, 4], "float32"),
+        indice_map=paddle.zeros([2, 1], "int32"),
+        topk_weights=paddle.ones([2, 1], "float32"),
+        num_worst_tokens=2,
+    )
+    assert dp_out.shape[0] == 2
+
     # process_weights_after_loading — covers L151
     monkeypatch.setattr(dgb.BlockWiseFP8MoEMethod, "process_weights_after_loading", lambda self, layer: None)
     m.process_weights_after_loading(layer)
