@@ -17,8 +17,8 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/types.h>
-#include "paddle/extension.h"
 #include "../custom_ftok.h"
+#include "paddle/extension.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
