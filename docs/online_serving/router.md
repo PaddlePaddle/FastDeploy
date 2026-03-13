@@ -253,3 +253,7 @@ Instance Registration Parameters：
 * metrics_port: Port number of the inference instance's metrics
 
 Among these, `role`, `host_ip`, and `port` are required; all other parameters are optional.
+
+## Troubleshooting
+
+If you encounter issues while using the Router, please refer to the [Router Troubleshooting Guide](router_faq.md), which covers common log analysis, response output interpretation, and troubleshooting methods.
