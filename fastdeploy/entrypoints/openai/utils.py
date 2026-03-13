@@ -118,6 +118,9 @@ class DealerConnectionManager:
                 api_server_logger.info(f"Started PULL client for batch response, pid {self.pid}")
             except Exception as e:
                 api_server_logger.error(f"Failed to create PULL client: {str(e)}")
+                # Reset running flag and propagate error to avoid hanging requests in batch mode
+                self.running = False
+                raise RuntimeError(f"Failed to initialize PULL client for batch response (pid={self.pid})") from e
         else:
             for index in range(self.max_connections):
                 await self._add_connection(index)

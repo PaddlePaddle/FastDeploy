@@ -24,133 +24,281 @@ from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 
 
 class TestDealerConnectionManager(unittest.TestCase):
-    """Test cases for DealerConnectionManager"""
+    """Test cases for DealerConnectionManager in dealer mode (ZMQ_SEND_BATCH_DATA=0)"""
 
     def setUp(self):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
-        self.manager = DealerConnectionManager(pid=1, max_connections=5)
 
     def tearDown(self):
-        self.loop.run_until_complete(self.manager.close())
         self.loop.close()
 
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
+    def test_init_attributes(self):
+        """Test __init__ sets correct attributes in dealer mode"""
+        manager = DealerConnectionManager(pid=1, max_connections=5)
+        # Verify dealer mode attributes (lines 99-104)
+        self.assertEqual(manager.max_connections, 10)  # max(max_connections, 10)
+        self.assertEqual(manager.connections, [])
+        self.assertEqual(manager.connection_load, [])
+        self.assertEqual(manager.connection_heap, [])
+        self.assertEqual(manager.request_num, {})
+        self.assertEqual(manager.connection_tasks, [])
+
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
     @patch("aiozmq.create_zmq_stream")
     async def test_initialization(self, mock_create):
         """Test manager initialization creates connections"""
         mock_stream = AsyncMock()
         mock_create.return_value = mock_stream
 
+        manager = DealerConnectionManager(pid=1, max_connections=5)
         # Test initialization
-        await self.manager.initialize()
+        await manager.initialize()
 
         # Verify connections were created
-        self.assertEqual(len(self.manager.connections), 10)
-        self.assertEqual(len(self.manager.connection_load), 10)
-        self.assertEqual(len(self.manager.connection_tasks), 10)
+        self.assertEqual(len(manager.connections), 10)
+        self.assertEqual(len(manager.connection_load), 10)
+        self.assertEqual(len(manager.connection_tasks), 10)
 
         # Verify connection tasks are running
-        for task in self.manager.connection_tasks:
+        for task in manager.connection_tasks:
             self.assertFalse(task.done())
 
+        await manager.close()
+
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
     @patch("aiozmq.create_zmq_stream")
     async def test_get_connection(self, mock_create):
         """Test getting a connection with load balancing"""
         mock_stream = AsyncMock()
         mock_create.return_value = mock_stream
-        await self.manager.initialize()
+
+        manager = DealerConnectionManager(pid=1, max_connections=5)
+        await manager.initialize()
 
         # Get a connection
-        dealer, queue = await self.manager.get_connection("req1")
+        dealer, queue = await manager.get_connection("req1")
 
         # Verify least loaded connection is returned
-        self.assertEqual(self.manager.connection_load[0], 1)
+        self.assertEqual(manager.connection_load[0], 1)
         self.assertIsNotNone(dealer)
         self.assertIsNotNone(queue)
-        self.assertIn("req1", self.manager.request_map)
+        self.assertIn("req1", manager.request_map)
 
+        await manager.close()
+
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
     @patch("aiozmq.create_zmq_stream")
     async def test_connection_listening(self, mock_create):
         """Test connection listener handles responses"""
         mock_stream = AsyncMock()
         mock_create.return_value = mock_stream
-        await self.manager.initialize()
+
+        manager = DealerConnectionManager(pid=1, max_connections=5)
+        await manager.initialize()
 
         # Setup test response
         test_response = {"request_id": "req1", "finished": True}
         mock_stream.read.return_value = [b"", msgpack.packb(test_response)]
 
         # Simulate response
-        dealer, queue = await self.manager.get_connection("req1")
+        dealer, queue = await manager.get_connection("req1")
         response = await queue.get()
 
         # Verify response handling
         self.assertEqual(response[-1]["request_id"], "req1")
-        self.assertEqual(self.manager.connection_load[0], 0)  # Should be decremented after finish
+        self.assertEqual(manager.connection_load[0], 0)  # Should be decremented after finish
 
+        await manager.close()
+
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
     @patch("aiozmq.create_zmq_stream")
     async def test_request_cleanup(self, mock_create):
         """Test request cleanup removes request tracking"""
         mock_stream = AsyncMock()
         mock_create.return_value = mock_stream
-        await self.manager.initialize()
 
-        await self.manager.get_connection("req1")
-        self.assertIn("req1", self.manager.request_map)
+        manager = DealerConnectionManager(pid=1, max_connections=5)
+        await manager.initialize()
 
-        await self.manager.cleanup_request("req1")
-        self.assertNotIn("req1", self.manager.request_map)
+        await manager.get_connection("req1")
+        self.assertIn("req1", manager.request_map)
 
+        await manager.cleanup_request("req1")
+        self.assertNotIn("req1", manager.request_map)
+
+        await manager.close()
+
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
     @patch("aiozmq.create_zmq_stream")
     async def test_multiple_requests(self, mock_create):
         """Test load balancing with multiple requests"""
         mock_stream = AsyncMock()
         mock_create.return_value = mock_stream
-        await self.manager.initialize()
+
+        manager = DealerConnectionManager(pid=1, max_connections=5)
+        await manager.initialize()
 
         # Get multiple connections
         connections = []
         for i in range(1, 6):
-            dealer, queue = await self.manager.get_connection(f"req{i}")
+            dealer, queue = await manager.get_connection(f"req{i}")
             connections.append((dealer, queue))
 
         # Verify load is distributed
         load_counts = [0] * 5
         for i in range(5):
-            load_counts[i] = self.manager.connection_load[i]
+            load_counts[i] = manager.connection_load[i]
 
         self.assertEqual(sum(load_counts), 5)
         self.assertTrue(all(1 <= load <= 2 for load in load_counts))
 
+        await manager.close()
+
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
     @patch("aiozmq.create_zmq_stream")
     async def test_connection_failure(self, mock_create):
         """Test connection failure handling"""
         mock_create.side_effect = Exception("Connection failed")
 
+        manager = DealerConnectionManager(pid=1, max_connections=5)
+
         with self.assertLogs(level="ERROR") as log:
-            await self.manager._add_connection(0)
+            await manager._add_connection(0)
             self.assertTrue(any("Failed to create dealer" in msg for msg in log.output))
 
-        self.assertEqual(len(self.manager.connections), 0)
+        self.assertEqual(len(manager.connections), 0)
 
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
     @patch("aiozmq.create_zmq_stream")
     async def test_close_manager(self, mock_create):
         """Test manager shutdown"""
         mock_stream = AsyncMock()
         mock_create.return_value = mock_stream
-        await self.manager.initialize()
+
+        manager = DealerConnectionManager(pid=1, max_connections=5)
+        await manager.initialize()
 
         # Verify connections exist
-        self.assertEqual(len(self.manager.connections), 5)
+        self.assertEqual(len(manager.connections), 10)
 
         # Close manager
-        await self.manager.close()
+        await manager.close()
 
         # Verify cleanup
-        self.assertEqual(len(self.manager.connections), 0)
-        self.assertEqual(len(self.manager.request_map), 0)
-        for task in self.manager.connection_tasks:
+        self.assertEqual(len(manager.connections), 0)
+        self.assertEqual(len(manager.request_map), 0)
+        for task in manager.connection_tasks:
             self.assertTrue(task.cancelled())
+
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
+    @patch("aiozmq.create_zmq_stream")
+    async def test_get_connection_no_available(self, mock_create):
+        """Test get_connection raises error when no connections available"""
+        mock_stream = AsyncMock()
+        mock_create.return_value = mock_stream
+
+        manager = DealerConnectionManager(pid=1, max_connections=5)
+        await manager.initialize()
+
+        # Clear connection heap to simulate no available connections
+        manager.connection_heap = []
+
+        with self.assertRaises(RuntimeError) as context:
+            await manager.get_connection("req1")
+
+        self.assertIn("No available connections", str(context.exception))
+
+        await manager.close()
+
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
+    @patch("aiozmq.create_zmq_stream")
+    async def test_get_connection_with_num_choices(self, mock_create):
+        """Test get_connection with num_choices in dealer mode"""
+        mock_stream = AsyncMock()
+        mock_create.return_value = mock_stream
+
+        manager = DealerConnectionManager(pid=1, max_connections=5)
+        await manager.initialize()
+
+        dealer, queue = await manager.get_connection("req1", num_choices=2)
+
+        self.assertIsNotNone(dealer)
+        self.assertIsNotNone(queue)
+        self.assertIn("req1", manager.request_map)
+        self.assertEqual(manager.request_num["req1"], 2)
+
+        await manager.close()
+
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
+    @patch("aiozmq.create_zmq_stream")
+    async def test_cleanup_request_with_request_num(self, mock_create):
+        """Test cleanup_request removes request_num in dealer mode"""
+        mock_stream = AsyncMock()
+        mock_create.return_value = mock_stream
+
+        manager = DealerConnectionManager(pid=1, max_connections=5)
+        await manager.initialize()
+
+        await manager.get_connection("req1", num_choices=2)
+        self.assertIn("req1", manager.request_map)
+        self.assertIn("req1", manager.request_num)
+
+        await manager.cleanup_request("req1")
+        self.assertNotIn("req1", manager.request_map)
+        self.assertNotIn("req1", manager.request_num)
+
+        await manager.close()
+
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
+    @patch("aiozmq.create_zmq_stream")
+    async def test_close_with_exception(self, mock_create):
+        """Test close handles exceptions when closing dealers"""
+        mock_stream = AsyncMock()
+        mock_stream.close.side_effect = Exception("Close failed")
+        mock_create.return_value = mock_stream
+
+        manager = DealerConnectionManager(pid=1, max_connections=5)
+        await manager.initialize()
+
+        # Should not raise exception
+        await manager.close()
+
+        # Verify cleanup happened
+        self.assertEqual(len(manager.connections), 0)
+
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
+    @patch("aiozmq.create_zmq_stream")
+    async def test_cleanup_cancelled_error(self, mock_create):
+        """Test cleanup_request handles CancelledError in dealer mode"""
+        mock_stream = AsyncMock()
+        mock_create.return_value = mock_stream
+
+        manager = DealerConnectionManager(pid=1, max_connections=5)
+        await manager.initialize()
+
+        await manager.get_connection("req1", num_choices=2)
+        self.assertIn("req1", manager.request_map)
+        self.assertIn("req1", manager.request_num)
+
+        # Simulate CancelledError during cleanup
+        original_lock = manager.lock
+        manager.lock = AsyncMock()
+        manager.lock.__aenter__ = AsyncMock(side_effect=asyncio.CancelledError)
+        manager.lock.__aexit__ = AsyncMock()
+
+        try:
+            await manager.cleanup_request("req1")
+        except asyncio.CancelledError:
+            pass
+
+        # Verify cleanup happened without lock (both request_map and request_num)
+        self.assertNotIn("req1", manager.request_map)
+        self.assertNotIn("req1", manager.request_num)
+
+        manager.lock = original_lock
+        await manager.close()
 
 
 class TestDealerConnectionManagerBatchMode(unittest.TestCase):
@@ -445,18 +593,19 @@ class TestDealerConnectionManagerBatchMode(unittest.TestCase):
     @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", True)
     @patch("aiozmq.create_zmq_stream")
     async def test_dispatch_batch_responses_connection_error(self, mock_create):
-        """Test _dispatch_batch_responses handles connection errors"""
+        """Test _dispatch_batch_responses handles connection errors (lines 235-237)"""
         mock_stream = AsyncMock()
         mock_create.return_value = mock_stream
 
         manager = DealerConnectionManager(pid=1, max_connections=5)
         await manager.initialize()
 
-        # Simulate connection error
+        # Simulate connection error while running
+        self.assertTrue(manager.running)
         mock_stream.read.side_effect = ConnectionError("Connection lost")
 
         with self.assertLogs(level="ERROR") as log:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.2)
             self.assertTrue(any("connection lost" in msg for msg in log.output))
 
         await manager.close()
@@ -464,17 +613,19 @@ class TestDealerConnectionManagerBatchMode(unittest.TestCase):
     @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", True)
     @patch("aiozmq.create_zmq_stream")
     async def test_dispatch_batch_responses_os_error(self, mock_create):
-        """Test _dispatch_batch_responses handles OS errors"""
+        """Test _dispatch_batch_responses handles OS errors (lines 235-237)"""
         mock_stream = AsyncMock()
         mock_create.return_value = mock_stream
 
         manager = DealerConnectionManager(pid=1, max_connections=5)
         await manager.initialize()
 
+        # Simulate OS error while running
+        self.assertTrue(manager.running)
         mock_stream.read.side_effect = OSError("OS error")
 
         with self.assertLogs(level="ERROR") as log:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.2)
             self.assertTrue(any("connection lost" in msg.lower() or "os error" in msg.lower() for msg in log.output))
 
         await manager.close()
@@ -482,7 +633,7 @@ class TestDealerConnectionManagerBatchMode(unittest.TestCase):
     @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", True)
     @patch("aiozmq.create_zmq_stream")
     async def test_dispatch_batch_responses_consecutive_errors(self, mock_create):
-        """Test _dispatch_batch_responses exits after consecutive errors"""
+        """Test _dispatch_batch_responses exits after consecutive errors (lines 239-247)"""
         mock_stream = AsyncMock()
         mock_create.return_value = mock_stream
 
@@ -490,10 +641,11 @@ class TestDealerConnectionManagerBatchMode(unittest.TestCase):
         await manager.initialize()
 
         # Simulate multiple consecutive errors
+        self.assertTrue(manager.running)
         mock_stream.read.side_effect = ValueError("Test error")
 
         with self.assertLogs(level="ERROR") as log:
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.5)
             # Should see error logs about consecutive errors
             error_msgs = [msg for msg in log.output if "Dispatcher error" in msg or "consecutive errors" in msg]
             self.assertTrue(len(error_msgs) > 0)
@@ -533,17 +685,19 @@ class TestDealerConnectionManagerCleanupCancelled(unittest.TestCase):
     def tearDown(self):
         self.loop.close()
 
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
     @patch("aiozmq.create_zmq_stream")
     async def test_cleanup_request_cancelled_error(self, mock_create):
-        """Test cleanup_request handles CancelledError correctly"""
+        """Test cleanup_request handles CancelledError correctly in dealer mode"""
         mock_stream = AsyncMock()
         mock_create.return_value = mock_stream
 
         manager = DealerConnectionManager(pid=1, max_connections=5)
         await manager.initialize()
 
-        await manager.get_connection("req1")
+        await manager.get_connection("req1", num_choices=2)
         self.assertIn("req1", manager.request_map)
+        self.assertIn("req1", manager.request_num)
 
         # Simulate CancelledError during cleanup
         original_lock = manager.lock
@@ -558,6 +712,7 @@ class TestDealerConnectionManagerCleanupCancelled(unittest.TestCase):
 
         # Verify cleanup happened without lock
         self.assertNotIn("req1", manager.request_map)
+        self.assertNotIn("req1", manager.request_num)
 
         manager.lock = original_lock
         await manager.close()
@@ -603,6 +758,7 @@ class TestDealerConnectionManagerCloseExceptions(unittest.TestCase):
     def tearDown(self):
         self.loop.close()
 
+    @patch("fastdeploy.entrypoints.openai.utils.envs.ZMQ_SEND_BATCH_DATA", False)
     @patch("aiozmq.create_zmq_stream")
     async def test_close_handles_dealer_close_exception(self, mock_create):
         """Test close method handles exceptions when closing dealers"""

@@ -341,7 +341,7 @@ class ZmqServerBase(ABC):
                     raise e
                 finally:
                     _zmq_metrics_stats.msg_send_total += 1
-            main_process_metrics.record_zmq_stats(_zmq_metrics_stats, self.address)
+                    main_process_metrics.record_zmq_stats(_zmq_metrics_stats, self.address)
 
             llm_logger.debug(f"send_batch: {len(batch_data)} requests, elapse: {time.time() - start_send}")
 
