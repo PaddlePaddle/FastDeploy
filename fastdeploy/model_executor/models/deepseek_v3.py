@@ -589,10 +589,7 @@ class Indexer(nn.Layer):
 
             # To save GPU global memory usage
             assert logits.size() == (num_tokens, max_seqlen_k)
-            tmp = paddle.full(
-                (num_tokens, num_tokens),
-                float("-inf"),
-            )
+            tmp = paddle.full((num_tokens, num_tokens), float("-inf"))
             for i in range(num_tokens):
                 tmp[i, ks[i] : ke[i]] = logits[i, : ke[i] - ks[i]]
             logits = tmp
