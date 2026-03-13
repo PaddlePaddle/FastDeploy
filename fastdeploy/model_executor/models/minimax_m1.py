@@ -45,7 +45,7 @@ from fastdeploy.model_executor.models.model_base import (
     ModelRegistry,
 )
 from fastdeploy.model_executor.layers.rotary_embedding import (
-    LlamaRotaryEmbedding,
+    QwenRotaryEmbedding,
 )
 from fastdeploy.model_executor.layers.activation import SiluAndMul
 from fastdeploy.model_executor.layers.linear import (
@@ -78,7 +78,7 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
         
         # Parse config
         config = fd_config.model_config
-        self.ori_vocab_size = config.ori_vocab_size
+        self.ori_vocab_size = getattr(config, "ori_vocab_size", getattr(config, "vocab_size", None))
         self.num_local_experts = config.num_local_experts
         self.num_experts_per_tok = config.num_experts_per_tok
         
@@ -128,6 +128,14 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
             else:
                 logger.warning(f"Weight {loaded_weight_name} not found in model")
 
+    def compute_logits(self, hidden_states: paddle.Tensor, **logits_processor_kwargs):
+        """Compute logits from hidden states"""
+        logits = self.lm_head(hidden_states)
+        logits = logits.astype(paddle.float32)
+        if hasattr(self, "ori_vocab_size") and getattr(self, "ori_vocab_size") is not None:
+            logits[:, self.ori_vocab_size :] = -float("inf")
+        return logits
+
     def forward(
         self,
         input_ids: paddle.Tensor,
@@ -142,6 +150,12 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
             attention_mask=attention_mask,
         )
         logits = self.lm_head(hidden_states)
+        return logits
+
+    def compute_logits(self, hidden_states: paddle.Tensor):
+        """Compute logits from hidden states."""
+        logits = self.lm_head(hidden_states)
+        logits = logits.astype(paddle.float32)
         return logits
 
 
@@ -159,8 +173,8 @@ class MiniMaxM1Model(nn.Layer):
         self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
             prefix="model.embed_tokens",
-            vocab_size=self.vocab_size,
-            hidden_size=self.config.hidden_size,
+            num_embeddings=self.vocab_size,
+            embedding_dim=self.config.hidden_size,
         )
         
         # Get attention type list (0=Lightning, 1=Standard)
@@ -428,7 +442,7 @@ class MiniMaxM1StandardAttention(nn.Layer):
         
         # RoPE
         self.rotary_dim = getattr(fd_config.model_config, "rotary_dim", self.head_dim)
-        self.rotary_emb = LlamaRotaryEmbedding(
+        self.rotary_emb = QwenRotaryEmbedding(
             dim=self.rotary_dim,
             max_position_embeddings=fd_config.model_config.max_position_embeddings,
             base=fd_config.model_config.rope_theta,
