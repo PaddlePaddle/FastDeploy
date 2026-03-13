@@ -160,7 +160,10 @@ class TestConfigTypes:
         assert ErnieArchitectures.is_ernie5_arch(["Ernie5ForCausalLM"])
         fake = type("_E", (), {"name": staticmethod(lambda: "ErnieTestForCausalLM")})
         ErnieArchitectures.register_ernie_model_arch(fake)
-        ErnieArchitectures.ARCHITECTURES.discard("ErnieTestForCausalLM")
+        try:
+            assert ErnieArchitectures.is_ernie_arch("ErnieTestForCausalLM")
+        finally:
+            ErnieArchitectures.ARCHITECTURES.discard("ErnieTestForCausalLM")
         phase = MoEPhase()
         phase.phase = "decode"
         with pytest.raises(ValueError):
