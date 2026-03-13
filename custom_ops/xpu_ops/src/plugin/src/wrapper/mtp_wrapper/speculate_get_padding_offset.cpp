@@ -16,8 +16,7 @@
 #include "xpu/refactor/impl/xdnn_impl.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 template <typename T>
 __attribute__((global)) void speculate_remove_padding(
@@ -42,16 +41,13 @@ __attribute__((global)) void speculate_get_padding_offset(
     const int max_seq_len,
     int bsz);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 template <typename T>
-static int cpu_wrapper_remove_padding(Context* ctx,
+static int cpu_wrapper_remove_padding(api::Context* ctx,
                                       T* output_data,
                                       const T* input_data,
                                       const T* draft_tokens,
@@ -77,7 +73,7 @@ static int cpu_wrapper_remove_padding(Context* ctx,
   return api::SUCCESS;
 }
 
-static int cpu_wrapper_get_padding_offset(Context* ctx,
+static int cpu_wrapper_get_padding_offset(api::Context* ctx,
                                           int* batch_id_per_token,
                                           int* cum_offsets_out,
                                           int* cu_seqlens_q,
@@ -100,7 +96,7 @@ static int cpu_wrapper_get_padding_offset(Context* ctx,
 }
 
 template <typename T>
-static int xpu3_wrapper_remove_padding(Context* ctx,
+static int xpu3_wrapper_remove_padding(api::Context* ctx,
                                        T* output_data,
                                        const T* input_data,
                                        const T* draft_tokens,
@@ -111,8 +107,8 @@ static int xpu3_wrapper_remove_padding(Context* ctx,
                                        int max_draft_tokens,
                                        int bsz,
                                        int token_num_data) {
-  using XPU_T = typename XPUIndexType<T>::type;
-  int32_t ret_xre = xpu3::plugin::speculate_remove_padding<XPU_T>
+  using XPU_T = typename api::XPUIndexType<T>::type;
+  int32_t ret_xre = fd_xpu3::speculate_remove_padding<XPU_T>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           static_cast<XPU_T*>(static_cast<void*>(output_data)),
           static_cast<const XPU_T*>(static_cast<const void*>(input_data)),
@@ -129,7 +125,7 @@ static int xpu3_wrapper_remove_padding(Context* ctx,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper_get_padding_offset(Context* ctx,
+static int xpu3_wrapper_get_padding_offset(api::Context* ctx,
                                            int* batch_id_per_token,
                                            int* cum_offsets_out,
                                            int* cu_seqlens_q,
@@ -138,7 +134,7 @@ static int xpu3_wrapper_get_padding_offset(Context* ctx,
                                            const int* seq_lens,
                                            const int max_seq_len,
                                            int bsz) {
-  int32_t ret_xre = xpu3::plugin::
+  int32_t ret_xre = fd_xpu3::
       speculate_get_padding_offset<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           batch_id_per_token,
           cum_offsets_out,
@@ -153,7 +149,7 @@ static int xpu3_wrapper_get_padding_offset(Context* ctx,
 }
 
 template <typename T>
-int speculate_remove_padding(Context* ctx,
+int speculate_remove_padding(api::Context* ctx,
                              T* x_remove_padding,
                              const T* input_ids,
                              const T* draft_tokens,
@@ -216,7 +212,7 @@ int speculate_remove_padding(Context* ctx,
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
-int speculate_get_padding_offset(Context* ctx,
+int speculate_get_padding_offset(api::Context* ctx,
                                  int* batch_id_per_token,
                                  int* cum_offsets_out,
                                  int* cu_seqlens_q,
@@ -274,7 +270,7 @@ int speculate_get_padding_offset(Context* ctx,
 }
 
 #define INSTANTIATION_SPECULATE_REMOVE_PADDING(T)                       \
-  template int speculate_remove_padding<T>(Context * ctx,               \
+  template int speculate_remove_padding<T>(api::Context * ctx,          \
                                            T * x_remove_padding,        \
                                            const T* input_ids,          \
                                            const T* draft_tokens,       \
@@ -292,6 +288,4 @@ INSTANTIATION_SPECULATE_REMOVE_PADDING(bfloat16);
 INSTANTIATION_SPECULATE_REMOVE_PADDING(int64_t);
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

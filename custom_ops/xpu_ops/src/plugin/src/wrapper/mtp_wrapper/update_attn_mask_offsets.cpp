@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __attribute__((global)) void update_attn_mask_offsets(
     int* attn_mask_offsets,
@@ -35,12 +34,9 @@ __attribute__((global)) void update_attn_mask_offsets(
     const int max_model_len,
     const int decode_states_len);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 static int cpu_wrapper(int* attn_mask_offsets,
@@ -102,7 +98,7 @@ static int cpu_wrapper(int* attn_mask_offsets,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         int* attn_mask_offsets,
                         const int* seq_lens_this_time,
                         const int* seq_lens_encoder,
@@ -116,7 +112,7 @@ static int xpu3_wrapper(Context* ctx,
                         int real_bsz,
                         int max_model_len,
                         int decode_states_len) {
-  int32_t ret_xre = xpu3::plugin::
+  int32_t ret_xre = fd_xpu3::
       update_attn_mask_offsets<<<ctx->ncluster(), 1, ctx->xpu_stream>>>(
           attn_mask_offsets,
           seq_lens_this_time,
@@ -135,7 +131,7 @@ static int xpu3_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-int update_attn_mask_offsets(Context* ctx,
+int update_attn_mask_offsets(api::Context* ctx,
                              int* attn_mask_offsets,
                              const int* seq_lens_this_time,
                              const int* seq_lens_encoder,
@@ -213,6 +209,4 @@ int update_attn_mask_offsets(Context* ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

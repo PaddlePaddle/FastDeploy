@@ -46,7 +46,7 @@ void SpeculateUpdateV3(const paddle::Tensor &seq_lens_encoder,
   }
 
   auto not_need_stop_xpu = not_need_stop.copy_to(stop_flags.place(), false);
-  int r = baidu::xpu::api::plugin::speculate_update_v3(
+  int r = fastdeploy::plugin::speculate_update_v3(
       ctx,
       const_cast<int *>(seq_lens_encoder.data<int>()),
       const_cast<int *>(seq_lens_decoder.data<int>()),

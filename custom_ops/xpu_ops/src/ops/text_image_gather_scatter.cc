@@ -42,7 +42,7 @@ std::vector<paddle::Tensor> TextImageGatherScatter(
     case paddle::DataType::BFLOAT16: {
       using XPUType = typename XPUTypeTrait<bfloat16>::Type;
       typedef paddle::bfloat16 data_t;
-      int r = baidu::xpu::api::plugin::text_image_gather_scatter<XPUType>(
+      int r = fastdeploy::plugin::text_image_gather_scatter<XPUType>(
           xpu_ctx->x_context(),
           reinterpret_cast<XPUType*>(input.data<data_t>()),
           reinterpret_cast<XPUType*>(text_input.data<data_t>()),

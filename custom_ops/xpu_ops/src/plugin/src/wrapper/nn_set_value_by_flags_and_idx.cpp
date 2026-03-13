@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __attribute__((global)) void set_value_by_flags_and_idx(
     const bool *stop_flags,
@@ -31,15 +30,12 @@ __attribute__((global)) void set_value_by_flags_and_idx(
     int length,
     int length_input_ids);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        const bool *stop_flags,
                        int64_t *pre_ids_all,
                        const int64_t *pre_ids,
@@ -55,7 +51,7 @@ static int cpu_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        const bool *stop_flags,
                        int64_t *pre_ids_all,
                        const int64_t *input_ids,
@@ -86,7 +82,7 @@ static int cpu_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context *ctx,
+static int xpu3_wrapper(api::Context *ctx,
                         const bool *stop_flags,
                         int64_t *pre_ids_all,
                         const int64_t *input_ids,
@@ -96,9 +92,8 @@ static int xpu3_wrapper(Context *ctx,
                         int bs,
                         int length,
                         int length_input_ids) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  auto set_value_by_flags_and_idx_kernel =
-      xpu3::plugin::set_value_by_flags_and_idx;
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  auto set_value_by_flags_and_idx_kernel = fd_xpu3::set_value_by_flags_and_idx;
   int32_t ret_xre = set_value_by_flags_and_idx_kernel<<<ctx->ncluster(),
                                                         64,
                                                         ctx->xpu_stream>>>(
@@ -115,7 +110,7 @@ static int xpu3_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-int set_value_by_flags_and_idx(Context *ctx,
+int set_value_by_flags_and_idx(api::Context *ctx,
                                const bool *stop_flags,
                                int64_t *pre_ids_all,
                                const int64_t *input_ids,
@@ -166,7 +161,7 @@ int set_value_by_flags_and_idx(Context *ctx,
                        length,
                        length_input_ids);
   }
-  if (ctx->dev().type() == api::kXPU2 || ctx->dev().type() == api::kXPU3) {
+  if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper(ctx,
                         stop_flags,
                         pre_ids_all,
@@ -182,6 +177,4 @@ int set_value_by_flags_and_idx(Context *ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

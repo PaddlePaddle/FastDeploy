@@ -3,8 +3,7 @@
 #include "xpu/kernel/cluster_primitive.h"
 #include "xpu/kernel/cluster_primitive_template.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 template <typename T, int MaxLength, int TopPBeamTopK>
 __device__ void top_p_candidates_big_n(
@@ -345,5 +344,4 @@ _XPU_DEF_TOP_P_CANDIDATES_KERNEL(float, 2, 5);
 _XPU_DEF_TOP_P_CANDIDATES_KERNEL(float, 2, 8);
 _XPU_DEF_TOP_P_CANDIDATES_KERNEL(float, 2, 10);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
