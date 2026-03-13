@@ -14,8 +14,9 @@
 
 import logging
 import sys
+import types
 from contextlib import ExitStack
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -27,31 +28,42 @@ WP = "fastdeploy.worker.worker_process"
 
 
 def _cfg(**overrides):
-    """Minimal FDConfig-like MagicMock."""
-    c = MagicMock()
-    c.parallel_config.local_engine_worker_queue_port = 9999
-    c.parallel_config.tensor_parallel_size = 1
-    c.parallel_config.tensor_parallel_rank = 0
-    c.parallel_config.data_parallel_size = 1
-    c.parallel_config.data_parallel_rank = 0
-    c.parallel_config.local_data_parallel_id = 0
-    c.parallel_config.engine_pid = 12345
-    c.parallel_config.pod_ip = "127.0.0.1"
-    c.parallel_config.use_ep = False
-    c.parallel_config.expert_parallel_size = 1
-    c.parallel_config.tp_group = MagicMock()
-    c.parallel_config.shutdown_comm_group_if_worker_idle = False
-    c.cache_config.num_cpu_blocks = 0
-    c.cache_config.total_block_num = 100
-    c.scheduler_config.enable_overlap_schedule = False
-    c.scheduler_config.splitwise_role = "mixed"
-    c.speculative_config.method = None
-    c.eplb_config.enable_eplb = False
-    c.load_config.dynamic_load_weight = False
-    c.model_config.enable_mm = False
-    c.model_config.enable_logprob = False
-    c.model_config.architectures = ["LlamaForCausalLM"]
-    c.nnode = 1
+    """Minimal FDConfig-like namespace."""
+    c = types.SimpleNamespace(
+        parallel_config=types.SimpleNamespace(
+            local_engine_worker_queue_port=9999,
+            tensor_parallel_size=1,
+            tensor_parallel_rank=0,
+            data_parallel_size=1,
+            data_parallel_rank=0,
+            local_data_parallel_id=0,
+            engine_pid=12345,
+            pod_ip="127.0.0.1",
+            use_ep=False,
+            expert_parallel_size=1,
+            tp_group=None,
+            shutdown_comm_group_if_worker_idle=False,
+        ),
+        cache_config=types.SimpleNamespace(
+            num_cpu_blocks=0,
+            total_block_num=100,
+        ),
+        scheduler_config=types.SimpleNamespace(
+            enable_overlap_schedule=False,
+            splitwise_role="mixed",
+        ),
+        speculative_config=types.SimpleNamespace(method=None),
+        eplb_config=types.SimpleNamespace(enable_eplb=False),
+        load_config=types.SimpleNamespace(dynamic_load_weight=False),
+        model_config=types.SimpleNamespace(
+            enable_mm=False,
+            enable_logprob=False,
+            architectures=["LlamaForCausalLM"],
+            tensor_model_parallel_size=1,
+            vision_config=types.SimpleNamespace(dtype=None),
+        ),
+        nnode=1,
+    )
     for k, v in overrides.items():
         parts = k.split(".")
         obj = c
@@ -128,9 +140,8 @@ def test_get_worker(platform, module_path, class_name):
         for a in ("is_dcu", "is_cuda", "is_xpu", "is_iluvatar", "is_gcu", "is_maca", "is_intel_hpu"):
             getattr(plat, a).return_value = False
         getattr(plat, platform).return_value = True
-        mock_mod = MagicMock()
-        sentinel = MagicMock()
-        setattr(mock_mod, class_name, MagicMock(return_value=sentinel))
+        sentinel = object()
+        mock_mod = types.SimpleNamespace(**{class_name: lambda *a, **kw: sentinel})
         with patch.dict("sys.modules", {module_path: mock_mod}):
             assert get_worker(_cfg(), local_rank=0, rank=1) is sentinel
 
@@ -240,7 +251,7 @@ def _fd_config_env():
     mc.is_quantized = False
     mc.quantization_config = None
     mc.head_dim = 128
-    mc.pretrained_config = MagicMock()
+    mc.pretrained_config = types.SimpleNamespace()
     pc = m["ParallelConfig"].return_value
     pc.tensor_parallel_size = 1
     pc.data_parallel_size = 1
@@ -271,7 +282,7 @@ def test_initialize_fd_config():
         m2["ParallelConfig"].return_value.expert_parallel_size = 2
         m2["ModelConfig"].return_value.moe_num_experts = [8]
         m2["EPLBConfig"].return_value.redundant_experts_num = 0
-        m2["parse_quant_config"].return_value = MagicMock()
+        m2["parse_quant_config"].return_value = types.SimpleNamespace()
         m2["ModelConfig"].return_value.is_quantized = True
         initialize_fd_config(args2, ranks=2, local_rank=0)
         m2["FDConfig"].assert_called_once()
@@ -315,7 +326,7 @@ def test_initialize_fd_config():
     # Quant config present but not pre-quantized → online quant log (L1138)
     args_q, stack_q, m_q = _fd_config_env()
     with stack_q:
-        m_q["parse_quant_config"].return_value = MagicMock()
+        m_q["parse_quant_config"].return_value = types.SimpleNamespace()
         m_q["ModelConfig"].return_value.is_quantized = False
         initialize_fd_config(args_q, ranks=1, local_rank=0)
     # Splitwise prefill with V1 scheduler → PREFILL_NODE_ONE_STEP_STOP_V1="1" (L1159)
@@ -387,18 +398,14 @@ def test_health_and_task_queue(pw):
 def test_load_model_and_graph(pw):
     """load_model, init_device, graph_optimize_and_warm_up_model."""
     with patch(f"{WP}.IPCSignal") as ipc:
-        sig = MagicMock()
-        sig.value = np.zeros([1], dtype=np.int32)
-        ipc.return_value = sig
+        ipc.return_value = types.SimpleNamespace(value=np.zeros([1], dtype=np.int32))
         p = _make(pw)
         p.load_model()
         p.worker.load_model.assert_called_once()
         assert p.loaded_model_signal.value[0] == 1
     # Distributed load
     with patch(f"{WP}.IPCSignal") as ipc, patch(f"{WP}.paddle") as pdl:
-        sig = MagicMock()
-        sig.value = np.zeros([1], dtype=np.int32)
-        ipc.return_value = sig
+        ipc.return_value = types.SimpleNamespace(value=np.zeros([1], dtype=np.int32))
         _make(pw, ranks=2).load_model()
         pdl.distributed.barrier.assert_called_once()
     # init_device + graph optimize
@@ -424,7 +431,7 @@ def test_kv_cache(pw):
     p.worker.initialize_cache.assert_called_once_with(num_gpu_blocks=42)
     # Profile: normal (reset worker mock to avoid cross-contamination)
     _, gw = pw
-    gw.return_value = MagicMock()
+    gw.return_value.reset_mock()
     with patch(f"{WP}.IPCSignal"), patch(f"{WP}.dist"):
         p2 = _make(pw, **{"parallel_config.do_profile": True})
         p2.worker.determine_available_memory.return_value = 1024**3
@@ -433,16 +440,14 @@ def test_kv_cache(pw):
         p2.worker.initialize_cache.assert_called_once_with(num_gpu_blocks=1024)
     # Multi-rank profile → dist.all_reduce path (L626-628)
     _, gw2 = pw
-    gw2.return_value = MagicMock()
+    gw2.return_value.reset_mock()
     with patch(f"{WP}.IPCSignal"), patch(f"{WP}.dist") as d2:
         p2r = _make(pw, ranks=2, **{"parallel_config.do_profile": True})
         p2r.worker.determine_available_memory.return_value = 1024**3
         p2r.worker.cal_theortical_kvcache.return_value = 1024**2
-        mock_t2 = MagicMock()
-        mock_t2.item.return_value = 512
         d2.all_reduce.return_value = None
         with patch(f"{WP}.paddle") as pdl2:
-            pdl2.full.return_value = mock_t2
+            pdl2.full.return_value = types.SimpleNamespace(item=lambda: 512)
             p2r.initialize_kv_cache()
             d2.all_reduce.assert_called_once()
     # Zero memory → ValueError
@@ -465,19 +470,21 @@ def test_kv_cache(pw):
 def test_control_method(pw):
     """run_control_method: bad method, success, exception."""
     p = _make(pw)
-    p._ctrl_output = MagicMock()
-    p._ctrl_output.put = AsyncMock()
-    req = MagicMock()
-    req.request_id, req.method, req.args = "r1", "bad", {}
+
+    async def _noop_put(*a, **kw):
+        pass
+
+    p._ctrl_output = types.SimpleNamespace(put=_noop_put)
+    req = types.SimpleNamespace(request_id="r1", method="bad", args={})
     p.worker.bad = None
     p.run_control_method(req)
     # success
-    p.worker.do_it = MagicMock(return_value={"ok": True})
+    p.worker.do_it.return_value = {"ok": True}
     req.method, req.args = "do_it", {"x": 1}
     p.run_control_method(req)
     p.worker.do_it.assert_called_once_with(x=1)
     # exception
-    p.worker.fail = MagicMock(side_effect=RuntimeError("boom"))
+    p.worker.fail.side_effect = RuntimeError("boom")
     req.method, req.args = "fail", {}
     p.run_control_method(req)
 
@@ -511,14 +518,10 @@ def test_eplb(pw):
     )
     p3.last_dump_expert_workload_ts = 0
     stats = np.ones((4, 8), dtype=np.int32)
-    p3.local_experts_token_stats_array = MagicMock()
-    p3.local_experts_token_stats_array.value = stats.copy()
-    p3.signal_clear_experts_token_stats = MagicMock()
-    p3.signal_clear_experts_token_stats.value = np.array([1], dtype=np.int32)
-    p3.signal_update_weight_from_tensor_array = MagicMock()
-    p3.signal_update_weight_from_tensor_array.value = np.array([1], dtype=np.int32)
-    p3.rearrange_experts_signal = MagicMock()
-    p3.rearrange_experts_signal.value = np.zeros([1], dtype=np.int32)
+    p3.local_experts_token_stats_array = types.SimpleNamespace(value=stats.copy())
+    p3.signal_clear_experts_token_stats = types.SimpleNamespace(value=np.array([1], dtype=np.int32))
+    p3.signal_update_weight_from_tensor_array = types.SimpleNamespace(value=np.array([1], dtype=np.int32))
+    p3.rearrange_experts_signal = types.SimpleNamespace(value=np.zeros([1], dtype=np.int32))
     p3.mmap_infos = {"main": "data"}
     p3.worker.get_model().redundant_table_manger.get_expert_tokens_stats.return_value = (
         stats,
@@ -528,9 +531,7 @@ def test_eplb(pw):
     )
     with patch(f"{WP}.time") as t, patch(f"{WP}.paddle") as pdl:
         t.time.return_value = 100.0
-        mock_data = MagicMock()
-        mock_data.__getitem__ = MagicMock(return_value=147183647)
-        pdl.to_tensor.return_value = mock_data
+        pdl.to_tensor.return_value = np.array([147183647])
         with patch.object(p3, "update_weights_from_tensor"):
             p3._run_eplb(tp_rank=0)
     assert p3.signal_clear_experts_token_stats.value[0] == 0
@@ -548,25 +549,27 @@ def test_barrier_broadcast_update(pw):
     plat, gw = pw
     plat.is_xpu.return_value = True
     p2 = _make(pw)
-    p2.task_queue = MagicMock()
+    _barrier_waited = []
+    p2.task_queue = types.SimpleNamespace(
+        worker_process_tp_barrier=types.SimpleNamespace(wait=lambda: _barrier_waited.append(1))
+    )
     p2._tp_barrier_wait()
-    p2.task_queue.worker_process_tp_barrier.wait.assert_called_once()
+    assert len(_barrier_waited) == 1
     plat.is_xpu.return_value = False
     # broadcast
     with patch(f"{WP}.paddle") as pdl:
         p3 = _make(pw, ranks=2)
         p3.model_weights_signal = np.array([42], dtype=np.int32)
-        mock_t = MagicMock()
-        mock_t.numpy.return_value = np.array([42])
-        pdl.full.return_value = mock_t
+        pdl.full.return_value = types.SimpleNamespace(numpy=lambda: np.array([42]))
         assert p3._broadcast_model_weights_signal(src=0, group=None) == 42
     # update_weights_from_tensor
     with patch(f"{WP}.load_tensor_from_shm_mem") as load, patch(f"{WP}.MODEL_MAIN_NAME", "main"):
         p4 = _make(pw)
-        p4.experts_manager = MagicMock()
-        p4.experts_manager.tensor_infos = {"x": 1}
-        p4.experts_manager.get_ep_rank_to_expert_id_list.return_value = ([1], {0: 1}, 1)
-        load.return_value = {"w": MagicMock()}
+        p4.experts_manager = types.SimpleNamespace(
+            tensor_infos={"x": 1},
+            get_ep_rank_to_expert_id_list=lambda: ([1], {0: 1}, 1),
+        )
+        load.return_value = {"w": np.zeros(1)}
         p4.update_weights_from_tensor({"main": "data"})
         load.assert_called_once()
         assert p4.experts_manager.tensor_infos is None
@@ -588,8 +591,7 @@ def test_run_worker_proc():
     ):
         plat.is_iluvatar.return_value = False
         env.FD_DETERMINISTIC_MODE = False
-        wp = MagicMock()
-        cls.return_value = wp
+        wp = cls.return_value
         run_worker_proc()
         cls.assert_called_once()
         wp.init_control.assert_called_once()
@@ -597,17 +599,30 @@ def test_run_worker_proc():
         # Deterministic mode
         cls.reset_mock()
         env.FD_DETERMINISTIC_MODE = True
-        wp2 = MagicMock()
-        cls.return_value = wp2
-        mock_biao = MagicMock()
+        _dm_calls = []
+        mock_biao = types.SimpleNamespace(init_deterministic_mode=lambda: _dm_calls.append(1))
         with patch.dict("sys.modules", {"fastdeploy.model_executor.layers.batch_invariant_ops": mock_biao}):
             run_worker_proc()
-        mock_biao.init_deterministic_mode.assert_called_once()
+        assert len(_dm_calls) == 1
         # Iluvatar path
         cls.reset_mock()
         plat.is_iluvatar.return_value = True
         env.FD_DETERMINISTIC_MODE = False
-        mock_il = MagicMock()
+        _il_calls = []
+
+        def _make_il_wp(*a, **kw):
+            _il_calls.append(1)
+            return types.SimpleNamespace(
+                init_device=lambda: None,
+                load_model=lambda: None,
+                initialize_kv_cache=lambda: None,
+                graph_optimize_and_warm_up_model=lambda: None,
+                init_health_status=lambda: None,
+                start_task_queue_service=lambda: None,
+                event_loop_normal=lambda: None,
+            )
+
+        mock_il = types.SimpleNamespace(IluvatarPaddleDisWorkerProc=_make_il_wp)
         with patch.dict("sys.modules", {"fastdeploy.worker.iluvatar_worker": mock_il}):
             run_worker_proc()
-        mock_il.IluvatarPaddleDisWorkerProc.assert_called_once()
+        assert len(_il_calls) == 1
