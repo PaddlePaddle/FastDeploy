@@ -212,6 +212,9 @@ __global__ void multi_query_append_attention_kernel(
 
   uint32_t kv_idx_base = chunk_start;
   int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
+  if (block_id < 0) {
+    block_id = 0;
+  }
   const uint32_t const_offset =
       (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
       (wid * 4 + tid / 8) * kv_b_stride + tid % 8 * num_elems_per_128b<T>();
@@ -606,6 +609,9 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
 
   uint32_t kv_idx_base = chunk_start;
   int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
+  if (block_id < 0) {
+    block_id = 0;
+  }
   const uint32_t const_offset =
       (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
       (wid * 4 + tid / 8) * kv_b_stride + tid % 8 * num_elems_per_128b<T>();
