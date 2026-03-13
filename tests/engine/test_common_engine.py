@@ -692,9 +692,20 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng = self._make_mixed_engine()
         eng.send_response_server = Mock()
 
-        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
+        ):
             eng._send_error_response("rid0", "boom", error_code=400)
             eng.send_response_server.send_response.assert_called_with("rid0", [ANY])
+
+        eng.send_response_server.reset_mock()
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", True),
+        ):
+            eng._send_error_response("rid2", "boom", error_code=400)
+            eng.send_response_server.send_response.assert_called_with(None, [ANY])
 
         eng.send_response_server.reset_mock()
         with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True):
@@ -1589,6 +1600,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch("fastdeploy.engine.common_engine.ZmqIpcServer", self._make_zmq_server_cls()),
             patch("fastdeploy.engine.common_engine.threading.Thread", self._make_zmq_thread_cls(created)),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
