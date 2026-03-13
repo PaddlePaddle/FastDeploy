@@ -1,4 +1,3 @@
-"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,13 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
 
 import sys
 import types
 from types import SimpleNamespace
 
 import paddle
+import pytest
 
 # Stub GPU-only ops for CPU environments (cf. test_fused_moe_cutlass_backend.py)
 _gpu = sys.modules.get("fastdeploy.model_executor.ops.gpu")
@@ -154,3 +153,7 @@ def test_apply_noaux_tc(monkeypatch):
     monkeypatch.setattr("paddle.incubate.nn.functional.swiglu", lambda x: x[..., : x.shape[-1] // 2])
     out = m.apply(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
     assert out.shape == [2, 64]
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
