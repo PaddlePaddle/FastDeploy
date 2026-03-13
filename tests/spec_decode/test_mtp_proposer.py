@@ -403,7 +403,7 @@ class TestMTPProposer(unittest.TestCase):
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
         mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
-        mock_eagle.return_value = paddle.zeros([2, 768], dtype="bfloat16")
+        mock_eagle.return_value = (paddle.zeros([2, 768], dtype="bfloat16"), paddle.to_tensor([2], dtype="int32"))
         mock_preprocess.return_value = None
 
         proposer = MTPProposer(
