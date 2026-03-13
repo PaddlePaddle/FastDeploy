@@ -256,7 +256,10 @@ class _EnvsModule(ModuleType):
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
     def __setattr__(self, name: str, value: Any):
-        raise AttributeError(f"Environment variables are read-only. Use os.environ to modify '{name}'.")
+        if name in environment_variables:
+            os.environ[name] = str(value)
+        else:
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
     def __dir__(self):
         return list(environment_variables.keys())
