@@ -30,6 +30,7 @@ __global__ void draft_model_update_kernel(const int64_t* inter_next_tokens,
                                           const int64_t* max_dec_len,
                                           const int64_t* end_ids,
                                           int64_t* base_model_draft_tokens,
+                                          const int64_t* prompt_lens,
                                           const int bsz,
                                           const int max_draft_token,
                                           const int pre_id_length,
@@ -72,10 +73,18 @@ __global__ void draft_model_update_kernel(const int64_t* inter_next_tokens,
         // seq_lens_decoder[tid] = seq_lens_encoder[tid];
         seq_lens_decoder[tid] = seq_len_encoder + seq_len_decoder;
         seq_lens_encoder[tid] = 0;
-        pre_ids_now[1] = token_this_time;
         step_idx[tid] += 1;
-        draft_token_now[0] = token_this_time;
-        base_model_draft_tokens_now[substep + 1] = token_this_time;
+
+        if (seq_lens_decoder[tid] >= prompt_lens[tid]) {
+          pre_ids_now[1] = token_this_time;
+          draft_token_now[0] = token_this_time;
+          base_model_draft_tokens_now[substep + 1] = token_this_time;
+        } else {
+          stop_flags[tid] = true;
+          seq_lens_this_time[tid] = 0;
+          seq_lens_decoder[tid] = 0;
+          stop_flag_now_int = 1;
+        }
       }
 
       // multi_end
@@ -130,6 +139,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& max_dec_len,
                       const paddle::Tensor& end_ids,
                       const paddle::Tensor& base_model_draft_tokens,
+                      const paddle::Tensor& prompt_lens,
                       const int max_seq_len,
                       const int substep) {
   auto seq_lens_this_time_shape = seq_lens_this_time.shape();
@@ -166,6 +176,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
       max_dec_len.data<int64_t>(),
       end_ids.data<int64_t>(),
       const_cast<int64_t*>(base_model_draft_tokens.data<int64_t>()),
+      prompt_lens.data<int64_t>(),
       real_bsz,
       max_draft_token,
       pre_id_length,
@@ -195,7 +206,8 @@ PD_BUILD_STATIC_OP(draft_model_update)
              "not_need_stop",
              "max_dec_len",
              "end_ids",
-             "base_model_draft_tokens"})
+             "base_model_draft_tokens",
+             "prompt_lens"})
     .Attrs({"max_seq_len: int", "substep: int"})
     .Outputs({"draft_tokens_out",
               "pre_ids_out",

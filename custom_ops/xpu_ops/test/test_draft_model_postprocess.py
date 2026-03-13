@@ -22,6 +22,7 @@ def draft_model_postprocess_cpu(
     base_model_seq_lens_encoder,  # 1D列表: [bsz]
     base_model_stop_flags,  # 1D列表: [bsz]
     batch_drop,
+    is_dummy_run=False,
 ):
     bsz = base_model_draft_tokens.shape[0]
     base_model_draft_token_len = base_model_draft_tokens.shape[1]
@@ -64,6 +65,7 @@ def test_draft_model_postprocess(batch_size=1, base_model_draft_token_len=8192):
         base_model_seq_lens_encoder,  # 1D列表: [bsz]
         base_model_stop_flags,
         batch_drop,
+        is_dummy_run=False,
     )
     base_model_seq_lens_this_time_xpu = paddle.ones((batch_size), dtype=paddle.int32)
     draft_model_postprocess(
@@ -72,6 +74,7 @@ def test_draft_model_postprocess(batch_size=1, base_model_draft_token_len=8192):
         base_model_seq_lens_encoder,  # 1D列表: [bsz]
         base_model_stop_flags,
         batch_drop,
+        False,  # is_dummy_run
     )
     print("test start")
     assert np.allclose(base_model_seq_lens_this_time, base_model_seq_lens_this_time_xpu)

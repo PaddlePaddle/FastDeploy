@@ -772,6 +772,7 @@ class MTPProposer(Proposer):
             self.model_inputs["max_dec_len"],
             self.model_inputs["eos_token_id"],
             self.model_inputs["base_model_draft_tokens"],
+            self.model_inputs["prompt_lens"],
             self.max_model_len,
             self.model_inputs["substep"],
         )

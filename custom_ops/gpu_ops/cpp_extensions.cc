@@ -995,6 +995,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& max_dec_len,
                       const paddle::Tensor& end_ids,
                       const paddle::Tensor& base_model_draft_tokens,
+                      const paddle::Tensor& prompt_lens,
                       const int max_seq_len,
                       const int substep);
 

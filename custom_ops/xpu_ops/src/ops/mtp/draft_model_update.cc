@@ -35,6 +35,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& max_dec_len,
                       const paddle::Tensor& end_ids,
                       const paddle::Tensor& base_model_draft_tokens,
+                      const paddle::Tensor& prompt_lens,
                       const int max_seq_len,
                       const int substep) {
   // printf("enter clear \n");
@@ -109,7 +110,8 @@ PD_BUILD_STATIC_OP(draft_model_update)
              "not_need_stop",
              "max_dec_len",
              "end_ids",
-             "base_model_draft_tokens"})
+             "base_model_draft_tokens",
+             "prompt_lens"})
     .Attrs({"max_seq_len: int", "substep: int"})
     .Outputs({"draft_tokens_out",
               "pre_ids_out",
