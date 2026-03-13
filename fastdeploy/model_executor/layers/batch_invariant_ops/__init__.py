@@ -8,6 +8,7 @@ from .batch_invariant_ops import (
     log_softmax,
     matmul_persistent,
     mean_dim,
+    rms_norm_batch_invariant,
     set_batch_invariant_mode,
 )
 
@@ -22,6 +23,7 @@ __all__ = [
     "matmul_persistent",
     "log_softmax",
     "mean_dim",
+    "rms_norm_batch_invariant",
     "get_batch_invariant_attention_block_size",
     "AttentionBlockSize",
 ]

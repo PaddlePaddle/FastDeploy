@@ -380,15 +380,8 @@ class DSAAttentionBackend(AttentionBackend):
                 k_pe,
                 latent_cache,
                 metadata.slot_mapping,
-                forward_meta.seq_lens_encoder,
-                forward_meta.seq_lens_decoder,
-                forward_meta.batch_id_per_token,
-                forward_meta.cu_seqlens_q,
-                metadata.block_tables,
-                None,
                 scale.cast(paddle.float32),
                 "fp8_ds_mla",
-                self.max_seq_len,
                 True,
             )
 
@@ -419,15 +412,8 @@ class DSAAttentionBackend(AttentionBackend):
                 k_pe,
                 latent_cache,
                 metadata.slot_mapping,
-                forward_meta.seq_lens_decoder,
-                forward_meta.seq_lens_decoder,
-                forward_meta.batch_id_per_token,
-                forward_meta.cu_seqlens_q,
-                metadata.block_tables,
-                None,
                 scale.cast(paddle.float32),
                 "fp8_ds_mla",
-                self.max_seq_len,
                 False,
             )
 

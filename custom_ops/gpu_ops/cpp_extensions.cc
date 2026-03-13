@@ -1215,15 +1215,8 @@ std::vector<paddle::Tensor> DSMLAWriteCacheKernel(
     const paddle::Tensor& kv_pe,
     const paddle::Tensor& kv_cache,
     const paddle::Tensor& slot_mapping,
-    const paddle::Tensor& seq_lens,
-    const paddle::Tensor& seq_lens_decoder,
-    const paddle::Tensor& batch_id_per_token,
-    const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& block_tables,
-    const paddle::optional<paddle::Tensor>& kv_signal_data,
     const paddle::optional<paddle::Tensor>& scale,
     const std::string& cache_quant_type_str,
-    const int max_seq_len,
     const bool is_prefill);
 
 std::vector<paddle::Tensor> IndexerKQuantAndCacheKernel(
