@@ -447,13 +447,17 @@ class MTPProposer(Proposer):
             }
         )
 
-    def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
+    def insert_tasks_v1(
+        self, req_dicts: List[Request], num_running_requests: int, target_model_index_to_batch_id: dict = {}
+    ):
 
         if "caches" not in self.model_inputs:
             self.initialize_kv_cache()
         req_len = len(req_dicts)
         self.model_inputs["num_running_requests"] = num_running_requests
         self.model_inputs["running_requests_ids"] = range(num_running_requests)
+        if target_model_index_to_batch_id:
+            self.model_inputs.index_to_batch_id = dict(target_model_index_to_batch_id)
         for i in range(req_len):
             request = req_dicts[i]
             logger.debug(f"{i}th request-{request.request_id}: {request}")
@@ -1207,11 +1211,11 @@ class MTPProposer(Proposer):
             raise NotImplementedError
         return cache_type
 
-    def reorder_inputs(self):
+    def reorder_inputs(self, target_model_input_batch):
         """
         Reorder inputs to split prefill and decode.
         """
-        reorder_split_prefill_and_decode_form_index_to_batch_id(self.model_inputs)
+        reorder_split_prefill_and_decode_form_index_to_batch_id(self.model_inputs, target_model_input_batch)
 
     def _share_external_data(self, cache, cache_name, cache_shape):
         if current_platform.is_xpu():
