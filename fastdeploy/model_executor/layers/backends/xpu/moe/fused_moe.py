@@ -457,6 +457,19 @@ class XPUMoEMethod(MoEMethodBase):
             hadamard_block_size,
             valid_token_num,
         )
+        print("ffn1_x:", ffn1_x)
+        print("token_num_lod:", token_num_lod)
+        print("w1:", w1)
+        print("w2:", w2)
+        print("in_scale_1:", in_scale_1)
+        print("in_scale_2:", in_scale_2)
+        print("w_scale_1:", w_scale_1)
+        print("w_scale_2:", w_scale_2)
+        print("self.xpu_moe_quant_type:", self.xpu_moe_quant_type)
+        print("hadamard_block_size:", hadamard_block_size)
+        print("valid_token_num:", valid_token_num)
+        print("ffn_out:", ffn_out)
+
         return ffn_out
 
     def apply_ep_prefill(
@@ -555,12 +568,12 @@ class XPUMoEMethod(MoEMethodBase):
             token_num_lod,
             token_all_num,
         )
-        print("permute_input: ", permute_input)
+        print("permute_input: ", permute_input, paddle.mean(permute_input.astype('float32')))
         print("token_all_num: ", token_all_num)
         print("token_num_lod: ", token_num_lod)
-        print("ffn1_x_scale: ", ffn1_x_scale)
-        print("[DEBUG apply_ep_prefill ffn_out] ffn_out: ", ffn_out)
-        print(f"[DEBUG apply_ep_prefill] compute_ffn done, ffn_out.shape={ffn_out.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+        print("ffn1_x_scale: ", ffn1_x_scale, paddle.mean(ffn1_x_scale.astype('float32')))
+        print("[DEBUG apply_ep_prefill ffn_out] ffn_out: ", ffn_out, paddle.mean(ffn_out.astype('float32')))
+        # print(f"[DEBUG apply_ep_prefill] compute_ffn done, ffn_out={paddle.mean(ffn_out)}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         recv_topk_weights_bf16 = recv_topk_weights.astype("bfloat16")
         tmp_ffn_out = ep_moe_expert_combine(
@@ -574,12 +587,12 @@ class XPUMoEMethod(MoEMethodBase):
         )
 
         # 5. EP combine
-        print(f"[DEBUG apply_ep_prefill] calling EP combine, tmp_ffn_out.shape={tmp_ffn_out.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+        print(f"[DEBUG apply_ep_prefill] calling EP combine, tmp_ffn_out.shape={paddle.mean(tmp_ffn_out.astype('float32'))}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
         tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
-        print(f"[DEBUG apply_ep_prefill] EP combine done, result.shape={tmp_ffn_out.shape}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+        print(f"[DEBUG apply_ep_prefill] EP combine done, result.shape={paddle.mean(tmp_ffn_out.astype('float32'))}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
-        print("[DEBUG apply_ep_prefill output] tmp_ffn_out: ", tmp_ffn_out)
+        print("[DEBUG apply_ep_prefill output] fused_moe_out: ", tmp_ffn_out)
         return tmp_ffn_out
 
     def apply_ep_decode(
@@ -821,11 +834,7 @@ class XPUW4A8MoEMethod(XPUMoEMethod):
             for i in range(layer.num_local_experts):
                 weight_list.append(weight_tensor[i].transpose([1, 0]))  # transpone to [n, k]
             quanted_weight = paddle.stack(weight_list, axis=0)
-            print("###########################")
-            print(quanted_weight)
-            getattr(layer, weight_name).set_value(
-                self.paddle_swap_int4_pack_int4_0123_to_int8_1032in_int8(quanted_weight)
-            )
+            getattr(layer, weight_name).set_value(quanted_weight)
 
         self.load_w4a8_scale_weights(
             layer,

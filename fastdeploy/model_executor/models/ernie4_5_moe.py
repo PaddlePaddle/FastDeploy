@@ -317,12 +317,12 @@ class Ernie4_5_Attention(nn.Layer):
         _bs = hidden_states.shape[0]
         _layer_id = getattr(self, '_debug_layer_id', '?')
         if _bs > 0:
-            print(f"[DEBUG Attn L{_layer_id}] START hidden.shape={hidden_states.shape} dtype={hidden_states.dtype}", flush=True, file=sys.stderr)
+            print(f"[DEBUG Attn L{_layer_id}] START hidden.shape={hidden_states} dtype={hidden_states.dtype}", flush=True, file=sys.stderr)
 
         qkv_out = self.qkv_proj(hidden_states)
         if _bs > 0:
             paddle.device.synchronize()
-            print(f"[DEBUG Attn L{_layer_id}] qkv_proj SYNC OK shape={qkv_out.shape} dtype={qkv_out.dtype} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+            print(f"[DEBUG Attn L{_layer_id}] qkv_proj SYNC OK shape={qkv_out} dtype={qkv_out.dtype} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         attn_out = self.attn(
             qkv=qkv_out,
@@ -330,12 +330,12 @@ class Ernie4_5_Attention(nn.Layer):
         )
         if _bs > 0:
             paddle.device.synchronize()
-            print(f"[DEBUG Attn L{_layer_id}] attn SYNC OK shape={attn_out.shape} dtype={attn_out.dtype} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+            print(f"[DEBUG Attn L{_layer_id}] attn SYNC OK shape={attn_out} dtype={attn_out.dtype} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         output = self.o_proj(attn_out)
         if _bs > 0:
             paddle.device.synchronize()
-            print(f"[DEBUG Attn L{_layer_id}] o_proj SYNC OK shape={output.shape} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+            print(f"[DEBUG Attn L{_layer_id}] o_proj SYNC OK shape={output} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         return output
 
