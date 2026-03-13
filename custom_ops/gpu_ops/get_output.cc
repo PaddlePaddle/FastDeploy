@@ -49,7 +49,7 @@ void GetOutput(const paddle::Tensor& x,
 #endif
     msg_queue_id = inference_msg_queue_id_from_env;
   }
-  static key_t key = ftok("/dev/shm", msg_queue_id);
+  static key_t key = custom_ftok("/dev/shm", msg_queue_id);
   static int msgid = msgget(key, IPC_CREAT | 0666);
 
 #ifdef GET_OUTPUT_DEBUG

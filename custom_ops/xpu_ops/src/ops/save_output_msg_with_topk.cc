@@ -94,7 +94,7 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
               << std::endl;
 #endif
   }
-  static key_t key = ftok("/dev/shm", msg_queue_id);
+  static key_t key = custom_ftok("/dev/shm", msg_queue_id);
   static int msgid = msgget(key, IPC_CREAT | 0666);
 #ifdef SAVE_WITH_OUTPUT_DEBUG
   std::cout << "save_output_key: " << key << std::endl;

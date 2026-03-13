@@ -25,7 +25,7 @@ void GetOutputKVSignal(const paddle::Tensor &x,
                        bool wait_flag) {
   int msg_queue_id = 1024 + rank_id;
   static struct msgdatakv msg_rcv;
-  static key_t key = ftok("/opt/", msg_queue_id);
+  static key_t key = custom_ftok("/opt/", msg_queue_id);
   static int msgid = msgget(key, IPC_CREAT | 0666);
 
   int *out_data = const_cast<int *>(x.data<int>());
@@ -67,7 +67,7 @@ void GetOutput(const paddle::Tensor &x,
 #endif
     msg_queue_id = inference_msg_queue_id_from_env;
   }
-  static key_t key = ftok("/dev/shm", msg_queue_id);
+  static key_t key = custom_ftok("/dev/shm", msg_queue_id);
   static int msgid = msgget(key, IPC_CREAT | 0666);
 
 #ifdef GET_OUTPUT_DEBUG

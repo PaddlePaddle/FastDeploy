@@ -74,7 +74,7 @@ struct RemoteCacheKvIpc {
       if (!inited) {
         // just init once
         const int msg_id = 1024 + rank;
-        key_t key = ftok("/opt/", msg_id);
+        key_t key = custom_ftok("/opt/", msg_id);
         msgid = msgget(key, IPC_CREAT | 0666);
         inited = true;
       }

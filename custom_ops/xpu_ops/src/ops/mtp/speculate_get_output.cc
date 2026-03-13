@@ -51,7 +51,7 @@ void SpeculateGetOutput(const paddle::Tensor& x,
 
   static struct msgdata msg_rcv;
 
-  static key_t key = ftok("./", msg_queue_id);
+  static key_t key = custom_ftok("./", msg_queue_id);
 
   static int msgid = msgget(key, IPC_CREAT | 0666);
 
