@@ -80,7 +80,7 @@ struct RemoteCacheKvIpc {
           msg_queue_id = std::stoi(msg_que_str);
         }
         msg_queue_id += rank;
-        key_t key = ftok("/opt/", msg_queue_id);
+        key_t key = custom_ftok("/opt/", msg_queue_id);
         msgid = msgget(key, IPC_CREAT | 0666);
         inited = true;
       }
