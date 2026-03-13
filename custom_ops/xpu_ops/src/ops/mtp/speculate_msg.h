@@ -21,26 +21,11 @@
 #include <sys/msg.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include "../custom_ftok.h"
 #include "paddle/extension.h"
 
 #define MAX_BSZ 256
 #define MAX_DRAFT_TOKENS 6
-
-// Custom ftok that uses the low 16 bits of id instead of only 8 bits.
-// This avoids dependency on filesystem paths while preserving queue separation.
-inline key_t custom_ftok(const char* path, int id) {
-  struct stat st;
-  if (stat(path, &st) < 0) {
-    fprintf(stderr,
-            "[custom_ftok] stat(\"%s\") failed (errno=%d), "
-            "msg queue key will be invalid!\n",
-            path,
-            errno);
-    return static_cast<key_t>(-1);
-  }
-  return static_cast<key_t>(((st.st_dev & 0xff) << 24) |
-                            ((st.st_ino & 0xff) << 16) | (id & 0xffff));
-}
 
 struct speculate_msgdata {
   long mtype;  // NOLINT

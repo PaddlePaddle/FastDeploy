@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "custom_ftok.h"
 #include "helper.h"
 #include "save_with_output_msg.h"
 
