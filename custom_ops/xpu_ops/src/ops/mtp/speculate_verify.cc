@@ -107,7 +107,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
   int ret;
   if (use_topk) {
     if (enable_topp) {
-      ret = baidu::xpu::api::plugin::speculate_verify<true, true>(
+      ret = fastdeploy::plugin::speculate_verify<true, true>(
           ctx,
           sampled_token_ids.data<int64_t>(),
           const_cast<int64_t *>(accept_tokens.data<int64_t>()),
@@ -140,7 +140,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
           use_target_sampling);
       PD_CHECK(ret == 0, "speculate_verify failed.");
     } else {
-      ret = baidu::xpu::api::plugin::speculate_verify<false, true>(
+      ret = fastdeploy::plugin::speculate_verify<false, true>(
           ctx,
           sampled_token_ids.data<int64_t>(),
           const_cast<int64_t *>(accept_tokens.data<int64_t>()),
@@ -175,7 +175,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
     PD_CHECK(ret == 0, "speculate_verify failed.");
   } else {
     if (enable_topp) {
-      ret = baidu::xpu::api::plugin::speculate_verify<true, false>(
+      ret = fastdeploy::plugin::speculate_verify<true, false>(
           ctx,
           sampled_token_ids.data<int64_t>(),
           const_cast<int64_t *>(accept_tokens.data<int64_t>()),
@@ -208,7 +208,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
           use_target_sampling);
       PD_CHECK(ret == 0, "speculate_verify failed.");
     } else {
-      ret = baidu::xpu::api::plugin::speculate_verify<false, false>(
+      ret = fastdeploy::plugin::speculate_verify<false, false>(
           ctx,
           sampled_token_ids.data<int64_t>(),
           const_cast<int64_t *>(accept_tokens.data<int64_t>()),

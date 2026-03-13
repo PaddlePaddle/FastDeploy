@@ -2,8 +2,7 @@
 #include "xpu/kernel/cluster_partition.h"
 #include "xpu/kernel/cluster_primitive.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __global__ void ComputeSelfOrderKernel(const int* last_seq_lens_this_time,
                                        const int* seq_lens_this_time,
@@ -69,5 +68,4 @@ __global__ void ComputeSelfOrderKernel(const int* last_seq_lens_this_time,
   LM2GM(&out_offset, output_token_num, sizeof(int));
 }
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

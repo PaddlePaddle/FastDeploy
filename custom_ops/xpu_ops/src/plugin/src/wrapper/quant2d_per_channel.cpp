@@ -17,8 +17,7 @@
 #include "xpu/refactor/impl/xdnn_impl.h"
 #include "xpu/xdnn.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 template <typename TX, typename TSCALE, typename TY>
 __attribute__((global)) void quant2d_per_channel_cluster(
     const TX *x, const TSCALE *scale, TY *y, int64_t m, int64_t n);
@@ -30,14 +29,11 @@ __attribute__((global)) void quant2d_per_channel_cached(
 template <typename TX, typename TSCALE, typename TY>
 __attribute__((global)) void quant2d_per_channel_bign(
     const TX *input, TY *output, TSCALE *scale, int64_t m, int64_t n);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
 namespace api = baidu::xpu::api;
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 template <typename TX,
@@ -192,7 +188,7 @@ int xpu3_wrapper_input_scale(api::Context *ctx,
                              TY *y,
                              int64_t m,
                              int64_t n) {
-  auto func = xpu3::plugin::quant2d_per_channel_cluster<TX, TSCALE, TY>;
+  auto func = fd_xpu3::quant2d_per_channel_cluster<TX, TSCALE, TY>;
   int32_t ret_xre =
       func<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(x, scale, y, m, n);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
@@ -212,24 +208,24 @@ int xpu3_wrapper_output_scale(api::Context *ctx,
                               int64_t n) {
   int64_t channel_size = m * sizeof(TX);
   int64_t cluster_n = (n + ctx->ncluster() - 1) / ctx->ncluster();
-  auto func = xpu3::plugin::quant2d_per_channel_bign<TX, TSCALE, TY>;
+  auto func = fd_xpu3::quant2d_per_channel_bign<TX, TSCALE, TY>;
   if (n < 1536) {
     if (channel_size <= 2048) {
       if (cluster_n <= 64) {
-        func = xpu3::plugin::quant2d_per_channel_cached<TX, TSCALE, TY, 64>;
+        func = fd_xpu3::quant2d_per_channel_cached<TX, TSCALE, TY, 64>;
       } else if (cluster_n <= 32) {
-        func = xpu3::plugin::quant2d_per_channel_cached<TX, TSCALE, TY, 32>;
+        func = fd_xpu3::quant2d_per_channel_cached<TX, TSCALE, TY, 32>;
       } else {
-        func = xpu3::plugin::quant2d_per_channel_cached<TX, TSCALE, TY, 128>;
+        func = fd_xpu3::quant2d_per_channel_cached<TX, TSCALE, TY, 128>;
       }
     } else if (channel_size <= 4096) {
       if (cluster_n <= 32) {
-        func = xpu3::plugin::quant2d_per_channel_cached<TX, TSCALE, TY, 32>;
+        func = fd_xpu3::quant2d_per_channel_cached<TX, TSCALE, TY, 32>;
       } else {
-        func = xpu3::plugin::quant2d_per_channel_cached<TX, TSCALE, TY, 64>;
+        func = fd_xpu3::quant2d_per_channel_cached<TX, TSCALE, TY, 64>;
       }
     } else if (channel_size <= 8192) {
-      func = xpu3::plugin::quant2d_per_channel_cached<TX, TSCALE, TY, 32>;
+      func = fd_xpu3::quant2d_per_channel_cached<TX, TSCALE, TY, 32>;
     }
   }
   int32_t ret_xre =
@@ -248,7 +244,7 @@ int xpu3_wrapper_output_scale(api::Context *ctx,
                               TY *y,
                               int64_t m,
                               int64_t n) {
-  auto func = xpu3::plugin::quant2d_per_channel_bign<TX, TSCALE, TY>;
+  auto func = fd_xpu3::quant2d_per_channel_bign<TX, TSCALE, TY>;
   int32_t ret_xre =
       func<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(x, y, scale, m, n);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
@@ -319,6 +315,4 @@ INSTANTIATION_QUANT2D_PER_CHANNEL(float16, float, int4_t);
 INSTANTIATION_QUANT2D_PER_CHANNEL(float, float, int4_t);
 INSTANTIATION_QUANT2D_PER_CHANNEL(bfloat16, float, int4_t);
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

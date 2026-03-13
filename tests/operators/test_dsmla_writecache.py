@@ -143,15 +143,8 @@ class TestBasicPrefill(BaseDSMLAWriteCacheTest):
             tensors["kv_pe"],
             tensors["kv_cache"],
             tensors["slot_mapping"],
-            tensors["seq_lens"],
-            tensors["seq_lens_decoder"],
-            tensors["batch_id_per_token"],
-            tensors["cu_seqlens_q"],
-            tensors["block_tables"],
-            None,  # kv_signal_data
             tensors["scale"],
             "fp8_ds_mla",
-            tensors["max_seq_len"],
             True,  # is_prefill
         )
 
@@ -173,15 +166,8 @@ class TestBasicDecode(BaseDSMLAWriteCacheTest):
             tensors["kv_pe"],
             tensors["kv_cache"],
             tensors["slot_mapping"],
-            tensors["seq_lens"],
-            tensors["seq_lens_decoder"],
-            tensors["batch_id_per_token"],
-            tensors["cu_seqlens_q"],
-            tensors["block_tables"],
-            None,
             tensors["scale"],
             "fp8_ds_mla",
-            tensors["max_seq_len"],
             False,  # is_prefill
         )
 
@@ -205,15 +191,8 @@ class TestSingleToken(BaseDSMLAWriteCacheTest):
             tensors["kv_pe"],
             tensors["kv_cache"],
             tensors["slot_mapping"],
-            tensors["seq_lens"],
-            tensors["seq_lens_decoder"],
-            tensors["batch_id_per_token"],
-            tensors["cu_seqlens_q"],
-            tensors["block_tables"],
-            None,
             tensors["scale"],
             "fp8_ds_mla",
-            tensors["max_seq_len"],
             True,
         )
 
@@ -232,15 +211,8 @@ class TestLargeBatch(BaseDSMLAWriteCacheTest):
             tensors["kv_pe"],
             tensors["kv_cache"],
             tensors["slot_mapping"],
-            tensors["seq_lens"],
-            tensors["seq_lens_decoder"],
-            tensors["batch_id_per_token"],
-            tensors["cu_seqlens_q"],
-            tensors["block_tables"],
-            None,
             tensors["scale"],
             "fp8_ds_mla",
-            tensors["max_seq_len"],
             True,
         )
 
@@ -261,15 +233,8 @@ class TestUnalignedTokens(BaseDSMLAWriteCacheTest):
             tensors["kv_pe"],
             tensors["kv_cache"],
             tensors["slot_mapping"],
-            tensors["seq_lens"],
-            tensors["seq_lens_decoder"],
-            tensors["batch_id_per_token"],
-            tensors["cu_seqlens_q"],
-            tensors["block_tables"],
-            None,
             tensors["scale"],
             "fp8_ds_mla",
-            tensors["max_seq_len"],
             True,
         )
 
@@ -291,15 +256,8 @@ class TestQuantTypeFp8DsMla(BaseDSMLAWriteCacheTest):
             tensors["kv_pe"],
             tensors["kv_cache"],
             tensors["slot_mapping"],
-            tensors["seq_lens"],
-            tensors["seq_lens_decoder"],
-            tensors["batch_id_per_token"],
-            tensors["cu_seqlens_q"],
-            tensors["block_tables"],
-            None,
             tensors["scale"],
             "fp8_ds_mla",  # 主要测试的量化类型
-            tensors["max_seq_len"],
             True,
         )
 
@@ -321,15 +279,8 @@ class TestQuantTypeNone(BaseDSMLAWriteCacheTest):
                 tensors["kv_pe"],
                 tensors["kv_cache"],
                 tensors["slot_mapping"],
-                tensors["seq_lens"],
-                tensors["seq_lens_decoder"],
-                tensors["batch_id_per_token"],
-                tensors["cu_seqlens_q"],
-                tensors["block_tables"],
-                None,
                 None,  # scale 在无量化时可为 None
                 "none",
-                tensors["max_seq_len"],
                 True,
             )
             self.assertIsNotNone(result)
@@ -353,15 +304,8 @@ class TestWithoutScale(BaseDSMLAWriteCacheTest):
             tensors["kv_pe"],
             tensors["kv_cache"],
             tensors["slot_mapping"],
-            tensors["seq_lens"],
-            tensors["seq_lens_decoder"],
-            tensors["batch_id_per_token"],
-            tensors["cu_seqlens_q"],
-            tensors["block_tables"],
-            None,  # kv_signal_data
-            None,  # scale = None
+            None,
             "fp8_ds_mla",
-            tensors["max_seq_len"],
             True,
         )
 
@@ -380,15 +324,8 @@ class TestWithoutKvSignalData(BaseDSMLAWriteCacheTest):
             tensors["kv_pe"],
             tensors["kv_cache"],
             tensors["slot_mapping"],
-            tensors["seq_lens"],
-            tensors["seq_lens_decoder"],
-            tensors["batch_id_per_token"],
-            tensors["cu_seqlens_q"],
-            tensors["block_tables"],
-            None,  # kv_signal_data = None
             tensors["scale"],
             "fp8_ds_mla",
-            tensors["max_seq_len"],
             True,
         )
 
@@ -410,15 +347,8 @@ class TestBfloat16Input(BaseDSMLAWriteCacheTest):
             tensors["kv_pe"],
             tensors["kv_cache"],
             tensors["slot_mapping"],
-            tensors["seq_lens"],
-            tensors["seq_lens_decoder"],
-            tensors["batch_id_per_token"],
-            tensors["cu_seqlens_q"],
-            tensors["block_tables"],
-            None,
             tensors["scale"],
             "fp8_ds_mla",
-            tensors["max_seq_len"],
             True,
         )
 
@@ -438,15 +368,8 @@ class TestFloat16Input(BaseDSMLAWriteCacheTest):
                 tensors["kv_pe"],
                 tensors["kv_cache"],
                 tensors["slot_mapping"],
-                tensors["seq_lens"],
-                tensors["seq_lens_decoder"],
-                tensors["batch_id_per_token"],
-                tensors["cu_seqlens_q"],
-                tensors["block_tables"],
-                None,
                 tensors["scale"],
                 "fp8_ds_mla",
-                tensors["max_seq_len"],
                 True,
             )
             self.assertIsNotNone(result)
@@ -471,15 +394,8 @@ class TestDSMLAWriteCachePerformance(BaseDSMLAWriteCacheTest):
                 tensors["kv_pe"],
                 tensors["kv_cache"],
                 tensors["slot_mapping"],
-                tensors["seq_lens"],
-                tensors["seq_lens_decoder"],
-                tensors["batch_id_per_token"],
-                tensors["cu_seqlens_q"],
-                tensors["block_tables"],
-                None,
                 tensors["scale"],
                 "fp8_ds_mla",
-                tensors["max_seq_len"],
                 True,
             )
 
@@ -495,15 +411,8 @@ class TestDSMLAWriteCachePerformance(BaseDSMLAWriteCacheTest):
                 tensors["kv_pe"],
                 tensors["kv_cache"],
                 tensors["slot_mapping"],
-                tensors["seq_lens"],
-                tensors["seq_lens_decoder"],
-                tensors["batch_id_per_token"],
-                tensors["cu_seqlens_q"],
-                tensors["block_tables"],
-                None,
                 tensors["scale"],
                 "fp8_ds_mla",
-                tensors["max_seq_len"],
                 True,
             )
 

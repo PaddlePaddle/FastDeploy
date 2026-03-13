@@ -45,7 +45,7 @@ std::vector<paddle::Tensor> SpeculateGetOutputPaddingOffset(
   auto output_cum_offsets =
       output_cum_offsets_tmp.copy_to(output_cum_offsets_tmp.place(), false);
   if (cpu_out_token_num.data<int64_t>()[0] > 0) {
-    int r = baidu::xpu::api::plugin::speculate_get_output_padding_offset(
+    int r = fastdeploy::plugin::speculate_get_output_padding_offset(
         ctx,
         output_padding_offset.mutable_data<int>(),
         output_cum_offsets.mutable_data<int>(),

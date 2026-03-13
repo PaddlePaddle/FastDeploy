@@ -15,42 +15,38 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 __attribute__((global)) void speculate_clear_accept_nums(
     int* accept_num, const int* seq_lens_decoder, const int max_bsz);
-}
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        int* accept_num,
                        const int* seq_lens_decoder,
                        const int max_bsz) {
   for (int i = 0; i < max_bsz; i++) {
     accept_num[i] = seq_lens_decoder[i] == 0 ? 0 : accept_num[i];
   }
-  return SUCCESS;
+  return api::SUCCESS;
 }
 
-static int xpu2or3_wrapper(Context* ctx,
-                           int* accept_num,
-                           const int* seq_lens_decoder,
-                           const int max_bsz) {
-  ctx_guard RAII_GUARD(ctx);
+static int xpu3_wrapper(api::Context* ctx,
+                        int* accept_num,
+                        const int* seq_lens_decoder,
+                        const int max_bsz) {
+  api::ctx_guard RAII_GUARD(ctx);
   int32_t ret_xre =
-      xpu3::plugin::speculate_clear_accept_nums<<<1, 64, ctx->xpu_stream>>>(
+      fd_xpu3::speculate_clear_accept_nums<<<1, 64, ctx->xpu_stream>>>(
           accept_num, seq_lens_decoder, max_bsz);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
 
   return api::SUCCESS;
 }
 
-int speculate_clear_accept_nums(Context* ctx,
+int speculate_clear_accept_nums(api::Context* ctx,
                                 int* accept_num,
                                 const int* seq_lens_decoder,
                                 const int max_bsz) {
@@ -63,13 +59,11 @@ int speculate_clear_accept_nums(Context* ctx,
     return cpu_wrapper(ctx, accept_num, seq_lens_decoder, max_bsz);
   }
   if (ctx->dev().type() == api::kXPU3) {
-    return xpu2or3_wrapper(ctx, accept_num, seq_lens_decoder, max_bsz);
+    return xpu3_wrapper(ctx, accept_num, seq_lens_decoder, max_bsz);
   }
 
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

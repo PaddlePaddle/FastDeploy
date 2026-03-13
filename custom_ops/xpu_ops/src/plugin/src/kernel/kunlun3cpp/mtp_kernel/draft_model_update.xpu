@@ -3,8 +3,7 @@
 #include "xpu/kernel/cluster_partition.h"
 #include "xpu/kernel/cluster_primitive.h"
 #include "xpu/kernel/cluster_primitive_template.h"
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 inline __device__ bool is_in_end(const int64_t id,
                                  const __global_ptr__ int64_t* end_ids,
                                  int length) {
@@ -108,5 +107,4 @@ __global__ void draft_model_update(const int64_t* inter_next_tokens,
   }
   mfence();
 }
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
