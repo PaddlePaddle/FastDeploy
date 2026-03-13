@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <paddle/phi/backends/xpu/xpu_context.h>
+#include "../custom_ftok.h"
 #include "paddle/phi/core/enforce.h"
 #include "speculate_msg.h"  // NOLINT
 #include "xpu/plugin.h"
