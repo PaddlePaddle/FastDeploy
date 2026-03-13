@@ -707,6 +707,22 @@ class GPUModelRunner(ModelRunnerBase):
         batch_pooling_params = []
         self.share_inputs["num_running_requests"] = num_running_requests
         self.share_inputs["running_requests_ids"] = range(num_running_requests)
+
+        # Collect decode and preempted requests for batch update
+        decode_idxs = []
+        decode_block_tables = []
+        preempt_pairs = []
+
+        for i in range(req_len):
+            request = req_dicts[i]
+            idx = self.share_inputs.get_index_by_batch_id(request.idx)
+
+            if request.task_type.value == RequestType.DECODE.value:
+                decode_idxs.append(idx)
+                decode_block_tables.append(request.block_tables)
+            elif request.task_type.value == RequestType.PREEMPTED.value:
+                preempt_pairs.append((idx, request))
+
         for i in range(req_len):
             request = req_dicts[i]
             idx = self.share_inputs.get_index_by_batch_id(request.idx)
@@ -807,12 +823,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.exist_prefill_flag = False
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
-                encoder_block_num = len(request.block_tables)
-                self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
-                self.share_inputs["block_tables"][idx : idx + 1, :] = -1
-                self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
-                    request.block_tables, dtype="int32"
-                )
                 if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
                     has_decode_task = True
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
@@ -820,21 +830,6 @@ class GPUModelRunner(ModelRunnerBase):
             else:  # preempted task
                 logger.info(f"Handle preempted request {request} at idx {idx}")
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 1
-                self.share_inputs["block_tables"][idx : idx + 1, :] = -1
-                self.share_inputs["stop_flags"][idx : idx + 1] = True
-                self.share_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = 0
-                self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
-                self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
-                self.exist_prefill_flag = False
-                self.share_inputs["is_block_step"][idx : idx + 1] = False
-                self.prompt_logprobs_reqs.pop(request.request_id, None)
-                self.in_progress_prompt_logprobs.pop(request.request_id, None)
-                self.forward_batch_reqs_list[idx] = None
-
-                # Routing Replay
-                if self.fd_config.routing_replay_config.enable_routing_replay:
-                    self.routing_replay_manager.clear_request(batch_id=idx)
-
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
@@ -893,6 +888,12 @@ class GPUModelRunner(ModelRunnerBase):
 
             self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
 
+        if decode_idxs:
+            self._batch_update_decode_block_tables(decode_idxs, decode_block_tables)
+
+        if preempt_pairs:
+            self._batch_update_preempted(preempt_pairs)
+
         self._process_mm_features(req_dicts)
         if has_prefill_task or has_decode_task:
             set_stop(self.share_inputs["not_need_stop"], True)
@@ -900,6 +901,52 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
+
+    def _batch_update_decode_block_tables(self, decode_idxs: List[int], decode_block_tables: List):
+        """Batch update block_tables for decode requests."""
+        if not decode_idxs:
+            return
+
+        idx_arr = np.array(decode_idxs, dtype=np.int32)
+        max_block_len = self.share_inputs["block_tables"].shape[1]
+
+        self.share_inputs["block_tables"][idx_arr, :] = -1
+        self.share_inputs["preempted_idx"][idx_arr, :] = 0
+
+        encoder_block_lens = []
+        for idx, bt in zip(decode_idxs, decode_block_tables):
+            n = len(bt)
+            encoder_block_lens.append(n)
+            if n > 0:
+                self.share_inputs["block_tables"][idx, :n] = np.asarray(bt, dtype=np.int32)
+
+        self.share_inputs["encoder_block_lens"][idx_arr] = np.array(encoder_block_lens, dtype=np.int32)
+
+    def _batch_update_preempted(self, preempt_pairs: List[tuple]):
+        """Batch update preempted requests."""
+        if not preempt_pairs:
+            return
+
+        preempt_idxs = [idx for idx, _ in preempt_pairs]
+
+        self.share_inputs["preempted_idx"][preempt_idxs, :] = 1
+        self.share_inputs["block_tables"][preempt_idxs, :] = -1
+        self.share_inputs["stop_flags"][preempt_idxs] = True
+        self.share_inputs["seq_lens_this_time_buffer"][preempt_idxs] = 0
+        self.share_inputs["seq_lens_decoder"][preempt_idxs] = 0
+        self.share_inputs["seq_lens_encoder"][preempt_idxs] = 0
+        self.share_inputs["is_block_step"][preempt_idxs] = False
+
+        for idx, request in preempt_pairs:
+            request_id = request.request_id
+            self.prompt_logprobs_reqs.pop(request_id, None)
+            self.in_progress_prompt_logprobs.pop(request_id, None)
+            self.forward_batch_reqs_list[idx] = None
+
+            if self.fd_config.routing_replay_config.enable_routing_replay:
+                self.routing_replay_manager.clear_request(batch_id=idx)
+
+        self.exist_prefill_flag = False
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
