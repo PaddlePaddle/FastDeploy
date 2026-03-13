@@ -15,8 +15,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 template <int THREADBLOCK_SIZE>
 __attribute__((global)) void speculate_update_v3(
     int *seq_lens_encoder,          // 输入 [B_max, ]
@@ -33,15 +32,12 @@ __attribute__((global)) void speculate_update_v3(
     const int real_bsz,
     const int max_bsz,
     const int max_draft_tokens);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        int *seq_lens_encoder,          // 输入 [B_max, ]
                        int *seq_lens_decoder,          // 输出 [B_max, ]
                        bool *not_need_stop,            // [1,]
@@ -122,7 +118,7 @@ static int cpu_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context *ctx,
+static int xpu3_wrapper(api::Context *ctx,
                         int *seq_lens_encoder,          // 输入 [B_max, ]
                         int *seq_lens_decoder,          // 输出 [B_max, ]
                         bool *not_need_stop,            // [1,]
@@ -138,8 +134,8 @@ static int xpu3_wrapper(Context *ctx,
                         const int max_bsz,
                         const int max_draft_tokens) {
   constexpr int BlockSize = 512;
-  using XPU_TI = typename XPUIndexType<int64_t>::type;
-  int32_t ret_xre = xpu3::plugin::speculate_update_v3<BlockSize>
+  using XPU_TI = typename api::XPUIndexType<int64_t>::type;
+  int32_t ret_xre = fd_xpu3::speculate_update_v3<BlockSize>
       <<<1, 64, ctx->xpu_stream>>>(seq_lens_encoder,
                                    seq_lens_decoder,
                                    not_need_stop,
@@ -158,7 +154,7 @@ static int xpu3_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-int speculate_update_v3(Context *ctx,
+int speculate_update_v3(api::Context *ctx,
                         int *seq_lens_encoder,          // 输入 [B_max, ]
                         int *seq_lens_decoder,          // 输出 [B_max, ]
                         bool *not_need_stop,            // [1,]
@@ -237,6 +233,4 @@ int speculate_update_v3(Context *ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

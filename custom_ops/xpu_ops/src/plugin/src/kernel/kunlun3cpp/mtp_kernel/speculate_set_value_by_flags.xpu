@@ -20,8 +20,7 @@
 #include "xpu/kernel/cluster_primitive.h"
 #include "xpu/kernel/xtdk_io.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __global__ void speculate_set_value_by_flag_and_id(int64_t *pre_ids_all,
                                                    const int64_t *accept_tokens,
@@ -84,5 +83,4 @@ __global__ void speculate_set_value_by_flag_and_id(int64_t *pre_ids_all,
   }
 }
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

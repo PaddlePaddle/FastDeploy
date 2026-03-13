@@ -18,8 +18,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 template <typename T>
 __attribute__((global)) void set_stop_value_multi_ends(
     bool *stop_flags,
@@ -31,12 +30,9 @@ __attribute__((global)) void set_stop_value_multi_ends(
     const int end_length,
     const bool beam_search,
     const bool prefill_one_step_stop);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 template <typename T>
@@ -50,7 +46,7 @@ __inline__ bool is_in_end(const T id, const T *end_ids, int length) {
 }
 
 template <typename T>
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        bool *stop_flags,
                        T *topk_ids,
                        T *next_tokens,
@@ -87,7 +83,7 @@ static int cpu_wrapper(Context *ctx,
 }
 
 template <typename T>
-static int xpu3_wrapper(Context *ctx,
+static int xpu3_wrapper(api::Context *ctx,
                         bool *stop_flags,
                         T *topk_ids,
                         T *next_tokens,
@@ -97,9 +93,8 @@ static int xpu3_wrapper(Context *ctx,
                         const int end_length,
                         const bool beam_search,
                         const bool prefill_one_step_stop) {
-  using XPU_TID = typename XPUIndexType<T>::type;
-  auto set_stop_value_multi_ends =
-      xpu3::plugin::set_stop_value_multi_ends<XPU_TID>;
+  using XPU_TID = typename api::XPUIndexType<T>::type;
+  auto set_stop_value_multi_ends = fd_xpu3::set_stop_value_multi_ends<XPU_TID>;
   int32_t ret_xre =
       set_stop_value_multi_ends<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           stop_flags,
@@ -116,7 +111,7 @@ static int xpu3_wrapper(Context *ctx,
 }
 
 template <typename T>
-int set_stop_value_multi_ends(Context *ctx,
+int set_stop_value_multi_ends(api::Context *ctx,
                               bool *stop_flags,
                               T *topk_ids,
                               T *next_tokens,
@@ -155,7 +150,7 @@ int set_stop_value_multi_ends(Context *ctx,
                           beam_search,
                           prefill_one_step_stop);
   }
-  if (ctx->dev().type() == api::kXPU2 || ctx->dev().type() == api::kXPU3) {
+  if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper<T>(ctx,
                            stop_flags,
                            topk_ids,
@@ -170,7 +165,7 @@ int set_stop_value_multi_ends(Context *ctx,
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
-template int set_stop_value_multi_ends<int64_t>(Context *ctx,
+template int set_stop_value_multi_ends<int64_t>(api::Context *ctx,
                                                 bool *stop_flags,
                                                 int64_t *topk_ids,
                                                 int64_t *next_tokens,
@@ -180,6 +175,4 @@ template int set_stop_value_multi_ends<int64_t>(Context *ctx,
                                                 const int end_length,
                                                 const bool beam_search);
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

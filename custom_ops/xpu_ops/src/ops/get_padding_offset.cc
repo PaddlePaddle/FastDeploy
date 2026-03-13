@@ -40,19 +40,19 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
   auto cu_seqlens_k =
       paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
   if (token_num_data > 0) {
-    int r = baidu::xpu::api::plugin::get_padding_offset(
-        xpu_ctx->x_context(),
-        batch_id_per_token.data<int>(),
-        cum_offsets_out.data<int>(),
-        cu_seqlens_q.data<int>(),
-        cu_seqlens_k.data<int>(),
-        x_remove_padding.data<int64_t>(),
-        input_ids.data<int64_t>(),
-        cum_offsets.data<int>(),
-        seq_len.data<int>(),
-        seq_length,
-        bsz);
-    PD_CHECK(r == 0, "baidu::xpu::api::plugin::get_padding_offset failed.");
+    int r =
+        fastdeploy::plugin::get_padding_offset(xpu_ctx->x_context(),
+                                               batch_id_per_token.data<int>(),
+                                               cum_offsets_out.data<int>(),
+                                               cu_seqlens_q.data<int>(),
+                                               cu_seqlens_k.data<int>(),
+                                               x_remove_padding.data<int64_t>(),
+                                               input_ids.data<int64_t>(),
+                                               cum_offsets.data<int>(),
+                                               seq_len.data<int>(),
+                                               seq_length,
+                                               bsz);
+    PD_CHECK(r == 0, "fastdeploy::plugin::get_padding_offset failed.");
   }
 
   return {x_remove_padding,
