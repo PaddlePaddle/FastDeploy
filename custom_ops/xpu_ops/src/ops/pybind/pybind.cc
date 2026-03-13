@@ -197,6 +197,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& max_dec_len,
                       const paddle::Tensor& end_ids,
                       const paddle::Tensor& base_model_draft_tokens,
+                      const paddle::Tensor& prompt_lens,
                       const int max_seq_len,
                       const int substep);
 
@@ -707,6 +708,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("max_dec_len"),              // 最大解码长度张量
         py::arg("end_ids"),                  // 结束ID张量
         py::arg("base_model_draft_tokens"),  // 基础模型草稿token张量
+        py::arg("prompt_lens"),              // prompt 长度张量
         py::arg("max_seq_len"),              // 最大序列长度（int）
         py::arg("substep")                   // 子步骤编号（int）
   );

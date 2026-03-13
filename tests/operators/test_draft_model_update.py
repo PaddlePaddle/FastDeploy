@@ -54,6 +54,7 @@ def draft_model_update_kernel(
     max_draft_token,
     pre_id_length,
     max_base_model_draft_token,
+    prompt_lens,
     end_ids_len,
     max_seq_len,
     substep,
@@ -92,10 +93,16 @@ def draft_model_update_kernel(
                 # seq_lens_decoder[tid] = seq_lens_encoder[tid]
                 seq_lens_decoder[tid] = seq_len_encoder + seq_len_decoder
                 seq_lens_encoder[tid] = 0
-                pre_ids_now[1] = token_this_time
-                step_idx[tid] += 1
-                draft_token_now[0] = token_this_time
-                base_model_draft_tokens_now[substep + 1] = token_this_time
+                if seq_lens_decoder[tid] >= prompt_lens[tid]:
+                    pre_ids_now[1] = token_this_time
+                    step_idx[tid] += 1
+                    draft_token_now[0] = token_this_time
+                    base_model_draft_tokens_now[substep + 1] = token_this_time
+                else:
+                    stop_flags[tid] = True
+                    seq_lens_this_time[tid] = 0
+                    seq_lens_decoder[tid] = 0
+                    stop_flag_now_int = 1
 
             # multi_end
             if is_in_end(token_this_time, end_ids, end_ids_len) or prefill_one_step_stop:
@@ -105,7 +112,8 @@ def draft_model_update_kernel(
             elif step_idx[tid] >= max_dec_len[tid] - 2:
                 stop_flags[tid] = True
                 drop_batch[tid] = True
-                draft_token_now[seq_len_this_time - 1] = end_ids[0]
+                if seq_len_decoder > 0 and seq_len_encoder <= 0:
+                    draft_token_now[seq_len_this_time - 1] = end_ids[0]
                 base_model_draft_tokens_now[substep + 1] = end_ids[0]
                 stop_flag_now_int = 1
         else:
@@ -139,6 +147,7 @@ def draft_model_update_ref(
     max_dec_len,
     end_ids,
     base_model_draft_tokens,
+    prompt_lens,
     max_seq_len,
     substep,
 ):
@@ -175,6 +184,7 @@ def draft_model_update_ref(
         max_draft_token,
         pre_id_length,
         max_base_model_draft_token,
+        prompt_lens,
         end_ids_len,
         max_seq_len,
         substep,
@@ -212,6 +222,7 @@ class TestDraftModelUpdate(unittest.TestCase):
         max_dec_len = paddle.randint(100, 102, shape=(max_bsz,), dtype="int64")
         end_ids = paddle.to_tensor([2], dtype="int64")
         base_model_draft_tokens = paddle.randint(1, 10, shape=(max_bsz, max_base_model_draft_token), dtype="int64")
+        prompt_lens = paddle.randint(1, 10, shape=(max_bsz,), dtype="int64")
 
         inputs = (
             inter_next_tokens,
@@ -228,6 +239,7 @@ class TestDraftModelUpdate(unittest.TestCase):
             max_dec_len,
             end_ids,
             base_model_draft_tokens,
+            prompt_lens,
             max_seq_len,
             substep,
         )

@@ -53,6 +53,7 @@ def run_paddle_test(device="cpu"):
     max_dec_len = paddle.randint(100, 102, shape=(max_bsz,), dtype="int64")
     end_ids = paddle.to_tensor([2], dtype="int64")
     base_model_draft_tokens = paddle.randint(1, 10, shape=(max_bsz, max_base_model_draft_token), dtype="int64")
+    prompt_lens = paddle.randint(1, 10, shape=(max_bsz,), dtype="int64")
 
     # 打印张量信息
     # print("inter_next_tokens shape:", inter_next_tokens.shape)
@@ -86,6 +87,7 @@ def run_paddle_test(device="cpu"):
         max_dec_len,
         end_ids,
         base_model_draft_tokens,
+        prompt_lens,
         max_seq_len,
         substep,
     )
