@@ -142,6 +142,7 @@ class LinearBase(nn.Layer):
         self.is_quantized = fd_config.model_config.is_quantized and not (
             fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.dense_quant_type is None
         )
+
         # key
         if weight_key:
             self.weight_key = f"{prefix}.{weight_key}"
