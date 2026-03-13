@@ -247,3 +247,7 @@ def test_delete_cached_data(rm_factory):
     rm._delete_cached_data(t2, 64)
     assert t2.prompt_token_ids_len == 192
     assert t2.seq_lens_decoder == 64
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
