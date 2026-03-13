@@ -300,7 +300,7 @@ void Schedule(const paddle::Tensor &stop_flags,
             "number.");
       }
     }
-    static key_t key = ftok("/dev/shm", msg_queue_id);
+    static key_t key = custom_ftok("/dev/shm", msg_queue_id);
 
     static int msgid = msgget(key, IPC_CREAT | 0666);
     msg_sed.mtype = 1;

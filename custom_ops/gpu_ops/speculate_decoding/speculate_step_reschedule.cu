@@ -314,8 +314,7 @@ void SpeculateStepSchedule(
 
     } else {
     }
-    // static key_t key = ftok("/dev/shm", msg_queue_id);
-    static key_t key = ftok("./", msg_queue_id);
+    static key_t key = custom_ftok("./", msg_queue_id);
 
     static int msgid = msgget(key, IPC_CREAT | 0666);
     msg_sed.mtype = 1;
