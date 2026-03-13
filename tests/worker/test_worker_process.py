@@ -626,3 +626,7 @@ def test_run_worker_proc():
         with patch.dict("sys.modules", {"fastdeploy.worker.iluvatar_worker": mock_il}):
             run_worker_proc()
         assert len(_il_calls) == 1
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
