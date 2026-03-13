@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,6 +34,11 @@
 inline key_t custom_ftok(const char* path, int id) {
   struct stat st;
   if (stat(path, &st) < 0) {
+    fprintf(stderr,
+            "[custom_ftok] stat(\"%s\") failed (errno=%d), "
+            "msg queue key will be invalid!\n",
+            path,
+            errno);
     return static_cast<key_t>(-1);
   }
   return static_cast<key_t>(((st.st_dev & 0xff) << 24) |
