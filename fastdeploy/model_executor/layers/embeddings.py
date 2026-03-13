@@ -22,6 +22,7 @@ import paddle
 from paddle import nn
 from paddle.distributed import fleet
 
+import fastdeploy.envs as envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.utils import h2d_copy, set_weight_attrs, slice_fn
@@ -315,6 +316,22 @@ class VocabParallelEmbedding(nn.Layer):
             )
             input_embedings = paddle.concat(inputs_embeds_temp, -1)
         else:
-            input_embedings = self.embeddings(ids_remove_padding)
+            if envs.FD_DETERMINISTIC_MODE and self.world_size > 1:  # pragma: no cover
+                # Bypass Paddle's _mp_allreduce (NCCL) with Custom AR for determinism.
+                from paddle.distributed.fleet.layers.mpu import mp_ops
+
+                from fastdeploy.distributed.communication import (
+                    tensor_model_parallel_all_reduce,
+                )
+
+                output_parallel = mp_ops._c_lookup_table(
+                    self.embeddings.weight,
+                    ids_remove_padding,
+                    start_index=self.embeddings.vocab_start_index,
+                    vocab_size=self.embeddings.num_embeddings,
+                )
+                input_embedings = tensor_model_parallel_all_reduce(output_parallel, self.tp_group)
+            else:
+                input_embedings = self.embeddings(ids_remove_padding)
 
         return input_embedings

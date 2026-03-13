@@ -16,13 +16,15 @@
 
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import paddle.distributed as dist
 
 from fastdeploy import envs
-from fastdeploy.config import FDConfig
 from fastdeploy.utils import spec_logger
+
+if TYPE_CHECKING:
+    from fastdeploy.config import FDConfig
 
 
 class Proposer(ABC):
@@ -33,7 +35,7 @@ class Proposer(ABC):
     the speculative decoding framework
     """
 
-    def __init__(self, fd_config: FDConfig):
+    def __init__(self, fd_config: "FDConfig"):
         """
         Init Speculative proposer
         """

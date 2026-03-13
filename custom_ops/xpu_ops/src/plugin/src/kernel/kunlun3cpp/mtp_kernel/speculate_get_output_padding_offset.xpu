@@ -20,8 +20,7 @@
 #include "xpu/kernel/cluster_primitive.h"
 #include "xpu/kernel/xtdk_io.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __global__ void speculate_get_output_padding_offset(
     int* output_padding_offset,
@@ -59,5 +58,4 @@ __global__ void speculate_get_output_padding_offset(
   }
 }
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

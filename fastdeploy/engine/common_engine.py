@@ -57,6 +57,7 @@ from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     EngineCacheQueue,
     EngineWorkerQueue,
+    IPCLock,
     IPCSignal,
     ZmqIpcServer,
     ZmqTcpServer,
@@ -66,6 +67,7 @@ from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.router.utils import check_service_health
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.trace.constants import LoggingEventName
@@ -173,6 +175,10 @@ class EngineService:
                 disable_any_whitespace=self.cfg.structured_outputs_config.disable_any_whitespace,
             )
         self._init_worker_monitor_signals()
+
+        # Pass the GPU KV cache lock to cache_manager for mutual exclusion
+        # between the CPU transfer process and the worker process.
+        self.resource_manager.cache_manager.gpu_cache_lock = self.gpu_cache_lock
 
         if self.cfg.eplb_config.enable_eplb:
             current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
@@ -382,7 +388,15 @@ class EngineService:
             suffix=current_suffix,
             create=True,
         )
-
+        
+        # gpu_cache_lock: file-based lock for mutual exclusion between worker
+        # and CPU transfer when accessing GPU KV cache.
+        self.gpu_cache_lock = IPCLock(
+            name="gpu_cache_lock",
+            suffix=current_suffix,
+            create=True,
+        )
+        
         infer_finished_signal_data = np.zeros([1], dtype=np.int32)
         self.infer_finished_signal = IPCSignal(
             name="infer_finished_signal",
@@ -392,7 +406,9 @@ class EngineService:
             create=True,
         )
 
-    def init_parallel_env(self, start_port=6070):
+    def init_parallel_env(self, start_port=6370):
+        llm_logger.info("Start init CPU parallel envs")
+          
         local_data_parallel_size = len(self.cfg.parallel_config.engine_worker_queue_port)
         global_data_parallel_id = (
             self.cfg.node_rank * local_data_parallel_size + self.cfg.parallel_config.local_data_parallel_id
@@ -410,8 +426,10 @@ class EngineService:
         os.environ["PADDLE_DISTRI_BACKEND"] = "gloo"
 
         dist.init_parallel_env()
+        llm_logger.info("Finish init CPU parallel envs")
         # Avoid bringing this env variable to workers
         os.unsetenv("PADDLE_DISTRI_BACKEND")
+        os.unsetenv("PADDLE_TRAINER_ENDPOINTS")
 
         paddle.set_device("cpu")
 
@@ -596,7 +614,10 @@ class EngineService:
             req_out.metrics.decode_preallocate_req_time = cur_req.metrics.decode_preallocate_req_time
             cur_req.metrics = req_out.metrics
             cur_req.metrics.decode_inference_start_time = time.time()
-            if self.cfg.speculative_config.method in ["mtp"] and self.cfg.scheduler_config.splitwise_role == "decode":
+            if (
+                self.cfg.speculative_config.method == SpecMethod.MTP
+                and self.cfg.scheduler_config.splitwise_role == "decode"
+            ):
                 cur_req.draft_token_ids = copy.deepcopy(req_out.outputs.draft_token_ids)
 
             if req_out.error_code != 200:

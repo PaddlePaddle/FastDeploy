@@ -326,8 +326,9 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             return linear_out
         if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
             x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
-                x, self.quant_config.weight_block_size[0]
+                x, self.quant_config.weight_block_size[0], self.quant_config.deepgemm_scale_ue8m0
             )
+            x_scale_tensor = x_scale_tensor[: x.shape[0], ...]
         else:
             x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
                 x,
