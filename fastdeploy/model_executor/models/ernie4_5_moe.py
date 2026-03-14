@@ -488,9 +488,10 @@ class Ernie4_5_Model(nn.Layer):
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
+        inputs: Dict,
         forward_meta: ForwardMeta,
     ):
+        ids_remove_padding = inputs["ids_remove_padding"]
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
@@ -693,9 +694,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
+        inputs: Dict,
         forward_meta: ForwardMeta,
     ):
+        ids_remove_padding = inputs["ids_remove_padding"]
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states

@@ -1204,7 +1204,11 @@ class HPUModelRunner(ModelRunnerBase):
             self._prepare_inputs()
 
             # 2. Initialize attention backend and forward meta data
-            model_output = self.model(self.share_inputs["ids_remove_padding"], self.forward_meta)
+            model_inputs = {"ids_remove_padding": self.share_inputs["ids_remove_padding"]}
+            model_output = self.model(
+                model_inputs,
+                forward_meta=self.forward_meta,
+            )
 
             hiddden_states = rebuild_padding_v3_1(
                 model_output,
@@ -1578,7 +1582,11 @@ class HPUModelRunner(ModelRunnerBase):
         hpu_model_runner_profile_logger.info(f"_prepare_inputs time(ms): {execution_time}, BT={real_bs}")
         start_time = time.time()
         # # 3. Execute model
-        model_output = self.model(self.share_inputs["ids_remove_padding"], self.forward_meta)
+        model_inputs = {"ids_remove_padding": self.share_inputs["ids_remove_padding"]}
+        model_output = self.model(
+            model_inputs,
+            forward_meta=self.forward_meta,
+        )
         if self.is_hpu_perf_breakdown_sync_mode:
             model_output.cpu()
         end_time = time.time()

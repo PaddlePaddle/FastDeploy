@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 from functools import partial
+from typing import Dict
 
 import paddle
 from paddle import nn
@@ -369,10 +370,10 @@ class Glm4MoeModel(nn.Layer):
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
+        inputs: Dict,
         forward_meta: ForwardMeta,
     ):
-        """ """
+        ids_remove_padding = inputs["ids_remove_padding"]
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
@@ -531,10 +532,10 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
+        inputs: Dict,
         forward_meta: ForwardMeta,
     ):
-        """ """
+        ids_remove_padding = inputs["ids_remove_padding"]
         hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states
