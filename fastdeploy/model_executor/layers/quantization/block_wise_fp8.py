@@ -68,7 +68,6 @@ class BlockWiseFP8Config(QuantConfigBase):
         self.use_deep_gemm = bool(envs.FD_USE_DEEP_GEMM)
         self.is_checkpoint_bf16 = is_checkpoint_bf16
         self.deepgemm_scale_ue8m0 = True if get_sm_version() == 100 else False
-        self.stack_quant = False
 
     def name(self) -> str:
         return "block_wise_fp8"
