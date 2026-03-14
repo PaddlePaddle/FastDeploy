@@ -1005,6 +1005,13 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--cache_queue_port",
+        type=str,
+        default=None,
+        help="Cache task queue port.",
+    )
+
+    parser.add_argument(
         "--cache-transfer-protocol",
         type=str,
         default="ipc",
@@ -1165,6 +1172,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     logger.info(f"parallel_config.tensor_parallel_size {parallel_config.tensor_parallel_size}")
     logger.info(f"parallel_config.tensor_parallel_rank {parallel_config.tensor_parallel_rank}")
     logger.info(f"parallel_config.engine_worker_queue_port {parallel_config.engine_worker_queue_port}")
+    logger.info(f"cache_config.cache_queue_port {cache_config.cache_queue_port}")
 
     if getattr(model_config, "num_hidden_layers", None) is None:
         raise ValueError("num_hidden_layers is None")
