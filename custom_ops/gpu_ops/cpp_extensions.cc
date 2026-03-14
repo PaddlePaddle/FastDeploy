@@ -1216,8 +1216,7 @@ std::vector<paddle::Tensor> DSMLAWriteCacheKernel(
     const paddle::Tensor& kv_cache,
     const paddle::Tensor& slot_mapping,
     const paddle::optional<paddle::Tensor>& scale,
-    const std::string& cache_quant_type_str,
-    const bool is_prefill);
+    const std::string& cache_quant_type_str);
 
 std::vector<paddle::Tensor> IndexerKQuantAndCacheKernel(
     const paddle::Tensor& k,
