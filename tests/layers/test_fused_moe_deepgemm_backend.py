@@ -20,29 +20,18 @@ from types import SimpleNamespace
 import paddle
 import pytest
 
+
 # ── Stub GPU-only modules ───────────────────────────────────────────────────
-_gpu = sys.modules.get("fastdeploy.model_executor.ops.gpu")
-if _gpu is None:
-    _gpu = types.ModuleType("fastdeploy.model_executor.ops.gpu")
-    sys.modules["fastdeploy.model_executor.ops.gpu"] = _gpu
-for _a in (
-    "count_tokens_per_expert_func",
-    "depermute_prefill_combine",
-    "ep_moe_expert_combine",
-    "ep_moe_expert_dispatch_fp8",
-    "fused_mask_swiglu_fp8_quant",
-    "get_padding_offset",
-    "gptq_marlin_repack",
-    "MoeWna16MarlinGemmApi",
-    "moe_expert_dispatch",
-    "moe_expert_reduce",
-    "moe_topk_select",
-    "per_token_quant",
-    "prefill_permute_to_masked_gemm",
-    "tritonmoe_preprocess_func",
-):
-    if not hasattr(_gpu, _a):
-        setattr(_gpu, _a, None)
+# Use __getattr__ catchall so the entire import chain (moe → attention → ops.gpu)
+# can resolve any GPU op name without an explicit allowlist.
+class _GpuOpsStub(types.ModuleType):
+    def __getattr__(self, name):
+        return None
+
+
+if "fastdeploy.model_executor.ops.gpu" not in sys.modules:
+    sys.modules["fastdeploy.model_executor.ops.gpu"] = _GpuOpsStub("fastdeploy.model_executor.ops.gpu")
+_gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
 
 _ep_mod = types.ModuleType("fastdeploy.model_executor.layers.moe.ep")
 
