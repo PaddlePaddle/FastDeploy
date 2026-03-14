@@ -48,8 +48,7 @@ def try_import(modules, name=None, fail_msg=None):
         logger.warning(fail_msg)
 
 
-TDU = try_import(["paddlefleet.extensions.ops", "paddlefleet.ops", "TokenDispatcherUtils"])
-FQO = try_import(["FusedQuantOps"])
+paddlefleet_ops = try_import(["paddlefleet.ops"])
 
 
 def load_deep_gemm():
@@ -162,52 +161,21 @@ def quant_weight_ue8m0(weight_dequant, weight_block_size):
     return out_w, out_s
 
 
-def _get_fp8_weight_and_scale(weight, transpose=False):
-    """_get_fp8_weight_and_scale"""
-    fp8_weight, fp8_scale = weight.fp8_weight_stacked, weight.fp8_scale_stacked
-
-    if transpose:
-        if hasattr(weight, "fp8_weight_stacked_transpose") and weight.fp8_weight_stacked_transpose is not None:
-            fp8_weight = weight.fp8_weight_stacked_transpose
-            fp8_scale = weight.fp8_scale_stacked_transpose
-        else:
-
-            assert fp8_weight.shape[0] % weight.shape[0] == 0
-            assert fp8_weight.ndim == 2, "fp8_weight must be 2 dims"
-
-            expert_num = fp8_weight.shape[0] // weight.shape[0]
-
-            def transpose_tensor(tensor):
-                assert tensor.ndim == 2
-                h0 = tensor.shape[0] // expert_num
-                h1 = tensor.shape[1]
-                tensor = tensor.reshape([expert_num, h0, h1])
-                return tensor.contiguous().transpose([0, 2, 1]).reshape([-1, h0]).contiguous()
-
-            fp8_weight, fp8_scale = map(lambda x: transpose_tensor(x), [fp8_weight, fp8_scale])
-
-    return fp8_weight, fp8_scale
-
-
 def fused_stack_transpose_quant(expert_weight_list, use_ue8m0=False):
     """fused_stack_transpose_quant"""
-    if hasattr(expert_weight_list[0], "fp8_weight_stacked"):
-        w, scale = _get_fp8_weight_and_scale(expert_weight_list[0], transpose=True)
-    else:
-        if hasattr(TDU, "fuse_stack_transpose_fp8_quant"):
-            use_pow2_scale = False
-            if paddle.device.cuda.get_device_capability()[0] == 10:
-                # Blackwell GPUs require the use of pow2_scales quantization.
-                use_pow2_scale = True
+    if hasattr(paddlefleet_ops, "fuse_stack_transpose_fp8_quant"):
+        use_pow2_scale = False
+        if paddle.device.cuda.get_device_capability()[0] == 10:
+            # Blackwell GPUs require the use of pow2_scales quantization.
+            use_pow2_scale = True
 
-            w, scale = TDU.fuse_stack_transpose_fp8_quant(
-                expert_weight_list,
-                use_pow2_scale,
-                use_ue8m0,
-                use_ue8m0,
-            )
-            if use_ue8m0:
-                scale = scale.T
-        else:
-            w, scale = FQO.fused_stack_transpose_quant(expert_weight_list)
+        w, scale = paddlefleet_ops.fuse_stack_transpose_fp8_quant(
+            expert_weight_list,
+            use_pow2_scale,
+            use_ue8m0,
+            use_ue8m0,
+        )
+        if use_ue8m0:
+            scale = scale.T
+
     return w, scale
