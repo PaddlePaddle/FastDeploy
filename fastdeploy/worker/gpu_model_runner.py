@@ -1845,7 +1845,7 @@ class GPUModelRunner(ModelRunnerBase):
                         cache_kvs_list.extend([key_cache_scales])
             else:
                 if not use_ipc_cache_sharing:
-                    raise RuntimeError("Proxy mode must not attach GPU cache through IPC.")
+                    raise RuntimeError("IPC sharing must be enabled if model runner does not create kv cache")
                 logger.info(f"..attaching kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
@@ -1947,12 +1947,47 @@ class GPUModelRunner(ModelRunnerBase):
             cache_transfer_args,
             execution_lock=self.cache_transfer_mutex,
         )
+        self._refresh_proxy_cache_transfer_binding()
+
+    def _collect_cache_transfer_bindings(self) -> tuple[dict, list, list, list, list]:
+        gpu_cache_kvs = dict(self.cache_kvs_map)
+        gpu_cache_k_tensors = list(self.gpu_cache_k_tensors)
+        gpu_cache_v_tensors = list(self.gpu_cache_v_tensors)
+        gpu_cache_scales_k_tensors = list(self.gpu_cache_scales_k_tensors)
+        gpu_cache_scales_v_tensors = list(self.gpu_cache_scales_v_tensors)
+
+        if self.speculative_method in ["mtp"] and self.proposer is not None:
+            gpu_cache_kvs.update(self.proposer.cache_kvs_map)
+            gpu_cache_k_tensors.extend(self.proposer.gpu_cache_k_tensors)
+            gpu_cache_v_tensors.extend(self.proposer.gpu_cache_v_tensors)
+            gpu_cache_scales_k_tensors.extend(self.proposer.gpu_cache_scales_k_tensors)
+            gpu_cache_scales_v_tensors.extend(self.proposer.gpu_cache_scales_v_tensors)
+
+        return (
+            gpu_cache_kvs,
+            gpu_cache_k_tensors,
+            gpu_cache_v_tensors,
+            gpu_cache_scales_k_tensors,
+            gpu_cache_scales_v_tensors,
+        )
+
+    def _refresh_proxy_cache_transfer_binding(self) -> None:
+        if self.cache_transfer_manager is None:
+            return
+
+        (
+            gpu_cache_kvs,
+            gpu_cache_k_tensors,
+            gpu_cache_v_tensors,
+            gpu_cache_scales_k_tensors,
+            gpu_cache_scales_v_tensors,
+        ) = self._collect_cache_transfer_bindings()
         self.cache_transfer_manager.bind_gpu_cache(
-            gpu_cache_kvs=self.cache_kvs_map,
-            gpu_cache_k_tensors=self.gpu_cache_k_tensors,
-            gpu_cache_v_tensors=self.gpu_cache_v_tensors,
-            gpu_cache_scales_k_tensors=self.gpu_cache_scales_k_tensors,
-            gpu_cache_scales_v_tensors=self.gpu_cache_scales_v_tensors,
+            gpu_cache_kvs=gpu_cache_kvs,
+            gpu_cache_k_tensors=gpu_cache_k_tensors,
+            gpu_cache_v_tensors=gpu_cache_v_tensors,
+            gpu_cache_scales_k_tensors=gpu_cache_scales_k_tensors,
+            gpu_cache_scales_v_tensors=gpu_cache_scales_v_tensors,
         )
 
     def _initialize_attn_backend(self) -> None:
@@ -2880,6 +2915,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if self.speculative_method in ["mtp"]:
             self.proposer.update_mtp_block_num(num_gpu_blocks)
+            self._refresh_proxy_cache_transfer_binding()
 
     def cal_theortical_kvcache(self):
         """
@@ -2948,13 +2984,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.gpu_cache_scales_k_tensors.clear()
         self.gpu_cache_scales_v_tensors.clear()
         if self.cache_transfer_manager is not None:
-            self.cache_transfer_manager.bind_gpu_cache(
-                gpu_cache_kvs=self.cache_kvs_map,
-                gpu_cache_k_tensors=self.gpu_cache_k_tensors,
-                gpu_cache_v_tensors=self.gpu_cache_v_tensors,
-                gpu_cache_scales_k_tensors=self.gpu_cache_scales_k_tensors,
-                gpu_cache_scales_v_tensors=self.gpu_cache_scales_v_tensors,
-            )
+            self._refresh_proxy_cache_transfer_binding()
         self.share_inputs.pop("caches", None)
         if self.forward_meta is not None:
             self.forward_meta.clear_caches()
@@ -2999,6 +3029,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
+        self._refresh_proxy_cache_transfer_binding()
         # Recapture CUDAGraph
         if self.use_cudagraph:
             self.capture_model()

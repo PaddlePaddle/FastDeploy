@@ -101,6 +101,10 @@ class MTPProposer(Proposer):
         self.enable_logprob = self.model_config.enable_logprob
         self.enable_draft_logprob = self.speculative_config.enable_draft_logprob
         self.cache_kvs_map = {}
+        self.gpu_cache_k_tensors = []
+        self.gpu_cache_v_tensors = []
+        self.gpu_cache_scales_k_tensors = []
+        self.gpu_cache_scales_v_tensors = []
 
         # [mixed, prefill, decoder]
         self.role = self.scheduler_config.splitwise_role
@@ -193,6 +197,10 @@ class MTPProposer(Proposer):
         """
         self.num_gpu_blocks = int(main_model_num_blocks * self.speculative_config.num_gpu_block_expand_ratio)
         self.cache_kvs = {}
+        self.gpu_cache_k_tensors = []
+        self.gpu_cache_v_tensors = []
+        self.gpu_cache_scales_k_tensors = []
+        self.gpu_cache_scales_v_tensors = []
 
         # Get kv cache dtype
         cache_type = self.model_config.dtype
@@ -212,6 +220,14 @@ class MTPProposer(Proposer):
         if kv_cache_quant_type == "block_wise_fp8":
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        cache_transfer_mode = envs.FD_CACHE_TRANSFER_MANAGER_MODE
+        use_proxy_cache_binding = (
+            self.fd_config.scheduler_config.splitwise_role == "mixed"
+            and self.fd_config.cache_config.num_cpu_blocks > 0
+            and self.fd_config.cache_config.enable_prefix_caching
+            and cache_transfer_mode == "proxy"
+        )
+        use_ipc_cache_sharing = not use_proxy_cache_binding
 
         cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
         cache_ready_signal = IPCSignal(
@@ -225,8 +241,9 @@ class MTPProposer(Proposer):
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
         # 2. If no need to profile, create kv cache if cache managers do not exist.
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0 or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        create_cache_tensor = profile or (
+            self.fd_config.scheduler_config.splitwise_role == "mixed"
+            and (self.fd_config.cache_config.num_cpu_blocks <= 0 or cache_transfer_mode == "proxy")
         )
 
         if not create_cache_tensor:
@@ -238,6 +255,8 @@ class MTPProposer(Proposer):
         logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
 
         if not create_cache_tensor:
+            if not use_ipc_cache_sharing:
+                raise RuntimeError("IPC sharing must be enabled if model runner does not create kv cache")
             cache_kvs_list = []
             for i in range(
                 self.num_main_model_layers,
@@ -251,10 +270,12 @@ class MTPProposer(Proposer):
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
                 key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
                 self.cache_kvs_map[key_cache_name] = key_cache
+                self.gpu_cache_k_tensors.append(key_cache)
                 cache_kvs_list.append(key_cache)
                 value_cache = paddle.empty(shape=[], dtype=cache_type)
                 value_cache = share_external_data(value_cache, val_cache_name, value_cache_shape)
                 self.cache_kvs_map[val_cache_name] = value_cache
+                self.gpu_cache_v_tensors.append(value_cache)
                 cache_kvs_list.append(value_cache)
 
                 if kv_cache_quant_type == "block_wise_fp8":
@@ -263,12 +284,14 @@ class MTPProposer(Proposer):
                     key_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
                     key_scale_cache = share_external_data(key_scale_cache, scale_key_cache_name, kv_cache_scale_shape)
                     self.cache_kvs_map[scale_key_cache_name] = key_scale_cache
+                    self.gpu_cache_scales_k_tensors.append(key_scale_cache)
                     cache_kvs_list.append(key_scale_cache)
                     value_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
                     value_scale_cache = share_external_data(
                         value_scale_cache, scale_val_cache_name, kv_cache_scale_shape
                     )
                     self.cache_kvs_map[scale_val_cache_name] = value_scale_cache
+                    self.gpu_cache_scales_v_tensors.append(value_scale_cache)
                     cache_kvs_list.append(value_scale_cache)
 
             self.model_inputs["caches"] = cache_kvs_list
@@ -285,8 +308,10 @@ class MTPProposer(Proposer):
                     dtype=cache_type,
                 )
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
-                set_data_ipc(key_cache, key_cache_name)
+                if use_ipc_cache_sharing:
+                    set_data_ipc(key_cache, key_cache_name)
                 self.cache_kvs_map[key_cache_name] = key_cache
+                self.gpu_cache_k_tensors.append(key_cache)
                 cache_kvs_list.append(key_cache)
 
                 val_cache = paddle.full(
@@ -295,8 +320,10 @@ class MTPProposer(Proposer):
                     dtype=cache_type,
                 )
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                set_data_ipc(val_cache, val_cache_name)
+                if use_ipc_cache_sharing:
+                    set_data_ipc(val_cache, val_cache_name)
                 self.cache_kvs_map[val_cache_name] = val_cache
+                self.gpu_cache_v_tensors.append(val_cache)
                 cache_kvs_list.append(val_cache)
 
                 if kv_cache_quant_type == "block_wise_fp8":
@@ -306,8 +333,10 @@ class MTPProposer(Proposer):
                         dtype=paddle.get_default_dtype(),
                     )
                     key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
-                    set_data_ipc(key_cache_scales, key_cache_scales_name)
+                    if use_ipc_cache_sharing:
+                        set_data_ipc(key_cache_scales, key_cache_scales_name)
                     self.cache_kvs_map[key_cache_scales_name] = key_cache_scales
+                    self.gpu_cache_scales_k_tensors.append(key_cache_scales)
                     cache_kvs_list.append(key_cache_scales)
 
                     val_cache_scales = paddle.full(
@@ -316,8 +345,10 @@ class MTPProposer(Proposer):
                         dtype=paddle.get_default_dtype(),
                     )
                     val_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
-                    set_data_ipc(val_cache_scales, val_cache_scales_name)
+                    if use_ipc_cache_sharing:
+                        set_data_ipc(val_cache_scales, val_cache_scales_name)
                     self.cache_kvs_map[val_cache_scales_name] = val_cache_scales
+                    self.gpu_cache_scales_v_tensors.append(val_cache_scales)
                     cache_kvs_list.append(val_cache_scales)
 
             self.model_inputs["caches"] = cache_kvs_list
@@ -400,13 +431,18 @@ class MTPProposer(Proposer):
         """
         Clear allocated cacheKV
         """
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0 or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        create_cache_tensor = profile or (
+            self.fd_config.scheduler_config.splitwise_role == "mixed"
+            and (self.fd_config.cache_config.num_cpu_blocks <= 0 or envs.FD_CACHE_TRANSFER_MANAGER_MODE == "proxy")
         )
         if not create_cache_tensor:
             for name, tensor in self.cache_kvs_map.items():
                 unset_data_ipc(tensor, name, True, False)
         self.cache_kvs_map.clear()
+        self.gpu_cache_k_tensors.clear()
+        self.gpu_cache_v_tensors.clear()
+        self.gpu_cache_scales_k_tensors.clear()
+        self.gpu_cache_scales_v_tensors.clear()
         del self.model_inputs["caches"]
         if self.forward_meta is not None:
             del self.forward_meta.caches
