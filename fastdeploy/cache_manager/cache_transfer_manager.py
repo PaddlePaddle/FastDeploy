@@ -817,9 +817,10 @@ class CacheTransferManager:
                         paddle.device.cuda.empty_cache()
                         logger.debug("[RL] successfully cleared gpu caches")
                     else:
-                        for name, tensor in self.gpu_cache_kvs.items():
-                            unset_data_ipc(tensor, name, True, False)
-                        logger.debug("[RL] successfully unlinked gpu caches cuda ipc")
+                        if self.mode == "indie":
+                            for name, tensor in self.gpu_cache_kvs.items():
+                                unset_data_ipc(tensor, name, True, False)
+                            logger.debug("[RL] successfully unlinked gpu caches cuda ipc")
                         self.cache_ready_signal.value[self.rank] = 0
 
                     while np.sum(self.cache_ready_signal.value) != 0:
