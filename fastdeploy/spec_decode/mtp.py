@@ -654,6 +654,8 @@ class MTPProposer(Proposer):
             attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.enable_mm else None,
         )
 
+        self.forward_meta.can_prefill_causal = self.target_model_inputs.get("can_prefill_causal", False)
+
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)

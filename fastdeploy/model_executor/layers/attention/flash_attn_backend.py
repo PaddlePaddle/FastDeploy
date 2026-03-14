@@ -143,6 +143,7 @@ def flash_attn_func(
         ]
         with paddle.no_grad():
             try:
+                print(f"fa4 {causal=}, {attn_mask_q=}")
                 paddle.set_flags({"FLAGS_flash_attn_version": 4})
                 out = flashmask_attention_v4(
                     q.reshape([1, -1, num_heads, head_dim]),
@@ -242,7 +243,6 @@ class FlashAttentionBackend(AttentionBackend):
         super().__init__()
         self.max_seq_len = fd_config.model_config.max_model_len
         self.causal = getattr(fd_config.model_config, "causal", True)
-        self.causal_running_flag = self.causal
 
         self.kv_num_heads = kv_num_heads
         self.num_heads = num_heads
@@ -334,6 +334,7 @@ class FlashAttentionBackend(AttentionBackend):
         forward_meta: ForwardMeta,
     ):
         metadata = self.attention_metadata
+        can_prefill_causal = getattr(forward_meta, "can_prefill_causal", self.causal)
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
@@ -395,14 +396,7 @@ class FlashAttentionBackend(AttentionBackend):
                     self.block_size,
                 )
 
-                # Default: prefill has multimodal tokens. decoder need to generate multimodal token.
-                all_prefill_text: bool = getattr(forward_meta, "all_prefill_text", None)
-                num_gen_multimodal_nontext_tokens: int = getattr(
-                    forward_meta, "num_gen_multimodal_nontext_tokens", None
-                )
-                if all_prefill_text is not None and num_gen_multimodal_nontext_tokens is not None:
-                    self.causal_running_flag = all_prefill_text and num_gen_multimodal_nontext_tokens <= 0
-                if forward_meta.attn_mask_offsets is not None and (not self.causal_running_flag):
+                if forward_meta.attn_mask_offsets is not None and (not can_prefill_causal):
                     forward_meta.attn_mask_q = get_attn_mask_q(
                         cu_seqlens_q=forward_meta.cu_seqlens_q,
                         cu_seqlens_k=forward_meta.cu_seqlens_k,
@@ -459,7 +453,7 @@ class FlashAttentionBackend(AttentionBackend):
                 max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
                 max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
                 attn_mask_q=forward_meta.attn_mask_q,
-                causal=self.causal_running_flag,
+                causal=can_prefill_causal,
                 num_heads=self.num_heads,
                 kv_num_heads=self.kv_num_heads,
                 head_dim=self.head_dim,
