@@ -1068,7 +1068,7 @@ class SpeculativeSampler(nn.Layer):
             sampling_metadata.top_p,
             sampling_metadata.top_k,
             sampling_metadata.seed,
-            share_inputs["seq_lens_this_time"],
+            paddle.reshape(share_inputs["seq_lens_this_time"], shape=[-1]),
             paddle.reshape(share_inputs["seq_lens_encoder"], shape=[-1]),
         )
         _, sampled_token_ids = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, topp_seed=topp_seed)
