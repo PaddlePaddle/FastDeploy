@@ -1,0 +1,4 @@
+
+## 2025-02-15 - [Dataclass Serialization Overhead]
+**Learning:** `dataclasses.asdict()` has a significant overhead because it performs recursive deep copies. For dataclasses that are serialized frequently (like `RequestMetrics`, which is serialized for every request and completion output), replacing `asdict(self)` with manual iteration over `__dataclass_fields__` and `getattr(self, k)` is much faster (about 2x faster). However, nested dataclasses (like `SpeculateMetrics` within `RequestMetrics`) need a fallback. Using `dataclasses.is_dataclass(v)` to fallback to `asdict(v)` dynamically is a safe and performant approach to handle nested structures without writing custom recursive logic.
+**Action:** When identifying slow serialization paths, check if `asdict()` is being used on simple dataclasses. If so, replace it with manual field extraction via `getattr`, ensuring nested dataclasses are handled correctly using `is_dataclass` checks.
