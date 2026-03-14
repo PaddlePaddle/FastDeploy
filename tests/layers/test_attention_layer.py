@@ -71,6 +71,9 @@ class TestAttentionPerformance(unittest.TestCase):
         init_distributed_environment()
         self.model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         self.create_model_config_json(self.model_dir)
+        self.prefill_batch_size = 3
+        self.prefill_seq_len = 500  # 1024 * 4
+        self.cache_len = 1024 * 2
 
     # region Helper Functions
     def create_model_config_json(self, model_dir) -> str:
@@ -83,10 +86,10 @@ class TestAttentionPerformance(unittest.TestCase):
             "max_position_embeddings": 201 * 1024,
             "max_model_len": 201 * 1024,
             "head_dim": 128,
-            "hidden_size": 7168,
-            "num_attention_heads": 56,
+            "hidden_size": 1536,
+            "num_attention_heads": 32,
             "num_key_value_heads": 4,
-            "num_hidden_layers": 2,
+            "num_hidden_layers": 10,
         }
         config_path = os.path.join(model_dir, "config.json")
         with open(config_path, "w") as f:
@@ -164,6 +167,7 @@ class TestAttentionPerformance(unittest.TestCase):
         mode: ForwardMode,
         fd_config: FDConfig,
         attn_backend: AttentionBackend,
+        cache_len: int = 0,
         cache_quant_type_str: str = "none",
         has_attn_mask: bool = False,
     ) -> ForwardMeta:
@@ -173,12 +177,12 @@ class TestAttentionPerformance(unittest.TestCase):
         attn_mask_offsets = None
         if mode == ForwardMode.EXTEND:
             seq_lens_encoder = paddle.full([batch_size], seq_len, dtype="int32")
-            seq_lens_decoder = paddle.zeros([batch_size], dtype="int32")
+            seq_lens_decoder = paddle.full([batch_size], cache_len, dtype="int32")
             seq_lens_this_time = seq_lens_encoder
             if has_attn_mask:
                 attn_mask_offsets_numpy = np.zeros([batch_size, seq_len, 2], dtype=np.int32)
                 for i in range(seq_len):
-                    attn_mask_offsets_numpy[:, i, 1] = i + 1
+                    attn_mask_offsets_numpy[:, i, 1] = cache_len + i + 1
                 attn_mask_offsets = paddle.to_tensor(attn_mask_offsets_numpy.reshape([-1, 2]))
         elif mode == ForwardMode.DECODE:
             seq_lens_encoder = paddle.zeros([batch_size], dtype="int32")
@@ -283,15 +287,16 @@ class TestAttentionPerformance(unittest.TestCase):
         # Test parameters
         test_steps = 100
 
-        prefill_batch_size = 1
-        prefill_seq_len = 4096 * 2
+        prefill_batch_size = self.prefill_batch_size
+        prefill_seq_len = self.prefill_seq_len
+        cache_len = self.cache_len
 
         model_dir = self.model_dir
         tp_size = paddle.distributed.get_world_size()
         quantization = {
             "dense_quant_type": "block_wise_fp8",
             "moe_quant_type": "block_wise_fp8",
-            "kv_cache_quant_type": "float8_e4m3fn",
+            # "kv_cache_quant_type": "float8_e4m3fn",
         }
         fd_config = self.create_fd_config_from_model_path(
             model_dir, tensor_parallel_size=tp_size, quantization=quantization
@@ -324,6 +329,7 @@ class TestAttentionPerformance(unittest.TestCase):
         forward_meta, prefill_hidden_states = self.create_forward_meta(
             batch_size=prefill_batch_size,
             seq_len=prefill_seq_len,
+            cache_len=cache_len,
             mode=ForwardMode.EXTEND,
             fd_config=fd_config,
             attn_backend=attn_backend,
@@ -414,8 +420,8 @@ class TestAttentionPerformance(unittest.TestCase):
         # Test parameters
         test_steps = 100
 
-        prefill_batch_size = 1
-        prefill_seq_len = 4096 * 2
+        prefill_batch_size = 4
+        prefill_seq_len = 500
 
         model_dir = self.model_dir
         tp_size = paddle.distributed.get_world_size()
@@ -557,8 +563,9 @@ class TestAttentionPerformance(unittest.TestCase):
         # Test parameters
         test_steps = 100
 
-        prefill_batch_size = 1
-        prefill_seq_len = 4096 * 2
+        prefill_batch_size = self.prefill_batch_size
+        prefill_seq_len = self.prefill_seq_len
+        cache_len = self.cache_len
 
         model_dir = self.model_dir
         tp_size = paddle.distributed.get_world_size()
@@ -597,6 +604,7 @@ class TestAttentionPerformance(unittest.TestCase):
         forward_meta, prefill_hidden_states = self.create_forward_meta(
             batch_size=prefill_batch_size,
             seq_len=prefill_seq_len,
+            cache_len=cache_len,
             mode=ForwardMode.EXTEND,
             fd_config=fd_config,
             attn_backend=attn_backend,

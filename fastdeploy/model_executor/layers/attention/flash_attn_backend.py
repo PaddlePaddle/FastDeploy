@@ -125,7 +125,7 @@ def flash_attn_func(
         assert (
             flashmask_attention_v4 is not None
         ), "Cannot import flashmask_attention from flash_mask.cute.interface, please install it first"
-        assert attn_mask_q is not None, "FA4 requires attn_mask_q"
+        # assert attn_mask_q is not None, "FA4 requires attn_mask_q"
         assert num_heads is not None
         assert kv_num_heads is not None
         original_flash_attn_version = paddle.base.framework.get_flags(["FLAGS_flash_attn_version"])[
@@ -139,7 +139,7 @@ def flash_attn_func(
                     k.reshape([1, -1, kv_num_heads, head_dim]),
                     v.reshape([1, -1, kv_num_heads, head_dim]),
                     startend_row_indices=attn_mask_q,
-                    causal=False,
+                    causal=causal,
                     return_softmax_lse=True,
                     training=True,
                 )
@@ -154,7 +154,7 @@ def flash_attn_func(
             k.reshape([1, -1, kv_num_heads, head_dim]),
             v.reshape([1, -1, kv_num_heads, head_dim]),
             startend_row_indices=attn_mask_q,
-            causal=False,
+            causal=causal,
         )
     else:
         if version == 3:
@@ -323,6 +323,7 @@ class FlashAttentionBackend(AttentionBackend):
         forward_meta: ForwardMeta,
     ):
         metadata = forward_meta.attention_metadata
+        causal_running_flag = self.causal
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
@@ -375,7 +376,12 @@ class FlashAttentionBackend(AttentionBackend):
                     forward_meta.max_len_tensor_cpu[2],
                     self.block_size,
                 )
-                if FLASH_ATTN_VERSION == 4 or forward_meta.attn_mask_offsets is not None:
+
+                # Default: prefill has multimodal tokens. decoder need to generate multimodal token.
+                all_prefill_text = getattr(forward_meta, "all_prefill_text", False)
+                num_gen_multimodal_nontext_tokens = getattr(forward_meta, "num_gen_multimodal_nontext_tokens", 1)
+                causal_running_flag = all_prefill_text and num_gen_multimodal_nontext_tokens <= 0
+                if forward_meta.attn_mask_offsets is not None and (not causal_running_flag):
                     metadata.attn_mask_q = get_attn_mask_q(
                         cu_seqlens_q=forward_meta.cu_seqlens_q,
                         cu_seqlens_k=metadata.cu_seqlens_k,
@@ -430,7 +436,7 @@ class FlashAttentionBackend(AttentionBackend):
                 max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
                 max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
                 attn_mask_q=metadata.attn_mask_q,
-                causal=self.causal,
+                causal=causal_running_flag,
                 num_heads=self.num_heads,
                 kv_num_heads=self.kv_num_heads,
                 head_dim=self.head_dim,
