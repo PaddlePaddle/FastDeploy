@@ -66,14 +66,13 @@ elif current_platform.is_maca():
         speculate_save_output,
         speculate_save_output_topk,
         speculate_set_stop_value_multi_seqs,
-        speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
         speculate_step_reschedule,
         speculate_step_system_cache,
-        speculate_update,
         step_paddle,
         step_reschedule,
         step_system_cache,
+        unified_update_model_status,
         update_inputs,
         update_inputs_v1,
     )
@@ -88,11 +87,10 @@ else:
         speculate_pre_process,
         speculate_save_output,
         speculate_save_output_topk,
-        speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
         speculate_step_system_cache,
-        speculate_update,
         speculate_set_stop_value_multi_seqs,
+        unified_update_model_status,
         step_paddle,
         step_system_cache,
         update_inputs,
@@ -107,6 +105,9 @@ else:
 from fastdeploy.model_executor.entropy_utils import (
     calculate_logits_entropy,
     speculate_calculate_logits_entropy,
+)
+from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
+    RoutingReplayManager,
 )
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
@@ -221,7 +222,7 @@ def _build_stream_transfer_data(
     stream_transfer_datas = []
     if output_tokens is not None:
 
-        output_tokens = output_tokens.reshape([-1]).numpy()
+        output_tokens = output_tokens.numpy().reshape([-1])
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
@@ -258,6 +259,7 @@ def post_process_normal(
     think_end_id: int = -1,
     splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
+    routing_replay_manager: RoutingReplayManager = None,
 ):
     """Post-processing steps after completing a single token generation."""
     if think_end_id > 0:
@@ -321,6 +323,21 @@ def post_process_normal(
     if enable_entropy:
         calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
 
+    # Routing replay
+    if routing_replay_manager is not None:
+        # Update host cache
+        slot_mapping = routing_replay_manager.compute_slot_mapping(
+            positions=routing_replay_manager.pending_update_positions
+        )
+        routing_replay_manager.update_host_cache(
+            positions=routing_replay_manager.pending_update_positions, slot_mapping=slot_mapping
+        )
+
+        # Put routing of finished requests to store
+        finished_batch_ids = paddle.flatten(paddle.isin(sampler_output.sampled_token_ids, model_output.eos_token_id))
+        context_lens = model_output.seq_lens_decoder + model_output.seq_lens_encoder
+        routing_replay_manager.put_finished_batch(finished_batch_ids=finished_batch_ids, seq_lens_decoder=context_lens)
+
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -363,11 +380,17 @@ def save_output_normal(
     # In the future, we will abandon this approach.
     if envs.FD_USE_GET_SAVE_OUTPUT_V1:
         if save_each_rank or model_output.mp_rank == 0:
+            recover_share_inputs_map = recover_batch_index_for_output(
+                share_inputs,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["sampled_token_ids"],
+            )
             recover_batch_index_for_sampler_output(
                 sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
             )
             output = _build_stream_transfer_data(
-                sampler_output.sampled_token_ids,
+                recover_share_inputs_map["sampled_token_ids"],
                 logprobs=sampler_output.logprobs_tensors,
                 prompt_logprobs_list=model_output.prompt_logprobs_list,
             )
@@ -419,6 +442,9 @@ def post_process_specualate(
     think_end_id: int = -1,
     splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
+    is_naive_mode: bool = False,
+    prefill_one_step_stop: bool = False,
+    routing_replay_manager: RoutingReplayManager = None,
 ):
     if think_end_id > 0:
         speculate_limit_thinking_content_length(
@@ -451,18 +477,54 @@ def post_process_specualate(
     if enable_entropy:
         speculate_calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
 
-    speculate_update(
-        model_output.seq_lens_encoder,
-        model_output.seq_lens_decoder,
-        model_output.not_need_stop,
-        model_output.draft_tokens,
-        model_output.actual_draft_token_num,
-        model_output.accept_tokens,
-        model_output.accept_num,
-        model_output.stop_flags,
-        model_output.seq_lens_this_time,
-        model_output.is_block_step,
-        model_output.mask_rollback,
+    # Routing replay
+    if routing_replay_manager is not None:
+        # Update host cache
+        slot_mapping = routing_replay_manager.compute_slot_mapping(
+            positions=routing_replay_manager.pending_update_positions
+        )
+        routing_replay_manager.update_host_cache(
+            positions=routing_replay_manager.pending_update_positions, slot_mapping=slot_mapping
+        )
+
+        # Put routing of finished requests to store
+        last_accept_token = paddle.full_like(model_output.accept_tokens, -1)
+        col_indices = paddle.arange(model_output.accept_tokens.shape[1], dtype=model_output.accept_num.dtype)
+        mask = col_indices < paddle.unsqueeze(model_output.accept_num, 1)
+        last_accept_token[mask] = model_output.accept_tokens[mask]
+        eos_tokens_flat = model_output.eos_token_id.flatten()
+        isin_mask = paddle.isin(last_accept_token, eos_tokens_flat)
+        finished_batch_ids = isin_mask.any(axis=-1)
+        context_lens = model_output.seq_lens_encoder + model_output.seq_lens_decoder
+        routing_replay_manager.put_finished_batch(
+            finished_batch_ids=finished_batch_ids,
+            seq_lens_decoder=context_lens,
+        )
+
+    # Unified state update: merges speculate_update + speculate_set_value_by_flags_and_idx
+    # into a single kernel launch. For MTP/ngram paths, verify_draft_tokens has already
+    # handled EOS/max_dec_len detection (replacing tokens + updating step_idx), so
+    # unified_update_model_status acts as a no-op for those checks. For naive mode
+    # (which skips verify), this kernel handles EOS/max_dec_len detection.
+    unified_update_model_status(
+        model_output.seq_lens_encoder,  # seq_lens_encoder
+        model_output.seq_lens_decoder,  # seq_lens_decoder
+        model_output.not_need_stop,  # has_running_seqs
+        model_output.draft_tokens,  # step_input_ids
+        model_output.actual_draft_token_num,  # adaptive_step_input_len
+        model_output.accept_tokens,  # step_output_ids (read-write)
+        model_output.accept_num,  # step_output_len (read-write)
+        model_output.stop_flags,  # stop_flags (read-write)
+        model_output.seq_lens_this_time,  # seq_lens_this_time
+        model_output.is_block_step,  # is_paused
+        model_output.mask_rollback,  # mask_rollback
+        model_output.token_ids_all,  # token_ids_all
+        model_output.prompt_lens,  # prompt_lens
+        model_output.step_idx,  # step_idx (read-write)
+        model_output.eos_token_id,  # end_tokens
+        model_output.max_dec_len,  # max_dec_len
+        is_naive_mode,  # is_naive_mode
+        prefill_one_step_stop,  # prefill_one_step_stop
     )
 
     if not skip_save_output:
@@ -516,20 +578,6 @@ def post_process_specualate(
                 save_each_rank,
             )
 
-    # Update token_ids_all through accept tokens
-
-    speculate_set_value_by_flags_and_idx(
-        model_output.token_ids_all,
-        model_output.prompt_lens,
-        model_output.accept_tokens,
-        model_output.accept_num,
-        model_output.stop_flags,
-        model_output.seq_lens_this_time,
-        model_output.seq_lens_encoder,
-        model_output.seq_lens_decoder,
-        model_output.step_idx,
-    )
-
 
 def post_process(
     sampler_or_pooler_output: Union[SamplerOutput, PoolerOutput],
@@ -544,6 +592,9 @@ def post_process(
     think_end_id: int = -1,
     splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
+    is_naive_mode: bool = False,
+    prefill_one_step_stop: bool = False,
+    routing_replay_manager: RoutingReplayManager = None,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
 
@@ -556,6 +607,7 @@ def post_process(
             save_each_rank,
             skip_save_output,
             async_output_queue,
+            routing_replay_manager,
         )
     else:
         if speculative_decoding:
@@ -569,6 +621,9 @@ def post_process(
                 think_end_id,
                 splitwise_role_is_decode,
                 enable_entropy,
+                is_naive_mode,
+                prefill_one_step_stop,
+                routing_replay_manager,
             )
         else:
             post_process_normal(
@@ -580,6 +635,7 @@ def post_process(
                 think_end_id,
                 splitwise_role_is_decode,
                 enable_entropy,
+                routing_replay_manager,
             )
             share_inputs["last_preempted_idx"].copy_(share_inputs["preempted_idx"])
     share_inputs["preempted_idx"][:] = 0
@@ -875,6 +931,7 @@ def post_process_pooling(
     save_each_rank: bool = False,
     skip_save_output: bool = False,
     async_output_queue: queue.Queue = None,
+    routing_replay_manager: RoutingReplayManager = None,
 ) -> None:
 
     paddle.assign(
@@ -891,6 +948,10 @@ def post_process_pooling(
         paddle.logical_or(model_output.stop_flags, length_cond),
         model_output.stop_flags,
     )
+
+    # Routing replay
+    if routing_replay_manager is not None:
+        raise NotImplementedError
 
     with paddle.framework._no_check_dy2st_diff():
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:

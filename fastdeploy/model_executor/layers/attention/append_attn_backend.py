@@ -45,6 +45,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 from fastdeploy.platforms import current_platform
+from fastdeploy.spec_decode import SpecMethod
 
 
 @dataclass
@@ -143,10 +144,10 @@ class AppendAttentionBackend(AttentionBackend):
         if fd_config.speculative_config.model_type != "main":
             self.rope_3d = False
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
-        self.speculative_method: str = fd_config.speculative_config.method
+        self.speculative_method = fd_config.speculative_config.method
         self.speculate_max_draft_token_num: int = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
+        self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
 
         self.kv_num_heads: int = kv_num_heads
         self.num_heads: int = num_heads

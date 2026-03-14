@@ -14,12 +14,16 @@
 # limitations under the License.
 """
 
+from typing import TYPE_CHECKING
+
 import paddle
 
-from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.ops.gpu import ngram_match
 
 from .base import Proposer
+
+if TYPE_CHECKING:
+    from fastdeploy.config import FDConfig
 
 
 class NgramProposer(Proposer):
@@ -29,7 +33,7 @@ class NgramProposer(Proposer):
     Matching corresponding tokens in input and output as draft tokens.
     """
 
-    def __init__(self, fd_config: FDConfig):
+    def __init__(self, fd_config: "FDConfig"):
         super().__init__(fd_config)
         self.max_ngram_size = self.speculative_config.max_ngram_size
         self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()

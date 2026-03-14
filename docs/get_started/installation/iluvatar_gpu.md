@@ -16,14 +16,14 @@ modinfo iluvatar |grep description
 Pull the Docker image
 
 ```bash
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0-20260312
 ```
 
 ## 3. Container Preparation
 ### 3.1 Start Container
 
 ```bash
-docker run -itd --name paddle_infer --network host -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle -v /usr/local/corex/bin/ixsmi:/usr/local/corex/bin/ixsmi -v /usr/local/corex/lib64/libcuda.so.1:/usr/local/corex/lib64/libcuda.so.1 -v /usr/local/corex/lib64/libixml.so:/usr/local/corex/lib64/libixml.so -v /usr/local/corex/lib64/libixthunk.so:/usr/local/corex/lib64/libixthunk.so --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0
+docker run -itd --name paddle_infer --network host -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle -v /usr/local/corex/bin/ixsmi:/usr/local/corex/bin/ixsmi -v /usr/local/corex/lib64/libcuda.so.1:/usr/local/corex/lib64/libcuda.so.1 -v /usr/local/corex/lib64/libixml.so:/usr/local/corex/lib64/libixml.so -v /usr/local/corex/lib64/libixthunk.so:/usr/local/corex/lib64/libixthunk.so --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0-20260312
 docker exec -it paddle_infer bash
 ```
 
@@ -79,7 +79,7 @@ prompts = [
 sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=256)
 
 # load the model
-graph_optimization_config = {"use_cudagraph": False}
+graph_optimization_config = {"use_cudagraph": True}
 llm = LLM(model="/home/paddle/ERNIE-4.5-21B-A3B-Paddle", tensor_parallel_size=1, max_model_len=8192, block_size=16, quantization='wint8', graph_optimization_config=graph_optimization_config)
 
 # Perform batch inference
@@ -147,7 +147,7 @@ python3 -m fastdeploy.entrypoints.openai.api_server \
        --max-model-len 32768 \
        --max-num-seqs 8 \
        --block-size 16 \
-       --graph-optimization-config '{"use_cudagraph": false}'
+       --graph-optimization-config '{"use_cudagraph": true}'
 ```
 If you want to use v0 loader, please set `--load-choices "default"`.
 
@@ -177,12 +177,12 @@ cp FastDeploy/tests/ci_use/iluvatar_UT/bench_gsm8k.py .
 ```bash
 python3 -u bench_gsm8k.py --port 8180 --num-questions 1319 --num-shots 5 --parallel 8
 ```
-It takes about 52 minutes to run the GSM8K dataset.
+It takes about 26 minutes to run the GSM8K dataset.
 
 ```
 Accuracy: 0.914
 Invaild: 0.000
-Latency: 3143.301 s
+Latency: 1539.625 s
 ```
 
 #### 4.1.2 ERNIE-4.5-21B-A3B-Thinking
@@ -206,7 +206,7 @@ python3 -m fastdeploy.entrypoints.openai.api_server \
        --tool-call-parser ernie_x1 \
        --max-num-seqs 8 \
        --block-size 16 \
-       --graph-optimization-config '{"use_cudagraph": false}'
+       --graph-optimization-config '{"use_cudagraph": true}'
 ```
 
 client:
@@ -241,7 +241,7 @@ python3 -m fastdeploy.entrypoints.openai.api_server \
        --max-model-len 32768 \
        --max-num-seqs 8 \
        --block-size 16 \
-       --graph-optimization-config '{"use_cudagraph": false}'
+       --graph-optimization-config '{"use_cudagraph": true}'
 ```
 If you want to use v0 loader, please set `--load-choices "default"`.
 
@@ -271,13 +271,7 @@ cp FastDeploy/tests/ci_use/iluvatar_UT/bench_gsm8k.py .
 ```bash
 python3 -u bench_gsm8k.py --port 8180 --num-questions 1319 --num-shots 5 --parallel 8
 ```
-It takes about 52 minutes to run the GSM8K dataset.
-
-```
-Accuracy: 0.962
-Invaild: 0.000
-Latency: 17332.728 s
-```
+The accuracy of the GSM8K dataset is about `0.962`.
 
 ### 4.2 ERNIE-4.5-VL series
 #### 4.2.1 ERNIE-4.5-VL-28B-A3B-Paddle

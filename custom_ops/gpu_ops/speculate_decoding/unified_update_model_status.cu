@@ -1,0 +1,298 @@
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "helper.h"
+
+/**
+ * @file unified_update_model_status.cu
+ * @brief Unified kernel for updating model status after token generation.
+ *
+ * Launched as a single block of 1024 threads (max_bsz <= 1024).
+ */
+
+/**
+ * @brief Check if token is an end token.
+ */
+__device__ __forceinline__ bool is_end_token(int64_t token,
+                                             const int64_t *end_tokens,
+                                             int num_end_tokens) {
+#pragma unroll 4
+  for (int i = 0; i < num_end_tokens; i++) {
+    if (token == end_tokens[i]) return true;
+  }
+  return false;
+}
+
+/**
+ * @brief Main unified update kernel.
+ */
+template <int BLOCK_SIZE>
+__global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
+                                                   int *seq_lens_decoder,
+                                                   bool *has_running_seqs,
+                                                   int *mask_rollback,
+                                                   int64_t *step_input_ids,
+                                                   int *adaptive_step_input_len,
+                                                   int64_t *step_output_ids,
+                                                   int *step_output_len,
+                                                   bool *stop_flags,
+                                                   int *seq_lens_this_time,
+                                                   const bool *is_paused,
+                                                   int64_t *token_ids_all,
+                                                   const int64_t *prompt_lens,
+                                                   int64_t *step_idx,
+                                                   const int64_t *end_tokens,
+                                                   const int64_t *max_dec_len,
+                                                   int real_bsz,
+                                                   int max_bsz,
+                                                   int max_step_tokens,
+                                                   int max_model_len,
+                                                   int num_end_tokens,
+                                                   bool is_naive_mode,
+                                                   bool prefill_one_step_stop) {
+  const int batch_id = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  const bool is_valid_slot = batch_id < max_bsz;
+  int stop_flag_int = 0;
+
+  if (is_valid_slot) {
+    // Read state
+    int cur_seq_len_encoder = seq_lens_encoder[batch_id];
+    int cur_seq_len_decoder = seq_lens_decoder[batch_id];
+    bool cur_stop_flag = stop_flags[batch_id];
+    int output_len = 0;
+    int64_t cur_step_idx = step_idx[batch_id];
+    bool cur_is_paused = is_paused[batch_id];
+
+    bool is_running = !cur_stop_flag && !cur_is_paused;
+
+    // Compute output length
+    if (is_running) {
+      if (is_naive_mode) {
+        output_len = 1;
+      } else {
+        output_len = step_output_len[batch_id];
+      }
+    }
+
+    // EOS detection
+    if (is_running && output_len > 0) {
+      bool hit_stop = false;
+      int64_t *output_ids = &step_output_ids[batch_id * max_step_tokens];
+
+      for (int i = 0; i < output_len; i++) {
+        cur_step_idx++;
+        int64_t token = output_ids[i];
+        bool is_eos = is_end_token(token, end_tokens, num_end_tokens);
+        bool max_len_hit = (cur_step_idx >= max_dec_len[batch_id]);
+
+        if (is_eos || max_len_hit) {
+          if (!is_eos) output_ids[i] = end_tokens[0];
+          output_len = i + 1;
+          cur_stop_flag = true;
+          hit_stop = true;
+          break;
+        }
+      }
+
+      if (!hit_stop && prefill_one_step_stop && cur_seq_len_encoder > 0) {
+        cur_stop_flag = true;
+      }
+    }
+
+    // Update state and write back
+    if (is_running) {
+      if (cur_stop_flag) {
+        stop_flag_int = 1;
+        if (output_len == 0) cur_seq_len_decoder = 0;
+        stop_flags[batch_id] = true;
+        mask_rollback[batch_id] = 0;
+      } else if (cur_seq_len_encoder == 0) {
+        cur_seq_len_decoder += output_len;
+        mask_rollback[batch_id] = seq_lens_this_time[batch_id] - output_len;
+      } else {
+        mask_rollback[batch_id] = 0;
+      }
+
+      if (cur_seq_len_encoder > 0) {
+        cur_seq_len_decoder += cur_seq_len_encoder;
+        cur_seq_len_encoder = 0;
+      }
+
+      seq_lens_encoder[batch_id] = cur_seq_len_encoder;
+      seq_lens_decoder[batch_id] = cur_seq_len_decoder;
+      step_output_len[batch_id] = output_len;
+      step_idx[batch_id] = cur_step_idx;
+
+      // Write history to token_ids_all
+      if (cur_step_idx > 0 && output_len > 0) {
+        // Bounds check: highest write index is prompt_lens + cur_step_idx
+        if (prompt_lens[batch_id] + cur_step_idx < max_model_len) {
+          int64_t *token_ids_all_now =
+              &token_ids_all[batch_id * max_model_len + prompt_lens[batch_id]];
+          int64_t *output_ids = &step_output_ids[batch_id * max_step_tokens];
+          for (int i = 0; i < output_len; i++) {
+            token_ids_all_now[cur_step_idx - i] =
+                output_ids[output_len - 1 - i];
+          }
+        }
+      }
+
+      // Setup next input
+      if (output_len > 0) {
+        step_input_ids[batch_id * max_step_tokens] =
+            step_output_ids[batch_id * max_step_tokens + output_len - 1];
+      }
+
+      if (is_naive_mode) {
+        seq_lens_this_time[batch_id] = cur_stop_flag ? 0 : 1;
+      }
+    } else if (batch_id >= real_bsz) {
+      // Padding slot: just count as stopped, don't modify state
+      stop_flag_int = 1;
+    } else {
+      // Stopped or paused slot (batch_id < real_bsz)
+      stop_flag_int = 1;
+      stop_flags[batch_id] = true;
+      seq_lens_decoder[batch_id] = 0;
+      seq_lens_this_time[batch_id] = 0;
+      step_output_len[batch_id] = 0;
+    }
+  }
+
+  // Simple block-level reduction using shared memory
+  __syncthreads();
+  typedef cub::BlockReduce<int64_t, BLOCK_SIZE> BlockReduce;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+
+  // printf("stop_flag_now_int %d \n", stop_flag_int);
+  int64_t stop_sum = BlockReduce(temp_storage).Sum(stop_flag_int);
+
+  if (threadIdx.x == 0) {
+    // printf("stop_sum %d \n", stop_sum);
+    has_running_seqs[0] = stop_sum < max_bsz;
+  }
+}
+
+// Host interface
+void UnifiedUpdateModelStatus(const paddle::Tensor &seq_lens_encoder,
+                              const paddle::Tensor &seq_lens_decoder,
+                              const paddle::Tensor &has_running_seqs,
+                              const paddle::Tensor &step_input_ids,
+                              const paddle::Tensor &adaptive_step_input_len,
+                              const paddle::Tensor &step_output_ids,
+                              const paddle::Tensor &step_output_len,
+                              const paddle::Tensor &stop_flags,
+                              const paddle::Tensor &seq_lens_this_time,
+                              const paddle::Tensor &is_paused,
+                              const paddle::Tensor &mask_rollback,
+                              const paddle::Tensor &token_ids_all,
+                              const paddle::Tensor &prompt_lens,
+                              const paddle::Tensor &step_idx,
+                              const paddle::Tensor &end_tokens,
+                              const paddle::Tensor &max_dec_len,
+                              const bool is_naive_mode,
+                              const bool prefill_one_step_stop) {
+  const int real_bsz = seq_lens_this_time.shape()[0];
+  const int max_bsz = stop_flags.shape()[0];
+  PADDLE_ENFORCE_LE(
+      max_bsz,
+      1024,
+      phi::errors::InvalidArgument(
+          "unified_update_model_status: max_bsz (%d) must be <= 1024 "
+          "(single-block launch limit).",
+          max_bsz));
+  const int max_step_tokens = step_input_ids.shape()[1];
+  const int max_model_len = token_ids_all.shape()[1];
+  const int num_end_tokens = end_tokens.shape()[0];
+
+  constexpr int BlockSize = 1024;
+
+  // has_running_seqs is CPU tensor, need to copy to GPU first
+  auto has_running_seqs_gpu =
+      has_running_seqs.copy_to(seq_lens_this_time.place(), false);
+  unified_update_model_status_kernel<BlockSize>
+      <<<1, BlockSize, 0, seq_lens_this_time.stream()>>>(
+          const_cast<int *>(seq_lens_encoder.data<int>()),
+          const_cast<int *>(seq_lens_decoder.data<int>()),
+          const_cast<bool *>(has_running_seqs_gpu.data<bool>()),
+          const_cast<int *>(mask_rollback.data<int>()),
+          const_cast<int64_t *>(step_input_ids.data<int64_t>()),
+          const_cast<int *>(adaptive_step_input_len.data<int>()),
+          const_cast<int64_t *>(step_output_ids.data<int64_t>()),
+          const_cast<int *>(step_output_len.data<int>()),
+          const_cast<bool *>(stop_flags.data<bool>()),
+          const_cast<int *>(seq_lens_this_time.data<int>()),
+          const_cast<bool *>(is_paused.data<bool>()),
+          const_cast<int64_t *>(token_ids_all.data<int64_t>()),
+          prompt_lens.data<int64_t>(),
+          const_cast<int64_t *>(step_idx.data<int64_t>()),
+          end_tokens.data<int64_t>(),
+          max_dec_len.data<int64_t>(),
+          real_bsz,
+          max_bsz,
+          max_step_tokens,
+          max_model_len,
+          num_end_tokens,
+          is_naive_mode,
+          prefill_one_step_stop);
+  // Copy result back to CPU
+  auto has_running_seqs_cpu =
+      has_running_seqs_gpu.copy_to(has_running_seqs.place(), false);
+  bool *out_data = const_cast<bool *>(has_running_seqs.data<bool>());
+  out_data[0] = has_running_seqs_cpu.data<bool>()[0];
+}
+
+PD_BUILD_STATIC_OP(unified_update_model_status)
+    .Inputs({"seq_lens_encoder",
+             "seq_lens_decoder",
+             "has_running_seqs",
+             "step_input_ids",
+             "adaptive_step_input_len",
+             "step_output_ids",
+             "step_output_len",
+             "stop_flags",
+             "seq_lens_this_time",
+             "is_paused",
+             "mask_rollback",
+             "token_ids_all",
+             "prompt_lens",
+             "step_idx",
+             "end_tokens",
+             "max_dec_len"})
+    .Attrs({"is_naive_mode: bool", "prefill_one_step_stop: bool"})
+    .Outputs({"seq_lens_encoder_out",
+              "seq_lens_decoder_out",
+              "has_running_seqs_out",
+              "step_input_ids_out",
+              "adaptive_step_input_len_out",
+              "step_output_ids_out",
+              "step_output_len_out",
+              "stop_flags_out",
+              "seq_lens_this_time_out",
+              "mask_rollback_out",
+              "token_ids_all_out",
+              "step_idx_out"})
+    .SetInplaceMap({{"seq_lens_encoder", "seq_lens_encoder_out"},
+                    {"seq_lens_decoder", "seq_lens_decoder_out"},
+                    {"has_running_seqs", "has_running_seqs_out"},
+                    {"step_input_ids", "step_input_ids_out"},
+                    {"adaptive_step_input_len", "adaptive_step_input_len_out"},
+                    {"step_output_ids", "step_output_ids_out"},
+                    {"step_output_len", "step_output_len_out"},
+                    {"stop_flags", "stop_flags_out"},
+                    {"seq_lens_this_time", "seq_lens_this_time_out"},
+                    {"mask_rollback", "mask_rollback_out"},
+                    {"token_ids_all", "token_ids_all_out"},
+                    {"step_idx", "step_idx_out"}})
+    .SetKernelFn(PD_KERNEL(UnifiedUpdateModelStatus));

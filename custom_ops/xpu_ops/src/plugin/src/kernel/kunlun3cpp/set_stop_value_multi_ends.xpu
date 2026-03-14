@@ -3,8 +3,7 @@
 #include "xpu/kernel/xtdk_math.h"
 #include "xpu/kernel/xtdk_simd.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 template <typename T>
 static inline __device__ bool is_in_end(const T id,
@@ -97,5 +96,4 @@ __global__ void set_stop_value_multi_ends(bool* stop_flags,
       const bool prefill_one_step_stop);
 _XPU_DEF__SET_VALUE_BY_FLAGS_BOTH_(int64_t);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
