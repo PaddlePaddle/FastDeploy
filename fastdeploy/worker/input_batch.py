@@ -171,7 +171,7 @@ class InputBatch:
         self.need_block_list = paddle.full([max_num_seqs], -1, dtype="int32")
         self.need_block_len = paddle.full([1], 0, dtype="int32")
         self.used_list_len = paddle.full([max_num_seqs], 0, dtype="int32")
-        self.infer_seed = paddle.full([max_num_seqs, 1], 0, dtype="int64", device="cpu")
+        self.infer_seed = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.first_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.ori_seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.system_lens = paddle.full([max_num_seqs, 1], 0, dtype="int32")

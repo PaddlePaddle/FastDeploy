@@ -55,6 +55,9 @@ from fastdeploy.model_executor.utils import get_sm_version
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
+import os
+
+from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 
 flashmask_attention_v4 = None
@@ -64,7 +67,8 @@ if current_platform.is_cuda():
 else:
     merge_prefill_decode_output = None
 
-import os
+
+from fastdeploy.spec_decode import SpecMethod
 
 FLASH_ATTN_VERSION = None
 
@@ -99,6 +103,11 @@ def init_flash_attn_version():
         logger.info("Only support CUDA version flash attention.")
 
 
+def _is_deterministic_mode():
+    """Check if FD_DETERMINISTIC_MODE is enabled."""
+    return envs.FD_DETERMINISTIC_MODE
+
+
 init_flash_attn_version()
 
 
@@ -121,6 +130,7 @@ def flash_attn_func(
         init_flash_attn_version()
     if version is None:
         version = FLASH_ATTN_VERSION
+
     if version == 4:
         assert (
             flashmask_attention_v4 is not None
@@ -247,7 +257,7 @@ class FlashAttentionBackend(AttentionBackend):
         self.use_speculate = self.speculative_method is not None
         self.speculate_max_draft_token_num = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
+        self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
 
         self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode
 
@@ -309,7 +319,7 @@ class FlashAttentionBackend(AttentionBackend):
         elif metadata._dtype == "float32":
             metadata._fuse_kernel_compute_dtype = "fp32"
 
-        forward_meta.attention_metadata = metadata
+        self.attention_metadata = metadata
 
     def forward_mixed(
         self,
@@ -322,7 +332,7 @@ class FlashAttentionBackend(AttentionBackend):
         layer: Attention,
         forward_meta: ForwardMeta,
     ):
-        metadata = forward_meta.attention_metadata
+        metadata = self.attention_metadata
         causal_running_flag = self.causal
 
         if self.pd_disaggregation_mode == "per_query":
@@ -330,6 +340,14 @@ class FlashAttentionBackend(AttentionBackend):
                 metadata.kv_signal_metadata,
                 layer.layer_id + self.start_layer_index,
             )
+
+        if int(os.getenv("USE_TBO", "0")) == 1:
+            if hasattr(forward_meta, "tbo_microbatch_id"):
+                # here we only let the last microbatch invoke cache kv transfer！
+                if forward_meta.tbo_microbatch_id == 0:
+                    os.environ["FLAGS_fmt_write_cache_completed_signal"] = "0"
+                elif forward_meta.tbo_microbatch_id == 1:
+                    os.environ["FLAGS_fmt_write_cache_completed_signal"] = "1"
 
         norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
         q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
@@ -360,15 +378,15 @@ class FlashAttentionBackend(AttentionBackend):
 
             if forward_meta.max_len_tensor_cpu[1].item() > 0:
 
-                metadata.max_len_tensor_cpu_decoder = paddle.clone(forward_meta.max_len_tensor_cpu)
-                metadata.max_len_tensor_cpu_decoder[1] = 0
+                forward_meta.max_len_tensor_cpu_decoder = paddle.clone(forward_meta.max_len_tensor_cpu)
+                forward_meta.max_len_tensor_cpu_decoder[1] = 0
 
                 (
-                    metadata.cu_seqlens_k,
-                    metadata.pre_cache_batch_ids,
-                    metadata.pre_cache_tile_ids_per_batch,
-                    metadata.pre_cache_num_blocks_cpu,
-                    metadata.kv_token_num_cpu,
+                    forward_meta.cu_seqlens_k,
+                    forward_meta.pre_cache_batch_ids,
+                    forward_meta.pre_cache_tile_ids_per_batch,
+                    forward_meta.pre_cache_num_blocks_cpu,
+                    forward_meta.kv_token_num_cpu,
                 ) = pre_cache_len_concat(
                     forward_meta.seq_lens_encoder,
                     forward_meta.seq_lens_decoder,
@@ -384,10 +402,12 @@ class FlashAttentionBackend(AttentionBackend):
                 if forward_meta.attn_mask_offsets is not None and (not causal_running_flag):
                     metadata.attn_mask_q = get_attn_mask_q(
                         cu_seqlens_q=forward_meta.cu_seqlens_q,
-                        cu_seqlens_k=metadata.cu_seqlens_k,
+                        cu_seqlens_k=forward_meta.cu_seqlens_k,
                         attn_mask_kv=forward_meta.attn_mask_offsets,
-                        kv_token_num=metadata.kv_token_num_cpu[0].item(),
+                        kv_token_num=forward_meta.kv_token_num_cpu[0].item(),
                     )
+                else:
+                    forward_meta.attn_mask_q = None
 
         use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 0
 
@@ -397,7 +417,7 @@ class FlashAttentionBackend(AttentionBackend):
                 forward_meta.caches[2 * layer.layer_id],
                 forward_meta.caches[2 * layer.layer_id + 1],
                 forward_meta.cu_seqlens_q,
-                metadata.cu_seqlens_k,
+                forward_meta.cu_seqlens_k,
                 forward_meta.rotary_embs,
                 forward_meta.seq_lens_this_time,
                 forward_meta.seq_lens_encoder,
@@ -407,9 +427,9 @@ class FlashAttentionBackend(AttentionBackend):
                 forward_meta.kv_batch_ids,
                 forward_meta.kv_tile_ids_per_batch,
                 forward_meta.kv_num_blocks_x_cpu,
-                metadata.pre_cache_batch_ids,
-                metadata.pre_cache_tile_ids_per_batch,
-                metadata.pre_cache_num_blocks_cpu,
+                forward_meta.pre_cache_batch_ids,
+                forward_meta.pre_cache_tile_ids_per_batch,
+                forward_meta.pre_cache_num_blocks_cpu,
                 q_norm_weight,
                 k_norm_weight,
                 getattr(layer, "cache_k_scale", None),
@@ -419,7 +439,7 @@ class FlashAttentionBackend(AttentionBackend):
                 getattr(layer, "cache_k_zp", None),
                 getattr(layer, "cache_v_zp", None),
                 metadata.kv_signal_data_list[layer.layer_id],
-                metadata.kv_token_num_cpu[0].item(),
+                forward_meta.kv_token_num_cpu[0].item(),
                 self.max_seq_len,
                 getattr(layer, "rms_norm_eps", 1e-6),
                 layer.use_neox_rotary_style,
@@ -431,11 +451,11 @@ class FlashAttentionBackend(AttentionBackend):
                 q,
                 k,
                 v,
-                forward_meta.cu_seqlens_q[: metadata.cu_seqlens_k.shape[0]],
-                metadata.cu_seqlens_k,
+                forward_meta.cu_seqlens_q[: forward_meta.cu_seqlens_k.shape[0]],
+                forward_meta.cu_seqlens_k,
                 max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
                 max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
-                attn_mask_q=metadata.attn_mask_q,
+                attn_mask_q=forward_meta.attn_mask_q,
                 causal=causal_running_flag,
                 num_heads=self.num_heads,
                 kv_num_heads=self.kv_num_heads,
@@ -461,7 +481,7 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.decoder_batch_ids,
             forward_meta.decoder_tile_ids_per_batch,
             forward_meta.decoder_num_blocks_cpu,
-            metadata.max_len_tensor_cpu_decoder if use_fa_do_prefill else forward_meta.max_len_tensor_cpu,
+            forward_meta.max_len_tensor_cpu_decoder if use_fa_do_prefill else forward_meta.max_len_tensor_cpu,
             forward_meta.rotary_embs,
             forward_meta.attn_mask,
             layer.qkv_bias,

@@ -53,6 +53,7 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.platforms import current_platform
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
 
 if current_platform.is_iluvatar():
@@ -78,17 +79,6 @@ else:
         unset_data_ipc,
     )
 
-from fastdeploy.model_executor.pre_and_post_process import (
-    async_set_value,
-    post_process,
-    pre_process,
-    rebuild_padding,
-    save_output_normal,
-)
-
-if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
-    from fastdeploy.spec_decode import MTPProposer, NgramProposer, SuffixProposer
-
 import zmq
 
 from fastdeploy import envs
@@ -100,6 +90,13 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
+from fastdeploy.model_executor.pre_and_post_process import (
+    async_set_value,
+    post_process,
+    pre_process,
+    rebuild_padding,
+    save_output_normal,
+)
 from fastdeploy.output.pooler import PoolerOutput
 from fastdeploy.worker.model_runner_base import (
     DistributedOut,
@@ -124,8 +121,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
-        self.speculative_method = self.fd_config.speculative_config.method
-        self.speculative_decoding = self.speculative_method is not None
+        self.spec_method = self.fd_config.speculative_config.method
+        self.speculative_decoding = self.spec_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
@@ -201,11 +198,11 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize input batch
         self.share_inputs = InputBatch(self.fd_config)
         self.share_inputs.init_share_inputs()
-        increment_value = (
+        self.increment_value = (
             4 if not self.speculative_decoding else (self.speculative_config.num_speculative_tokens + 1) * 4
         )
         self.infer_seed_increment = paddle.full(
-            shape=[self.scheduler_config.max_num_seqs, 1], fill_value=increment_value, dtype="int64", device="cpu"
+            shape=[self.scheduler_config.max_num_seqs, 1], fill_value=self.increment_value, dtype="int64", device="cpu"
         )
 
         self.restore_chunked_prefill_request = dict()
@@ -233,14 +230,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Rollout routing replay config
         self.routing_replay_manager = None
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            self.routing_replay_manager = RoutingReplayManager(fd_config=self.fd_config)
 
         self.zmq_client = None
         self.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            logger.info(f"zmq client get_save_output_rank{local_rank}")
-            self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
+            port = self.fd_config.parallel_config.local_engine_worker_queue_port
+            logger.info(f"zmq client get_save_output_rank{local_rank}_{port}")
+            self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}_{port}", mode=zmq.PUSH)
             self.zmq_client.connect()
             self.zmq_client.socket.SNDTIMEO = 3000
             self.async_output_queue: queue.Queue = queue.Queue()
@@ -273,6 +269,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule and (
             not self.speculative_decoding
         )
+        if self.enable_overlap_schedule:
+            logger.info("Using overlap schedule")
         self.current_launch_token_num = 0
 
     def _async_output_busy_loop(self):
@@ -294,7 +292,9 @@ class GPUModelRunner(ModelRunnerBase):
         """
         check whether decode stage exist
         """
-        return (self.share_inputs["seq_lens_decoder"] > 0).any().cpu().numpy().item()
+        seq_lens_decoder = self.share_inputs["seq_lens_decoder"]
+        stop_flags = self.share_inputs["stop_flags"].squeeze(1)
+        return ((seq_lens_decoder > 0) & ~stop_flags).any().cpu().numpy().item()
 
     def _resolve_current_launch_token_num(
         self, cached_token_num: int, token_num_event, is_dummy_or_profile_run: bool
@@ -426,21 +426,19 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Init speculative proposer
         """
-        if self.speculative_method == "ngram":
-            self.proposer = NgramProposer(self.fd_config)
-        elif self.speculative_method == "mtp":
-            self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
-            self.proposer = MTPProposer(
-                self.fd_config,
-                self.get_model(),
-                self.local_rank,
-                self.device_id,
-                self.share_inputs,
-            )
-        elif self.speculative_method == "suffix":
-            self.proposer = SuffixProposer(self.fd_config)
-        else:
+        if self.spec_method is None:
             self.proposer = None
+            return
+        # MTP-specific: swap seq_lens_this_time to the buffer tensor
+        if self.spec_method == SpecMethod.MTP:
+            self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
+        self.proposer = self.spec_method.create_proposer(
+            self.fd_config,
+            main_model=self.get_model(),
+            local_rank=self.local_rank,
+            device_id=self.device_id,
+            share_inputs=self.share_inputs,
+        )
 
     def _init_logits_processor(self, request) -> tuple[Future[LogitsProcessorBase],]:
         """
@@ -745,10 +743,6 @@ class GPUModelRunner(ModelRunnerBase):
         req_dict: A list of Request dict
         num_running_requests: batch_size
         """
-        # NOTE(luotingdan): Lazy initialize kv cache
-        if "caches" not in self.share_inputs:
-            self.initialize_kv_cache()
-
         req_len = len(req_dicts)
 
         batch_pooling_params = []
@@ -866,7 +860,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.prompt_logprobs_reqs[request.request_id] = request
                 self.forward_batch_reqs_list[idx] = request
 
-                if self.speculative_decoding and self.speculative_method == "suffix" and self.proposer is not None:
+                if self.speculative_decoding and self.spec_method == SpecMethod.SUFFIX and self.proposer is not None:
                     if isinstance(request.prompt_token_ids, np.ndarray):
                         prompt_token_ids = request.prompt_token_ids.tolist()
                     else:
@@ -875,14 +869,15 @@ class GPUModelRunner(ModelRunnerBase):
 
                 # Routing Replay
                 if self.fd_config.routing_replay_config.enable_routing_replay:
-                    if prefill_start_index == 0:
-                        self.routing_replay_manager.register_request(batch_id=idx, request_id=request.request_id)
+                    # 1.prefix task(need regist) 2. chunkend task(not need regist)
+                    self.routing_replay_manager.register_request(batch_id=idx, request_id=request.request_id)
 
                 if (
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generate first token
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                     self.exist_prefill_flag = False
+                    self._cached_launch_token_num = -1
                     if self.speculative_decoding:
                         # D speculate decode, seq_lens_this_time = length + 1
                         self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length + 1
@@ -981,7 +976,7 @@ class GPUModelRunner(ModelRunnerBase):
         self._process_mm_features(req_dicts)
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
-        if self.speculative_method in ["mtp"]:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
@@ -1225,7 +1220,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs.condense()
             reorder_split_prefill_and_decode(input_batch=self.share_inputs)
             if self.speculative_decoding:
-                if self.speculative_method == "mtp":
+                if self.spec_method == SpecMethod.MTP:
                     self.proposer.reorder_inputs()
 
     def load_model(self) -> None:
@@ -1246,7 +1241,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.fd_config.load_config.dynamic_load_weight:
             from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
 
-            if self.fd_config.speculative_config.method == "mtp":
+            if self.spec_method == SpecMethod.MTP:
                 self.dynamic_weight_manager = DynamicWeightManager(
                     self.fd_config, [self.model, self.proposer.model], self.local_rank
                 )
@@ -1349,6 +1344,14 @@ class GPUModelRunner(ModelRunnerBase):
         # Get kv cache dtype
         cache_type = self.model_config.dtype
         kv_cache_quant_type = None
+
+        # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
+        # To rationalize the allocation of kvcache.
+        from fastdeploy import envs
+
+        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
+        self.dsa_cache = envs.FD_ATTENTION_BACKEND == "DSA_ATTN"
+
         if (
             self.quant_config
             and hasattr(self.quant_config, "kv_cache_quant_type")
@@ -1356,11 +1359,21 @@ class GPUModelRunner(ModelRunnerBase):
         ):
             cache_type = "uint8"
             kv_cache_quant_type = self.quant_config.kv_cache_quant_type
-
         # Get kv cache shape
-        key_cache_shape, value_cache_shape = self.attn_backends[0].get_kv_cache_shape(
-            max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
-        )
+        if self.dsa_cache:
+            # Determine dsa cache quant type
+            kv_cache_quant_type = "uint8"
+            cache_type = "uint8"
+
+            # NOTE(changwenbin) Get dsa cache shape.
+            key_cache_shape, value_cache_shape, indexer_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+                max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
+            )
+        else:
+            key_cache_shape, value_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+                max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
+            )
+            indexer_cache_shape = []
         if kv_cache_quant_type == "block_wise_fp8":
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
@@ -1383,6 +1396,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
         cache_kvs_list = []
+
         for i in range(self.model_config.num_hidden_layers):
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
@@ -1390,8 +1404,12 @@ class GPUModelRunner(ModelRunnerBase):
             if value_cache_shape:
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
                 value_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+            elif indexer_cache_shape:
+                indexer_cache_name = f"indexer_caches_{i}_rank{local_rank}.device{self.device_id}"
             if create_cache_tensor:
-                logger.info(f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
+                logger.info(
+                    f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}, indexer:{indexer_cache_shape}"
+                )
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
                 set_data_ipc(key_cache, key_cache_name)
                 self.cache_kvs_map[key_cache_name] = key_cache
@@ -1400,6 +1418,11 @@ class GPUModelRunner(ModelRunnerBase):
                     set_data_ipc(val_cache, val_cache_name)
                     self.cache_kvs_map[val_cache_name] = val_cache
                     cache_kvs_list.extend([key_cache, val_cache])
+                elif indexer_cache_shape:
+                    indexer_cache = paddle.full(shape=indexer_cache_shape, fill_value=0, dtype=cache_type)
+                    set_data_ipc(indexer_cache, indexer_cache_name)
+                    self.cache_kvs_map[indexer_cache_name] = indexer_cache
+                    cache_kvs_list.extend([key_cache, indexer_cache])
                 else:
                     cache_kvs_list.extend([key_cache])
                 if kv_cache_quant_type == "block_wise_fp8":
@@ -1418,7 +1441,9 @@ class GPUModelRunner(ModelRunnerBase):
                     else:
                         cache_kvs_list.extend([key_cache_scales])
             else:
-                logger.info(f"..attaching kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
+                logger.info(
+                    f"..attaching kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}, indexer:{indexer_cache_shape}"
+                )
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
                 self.cache_kvs_map[key_cache_name] = key_cache
@@ -1440,6 +1465,11 @@ class GPUModelRunner(ModelRunnerBase):
                         )
                         self.cache_kvs_map[value_cache_scales_name] = val_cache_scales
                         cache_kvs_list.extend([key_cache_scales, val_cache_scales])
+                elif indexer_cache_shape:
+                    indexer_cache = paddle.empty(shape=[], dtype=cache_type)
+                    indexer_cache = share_external_data(indexer_cache, indexer_cache_name, indexer_cache_shape)
+                    self.cache_kvs_map[indexer_cache_name] = indexer_cache
+                    cache_kvs_list.extend([key_cache, indexer_cache])
                 else:
                     cache_kvs_list.extend([key_cache])
                     if kv_cache_quant_type == "block_wise_fp8":
@@ -1637,6 +1667,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.sampling_metadata,
                 self.model_config.max_model_len,
                 self.share_inputs,
+                int(self._real_output_token_num_host),
+                self.increment_value,
                 accept_all_drafts,
                 reject_all_drafts,
             )
@@ -1707,15 +1739,19 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=self.model_config.think_end_id,
             splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
             enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
+            is_naive_mode=(self.speculative_decoding and self.proposer is None),
+            prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
         )
         self.exist_prefill_flag = False
         if self.speculative_decoding:
-            if self.speculative_method == "mtp":
+            if self.spec_method == SpecMethod.MTP:
                 self.proposer.run(
                     full_hidden_states=model_output,
                     step_use_cudagraph=self.forward_meta.step_use_cudagraph,
                     is_dummy_run=True,
                 )
+            elif self.spec_method == SpecMethod.NAIVE:
+                pass
             else:
                 self.proposer.prepare_dummy_speculative_drafts(share_inputs=self.share_inputs, batch_size=batch_size)
         return sampler_output
@@ -1751,7 +1787,7 @@ class GPUModelRunner(ModelRunnerBase):
             max_dec_len_list=max_dec_len_list,
             block_num=block_num,
         )
-        if self.speculative_method in ["mtp"]:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
                 batch_size=batch_size,
@@ -1765,7 +1801,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             self.padding_cudagraph_inputs()
 
-            # 3. Run model
             if self.enable_mm:
                 model_output = self.model(
                     self.forward_meta.ids_remove_padding,
@@ -1803,17 +1838,15 @@ class GPUModelRunner(ModelRunnerBase):
                 self._dummy_sampler_run(hidden_states, model_output, batch_size, accept_all_drafts, reject_all_drafts)
 
             # 7. Updata 'infer_seed' and step_cuda()
-            self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-            self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+            if not self.speculative_decoding:
+                self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
+                self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
 
             if capture_prefill and self.graph_opt_config.graph_opt_level > 0:
                 # only need to capture prefill
                 break
-
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            self.routing_replay_manager.clear_routing_table()
 
     @sot_warmup_guard(True)
     def capture_model(self) -> None:
@@ -1839,7 +1872,7 @@ class GPUModelRunner(ModelRunnerBase):
                     logger.info(
                         f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
                     )
-            elif self.speculative_decoding:
+            elif self.speculative_decoding and self.spec_method == SpecMethod.MTP:
                 # Capture Target Model without bsz 1
                 for capture_size in sorted(capture_sizes, reverse=True):
                     expected_decode_len = self.speculative_config.num_speculative_tokens * 2 + 1
@@ -2071,6 +2104,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
         self.sampler.pre_process(p_done_idxs)
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager.pending_update_positions = self.routing_replay_manager.get_token_positions(
+                seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+                seq_lens_this_time=self.share_inputs["seq_lens_this_time_buffer"],
+            )
 
         # 1.1 Update state of logits processor
         for proc in self.sampling_metadata.logits_processors:
@@ -2078,7 +2116,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
-
         # 3. Execute model
         if self.enable_mm:
             model_output = self.model(
@@ -2155,6 +2192,7 @@ class GPUModelRunner(ModelRunnerBase):
                 skip_save_output=False,
                 async_output_queue=self.async_output_queue,
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
+                routing_replay_manager=self.routing_replay_manager,
             )
 
             return None, None, None
@@ -2235,6 +2273,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self.sampling_metadata,
                     self.model_config.max_model_len,
                     self.share_inputs,
+                    int(self._real_output_token_num_host),
+                    self.increment_value,
                 )
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
@@ -2292,7 +2332,7 @@ class GPUModelRunner(ModelRunnerBase):
                 enable_pd_reorder=getattr(self.share_inputs, "enable_pd_reorder", False),
             )
 
-            if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
+            if self.spec_method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill":
                 skip_save_output = True
             else:
                 skip_save_output = False
@@ -2310,25 +2350,33 @@ class GPUModelRunner(ModelRunnerBase):
                 think_end_id=self.model_config.think_end_id,
                 splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
+                is_naive_mode=(self.speculative_decoding and self.proposer is None),
+                prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
+                routing_replay_manager=self.routing_replay_manager,
             )
 
             if self.guided_backend is not None and sampler_output is not None:
                 self.sampler.post_process(sampler_output.sampled_token_ids)
 
-            # 6. Speculative decode
-            if self.speculative_decoding:
-                if self.speculative_method == "mtp":
+            # 6. Speculative decode -- proposer run (method="naive" has proposer=None, skip)
+            # For naive mode: seq_lens_this_time is already reset to 1 inside
+            # unified_update_model_status kernel. For MTP/Ngram, the proposer
+            # will overwrite it with (draft_count + 1) below.
+
+            if self.speculative_decoding and self.proposer is not None:
+                if self.spec_method == SpecMethod.MTP:
                     self.proposer.run(
                         full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
                     )
-                elif self.speculative_method == "suffix":
-                    self.proposer.run(share_inputs=self.share_inputs)
+                elif self.spec_method == SpecMethod.NAIVE:
+                    pass
                 else:
                     self.proposer.run(share_inputs=self.share_inputs)
 
             # 7. Update 'infer_seed' and step_cuda()
-            self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-            self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+            if not self.speculative_decoding:
+                self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
+                self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
             if self.speculative_decoding:
                 speculate_schedule_cache(
                     self.share_inputs["draft_tokens"],
@@ -2356,15 +2404,6 @@ class GPUModelRunner(ModelRunnerBase):
                 post_process_event.record()
 
         self.exist_prefill_flag = False
-        # Routing replay
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            if (
-                not self.exist_prefill()
-                and not self.exist_decode()
-                and self.share_inputs["is_block_step"].sum() == 0
-                and self.share_inputs["is_chunk_step"].sum() == 0
-            ):
-                self.routing_replay_manager.put_table_to_store()
         return model_output_data, sampler_output, post_process_event
 
     def _save_model_output(
@@ -2445,7 +2484,7 @@ class GPUModelRunner(ModelRunnerBase):
         # TODO(gongshaotian): Optimize the management logic of kvcache
         self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache(profile=True)
-        if self.speculative_method in ["mtp"]:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
 
         # 1. Profile with multimodal encoder & encoder cache
@@ -2461,7 +2500,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # 3. gc
-        if self.speculative_method in ["mtp"]:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.clear_mtp_cache(profile=True)
         self.clear_cache(profile=True)
 
@@ -2492,7 +2531,7 @@ class GPUModelRunner(ModelRunnerBase):
             }
         )
 
-        if self.speculative_method in ["mtp"]:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.update_mtp_block_num(num_gpu_blocks)
 
     def cal_theortical_kvcache(self):
@@ -2523,7 +2562,7 @@ class GPUModelRunner(ModelRunnerBase):
         # NOTE(liuzichang): Implement multi-layer MTP architecture in the future
         num_layers = (
             self.model_config.num_hidden_layers + self.speculative_config.num_gpu_block_expand_ratio
-            if self.speculative_method in ["mtp"]
+            if self.spec_method == SpecMethod.MTP
             else self.model_config.num_hidden_layers
         )
 
@@ -2536,6 +2575,20 @@ class GPUModelRunner(ModelRunnerBase):
                 * (self.cache_config.block_size)
                 * num_layers
             )  # compress_kv + k_pe
+        elif self.dsa_cache:
+            required_memory = (
+                1
+                * (
+                    self.fd_config.model_config.kv_lora_rank
+                    + self.fd_config.model_config.kv_lora_rank // 128 * 4
+                    + 2 * self.fd_config.model_config.qk_rope_head_dim
+                    # indexer
+                    + self.fd_config.model_config.index_head_dim
+                    + self.fd_config.model_config.index_head_dim // 128 * 4
+                )
+                * (self.cache_config.block_size)
+                * num_layers
+            )
         else:
             required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
         return required_memory
@@ -2568,7 +2621,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.clear_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
-        if self.speculative_method in ["mtp"]:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.clear_mtp_cache()
         self.clear_cache()
         paddle.device.cuda.empty_cache()
@@ -2582,8 +2635,10 @@ class GPUModelRunner(ModelRunnerBase):
         self.prompt_logprobs_reqs.clear()
         self.in_progress_prompt_logprobs.clear()
         self.forward_batch_reqs_list = [None for _ in range(self.scheduler_config.max_num_seqs)]
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            self.routing_replay_manager.put_table_to_store()
+
+        # Routing Replay
+        if self.routing_replay_manager:
+            self.routing_replay_manager.clear_all_request()
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
@@ -2594,7 +2649,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Reset share_inputs
         self.share_inputs.reset_share_inputs()
-        if self.speculative_method in ["mtp"]:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.model_inputs.reset_model_inputs()
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
@@ -2903,3 +2958,12 @@ class GPUModelRunner(ModelRunnerBase):
             del self.prompt_logprobs_reqs[req.request_id]
             del self.in_progress_prompt_logprobs[req.request_id]
         return prompt_logprobs_list
+
+    def initialize_routing_replay_manager(self):
+        """Initialize the routing replay manager after initialize the KVCache"""
+        # Use updated block number
+        self.routing_replay_manager = RoutingReplayManager(
+            fd_config=self.fd_config,
+            block_table=self.share_inputs["block_tables"],
+            total_block_num=self.num_gpu_blocks,
+        )

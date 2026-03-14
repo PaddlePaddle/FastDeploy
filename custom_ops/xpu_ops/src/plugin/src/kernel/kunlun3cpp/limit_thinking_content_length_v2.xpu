@@ -7,8 +7,7 @@
 #include "xpu/kernel/xtdk.h"
 #include "xpu/kernel/xtdk_io.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __global__ void limit_thinking_content_length_kernel_v2(
     int64_t* next_tokens,
@@ -89,5 +88,4 @@ __global__ void limit_thinking_content_length_kernel_v2(
   }
 }
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

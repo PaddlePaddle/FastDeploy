@@ -228,7 +228,7 @@ class DPScheduler:
     def _put_requests_to_local(self):
         while True:
             request = self.request_queues.get()
-            self.scheduler_logger.info(f"Recieve request from puller, request_id: {request.request_id}")
+            self.scheduler_logger.info(f"Receive request from puller, request_id: {request.request_id}")
             self._scheduler.put_requests([request])
 
     def _get_response_from_local(self):
