@@ -400,7 +400,7 @@ class FlashAttentionBackend(AttentionBackend):
                 num_gen_multimodal_nontext_tokens = getattr(forward_meta, "num_gen_multimodal_nontext_tokens", 1)
                 causal_running_flag = all_prefill_text and num_gen_multimodal_nontext_tokens <= 0
                 if forward_meta.attn_mask_offsets is not None and (not causal_running_flag):
-                    metadata.attn_mask_q = get_attn_mask_q(
+                    forward_meta.attn_mask_q = get_attn_mask_q(
                         cu_seqlens_q=forward_meta.cu_seqlens_q,
                         cu_seqlens_k=forward_meta.cu_seqlens_k,
                         attn_mask_kv=forward_meta.attn_mask_offsets,
