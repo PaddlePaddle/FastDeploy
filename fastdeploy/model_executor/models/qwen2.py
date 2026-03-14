@@ -272,10 +272,9 @@ class Qwen2Model(nn.Layer):
 
     def forward(
         self,
-        inputs: Dict,
+        ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        ids_remove_padding = inputs["ids_remove_padding"]
 
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
