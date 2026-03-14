@@ -399,7 +399,7 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         self.qwen2.load_state_dict(state_dict)
         self.lm_head.load_state_dict(state_dict)
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         """ """
         logits = self.lm_head(hidden_states)
         logits = logits.astype(paddle.float32)

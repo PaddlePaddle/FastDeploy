@@ -732,7 +732,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
                 process_weights_after_loading_fn(kv_model_sublayer_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         """ """
         logits = self.lm_head(hidden_states)
         logits = logits.astype(paddle.float32)

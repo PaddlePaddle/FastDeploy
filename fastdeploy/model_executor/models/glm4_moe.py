@@ -507,7 +507,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         """
         assert False, "glm4_moe only support --load-choices default_v1."
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         """ """
         logits = self.lm_head(hidden_states)
         logits = logits.astype(paddle.float32)

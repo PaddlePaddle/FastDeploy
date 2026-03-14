@@ -176,6 +176,7 @@ class InputBatch:
         self.ori_seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.system_lens = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.system_ids = paddle.full([max_num_seqs, 1], -1, dtype="int32")
+        self.generated_modality = paddle.full([max_num_seqs], -1, dtype="int32")
 
         self.ids_remove_padding = paddle.full(
             [max_num_seqs * self.max_chunk_tokens],

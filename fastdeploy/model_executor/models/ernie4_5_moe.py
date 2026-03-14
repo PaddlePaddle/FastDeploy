@@ -670,7 +670,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
             )
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         logits = self.lm_head(hidden_states)
         logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")

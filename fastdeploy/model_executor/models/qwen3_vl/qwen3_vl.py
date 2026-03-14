@@ -259,7 +259,7 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
         else:
             self.lm_head.load_state_dict(state_dict)
 
-    def compute_logits(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None) -> paddle.Tensor:
         logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
