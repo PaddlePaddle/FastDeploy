@@ -20,21 +20,18 @@ import paddle
 import pytest
 
 # Stub GPU-only ops for CPU environments (cf. test_fused_moe_cutlass_backend.py)
-_gpu = sys.modules.get("fastdeploy.model_executor.ops.gpu")
-if _gpu is None:
-    _gpu = types.ModuleType("fastdeploy.model_executor.ops.gpu")
-    sys.modules["fastdeploy.model_executor.ops.gpu"] = _gpu
-for _a in (
-    "MoeWna16MarlinGemmApi",
-    "moe_expert_dispatch",
-    "moe_expert_reduce",
-    "tritonmoe_preprocess_func",
-    "gptq_marlin_repack",
-    "moe_topk_select",
-    "get_padding_offset",
-):
-    if not hasattr(_gpu, _a):
-        setattr(_gpu, _a, None)
+# Use __getattr__ catchall so the entire import chain (moe → attention → ops.gpu)
+# can resolve any GPU op name without an explicit allowlist.
+
+
+class _GpuOpsStub(types.ModuleType):
+    def __getattr__(self, name):
+        return None
+
+
+if "fastdeploy.model_executor.ops.gpu" not in sys.modules:
+    sys.modules["fastdeploy.model_executor.ops.gpu"] = _GpuOpsStub("fastdeploy.model_executor.ops.gpu")
+_gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
 
 from fastdeploy.model_executor.layers.moe import (  # noqa: E402
     fused_moe_marlin_backend as mb,
