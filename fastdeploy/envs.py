@@ -194,6 +194,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
     # Whether to use phi MOE permute,if 1,use paddle op.
     "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))),
+    # Whether to use phi TopK, when need select moe by noaux_tc method if 1,use paddle default.
+    "FD_USE_PHI_TOPK": lambda: bool(int(os.getenv("FD_USE_PHI_TOPK", "0"))),
     # Control class SiluAndMul to use swiglu or fusid_bias_act operator in the forward_cuda function
     "FD_SiluAndMul_USE_PHI_SWIGLU": lambda: bool(int(os.getenv("FD_SiluAndMul_USE_PHI_SWIGLU", "0"))),
     # Reserve output blocks for decoding requests when schedule new prefill requests
