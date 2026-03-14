@@ -29,6 +29,7 @@
 
 #include "cutlass_helper.h"
 #include "helper.h"
+#include "batch_invariant_gemm/gate_gemm_streamk_kernel.cuh"
 // clang-format on
 
 namespace fastdeploy {
@@ -141,6 +142,103 @@ struct GateGemmSm90 {
   struct GemmKernel : public KernelType {};
 };
 
+// Variant using custom Non-Cooperative kernel with StreamK support.
+// Removes the M_tile >= 128 constraint, enabling TileShape<64, 32, 64>.
+// Uses KernelTmaWarpSpecialized (1 Producer + 1 Consumer WG = 256 threads)
+// with persistent StreamK loop for SplitK + Deterministic reduction.
+template <typename ElementAB_,
+          typename ElementD_,
+          bool HasBias,
+          typename TileShape,
+          typename ClusterShape>
+struct GateGemmSm90StreamK {
+  using ElementAB = ElementAB_;
+  using ElementD = ElementD_;
+  using ElementAcc = float;
+  static constexpr bool kHasBias = HasBias;
+
+  using LayoutA = cutlass::layout::RowMajor;
+  using LayoutB = cutlass::layout::ColumnMajor;
+  using LayoutD = cutlass::layout::RowMajor;
+
+  using ElementC = std::conditional_t<HasBias, ElementD, void>;
+  using LayoutC = LayoutD;
+  using StrideD = cutlass::detail::TagToStrideA_t<LayoutD>;
+  using StrideC = StrideD;
+
+  static constexpr int AlignmentAB =
+      128 / cutlass::sizeof_bits<ElementAB>::value;
+  static constexpr int AlignmentCD =
+      HasBias ? (128 / cutlass::sizeof_bits<ElementD>::value) : 4;
+
+  // Non-Cooperative schedule — no M_tile >= 128 constraint
+  using KernelSchedule = cutlass::gemm::KernelTmaWarpSpecialized;
+  using EpilogueSchedule = cutlass::epilogue::TmaWarpSpecialized;
+
+  using FusionOp =
+      std::conditional_t<HasBias,
+                         cutlass::epilogue::fusion::LinCombEltAct<
+                             cutlass::epilogue::thread::Identity,
+                             ElementD,
+                             float,
+                             ElementC,
+                             float,
+                             cutlass::FloatRoundStyle::round_to_nearest>,
+                         cutlass::epilogue::fusion::LinearCombination<
+                             ElementD,
+                             float,
+                             void,
+                             float,
+                             cutlass::FloatRoundStyle::round_to_nearest>>;
+
+  using CollectiveEpilogue =
+      typename cutlass::epilogue::collective::CollectiveBuilder<
+          cutlass::arch::Sm90,
+          cutlass::arch::OpClassTensorOp,
+          TileShape,
+          ClusterShape,
+          cutlass::epilogue::collective::EpilogueTileAuto,
+          ElementAcc,
+          float,
+          ElementC,
+          LayoutC,
+          AlignmentCD,
+          ElementD,
+          LayoutD,
+          AlignmentCD,
+          EpilogueSchedule,
+          FusionOp>::CollectiveOp;
+
+  static constexpr size_t CEStorageSize =
+      sizeof(typename CollectiveEpilogue::SharedStorage);
+
+  using CollectiveMainloop =
+      typename cutlass::gemm::collective::CollectiveBuilder<
+          cutlass::arch::Sm90,
+          cutlass::arch::OpClassTensorOp,
+          ElementAB,
+          LayoutA,
+          AlignmentAB,
+          ElementAB,
+          LayoutB,
+          AlignmentAB,
+          ElementAcc,
+          TileShape,
+          ClusterShape,
+          cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(
+              CEStorageSize)>,
+          KernelSchedule>::CollectiveOp;
+
+  // Custom kernel: Non-Cooperative structure + StreamK persistent loop
+  using KernelType =
+      GemmWarpSpecializedStreamK<cute::Shape<int, int, int, int>,
+                                 CollectiveMainloop,
+                                 CollectiveEpilogue,
+                                 cutlass::gemm::StreamKScheduler>;
+
+  struct GemmKernel : public KernelType {};
+};
+
 // Launch helper: allocates workspace and runs the CUTLASS kernel
 template <typename Gemm>
 void launch_gate_gemm(
@@ -214,14 +312,13 @@ void launch_gate_gemm(
   // SplitK + Deterministic reduce: K boundaries are fixed (M-independent),
   // daisy-chain accumulation ensures fixed FP order → batch invariance.
   //
-  // Optimal splits from benchmark (H800, K=7168, TileShape 128x256x64):
-  //   T(s) = T_compute/s + (s-1)*T_reduce_step,  s_opt =
-  //   sqrt(T_compute/T_reduce) Measured: T_compute=68μs, T_reduce_step≈3.4μs →
-  //   s_opt≈4.5 splits=4: 31μs (2.2x faster than persistent 68μs)
-  // Consistent across all M (1~2048), batch-invariant since splits is
-  // M-independent. Override via CUTLASS_GATE_GEMM_SPLITS env var for tuning.
-  constexpr int DEFAULT_SPLITS = 4;
+  // Optimal splits from nsys benchmark (H800, K=7168, N=256):
+  //   TileShape<128,32,64> (Cooperative):      splits=5 → 13.3μs
+  //   TileShape<64,32,64>  (Non-Coop StreamK): splits=3 →  9.9μs
+  // Override via CUTLASS_GATE_GEMM_SPLITS env var for tuning.
   using TileShapeType = typename GemmKernel::TileShape;
+  constexpr int M_TILE = cute::size<0>(TileShapeType{});
+  constexpr int DEFAULT_SPLITS = (M_TILE <= 64) ? 3 : 5;
   constexpr int K_TILE = cute::size<2>(TileShapeType{});
   int k_iters = (K + K_TILE - 1) / K_TILE;
   int splits;

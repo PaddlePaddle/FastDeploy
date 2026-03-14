@@ -17,14 +17,19 @@
 namespace fastdeploy {
 
 // Tile configs for Gate GEMM (N=256, K=7168)
-// bf16/fp16: 128x32x64 — 8 N-tiles for N=256, requires Cooperative
-// (M_tile>=128). Smaller N-tile doubles CTA count vs 128x64x64.
+// bf16/fp16: 128x32x64 — Cooperative, 8 N-tiles for N=256
 using TileShape_bf16 = cute::Shape<cute::_128, cute::_32, cute::_64>;
-// fp32: 128x128x64 — smaller N-tile due to larger element size
+// bf16/fp16: 64x32x64 — Non-Cooperative StreamK, 2 M-tiles for M=128
+using TileShape_small = cute::Shape<cute::_64, cute::_32, cute::_64>;
+// P1: K_tile=128 — halves K iterations (112→56), better TMA pipeline efficiency
+using TileShape_small_k128 = cute::Shape<cute::_64, cute::_32, cute::_128>;
+// fp32: 128x128x64
 using TileShape_fp32 = cute::Shape<cute::_128, cute::_128, cute::_64>;
 using ClusterShape_1x1x1 = cute::Shape<cute::_1, cute::_1, cute::_1>;
+// P2: Cluster<1,2,1> — 2 N-adjacent CTAs share A via TMA multicast
+using ClusterShape_1x2x1 = cute::Shape<cute::_1, cute::_2, cute::_1>;
 
-// --- Explicit template instantiation types ---
+// --- Cooperative (M_tile=128) instantiations ---
 
 // bf16, no bias
 using GateGemm_bf16_nobias = GateGemmSm90<cutlass::bfloat16_t,
@@ -62,7 +67,87 @@ using GateGemm_fp32_nobias =
 using GateGemm_fp32_bias =
     GateGemmSm90<float, float, true, TileShape_fp32, ClusterShape_1x1x1>;
 
-template <typename GemmNoBias, typename GemmBias>
+// --- Non-Cooperative StreamK (M_tile=64) instantiations ---
+
+using GateGemm_bf16_nobias_small = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                       cutlass::bfloat16_t,
+                                                       false,
+                                                       TileShape_small,
+                                                       ClusterShape_1x1x1>;
+
+using GateGemm_bf16_bias_small = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                     cutlass::bfloat16_t,
+                                                     true,
+                                                     TileShape_small,
+                                                     ClusterShape_1x1x1>;
+
+using GateGemm_fp16_nobias_small = GateGemmSm90StreamK<cutlass::half_t,
+                                                       cutlass::half_t,
+                                                       false,
+                                                       TileShape_small,
+                                                       ClusterShape_1x1x1>;
+
+using GateGemm_fp16_bias_small = GateGemmSm90StreamK<cutlass::half_t,
+                                                     cutlass::half_t,
+                                                     true,
+                                                     TileShape_small,
+                                                     ClusterShape_1x1x1>;
+
+// --- P1: K_tile=128 instantiations (bf16 only for benchmarking) ---
+
+using GateGemm_bf16_nobias_small_k128 =
+    GateGemmSm90StreamK<cutlass::bfloat16_t,
+                        cutlass::bfloat16_t,
+                        false,
+                        TileShape_small_k128,
+                        ClusterShape_1x1x1>;
+
+using GateGemm_bf16_bias_small_k128 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                          cutlass::bfloat16_t,
+                                                          true,
+                                                          TileShape_small_k128,
+                                                          ClusterShape_1x1x1>;
+
+// --- P2: ClusterShape<1,2,1> instantiations (bf16 only) ---
+
+using GateGemm_bf16_nobias_small_cluster =
+    GateGemmSm90StreamK<cutlass::bfloat16_t,
+                        cutlass::bfloat16_t,
+                        false,
+                        TileShape_small,
+                        ClusterShape_1x2x1>;
+
+using GateGemm_bf16_bias_small_cluster =
+    GateGemmSm90StreamK<cutlass::bfloat16_t,
+                        cutlass::bfloat16_t,
+                        true,
+                        TileShape_small,
+                        ClusterShape_1x2x1>;
+
+// --- P1+P2: K_tile=128 + ClusterShape<1,2,1> (bf16 only) ---
+
+using GateGemm_bf16_nobias_small_k128_cluster =
+    GateGemmSm90StreamK<cutlass::bfloat16_t,
+                        cutlass::bfloat16_t,
+                        false,
+                        TileShape_small_k128,
+                        ClusterShape_1x2x1>;
+
+using GateGemm_bf16_bias_small_k128_cluster =
+    GateGemmSm90StreamK<cutlass::bfloat16_t,
+                        cutlass::bfloat16_t,
+                        true,
+                        TileShape_small_k128,
+                        ClusterShape_1x2x1>;
+
+// Runtime M-based dispatch:
+// M >= 128: use TileShape<64,32,64> (2 M-tiles → 64 CTAs, 48% SM)
+// M < 128:  use TileShape<128,32,64> (1 M-tile, same CTA count as small tile)
+// Override with CUTLASS_GATE_GEMM_TILE=large|small for debugging.
+template <typename GemmNoBias,
+          typename GemmBias,
+          typename GemmNoBiasSmall,
+          typename GemmBiasSmall>
 void dispatch_gate_gemm(paddle::Tensor &c,
                         paddle::Tensor const &a,
                         paddle::Tensor const &b,
@@ -71,10 +156,27 @@ void dispatch_gate_gemm(paddle::Tensor &c,
   int N = b.dims()[0];
   int K = a.dims()[1];
 
-  if (bias) {
-    launch_gate_gemm<GemmBias>(c, a, b, bias->data(), M, N, K);
+  bool use_small = (M >= 128);
+  const char *env_tile = std::getenv("CUTLASS_GATE_GEMM_TILE");
+  if (env_tile) {
+    if (std::string(env_tile) == "large")
+      use_small = false;
+    else if (std::string(env_tile) == "small")
+      use_small = true;
+  }
+
+  if (use_small) {
+    if (bias) {
+      launch_gate_gemm<GemmBiasSmall>(c, a, b, bias->data(), M, N, K);
+    } else {
+      launch_gate_gemm<GemmNoBiasSmall>(c, a, b, nullptr, M, N, K);
+    }
   } else {
-    launch_gate_gemm<GemmNoBias>(c, a, b, nullptr, M, N, K);
+    if (bias) {
+      launch_gate_gemm<GemmBias>(c, a, b, bias->data(), M, N, K);
+    } else {
+      launch_gate_gemm<GemmNoBias>(c, a, b, nullptr, M, N, K);
+    }
   }
 }
 
@@ -108,15 +210,46 @@ void BatchInvariantGateGemm(paddle::Tensor &c,
 
   auto dtype = a.dtype();
   if (dtype == paddle::DataType::BFLOAT16) {
-    fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias,
-                                   fastdeploy::GateGemm_bf16_bias>(
-        c, a, b, bias);
+    // P1/P2 optimization variants (bf16 only).
+    // CUTLASS_GATE_GEMM_OPT: k128 | cluster | k128_cluster | (empty=baseline)
+    const char *env_opt = std::getenv("CUTLASS_GATE_GEMM_OPT");
+    std::string opt = env_opt ? env_opt : "";
+
+    if (opt == "k128_cluster") {
+      fastdeploy::dispatch_gate_gemm<
+          fastdeploy::GateGemm_bf16_nobias,
+          fastdeploy::GateGemm_bf16_bias,
+          fastdeploy::GateGemm_bf16_nobias_small_k128_cluster,
+          fastdeploy::GateGemm_bf16_bias_small_k128_cluster>(c, a, b, bias);
+    } else if (opt == "k128") {
+      fastdeploy::dispatch_gate_gemm<
+          fastdeploy::GateGemm_bf16_nobias,
+          fastdeploy::GateGemm_bf16_bias,
+          fastdeploy::GateGemm_bf16_nobias_small_k128,
+          fastdeploy::GateGemm_bf16_bias_small_k128>(c, a, b, bias);
+    } else if (opt == "cluster") {
+      fastdeploy::dispatch_gate_gemm<
+          fastdeploy::GateGemm_bf16_nobias,
+          fastdeploy::GateGemm_bf16_bias,
+          fastdeploy::GateGemm_bf16_nobias_small_cluster,
+          fastdeploy::GateGemm_bf16_bias_small_cluster>(c, a, b, bias);
+    } else {
+      fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias,
+                                     fastdeploy::GateGemm_bf16_bias,
+                                     fastdeploy::GateGemm_bf16_nobias_small,
+                                     fastdeploy::GateGemm_bf16_bias_small>(
+          c, a, b, bias);
+    }
   } else if (dtype == paddle::DataType::FLOAT16) {
     fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_fp16_nobias,
-                                   fastdeploy::GateGemm_fp16_bias>(
+                                   fastdeploy::GateGemm_fp16_bias,
+                                   fastdeploy::GateGemm_fp16_nobias_small,
+                                   fastdeploy::GateGemm_fp16_bias_small>(
         c, a, b, bias);
   } else if (dtype == paddle::DataType::FLOAT32) {
     fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_fp32_nobias,
+                                   fastdeploy::GateGemm_fp32_bias,
+                                   fastdeploy::GateGemm_fp32_nobias,
                                    fastdeploy::GateGemm_fp32_bias>(
         c, a, b, bias);
   } else {
