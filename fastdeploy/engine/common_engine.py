@@ -74,13 +74,6 @@ class EngineService:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
-        if cfg.scheduler_config.splitwise_role != "mixed" or cfg.cache_config.enable_prefix_caching:
-            if isinstance(self.cfg.cache_config.cache_queue_port, str):
-                self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port.split(",")
-            if isinstance(self.cfg.cache_config.cache_queue_port, list):
-                self.cfg.cache_config.cache_queue_port = int(
-                    self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-                )
 
         if self.cfg.parallel_config.data_parallel_size > 1:
             self.llm_logger = get_logger(
@@ -313,10 +306,13 @@ class EngineService:
                 )
 
             if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+                self.llm_logger.info(
+                    f"Starting cache queue server at {self.cfg.master_ip}:{self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]}"
+                )
                 self.cache_task_queue = EngineCacheQueue(
                     address=(
                         self.cfg.master_ip,
-                        self.cfg.cache_config.cache_queue_port,
+                        self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id],
                     ),
                     authkey=b"cache_queue_service",
                     is_server=True,
@@ -324,7 +320,7 @@ class EngineService:
                     client_id=-1,
                     local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                 )
-                self.cfg.cache_config.cache_queue_port = self.cache_task_queue.get_server_port()
+                # self.cfg.cache_config.cache_queue_port = self.cache_task_queue.get_server_port()
 
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,

@@ -1308,6 +1308,9 @@ class CacheConfig:
         if self.pd_comm_port is not None and isinstance(self.pd_comm_port, str):
             self.pd_comm_port = [int(port) for port in self.pd_comm_port.split(",")]
 
+        if self.cache_queue_port is not None and isinstance(self.cache_queue_port, str):
+            self.cache_queue_port = [int(port) for port in self.cache_queue_port.split(",")]
+
         if self.swap_space is None:
             self.enable_hierarchical_cache = False
         else:

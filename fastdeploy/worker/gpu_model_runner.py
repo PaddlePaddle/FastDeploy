@@ -1943,6 +1943,7 @@ class GPUModelRunner(ModelRunnerBase):
             speculative_config=json.loads(self.speculative_config.to_json_string()),
             create_cache_tensor=False,
         )
+        logger.info(f"Initialize proxy cache transfer manager with args: {cache_transfer_args}")
         self.cache_transfer_manager = CacheTransferManager(
             cache_transfer_args,
             execution_lock=self.cache_transfer_mutex,

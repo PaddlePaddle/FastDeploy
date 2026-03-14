@@ -129,7 +129,9 @@ class CacheTransferManager:
 
         device = args.device_id
         rank = args.rank
-        logger = get_logger("cache_transfer_manager", f"cache_transfer_manager_tprank{args.rank}.log")
+        logger = get_logger(
+            "cache_transfer_manager", f"cache_transfer_manager_dprank{args.local_data_parallel_id}.log"
+        )
         self.mode = getattr(args, "mode", "indie")
         self.execution_lock = execution_lock
         self.gpu_cache_kvs = {}
@@ -261,6 +263,7 @@ class CacheTransferManager:
 
     def _connect_cache_task_queue(self, args):
         address = (args.pod_ip, args.cache_queue_port)
+        logger.info(f"Connecting to cache task queue {address}")
         self.cache_task_queue = EngineCacheQueue(
             address=address,
             is_server=False,

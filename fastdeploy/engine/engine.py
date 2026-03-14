@@ -568,7 +568,6 @@ class LLMEngine:
             f" --plas_attention_config '{self.cfg.plas_attention_config.to_json_string()}'"
             f" --ips {ips}"
             f" --max_encoder_cache {self.cfg.cache_config.max_encoder_cache}"
-            f" --cache_queue_port {self.cfg.cache_config.cache_queue_port}"
             f" --cache-transfer-protocol {self.cfg.cache_config.cache_transfer_protocol}"
             f" --runner {self.cfg.model_config.runner}"
             f" --convert {self.cfg.model_config.convert}"
@@ -583,6 +582,9 @@ class LLMEngine:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
         if self.engine.mm_max_tokens_per_item is not None:
             arguments += f" --mm_max_tokens_per_item '{json.dumps(self.engine.mm_max_tokens_per_item)}'"
+        if self.cfg.cache_config.cache_queue_port is not None:
+            cache_queue_ports = ",".join(map(str, self.cfg.cache_config.cache_queue_port))
+            arguments += f" --cache_queue_port {cache_queue_ports}"
 
         worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,

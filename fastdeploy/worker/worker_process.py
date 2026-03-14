@@ -882,8 +882,8 @@ def parse_args():
 
     parser.add_argument(
         "--cache_queue_port",
-        type=int,
-        default=0,
+        type=str,
+        default=None,
         help="Cache task queue port.",
     )
 
@@ -1009,6 +1009,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
             parallel_config.local_data_parallel_id
         ]
+        cache_config.cache_queue_port = cache_config.cache_queue_port[parallel_config.local_data_parallel_id]
+
     parallel_config.set_communicate_group()
 
     load_config = LoadConfig(vars(args))
@@ -1033,6 +1035,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     logger.info(f"parallel_config.tensor_parallel_size {parallel_config.tensor_parallel_size}")
     logger.info(f"parallel_config.tensor_parallel_rank {parallel_config.tensor_parallel_rank}")
     logger.info(f"parallel_config.engine_worker_queue_port {parallel_config.engine_worker_queue_port}")
+    logger.info(f"cache_config.cache_queue_port {cache_config.cache_queue_port}")
 
     if getattr(model_config, "num_hidden_layers", None) is None:
         raise ValueError("num_hidden_layers is None")
