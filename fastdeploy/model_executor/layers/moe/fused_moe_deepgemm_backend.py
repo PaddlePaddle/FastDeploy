@@ -168,7 +168,7 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
     )
 
     # swiglu
-    if fastdeploy.envs.FD_USE_FLEET_FUSE_SWIGLU:
+    if fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE:
         ffn_in_x, ffn_in_x_scale_tensor = paddlefleet_ops.fuse_weighted_swiglu_fp8_quant(
             ffn_out, dst_weights, using_pow2_scaling=True, use_ue8m0=not disable_ue8m0_cast
         )
@@ -823,7 +823,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 token_prob_unzipped=dst_weights,
                 total_zipped_tokens=recv_x.shape[0],
                 num_experts=layer.num_experts,
-                using_weighted_combine=True,
+                using_weighted_combine=not fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE,
             )
         else:
             tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
