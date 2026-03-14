@@ -198,7 +198,11 @@ class GpuWorker(WorkerBase):
         num_running_request: int = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        output = self.model_runner.execute_model(model_forward_batch, num_running_request)
+        if hasattr(self.model_runner, "cache_transfer_mutex"):
+            with self.model_runner.cache_transfer_mutex:
+                output = self.model_runner.execute_model(model_forward_batch, num_running_request)
+        else:
+            output = self.model_runner.execute_model(model_forward_batch, num_running_request)
         return output
 
     def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:

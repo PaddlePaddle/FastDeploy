@@ -132,6 +132,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
     # Count for cache_transfer_manager process error
     "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
+    # Cache transfer manager mode: indie launches standalone processes, proxy embeds in GPUModelRunner.
+    "FD_CACHE_TRANSFER_MANAGER_MODE": lambda: os.getenv("FD_CACHE_TRANSFER_MANAGER_MODE", "indie"),
     # API_KEY required for service authentication
     "FD_API_KEY": lambda: [] if "FD_API_KEY" not in os.environ else os.environ["FD_API_KEY"].split(","),
     # The AK of bos storing the features while multi_modal infer

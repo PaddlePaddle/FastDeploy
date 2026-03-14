@@ -259,51 +259,63 @@ class PrefixCacheManager:
             create=False,
         )
 
-        # Run command to launch cache transfer managers
-        log_dir = envs.FD_LOG_DIR
+        cache_transfer_mode = envs.FD_CACHE_TRANSFER_MANAGER_MODE
+        use_proxy_mode = cache_transfer_mode == "proxy" and self.splitwise_role == "mixed"
+        if cache_transfer_mode == "proxy" and not use_proxy_mode:
+            logger.warning(
+                "FD_CACHE_TRANSFER_MANAGER_MODE=proxy is only supported in mixed mode; fallback to indie mode."
+            )
         cache_manager_processes = []
-        visible_devices = get_all_visible_devices()
-
-        val_cache_arg_str = ""
-        if val_cache_shape:
-            if isinstance(val_cache_shape, list):
-                val_shape_str = ",".join(map(str, val_cache_shape))
-            else:
-                val_shape_str = str(val_cache_shape)
-            val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
-
         if self.cache_config.enable_hierarchical_cache:
-            for i in range(tensor_parallel_size):
-                launch_cmd = (
-                    "FLAGS_allocator_strategy=auto_growth "
-                    + visible_devices
-                    + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
-                    + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
-                    + f" {sys.executable} {py_path}"
-                    + f" --device_id {int(device_ids[i])}"
-                    + f" --rank {i}"
-                    + f" --splitwise_role {self.splitwise_role}"
-                    + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
-                    + f" --mp_num {tensor_parallel_size}"
-                    + f" --cache_dtype {cache_config.cache_dtype}"
-                    + f" --key_cache_shape {key_cache_shape}"
-                    + val_cache_arg_str
-                    + f" --cache_queue_port {cache_config.cache_queue_port}"
-                    + f" --enable_splitwise {int(self.enable_splitwise)}"
-                    + f" --pod_ip {pod_ip}"
-                    + f" --engine_worker_queue_port {engine_worker_queue_port}"
-                    + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
-                    + f" --engine_pid {pid_suffix}"
-                    + f" --default_dtype '{self.config.model_config.dtype}'"
-                    + f" --protocol {cache_config.cache_transfer_protocol}"
-                    + f" --local_data_parallel_id {self.local_data_parallel_id}"
-                    + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
-                    + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                    + (" --create_cache_tensor" if not self.enable_splitwise else "")
-                    + f" >{log_dir}/launch_cache_transfer_manager_tprank{i}.log 2>&1"
+            if use_proxy_mode:
+                logger.info(
+                    "Hierarchical cache transfer manager is embedded in GPUModelRunner "
+                    "(FD_CACHE_TRANSFER_MANAGER_MODE=proxy); skip launching processes."
                 )
-                logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
-                cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
+            else:
+                log_dir = envs.FD_LOG_DIR
+                visible_devices = get_all_visible_devices()
+
+                val_cache_arg_str = ""
+                if val_cache_shape:
+                    if isinstance(val_cache_shape, list):
+                        val_shape_str = ",".join(map(str, val_cache_shape))
+                    else:
+                        val_shape_str = str(val_cache_shape)
+                    val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
+
+                for i in range(tensor_parallel_size):
+                    launch_cmd = (
+                        "FLAGS_allocator_strategy=auto_growth "
+                        + visible_devices
+                        + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
+                        + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
+                        + f" {sys.executable} {py_path}"
+                        + f" --device_id {int(device_ids[i])}"
+                        + f" --rank {i}"
+                        + f" --splitwise_role {self.splitwise_role}"
+                        + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
+                        + f" --mp_num {tensor_parallel_size}"
+                        + f" --cache_dtype {cache_config.cache_dtype}"
+                        + f" --key_cache_shape {key_cache_shape}"
+                        + val_cache_arg_str
+                        + f" --cache_queue_port {cache_config.cache_queue_port}"
+                        + f" --enable_splitwise {int(self.enable_splitwise)}"
+                        + f" --pod_ip {pod_ip}"
+                        + f" --engine_worker_queue_port {engine_worker_queue_port}"
+                        + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
+                        + f" --engine_pid {pid_suffix}"
+                        + f" --default_dtype '{self.config.model_config.dtype}'"
+                        + f" --protocol {cache_config.cache_transfer_protocol}"
+                        + f" --local_data_parallel_id {self.local_data_parallel_id}"
+                        + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
+                        + f" --speculative_config '{self.speculative_config.to_json_string()}'"
+                        + (" --create_cache_tensor" if not self.enable_splitwise else "")
+                        + " --mode indie"
+                        + f" >{log_dir}/launch_cache_transfer_manager_tprank{i}.log 2>&1"
+                    )
+                    logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
+                    cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
 
         logger.info("PrefixCacheManager is waiting for kv cache to be initialized.")
         while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:

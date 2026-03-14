@@ -881,6 +881,13 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--cache_queue_port",
+        type=int,
+        default=0,
+        help="Cache task queue port.",
+    )
+
+    parser.add_argument(
         "--cache-transfer-protocol",
         type=str,
         default="ipc",

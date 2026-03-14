@@ -14,11 +14,14 @@
 # limitations under the License.
 """
 
+import json
 import os
 import queue
+import threading
 import time
 from concurrent.futures import Future
 from threading import Thread
+from types import SimpleNamespace
 from typing import List, Optional, cast
 
 import numpy as np
@@ -90,6 +93,7 @@ if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
 import zmq
 
 from fastdeploy import envs
+from fastdeploy.cache_manager.cache_transfer_manager import CacheTransferManager
 from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
@@ -238,6 +242,12 @@ class GPUModelRunner(ModelRunnerBase):
             self.async_output_copy_thread.start()
 
         self.enable_entropy = self.model_config.enable_entropy
+        self.cache_transfer_manager: Optional[CacheTransferManager] = None
+        self.cache_transfer_mutex = threading.RLock()
+        self.gpu_cache_k_tensors: list[paddle.Tensor] = []
+        self.gpu_cache_v_tensors: list[paddle.Tensor] = []
+        self.gpu_cache_scales_k_tensors: list[paddle.Tensor] = []
+        self.gpu_cache_scales_v_tensors: list[paddle.Tensor] = []
 
         # init signal
         cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
@@ -1758,12 +1768,22 @@ class GPUModelRunner(ModelRunnerBase):
         if kv_cache_quant_type == "block_wise_fp8":
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        cache_transfer_mode = envs.FD_CACHE_TRANSFER_MANAGER_MODE
+        use_proxy_cache_binding = (
+            self.fd_config.scheduler_config.splitwise_role == "mixed"
+            and self.fd_config.cache_config.num_cpu_blocks > 0
+            and self.fd_config.cache_config.enable_prefix_caching
+            and cache_transfer_mode == "proxy"
+        )
+        use_ipc_cache_sharing = not use_proxy_cache_binding
 
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
-        # 2. If no need to profile, create kv cache if cache managers do not exist.
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0 or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        # 2. In mixed mode with cpu cache, `indie` means standalone CTM creates cache;
+        #    `proxy` means GPUModelRunner creates cache by itself.
+        create_cache_tensor = profile or (
+            self.fd_config.scheduler_config.splitwise_role == "mixed"
+            and (self.fd_config.cache_config.num_cpu_blocks <= 0 or cache_transfer_mode == "proxy")
         )
 
         cache_ready_signal = self.cache_ready_signal
@@ -1775,6 +1795,10 @@ class GPUModelRunner(ModelRunnerBase):
 
         logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
         cache_kvs_list = []
+        self.gpu_cache_k_tensors = []
+        self.gpu_cache_v_tensors = []
+        self.gpu_cache_scales_k_tensors = []
+        self.gpu_cache_scales_v_tensors = []
 
         self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         for i in range(self.model_config.num_hidden_layers):
@@ -1787,12 +1811,16 @@ class GPUModelRunner(ModelRunnerBase):
             if create_cache_tensor:
                 logger.info(f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
-                set_data_ipc(key_cache, key_cache_name)
+                if use_ipc_cache_sharing:
+                    set_data_ipc(key_cache, key_cache_name)
                 self.cache_kvs_map[key_cache_name] = key_cache
+                self.gpu_cache_k_tensors.append(key_cache)
                 if value_cache_shape:
                     val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=cache_type)
-                    set_data_ipc(val_cache, val_cache_name)
+                    if use_ipc_cache_sharing:
+                        set_data_ipc(val_cache, val_cache_name)
                     self.cache_kvs_map[val_cache_name] = val_cache
+                    self.gpu_cache_v_tensors.append(val_cache)
                     cache_kvs_list.extend([key_cache, val_cache])
                 else:
                     cache_kvs_list.extend([key_cache])
@@ -1800,32 +1828,41 @@ class GPUModelRunner(ModelRunnerBase):
                     key_cache_scales = paddle.full(
                         shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                     )
-                    set_data_ipc(key_cache_scales, key_cache_scales_name)
+                    if use_ipc_cache_sharing:
+                        set_data_ipc(key_cache_scales, key_cache_scales_name)
                     self.cache_kvs_map[key_cache_scales_name] = key_cache_scales
+                    self.gpu_cache_scales_k_tensors.append(key_cache_scales)
                     if value_cache_shape:
                         val_cache_scales = paddle.full(
                             shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                         )
-                        set_data_ipc(val_cache_scales, value_cache_scales_name)
+                        if use_ipc_cache_sharing:
+                            set_data_ipc(val_cache_scales, value_cache_scales_name)
                         self.cache_kvs_map[value_cache_scales_name] = val_cache_scales
+                        self.gpu_cache_scales_v_tensors.append(val_cache_scales)
                         cache_kvs_list.extend([key_cache_scales, val_cache_scales])
                     else:
                         cache_kvs_list.extend([key_cache_scales])
             else:
+                if not use_ipc_cache_sharing:
+                    raise RuntimeError("Proxy mode must not attach GPU cache through IPC.")
                 logger.info(f"..attaching kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
                 self.cache_kvs_map[key_cache_name] = key_cache
+                self.gpu_cache_k_tensors.append(key_cache)
                 if kv_cache_quant_type == "block_wise_fp8":
                     key_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
                     key_cache_scales = share_external_data(
                         key_cache_scales, key_cache_scales_name, kv_cache_scale_shape
                     )
                     self.cache_kvs_map[key_cache_scales_name] = key_cache_scales
+                    self.gpu_cache_scales_k_tensors.append(key_cache_scales)
                 if value_cache_shape:
                     val_cache = paddle.empty(shape=[], dtype=cache_type)
                     val_cache = share_external_data(val_cache, val_cache_name, value_cache_shape)
                     self.cache_kvs_map[val_cache_name] = val_cache
+                    self.gpu_cache_v_tensors.append(val_cache)
                     cache_kvs_list.extend([key_cache, val_cache])
                     if kv_cache_quant_type == "block_wise_fp8":
                         val_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
@@ -1833,6 +1870,7 @@ class GPUModelRunner(ModelRunnerBase):
                             val_cache_scales, value_cache_scales_name, kv_cache_scale_shape
                         )
                         self.cache_kvs_map[value_cache_scales_name] = val_cache_scales
+                        self.gpu_cache_scales_v_tensors.append(val_cache_scales)
                         cache_kvs_list.extend([key_cache_scales, val_cache_scales])
                 else:
                     cache_kvs_list.extend([key_cache])
@@ -1845,7 +1883,77 @@ class GPUModelRunner(ModelRunnerBase):
             cache_ready_signal.value[local_rank] = 1
             logger.info(f"✅ kv cache is ready! {cache_ready_signal.value}")
 
+        self._initialize_cache_transfer_manager(
+            local_rank=local_rank,
+            key_cache_shape=key_cache_shape,
+            value_cache_shape=value_cache_shape,
+            profile=profile,
+            create_cache_tensor=create_cache_tensor,
+        )
+
         paddle.device.cuda.empty_cache()
+
+    def _initialize_cache_transfer_manager(
+        self,
+        local_rank: int,
+        key_cache_shape: list[int],
+        value_cache_shape: list[int],
+        profile: bool,
+        create_cache_tensor: bool,
+    ) -> None:
+        if profile or self.cache_transfer_manager is not None:
+            return
+
+        if envs.FD_CACHE_TRANSFER_MANAGER_MODE != "proxy":
+            return
+
+        if (
+            self.fd_config.scheduler_config.splitwise_role != "mixed"
+            or self.fd_config.cache_config.num_cpu_blocks <= 0
+            or not self.fd_config.cache_config.enable_prefix_caching
+        ):
+            return
+
+        rdma_port = "0"
+        if self.fd_config.cache_config.rdma_comm_ports is not None:
+            rdma_ports = self.fd_config.cache_config.rdma_comm_ports
+            if len(rdma_ports) > local_rank:
+                rdma_port = rdma_ports[local_rank]
+
+        cache_transfer_args = SimpleNamespace(
+            mode="proxy",
+            splitwise_role=self.fd_config.scheduler_config.splitwise_role,
+            rank=local_rank,
+            device_id=self.device_id,
+            num_layers=self.model_config.num_hidden_layers,
+            mp_num=self.parallel_config.tensor_parallel_size,
+            cache_dtype=self.cache_config.cache_dtype,
+            key_cache_shape=",".join(str(item) for item in key_cache_shape),
+            value_cache_shape=",".join(str(item) for item in value_cache_shape),
+            cache_queue_port=self.cache_config.cache_queue_port,
+            enable_splitwise=int(self.fd_config.scheduler_config.splitwise_role != "mixed"),
+            pod_ip=getattr(self.parallel_config, "pod_ip", getattr(self.fd_config, "master_ip", "0.0.0.0")),
+            engine_worker_queue_port=self.parallel_config.engine_worker_queue_port,
+            num_cpu_blocks=self.cache_config.num_cpu_blocks,
+            engine_pid=str(self.parallel_config.engine_worker_queue_port),
+            protocol=self.cache_config.cache_transfer_protocol,
+            default_dtype=self.model_config.dtype,
+            local_data_parallel_id=self.parallel_config.local_data_parallel_id,
+            rdma_port=rdma_port,
+            speculative_config=json.loads(self.speculative_config.to_json_string()),
+            create_cache_tensor=False,
+        )
+        self.cache_transfer_manager = CacheTransferManager(
+            cache_transfer_args,
+            execution_lock=self.cache_transfer_mutex,
+        )
+        self.cache_transfer_manager.bind_gpu_cache(
+            gpu_cache_kvs=self.cache_kvs_map,
+            gpu_cache_k_tensors=self.gpu_cache_k_tensors,
+            gpu_cache_v_tensors=self.gpu_cache_v_tensors,
+            gpu_cache_scales_k_tensors=self.gpu_cache_scales_k_tensors,
+            gpu_cache_scales_v_tensors=self.gpu_cache_scales_v_tensors,
+        )
 
     def _initialize_attn_backend(self) -> None:
         """
@@ -2394,48 +2502,49 @@ class GPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
             num_running_requests: batch_size
         """
-        # 1. Prepare inputs of model and sampler.
-        p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
+        with self.cache_transfer_mutex:
+            # 1. Prepare inputs of model and sampler.
+            p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
 
-        self._prepare_inputs()
-        self.sampler.pre_process(p_done_idxs)
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            self.routing_replay_manager.pending_update_positions = self.routing_replay_manager.get_token_positions(
-                seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
-                seq_lens_this_time=self.seq_lens_this_time_buffer,
-            )
+            self._prepare_inputs()
+            self.sampler.pre_process(p_done_idxs)
+            if self.fd_config.routing_replay_config.enable_routing_replay:
+                self.routing_replay_manager.pending_update_positions = self.routing_replay_manager.get_token_positions(
+                    seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+                    seq_lens_this_time=self.seq_lens_this_time_buffer,
+                )
 
-        # 1.1 Update state of logits processor
-        for proc in self.sampling_metadata.logits_processors:
-            proc.update_state(self.share_inputs)
+            # 1.1 Update state of logits processor
+            for proc in self.sampling_metadata.logits_processors:
+                proc.update_state(self.share_inputs)
 
-        # 2. Padding inputs for cuda graph
-        self.padding_cudagraph_inputs()
+            # 2. Padding inputs for cuda graph
+            self.padding_cudagraph_inputs()
 
-        # 3. Execute model
-        if self.enable_mm:
-            model_output = self.model(
-                self.forward_meta.ids_remove_padding,
-                self.share_inputs["image_features"],
-                self.forward_meta,
-            )
-        else:
-            model_output = self.model(
-                self.forward_meta.ids_remove_padding,
-                self.forward_meta,
-            )
+            # 3. Execute model
+            if self.enable_mm:
+                model_output = self.model(
+                    self.forward_meta.ids_remove_padding,
+                    self.share_inputs["image_features"],
+                    self.forward_meta,
+                )
+            else:
+                model_output = self.model(
+                    self.forward_meta.ids_remove_padding,
+                    self.forward_meta,
+                )
 
-        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
-        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
-        # Then there is data on other runner, the current runner is required to execute part of the model.
-        # But not need to run the below code.
-        if not self.not_need_stop():
-            return None
+            # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+            # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
+            # Then there is data on other runner, the current runner is required to execute part of the model.
+            # But not need to run the below code.
+            if not self.not_need_stop():
+                return None
 
-        if self.use_cudagraph:
-            model_output = model_output[: self.real_token_num]
+            if self.use_cudagraph:
+                model_output = model_output[: self.real_token_num]
 
-        prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
+            prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
 
         if self.is_pooling_model:
             pooler_output = self._pool(model_output, num_running_requests)
@@ -2823,8 +2932,9 @@ class GPUModelRunner(ModelRunnerBase):
 
     def clear_cache(self, profile=False):
         """Clear cached data from shared inputs and forward metadata"""
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0 or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        create_cache_tensor = profile or (
+            self.fd_config.scheduler_config.splitwise_role == "mixed"
+            and (self.fd_config.cache_config.num_cpu_blocks <= 0 or envs.FD_CACHE_TRANSFER_MANAGER_MODE == "proxy")
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
@@ -2833,6 +2943,18 @@ class GPUModelRunner(ModelRunnerBase):
                 unset_data_ipc(tensor, name, True, False)
             self.cache_ready_signal.value[local_rank] = 0
         self.cache_kvs_map.clear()
+        self.gpu_cache_k_tensors.clear()
+        self.gpu_cache_v_tensors.clear()
+        self.gpu_cache_scales_k_tensors.clear()
+        self.gpu_cache_scales_v_tensors.clear()
+        if self.cache_transfer_manager is not None:
+            self.cache_transfer_manager.bind_gpu_cache(
+                gpu_cache_kvs=self.cache_kvs_map,
+                gpu_cache_k_tensors=self.gpu_cache_k_tensors,
+                gpu_cache_v_tensors=self.gpu_cache_v_tensors,
+                gpu_cache_scales_k_tensors=self.gpu_cache_scales_k_tensors,
+                gpu_cache_scales_v_tensors=self.gpu_cache_scales_v_tensors,
+            )
         self.share_inputs.pop("caches", None)
         if self.forward_meta is not None:
             self.forward_meta.clear_caches()
