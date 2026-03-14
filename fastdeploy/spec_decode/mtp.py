@@ -107,6 +107,10 @@ class MTPProposer(Proposer):
         self.enable_logprob = self.model_config.enable_logprob
         self.enable_draft_logprob = self.speculative_config.enable_draft_logprob
         self.cache_kvs_map = {}
+        self.gpu_cache_k_tensors = []
+        self.gpu_cache_v_tensors = []
+        self.gpu_cache_scales_k_tensors = []
+        self.gpu_cache_scales_v_tensors = []
 
         # [mixed, prefill, decoder]
         self.role = self.scheduler_config.splitwise_role
@@ -199,6 +203,10 @@ class MTPProposer(Proposer):
         """
         self.num_gpu_blocks = int(main_model_num_blocks * self.speculative_config.num_gpu_block_expand_ratio)
         self.cache_kvs = {}
+        self.gpu_cache_k_tensors = []
+        self.gpu_cache_v_tensors = []
+        self.gpu_cache_scales_k_tensors = []
+        self.gpu_cache_scales_v_tensors = []
 
         # Get kv cache dtype
         cache_type = self.model_config.dtype
@@ -231,10 +239,14 @@ class MTPProposer(Proposer):
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
         # 2. If no need to profile, create kv cache if cache managers do not exist.
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0
-            or self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        create_cache_tensor = (
+            profile
+            or envs.FD_CACHE_TRANSFER_MANAGER_MODE == "proxy"
+            or not (
+                self.fd_config.cache_config.num_cpu_blocks > 0
+                or self.fd_config.cache_config.kvcache_storage_backend
+                or self.fd_config.scheduler_config.splitwise_role != "mixed"
+            )
         )
 
         if not create_cache_tensor:
@@ -246,6 +258,8 @@ class MTPProposer(Proposer):
         logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
 
         if not create_cache_tensor:
+            if envs.FD_CACHE_TRANSFER_MANAGER_MODE == "proxy":
+                raise RuntimeError("In cache transfer manager proxy mode, gpu model runner must create gpu kv cache!")
             cache_kvs_list = []
             for i in range(
                 self.num_main_model_layers,
@@ -295,7 +309,10 @@ class MTPProposer(Proposer):
                     dtype=cache_type,
                 )
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
-                set_data_ipc(key_cache, key_cache_name)
+                if envs.FD_CACHE_TRANSFER_MANAGER_MODE == "indie":
+                    set_data_ipc(key_cache, key_cache_name)
+                else:
+                    self.gpu_cache_k_tensors.append(key_cache)
                 self.cache_kvs_map[key_cache_name] = key_cache
                 cache_kvs_list.append(key_cache)
 
@@ -305,7 +322,10 @@ class MTPProposer(Proposer):
                     dtype=cache_type,
                 )
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                set_data_ipc(val_cache, val_cache_name)
+                if envs.FD_CACHE_TRANSFER_MANAGER_MODE == "indie":
+                    set_data_ipc(val_cache, val_cache_name)
+                else:
+                    self.gpu_cache_v_tensors.append(val_cache)
                 self.cache_kvs_map[val_cache_name] = val_cache
                 cache_kvs_list.append(val_cache)
 
@@ -316,7 +336,10 @@ class MTPProposer(Proposer):
                         dtype=paddle.get_default_dtype(),
                     )
                     key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
-                    set_data_ipc(key_cache_scales, key_cache_scales_name)
+                    if envs.FD_CACHE_TRANSFER_MANAGER_MODE == "indie":
+                        set_data_ipc(key_cache_scales, key_cache_scales_name)
+                    else:
+                        self.gpu_cache_scales_k_tensors.append(key_cache_scales)
                     self.cache_kvs_map[key_cache_scales_name] = key_cache_scales
                     cache_kvs_list.append(key_cache_scales)
 
@@ -326,7 +349,10 @@ class MTPProposer(Proposer):
                         dtype=paddle.get_default_dtype(),
                     )
                     val_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
-                    set_data_ipc(val_cache_scales, val_cache_scales_name)
+                    if envs.FD_CACHE_TRANSFER_MANAGER_MODE == "indie":
+                        set_data_ipc(val_cache_scales, val_cache_scales_name)
+                    else:
+                        self.gpu_cache_scales_v_tensors.append(val_cache_scales)
                     self.cache_kvs_map[val_cache_scales_name] = val_cache_scales
                     cache_kvs_list.append(val_cache_scales)
 
@@ -410,15 +436,23 @@ class MTPProposer(Proposer):
         """
         Clear allocated cacheKV
         """
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0
-            or self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        create_cache_tensor = (
+            profile
+            or envs.FD_CACHE_TRANSFER_MANAGER_MODE == "proxy"
+            or not (
+                self.fd_config.cache_config.num_cpu_blocks > 0
+                or self.fd_config.cache_config.kvcache_storage_backend
+                or self.fd_config.scheduler_config.splitwise_role != "mixed"
+            )
         )
         if not create_cache_tensor:
             for name, tensor in self.cache_kvs_map.items():
                 unset_data_ipc(tensor, name, True, False)
         self.cache_kvs_map.clear()
+        self.gpu_cache_k_tensors.clear()
+        self.gpu_cache_v_tensors.clear()
+        self.gpu_cache_scales_k_tensors.clear()
+        self.gpu_cache_scales_v_tensors.clear()
         del self.model_inputs["caches"]
         if self.forward_meta is not None:
             del self.forward_meta.caches

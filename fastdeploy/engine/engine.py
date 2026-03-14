@@ -600,7 +600,9 @@ class LLMEngine:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
         if self.engine.mm_max_tokens_per_item is not None:
             arguments += f" --mm_max_tokens_per_item '{json.dumps(self.engine.mm_max_tokens_per_item)}'"
-
+        if self.cfg.cache_config.cache_queue_port is not None:
+            cache_queue_ports = ",".join(map(str, self.cfg.cache_config.cache_queue_port))
+            arguments += f" --cache_queue_port {cache_queue_ports}"
         # TODO (iluvatar): remove after paddle fix launch error
         if current_platform.is_iluvatar() and "CUDA_VISIBLE_DEVICES" in os.environ:
             arguments = arguments.replace(f"--devices {self.cfg.parallel_config.device_ids}", "")
