@@ -12,237 +12,99 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Tests for MiniMax-M1 model
-"""
-
 import unittest
-import numpy as np
 import paddle
+import numpy as np
+from types import SimpleNamespace
 
+from fastdeploy.model_executor.models.minimax_m1 import MiniMaxM1ForCausalLM
+from fastdeploy.model_executor.forward_meta import ForwardMeta, ForwardMode
 
-class TestMiniMaxM1Config(unittest.TestCase):
-    """Test MiniMax-M1 configuration"""
-    
-    def test_minimax_m1_config_creation(self):
-        """Test creating MiniMax-M1 config"""
-        from fastdeploy.config import ModelConfig
+class TestMiniMaxM1(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Set seed for reproducibility
+        paddle.seed(42)
         
-        # MiniMax-M1 config (from HuggingFace)
-        config_dict = {
-            "model_type": "minimax_m1",
-            "hidden_size": 6144,
-            "intermediate_size": 9216,
-            "num_hidden_layers": 80,
-            "num_attention_heads": 64,
-            "num_key_value_heads": 8,
-            "head_dim": 128,
-            "vocab_size": 200064,
-            "rope_theta": 10000000,
-            "max_position_embeddings": 10240000,
-            "rms_norm_eps": 1e-5,
-            "hidden_act": "silu",
-            "num_local_experts": 32,
-            "num_experts_per_tok": 2,
-            "attn_type_list": [0, 0, 0, 0, 0, 0, 0, 1] * 10,  # 8 layers pattern, repeated 10 times
-            "layernorm_full_attention_alpha": 3.5565588200778455,
-            "layernorm_full_attention_beta": 1.0,
-            "layernorm_linear_attention_alpha": 3.5565588200778455,
-            "layernorm_linear_attention_beta": 1.0,
-            "layernorm_mlp_alpha": 3.5565588200778455,
-            "layernorm_mlp_beta": 1.0,
-            "postnorm": True,
-        }
+        # Create a standard mock configuration
+        cls.model_config = SimpleNamespace(
+            model_type="minimax_m1",
+            hidden_size=512,
+            intermediate_size=1024,
+            num_hidden_layers=2,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=128,
+            vocab_size=1000,
+            num_local_experts=4,
+            num_experts_per_tok=2,
+            attn_type_list=[0, 1],
+            max_position_embeddings=512,
+            rms_norm_eps=1e-6,
+            pad_token_id=0,
+            hidden_act="silu",
+            rope_theta=10000.0,
+            shared_intermediate_size=512,
+            layernorm_linear_attention_alpha=3.556,
+            layernorm_linear_attention_beta=1.0,
+            layernorm_full_attention_alpha=3.556,
+            layernorm_full_attention_beta=1.0,
+            layernorm_mlp_alpha=3.556,
+            layernorm_mlp_beta=1.0,
+            model_format="paddle",
+            tie_word_embeddings=False,
+            is_quantized=False,
+            is_mtp=False,
+        )
         
-        # Just verify config dict is valid
-        self.assertEqual(config_dict["model_type"], "minimax_m1")
-        self.assertEqual(config_dict["hidden_size"], 6144)
-        self.assertEqual(config_dict["num_local_experts"], 32)
-        self.assertEqual(config_dict["num_experts_per_tok"], 2)
-        self.assertEqual(len(config_dict["attn_type_list"]), 80)
+        cls.fd_config = SimpleNamespace()
+        cls.fd_config.model_config = cls.model_config
+        cls.fd_config.scheduler_config = SimpleNamespace(max_num_seqs=256, max_num_batched_tokens=256, max_model_len=2048, splitwise_role="mixed")
+        cls.fd_config.parallel_config = SimpleNamespace(tensor_parallel_size=1, tensor_parallel_rank=0, expert_parallel_size=1, expert_parallel_rank=0, pp_size=1, pp_rank=0, use_sequence_parallel_moe=False, tp_group=None)
+        cls.fd_config.cache_config = SimpleNamespace(kv_cache_dtype="fp16", block_size=16, num_gpu_blocks=100)
+        cls.fd_config.device_config = SimpleNamespace()
+        cls.fd_config.quant_config = SimpleNamespace(quant_type=None, weight_quant_method=None, quant_round_type=0, get_quant_method=lambda x: None, name=lambda: "")
+        cls.fd_config.routing_replay_config = SimpleNamespace(enable_routing_replay=False)
+        cls.fd_config.plas_attention_config = None
+        cls.fd_config.mla_attention_config = None
+        cls.fd_config.reasoning_config = None
 
+    def test_prefill_forward(self):
+        """Test MiniMax-M1 prefill forward pass on GPU"""
+        model = MiniMaxM1ForCausalLM(self.fd_config)
+        
+        batch_size, seq_len = 2, 16
+        total_tokens = batch_size * seq_len
+        input_ids = paddle.randint(0, 1000, shape=[total_tokens])
+        
+        forward_meta = ForwardMeta(
+            ids_remove_padding=input_ids,
+            forward_mode=ForwardMode.EXTEND,
+            cu_seqlens_q=paddle.to_tensor([0, seq_len, total_tokens], dtype="int32"),
+            cu_seqlens_k=paddle.to_tensor([0, seq_len, total_tokens], dtype="int32"),
+        )
+        
+        output = model(input_ids, forward_meta)
+        self.assertEqual(output.shape, [total_tokens, self.model_config.hidden_size])
+        print(f"Prefill Output Shape: {output.shape} - OK")
 
-class TestMiniMaxM1LightningAttention(unittest.TestCase):
-    """Test Lightning Attention implementation"""
-    
-    def setUp(self):
-        """Set up test fixtures"""
-        self.batch_size = 2
-        self.seq_len = 512
-        self.num_heads = 64
-        self.head_dim = 128
-        self.hidden_size = self.num_heads * self.head_dim
-        self.block_size = 256
-    
-    def test_slope_tensor_creation(self):
-        """Test slope tensor building for Lightning Attention"""
-        from fastdeploy.model_executor.models.minimax_m1 import MiniMaxM1Model
+    def test_decode_forward(self):
+        """Test MiniMax-M1 decode forward pass on GPU"""
+        model = MiniMaxM1ForCausalLM(self.fd_config)
         
-        # Test slope tensor creation
-        def get_slopes(n):
-            import math
-            def get_slopes_power_of_2(n):
-                start = 2 ** (-(2 ** -(math.log2(n) - 3)))
-                ratio = start
-                return [start * ratio ** i for i in range(n)]
-            
-            if math.log2(n).is_integer():
-                return get_slopes_power_of_2(n)
-            else:
-                closest_power_of_2 = 2 ** math.floor(math.log2(n))
-                return (
-                    get_slopes_power_of_2(closest_power_of_2)
-                    + get_slopes(2 * closest_power_of_2)[0::2][:n - closest_power_of_2]
-                )
-        
-        slopes = get_slopes(self.num_heads)
-        self.assertEqual(len(slopes), self.num_heads)
-        
-        # All slopes should be positive
-        for s in slopes:
-            self.assertGreater(s, 0)
-    
-    def test_attn_type_list_length(self):
-        """Test attn_type_list matches num_hidden_layers"""
-        num_layers = 80
-        attn_type_list = [0, 0, 0, 0, 0, 0, 0, 1] * 10  # 80 layers
-        
-        self.assertEqual(len(attn_type_list), num_layers)
-        
-        # Count attention types
-        lightning_count = sum(1 for t in attn_type_list if t == 0)
-        standard_count = sum(1 for t in attn_type_list if t == 1)
-        
-        # MiniMax-M1 uses 7 Lightning + 1 Standard per 8-layer block
-        self.assertEqual(lightning_count, 70)  # 7 * 10
-        self.assertEqual(standard_count, 10)   # 1 * 10
-
-
-class TestMiniMaxM1ModelStructure(unittest.TestCase):
-    """Test MiniMax-M1 model structure"""
-    
-    def test_model_registry_registration(self):
-        """Test that MiniMax-M1 is properly registered"""
-        from fastdeploy.model_executor.models.model_base import ModelRegistry
-        
-        # Check if MiniMax-M1 is registered
-        # The model should be registered via @ModelRegistry.register_model_class
-        # This is a basic check - in production, we would check the actual registry
-        
-        # For now, just verify the module can be imported
-        try:
-            from fastdeploy.model_executor.models.minimax_m1 import (
-                MiniMaxM1ForCausalLM,
-                MiniMaxM1Model,
-                MiniMaxM1DecoderLayer,
-                MiniMaxM1LightningAttention,
-                MiniMaxM1StandardAttention,
-                MiniMaxM1SparseMoEBlock,
-            )
-            self.assertTrue(True)
-        except ImportError as e:
-            self.fail(f"Failed to import MiniMax-M1 modules: {e}")
-    
-    def test_attention_type_selection(self):
-        """Test attention type selection based on layer index"""
-        # Test that attention type is correctly selected
-        attn_type_list = [0, 0, 0, 0, 0, 0, 0, 1] * 10
-        
-        # Layer 0-6 should use Lightning Attention
-        for i in range(7):
-            self.assertEqual(attn_type_list[i], 0, f"Layer {i} should use Lightning Attention")
-        
-        # Layer 7 should use Standard Attention
-        self.assertEqual(attn_type_list[7], 1, "Layer 7 should use Standard Attention")
-        
-        # Layer 8-14 should use Lightning Attention
-        for i in range(8, 15):
-            self.assertEqual(attn_type_list[i], 0, f"Layer {i} should use Lightning Attention")
-        
-        # Layer 15 should use Standard Attention
-        self.assertEqual(attn_type_list[15], 1, "Layer 15 should use Standard Attention")
-
-
-class TestMiniMaxM1MoE(unittest.TestCase):
-    """Test MiniMax-M1 MoE configuration"""
-    
-    def test_moe_config(self):
-        """Test MoE configuration"""
-        num_experts = 32
-        top_k = 2
-        
-        # Each token activates top_k experts
-        self.assertEqual(num_experts, 32)
-        self.assertEqual(top_k, 2)
-        
-        # Load balancing loss coefficient (from config)
-        router_aux_loss_coef = 0.001
-        self.assertEqual(router_aux_loss_coef, 0.001)
-    
-    def test_expert_routing(self):
-        """Test expert routing computation"""
         batch_size = 2
-        seq_len = 4
-        num_experts = 32
-        top_k = 2
+        input_ids = paddle.randint(0, 1000, shape=[batch_size])
         
-        # Simulate router logits
-        router_logits = np.random.randn(batch_size * seq_len, num_experts).astype(np.float32)
+        forward_meta = ForwardMeta(
+            ids_remove_padding=input_ids,
+            forward_mode=ForwardMode.DECODE,
+            cu_seqlens_q=paddle.to_tensor([0, 1, 2], dtype="int32"),
+            cu_seqlens_k=paddle.to_tensor([0, 1, 2], dtype="int32"),
+        )
         
-        # Softmax over experts
-        routing_weights = np.exp(router_logits) / np.exp(router_logits).sum(axis=-1, keepdims=True)
-        
-        # Top-k selection
-        selected_experts = np.argsort(routing_weights, axis=-1)[:, -top_k:]
-        
-        # Verify shapes
-        self.assertEqual(selected_experts.shape, (batch_size * seq_len, top_k))
-        
-        # Verify expert indices are valid
-        self.assertTrue(np.all(selected_experts >= 0))
-        self.assertTrue(np.all(selected_experts < num_experts))
-
-
-class TestMiniMaxM1Integration(unittest.TestCase):
-    """Integration tests for MiniMax-M1"""
-    
-    def test_config_equivalence(self):
-        """Test that our config matches HuggingFace config"""
-        # MiniMax-M1-80k config from HuggingFace
-        hf_config = {
-            "model_type": "minimax_m1",
-            "architectures": ["MiniMaxM1ForCausalLM"],
-            "hidden_size": 6144,
-            "intermediate_size": 9216,
-            "num_hidden_layers": 80,
-            "num_attention_heads": 64,
-            "num_key_value_heads": 8,
-            "head_dim": 128,
-            "vocab_size": 200064,
-            "rope_theta": 10000000,
-            "max_position_embeddings": 10240000,
-            "rms_norm_eps": 1e-5,
-            "hidden_act": "silu",
-            "num_local_experts": 32,
-            "num_experts_per_tok": 2,
-            "attn_type_list": [0] * 70 + [1] * 10,  # 70 Lightning + 10 Standard
-        }
-        
-        # Verify key parameters
-        self.assertEqual(hf_config["hidden_size"], 6144)
-        self.assertEqual(hf_config["num_hidden_layers"], 80)
-        self.assertEqual(hf_config["num_local_experts"], 32)
-        self.assertEqual(hf_config["num_experts_per_tok"], 2)
-        
-        # Total params: 456B, activated: 45.9B
-        # hidden_size * num_attention_heads * head_dim check
-        self.assertEqual(hf_config["num_attention_heads"] * hf_config["head_dim"], hf_config["hidden_size"])
-    
-    def test_position_embeddings_limit(self):
-        """Test max position embeddings"""
-        max_position = 10240000  # 10M context
-        self.assertEqual(max_position, 10 * 1024 * 1024)  # 10M tokens
-
+        output = model(input_ids, forward_meta)
+        self.assertEqual(output.shape, [batch_size, self.model_config.hidden_size])
+        print(f"Decode Output Shape: {output.shape} - OK")
 
 if __name__ == "__main__":
     unittest.main()

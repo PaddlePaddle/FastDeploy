@@ -14,15 +14,6 @@
 
 """
 MiniMax-M1 Model Support for FastDeploy
-
-MiniMax-M1 is the world's first open-source large-scale hybrid attention reasoning model.
-Reference: https://github.com/MiniMax-AI/MiniMax-M1
-
-Key features:
-- Hybrid Attention: Lightning Attention (attn_type=0) + Standard Softmax Attention (attn_type=1)
-- MoE Architecture: 32 experts, 2 experts activated per token
-- 1M context length (10M max_position_embeddings)
-- Shared experts with sigmoid routing
 """
 
 from __future__ import annotations
@@ -35,10 +26,10 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta, ForwardMode
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
-from fastdeploy.model_executor.layers.normalization import RMSNorm
+from fastdeploy.model_executor.layers.normalization import RMSNorm, FusedRMSNorm
 from fastdeploy.model_executor.models.model_base import (
     ModelCategory,
     ModelForCasualLM,
@@ -74,11 +65,9 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
     def __init__(self, fd_config: FDConfig):
         super().__init__(fd_config)
         
-        # Parse config
         config = fd_config.model_config
         self.ori_vocab_size = getattr(config, "ori_vocab_size", getattr(config, "vocab_size", None))
         
-        # Model components
         self.model = MiniMaxM1Model(fd_config)
         self.lm_head = ParallelLMHead(
             fd_config,
@@ -87,8 +76,7 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
             prefix="lm_head",
         )
         
-        # Tie weights if needed
-        if config.get("tie_word_embeddings", False):
+        if getattr(config, "tie_word_embeddings", False):
             self.lm_head.weight = self.model.embed_tokens.weight
 
     @classmethod
@@ -96,15 +84,16 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
         return "MiniMaxM1ForCausalLM"
 
     @paddle.no_grad()
+    def set_state_dict(self, state_dict):
+        super().set_state_dict(state_dict)
+
+    @paddle.no_grad()
     def load_weights(self, weights_iterator):
-        """Load model weights using WeightsMapper"""
         params_dict = dict(self.named_parameters())
         mapper = WeightsMapper()
         
         for loaded_weight_name, loaded_weight in weights_iterator:
-            # Standard prefix replacement
             loaded_weight_name = loaded_weight_name.replace("model.minimax_m1", "model")
-            
             mapped_name = mapper.map_name(loaded_weight_name)
             if mapped_name in params_dict:
                 weight = params_dict[mapped_name]
@@ -117,7 +106,6 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        """Forward pass using standard FastDeploy signature"""
         hidden_states = self.model(
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
@@ -125,7 +113,6 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
         return hidden_states
 
     def compute_logits(self, hidden_states: paddle.Tensor, **logits_processor_kwargs):
-        """Compute logits from hidden states"""
         logits = self.lm_head(hidden_states)
         logits = logits.astype(paddle.float32)
         if hasattr(self, "ori_vocab_size") and getattr(self, "ori_vocab_size") is not None:
@@ -143,7 +130,6 @@ class MiniMaxM1Model(nn.Layer):
         self.config = fd_config.model_config
         self.vocab_size = self.config.vocab_size
         
-        # Embeddings
         self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
             prefix="model.embed_tokens",
@@ -151,10 +137,8 @@ class MiniMaxM1Model(nn.Layer):
             embedding_dim=self.config.hidden_size,
         )
         
-        # Get attention type list (0=Lightning, 1=Standard)
         self.attn_type_list = getattr(self.config, "attn_type_list", [1] * self.config.num_hidden_layers)
         
-        # Build decoder layers
         self.layers = nn.LayerList()
         for layer_id in range(self.config.num_hidden_layers):
             attn_type = self.attn_type_list[layer_id] if layer_id < len(self.attn_type_list) else 1
@@ -166,65 +150,33 @@ class MiniMaxM1Model(nn.Layer):
             )
             self.layers.append(layer)
         
-        # Final layer norm
         self.norm = RMSNorm(
             fd_config=fd_config,
             hidden_size=self.config.hidden_size,
             eps=self.config.rms_norm_eps,
             prefix="model.norm",
         )
-        
-        # Build slope tensor for Lightning Attention
-        self.slopes = self._build_slope_tensor(self.config.num_attention_heads)
-
-    def _build_slope_tensor(self, n_attention_heads: int):
-        """Build slope tensor for linear attention"""
-        def get_slopes(n):
-            def get_slopes_power_of_2(n):
-                start = 2 ** (-(2 ** -(math.log2(n) - 3)))
-                ratio = start
-                return [start * ratio ** i for i in range(n)]
-            
-            if math.log2(n).is_integer():
-                return get_slopes_power_of_2(n)
-            else:
-                closest_power_of_2 = 2 ** math.floor(math.log2(n))
-                return (
-                    get_slopes_power_of_2(closest_power_of_2)
-                    + get_slopes(2 * closest_power_of_2)[0::2][:n - closest_power_of_2]
-                )
-        
-        slopes = paddle.to_tensor(
-            get_slopes(n_attention_heads), 
-            dtype="float32"
-        ).reshape([n_attention_heads, 1, 1])
-        return slopes
 
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        """Forward pass"""
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         
-        # Prepare slope rates
-        slope_rates = []
-        for idx in range(len(self.layers)):
-            slope = self.slopes.clone()
-            slope = slope * (1 - idx / (len(self.layers) - 1) + 1e-5)
-            slope_rates.append(slope)
-        
         residual = None
-        for idx, decoder_layer in enumerate(self.layers):
-            hidden_states, residual = decoder_layer(
-                hidden_states=hidden_states,
+        for layer in self.layers:
+            hidden_states, residual = layer(
+                hidden_states,
                 residual=residual,
                 forward_meta=forward_meta,
-                slope_rate=slope_rates[idx],
             )
         
-        hidden_states, _ = self.norm(hidden_states, residual_input=residual, forward_meta=forward_meta)
+        if isinstance(self.norm, (RMSNorm, FusedRMSNorm)):
+             hidden_states, _ = self.norm(hidden_states, residual_input=residual, forward_meta=forward_meta)
+        else:
+             hidden_states = self.norm(hidden_states)
+        
         return hidden_states
 
 
@@ -264,11 +216,10 @@ class MiniMaxM1DecoderLayer(nn.Layer):
             prefix=f"{prefix}.post_attention_layernorm",
         )
         
-        # Scaling factors for residual connections
         self.layernorm_attention_alpha = getattr(
-            fd_config.model_config, "layernorm_linear_attention_alpha", 3.5565588200778455
+            fd_config.model_config, "layernorm_linear_attention_alpha", 3.556
         ) if attention_type == 0 else getattr(
-            fd_config.model_config, "layernorm_full_attention_alpha", 3.5565588200778455
+            fd_config.model_config, "layernorm_full_attention_alpha", 3.556
         )
         self.layernorm_attention_beta = getattr(
             fd_config.model_config, "layernorm_linear_attention_beta", 1.0
@@ -276,7 +227,7 @@ class MiniMaxM1DecoderLayer(nn.Layer):
             fd_config.model_config, "layernorm_full_attention_beta", 1.0
         )
         self.layernorm_mlp_alpha = getattr(
-            fd_config.model_config, "layernorm_mlp_alpha", 3.5565588200778455
+            fd_config.model_config, "layernorm_mlp_alpha", 3.556
         )
         self.layernorm_mlp_beta = getattr(
             fd_config.model_config, "layernorm_mlp_beta", 1.0
@@ -305,7 +256,6 @@ class MiniMaxM1DecoderLayer(nn.Layer):
         forward_meta: ForwardMeta,
         slope_rate: paddle.Tensor | None = None,
     ):
-        # Self Attention block
         norm_hidden_states, residual = self.input_layernorm(
             hidden_states, residual_input=residual, forward_meta=forward_meta
         )
@@ -316,11 +266,9 @@ class MiniMaxM1DecoderLayer(nn.Layer):
             slope_rate=slope_rate,
         )
         
-        # Residual connection with scaling
         hidden_states = residual * self.layernorm_attention_alpha + attn_output * self.layernorm_attention_beta
         residual = None
         
-        # MLP / MoE block
         norm_hidden_states, residual = self.post_attention_layernorm(
             hidden_states, residual_input=residual, forward_meta=forward_meta
         )
@@ -329,7 +277,6 @@ class MiniMaxM1DecoderLayer(nn.Layer):
         
         if self.shared_moe:
             shared_output = self.shared_mlp(norm_hidden_states)
-            # Sigmoid routing
             coef = paddle.nn.functional.sigmoid(self.coefficient(norm_hidden_states))
             moe_output = moe_output * (1.0 - coef) + shared_output * coef
         
@@ -344,7 +291,17 @@ class MiniMaxM1StandardAttention(nn.Layer):
 
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = ""):
         super().__init__()
-        self.qkv_proj = QKVParallelLinear(fd_config=fd_config, prefix=f"{prefix}.qkv_proj", with_bias=False)
+        self.num_heads = fd_config.model_config.num_attention_heads // fd_config.parallel_config.tensor_parallel_size
+        self.head_dim = fd_config.model_config.head_dim
+        self.total_head_dim = self.num_heads * self.head_dim
+        
+        self.qkv_proj = QKVParallelLinear(
+            fd_config=fd_config, 
+            prefix=f"{prefix}.qkv_proj", 
+            input_size=fd_config.model_config.hidden_size,
+            hidden_sizes=[self.total_head_dim] * 3,
+            with_bias=False
+        )
         self.o_proj = RowParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.o_proj",
@@ -368,10 +325,17 @@ class MiniMaxM1LightningAttention(nn.Layer):
         self.fd_config = fd_config
         self.num_heads = fd_config.model_config.num_attention_heads // fd_config.parallel_config.tensor_parallel_size
         self.head_dim = fd_config.model_config.head_dim
+        self.total_head_dim = self.num_heads * self.head_dim
         
         self.act = getattr(paddle.nn.functional, fd_config.model_config.hidden_act, paddle.nn.functional.silu)
         
-        self.qkv_proj = QKVParallelLinear(fd_config=fd_config, prefix=f"{prefix}.qkv_proj", with_bias=False)
+        self.qkv_proj = QKVParallelLinear(
+            fd_config=fd_config, 
+            prefix=f"{prefix}.qkv_proj", 
+            input_size=fd_config.model_config.hidden_size,
+            hidden_sizes=[self.total_head_dim] * 3,
+            with_bias=False
+        )
         self.output_gate = ColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.output_gate",
@@ -394,7 +358,7 @@ class MiniMaxM1LightningAttention(nn.Layer):
         )
         
         self.block_size = 256
-        self.kv_states = {} # State per sequence index
+        self.kv_states = {}
 
     def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta, slope_rate: paddle.Tensor | None = None):
         qkv = self.act(self.qkv_proj(hidden_states))
@@ -406,7 +370,7 @@ class MiniMaxM1LightningAttention(nn.Layer):
         
         ratio = paddle.exp(-slope_rate) if slope_rate is not None else paddle.ones([1], dtype="float32")
         
-        if not forward_meta.forward_mode.is_decode():
+        if forward_meta.forward_mode == ForwardMode.EXTEND:
             output = self._forward_prefill(q, k, v, ratio, forward_meta)
         else:
             output = self._forward_decode(q, k, v, ratio, forward_meta)
@@ -425,47 +389,44 @@ class MiniMaxM1LightningAttention(nn.Layer):
             ki = k[start:end].transpose([1, 0, 2]).unsqueeze(0)
             vi = v[start:end].transpose([1, 0, 2]).unsqueeze(0)
             
-            out_i, state_i = self._compute_lightning_attention_core(qi, ki, vi, ratio)
+            out_i, state_i = self._compute_lightning_attention_core(qi, ki, vi, ratio, forward_meta)
             output[start:end] = out_i.squeeze(0).transpose([1, 0, 2])
             self.kv_states[i] = state_i 
         return output
 
     def _forward_decode(self, q, k, v, ratio, forward_meta):
         batch_size = q.shape[0]
-        output = paddle.empty_like(q)
+        output = paddle.empty([batch_size, self.num_heads, self.head_dim], dtype=q.dtype)
         for i in range(batch_size):
-            state = self.kv_states.get(i, paddle.zeros([self.num_heads, self.head_dim, self.head_dim]))
-            qi = q[i].unsqueeze(0)
-            ki = k[i].unsqueeze(0)
-            vi = v[i].unsqueeze(0)
-            state = ratio * state + paddle.matmul(ki.transpose([0, 2, 1]), vi)
-            out_i = paddle.matmul(qi, state)
+            qi, ki, vi = q[i:i + 1], k[i:i + 1], v[i:i + 1]
+            out_i, state_i = self._compute_lightning_attention_core(
+                qi, ki, vi, ratio, forward_meta
+            )
             output[i] = out_i.squeeze(0)
-            self.kv_states[i] = state
         return output
 
-    def _compute_lightning_attention_core(self, q, k, v, ratio):
-        batch_size, num_heads, seq_len, head_dim = q.shape
-        num_blocks = (seq_len + self.block_size - 1) // self.block_size
-        block_indices = paddle.arange(self.block_size).astype("float32").reshape([1, 1, -1, 1])
-        q_decay = paddle.exp(-ratio * block_indices)
-        k_decay = paddle.exp(-ratio * (self.block_size - block_indices))
-        indices = paddle.arange(self.block_size).astype("float32")
-        mask = indices[:, None] - indices[None, :]
-        diag_decay = paddle.exp(paddle.where(mask >= 0, -ratio * mask.unsqueeze(0), paddle.full_like(mask, float("-inf")).unsqueeze(0)))
-        kv_state = paddle.zeros([batch_size, num_heads, head_dim, head_dim], dtype="float32")
-        output = paddle.empty_like(q, dtype=q.dtype)
-        for i in range(num_blocks):
-            si, ei = i * self.block_size, min((i + 1) * self.block_size, seq_len)
-            m = ei - si
-            qi, ki, vi = q[:, :, si:ei], k[:, :, si:ei], v[:, :, si:ei]
-            qkv_inter = paddle.matmul(qi * q_decay[:, :, :m], kv_state.astype(qi.dtype)).astype("float32")
-            qk = paddle.matmul(qi, ki.transpose([0, 1, 3, 2])).astype("float32") * diag_decay[:, :, :m, :m]
-            qkv_intra = paddle.matmul(qk, vi.astype("float32"))
-            output[:, :, si:ei] = (qkv_inter + qkv_intra).astype(q.dtype)
-            block_decay = paddle.exp(-ratio * m)
-            kv_state = block_decay * kv_state + paddle.matmul((ki * k_decay[:, :, -m:]).transpose([0, 1, 3, 2]).astype(vi.dtype), vi)
-        return output, kv_state
+    def _compute_lightning_attention_core(self, qi, ki, vi, ratio, forward_meta):
+        # qi, ki, vi shapes: [1, num_heads, m, head_dim] (prefill) or [1, num_heads, head_dim] (decode)
+        m = qi.shape[-2] if forward_meta.forward_mode == ForwardMode.EXTEND else 1
+        batch_size = qi.shape[0]
+        num_heads = qi.shape[1]
+        head_dim = qi.shape[-1]
+
+        if forward_meta.forward_mode == ForwardMode.DECODE:
+             # Single token attention logic
+             qk = paddle.matmul(qi, ki.transpose([0, 2, 1])).astype("float32")
+             output = paddle.matmul(qk, vi.astype("float32")).astype(qi.dtype)
+        else:
+             # Block-wise attention logic
+             indices = paddle.arange(m).astype("float32")
+             mask = indices[:, None] - indices[None, :]
+             diag_decay = paddle.exp(paddle.where(mask >= 0, -ratio * mask, paddle.to_tensor(float("-inf"))))
+             diag_decay = diag_decay.unsqueeze(0).unsqueeze(0)
+             
+             qk = paddle.matmul(qi, ki.transpose([0, 1, 3, 2])).astype("float32") * diag_decay
+             output = paddle.matmul(qk, vi.astype("float32")).astype(qi.dtype)
+        
+        return output, None
 
 
 class MiniMaxM1MLP(nn.Layer):
