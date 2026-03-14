@@ -145,7 +145,6 @@ class TestBasicPrefill(BaseDSMLAWriteCacheTest):
             tensors["slot_mapping"],
             tensors["scale"],
             "fp8_ds_mla",
-            True,  # is_prefill
         )
 
         # dsk_attn_write_cache 是 in-place 操作，直接修改 kv_cache
@@ -168,7 +167,6 @@ class TestBasicDecode(BaseDSMLAWriteCacheTest):
             tensors["slot_mapping"],
             tensors["scale"],
             "fp8_ds_mla",
-            False,  # is_prefill
         )
 
         # in-place 操作验证
@@ -193,7 +191,6 @@ class TestSingleToken(BaseDSMLAWriteCacheTest):
             tensors["slot_mapping"],
             tensors["scale"],
             "fp8_ds_mla",
-            True,
         )
 
         self.assertIsNotNone(result)
@@ -213,7 +210,6 @@ class TestLargeBatch(BaseDSMLAWriteCacheTest):
             tensors["slot_mapping"],
             tensors["scale"],
             "fp8_ds_mla",
-            True,
         )
 
         self.assertIsNotNone(result)
@@ -235,7 +231,6 @@ class TestUnalignedTokens(BaseDSMLAWriteCacheTest):
             tensors["slot_mapping"],
             tensors["scale"],
             "fp8_ds_mla",
-            True,
         )
 
         self.assertIsNotNone(result)
@@ -258,7 +253,6 @@ class TestQuantTypeFp8DsMla(BaseDSMLAWriteCacheTest):
             tensors["slot_mapping"],
             tensors["scale"],
             "fp8_ds_mla",  # 主要测试的量化类型
-            True,
         )
 
         self.assertIsNotNone(result)
@@ -306,7 +300,6 @@ class TestWithoutScale(BaseDSMLAWriteCacheTest):
             tensors["slot_mapping"],
             None,
             "fp8_ds_mla",
-            True,
         )
 
         self.assertIsNotNone(result)
@@ -326,7 +319,6 @@ class TestWithoutKvSignalData(BaseDSMLAWriteCacheTest):
             tensors["slot_mapping"],
             tensors["scale"],
             "fp8_ds_mla",
-            True,
         )
 
         self.assertIsNotNone(result)
@@ -349,7 +341,6 @@ class TestBfloat16Input(BaseDSMLAWriteCacheTest):
             tensors["slot_mapping"],
             tensors["scale"],
             "fp8_ds_mla",
-            True,
         )
 
         self.assertIsNotNone(result)
@@ -370,7 +361,6 @@ class TestFloat16Input(BaseDSMLAWriteCacheTest):
                 tensors["slot_mapping"],
                 tensors["scale"],
                 "fp8_ds_mla",
-                True,
             )
             self.assertIsNotNone(result)
         except Exception as e:
@@ -396,7 +386,6 @@ class TestDSMLAWriteCachePerformance(BaseDSMLAWriteCacheTest):
                 tensors["slot_mapping"],
                 tensors["scale"],
                 "fp8_ds_mla",
-                True,
             )
 
         paddle.device.synchronize()
@@ -413,7 +402,6 @@ class TestDSMLAWriteCachePerformance(BaseDSMLAWriteCacheTest):
                 tensors["slot_mapping"],
                 tensors["scale"],
                 "fp8_ds_mla",
-                True,
             )
 
         paddle.device.synchronize()
