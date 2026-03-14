@@ -390,7 +390,22 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         hidden_size = x.shape[1]
 
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+        if (
+            fastdeploy.envs.FD_USE_PHI_TOPK
+            and layer.redundant_table_manger is None
+            and layer.topk_method == "noaux_tc"
+        ):
+            topk_weights, topk_idx = moe_topk_select(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                layer.top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
+            )
+        else:
+            topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
