@@ -12,6 +12,32 @@ import os
 import sys
 import paddle
 
+# Compatibility for Paddle versions missing 'compat' or 'enable_torch_proxy'
+if not hasattr(paddle, 'compat'):
+    paddle.compat = type('obj', (object,), {'enable_torch_proxy': lambda *args, **kwargs: None})()
+elif not hasattr(paddle.compat, 'enable_torch_proxy'):
+    paddle.compat.enable_torch_proxy = lambda *args, **kwargs: None
+
+if not hasattr(paddle, 'enable_compat'):
+    paddle.enable_compat = lambda *args, **kwargs: None
+
+# Mock newer functionals if missing
+if not hasattr(paddle.nn.functional, 'swiglu'):
+    def mock_swiglu(x, y=None):
+        if y is None:
+            x, y = paddle.chunk(x, 2, axis=-1)
+        return paddle.nn.functional.silu(x) * y
+    paddle.nn.functional.swiglu = mock_swiglu
+
+# Fix paddleformers import
+try:
+    import paddleformers.transformers as pt
+    if not hasattr(pt, 'PretrainedModel'):
+        from paddleformers.transformers.model_utils import PretrainedModel
+        pt.PretrainedModel = PretrainedModel
+except ImportError:
+    pass
+
 # Setup environment
 os.environ["PROMETHEUS_MULTIPROC_DIR"] = "/tmp/fd_prom"
 os.makedirs("/tmp/fd_prom", exist_ok=True)

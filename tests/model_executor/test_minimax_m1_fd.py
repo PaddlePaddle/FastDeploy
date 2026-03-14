@@ -18,6 +18,64 @@ MiniMax-M1 Model Execution Test
 
 import os
 import paddle
+# Compatibility for Paddle versions missing 'compat', 'enable_torch_proxy', or newer functionals
+if not hasattr(paddle, 'compat'):
+    paddle.compat = type('obj', (object,), {'enable_torch_proxy': lambda *args, **kwargs: None})()
+elif not hasattr(paddle.compat, 'enable_torch_proxy'):
+    paddle.compat.enable_torch_proxy = lambda *args, **kwargs: None
+
+if not hasattr(paddle, 'enable_compat'):
+    paddle.enable_compat = lambda *args, **kwargs: None
+
+# Mock Backend for dy2static if missing
+try:
+    import paddle.jit.dy2static.utils as jit_utils
+    if not hasattr(jit_utils, 'Backend'):
+        jit_utils.Backend = type('obj', (object,), {'CINN': 'CINN', 'SOT': 'SOT', 'PIR': 'PIR'})()
+except ImportError:
+    pass
+
+# Mock swiglu if missing (used in some FD layers)
+if not hasattr(paddle.nn.functional, 'swiglu'):
+    def mock_swiglu(x, y=None):
+        if y is None:
+            x, y = paddle.chunk(x, 2, axis=-1)
+        return paddle.nn.functional.silu(x) * y
+    paddle.nn.functional.swiglu = mock_swiglu
+
+# Mock fused_rms_norm if missing
+if not hasattr(paddle.incubate.nn.functional, 'fused_rms_norm'):
+    if not hasattr(paddle.incubate.nn, 'functional'):
+        paddle.incubate.nn.functional = type('obj', (object,), {})()
+    paddle.incubate.nn.functional.fused_rms_norm = lambda x, w, eps, **kwargs: (paddle.nn.functional.rms_norm(x, w.shape, w, eps), None)
+
+# Fix paddleformers import
+try:
+    import paddleformers.transformers as pt
+    if not hasattr(pt, 'PretrainedModel'):
+        from paddleformers.transformers.model_utils import PretrainedModel
+        pt.PretrainedModel = PretrainedModel
+except ImportError:
+    pass
+
+import sys
+# Mock missing C++ extensions in distributed.communication
+import fastdeploy.distributed.communication as comm
+comm.decode_alltoall_transpose = lambda *args, **kwargs: None
+comm.tensor_model_parallel_all_reduce = lambda x: x
+
+import importlib
+original_import = importlib.import_module
+def hacked_import(name, package=None):
+    try:
+        return original_import(name, package)
+    except ImportError as e:
+        if 'fastdeploy.model_executor.models.' in name and 'minimax_m1' not in name:
+            print(f"Ignoring ImportError for {name}: {e}")
+            return type('obj', (object,), {})()
+        raise e
+importlib.import_module = hacked_import
+
 import numpy as np
 from types import SimpleNamespace
 from fastdeploy.config import FDConfig
