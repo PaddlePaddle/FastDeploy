@@ -28,12 +28,14 @@ import sys
 import threading
 import time
 import traceback
+import uuid
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import paddle
+import paddle.distributed as dist
 import requests
 import zmq
 from tqdm import tqdm
@@ -386,7 +388,7 @@ class EngineService:
             suffix=current_suffix,
             create=True,
         )
-
+        
         # gpu_cache_lock: file-based lock for mutual exclusion between worker
         # and CPU transfer when accessing GPU KV cache.
         self.gpu_cache_lock = IPCLock(
@@ -394,6 +396,42 @@ class EngineService:
             suffix=current_suffix,
             create=True,
         )
+        
+        infer_finished_signal_data = np.zeros([1], dtype=np.int32)
+        self.infer_finished_signal = IPCSignal(
+            name="infer_finished_signal",
+            array=infer_finished_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+    def init_parallel_env(self, start_port=6370):
+        llm_logger.info("Start init CPU parallel envs")
+          
+        local_data_parallel_size = len(self.cfg.parallel_config.engine_worker_queue_port)
+        global_data_parallel_id = (
+            self.cfg.node_rank * local_data_parallel_size + self.cfg.parallel_config.local_data_parallel_id
+        )
+        os.environ["PADDLE_TRAINER_ID"] = str(global_data_parallel_id)
+        os.environ["PADDLE_TRAINERS_NUM"] = str(self.cfg.parallel_config.data_parallel_size)
+        if self.cfg.ips is None:
+            os.environ["PADDLE_TRAINER_ENDPOINTS"] = ",".join(
+                [f"0.0.0.0:{int(start_port + i)}" for i in range(local_data_parallel_size)]
+            )
+        else:
+            os.environ["PADDLE_TRAINER_ENDPOINTS"] = ",".join(
+                [f"{ip}:{int(start_port + i)}" for i in range(local_data_parallel_size) for ip in self.cfg.ips]
+            )
+        os.environ["PADDLE_DISTRI_BACKEND"] = "gloo"
+
+        dist.init_parallel_env()
+        llm_logger.info("Finish init CPU parallel envs")
+        # Avoid bringing this env variable to workers
+        os.unsetenv("PADDLE_DISTRI_BACKEND")
+        os.unsetenv("PADDLE_TRAINER_ENDPOINTS")
+
+        paddle.set_device("cpu")
 
     def start_worker_queue_service(self, start_queue):
         """
@@ -824,6 +862,9 @@ class EngineService:
         tracing.trace_set_thread_info("Scheduler Task to Work")
         get_request_pool = ThreadPoolExecutor(max_workers=1)
         is_fetching = False
+        buffered_req_info = {}
+        req_info_lock = threading.Lock()
+        last_sched_batch_id, last_sched_batch_cnt, last_received_request_ids = -1, [], []
 
         def _fetch_request():
             try:
@@ -988,40 +1029,112 @@ class EngineService:
                     else:
                         for task in tasks:
                             self.resource_manager.add_request(task)
+
+                    if envs.FD_ENABLE_BATCH_SCHEDULER:
+                        with req_info_lock:
+                            for task in tasks:
+                                if "batch_info" not in task.ic_req_data:
+                                    continue
+                                batch_info = json.loads(task.ic_req_data["batch_info"])
+                                self.llm_logger.info(f"sched batch info: {batch_info}")
+                                buffered_req_info[task.request_id] = batch_info
                 is_fetching = False
             except Exception as e:
                 self.llm_logger.error(f"fetching request error {e} {str(traceback.format_exc())}")
                 is_fetching = False
 
+        def _check_recv_full_batch():
+            with req_info_lock:
+                all_buffered_req_info = []
+                dist.all_gather_object(all_buffered_req_info, buffered_req_info)
+
+                nonlocal last_sched_batch_id, last_sched_batch_cnt, last_received_request_ids, start_time
+                has_recv_data = last_sched_batch_id != -1
+                last_received_request_ids = []
+                # Find the latest scheduled batch
+                for local_info in all_buffered_req_info:
+                    for _, sched_info in local_info.items():
+                        if sched_info["sched_batch_id"] > last_sched_batch_id:
+                            last_sched_batch_id = sched_info["sched_batch_id"]
+                            last_sched_batch_cnt = sched_info["sched_batch_cnt"]
+
+                # Currently no new reqs
+                if last_sched_batch_id == -1:
+                    return False
+                    # return True
+
+                if not has_recv_data:
+                    start_time = time.time()
+                # Count req num of each DP instance
+                dp_size = len(last_sched_batch_cnt)
+                req_num_count = [0] * dp_size
+                for i, local_info in enumerate(all_buffered_req_info):
+                    for _, sched_info in local_info.items():
+                        if sched_info["sched_batch_id"] == last_sched_batch_id:
+                            req_num_count[i] += 1
+                            last_received_request_ids.append(sched_info["sched_batch_local_id"])
+
+                flag = True
+                for i in range(dp_size):
+                    if req_num_count[i] < last_sched_batch_cnt[i]:
+                        flag = False
+                        break
+
+                if flag:
+                    # All reqs in latest batch are received
+                    last_received_request_ids = []
+                return flag
+
+        def _check_timeout():
+            # All DP instances should use a same timer
+            # Otherwise, say that we have two instances, instance 0 reaches timeout, while instance 1 not, this
+            # will cause:
+            # instance 0: worker stuck at dist.barrier -> engine stuck at waiting infer_finished_signal
+            # instance 1: engine stuck at all_gather_object
+            # Now we have a deadlock!
+            nonlocal start_time
+            time_list = [time.time() - start_time]
+            dist.broadcast_object_list(time_list, src=0)
+
+            return time_list[0] * 1000 >= envs.FD_RECV_BATCH_TIMEOUT
+
+        if not envs.FD_ENABLE_BATCH_SCHEDULER:
+            self.infer_finished_signal.value[0] = 1
+
+        start_time = time.time()
         while self.running:
             with self._pause_cond:
                 self._pause_cond.wait_for(lambda: not self.is_paused)
             try:
-                if self.engine_worker_queue.exist_tasks():
-                    time.sleep(0.001)
-                    continue
-                if self.cfg.scheduler_config.splitwise_role != "mixed":
-                    if not is_fetching:
+                if not is_fetching:
+                    # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
+                    try:
                         is_fetching = True
                         get_request_pool.submit(_fetch_request)
+                    except RuntimeError as e:
+                        if "shutdown" in str(e):
+                            self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
+                            break
+                        else:
+                            raise
 
+                if envs.FD_ENABLE_BATCH_SCHEDULER:
+                    # Some reqs of the scheduled batch still in flight
+                    if not _check_recv_full_batch() and not _check_timeout():
+                        time.sleep(0.01)
+                        continue
                 else:
-                    if len(self.resource_manager.waiting) == 0 and (not is_fetching):
-                        # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
-                        try:
-                            is_fetching = True
-                            get_request_pool.submit(_fetch_request)
-                        except RuntimeError as e:
-                            if "shutdown" in str(e):
-                                self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
-                                break
-                            else:
-                                raise
+                    if not (self.engine_worker_queue.num_tasks() == 0 and self.infer_finished_signal.value[0] == 1):
+                        time.sleep(0.001)
+                        continue
 
                 if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
                     self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
+                # Clear buffered reqs
+                with req_info_lock:
+                    buffered_req_info.clear()
 
                 # 3. Send to engine
                 if tasks:
@@ -1077,6 +1190,13 @@ class EngineService:
                             elif not task.has_been_preempted_before:
                                 task.metrics.inference_start_time = time.time()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
+                else:
+                    if envs.FD_ENABLE_BATCH_SCHEDULER or self.cfg.parallel_config.enable_expert_parallel:
+                        # Insert IDLE task for synchronization
+                        idle_task = Request.from_dict({"request_id": f"idle-{uuid.uuid4()}"})
+                        idle_task.task_type = RequestType.IDLE
+                        tasks = [idle_task]
+                        self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
 
                 # 4. Response error tasks
                 if error_tasks:
@@ -1086,8 +1206,25 @@ class EngineService:
                             continue
                         self._send_error_response(request_id, failed)
 
-                if not tasks and not error_tasks:
-                    time.sleep(0.005)
+                if envs.FD_ENABLE_BATCH_SCHEDULER:
+                    start_execute_time = time.time()
+                    while self.infer_finished_signal.value[0] == 0:
+                        # Wait for current forward to finish
+                        time.sleep(0.01)
+                    execute_time = int((time.time() - start_execute_time) * 1000)
+
+                    # Report to IM
+                    if last_sched_batch_id != -1:
+                        self.report_infer_monitor(
+                            last_sched_batch_id,
+                            last_received_request_ids,
+                            execute_time,
+                            self.resource_manager.get_remain_token_num(),
+                        )
+                    self.infer_finished_signal.value[0] = 0
+                else:
+                    if not tasks and not error_tasks:
+                        time.sleep(0.005)
 
             except RuntimeError as e:
                 if "cannot schedule new futures after shutdown" in str(e):
@@ -1095,6 +1232,9 @@ class EngineService:
             except Exception as e:
                 err_msg = "Error happened while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
+
+            last_sched_batch_id, last_sched_batch_cnt = -1, []
+            start_time = time.time()
 
     def _get_scheduler_unhandled_request_num(self) -> int:
         """
@@ -1764,6 +1904,62 @@ class EngineService:
         else:
             register_thread = threading.Thread(target=_register, daemon=True)
             register_thread.start()
+
+    def report_infer_monitor(
+        self,
+        last_sched_batch_id,
+        last_received_request_ids,
+        last_run_batch_duration,
+        remain_token_num,
+    ):
+        """
+        Report info of latest batch to infer monitor
+        """
+        report_info_list = []
+        dist.communication.stream.gather(
+            paddle.to_tensor([last_run_batch_duration, remain_token_num]),
+            report_info_list,
+            dst=0,
+        )
+        if self.cfg.node_rank == 0 and self.cfg.parallel_config.local_data_parallel_id == 0:
+            # Report by DP0
+            report_info = paddle.to_tensor(report_info_list)
+            """
+            local_data_parallel_size = len(self.cfg.parallel_config.engine_worker_queue_port)
+            global_data_parallel_id = (
+                self.cfg.node_rank * local_data_parallel_size + self.cfg.parallel_config.local_data_parallel_id
+            )
+            """
+            payload = {
+                "last_sched_batch_id": last_sched_batch_id,
+                "last_received_request_ids": last_received_request_ids,
+                "last_run_batch_duration": report_info[:, 0].max().item(),
+                "remain_token_num_per_dp": report_info[:, 1].tolist(),
+                "fed_instance_name": os.getenv("FED_INSTANCE_NAME"),
+                """
+                "fed_instance_name": (
+                    os.getenv("POD_NAMESPACE", "None")
+                    + "_"
+                    + os.getenv("FD_POD_NAME", "None")
+                    + "_"
+                    + os.getenv("HOST_IP", "None")
+                    + "_"
+                    + os.getenv("SPLITWISE_ROLE", "None")
+                    + "_"
+                    + str(global_data_parallel_id)
+                ),
+                """
+                "model_id": os.getenv("MODEL_ID"),
+            }
+            llm_logger.info(f"report info: {payload}")
+
+            try:
+                url = f"http://0.0.0.0:{envs.FD_REPORT_IM_PORT}/end_forward"
+                response = requests.post(url, json=payload)
+                response.raise_for_status()
+                llm_logger.info(f"report IM successful: {response}")
+            except Exception as e:
+                llm_logger.info(f"report IM failed: {e}")
 
     def _exit_sub_services(self):
         """

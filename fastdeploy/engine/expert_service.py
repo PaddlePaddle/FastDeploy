@@ -150,6 +150,9 @@ class ExpertService:
                 )
                 self.launched_expert_service_signal.value[local_rank] = 1
 
+        if envs.FD_ENABLE_BATCH_SCHEDULER:
+            self.engine.init_parallel_env()
+
         if self.do_profile:
             get_profile_block_num = np.zeros([1], dtype=np.int32)
             while True:

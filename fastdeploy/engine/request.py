@@ -61,6 +61,7 @@ class RequestType(Enum):
     DECODE = 1
     PREEMPTED = 2
     EXTEND = 3
+    IDLE = 4
 
 
 @dataclass
@@ -352,6 +353,7 @@ class Request:
                 data_processor_logger.error(
                     f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
                 )
+
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),

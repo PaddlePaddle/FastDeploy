@@ -114,6 +114,7 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
 def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
     """Initialize Paddle Fleet and get rank of worker"""
     # Global rank
+
     ranks = dist.get_world_size()
     dist_strategy = fleet.DistributedStrategy()
     if ranks > 0:
@@ -289,6 +290,15 @@ class PaddleDisWorkerProc:
         # and CPU transfer when accessing GPU KV cache.
         self.gpu_cache_lock = IPCLock(
             name="gpu_cache_lock",
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
+        )
+
+        infer_finished_signal_data = np.zeros([1], dtype=np.int32)
+        self.infer_finished_signal = IPCSignal(
+            name="infer_finished_signal",
+            array=infer_finished_signal_data,
+            dtype=np.int32,
             suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
@@ -473,7 +483,7 @@ class PaddleDisWorkerProc:
         tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
         self.nnode = (tp_size + self.max_chips_per_node) // self.max_chips_per_node
-        max_occupied_batch_index = 0
+        self.max_occupied_batch_index = 0
         tp_rank = self.local_rank % tp_size
 
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
@@ -487,12 +497,11 @@ class PaddleDisWorkerProc:
                 if self.ranks > 1:
                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
 
-            req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
             if tp_rank == 0:
-                if self.task_queue.exist_tasks():
+                if not envs.FD_ENABLE_BATCH_SCHEDULER and self.task_queue.exist_tasks():
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
@@ -557,46 +566,29 @@ class PaddleDisWorkerProc:
                             )  # 所有 Rank 已同步唤醒，启动权重更新流程
                             continue
 
-            if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
-                logger.info(f"Rank: {self.local_rank} Detected new requests.")
-
-                tasks, read_finish = self.task_queue.get_tasks()
-                # Only one of all tp_size client will get read_finish == True.
-                if read_finish:
-                    # Reset the two signal.
-                    if self.nnode > 1:
-                        self.task_queue.read_finish_flag.set(0)
-                    else:
-                        self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
-
-                req_dicts, control_reqs = [], []
-                for req_dict, bsz in tasks:
-                    if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
-                        control_reqs.append(req_dict[0])
-                    else:
-                        max_occupied_batch_index = int(bsz)
-                        req_dicts.extend(req_dict)
-
-                # todo: run control request async
-                if len(control_reqs) > 0:
-                    logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
-                    for control_req in control_reqs:
-                        self.run_control_method(control_req)
+            if not envs.FD_ENABLE_BATCH_SCHEDULER:
+                if (
+                    self.exist_task_signal.value[0] == ExistTaskStatus.EXIST
+                    or self.task_queue.read_finish_flag.get() == 1
+                ):
+                    req_dicts, control_reqs = self.get_tasks()
+                    # TODO: run control request async
+                    if len(control_reqs) > 0:
+                        logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
+                        for control_req in control_reqs:
+                            self.run_control_method(control_req)
+                            self._tp_barrier_wait() if tp_size > 1 else None
+                else:
+                    req_dicts = []
+                    if self.scheduler_config.splitwise_role == "prefill":
+                        # Synchronize the signal for other workers
                         self._tp_barrier_wait() if tp_size > 1 else None
-
-                # Count prefill requests in current batch
-                num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
-                num_scheduled_requests = len(req_dicts)
-                scheduled_request_ids = [req.request_id for req in req_dicts]
-                logger.info(
-                    f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
-                    f"max_occupied_batch_index: {max_occupied_batch_index}, "
-                    f"num_scheduled_requests: {num_scheduled_requests}, "
-                    f"scheduled_request_ids: {scheduled_request_ids}"
-                )
-
+                        continue
+            else:
+                req_dicts = self.get_batch_sched_tasks()
+            if req_dicts:
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+                self.worker.preprocess_new_task(req_dicts, self.max_occupied_batch_index)
 
             if (
                 not self.parallel_config.use_ep
@@ -604,6 +596,7 @@ class PaddleDisWorkerProc:
                 and not self.worker.model_runner.not_need_stop()
             ):
                 self._tp_barrier_wait() if tp_size > 1 else None
+                self.infer_finished_signal.value[0] = 1
                 time.sleep(0.001)
                 continue
 
@@ -612,7 +605,7 @@ class PaddleDisWorkerProc:
             start_execute_time = time.time()
 
             self._acquire_kvcache_lock(tp_rank)
-            self.worker.execute_model(req_dicts, max_occupied_batch_index)
+            self.worker.execute_model(req_dicts, self.max_occupied_batch_index)
             self._release_kvcache_lock(tp_rank)
 
             # Only v0 use this signal
@@ -620,13 +613,83 @@ class PaddleDisWorkerProc:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
+            self._tp_barrier_wait() if tp_size > 1 else None
+            self.infer_finished_signal.value[0] = 1
             if (
                 not self.parallel_config.use_ep
                 and hasattr(self.worker.model_runner, "current_launch_token_num")
                 and self.worker.model_runner.current_launch_token_num == 0
             ):
-                self._tp_barrier_wait() if tp_size > 1 else None
                 time.sleep(0.001)
+
+    def get_tasks(self):
+        req_dicts, control_reqs = [], []
+        logger.info(f"Rank: {self.local_rank} Detected new requests.")
+        self.infer_finished_signal.value[0] = 0
+        tasks, read_finish = self.task_queue.get_tasks()
+        # Only one of all tp_size client will get read_finish == True.
+        if read_finish:
+            # Reset the two signal.
+            if self.nnode > 1:
+                self.task_queue.read_finish_flag.set(0)
+            else:
+                self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
+        # In EP parallel(corresponing to dp attention), we need to barrier for prefill to prevent data imbalance due to inconsistent data arrival.
+        # Only EP + DP prefill should barrier for data arrival.
+        # In mixed mode and decoder in D, we should not barrier to influence decoding.
+        if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
+            dist.barrier(self.parallel_config.ep_group)
+
+        for req_dict, bsz in tasks:
+            if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
+                control_reqs.append(req_dict[0])
+            elif not req_dict[0].task_type.value == RequestType.IDLE.value:
+                self.max_occupied_batch_index = int(bsz)
+                req_dicts.extend(req_dict)
+
+        # Count prefill requests in current batch
+        num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
+        num_scheduled_requests = len(req_dicts)
+        scheduled_request_ids = [req.request_id for req in req_dicts]
+        logger.info(
+            f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
+            f"max_occupied_batch_index: {self.max_occupied_batch_index}, "
+            f"num_scheduled_requests: {num_scheduled_requests}, "
+            f"scheduled_request_ids: {scheduled_request_ids}"
+        )
+
+        return req_dicts, control_reqs
+
+    def get_batch_sched_tasks(self):
+        """
+        Fetch tasks under batch scheduling.
+        """
+        req_dicts = []
+        while True:
+            tasks, _ = self.task_queue.get_tasks()
+            if tasks:
+                logger.info(f"Rank: {self.local_rank} Detected new requests.")
+                dist.barrier(self.parallel_config.ep_group)
+                break
+
+        for req_dict, bsz in tasks:
+            if not req_dict[0].task_type.value == RequestType.IDLE.value:
+                # may be IDLE task only used for synchronization
+                self.max_occupied_batch_index = int(bsz)
+                req_dicts.extend(req_dict)
+
+        # Count prefill requests in current batch
+        num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
+        num_scheduled_requests = len(req_dicts)
+        scheduled_request_ids = [req.request_id for req in req_dicts]
+        logger.info(
+            f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
+            f"max_occupied_batch_index: {self.max_occupied_batch_index}, "
+            f"num_scheduled_requests: {num_scheduled_requests}, "
+            f"scheduled_request_ids: {scheduled_request_ids}"
+        )
+
+        return req_dicts
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many

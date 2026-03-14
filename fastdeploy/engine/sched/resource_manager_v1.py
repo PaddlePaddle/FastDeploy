@@ -1467,6 +1467,20 @@ class ResourceManagerV1(ResourceManager):
         if verbose:
             llm_logger.info(f"update metrics: running={len(self.running)}, waiting={num_tasks - len(self.running)}")
 
+    def get_remain_token_num(self):
+        token_num = 0
+        with self.lock:
+            for req in self.running:
+                token_num += req.num_total_tokens - req.num_computed_tokens
+            for req in self.waiting:
+                token_num += req.num_total_tokens
+            for req_id in self.to_be_rescheduled_request_id_set:
+                # Preempt reqs currently neither in running queue nor in waiting queue
+                req = self.requests[req_id]
+                token_num += req.num_total_tokens
+
+        return token_num
+
     def log_status(self):
         llm_logger.info(
             f"ResourceManagerV1( "
