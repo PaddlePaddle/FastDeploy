@@ -177,5 +177,7 @@ def fused_stack_transpose_quant(expert_weight_list, use_ue8m0=False):
         )
         if use_ue8m0:
             scale = scale.T
+    else:
+        raise RuntimeError("'fuse_stack_transpose_fp8_quant' is not available in the current paddlefleet_ops.")
 
     return w, scale
