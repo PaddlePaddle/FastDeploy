@@ -143,7 +143,6 @@ def flash_attn_func(
         ]
         with paddle.no_grad():
             try:
-                print(f"fa4 {causal=}, {attn_mask_q=}")
                 paddle.set_flags({"FLAGS_flash_attn_version": 4})
                 out = flashmask_attention_v4(
                     q.reshape([1, -1, num_heads, head_dim]),
