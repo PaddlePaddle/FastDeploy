@@ -238,6 +238,12 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # has been observed to cause NaN computation errors.
     # Set to 1 to enable the lock; defaults to 0 (disabled).
     "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
+    # Whether to probe MoE routing probabilities.
+    "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
+    # Whether to use Fleet's fused SwiGLU kernel for mlp activation computation.
+    "FD_USE_FLEET_FUSE_SWIGLU": lambda: bool(int(os.getenv("FD_USE_FLEET_FUSE_SWIGLU", "0"))),
+    # Whether to use Fleet's FP8 quantization kernel for weight quantization.
+    "FD_USE_FLEET_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_FLEET_FP8_QUANT", "0"))),
 }
 
 
