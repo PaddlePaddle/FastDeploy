@@ -150,6 +150,12 @@ def _make_loader(safetensors=False, **kw):
 _GC_GUARD: list = []  # prevents ctypes buffers from being garbage-collected
 
 
+@pytest.fixture(autouse=True)
+def _force_cpu():
+    """Prevent segfaults on CI GPU — ctypes.string_at reads CPU pointers only."""
+    paddle.set_device("cpu")
+
+
 def _shm_buffer(data_bytes):
     buf = (ctypes.c_byte * len(data_bytes))(*data_bytes)
     _GC_GUARD.append(buf)
