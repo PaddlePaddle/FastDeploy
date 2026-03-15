@@ -1231,6 +1231,11 @@ std::vector<paddle::Tensor> CpGatherIndexerKQuantCacheKernel(
     const paddle::Tensor& block_table,
     const paddle::Tensor& cu_seq_lens);
 
+void BatchInvariantGateGemm(paddle::Tensor& c,
+                            paddle::Tensor const& a,
+                            paddle::Tensor const& b,
+                            paddle::optional<paddle::Tensor> const& bias);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
         &GetExpertTokenNum,
@@ -1873,4 +1878,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("cp_gather_indexer_k_quant_cache",
         &CpGatherIndexerKQuantCacheKernel,
         "cp_gather_indexer_k_quant_cache");
+
+  // batch_invariant_gemm/batch_invariant_gate_gemm.cu
+  // Direct pybind call bypasses PD_BUILD_STATIC_OP dispatch (~215us overhead)
+  m.def("batch_invariant_gate_gemm",
+        &BatchInvariantGateGemm,
+        py::arg("c"),
+        py::arg("a"),
+        py::arg("b"),
+        py::arg("bias"),
+        "CUTLASS batch-invariant gate GEMM (pybind direct call)");
 }

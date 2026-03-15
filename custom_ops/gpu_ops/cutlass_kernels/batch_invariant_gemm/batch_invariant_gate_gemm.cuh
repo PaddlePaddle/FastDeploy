@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include <chrono>
+#include <cstdio>
+
 // clang-format off
 #include "cutlass/cutlass.h"
 #include "cute/tensor.hpp"
@@ -34,10 +37,11 @@
 
 namespace fastdeploy {
 
-// Batch-invariant Gate GEMM kernel for MoE gate matmul on SM90.
+// Cooperative kernel for batch-invariant Gate GEMM on SM90.
 //
-// Uses CUTLASS 3.x PersistentScheduler to guarantee that output row i
-// is bitwise identical regardless of batch size M.
+// Uses KernelTmaWarpSpecializedCooperative (1 Producer + 2 Consumer WGs
+// = 384 threads). Higher throughput per CTA due to 2 consumer WGs,
+// but requires M_tile >= 128.
 //
 // A = [M, K] row-major (activations)
 // B = [N, K] column-major (pre-transposed gate weight)
@@ -47,25 +51,19 @@ template <typename ElementAB_,
           typename ElementD_,
           bool HasBias,
           typename TileShape,
-          typename ClusterShape,
-          typename KernelSchedule =
-              cutlass::gemm::KernelTmaWarpSpecializedCooperative,
-          typename EpilogueSchedule =
-              cutlass::epilogue::TmaWarpSpecializedCooperative>
+          typename ClusterShape>
 struct GateGemmSm90 {
   using ElementAB = ElementAB_;
   using ElementD = ElementD_;
-  using ElementAcc = float;  // always fp32 accumulation for determinism
+  using ElementAcc = float;
   static constexpr bool kHasBias = HasBias;
 
   using LayoutA = cutlass::layout::RowMajor;
   using LayoutB = cutlass::layout::ColumnMajor;
   using LayoutD = cutlass::layout::RowMajor;
 
-  // Bias element type matches output; void when no bias
   using ElementC = std::conditional_t<HasBias, ElementD, void>;
   using LayoutC = LayoutD;
-
   using StrideD = cutlass::detail::TagToStrideA_t<LayoutD>;
   using StrideC = StrideD;
 
@@ -74,7 +72,10 @@ struct GateGemmSm90 {
   static constexpr int AlignmentCD =
       HasBias ? (128 / cutlass::sizeof_bits<ElementD>::value) : 4;
 
-  // Epilogue fusion: D = alpha * acc (+ bias if HasBias)
+  // Cooperative schedule — requires M_tile >= 128
+  using KernelSchedule = cutlass::gemm::KernelTmaWarpSpecializedCooperative;
+  using EpilogueSchedule = cutlass::epilogue::TmaWarpSpecializedCooperative;
+
   using FusionOp =
       std::conditional_t<HasBias,
                          cutlass::epilogue::fusion::LinCombEltAct<
@@ -129,10 +130,7 @@ struct GateGemmSm90 {
               CEStorageSize)>,
           KernelSchedule>::CollectiveOp;
 
-  // StreamKScheduler with SplitK decomposition + Deterministic reduce:
-  // - SplitK: fixed K-splits per tile, K boundaries independent of M
-  // - Deterministic: daisy-chain ordered accumulation
-  // Together they guarantee batch invariance with much better SM utilization.
+  // Standard CUTLASS GemmUniversal + StreamKScheduler
   using KernelType = enable_sm90_or_later<
       cutlass::gemm::kernel::GemmUniversal<cute::Shape<int, int, int, int>,
                                            CollectiveMainloop,
@@ -142,10 +140,11 @@ struct GateGemmSm90 {
   struct GemmKernel : public KernelType {};
 };
 
-// Variant using custom Non-Cooperative kernel with StreamK support.
-// Removes the M_tile >= 128 constraint, enabling TileShape<64, 32, 64>.
+// Non-Cooperative StreamK kernel for batch-invariant Gate GEMM on SM90.
+//
 // Uses KernelTmaWarpSpecialized (1 Producer + 1 Consumer WG = 256 threads)
 // with persistent StreamK loop for SplitK + Deterministic reduction.
+// Removes the M_tile >= 128 constraint, enabling TileShape<64, 32, 64>.
 template <typename ElementAB_,
           typename ElementD_,
           bool HasBias,
@@ -239,6 +238,15 @@ struct GateGemmSm90StreamK {
   struct GemmKernel : public KernelType {};
 };
 
+// Host timing helper — enabled by CUTLASS_HOST_TIMING=1
+inline bool host_timing_enabled() {
+  static const bool enabled = [] {
+    const char *env = std::getenv("CUTLASS_HOST_TIMING");
+    return env && std::string(env) == "1";
+  }();
+  return enabled;
+}
+
 // Launch helper: allocates workspace and runs the CUTLASS kernel
 template <typename Gemm>
 void launch_gate_gemm(
@@ -259,6 +267,9 @@ void launch_gate_gemm(
   using StrideB = typename GemmKernel::StrideB;
   using StrideC = typename GemmKernel::StrideC;
   using StrideD = typename GemmKernel::StrideD;
+
+  const bool timing = host_timing_enabled();
+  auto t0 = std::chrono::high_resolution_clock::now();
 
   StrideA a_stride =
       cutlass::make_cute_packed_stride(StrideA{}, make_shape(M, K, 1));
@@ -309,16 +320,16 @@ void launch_gate_gemm(
                                       epilogue_args,
                                       hw_info};
 
+  auto t1 = std::chrono::high_resolution_clock::now();
+
   // SplitK + Deterministic reduce: K boundaries are fixed (M-independent),
   // daisy-chain accumulation ensures fixed FP order → batch invariance.
   //
-  // Optimal splits from nsys benchmark (H800, K=7168, N=256):
-  //   TileShape<128,32,64> (Cooperative):      splits=5 → 13.3μs
-  //   TileShape<64,32,64>  (Non-Coop StreamK): splits=3 →  9.9μs
-  // Override via CUTLASS_GATE_GEMM_SPLITS env var for tuning.
+  // CRITICAL: auto-splits must be M-independent to preserve batch invariance.
+  // Use m_tiles=1 (worst case) so splits is constant for given (N, K, tile).
+  // Large M may over-saturate SMs but correctness > performance.
   using TileShapeType = typename GemmKernel::TileShape;
-  constexpr int M_TILE = cute::size<0>(TileShapeType{});
-  constexpr int DEFAULT_SPLITS = (M_TILE <= 64) ? 3 : 5;
+  constexpr int N_TILE = cute::size<1>(TileShapeType{});
   constexpr int K_TILE = cute::size<2>(TileShapeType{});
   int k_iters = (K + K_TILE - 1) / K_TILE;
   int splits;
@@ -326,7 +337,13 @@ void launch_gate_gemm(
   if (env_splits) {
     splits = std::max(1, std::min(std::atoi(env_splits), k_iters));
   } else {
-    splits = std::min(DEFAULT_SPLITS, k_iters);
+    // Target ~100% SM util for M=1 (worst case). Cap at 8 to limit
+    // reduce overhead — beyond 8 splits the SplitK reduction cost
+    // outweighs the SM utilization gain.
+    constexpr int MAX_AUTO_SPLITS = 8;
+    int n_tiles = (N + N_TILE - 1) / N_TILE;
+    int auto_splits = std::max(1, (hw_info.sm_count + n_tiles - 1) / n_tiles);
+    splits = std::min({auto_splits, k_iters, MAX_AUTO_SPLITS});
   }
 
   using StreamKParams =
@@ -335,16 +352,56 @@ void launch_gate_gemm(
   args.scheduler.reduction_mode = StreamKParams::ReductionMode::Deterministic;
   args.scheduler.splits = splits;
 
+  auto t2 = std::chrono::high_resolution_clock::now();
+
   GemmOp gemm_op;
+
+  auto t3 = std::chrono::high_resolution_clock::now();
+
   CUTLASS_CHECK(gemm_op.can_implement(args));
+
+  auto t4 = std::chrono::high_resolution_clock::now();
 
   size_t workspace_size = gemm_op.get_workspace_size(args);
   phi::Allocator *allocator = paddle::GetAllocator(out.place());
   auto workspace = allocator->Allocate(workspace_size);
 
+  auto t5 = std::chrono::high_resolution_clock::now();
+
+  // Split into initialize() + run() to measure TMA descriptor cost vs launch
   auto stream = paddle::GetCurrentCUDAStream(out.place())->raw_stream();
-  cutlass::Status status = gemm_op.run(args, workspace->ptr(), stream);
+  cutlass::Status status = gemm_op.initialize(args, workspace->ptr(), stream);
   CUTLASS_CHECK(status);
+
+  auto t6 = std::chrono::high_resolution_clock::now();
+
+  status = gemm_op.run(stream);
+  CUTLASS_CHECK(status);
+
+  auto t7 = std::chrono::high_resolution_clock::now();
+
+  if (timing) {
+    auto us = [](auto a, auto b) {
+      return std::chrono::duration<double, std::micro>(b - a).count();
+    };
+    printf("[CUTLASS host timing] M=%d N=%d K=%d splits=%d\n", M, N, K, splits);
+    printf("  args build     : %7.1f us  (stride+ptr+epilogue+hw_info)\n",
+           us(t0, t1));
+    printf("  splits calc    : %7.1f us  (env read + auto-splits)\n",
+           us(t1, t2));
+    printf("  GemmOp ctor    : %7.1f us\n", us(t2, t3));
+    printf("  can_implement  : %7.1f us\n", us(t3, t4));
+    printf("  workspace alloc: %7.1f us  (get_size + Allocate)\n", us(t4, t5));
+    printf(
+        "  initialize     : %7.1f us  (init_workspace + to_underlying_args + "
+        "smem_attr)\n",
+        us(t5, t6));
+    printf("  run (launch)   : %7.1f us  (cuLaunchKernelEx)\n", us(t6, t7));
+    printf("  TOTAL          : %7.1f us\n", us(t0, t7));
+    printf("  ---\n");
+    printf("  cacheable (ctor+can_impl+workspace): %7.1f us\n", us(t2, t5));
+    printf("  TMA+smem (initialize):               %7.1f us\n", us(t5, t6));
+  }
 }
 
 }  // namespace fastdeploy

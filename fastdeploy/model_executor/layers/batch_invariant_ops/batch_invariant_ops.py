@@ -387,7 +387,11 @@ def matmul_cutlass_gate_pretransposed(a: paddle.Tensor, b_t: paddle.Tensor, bias
     bias: optional [N] vector
     Returns: [M, N]
     """
-    from fastdeploy.model_executor.ops.gpu import batch_invariant_gate_gemm
+    # Use pybind11 direct call to bypass Paddle custom op dispatch overhead
+    # (~8.5us vs ~230us via PD_BUILD_STATIC_OP)
+    from fastdeploy.model_executor.ops.gpu.fastdeploy_ops import (
+        batch_invariant_gate_gemm,
+    )
 
     M, K = a.shape
     N = b_t.shape[0]
