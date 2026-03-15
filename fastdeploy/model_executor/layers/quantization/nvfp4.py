@@ -32,6 +32,8 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 
 paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
+CUTEDSL_MOE_SCALAR_INPUT_SCALE = bool(envs.FD_CUTEDSL_MOE_SCALAR_INPUT_SCALE)
+
 
 def next_power_of_2(n: int):
     return 1 << (n - 1).bit_length() if n > 0 else 1
@@ -124,7 +126,15 @@ class ModelOptNvFp4Config(QuantConfigBase):
                 raise ValueError(f"group_size must be an integer, got {type(group_size_raw)}") from None
 
         # "exclude_modules" is the key in the legacy hf_quant_config.json
-        exclude_modules = quant_config.get("exclude_modules", [])
+        print("quant_config", quant_config)
+        exclude_modules = (
+            quant_config.get("exclude_modules")
+            or quant_config.get("exculde_modules")
+            or quant_config.get("ignore")
+            or []
+        )
+        print("exclude_modules", exclude_modules)
+
         if not isinstance(exclude_modules, list):
             raise ValueError(f"exclude_modules must be a list, got {type(exclude_modules)}")
 
@@ -133,13 +143,27 @@ class ModelOptNvFp4Config(QuantConfigBase):
         # For FP4, these fields are required
         if is_checkpoint_nvfp4_serialized and "quantization" in config:
             # Check if required fields are present in the quantization config
-            quant_config = config["quantization"]
-            required_fields = ["group_size", "kv_cache_quant_algo", "exclude_modules"]
-            missing_fields = [field for field in required_fields if field not in quant_config]
-            if missing_fields:
-                raise ValueError(
-                    f"NVFP4 quantization requires the following fields in " f"hf_quant_config.json: {missing_fields}"
-                )
+            sub = config["quantization"]
+            if isinstance(sub, dict):
+                required_fields = ["group_size", "kv_cache_quant_algo", "exclude_modules"]
+                missing_fields = [field for field in required_fields if field not in sub]
+                if missing_fields:
+                    raise ValueError(
+                        f"NVFP4 quantization requires the following fields in "
+                        f"hf_quant_config.json: {missing_fields}"
+                    )
+                group_size_raw = sub.get("group_size", group_size)
+                group_size = int(group_size_raw) if group_size_raw is not None else group_size
+                kv_cache_quant_algo = sub.get("kv_cache_quant_algo", kv_cache_quant_algo)
+                exclude_modules = sub.get("exclude_modules") or sub.get("exculde_modules", exclude_modules)
+
+            # Derive group_size from config_groups if missing at top-level (e.g. ModelOpt export)
+            if quant_config.get("group_size") is None and quant_config.get("config_groups"):
+                for grp in quant_config["config_groups"].values():
+                    w = grp.get("weights") or {}
+                    if "group_size" in w:
+                        group_size = int(w["group_size"])
+                        break
 
         return cls(
             is_checkpoint_nvfp4_serialized=is_checkpoint_nvfp4_serialized,
