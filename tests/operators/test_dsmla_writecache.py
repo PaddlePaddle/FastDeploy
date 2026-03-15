@@ -28,9 +28,9 @@ import unittest
 
 import paddle
 
-from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
+from fastdeploy.model_executor.layers.attention.dsa_helper import dsk_attn_write_cache
 
-# from fastdeploy.model_executor.layers.attention.dsa_helper import dsk_attn_write_cache
+# from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
 
 
 # DS MLA 常量定义
