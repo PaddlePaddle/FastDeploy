@@ -8,7 +8,7 @@ from cutlass import Boolean, Int8, Int32, const_expr
 
 from .block_sparsity import (
     BlockSparseTensors,
-    BlockSparseTensorsTorch,
+    BlockSparseTensorsPaddle,
     to_cute_block_sparse_tensors,
 )
 from .seqlen_info import SeqlenInfoQK
@@ -280,7 +280,7 @@ def compute_block_sparsity(
     device,
     compute_full_blocks: bool = True,
     use_fast_sampling: bool = False,
-) -> Tuple[BlockSparseTensors, BlockSparseTensorsTorch]:
+) -> Tuple[BlockSparseTensors, BlockSparseTensorsPaddle]:
     """
     Computes block sparsity for a given `mask_mod`.
 
@@ -298,7 +298,7 @@ def compute_block_sparsity(
         use_fast_sampling: Whether to use 5-point sampling (4 corners + center). This is much faster, but only suitable for masks where this check is sufficient.
 
     Returns:
-        A tuple of `BlockSparseTensors` and `BlockSparseTensorsTorch`.
+        A tuple of `BlockSparseTensors` and `BlockSparseTensorsPaddle`.
     """
     # Check if mask_mod is marked as suitable for 5-point fast sampling
     use_fast_sampling = getattr(mask_mod, "use_fast_sampling", use_fast_sampling)
@@ -321,7 +321,7 @@ def compute_block_sparsity(
         else None
     )
 
-    blocksparse_tensors_torch = BlockSparseTensorsTorch(
+    blocksparse_tensors_torch = BlockSparseTensorsPaddle(
         mask_block_cnt=mask_block_cnt,
         mask_block_idx=mask_block_idx,
         full_block_cnt=full_block_cnt,

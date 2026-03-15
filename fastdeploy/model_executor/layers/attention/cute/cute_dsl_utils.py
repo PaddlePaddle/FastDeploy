@@ -28,7 +28,7 @@ load_cubin_module_data_og = cutlass.base_dsl.runtime.cuda.load_cubin_module_data
 cute_compile_og = cute.compile
 
 
-torch2cute_dtype_map = {
+paddle2cute_dtype_map = {
     paddle.float16: cutlass.Float16,
     paddle.bfloat16: cutlass.BFloat16,
     paddle.float32: cutlass.Float32,

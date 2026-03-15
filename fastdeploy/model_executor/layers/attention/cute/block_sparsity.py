@@ -26,7 +26,7 @@ class BlockSparseTensors(NamedTuple):
         return BlockSparseTensors(*values)
 
 
-class BlockSparseTensorsTorch(NamedTuple):
+class BlockSparseTensorsPaddle(NamedTuple):
     mask_block_cnt: paddle.Tensor
     mask_block_idx: paddle.Tensor
     full_block_cnt: paddle.Tensor | None = None
@@ -122,13 +122,13 @@ def get_block_sparse_expected_shapes_bwd(
 
 
 def normalize_block_sparse_tensors(
-    tensors: BlockSparseTensorsTorch,
+    tensors: BlockSparseTensorsPaddle,
     *,
     expected_count_shape: Tuple[int, int, int],
     expected_index_shape: Tuple[int, int, int, int],
     context: str | None = None,
     hint: str | Callable[[], str] | None = None,
-) -> BlockSparseTensorsTorch:
+) -> BlockSparseTensorsPaddle:
     if tensors.mask_block_cnt is None or tensors.mask_block_idx is None:
         raise ValueError("mask_block_cnt and mask_block_idx must be provided for block sparsity.")
 
@@ -156,7 +156,7 @@ def normalize_block_sparse_tensors(
     if full_cnt is not None and mask_cnt.device != full_cnt.device:
         raise ValueError("All block sparse tensors must be on the same device")
 
-    return BlockSparseTensorsTorch(
+    return BlockSparseTensorsPaddle(
         mask_block_cnt=mask_cnt,
         mask_block_idx=mask_idx,
         full_block_cnt=full_cnt,
@@ -164,12 +164,12 @@ def normalize_block_sparse_tensors(
     )
 
 
-def is_block_sparsity_enabled(tensors: BlockSparseTensorsTorch) -> bool:
+def is_block_sparsity_enabled(tensors: BlockSparseTensorsPaddle) -> bool:
     return any(t is not None for t in (tensors.full_block_cnt, tensors.mask_block_cnt))
 
 
 def get_block_sparse_broadcast_pattern(
-    tensors: BlockSparseTensorsTorch,
+    tensors: BlockSparseTensorsPaddle,
 ) -> Tuple[Tuple[bool, ...], ...] | None:
     """Return broadcast pattern for block sparse tensors by checking actual strides.
 
@@ -201,7 +201,7 @@ def get_block_sparse_broadcast_pattern(
 
 
 def to_cute_block_sparse_tensors(
-    tensors: BlockSparseTensorsTorch, enable_tvm_ffi: bool = True
+    tensors: BlockSparseTensorsPaddle, enable_tvm_ffi: bool = True
 ) -> BlockSparseTensors | None:
     """Convert paddle block sparsity tensors to CuTe tensors, optionally for tvm ffi"""
     if not is_block_sparsity_enabled(tensors):

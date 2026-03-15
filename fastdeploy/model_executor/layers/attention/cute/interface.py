@@ -30,7 +30,7 @@ import paddle
 import fastdeploy.model_executor.layers.attention.cute.utils as utils
 
 from .block_sparsity import (
-    BlockSparseTensorsTorch,
+    BlockSparseTensorsPaddle,
     get_block_sparse_broadcast_pattern,
     get_block_sparse_expected_shapes,
     get_block_sparse_expected_shapes_bwd,
@@ -66,7 +66,7 @@ def _validate_tensor(t, name, expected_shape, expected_dtype, expected_device=No
     # assert t.is_cuda, f"{name} must be on CUDA"
 
 
-torch2cute_dtype_map = {
+paddle2cute_dtype_map = {
     paddle.float16: cutlass.Float16,
     paddle.bfloat16: cutlass.BFloat16,
     paddle.float32: cutlass.Float32,
@@ -111,7 +111,7 @@ def _flash_attn_fwd(
     _compute_capability: Optional[int] = None,
     score_mod: Optional[Callable] = None,
     mask_mod: Optional[Callable] = None,
-    block_sparse_tensors: Optional[BlockSparseTensorsTorch] = None,
+    block_sparse_tensors: Optional[BlockSparseTensorsPaddle] = None,
     return_lse: bool = False,
     out: Optional[paddle.Tensor] = None,
     lse: Optional[paddle.Tensor] = None,
@@ -204,23 +204,23 @@ def _flash_attn_fwd(
     if pack_gqa is None:
         pack_gqa = qhead_per_kvhead > 1
 
-    out_torch_dtype = q.dtype
+    out_paddle_dtype = q.dtype
     device = "cuda"
     q_batch_seqlen_shape = (batch_size, seqlen_q) if cu_seqlens_q is None else (total_q,)
     lse_shape = (batch_size, num_head, seqlen_q) if cu_seqlens_q is None else (num_head, total_q)
     requires_grad = q.requires_grad or k.requires_grad or v.requires_grad
 
     if out is None:
-        out = paddle.empty(*q_batch_seqlen_shape, num_head, head_dim_v, dtype=out_torch_dtype)
+        out = paddle.empty(*q_batch_seqlen_shape, num_head, head_dim_v, dtype=out_paddle_dtype)
     else:
-        _validate_tensor(out, "out", (*q_batch_seqlen_shape, num_head, head_dim_v), out_torch_dtype, device)
+        _validate_tensor(out, "out", (*q_batch_seqlen_shape, num_head, head_dim_v), out_paddle_dtype, device)
 
     if lse is None:
         lse = paddle.empty(lse_shape, dtype=paddle.float32) if requires_grad or return_lse else None
     elif lse is not None:
         _validate_tensor(lse, "lse", lse_shape, paddle.float32)
 
-    dtype = torch2cute_dtype_map[q.dtype]
+    dtype = paddle2cute_dtype_map[q.dtype]
     compute_capability = _get_device_capability() if _compute_capability is None else _compute_capability
 
     assert compute_capability in [9, 10, 11], "Unsupported compute capability. Supported: 9.x, 10.x, 11.x"
@@ -469,7 +469,7 @@ def _flash_attn_fwd(
             learnable_sink_tensor,
             sparse_tensors,
             cute_aux_tensors,
-            # options="--enable-tvm-ffi",
+            options="--enable-tvm-ffi",
         )
 
     _flash_attn_fwd.compile_cache[compile_key](
@@ -545,7 +545,7 @@ def _flash_attn_bwd(
     score_mod_bwd: Optional[Callable] = None,
     mask_mod: Optional[Callable] = None,
     aux_tensors: Optional[list[paddle.Tensor]] = None,
-    block_sparse_tensors: Optional[BlockSparseTensorsTorch] = None,
+    block_sparse_tensors: Optional[BlockSparseTensorsPaddle] = None,
 ) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor]:
     compute_capability = _get_device_capability()
     assert compute_capability in [9, 10, 11], "Unsupported compute capability. Supported: 9.x, 10.x, 11.x"
@@ -671,22 +671,22 @@ def _flash_attn_bwd(
         assert cu_seqlens_q is None and cu_seqlens_k is None, "varlen + score_mod not supported in bwd yet"
 
     device = q.device
-    out_torch_dtype = q.dtype
+    out_paddle_dtype = q.dtype
 
     if dq is None:
         dq = paddle.empty_like(q)
     else:
-        _validate_tensor(dq, "dq", q.shape, out_torch_dtype, device)
+        _validate_tensor(dq, "dq", q.shape, out_paddle_dtype, device)
 
     if dk is None:
         dk = paddle.empty_like(k)
     else:
-        _validate_tensor(dk, "dk", k.shape, out_torch_dtype, device)
+        _validate_tensor(dk, "dk", k.shape, out_paddle_dtype, device)
 
     if dv is None:
         dv = paddle.empty_like(v)
     else:
-        _validate_tensor(dv, "dv", v.shape, out_torch_dtype, device)
+        _validate_tensor(dv, "dv", v.shape, out_paddle_dtype, device)
 
     head_dim_rounded = (head_dim + 32 - 1) // 32 * 32
 
@@ -749,7 +749,7 @@ def _flash_attn_bwd(
                 device=device,
             )
 
-    dtype = torch2cute_dtype_map[q.dtype]
+    dtype = paddle2cute_dtype_map[q.dtype]
     current_stream = cuda.CUstream(paddle.cuda.current_stream().cuda_stream)
 
     if deterministic:
@@ -1226,7 +1226,7 @@ class FlashAttnFunc(paddle.autograd.Function):
         # Only create block sparse tensors if at least one block sparse parameter is provided
         block_sparse_tensors = None
         if any(t is not None for t in [full_block_cnt, full_block_idx, mask_block_cnt, mask_block_idx]):
-            block_sparse_tensors = BlockSparseTensorsTorch(
+            block_sparse_tensors = BlockSparseTensorsPaddle(
                 full_block_cnt=full_block_cnt,
                 full_block_idx=full_block_idx,
                 mask_block_cnt=mask_block_cnt,
@@ -1527,8 +1527,8 @@ def _flash_attn_fwd_combine(
     current_stream = cuda.CUstream(paddle.cuda.current_stream().cuda_stream)
 
     # Create combine kernel configuration
-    dtype = torch2cute_dtype_map[out.dtype]
-    dtype_partial = torch2cute_dtype_map[out_partial.dtype]
+    dtype = paddle2cute_dtype_map[out.dtype]
+    dtype_partial = paddle2cute_dtype_map[out_partial.dtype]
 
     compile_key = (
         dtype,
