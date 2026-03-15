@@ -238,7 +238,7 @@ def intercept_paddle_loggers():
             formatter = logging.Formatter(
                 "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
             )
-            logger.setLevel(logging.INFO)
+            logger.setLevel(logging.DEBUG if envs.FD_DEBUG else logging.INFO)
             for handler in logger.handlers[:]:
                 logger.removeHandler(handler)
             stream_handler = logging.StreamHandler()

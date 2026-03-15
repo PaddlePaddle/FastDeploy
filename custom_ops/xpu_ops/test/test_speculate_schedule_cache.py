@@ -37,7 +37,6 @@ def cpu_reference(
     accept_tokens,
     is_block_step,
     not_need_stop,
-    stop_nums,
     block_size,
     max_draft_tokens,
 ):
@@ -82,7 +81,7 @@ def cpu_reference(
             stop_flag_now_int[bid] = 0
 
     stop_sum = int(stop_flag_now_int.sum())
-    not_need_stop[0] = stop_sum < int(stop_nums[0])
+    not_need_stop[0] = stop_sum < max_bsz
 
 
 class TestSpeculateScheduleCache(unittest.TestCase):
@@ -141,8 +140,6 @@ class TestSpeculateScheduleCache(unittest.TestCase):
         self.not_need_stop = paddle.zeros((1,), dtype=paddle.bool).cpu()
 
         # 设置阈值：bid0触发，bid1已停止，填充(5-3)=2 -> stop_sum = 1+1+2 = 4
-        # 设置stop_nums为5，使得not_need_stop = (4 < 5) = True
-        self.stop_nums = paddle.to_tensor([5], dtype=paddle.int64)
 
         # 保存NumPy副本用于CPU参考实现对比
         self.np_draft_tokens = self.draft_tokens.numpy().copy()
@@ -159,7 +156,6 @@ class TestSpeculateScheduleCache(unittest.TestCase):
         self.np_accept_tokens = self.accept_tokens.numpy().copy()
         self.np_is_block_step = self.is_block_step.numpy().copy()
         self.np_not_need_stop = self.not_need_stop.numpy().copy()
-        self.np_stop_nums = self.stop_nums.numpy().copy()
 
     def test_correctness_against_cpu_reference(self):
         # Run GPU kernel (in-place)
@@ -178,7 +174,6 @@ class TestSpeculateScheduleCache(unittest.TestCase):
             self.accept_tokens,
             self.is_block_step,
             self.not_need_stop,
-            self.stop_nums,
             self.block_size,
             self.max_draft_tokens,
         )
@@ -199,7 +194,6 @@ class TestSpeculateScheduleCache(unittest.TestCase):
             self.np_accept_tokens,
             self.np_is_block_step,
             self.np_not_need_stop,
-            self.np_stop_nums,
             self.block_size,
             self.max_draft_tokens,
         )
@@ -233,7 +227,6 @@ class TestSpeculateScheduleCache(unittest.TestCase):
         self.not_need_stop[:] = False
 
         # For not_need_stop: stopped_in_real = (bid1 True) = 1, padding = 2 -> stop_sum=3
-        # With stop_nums=5 -> True
         speculate_schedule_cache(
             self.draft_tokens,
             self.block_tables,
@@ -249,7 +242,6 @@ class TestSpeculateScheduleCache(unittest.TestCase):
             self.accept_tokens,
             self.is_block_step,
             self.not_need_stop,
-            self.stop_nums,
             self.block_size,
             self.max_draft_tokens,
         )

@@ -3,8 +3,7 @@
 #include "xpu/kernel/cluster_primitive.h"
 #include "xpu/kernel/cluster_primitive_template.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 static __device__ void atomic_add(_shared_ptr_ int *ptr, int v) {
   bool fail = true;
@@ -264,5 +263,4 @@ __global__ void speculate_update_repeat_times(const int64_t *pre_ids,
   }
 }
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
