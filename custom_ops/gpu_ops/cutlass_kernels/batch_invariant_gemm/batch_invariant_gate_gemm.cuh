@@ -247,25 +247,139 @@ inline bool host_timing_enabled() {
   return enabled;
 }
 
-// Cached env var reads — process-level config, read once.
-inline const std::string &cached_gate_gemm_opt() {
-  static const std::string val = [] {
-    const char *env = std::getenv("CUTLASS_GATE_GEMM_OPT");
-    return env ? std::string(env) : std::string();
+// Launch cache switch — enabled by CUTLASS_LAUNCH_CACHE=1.
+// Caches sm_count, splits, workspace, and skips repeated can_implement checks.
+// Saves ~1.5-2μs per call. Incompatible with benchmark sweeps that change
+// env vars at runtime (CUTLASS_GATE_GEMM_OPT / CUTLASS_GATE_GEMM_SPLITS).
+inline bool launch_cache_enabled() {
+  static const bool enabled = [] {
+    const char *env = std::getenv("CUTLASS_LAUNCH_CACHE");
+    return env && std::string(env) == "1";
   }();
-  return val;
+  return enabled;
 }
 
-// Returns -1 if not set (use auto-splits), otherwise the parsed value.
-inline int cached_gate_gemm_splits() {
-  static const int val = [] {
-    const char *env = std::getenv("CUTLASS_GATE_GEMM_SPLITS");
-    return env ? std::atoi(env) : -1;
-  }();
-  return val;
+// Per-template-instantiation launch cache (like cuBLAS handle).
+// One instance per Gemm type, lives for the process lifetime.
+template <typename GemmOp>
+struct LaunchCache {
+  GemmOp gemm_op;
+  void *workspace_ptr = nullptr;
+  size_t workspace_capacity = 0;
+  int sm_count = 0;
+  int splits = -1;  // cached for (N, K) — M-independent
+  int cached_N = 0;
+  int cached_K = 0;
+  bool verified = false;  // can_implement passed
+
+  static LaunchCache &instance() {
+    static LaunchCache cache;
+    return cache;
+  }
+
+  // Grow-only workspace: only re-allocate when needed size exceeds capacity.
+  void ensure_workspace(size_t needed, paddle::Tensor const &ref_tensor) {
+    if (needed <= workspace_capacity) return;
+    if (workspace_ptr) cudaFree(workspace_ptr);
+    cudaMalloc(&workspace_ptr, needed);
+    workspace_capacity = needed;
+  }
+
+  int get_sm_count() {
+    if (sm_count == 0) {
+      sm_count =
+          cutlass::KernelHardwareInfo::query_device_multiprocessor_count(0);
+    }
+    return sm_count;
+  }
+};
+
+// Build CUTLASS args (shared by both cached and uncached paths).
+template <typename Gemm>
+typename Gemm::GemmKernel::Arguments build_gate_gemm_args(
+    paddle::Tensor &out,
+    paddle::Tensor const &a,
+    paddle::Tensor const &b,
+    void const *bias_ptr,
+    int M,
+    int N,
+    int K,
+    int sm_count) {
+  using namespace cute;
+  using ElementAB = typename Gemm::ElementAB;
+  using ElementD = typename Gemm::ElementD;
+  using GemmKernel = typename Gemm::GemmKernel;
+  using StrideA = typename GemmKernel::StrideA;
+  using StrideB = typename GemmKernel::StrideB;
+  using StrideC = typename GemmKernel::StrideC;
+  using StrideD = typename GemmKernel::StrideD;
+
+  auto a_ptr = static_cast<ElementAB const *>(a.data());
+  auto b_ptr = static_cast<ElementAB const *>(b.data());
+  auto d_ptr = static_cast<ElementD *>(const_cast<void *>(out.data()));
+
+  typename GemmKernel::MainloopArguments mainloop_args{
+      const_cast<ElementAB *>(a_ptr),
+      cutlass::make_cute_packed_stride(StrideA{}, make_shape(M, K, 1)),
+      const_cast<ElementAB *>(b_ptr),
+      cutlass::make_cute_packed_stride(StrideB{}, make_shape(N, K, 1))};
+
+  typename GemmKernel::EpilogueArguments epilogue_args{
+      {1.0f},
+      d_ptr,
+      cutlass::make_cute_packed_stride(StrideD{}, make_shape(M, N, 1)),
+      d_ptr,
+      cutlass::make_cute_packed_stride(StrideD{}, make_shape(M, N, 1))};
+
+  if constexpr (Gemm::kHasBias) {
+    using ElementC = typename Gemm::ElementC;
+    epilogue_args.thread.beta = 1.0f;
+    epilogue_args.ptr_C = static_cast<ElementC const *>(bias_ptr);
+    epilogue_args.dC = StrideC{0, cute::Int<1>{}, 0};
+  }
+
+  cutlass::KernelHardwareInfo hw_info;
+  hw_info.device_id = 0;
+  hw_info.sm_count = sm_count;
+
+  return {cutlass::gemm::GemmUniversalMode::kGemm,
+          {M, N, K, 1},
+          mainloop_args,
+          epilogue_args,
+          hw_info};
 }
 
-// Launch helper: allocates workspace and runs the CUTLASS kernel
+// Compute SplitK splits (M-independent for batch invariance).
+template <typename GemmKernel>
+int compute_splits(int N, int K, int sm_count) {
+  using TileShapeType = typename GemmKernel::TileShape;
+  constexpr int N_TILE = cute::size<1>(TileShapeType{});
+  constexpr int K_TILE = cute::size<2>(TileShapeType{});
+  int k_iters = (K + K_TILE - 1) / K_TILE;
+
+  const char *env_splits = std::getenv("CUTLASS_GATE_GEMM_SPLITS");
+  if (env_splits) {
+    return std::max(1, std::min(std::atoi(env_splits), k_iters));
+  }
+  constexpr int MAX_AUTO_SPLITS = 8;
+  int n_tiles = (N + N_TILE - 1) / N_TILE;
+  int auto_splits = std::max(1, (sm_count + n_tiles - 1) / n_tiles);
+  return std::min({auto_splits, k_iters, MAX_AUTO_SPLITS});
+}
+
+// Set SplitK + Deterministic scheduler on args.
+template <typename GemmKernel>
+void set_splitk_scheduler(typename GemmKernel::Arguments &args, int splits) {
+  using StreamKParams =
+      cutlass::gemm::kernel::detail::PersistentTileSchedulerSm90StreamKParams;
+  args.scheduler.decomposition_mode = StreamKParams::DecompositionMode::SplitK;
+  args.scheduler.reduction_mode = StreamKParams::ReductionMode::Deterministic;
+  args.scheduler.splits = splits;
+}
+
+// Launch helper: allocates workspace and runs the CUTLASS kernel.
+// When CUTLASS_LAUNCH_CACHE=1, caches sm_count/splits/workspace/can_implement
+// across calls, saving ~1.5-2μs. Safe for production (single-thread per GPU).
 template <typename Gemm>
 void launch_gate_gemm(
     paddle::Tensor &out,      // [M, N] pre-allocated
@@ -275,100 +389,80 @@ void launch_gate_gemm(
     int M,
     int N,
     int K) {
-  using namespace cute;
-  using ElementAB = typename Gemm::ElementAB;
-  using ElementD = typename Gemm::ElementD;
   using GemmKernel = typename Gemm::GemmKernel;
   using GemmOp = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
 
-  using StrideA = typename GemmKernel::StrideA;
-  using StrideB = typename GemmKernel::StrideB;
-  using StrideC = typename GemmKernel::StrideC;
-  using StrideD = typename GemmKernel::StrideD;
-
   const bool timing = host_timing_enabled();
+  const bool use_cache = launch_cache_enabled();
   auto t0 = std::chrono::high_resolution_clock::now();
 
-  StrideA a_stride =
-      cutlass::make_cute_packed_stride(StrideA{}, make_shape(M, K, 1));
-  StrideB b_stride =
-      cutlass::make_cute_packed_stride(StrideB{}, make_shape(N, K, 1));
-  StrideC c_stride =
-      cutlass::make_cute_packed_stride(StrideC{}, make_shape(M, N, 1));
-  StrideD d_stride =
-      cutlass::make_cute_packed_stride(StrideD{}, make_shape(M, N, 1));
+  if (use_cache) {
+    // === Cached path: reuse sm_count, splits, workspace, GemmOp ===
+    auto &cache = LaunchCache<GemmOp>::instance();
+    int sm_count = cache.get_sm_count();
 
-  auto a_ptr = static_cast<ElementAB const *>(a.data());
-  auto b_ptr = static_cast<ElementAB const *>(b.data());
-  auto d_ptr = static_cast<ElementD *>(const_cast<void *>(out.data()));
+    auto args =
+        build_gate_gemm_args<Gemm>(out, a, b, bias_ptr, M, N, K, sm_count);
+    auto t1 = std::chrono::high_resolution_clock::now();
 
-  typename GemmKernel::ProblemShape prob_shape{M, N, K, 1};
+    // Splits: cache per (N, K) — M-independent for batch invariance
+    if (cache.cached_N != N || cache.cached_K != K) {
+      cache.splits = compute_splits<GemmKernel>(N, K, sm_count);
+      cache.cached_N = N;
+      cache.cached_K = K;
+    }
+    set_splitk_scheduler<GemmKernel>(args, cache.splits);
 
-  typename GemmKernel::MainloopArguments mainloop_args{
-      const_cast<ElementAB *>(a_ptr),
-      a_stride,
-      const_cast<ElementAB *>(b_ptr),
-      b_stride};
+    auto t2 = std::chrono::high_resolution_clock::now();
 
-  // Build epilogue arguments
-  // For LinearCombination: alpha=1.0, beta=0 (no bias) or beta=1.0 (with bias)
-  typename GemmKernel::EpilogueArguments epilogue_args{
-      {1.0f},  // thread args (alpha)
-      d_ptr,
-      d_stride,
-      d_ptr,
-      d_stride};
+    // can_implement: check once per template type
+    if (!cache.verified) {
+      CUTLASS_CHECK(cache.gemm_op.can_implement(args));
+      cache.verified = true;
+    }
 
-  if constexpr (Gemm::kHasBias) {
-    using ElementC = typename Gemm::ElementC;
-    epilogue_args.thread.beta = 1.0f;
-    epilogue_args.ptr_C = static_cast<ElementC const *>(bias_ptr);
-    // Bias is [N] broadcast across M rows: M-stride=0, N-stride=1,
-    // batch-stride=0
-    epilogue_args.dC = StrideC{0, cute::Int<1>{}, 0};
+    // Workspace: grow-only, bypass Paddle allocator
+    size_t ws_needed = cache.gemm_op.get_workspace_size(args);
+    cache.ensure_workspace(ws_needed, out);
+
+    auto t5 = std::chrono::high_resolution_clock::now();
+
+    auto stream = paddle::GetCurrentCUDAStream(out.place())->raw_stream();
+    CUTLASS_CHECK(cache.gemm_op.initialize(args, cache.workspace_ptr, stream));
+
+    auto t6 = std::chrono::high_resolution_clock::now();
+
+    CUTLASS_CHECK(cache.gemm_op.run(stream));
+
+    auto t7 = std::chrono::high_resolution_clock::now();
+
+    if (timing) {
+      auto us = [](auto a, auto b) {
+        return std::chrono::duration<double, std::micro>(b - a).count();
+      };
+      printf(
+          "[CUTLASS cached] M=%d N=%d K=%d splits=%d\n", M, N, K, cache.splits);
+      printf("  args build     : %7.1f us\n", us(t0, t1));
+      printf("  splits+verify  : %7.1f us\n", us(t1, t2));
+      printf("  workspace      : %7.1f us\n", us(t2, t5));
+      printf("  initialize     : %7.1f us  (TMA descriptors)\n", us(t5, t6));
+      printf("  run (launch)   : %7.1f us\n", us(t6, t7));
+      printf("  TOTAL          : %7.1f us\n", us(t0, t7));
+    }
+    return;
   }
 
+  // === Uncached path: original behavior, full timing breakdown ===
   cutlass::KernelHardwareInfo hw_info;
   hw_info.sm_count =
       cutlass::KernelHardwareInfo::query_device_multiprocessor_count(
           hw_info.device_id);
-  typename GemmKernel::Arguments args{cutlass::gemm::GemmUniversalMode::kGemm,
-                                      prob_shape,
-                                      mainloop_args,
-                                      epilogue_args,
-                                      hw_info};
-
+  auto args = build_gate_gemm_args<Gemm>(
+      out, a, b, bias_ptr, M, N, K, hw_info.sm_count);
   auto t1 = std::chrono::high_resolution_clock::now();
 
-  // SplitK + Deterministic reduce: K boundaries are fixed (M-independent),
-  // daisy-chain accumulation ensures fixed FP order → batch invariance.
-  //
-  // CRITICAL: auto-splits must be M-independent to preserve batch invariance.
-  // Use m_tiles=1 (worst case) so splits is constant for given (N, K, tile).
-  // Large M may over-saturate SMs but correctness > performance.
-  using TileShapeType = typename GemmKernel::TileShape;
-  constexpr int N_TILE = cute::size<1>(TileShapeType{});
-  constexpr int K_TILE = cute::size<2>(TileShapeType{});
-  int k_iters = (K + K_TILE - 1) / K_TILE;
-  int splits;
-  const char *env_splits = std::getenv("CUTLASS_GATE_GEMM_SPLITS");
-  if (env_splits) {
-    splits = std::max(1, std::min(std::atoi(env_splits), k_iters));
-  } else {
-    // Target ~100% SM util for M=1 (worst case). Cap at 8 to limit
-    // reduce overhead — beyond 8 splits the SplitK reduction cost
-    // outweighs the SM utilization gain.
-    constexpr int MAX_AUTO_SPLITS = 8;
-    int n_tiles = (N + N_TILE - 1) / N_TILE;
-    int auto_splits = std::max(1, (hw_info.sm_count + n_tiles - 1) / n_tiles);
-    splits = std::min({auto_splits, k_iters, MAX_AUTO_SPLITS});
-  }
-
-  using StreamKParams =
-      cutlass::gemm::kernel::detail::PersistentTileSchedulerSm90StreamKParams;
-  args.scheduler.decomposition_mode = StreamKParams::DecompositionMode::SplitK;
-  args.scheduler.reduction_mode = StreamKParams::ReductionMode::Deterministic;
-  args.scheduler.splits = splits;
+  int splits = compute_splits<GemmKernel>(N, K, hw_info.sm_count);
+  set_splitk_scheduler<GemmKernel>(args, splits);
 
   auto t2 = std::chrono::high_resolution_clock::now();
 
@@ -386,7 +480,6 @@ void launch_gate_gemm(
 
   auto t5 = std::chrono::high_resolution_clock::now();
 
-  // Split into initialize() + run() to measure TMA descriptor cost vs launch
   auto stream = paddle::GetCurrentCUDAStream(out.place())->raw_stream();
   cutlass::Status status = gemm_op.initialize(args, workspace->ptr(), stream);
   CUTLASS_CHECK(status);
