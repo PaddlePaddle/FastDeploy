@@ -360,6 +360,8 @@ inline int cached_gate_gemm_splits_env() {
 }
 
 // Compute SplitK splits (M-independent for batch invariance).
+// Heuristic: only add SplitK when n_tiles alone cannot fill SMs.
+// When n_tiles >= 80% of sm_count, SplitK reduce overhead > utilization gain.
 template <typename GemmKernel>
 int compute_splits(int N, int K, int sm_count) {
   using TileShapeType = typename GemmKernel::TileShape;
@@ -376,8 +378,12 @@ int compute_splits(int N, int K, int sm_count) {
   if (env_val > 0) {
     return std::max(1, std::min(env_val, k_iters));
   }
-  constexpr int MAX_AUTO_SPLITS = 8;
   int n_tiles = (N + N_TILE - 1) / N_TILE;
+  // When n_tiles already saturate SMs (>= 80%), splits=1 avoids reduce cost.
+  if (n_tiles * 5 >= sm_count * 4) {
+    return 1;
+  }
+  constexpr int MAX_AUTO_SPLITS = 8;
   int auto_splits = std::max(1, (sm_count + n_tiles - 1) / n_tiles);
   return std::min({auto_splits, k_iters, MAX_AUTO_SPLITS});
 }

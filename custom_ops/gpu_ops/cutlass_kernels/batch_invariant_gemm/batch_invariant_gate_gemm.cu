@@ -24,6 +24,9 @@ using TileShape_n128 = cute::Shape<cute::_64, cute::_128, cute::_64>;
 using TileShape_n64 = cute::Shape<cute::_64, cute::_64, cute::_64>;
 using TileShape_n64_k128 = cute::Shape<cute::_64, cute::_64, cute::_128>;
 using TileShape_n256 = cute::Shape<cute::_64, cute::_256, cute::_64>;
+using TileShape_n96 = cute::Shape<cute::_64, cute::Int<96>, cute::_64>;
+using TileShape_n96_k128 = cute::Shape<cute::_64, cute::Int<96>, cute::_128>;
+using TileShape_n128_k128 = cute::Shape<cute::_64, cute::_128, cute::_128>;
 
 // --- Cooperative tile configs (M_tile >= 128 required) ---
 using CoopTileShape_k64 = cute::Shape<cute::_128, cute::_32, cute::_64>;
@@ -188,6 +191,48 @@ using GateGemm_bf16_bias_n64_k128 = GateGemmSm90StreamK<cutlass::bfloat16_t,
                                                         true,
                                                         TileShape_n64_k128,
                                                         ClusterShape_1x1x1>;
+
+// --- N96 variant (opt="n96", bf16 only — qkv N=4608: 4608/96=48 tiles) ---
+
+using GateGemm_bf16_nobias_n96 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                     cutlass::bfloat16_t,
+                                                     false,
+                                                     TileShape_n96,
+                                                     ClusterShape_1x1x1>;
+
+using GateGemm_bf16_bias_n96 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                   cutlass::bfloat16_t,
+                                                   true,
+                                                   TileShape_n96,
+                                                   ClusterShape_1x1x1>;
+
+// --- N96_K128 variant (opt="n96_k128", bf16 only) ---
+
+using GateGemm_bf16_nobias_n96_k128 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                          cutlass::bfloat16_t,
+                                                          false,
+                                                          TileShape_n96_k128,
+                                                          ClusterShape_1x1x1>;
+
+using GateGemm_bf16_bias_n96_k128 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                        cutlass::bfloat16_t,
+                                                        true,
+                                                        TileShape_n96_k128,
+                                                        ClusterShape_1x1x1>;
+
+// --- N128_K128 variant (opt="n128_k128", bf16 only) ---
+
+using GateGemm_bf16_nobias_n128_k128 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                           cutlass::bfloat16_t,
+                                                           false,
+                                                           TileShape_n128_k128,
+                                                           ClusterShape_1x1x1>;
+
+using GateGemm_bf16_bias_n128_k128 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                         cutlass::bfloat16_t,
+                                                         true,
+                                                         TileShape_n128_k128,
+                                                         ClusterShape_1x1x1>;
 
 // --- N128 + ClusterShape 1x2x1 (opt="n128_c2", bf16 only — TMA multicast) ---
 
@@ -355,21 +400,25 @@ void BatchInvariantGateGemm(paddle::Tensor &c,
     PD_CHECK(bias->is_contiguous() && bias->dims().size() == 1);
   }
 
-  // CUTLASS_GATE_GEMM_OPT: k64 | n16 | n64 | n64_k128 | n128 | n128_c2 |
-  //   n256 | coop | coop_k128 | coop_n128 | coop_n256 | (empty=auto-dispatch)
+  // CUTLASS_GATE_GEMM_OPT: k64 | n16 | n64 | n64_k128 | n96 | n96_k128 |
+  //   n128 | n128_c2 | n128_k128 | n256 | coop | coop_k128 | coop_n128 |
+  //   coop_n256 | (empty=auto-dispatch)
   // When unset, auto-dispatch by N dimension (model-agnostic heuristic).
   const char *env_opt = std::getenv("CUTLASS_GATE_GEMM_OPT");
   std::string opt = env_opt ? env_opt : "";
 
-  // Auto-dispatch by N when env var is not set
+  // Auto-dispatch by N when env var is not set.
+  // Tile selection tuned for M=32~64 sweet spot on H800 (132 SM).
+  // k128 (64×32×128) has higher arithmetic intensity than n64 (64×64×64)
+  // and its n_tiles already saturate SMs for medium-N shapes.
   if (opt.empty()) {
     int N = b.dims()[0];
     if (N <= 256)
-      opt = "n16";  // gate/router: small N
+      opt = "n16";  // gate/router: small N, SplitK fills SMs
     else if (N <= 4096)
-      opt = "n64";  // o_proj/down: medium N
+      opt = "k128";  // o_proj/down: K_TILE=128 wins at M=32~64
     else if (N <= 8192)
-      opt = "n128";  // qkv: large N
+      opt = "n128";  // qkv: N_TILE=128, 36 tiles + SplitK
     else
       opt = "n256";  // up_gate/lm_head: very large N
   }
@@ -400,9 +449,21 @@ void BatchInvariantGateGemm(paddle::Tensor &c,
       fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias_n128,
                                      fastdeploy::GateGemm_bf16_bias_n128>(
           c, a, b, bias);
+    } else if (opt == "n128_k128") {
+      fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias_n128_k128,
+                                     fastdeploy::GateGemm_bf16_bias_n128_k128>(
+          c, a, b, bias);
     } else if (opt == "n128_c2") {
       fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias_n128_c2,
                                      fastdeploy::GateGemm_bf16_bias_n128_c2>(
+          c, a, b, bias);
+    } else if (opt == "n96_k128") {
+      fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias_n96_k128,
+                                     fastdeploy::GateGemm_bf16_bias_n96_k128>(
+          c, a, b, bias);
+    } else if (opt == "n96") {
+      fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias_n96,
+                                     fastdeploy::GateGemm_bf16_bias_n96>(
           c, a, b, bias);
     } else if (opt == "n64_k128") {
       fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias_n64_k128,
