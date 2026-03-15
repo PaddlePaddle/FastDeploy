@@ -349,6 +349,16 @@ typename Gemm::GemmKernel::Arguments build_gate_gemm_args(
           hw_info};
 }
 
+// Cached env var for CUTLASS_GATE_GEMM_SPLITS — read once per process.
+// Returns the env value or -1 if not set.
+inline int cached_gate_gemm_splits_env() {
+  static const int val = [] {
+    const char *env = std::getenv("CUTLASS_GATE_GEMM_SPLITS");
+    return env ? std::atoi(env) : -1;
+  }();
+  return val;
+}
+
 // Compute SplitK splits (M-independent for batch invariance).
 template <typename GemmKernel>
 int compute_splits(int N, int K, int sm_count) {
@@ -357,9 +367,14 @@ int compute_splits(int N, int K, int sm_count) {
   constexpr int K_TILE = cute::size<2>(TileShapeType{});
   int k_iters = (K + K_TILE - 1) / K_TILE;
 
-  const char *env_splits = std::getenv("CUTLASS_GATE_GEMM_SPLITS");
-  if (env_splits) {
-    return std::max(1, std::min(std::atoi(env_splits), k_iters));
+  // Use cached env read when launch cache is enabled; otherwise read every
+  // call to support runtime switching during benchmark sweeps.
+  int env_val = launch_cache_enabled() ? cached_gate_gemm_splits_env() : [&] {
+    const char *e = std::getenv("CUTLASS_GATE_GEMM_SPLITS");
+    return e ? std::atoi(e) : -1;
+  }();
+  if (env_val > 0) {
+    return std::max(1, std::min(env_val, k_iters));
   }
   constexpr int MAX_AUTO_SPLITS = 8;
   int n_tiles = (N + N_TILE - 1) / N_TILE;

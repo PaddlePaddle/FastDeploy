@@ -356,12 +356,23 @@ void BatchInvariantGateGemm(paddle::Tensor &c,
   }
 
   // CUTLASS_GATE_GEMM_OPT: k64 | n16 | n64 | n64_k128 | n128 | n128_c2 |
-  //   n256 | coop | coop_k128 | coop_n128 | coop_n256 | (empty=k128 default)
-  // NOTE: not using cached_gate_gemm_opt() here — env var must be switchable
-  // at runtime for benchmark sweeps. Cache is safe only in production where
-  // the value is set once before first kernel call.
+  //   n256 | coop | coop_k128 | coop_n128 | coop_n256 | (empty=auto-dispatch)
+  // When unset, auto-dispatch by N dimension (model-agnostic heuristic).
   const char *env_opt = std::getenv("CUTLASS_GATE_GEMM_OPT");
   std::string opt = env_opt ? env_opt : "";
+
+  // Auto-dispatch by N when env var is not set
+  if (opt.empty()) {
+    int N = b.dims()[0];
+    if (N <= 256)
+      opt = "n16";  // gate/router: small N
+    else if (N <= 4096)
+      opt = "n64";  // o_proj/down: medium N
+    else if (N <= 8192)
+      opt = "n128";  // qkv: large N
+    else
+      opt = "n256";  // up_gate/lm_head: very large N
+  }
 
   auto dtype = a.dtype();
   if (dtype == paddle::DataType::BFLOAT16) {
