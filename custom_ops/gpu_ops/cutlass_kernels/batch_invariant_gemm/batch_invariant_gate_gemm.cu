@@ -21,6 +21,8 @@ using TileShape_k64 = cute::Shape<cute::_64, cute::_32, cute::_64>;
 using TileShape_k128 = cute::Shape<cute::_64, cute::_32, cute::_128>;
 using TileShape_n16 = cute::Shape<cute::_64, cute::_16, cute::_128>;
 using TileShape_n128 = cute::Shape<cute::_64, cute::_128, cute::_64>;
+using TileShape_n64 = cute::Shape<cute::_64, cute::_64, cute::_64>;
+using TileShape_n64_k128 = cute::Shape<cute::_64, cute::_64, cute::_128>;
 using TileShape_n256 = cute::Shape<cute::_64, cute::_256, cute::_64>;
 
 // --- Cooperative tile configs (M_tile >= 128 required) ---
@@ -30,6 +32,7 @@ using CoopTileShape_n128 = cute::Shape<cute::_128, cute::_128, cute::_64>;
 using CoopTileShape_n256 = cute::Shape<cute::_128, cute::_256, cute::_64>;
 
 using ClusterShape_1x1x1 = cute::Shape<cute::_1, cute::_1, cute::_1>;
+using ClusterShape_1x2x1 = cute::Shape<cute::_1, cute::_2, cute::_1>;
 
 // --- Default (K128) instantiations ---
 
@@ -157,6 +160,48 @@ using GateGemm_fp16_bias_k64 = GateGemmSm90StreamK<cutlass::half_t,
                                                    true,
                                                    TileShape_k64,
                                                    ClusterShape_1x1x1>;
+
+// --- N64 variant (opt="n64", bf16 only — sweetspot between n32 and n128) ---
+
+using GateGemm_bf16_nobias_n64 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                     cutlass::bfloat16_t,
+                                                     false,
+                                                     TileShape_n64,
+                                                     ClusterShape_1x1x1>;
+
+using GateGemm_bf16_bias_n64 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                   cutlass::bfloat16_t,
+                                                   true,
+                                                   TileShape_n64,
+                                                   ClusterShape_1x1x1>;
+
+// --- N64_K128 variant (opt="n64_k128", bf16 only) ---
+
+using GateGemm_bf16_nobias_n64_k128 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                          cutlass::bfloat16_t,
+                                                          false,
+                                                          TileShape_n64_k128,
+                                                          ClusterShape_1x1x1>;
+
+using GateGemm_bf16_bias_n64_k128 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                        cutlass::bfloat16_t,
+                                                        true,
+                                                        TileShape_n64_k128,
+                                                        ClusterShape_1x1x1>;
+
+// --- N128 + ClusterShape 1x2x1 (opt="n128_c2", bf16 only — TMA multicast) ---
+
+using GateGemm_bf16_nobias_n128_c2 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                         cutlass::bfloat16_t,
+                                                         false,
+                                                         TileShape_n128,
+                                                         ClusterShape_1x2x1>;
+
+using GateGemm_bf16_bias_n128_c2 = GateGemmSm90StreamK<cutlass::bfloat16_t,
+                                                       cutlass::bfloat16_t,
+                                                       true,
+                                                       TileShape_n128,
+                                                       ClusterShape_1x2x1>;
 
 // =====================================================================
 // Cooperative instantiations (GateGemmSm90, M_tile=128)
@@ -310,8 +355,11 @@ void BatchInvariantGateGemm(paddle::Tensor &c,
     PD_CHECK(bias->is_contiguous() && bias->dims().size() == 1);
   }
 
-  // CUTLASS_GATE_GEMM_OPT: k64 | n16 | n128 | n256 | coop | coop_k128 |
-  //                        coop_n128 | coop_n256 | (empty=k128 default)
+  // CUTLASS_GATE_GEMM_OPT: k64 | n16 | n64 | n64_k128 | n128 | n128_c2 |
+  //   n256 | coop | coop_k128 | coop_n128 | coop_n256 | (empty=k128 default)
+  // NOTE: not using cached_gate_gemm_opt() here — env var must be switchable
+  // at runtime for benchmark sweeps. Cache is safe only in production where
+  // the value is set once before first kernel call.
   const char *env_opt = std::getenv("CUTLASS_GATE_GEMM_OPT");
   std::string opt = env_opt ? env_opt : "";
 
@@ -340,6 +388,18 @@ void BatchInvariantGateGemm(paddle::Tensor &c,
     } else if (opt == "n128") {
       fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias_n128,
                                      fastdeploy::GateGemm_bf16_bias_n128>(
+          c, a, b, bias);
+    } else if (opt == "n128_c2") {
+      fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias_n128_c2,
+                                     fastdeploy::GateGemm_bf16_bias_n128_c2>(
+          c, a, b, bias);
+    } else if (opt == "n64_k128") {
+      fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias_n64_k128,
+                                     fastdeploy::GateGemm_bf16_bias_n64_k128>(
+          c, a, b, bias);
+    } else if (opt == "n64") {
+      fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias_n64,
+                                     fastdeploy::GateGemm_bf16_bias_n64>(
           c, a, b, bias);
     } else if (opt == "n16") {
       fastdeploy::dispatch_gate_gemm<fastdeploy::GateGemm_bf16_nobias_n16,

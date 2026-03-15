@@ -247,6 +247,24 @@ inline bool host_timing_enabled() {
   return enabled;
 }
 
+// Cached env var reads — process-level config, read once.
+inline const std::string &cached_gate_gemm_opt() {
+  static const std::string val = [] {
+    const char *env = std::getenv("CUTLASS_GATE_GEMM_OPT");
+    return env ? std::string(env) : std::string();
+  }();
+  return val;
+}
+
+// Returns -1 if not set (use auto-splits), otherwise the parsed value.
+inline int cached_gate_gemm_splits() {
+  static const int val = [] {
+    const char *env = std::getenv("CUTLASS_GATE_GEMM_SPLITS");
+    return env ? std::atoi(env) : -1;
+  }();
+  return val;
+}
+
 // Launch helper: allocates workspace and runs the CUTLASS kernel
 template <typename Gemm>
 void launch_gate_gemm(
