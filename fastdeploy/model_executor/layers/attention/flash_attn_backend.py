@@ -144,15 +144,32 @@ def flash_attn_func(
         with paddle.no_grad():
             try:
                 paddle.set_flags({"FLAGS_flash_attn_version": 4})
-                out = flashmask_attention_v4(
-                    q.reshape([1, -1, num_heads, head_dim]),
-                    k.reshape([1, -1, kv_num_heads, head_dim]),
-                    v.reshape([1, -1, kv_num_heads, head_dim]),
-                    startend_row_indices=attn_mask_q,
-                    causal=causal,
-                    return_softmax_lse=True,
-                    training=True,
-                )
+                if causal:
+                    from fastdeploy.model_executor.layers.attention.flash_attention_v4 import (
+                        flash_attn_varlen_func,
+                    )
+
+                    out = flash_attn_varlen_func(
+                        q=q.view([-1, num_heads, head_dim]),
+                        k=k.view([-1, kv_num_heads, head_dim]),
+                        v=v.view([-1, kv_num_heads, head_dim]),
+                        cu_seqlens_q=cu_seqlens_q,
+                        cu_seqlens_k=cu_seqlens_k,
+                        max_seqlen_q=max_seqlen_q,
+                        max_seqlen_k=max_seqlen_k,
+                        causal=True,
+                        return_softmax_lse=True,
+                    )
+                else:
+                    out = flashmask_attention_v4(
+                        q.reshape([1, -1, num_heads, head_dim]),
+                        k.reshape([1, -1, kv_num_heads, head_dim]),
+                        v.reshape([1, -1, kv_num_heads, head_dim]),
+                        startend_row_indices=attn_mask_q,
+                        causal=causal,
+                        return_softmax_lse=True,
+                        training=True,
+                    )
             finally:
                 paddle.set_flags({"FLAGS_flash_attn_version": original_flash_attn_version})
         return out
