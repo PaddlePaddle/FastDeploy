@@ -72,7 +72,6 @@ if current_platform.is_cuda():
     )
 
     paddle.enable_compat(scope={"deep_gemm"})
-    import deep_gemm
 
 
 class DeepSeekV3MLP(nn.Layer):
@@ -568,6 +567,9 @@ class Indexer(nn.Layer):
 
         # indexer write_cache
         indexer_k_quant_and_cache(k, self.indexer_cache, slot_mapping, self.quant_block_size, self.scale_fmt)
+
+        import deep_gemm
+
         if forward_meta.max_len_tensor_cpu[1]:
 
             # indexer_prefill read_cache
