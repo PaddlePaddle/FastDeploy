@@ -436,7 +436,7 @@ class EngineClient:
 
     def _send_task(self, task):
         if envs.ZMQ_SEND_BATCH_DATA:
-            task["_worker_pid"] = self.worker_pid
+            task["zmq_worker_pid"] = self.worker_pid
         if not self.enable_mm and not envs.ENABLE_V1_DATA_PROCESSOR:
             self.zmq_client.send_json(task)
         else:
@@ -598,7 +598,7 @@ class EngineClient:
         api_server_logger.info(f"Start Run Control Method: {request}")
         req_dict = request.to_dict()
         if envs.ZMQ_SEND_BATCH_DATA:
-            req_dict["_worker_pid"] = self.worker_pid
+            req_dict["zmq_worker_pid"] = self.worker_pid
         self.zmq_client.send_json(req_dict)
         request_id = request.request_id
         dealer, response_queue = await self.connection_manager.get_connection(request_id)

@@ -1178,10 +1178,10 @@ class EngineService:
                         self.recv_request_server = ZmqIpcServer(name=self.api_server_pid, mode=zmq.PULL)
                     continue
 
-                # Extract worker_pid for per-worker PUSH routing
+                # Extract zmq_worker_pid for per-worker PUSH routing
                 worker_pid = None
-                if envs.ZMQ_SEND_BATCH_DATA and isinstance(data, dict):
-                    worker_pid = data.pop("_worker_pid", None)
+                if envs.ZMQ_SEND_BATCH_DATA:
+                    worker_pid = data["zmq_worker_pid"]
 
                 if ControlRequest.is_control_request(data):
                     try:  # todo: run control request async, do not block request generation
