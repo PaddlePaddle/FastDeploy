@@ -1040,8 +1040,8 @@ def async_generate_output(
 
     generate_output = ModelRunnerOutput(
         decode_mode=decode_mode,
-        cu_num_generated_tokens=cu_num_generated_tokens,
-        sampled_token_ids=sampled_token_ids,
+        cu_num_generated_tokens=cu_num_generated_tokens.tolist(),
+        sampled_token_ids=sampled_token_ids.tolist(),
         logprobs=logprobs_tensors,
         prompt_logprobs=prompt_logprobs,
     )
