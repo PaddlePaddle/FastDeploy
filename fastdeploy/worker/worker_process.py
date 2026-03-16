@@ -1009,7 +1009,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
             parallel_config.local_data_parallel_id
         ]
-        cache_config.cache_queue_port = cache_config.cache_queue_port[parallel_config.local_data_parallel_id]
+        if cache_config.cache_queue_port is not None:
+            cache_config.cache_queue_port = cache_config.cache_queue_port[parallel_config.local_data_parallel_id]
 
     parallel_config.set_communicate_group()
 

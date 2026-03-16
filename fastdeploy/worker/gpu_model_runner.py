@@ -243,7 +243,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.enable_entropy = self.model_config.enable_entropy
         self.cache_transfer_manager: Optional[CacheTransferManager] = None
-        self.cache_transfer_mutex = threading.RLock()
+        self.cache_transfer_manager_execution_lock = threading.RLock()
         self.gpu_cache_k_tensors: list[paddle.Tensor] = []
         self.gpu_cache_v_tensors: list[paddle.Tensor] = []
         self.gpu_cache_scales_k_tensors: list[paddle.Tensor] = []
@@ -1946,7 +1946,7 @@ class GPUModelRunner(ModelRunnerBase):
         logger.info(f"Initialize proxy cache transfer manager with args: {cache_transfer_args}")
         self.cache_transfer_manager = CacheTransferManager(
             cache_transfer_args,
-            execution_lock=self.cache_transfer_mutex,
+            execution_lock=self.cache_transfer_manager_execution_lock,
         )
         self._refresh_proxy_cache_transfer_binding()
 
@@ -2538,49 +2538,48 @@ class GPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
             num_running_requests: batch_size
         """
-        with self.cache_transfer_mutex:
-            # 1. Prepare inputs of model and sampler.
-            p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
+        # 1. Prepare inputs of model and sampler.
+        p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
 
-            self._prepare_inputs()
-            self.sampler.pre_process(p_done_idxs)
-            if self.fd_config.routing_replay_config.enable_routing_replay:
-                self.routing_replay_manager.pending_update_positions = self.routing_replay_manager.get_token_positions(
-                    seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
-                    seq_lens_this_time=self.seq_lens_this_time_buffer,
-                )
+        self._prepare_inputs()
+        self.sampler.pre_process(p_done_idxs)
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager.pending_update_positions = self.routing_replay_manager.get_token_positions(
+                seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+                seq_lens_this_time=self.seq_lens_this_time_buffer,
+            )
 
-            # 1.1 Update state of logits processor
-            for proc in self.sampling_metadata.logits_processors:
-                proc.update_state(self.share_inputs)
+        # 1.1 Update state of logits processor
+        for proc in self.sampling_metadata.logits_processors:
+            proc.update_state(self.share_inputs)
 
-            # 2. Padding inputs for cuda graph
-            self.padding_cudagraph_inputs()
+        # 2. Padding inputs for cuda graph
+        self.padding_cudagraph_inputs()
 
-            # 3. Execute model
-            if self.enable_mm:
-                model_output = self.model(
-                    self.forward_meta.ids_remove_padding,
-                    self.share_inputs["image_features"],
-                    self.forward_meta,
-                )
-            else:
-                model_output = self.model(
-                    self.forward_meta.ids_remove_padding,
-                    self.forward_meta,
-                )
+        # 3. Execute model
+        if self.enable_mm:
+            model_output = self.model(
+                self.forward_meta.ids_remove_padding,
+                self.share_inputs["image_features"],
+                self.forward_meta,
+            )
+        else:
+            model_output = self.model(
+                self.forward_meta.ids_remove_padding,
+                self.forward_meta,
+            )
 
-            # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
-            # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
-            # Then there is data on other runner, the current runner is required to execute part of the model.
-            # But not need to run the below code.
-            if not self.not_need_stop():
-                return None
+        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
+        # Then there is data on other runner, the current runner is required to execute part of the model.
+        # But not need to run the below code.
+        if not self.not_need_stop():
+            return None
 
-            if self.use_cudagraph:
-                model_output = model_output[: self.real_token_num]
+        if self.use_cudagraph:
+            model_output = model_output[: self.real_token_num]
 
-            prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
+        prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
 
         if self.is_pooling_model:
             pooler_output = self._pool(model_output, num_running_requests)

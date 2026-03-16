@@ -127,12 +127,16 @@ class CacheTransferManager:
         """
         global logger
 
-        device = args.device_id
-        rank = args.rank
-        logger = get_logger(
-            "cache_transfer_manager", f"cache_transfer_manager_dprank{args.local_data_parallel_id}.log"
-        )
         self.mode = getattr(args, "mode", "indie")
+        if self.mode == "indie":
+            tp_rank = args.rank
+            logger = get_logger("cache_transfer_manager", f"cache_transfer_manager_tprank{tp_rank}.log")
+        elif self.mode == "proxy":
+            dp_rank = args.local_data_parallel_id
+            logger = get_logger("cache_transfer_manager", f"cache_transfer_manager_proxy_dprank{dp_rank}.log")
+        else:
+            raise ValueError(f"Invalid mode: {self.mode}")
+
         self.execution_lock = execution_lock
         self.gpu_cache_kvs = {}
         self.cpu_cache_kvs = {}
@@ -155,8 +159,8 @@ class CacheTransferManager:
         self.transfer_task_queue = queue.Queue()
         self.transfer_done_queue = queue.Queue()
         self.n_ranks = args.mp_num
-        self.rank = rank
-        self.device = device
+        self.rank = args.rank
+        self.device = args.device
         self.engine_pid = args.engine_pid
         self.cache_dtype = args.cache_dtype
         self._proxy_args = args
@@ -923,7 +927,5 @@ def main():
 if __name__ == "__main__":
 
     args = parse_args()
-    rank_id = args.rank + args.local_data_parallel_id * args.mp_num
-    logger = get_logger("cache_transfer_manager", f"cache_transfer_manager_tprank{args.rank}.log")
     set_device(args.device_id)
     main()

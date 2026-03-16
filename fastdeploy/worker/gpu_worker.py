@@ -198,8 +198,8 @@ class GpuWorker(WorkerBase):
         num_running_request: int = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        if hasattr(self.model_runner, "cache_transfer_mutex"):
-            with self.model_runner.cache_transfer_mutex:
+        if hasattr(self.model_runner, "cache_transfer_manager_execution_lock"):
+            with self.model_runner.cache_transfer_manager_execution_lock:
                 output = self.model_runner.execute_model(model_forward_batch, num_running_request)
         else:
             output = self.model_runner.execute_model(model_forward_batch, num_running_request)
