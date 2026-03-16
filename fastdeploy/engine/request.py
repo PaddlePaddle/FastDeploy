@@ -408,7 +408,9 @@ class CompletionOutput:
     reasoning_content: Optional[str] = None
     tool_calls: Optional[ToolCall] = None
     speculate_metrics: Optional[SpeculateMetrics] = None
-    # Binary mask [vocab_size]: 1 = retained by top_p/top_k, 0 = truncated
+    # Sparse indices of retained vocab ids:
+    #   - Non-MTP: list[int]
+    #   - MTP: list[list[int]]
     sampling_mask: Optional[Any] = None
 
     def to_dict(self):

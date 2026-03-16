@@ -229,7 +229,7 @@ class ChatCompletionResponseChoice(BaseModel):
     logprobs: Optional[LogProbs] = None
     draft_logprobs: Optional[LogProbs] = None
     prompt_logprobs: Optional[PromptLogprobs] = None
-    # Bool mask list per token [num_tokens, vocab_size]: True = retained by top_p sampling, False = truncated
+    # Per-token retained vocab indices from top_p/top_k sampling: List[List[int]], one list of vocab indices per token
     sampling_mask: Optional[List[List[int]]] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]]
     speculate_metrics: Optional[SpeculateMetrics] = None
