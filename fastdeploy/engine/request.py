@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import time
 import traceback
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, fields, is_dataclass
 from enum import Enum
 from typing import Any, Dict, Generic, Optional
 from typing import TypeVar as TypingTypeVar
@@ -895,7 +895,21 @@ class RequestMetrics:
         """
         Convert the RequestMetrics object to a dictionary.
         """
-        return {k: v for k, v in asdict(self).items()}
+        # Optimization: Avoid the recursive deepcopy overhead of dataclasses.asdict()
+        # by manually iterating over fields and handling simple types, shallow copies
+        # for collections, and direct asdict calls for nested dataclasses.
+        res = {}
+        for k in self.__dataclass_fields__:
+            v = getattr(self, k)
+            if type(v) in (int, float, str, bool, type(None)):
+                res[k] = v
+            elif isinstance(v, (list, dict)):
+                res[k] = v.copy()
+            elif is_dataclass(v):
+                res[k] = asdict(v)
+            else:
+                res[k] = v
+        return res
 
     def record_recv_first_token(self):
         cur_time = time.time()

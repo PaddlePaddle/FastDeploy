@@ -1,0 +1,3 @@
+## 2026-03-16 - [Optimize RequestMetrics.to_dict serialization]
+**Learning:** `dataclasses.asdict()` suffers from significant overhead due to its deepcopy-by-default behavior, which can be a massive bottleneck for frequently serialized objects in high-throughput paths like request metrics.
+**Action:** Replace `asdict(self)` with manual `__dataclass_fields__` iteration when serializing nested metrics dataclasses. Explicitly check for primitive types `if type(v) in (int, float, str, bool, type(None)):` to bypass deepcopy, fallback to `v.copy()` for dicts/lists, and only use `asdict` specifically on nested child dataclasses detected with `is_dataclass(v)`.
