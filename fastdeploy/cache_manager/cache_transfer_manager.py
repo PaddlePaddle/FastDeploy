@@ -1522,10 +1522,10 @@ def main():
 if __name__ == "__main__":
 
     args = parse_args()
+    init_logger(args)
     logger.info(f"args: {vars(args)}")
     set_device(args.device_id)
     try:
-        init_logger(args)
         main()
     except Exception as e:
         logger.error(f"cache_transfer_manager failed with error: {e}, traceback: {traceback.format_exc()}")
