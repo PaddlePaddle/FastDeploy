@@ -20,9 +20,10 @@
 
 namespace cg = cooperative_groups;
 
-// Fused kernel: thread 0 of block 0 computes position_map and output_token_num,
-// then all blocks synchronize via cooperative_groups grid sync, and finally
-// all threads perform the hidden states rebuild in parallel.
+// Fused kernel: block 0 computes position_map and output_token_num in parallel
+// (one thread per batch element), then all blocks synchronize via
+// cooperative_groups grid sync, and finally all threads perform the hidden
+// states rebuild in parallel.
 template <typename T, int VecSize>
 __global__ void rebuildSelfHiddenStatesKernel(
     const T* input,
@@ -37,35 +38,67 @@ __global__ void rebuildSelfHiddenStatesKernel(
     const int input_token_num) {
   cg::grid_group grid = cg::this_grid();
 
-  // Phase 1: compute position_map (single thread)
-  // TODO(yaohuicong): paralize phase 1
-  if (blockIdx.x == 0 && threadIdx.x == 0) {
-    int in_offset = 0;
-    int out_offset = 0;
-    for (int i = 0; i < bsz; ++i) {
-      int cur_seq_lens_this_time = seq_lens_this_time[i];
-      int cur_last_seq_lens_this_time = last_seq_lens_this_time[i];
+  // Dynamic shared memory layout: [in_count|out_count|in_offsets|out_offsets]
+  extern __shared__ int smem[];
+  int* in_count = smem;
+  int* out_count = smem + bsz;
+  int* in_offsets = smem + 2 * bsz;
+  int* out_offsets = smem + 3 * bsz;
+
+  // Phase 1: compute position_map (parallelized across threads in block 0)
+  if (blockIdx.x == 0) {
+    // Phase 1a: each thread computes counts for its batch elements
+    for (int t = threadIdx.x; t < bsz; t += blockDim.x) {
+      int cur_seq_lens_this_time = seq_lens_this_time[t];
+      int cur_last_seq_lens_this_time = last_seq_lens_this_time[t];
       // 1. encoder
-      if (step_idx[i] == 1 && cur_seq_lens_this_time > 0) {
-        position_map[in_offset] = out_offset++;
-        in_offset += 1;
+      if (step_idx[t] == 1 && cur_seq_lens_this_time > 0) {
+        in_count[t] = 1;
+        out_count[t] = 1;
         // 2. decoder
-      } else if (cur_seq_lens_this_time > 0) /* =1 */ {
-        position_map[in_offset + cur_last_seq_lens_this_time - 1] =
-            out_offset++;
-        in_offset += cur_last_seq_lens_this_time;
+      } else if (cur_seq_lens_this_time > 0) {
+        in_count[t] = cur_last_seq_lens_this_time;
+        out_count[t] = 1;
         // 3. stop
       } else {
-        // first token end
-        if (step_idx[i] == 1) {
-          in_offset += cur_last_seq_lens_this_time > 0 ? 1 : 0;
-          // normal end
+        if (step_idx[t] == 1) {
+          in_count[t] = cur_last_seq_lens_this_time > 0 ? 1 : 0;
         } else {
-          in_offset += cur_last_seq_lens_this_time;
+          in_count[t] = cur_last_seq_lens_this_time;
         }
+        out_count[t] = 0;
       }
     }
-    output_token_num[0] = out_offset;
+    __syncthreads();
+
+    // Phase 1b: prefix sum (thread 0 computes exclusive prefix sums)
+    if (threadIdx.x == 0) {
+      int in_acc = 0, out_acc = 0;
+      for (int i = 0; i < bsz; i++) {
+        in_offsets[i] = in_acc;
+        out_offsets[i] = out_acc;
+        in_acc += in_count[i];
+        out_acc += out_count[i];
+      }
+      output_token_num[0] = out_acc;
+    }
+    __syncthreads();
+
+    // Phase 1c: each thread fills position_map for its batch elements
+    for (int t = threadIdx.x; t < bsz; t += blockDim.x) {
+      int in_off = in_offsets[t];
+      int out_off = out_offsets[t];
+      int cur_seq_lens_this_time = seq_lens_this_time[t];
+      int cur_last_seq_lens_this_time = last_seq_lens_this_time[t];
+      // 1. encoder
+      if (step_idx[t] == 1 && cur_seq_lens_this_time > 0) {
+        position_map[in_off] = out_off;
+        // 2. decoder
+      } else if (cur_seq_lens_this_time > 0) {
+        position_map[in_off + cur_last_seq_lens_this_time - 1] = out_off;
+      }
+      // 3. stop: no writes needed (position_map stays -1 from memset)
+    }
   }
 
   // Phase 2: grid-wide sync to ensure position_map is ready
@@ -121,25 +154,33 @@ std::vector<paddle::Tensor> DispatchDtype(
   int elem_cnt = input_token_num * dim_embed;
   assert(elem_cnt % packSize == 0);
 
-  int pack_num = elem_cnt / packSize;
-  int grid_size = 1;
-  GetNumBlocks(pack_num, &grid_size);
-  grid_size = std::max(grid_size, 1);
-
-  // Clamp grid_size to max cooperative launch limit
-  int max_blocks_per_sm = 0;
+  // Grid size linearly related to bsz for cooperative launch efficiency
+  // and CUDA graph capture friendliness
   constexpr int thread_per_block = 128;
-  cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-      &max_blocks_per_sm,
-      rebuildSelfHiddenStatesKernel<DataType_, packSize>,
-      thread_per_block,
-      0);
-  int dev = 0;
-  cudaGetDevice(&dev);
-  int sm_count = 0;
-  cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev);
-  int max_grid_size = max_blocks_per_sm * sm_count;
-  grid_size = std::min(grid_size, max_grid_size);
+  constexpr int DESIRED_BLOCKS_PER_BATCH = 4;
+  int dynamic_smem_size = 4 * bsz * static_cast<int>(sizeof(int));
+
+  // Cooperative launch limit: use conservative smem upper bound for caching
+  static const int max_grid_size = [&]() {
+    int blocks_per_sm = 0;
+    constexpr int smem_upper_bound = 4 * 512 * sizeof(int);  // 8KB
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+        &blocks_per_sm,
+        rebuildSelfHiddenStatesKernel<DataType_, packSize>,
+        thread_per_block,
+        smem_upper_bound);
+    int dev = 0;
+    cudaGetDevice(&dev);
+    int sms = 0;
+    cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+    return blocks_per_sm * sms;
+  }();
+
+  int blocks_per_batch =
+      std::min(DESIRED_BLOCKS_PER_BATCH, max_grid_size / std::max(bsz, 1));
+  blocks_per_batch = std::max(blocks_per_batch, 1);
+  int grid_size = std::min(bsz * blocks_per_batch, max_grid_size);
+  grid_size = std::max(grid_size, 1);
 
   const DataType_* input_ptr =
       reinterpret_cast<const DataType_*>(input.data<data_t>());
@@ -168,7 +209,7 @@ std::vector<paddle::Tensor> DispatchDtype(
       dim3(grid_size),
       dim3(thread_per_block),
       kernel_args,
-      0,
+      dynamic_smem_size,
       input.stream());
 
   return {out, output_token_num};
