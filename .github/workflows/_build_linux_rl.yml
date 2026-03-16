@@ -161,8 +161,8 @@ jobs:
             chown -R $(whoami) /workspace/FastDeploy
             cd FastDeploy
 
-            wget -q --no-proxy https://paddle-qa.bj.bcebos.com/paddle-pipeline/Paddle-RL-Compile/release/3.3/latest/paddlepaddle_gpu-3.3.0.dev-cp310-cp310-linux_x86_64.whl
-            python -m pip install paddlepaddle_gpu-3.3.0.dev-cp310-cp310-linux_x86_64.whl
+            wget -q --no-proxy https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Gpu-Cuda12.9-Cudnn9.9-Trt10.5-Mkl-Avx-Gcc11-SelfBuiltPypiUse/latest/paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
+            python -m pip install paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
 
             pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
