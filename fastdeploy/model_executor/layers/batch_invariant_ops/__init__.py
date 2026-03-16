@@ -3,10 +3,12 @@ from .batch_invariant_ops import (
     disable_batch_invariant_mode,
     enable_batch_invariant_mode,
     get_batch_invariant_attention_block_size,
+    init_deterministic_mode,
     is_batch_invariant_mode_enabled,
     log_softmax,
     matmul_persistent,
     mean_dim,
+    rms_norm_batch_invariant,
     set_batch_invariant_mode,
 )
 
@@ -17,9 +19,11 @@ __all__ = [
     "is_batch_invariant_mode_enabled",
     "disable_batch_invariant_mode",
     "enable_batch_invariant_mode",
+    "init_deterministic_mode",
     "matmul_persistent",
     "log_softmax",
     "mean_dim",
+    "rms_norm_batch_invariant",
     "get_batch_invariant_attention_block_size",
     "AttentionBlockSize",
 ]

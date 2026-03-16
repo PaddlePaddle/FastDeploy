@@ -46,7 +46,7 @@ void MTPStepPaddle(
   const int bsz = seq_lens_this_time.shape()[0];
   const int block_num_per_seq = block_tables.shape()[1];
 
-  int r = baidu::xpu::api::plugin::mtp_free_and_dispatch_block(
+  int r = fastdeploy::plugin::mtp_free_and_dispatch_block(
       ctx,
       const_cast<bool *>(base_model_stop_flags.data<bool>()),
       const_cast<bool *>(stop_flags.data<bool>()),
@@ -62,7 +62,7 @@ void MTPStepPaddle(
       block_size,
       block_num_per_seq,
       max_draft_tokens);
-  PD_CHECK(r == 0, "free_and_dispatch_block failed.");
+  PD_CHECK(r == 0, "mtp_free_and_dispatch_block failed.");
   if (base_model_stop_flags.is_cpu() && ctx != nullptr) {
     delete ctx;
   }

@@ -31,6 +31,10 @@ else:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused
 
+from .batch_invariant_ops import (
+    is_batch_invariant_mode_enabled,
+    rms_norm_batch_invariant,
+)
 from .utils import get_tensor, modules_to_convert
 
 
@@ -237,19 +241,25 @@ class RMSNorm(nn.Layer):
                     return norm_out.astype(x_dtype), residual_out
                 norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
             else:
-                norm_out = self.norm_func(
-                    x,
-                    norm_weight=self.weight,
-                    norm_bias=None,
-                    epsilon=self.eps,
-                    begin_norm_axis=self.begin_norm_axis,
-                    bias=self.bias,
-                    residual=residual_input,
-                    quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
-                    quant_round_type=self.quant_round_type,
-                    quant_max_bound=self.quant_max_bound,
-                    quant_min_bound=self.quant_min_bound,
-                )
+                if is_batch_invariant_mode_enabled():
+                    # M-invariant path: per-row Triton kernel, no cross-row reduction
+                    if residual_input is not None:
+                        x = x + residual_input
+                    norm_out = rms_norm_batch_invariant(x, self.weight, self.eps), x
+                else:
+                    norm_out = self.norm_func(
+                        x,
+                        norm_weight=self.weight,
+                        norm_bias=None,
+                        epsilon=self.eps,
+                        begin_norm_axis=self.begin_norm_axis,
+                        bias=self.bias,
+                        residual=residual_input,
+                        quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
+                        quant_round_type=self.quant_round_type,
+                        quant_max_bound=self.quant_max_bound,
+                        quant_min_bound=self.quant_min_bound,
+                    )
         else:
             if residual_input is not None:
                 x = x + residual_input

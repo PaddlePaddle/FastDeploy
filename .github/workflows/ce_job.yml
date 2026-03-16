@@ -124,14 +124,33 @@ jobs:
           tar -zcf FastDeploy.tar.gz FastDeploy
           commit_id=${{ github.sha }}
           branch_name=${{ github.ref_name }}
-          target_path=paddle-qa/BRANCH/FastDeploy/${branch_name}/${commit_id}
-          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+
+          wget -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
           python -m pip install bce-python-sdk==0.9.29
-          ls
-          python ${push_file} FastDeploy.tar.gz ${target_path}
-          target_path_stripped="${target_path#paddle-qa/}"
-          REPO_ARCHIVE_URL=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/FastDeploy.tar.gz
+
+          filename="FastDeploy.tar.gz"
+          target_paths=(
+            "paddle-qa/BRANCH/FastDeploy/${branch_name}/${commit_id}"
+            "paddle-qa/BRANCH/FastDeploy/${branch_name}/latest"
+          )
+
+          for target_path in "${target_paths[@]}"; do
+            echo "Uploading ${filename} to ${target_path}"
+            python "${push_file}" "${filename}" "${target_path}"
+          done
+
+          base_prefix="paddle-qa/"
+
+          commit_path_stripped="${target_paths[0]#${base_prefix}}"
+          latest_path_stripped="${target_paths[1]#${base_prefix}}"
+
+          REPO_ARCHIVE_URL="https://paddle-qa.bj.bcebos.com/${commit_path_stripped}/${filename}"
+          LATEST_REPO_ARCHIVE_URL="https://paddle-qa.bj.bcebos.com/${latest_path_stripped}/${filename}"
+
+          echo "commit archive url is ${REPO_ARCHIVE_URL}"
+          echo "latest archive url is ${LATEST_REPO_ARCHIVE_URL}"
+
           echo "repo_archive_url=${REPO_ARCHIVE_URL}" >> $GITHUB_OUTPUT
 
   resultshow:
@@ -139,7 +158,7 @@ jobs:
     needs: clone
     runs-on: ubuntu-latest
     steps:
-      - name: Print wheel path
+      - name: Print repo_archive_url path
         run: |
           echo "The code archive is located at: ${{ needs.clone.outputs.repo_archive_url }}"
 

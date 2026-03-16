@@ -20,7 +20,15 @@ __host__ __device__ __forceinline__ int ceil_div(int x, int y) {
   return (x + y - 1) / y;
 }
 
+__host__ __device__ __forceinline__ int64_t ceil_div(int64_t x, int64_t y) {
+  return (x + y - 1) / y;
+}
+
 __host__ __device__ __forceinline__ int align(int x, int y) {
+  return ceil_div(x, y) * y;
+}
+
+__host__ __device__ __forceinline__ int64_t align(int64_t x, int64_t y) {
   return ceil_div(x, y) * y;
 }
 
@@ -41,10 +49,10 @@ __global__ void fused_swiglu_fp8_quant_kernel(
     const index_t* __restrict__ token_nums_per_expert,
     phi::dtype::float8_e4m3fn* __restrict__ out_fp8,
     ScaleT* __restrict__ out_scale,
-    int group_num,
-    int group_size,
-    int hidden_size,
-    int hidden_size_scale,
+    int64_t group_num,
+    int64_t group_size,
+    int64_t hidden_size,
+    int64_t hidden_size_scale,
     bool use_finegrained_range) {
   constexpr int BLOCK = 128;
 
@@ -53,7 +61,7 @@ __global__ void fused_swiglu_fp8_quant_kernel(
   int warp = tid >> 5;
   int num_warps = blockDim.x >> 5;
 
-  int block_id = static_cast<int64_t>(blockIdx.x);
+  int64_t block_id = static_cast<int64_t>(blockIdx.x);
 
   using VecBF16 = AlignedVector<T, 4>;
   VecBF16 x1_vec, x2_vec;
@@ -62,13 +70,13 @@ __global__ void fused_swiglu_fp8_quant_kernel(
 
   while (true) {
     // ================= token mapping =================
-    int expert = -1;
-    int token_in_expert = -1;
+    int64_t expert = -1;
+    int64_t token_in_expert = -1;
 
     if (lane == 0) {
-      int cumsum = 0;
-      for (int i = 0; i < group_num; ++i) {
-        int cnt = token_nums_per_expert[i];
+      int64_t cumsum = 0;
+      for (int64_t i = 0; i < group_num; ++i) {
+        int64_t cnt = static_cast<int64_t>(token_nums_per_expert[i]);
         if (block_id >= cumsum && block_id < cumsum + cnt) {
           expert = i;
           token_in_expert = block_id - cumsum;
@@ -84,17 +92,17 @@ __global__ void fused_swiglu_fp8_quant_kernel(
     if (expert < 0 || token_in_expert >= group_size) break;
 
     // ================= base pointers =================
-    int token = expert * group_size + token_in_expert;
+    int64_t token = expert * group_size + token_in_expert;
 
     const T* in = input + token * hidden_size * 2;
 
     auto* out = out_fp8 + token * hidden_size;
 
-    int num_iters = hidden_size / BLOCK;
+    int64_t num_iters = hidden_size / BLOCK;
 
     // ================= main loop =================
-    for (int iter = warp; iter < num_iters; iter += num_warps) {
-      int base = iter * BLOCK + lane * 4;
+    for (int64_t iter = warp; iter < num_iters; iter += num_warps) {
+      int64_t base = iter * BLOCK + lane * 4;
 
       // vec load
       Load(in + base, &x1_vec);
@@ -141,20 +149,20 @@ __global__ void fused_swiglu_fp8_quant_kernel(
           const int exp = (__float_as_int(scale) >> 23) & 0xFF;
 
           // 2. pack information
-          const int pack_idx = iter >> 2;  // iter / 4
-          const int byte_idx = iter & 3;   // iter % 4
+          const int64_t pack_idx = iter >> 2;  // iter / 4
+          const int64_t byte_idx = iter & 3;   // iter % 4
 
           // 3. layout parameters
-          const int pack_num = ceil_div(hidden_size_scale, 4);
-          const int token_stride = align(group_size, 4);
+          const int64_t pack_num = ceil_div(hidden_size_scale, (int64_t)4);
+          const int64_t token_stride = align(group_size, (int64_t)4);
 
           // 4. base pointer (int32 pack)
           auto* scale_pack = reinterpret_cast<int32_t*>(out_scale);
 
           // 5. column-major offset:
           //    [expert][pack][token]
-          const int base_idx = expert * pack_num * token_stride +
-                               pack_idx * token_stride + token_in_expert;
+          const int64_t base_idx = expert * pack_num * token_stride +
+                                   pack_idx * token_stride + token_in_expert;
           // 6. write one byte into pack
           reinterpret_cast<uint8_t*>(&scale_pack[base_idx])[byte_idx] =
               static_cast<uint8_t>(exp);
@@ -184,11 +192,11 @@ std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
     const int block_size,
     const bool use_ue8m0) {
   auto dim = input.dims();
-  const int group_num = token_nums_per_expert.shape()[0];
-  const int group_size = dim[1];
-  const int hidden_size = dim[2] / 2;
-  const int hidden_size_scale = hidden_size / block_size;
-  const int token_num = group_num * group_size;
+  const int64_t group_num = token_nums_per_expert.shape()[0];
+  const int64_t group_size = dim[1];
+  const int64_t hidden_size = dim[2] / 2;
+  const int64_t hidden_size_scale = hidden_size / block_size;
+  const int64_t token_num = group_num * group_size;
 
   auto out_fp8 = GetEmptyTensor({group_num, group_size, hidden_size},
                                 paddle::DataType::FLOAT8_E4M3FN,
@@ -200,21 +208,22 @@ std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
                      paddle::DataType::FLOAT32,
                      input.place());
   if (use_ue8m0) {
-    int hidden_size_scale_pack = ceil_div(hidden_size_scale, 4);
-    out_scale = GetEmptyTensor({group_num, group_size, hidden_size_scale_pack},
-                               {hidden_size_scale_pack * align(group_size, 4),
-                                1,
-                                align(group_size, 4)},
-                               paddle::DataType::INT32,
-                               input.place());
+    int64_t hidden_size_scale_pack = ceil_div(hidden_size_scale, (int64_t)4);
+    int64_t group_size_aligned = align(group_size, (int64_t)4);
+    out_scale = GetEmptyTensor(
+        {group_num, group_size, hidden_size_scale_pack},
+        {hidden_size_scale_pack * group_size_aligned, 1, group_size_aligned},
+        paddle::DataType::INT32,
+        input.place());
   }
 
   int sm_count = 0;
   cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, 0);
 
   constexpr int BLOCKS_PER_SM = 2;
-  int gridx = std::min(sm_count * BLOCKS_PER_SM, token_num);
-  int blockx = std::min(1024, hidden_size / 128 * 32);
+  int gridx =
+      std::min(static_cast<int64_t>(sm_count * BLOCKS_PER_SM), token_num);
+  int blockx = std::min(1024L, hidden_size / 128 * 32);
 
   bool use_finegrained_range = false;
   if (auto* env = getenv("PER_TOKEN_QUANT_FP8_USE_FINEGRAINED_RANGE"))

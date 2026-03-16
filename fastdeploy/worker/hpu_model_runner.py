@@ -46,6 +46,7 @@ from fastdeploy.model_executor.ops.intel_hpu import (
     step_paddle,
     update_inputs_v3,
 )
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.utils import get_logger
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
@@ -501,9 +502,9 @@ class HPUModelRunner(ModelRunnerBase):
         """
         Init speculative proposer
         """
-        # if self.speculative_method == "ngram":
+        # if self.speculative_method == SpecMethod.NGRAM:
         #     self.proposer = NgramProposer(self.fd_config)
-        # elif self.speculative_method == "mtp":
+        # elif self.speculative_method == SpecMethod.MTP:
         #     self.proposer = MTPProposer(self.fd_config, self.get_model(),
         #                                 self.local_rank, self.device_id,
         #                                 self.share_inputs)
@@ -767,7 +768,7 @@ class HPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
 
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
@@ -1195,7 +1196,7 @@ class HPUModelRunner(ModelRunnerBase):
         self._dummy_prefill_inputs(
             num_tokens=num_tokens, batch_size=batch_size, expected_decode_len=expected_decode_len
         )
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             raise NotImplementedError("speculative sampling is not supported on Intel HPU.")
         while True:
 
@@ -1203,7 +1204,11 @@ class HPUModelRunner(ModelRunnerBase):
             self._prepare_inputs()
 
             # 2. Initialize attention backend and forward meta data
-            model_output = self.model(self.share_inputs["ids_remove_padding"], self.forward_meta)
+            model_inputs = {"ids_remove_padding": self.share_inputs["ids_remove_padding"]}
+            model_output = self.model(
+                model_inputs,
+                forward_meta=self.forward_meta,
+            )
 
             hiddden_states = rebuild_padding_v3_1(
                 model_output,
@@ -1577,7 +1582,11 @@ class HPUModelRunner(ModelRunnerBase):
         hpu_model_runner_profile_logger.info(f"_prepare_inputs time(ms): {execution_time}, BT={real_bs}")
         start_time = time.time()
         # # 3. Execute model
-        model_output = self.model(self.share_inputs["ids_remove_padding"], self.forward_meta)
+        model_inputs = {"ids_remove_padding": self.share_inputs["ids_remove_padding"]}
+        model_output = self.model(
+            model_inputs,
+            forward_meta=self.forward_meta,
+        )
         if self.is_hpu_perf_breakdown_sync_mode:
             model_output.cpu()
         end_time = time.time()
@@ -1682,7 +1691,7 @@ class HPUModelRunner(ModelRunnerBase):
             accept_num=self.share_inputs["accept_num"] if self.speculative_decoding else None,
         )
 
-        # if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
+        # if self.speculative_config.method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill":
         #     skip_save_output = True
         # else:
         #     skip_save_output = False
@@ -1702,7 +1711,7 @@ class HPUModelRunner(ModelRunnerBase):
 
         # 6. Speculative decode
         if self.speculative_decoding:
-            if self.speculative_method == "mtp":
+            if self.speculative_method == SpecMethod.MTP:
                 self.proposer.run(full_hidden_states=hiddden_states)
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
@@ -1757,7 +1766,7 @@ class HPUModelRunner(ModelRunnerBase):
         # 3. gc
         self.clear_cache()
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.clear_dummy_input()
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
@@ -1785,7 +1794,7 @@ class HPUModelRunner(ModelRunnerBase):
 
         self.parallel_config.do_profile = False
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.update_block_num(num_gpu_blocks)
 
     def cal_theortical_kvcache(self):
@@ -1816,7 +1825,7 @@ class HPUModelRunner(ModelRunnerBase):
         # NOTE(liuzichang): Implement multi-layer MTP architecture in the future
         num_layers = (
             self.model_config.num_hidden_layers + self.speculative_config.num_gpu_block_expand_ratio
-            if self.speculative_method in ["mtp"]
+            if self.speculative_method == SpecMethod.MTP
             else self.model_config.num_hidden_layers
         )
         required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v

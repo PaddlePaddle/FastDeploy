@@ -43,7 +43,7 @@ void SpeculateGetLogits(const paddle::Tensor& draft_logits,
   const int vocab_size = logits.shape()[1];
   const int real_bsz = seq_lens_this_time.shape()[0];
 
-  baidu::xpu::api::plugin::speculate_get_logits(
+  int r = fastdeploy::plugin::speculate_get_logits(
       ctx,
       const_cast<float*>(draft_logits.data<float>()),
       const_cast<int*>(next_token_num.data<int>()),
@@ -56,6 +56,7 @@ void SpeculateGetLogits(const paddle::Tensor& draft_logits,
       seq_lens_encoder.data<int>(),
       real_bsz,
       vocab_size);
+  PADDLE_ENFORCE_XDNN_SUCCESS(r, "speculate_get_logits");
   if (draft_logits.is_cpu()) {
     delete ctx;
   }

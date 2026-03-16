@@ -16,14 +16,13 @@
 
 import os
 import time
-from typing import List
+from typing import TYPE_CHECKING, List
 
 import numpy as np
 import paddle
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
-from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -48,6 +47,7 @@ if current_platform.is_xpu():
         mtp_step_paddle,
         set_data_ipc,
         share_external_data,
+        update_attn_mask_offsets,
     )
     from fastdeploy.model_executor.xpu_pre_and_post_process import (
         xpu_pre_process,
@@ -81,6 +81,9 @@ from fastdeploy.worker.input_batch import (
 
 from .base import Proposer
 
+if TYPE_CHECKING:
+    from fastdeploy.config import FDConfig
+
 
 class MTPProposer(Proposer):
     """
@@ -89,7 +92,7 @@ class MTPProposer(Proposer):
 
     def __init__(
         self,
-        fd_config: FDConfig,
+        fd_config: "FDConfig",
         main_model: ModelForCasualLM,
         local_rank: int,
         device_id: int,  # physical device id
@@ -511,7 +514,6 @@ class MTPProposer(Proposer):
                     # NOTE(liuzichang):
                     # extra 1 : P-D split need rollback one step
                     self.model_inputs["mask_rollback"][idx : idx + 1] = 1
-
                 # has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 encoder_block_num = len(request.block_tables)
@@ -682,6 +684,8 @@ class MTPProposer(Proposer):
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
             self.forward_meta.kv_signal_sender = self.target_model_inputs["kv_signal_sender"]
 
+        self.forward_meta.is_draft = True
+
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
@@ -724,7 +728,7 @@ class MTPProposer(Proposer):
             self.target_model_inputs["is_block_step"],
             self.target_model_inputs["draft_tokens"],
             self.num_model_steps,
-            self.speculative_method in ["eagle", "mtp"],
+            True,
             self.role == "prefill",
             use_v1_cache_scheduler,
         )
@@ -996,7 +1000,6 @@ class MTPProposer(Proposer):
         step_use_cudagraph: bool
             Whether to use cuda graph. Use the target model flag to avoid hanging problems with EP.
         """
-        # TODO(chenhuan09)：check multi step
         for substep in range(self.num_model_steps):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
@@ -1011,6 +1014,24 @@ class MTPProposer(Proposer):
                     self.model_inputs["seq_lens_encoder"],
                     self.model_inputs["seq_lens_decoder"],
                 )
+
+                if self.enable_mm:
+                    attn_mask_offsets = update_attn_mask_offsets(
+                        self.model_inputs["ids_remove_padding"],
+                        getattr(
+                            self.model_inputs, "seq_lens_this_time", self.model_inputs["seq_lens_this_time_buffer"]
+                        ),
+                        self.model_inputs["seq_lens_encoder"],
+                        self.model_inputs["seq_lens_decoder"],
+                        self.model_inputs["cu_seqlens_q"],
+                        self.model_inputs["attn_mask_offsets_full"],
+                        self.model_inputs["attn_mask_offsets_decoder"],
+                        self.model_inputs["is_block_step"],
+                        self.model_inputs["decode_states"],
+                        self.model_inputs["mask_rollback"],
+                    )
+                    self.model_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
+
                 self._initialize_forward_meta_xpu()
                 # Get sampling metadata
                 self.sampling_metadata = SamplingMetadata(
