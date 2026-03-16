@@ -25,7 +25,8 @@ void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_this_time,
                            const paddle::Tensor& base_model_seq_lens_encoder,
                            const paddle::Tensor& base_model_stop_flags,
-                           const paddle::Tensor& batch_drop) {
+                           const paddle::Tensor& batch_drop,
+                           bool is_dummy_run) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
   auto xpu_ctx = static_cast<const phi::XPUContext*>(dev_ctx);
