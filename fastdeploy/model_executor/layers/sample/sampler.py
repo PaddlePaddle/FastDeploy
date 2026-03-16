@@ -675,9 +675,11 @@ class SpeculativeSampler(nn.Layer):
     def compute_logprobs(
         self,
         logits: paddle.Tensor,
-        sampling_metadata: SamplingMetadata,
+        sampling_metadata: SamplingMetadata | None = None,
     ) -> paddle.Tensor:
         """compute logprobs"""
+        if sampling_metadata is None:
+            return F.log_softmax(logits, axis=-1)
         share_inputs = sampling_metadata.share_inputs
         last_logits = logits
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]

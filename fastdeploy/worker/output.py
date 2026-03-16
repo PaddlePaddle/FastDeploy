@@ -15,6 +15,7 @@
 """
 
 from dataclasses import dataclass, field
+from enum import IntEnum
 from typing import NamedTuple, Optional
 
 import paddle
@@ -72,11 +73,11 @@ class LogprobsTensors(NamedTuple):
     """ """
 
     # [num_reqs, max_num_logprobs + 1]
-    logprob_token_ids: paddle.Tensor
+    logprob_token_ids: paddle.Tensor | None = None
     # [num_reqs, max_num_logprobs + 1]
-    logprobs: paddle.Tensor
+    logprobs: paddle.Tensor | None = None
     # [num_reqs]
-    selected_token_ranks: paddle.Tensor
+    selected_token_ranks: paddle.Tensor | None = None
 
     def tolists(self):
         """Convert to lists."""
@@ -122,6 +123,14 @@ class LogprobsTensors(NamedTuple):
                 paddle.to_tensor(self.logprob_token_ids.cpu()[start:end], place="cpu"),
                 paddle.to_tensor(self.logprobs.cpu()[start:end], place="cpu"),
                 paddle.to_tensor(self.selected_token_ranks.cpu()[start:end], place="cpu"),
+            )
+
+    def clone(self):
+        with paddle.no_grad():
+            return LogprobsTensors(
+                self.logprob_token_ids.clone().cpu() if self.logprob_token_ids is not None else None,
+                self.logprobs.clone().cpu() if self.logprobs is not None else None,
+                self.selected_token_ranks.clone().cpu() if self.selected_token_ranks is not None else None,
             )
 
 
@@ -343,33 +352,40 @@ class ModelOutputData:
     not_need_stop_device: paddle.Tensor = None
 
 
+class DecodeMode(IntEnum):
+    """
+    The mode of decoding.
+    """
+
+    TARGET = 3
+    DRAFT = 4
+
+
 @dataclass
 class ModelRunnerOutput:
     """
     [WIP] ModelRunnerOutput is serialized and sent to the scheduler process.
     """
 
-    """
-        [num_reqs]
-    """
-    req_ids: list[str]
+    # The mode of decoding.
+    decode_mode: DecodeMode | None = DecodeMode.TARGET
 
-    """
-        req_id -> index
-    """
-    req_id_to_index: dict[str, int]
+    # [num_reqs]
+    # Used for slicing the logprobs in cases like speculative
+    # decoding where the number of generated tokens may be
+    # different for each request.
+    cu_num_generated_tokens: list[int] = field(default_factory=list)
 
-    """
-        [num_reqs, num_generated_tokens]
-    """
-    sampled_token_ids: list[list[int]]
+    # [num_reqs, num_generated_tokens]
+    sampled_token_ids: list[list[int]] = field(default_factory=list)
 
-    """
-        [num_reqs, num_spec_tokens]
-    """
-    spec_token_ids: Optional[list[list[int]]]
+    # [num_reqs, max_num_logprobs + 1]
+    # [num_reqs, max_num_logprobs + 1]
+    # [num_reqs]
+    logprobs: LogprobsTensors | None = None
 
-    """
-    [num_reqs, hidden_size]
-    """
-    pooler_output: list[Optional[paddle.Tensor]]
+    # [num_reqs, num_prompt_tokens]
+    prompt_logprobs: LogprobsTensors | None = None
+
+    # [num_reqs, hidden_size]
+    pooler_output: list[paddle.Tensor | None] | None = None

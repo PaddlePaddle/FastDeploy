@@ -15,6 +15,7 @@
 """
 
 import os
+import queue
 import time
 from typing import TYPE_CHECKING, List
 
@@ -35,6 +36,7 @@ from fastdeploy.model_executor.layers.sample.sampler import MTPSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models import ModelForCasualLM
 from fastdeploy.platforms import current_platform
+from fastdeploy.worker.output import DecodeMode
 
 if current_platform.is_xpu():
     from fastdeploy.model_executor.ops.xpu import (
@@ -70,7 +72,7 @@ else:
         set_data_ipc,
         unset_data_ipc,
     )
-    from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
+    from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding, async_generate_output
 
 from fastdeploy.worker.input_batch import (
     ProposerInputBatch,
@@ -804,7 +806,9 @@ class MTPProposer(Proposer):
                 self.model_inputs["step_idx"],
             )
 
-    def _propose_cuda(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
+    def _propose_cuda(
+        self, step_use_cudagraph: bool = False, is_dummy_run: bool = False, async_output_queue: queue.Queue = None
+    ):
         """
         Main process for MTP inference.
         Args:
@@ -993,7 +997,9 @@ class MTPProposer(Proposer):
                 if hasattr(self.model, "empty_input_forward") and not is_dummy_run:
                     self.model.empty_input_forward(forward_meta=self.forward_meta)
 
-    def _propose_xpu(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
+    def _propose_xpu(
+        self, step_use_cudagraph: bool = False, is_dummy_run: bool = False, async_output_queue: queue.Queue = None
+    ):
         """
         Main process for MTP inference.
         Args:
@@ -1074,24 +1080,41 @@ class MTPProposer(Proposer):
                 )
 
                 if substep == 0 and sampler_output.logprobs_tensors is not None:
+                    recover_batch_index_for_sampler_output(
+                        sampler_output, self.model_inputs.index_to_batch_id, self.model_inputs.enable_pd_reorder
+                    )
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
-                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
-                    recover_model_output_map = recover_batch_index_for_output(
-                        self.model_inputs,
-                        self.model_inputs.index_to_batch_id,
-                        self.model_inputs.enable_pd_reorder["batch_token_num", "cu_batch_token_offset"],
-                    )
-                    speculate_save_output_topk(
-                        sampler_output.sampled_token_ids,
-                        sampler_output.logprobs_tensors.logprob_token_ids,
-                        sampler_output.logprobs_tensors.logprobs,
-                        sampler_output.logprobs_tensors.selected_token_ranks,
-                        recover_model_output_map["batch_token_num"][:real_bsz],
-                        recover_model_output_map["cu_batch_token_offset"][:real_bsz],
-                        self.model_inputs["not_need_stop"],
-                        4,  # mtype
-                        self.local_rank,
-                    )
+                    if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                        if self.parallel_config.use_ep or self.local_rank == 0:
+                            accept_token_nums = self.model_inputs["batch_token_num"][:real_bsz]
+                            async_generate_output(
+                                async_output_queue=async_output_queue,
+                                sampled_tokens=sampler_output.sampled_token_ids,
+                                accept_token_nums=accept_token_nums,
+                                logprobs_tensors=sampler_output.logprobs_tensors,
+                                decode_mode=DecodeMode.DRAFT,
+                            )
+                    else:
+                        recover_batch_index_for_sampler_output(
+                            sampler_output, self.model_inputs.index_to_batch_id, self.model_inputs.enable_pd_reorder
+                        )
+                        recover_model_output_map = recover_batch_index_for_output(
+                            self.model_inputs,
+                            self.model_inputs.index_to_batch_id,
+                            self.model_inputs.enable_pd_reorder,
+                            ["batch_token_num", "cu_batch_token_offset"],
+                        )
+                        speculate_save_output_topk(
+                            sampler_output.sampled_token_ids,
+                            sampler_output.logprobs_tensors.logprob_token_ids,
+                            sampler_output.logprobs_tensors.logprobs,
+                            sampler_output.logprobs_tensors.selected_token_ranks,
+                            recover_model_output_map["batch_token_num"][:real_bsz],
+                            recover_model_output_map["cu_batch_token_offset"][:real_bsz],
+                            self.model_inputs["not_need_stop"],
+                            4,  # mtype
+                            self.local_rank,
+                        )
 
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
@@ -1198,11 +1221,17 @@ class MTPProposer(Proposer):
         self.target_model_inputs["seq_lens_this_time"][:] = seq_lens_this_time.cuda()
 
     def _run_impl(
-        self, full_hidden_states: paddle.Tensor, step_use_cudagraph: bool = False, is_dummy_run: bool = False
+        self,
+        full_hidden_states: paddle.Tensor,
+        step_use_cudagraph: bool = False,
+        is_dummy_run: bool = False,
+        async_output_queue=None,
     ):
         """Execute Draft Model"""
         self._prepare_inputs(full_hidden_states)
-        self._propose(step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run)
+        self._propose(
+            step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run, async_output_queue=async_output_queue
+        )
         self._update_status()
         if self.hybrid_mode:
             self._extend_draft_token_with_ngram_match()
