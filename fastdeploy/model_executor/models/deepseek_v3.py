@@ -860,7 +860,32 @@ class DeepseekV32DSAAttention(nn.Layer):
         kv = paddle.concat([compressed_kv, key_pe.squeeze(1)], axis=-1)
 
         # DSA indexer
-        indexer_top_k = self.indexer(forward_meta, hidden_states, qr, position_ids, rotary_emb=self.indexer_rotary_emb)
+        # indexer_top_k = self.indexer(forward_meta, hidden_states, qr, position_ids, rotary_emb=self.indexer_rotary_emb)
+        indexer_top_k = paddle.full([query.shape[0], self.index_topk], -1, dtype="int32")
+
+        assert position_ids.shape == [query.shape[0]]
+
+        real_bs = forward_meta.seq_lens_this_time.shape[0]
+        for bs_id in range(real_bs):
+            cu_q = forward_meta.cu_seqlens_q[bs_id]
+
+            if forward_meta.seq_lens_this_time[bs_id] <= 0:
+                continue
+            if forward_meta.seq_lens_encoder[bs_id] > 0:
+                q_lens = forward_meta.seq_lens_encoder[bs_id].item()
+                for token in range(q_lens):
+                    indexer_top_k[cu_q + token][: token + 1] = cu_q + paddle.arange(token + 1).cast("int32")
+            else:
+                # 处理decoder情况
+                kv_len = forward_meta.seq_lens_decoder[bs_id].item() + 1
+                num_blocks = (kv_len + 63) // 64
+                for block_id in range(num_blocks):
+                    start_pos = block_id * 64
+                    end_pos = min(start_pos + 64, kv_len)
+                    physical_pos = forward_meta.block_tables[bs_id, block_id].item()
+                    indexer_top_k[cu_q][start_pos:end_pos] = physical_pos * 64 + paddle.arange(
+                        end_pos - start_pos, dtype="int32"
+                    )
 
         # dsa attention
         fmha_out = self.dsa_attn(
