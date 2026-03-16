@@ -228,7 +228,7 @@ class ModelConfig:
         self.kv_cache_quant_scale_path = ""
         self.enable_entropy = False
         self.model_impl: ModelImpl = "auto"
-        self.version: str = None
+        self.version: str = "init"  # will override by the version.yaml in model dir
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0

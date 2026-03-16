@@ -1416,7 +1416,18 @@ class EngineService:
                 self.llm_logger.error(error_msg)
                 raise Exception(error_msg)
         responses = self._call_worker(control_request, 60)
-        self.cfg.model_config.version = responses[0].get("version")
+
+        if responses:
+            new_version = None
+            for resp in responses:
+                # Expect each worker response to be a dict-like object
+                if isinstance(resp, dict) and "version" in resp:
+                    new_version = resp.get("version")
+                    self.llm_logger.info(f"Update Weights Version in Config: {new_version}")
+                    break
+            if new_version is not None:
+                self.cfg.model_config.version = new_version
+
         return responses
 
     async def _wait_all_control_responses(self, request_id: str, timeout: int):
