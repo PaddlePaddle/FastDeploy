@@ -676,8 +676,9 @@ class TokenProcessor:
             batch = self.output_tokens[1, 0]
             tokens = tokens[2 : batch + 2]
 
-        # Receive sampling_mask per request from ZMQ side-channel (if enabled).
-        # The worker sends a dict {batch_id: bool_mask_list} each step.
+        # Receive sampling constraints per request from ZMQ side-channel (if enabled).
+        # The worker sends a dict {batch_id: sparse_vocab_indices} each step,
+        # where the value is a list[int] or list[list[int]] of allowed token ids
         sampling_masks_per_request = {}
         if self.use_sampling_mask and not envs.FD_USE_GET_SAVE_OUTPUT_V1 and hasattr(self, "sampling_mask_zmq_server"):
             _, mask_data = self.sampling_mask_zmq_server.receive_pyobj_once(block=True)

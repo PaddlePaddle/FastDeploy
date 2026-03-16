@@ -782,8 +782,13 @@ class EngineArgs:
             "--enable-keep-sampling-mask",
             action="store_true",
             default=EngineArgs.enable_keep_sampling_mask,
-            help="Enable output of sampling mask. A binary mask per token step indicating which "
-            "positions were retained (1) or truncated (0) after top_p/top_k sampling.",
+            help=(
+                "Enable output of sampling mask as a sparse index list over the vocabulary. "
+                "For non-MTP decoding, this is a list[int] per token step indicating which "
+                "vocabulary indices were kept after top_p/top_k sampling. "
+                "For MTP decoding, this is a list[list[int]] per token step, where each inner "
+                "list corresponds to one MTP group."
+            ),
         )
         model_group.add_argument(
             "--max-logprobs",
