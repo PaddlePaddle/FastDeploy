@@ -19,6 +19,7 @@ import os
 import paddle
 
 from fastdeploy.platforms import current_platform
+from fastdeploy.utils import llm_logger as logger
 
 try:
     if current_platform.is_cuda():
@@ -120,7 +121,8 @@ try:
         else:
             return "CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
 
-except:
+except Exception as e:
+    logger.warning(f"Failed to import cache manager ops: {e}")
     cuda_host_alloc = None
     cuda_host_free = None
     set_data_ipc = None
