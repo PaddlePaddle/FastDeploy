@@ -285,12 +285,25 @@ class FusedMoE(nn.Layer):
 
         if self.ep_size > 1 or weight_need_transpose:
             loaded_weight = get_tensor(loaded_weight)
-
-        if shard_id is None:
+        logger.info("xxxadadad")
+        if shard_id is None and len(param.shape) == 3:
+            logger.info(f"shard_id:{shard_id}")
             # 1.gate up fused in disk
             if weight_need_transpose:
                 loaded_weight = loaded_weight.transpose([1, 0])
-            output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
+            logger.info(f"expert_id:{expert_id}")
+            logger.info(f"self.expert_id_offset:{self.expert_id_offset}")
+            logger.info(f"shard_id_to_sharded_dim[gate]:{SHARD_ID_TO_SHARDED_DIM['gate']}")
+            logger.info(f"param.shape:{param.shape}")
+            if len(param.shape) == 3:
+                output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
+                shard_dim = SHARD_ID_TO_SHARDED_DIM["gate"]
+            else:
+                if current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_maca():
+                    shard_dim = 1  # gate/up sharded on dim 1
+                else:
+                    shard_dim = 0  # gate/up sharded on dim 0 for XPU/GCU
+                output_size = param[expert_id - self.expert_id_offset].shape[shard_dim]
             shard_offsets = [
                 # (shard_id, shard_offset, shard_size)
                 ("gate", 0, output_size // 2 * self.tp_size),
@@ -298,21 +311,20 @@ class FusedMoE(nn.Layer):
             ]
 
             for shard_id, shard_offset, shard_size in shard_offsets:
-                loaded_weight_shard = slice_fn(
-                    loaded_weight, SHARD_ID_TO_SHARDED_DIM[shard_id], shard_offset, shard_offset + shard_size
-                )
+                loaded_weight_shard = slice_fn(loaded_weight, shard_dim, shard_offset, shard_offset + shard_size)
                 self.weight_loader(param, loaded_weight_shard, expert_id, shard_id, "fused")
         else:
+            logger.info(f"shard_id不为none:{shard_id}")
             if weight_need_transpose and source != "fused":
                 loaded_weight = loaded_weight.transpose([1, 0])
             # 2.gate up splited in disk
-            assert shard_id in ["gate", "down", "up"]
+            # assert shard_id in ["gate", "down", "up"]
             self._load_expert_weight(
                 param=param,
                 expert_id=expert_id,
                 loaded_weight=loaded_weight,
                 shard_id=shard_id,
-                shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
+                shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id] if shard_id is not None else -1,
             )
 
     def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None, is_sharded=False):
@@ -453,6 +465,7 @@ class FusedMoE(nn.Layer):
         shard_dim=None,
     ):
         weight_type = getattr(param, "weight_type", None)
+        logger.info(f"weight_type:{weight_type}")
         if weight_type in ["weight_scale_2", "input_scale"]:
             self._load_per_tensor_weight_scale(param, expert_id, loaded_weight, shard_id)
         elif shard_id == "down":

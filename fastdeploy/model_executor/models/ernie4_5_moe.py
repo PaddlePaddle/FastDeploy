@@ -599,6 +599,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         ]
 
         expert_params_mapping = []
+
         if getattr(self.fd_config.model_config, "moe_num_experts", None) is not None:
             if self.fd_config.parallel_config.expert_parallel_size > 1:
                 num_experts = self.fd_config.parallel_config.num_experts_per_rank
@@ -617,6 +618,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 param_down_proj_name="experts.down_proj_",
                 num_experts_start_offset=num_experts_start_offset,
             )
+            logger.info(f"expert_params_mapping:{expert_params_mapping}")
         all_param_mapping = [
             (param, weight, exp, shard, False) for param, weight, exp, shard in general_params_mapping
         ] + [(param, weight, exp, shard, True) for param, weight, exp, shard in expert_params_mapping]

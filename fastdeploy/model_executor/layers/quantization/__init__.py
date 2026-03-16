@@ -63,7 +63,6 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
             model_config.is_quantized = True
     else:
         quantization_config = model_config.quantization_config
-        print("quantization+")
         if not model_config.is_quantized:
             if quantization_config is not None:
                 if "is_quantized" in quantization_config:
@@ -77,15 +76,9 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
                     else:
                         model_config.is_moe_quantized = True
             if quantization_config is not None and quantization_config.get("quantization", None) is None:
-                if quantization_config.get("quant_algo", "") == "NVFP4" or (
-                    quantization_config.get("quant_method") == "modelopt"
-                    and "NVFP4" in quantization_config.get("quant_algo", "")
-                ):
-                    quantization_config["quantization"] = "modelopt_fp4"
-                else:
-                    raise ValueError(
-                        "quantization_config should have a key named 'quantization' for specify quant config."
-                    )
+                raise ValueError(
+                    "quantization_config should have a key named 'quantization' for specify quant config."
+                )
 
     quant_config_name = None
 

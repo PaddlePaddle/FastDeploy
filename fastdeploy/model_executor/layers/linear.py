@@ -50,7 +50,7 @@ class UnquantizedLinearMethod(QuantMethodBase):
         """
         self.model_format = extra_weight_attrs.get("model_format")
         self.weight_shape = (
-            layer.weight_shape[::-1] if extra_weight_attrs.get("model_format") == "torch" else layer.weight_shape
+            layer.weight_shape[::-1] if extra_weight_attrs.get("model_format") == "torch1" else layer.weight_shape
         )
 
         layer.weight = layer.create_parameter(
@@ -396,6 +396,10 @@ class MergedReplicatedLinear(ReplicatedLinear):
                 start=param_shard_offset,
                 end=param_shard_offset + param_shard_size,
             )
+
+        print(param.shape)
+        print(self.quant_method)
+
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -1153,6 +1157,9 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             self.num_kv_head_replicas = 1
             output_size = (2 * self.num_heads + 2 * self.kv_num_heads) * self.head_dim
         input_size = self.hidden_size
+
+        print(input_size, output_size)
+        print("niubi")
         super().__init__(
             fd_config=fd_config,
             prefix=prefix,
@@ -1162,6 +1169,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             skip_quant=skip_quant,
             weight_dtype=weight_dtype,
         )
+        print(self.weight_shape)
 
     def _get_shard_size_mapping(self, loaded_shard_id: str, head_dim: int):
         shard_size_mapping = {
@@ -1279,6 +1287,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
         param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
+
         assert param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
