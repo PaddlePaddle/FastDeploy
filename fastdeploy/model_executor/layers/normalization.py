@@ -20,6 +20,7 @@ import numpy as np
 import paddle
 from paddle import nn
 
+from fastdeploy import envs
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.platforms import current_platform
 
@@ -36,6 +37,15 @@ from .batch_invariant_ops import (
     rms_norm_batch_invariant,
 )
 from .utils import get_tensor, modules_to_convert
+
+
+def phi_rms_norm_func(x, weight, eps):
+    if x.dtype == paddle.float32:
+        x = x.cast("bfloat16")
+    return paddle.nn.functional.rms_norm(x, x.shape[-1:], weight, eps)[0]
+
+
+rms_norm_func = phi_rms_norm_func if envs.FD_USE_PHI_RMSNORM else None
 
 
 class RMSNorm(nn.Layer):
@@ -340,7 +350,7 @@ class QKRMSNorm(nn.Layer):
         qkv_out,
         forward_meta,
     ) -> paddle.Tensor:
-        if self.qk_norm_fused and forward_meta.step_use_cudagraph:
+        if not envs.FD_USE_PHI_RMSNORM and self.qk_norm_fused and forward_meta.step_use_cudagraph:
             qkv_out = qk_rmsnorm_fused(
                 qkv_out,
                 self.q_norm.weight,
@@ -354,11 +364,11 @@ class QKRMSNorm(nn.Layer):
             q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
 
             q_by_head = q.reshape([*q.shape[:-1], q.shape[-1] // self.head_dim, self.head_dim])
-            q_by_head = self.q_norm(q_by_head)[0]
+            q_by_head = self.q_norm(q_by_head, proxy_rmsnorm=rms_norm_func)[0]
             q = q_by_head.reshape(q.shape)
 
             k_by_head = k.reshape([*k.shape[:-1], k.shape[-1] // self.head_dim, self.head_dim])
-            k_by_head = self.k_norm(k_by_head)[0]
+            k_by_head = self.k_norm(k_by_head, proxy_rmsnorm=rms_norm_func)[0]
             k = k_by_head.reshape(k.shape)
 
             qkv_out = paddle.concat([q, k, v], axis=-1)
