@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <paddle/phi/backends/xpu/xpu_context.h>
+#include "../custom_ftok.h"
 #include "paddle/phi/core/enforce.h"
 #include "speculate_msg.h"  // NOLINT
 #include "xpu/plugin.h"
@@ -70,7 +71,7 @@ void SpeculateStepSchedule(
       paddle::full({1}, 0, paddle::DataType::INT32, stop_flags.place());
   auto step_bs_list =
       paddle::full({bsz}, 0, paddle::DataType::INT32, stop_flags.place());
-  int r = baidu::xpu::api::plugin::speculate_free_and_reschedule(
+  int r = fastdeploy::plugin::speculate_free_and_reschedule(
       ctx,
       const_cast<bool *>(stop_flags.data<bool>()),
       const_cast<int *>(seq_lens_this_time.data<int>()),
@@ -138,8 +139,7 @@ void SpeculateStepSchedule(
 
     } else {
     }
-    // static key_t key = ftok("/dev/shm", msg_queue_id);
-    static key_t key = ftok("./", msg_queue_id);
+    static key_t key = custom_ftok("./", msg_queue_id);
 
     static int msgid = msgget(key, IPC_CREAT | 0666);
     msg_sed.mtype = 1;

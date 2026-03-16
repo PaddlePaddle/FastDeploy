@@ -41,26 +41,25 @@ void SpeculateLimitThinkingContentLength(const paddle::Tensor& next_tokens,
   const int eos_token_id_len = eos_token_ids.shape()[0];
   const int inject_len = inject_token_ids.shape()[0];
 
-  int r =
-      baidu::xpu::api::plugin::speculate_limit_thinking_content_length_kernel(
-          xpu_ctx->x_context(),
-          const_cast<int64_t*>(next_tokens.data<int64_t>()),
-          max_think_lens.data<int>(),
-          const_cast<int*>(max_reply_lens.data<int>()),
-          const_cast<int64_t*>(step_idx.data<int64_t>()),
-          eos_token_ids.data<int64_t>(),
-          const_cast<int*>(limit_status.data<int>()),
-          const_cast<int*>(accept_num.data<int>()),
-          stop_flags.data<bool>(),
-          think_end_id,
-          (inject_len > 0) ? inject_token_ids.data<int64_t>() : nullptr,
-          tokens_per_step,
-          batch_size,
-          eos_token_id_len,
-          inject_len,
-          splitwise_role_is_decode);
+  int r = fastdeploy::plugin::speculate_limit_thinking_content_length_kernel(
+      xpu_ctx->x_context(),
+      const_cast<int64_t*>(next_tokens.data<int64_t>()),
+      max_think_lens.data<int>(),
+      const_cast<int*>(max_reply_lens.data<int>()),
+      const_cast<int64_t*>(step_idx.data<int64_t>()),
+      eos_token_ids.data<int64_t>(),
+      const_cast<int*>(limit_status.data<int>()),
+      const_cast<int*>(accept_num.data<int>()),
+      stop_flags.data<bool>(),
+      think_end_id,
+      (inject_len > 0) ? inject_token_ids.data<int64_t>() : nullptr,
+      tokens_per_step,
+      batch_size,
+      eos_token_id_len,
+      inject_len,
+      splitwise_role_is_decode);
   PD_CHECK(r == 0,
-           "baidu::xpu::api::plugin::"
+           "fastdeploy::plugin::"
            "speculate_limit_thinking_content_length_kernel failed.");
 }
 

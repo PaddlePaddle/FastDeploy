@@ -30,7 +30,7 @@ void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
   auto xpu_ctx = static_cast<const phi::XPUContext*>(dev_ctx);
   int real_bsz = base_model_draft_tokens.shape()[0];
   int base_model_draft_token_len = base_model_draft_tokens.shape()[1];
-  int r = baidu::xpu::api::plugin::draft_model_postprocess(
+  int r = fastdeploy::plugin::draft_model_postprocess(
       xpu_ctx->x_context(),
       const_cast<int64_t*>(base_model_draft_tokens.data<int64_t>()),
       const_cast<int*>(base_model_seq_lens_this_time.data<int>()),
@@ -38,7 +38,7 @@ void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
       const_cast<bool*>(base_model_stop_flags.data<bool>()),
       real_bsz,
       base_model_draft_token_len);
-  PADDLE_ENFORCE_XDNN_SUCCESS(r, "");
+  PADDLE_ENFORCE_XDNN_SUCCESS(r, "draft_model_postprocess");
 }
 
 PD_BUILD_STATIC_OP(draft_model_postprocess)

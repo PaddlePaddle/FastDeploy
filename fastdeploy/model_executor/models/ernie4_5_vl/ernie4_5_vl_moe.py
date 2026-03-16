@@ -765,7 +765,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         else:
             self.lm_head.load_state_dict(state_dict)
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         logits = self.lm_head(hidden_states)
         logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
@@ -803,10 +803,11 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
-        image_features: Optional[paddle.Tensor],
+        inputs: Dict,
         forward_meta: ForwardMeta,
     ):
+        ids_remove_padding = inputs["ids_remove_padding"]
+        image_features = inputs["image_features"]
         vl_moe_meta = self.ernie.prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
         input_embeddings = self.get_input_embeddings(
             ids_remove_padding=ids_remove_padding,

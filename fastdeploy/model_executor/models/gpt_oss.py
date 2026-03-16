@@ -345,15 +345,16 @@ class GptOssForCausalLM(ModelForCasualLM):
         """
         assert False, "gpt-oss only support --load_choices default_v1."
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, paddle.float32)
         return logits
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
+        inputs: Dict,
         forward_meta: ForwardMeta,
     ):
+        ids_remove_padding = inputs["ids_remove_padding"]
         hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         return hidden_states

@@ -60,7 +60,7 @@ void SpeculateStepPaddleBase(
   const int length = input_ids.shape()[1];
   const int pre_id_length = pre_ids.shape()[1];
   const int max_decoder_block_num = pre_id_length / block_size;
-  int r = baidu::xpu::api::plugin::speculate_free_and_dispatch_block(
+  int r = fastdeploy::plugin::speculate_free_and_dispatch_block(
       ctx,
       const_cast<bool *>(stop_flags.data<bool>()),
       const_cast<int *>(seq_lens_this_time.data<int>()),
@@ -88,7 +88,7 @@ void SpeculateStepPaddleBase(
   auto recover_lens_cpu = recover_lens.copy_to(paddle::CPUPlace(), false);
   int recover_lens_cpu_data = recover_lens_cpu.data<int>()[0];
   if (recover_lens_cpu_data > 0) {
-    r = baidu::xpu::api::plugin::speculate_recover_block(
+    r = fastdeploy::plugin::speculate_recover_block(
         ctx,
         const_cast<int *>(recover_block_list.data<int>()),
         const_cast<int *>(recover_lens.data<int>()),

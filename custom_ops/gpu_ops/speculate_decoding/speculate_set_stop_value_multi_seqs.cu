@@ -58,7 +58,7 @@ __global__ void spec_set_value_by_stop_seqs(bool *stop_flags,
       bool is_end = false;
       // 遍历起始位置
       for (; accept_idx <= accept_num - 1 && !is_end; accept_idx++) {
-        if (step_idx_now - accept_num + accept_idx + 1 < stop_seq_len) {
+        if (step_idx_now + accept_idx + 1 < stop_seq_len) {
 #ifdef DEBUG_SPEC_STOP_SEQS
           printf("num %d < stop_seq_len %d\n",
                  step_idx_now - accept_num + accept_idx + 1,
@@ -98,7 +98,7 @@ __global__ void spec_set_value_by_stop_seqs(bool *stop_flags,
                     (stop_seq_len - 1 - i));
 #endif
             int pre_ids_idx =
-                step_idx_now - accept_num + accept_idx - (stop_seq_len - 1 - i);
+                step_idx_now + accept_idx - (stop_seq_len - 1 - i);
             // EC3
             // 特殊拼接会导致input_ids最后一位无特殊token，即pre_ids[0]可能为23,
             // 导致异常结束
@@ -131,7 +131,7 @@ __global__ void spec_set_value_by_stop_seqs(bool *stop_flags,
 
         accept_nums[bid] = accept_idx;
         accept_tokens_now[accept_idx - 1] = end_ids[0];
-        stop_flags[bid] = true;
+        // stop_flags[bid] = true;
       }
     }
   }
