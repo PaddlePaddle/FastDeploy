@@ -320,7 +320,6 @@ class PrefixCacheManager:
                         + f" --pod_ip {pod_ip}"
                         + f" --engine_worker_queue_port {engine_worker_queue_port}"
                         + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
-                        + f" --ipc_suffix {ipc_suffix}"
                         + f" --protocol {cache_config.cache_transfer_protocol}"
                         + f" --local_data_parallel_id {self.local_data_parallel_id}"
                         + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
