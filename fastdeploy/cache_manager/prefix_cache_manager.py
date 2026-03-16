@@ -1139,6 +1139,73 @@ class PrefixCacheManager:
         cost_time = time.time() - tic
         logger.info(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
 
+    def write_cache_to_storage_decode(self, request: Request):
+        """
+        D instance (Decode Node) simplified write method, does not rely on Radix Tree.
+
+        D instance does not maintain Radix Tree, so it cannot get keys through req_leaf_map.
+        Need to calculate cache keys directly based on token_ids.
+
+        Key generation algorithm is exactly the same as P instance (chained hash):
+        - Block 0: key_0 = get_hash_str(token_ids[0:block_size], [])
+        - Block 1: key_1 = get_hash_str(token_ids[block_size:2*block_size], [key_0])
+        - Block n: key_n = get_hash_str(token_ids[n*block_size:(n+1)*block_size], [key_{n-1}])
+
+        Incremental write logic is handled by CacheTransferManager.
+        """
+        if self.kvcache_storage_backend is None:
+            return
+
+        # 1. Get complete token_ids
+        token_ids = request.prompt_token_ids
+        if isinstance(token_ids, np.ndarray):
+            token_ids = token_ids.tolist()
+        else:
+            token_ids = list(token_ids)
+
+        if self.config.cache_config.enable_output_caching:
+            token_ids = token_ids + request.output_token_ids
+
+        # 2. Calculate cache keys using chained hash (consistent with P instance)
+        keys = []
+        prefix_block_key = []  # Initial is empty list
+        block_size = self.config.cache_config.block_size
+
+        for i in range(0, len(token_ids), block_size):
+            block_token_ids = token_ids[i : i + block_size]
+            if len(block_token_ids) < block_size:
+                break  # Do not cache incomplete block
+
+            # Calculate hash key for current block
+            key = get_hash_str(block_token_ids, prefix_block_key)
+            keys.append(key)
+
+            # Update prefix_block_key to current key (for next block)
+            prefix_block_key = [key]
+
+        if not keys:
+            return
+
+        # 3. Get corresponding gpu_block_ids
+        gpu_block_ids = request.block_tables[: len(keys)]
+
+        # 4. Construct WriteStorageTask and send
+        # Incremental logic is handled by CacheTransferManager.write_back_storage_task()
+        req_id = request.request_id
+        logger.info(f"[D instance] start write cache to storage, req_id: {req_id}, block num: {len(keys)}")
+
+        write_storage_task = WriteStorageTask(
+            task_id=req_id,
+            keys=keys,
+            token_ids=token_ids,
+            gpu_block_ids=gpu_block_ids,
+        )
+
+        tic = time.time()
+        self.issue_write_back_storage_task(write_storage_task, is_sync=True)
+        cost_time = time.time() - tic
+        logger.info(f"[D instance] finish write cache to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
+
     def issue_write_back_storage_task(self, task: WriteStorageTask, is_sync=True):
         if self.kvcache_storage_backend is None:
             return
