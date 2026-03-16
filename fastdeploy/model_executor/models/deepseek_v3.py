@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import math
 import re
+from typing import Dict
 
 import paddle
 from paddle import nn
@@ -1158,7 +1159,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
                 process_weights_after_loading_fn(kv_model_sublayer_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         """ """
         logits = self.lm_head(hidden_states)
         logits = logits.astype(paddle.float32)
@@ -1200,10 +1201,10 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
+        inputs: Dict,
         forward_meta: ForwardMeta,
     ):
-        """ """
+        ids_remove_padding = inputs["ids_remove_padding"]
         position_ids, mask_encoder_batch = self.pre_process(forward_meta)
         hidden_states = self.model(
             ids_remove_padding=ids_remove_padding,

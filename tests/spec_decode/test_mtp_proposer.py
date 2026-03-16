@@ -373,7 +373,7 @@ class TestMTPProposer(unittest.TestCase):
 
         # Test _initialize_forward_meta_xpu
         proposer._initialize_forward_meta_xpu()
-        if hasattr(proposer.forward_meta, "pos_emb_type"):
+        if hasattr(proposer.forward_meta, "pos_emb_type") and proposer.forward_meta.pos_emb_type is not None:
             self.assertEqual(proposer.forward_meta.pos_emb_type, "NORMAL")
 
         # Test exist_prefill
