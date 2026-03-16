@@ -838,7 +838,10 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
-                logger.info(f"Handle preempted request {request} at idx {idx}")
+                if request.task_type.value == RequestType.PREEMPTED.value:
+                    logger.info(f"Handle preempted request {request} at idx {idx}")
+                elif request.task_type.value == RequestType.ABORT.value:
+                    logger.info(f"Handle abort request {request} at idx {idx}")
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 1
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True

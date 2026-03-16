@@ -61,6 +61,7 @@ class RequestType(Enum):
     DECODE = 1
     PREEMPTED = 2
     EXTEND = 3
+    ABORT = 4
 
 
 @dataclass
