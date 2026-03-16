@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __attribute__((global)) void limit_thinking_content_length_kernel_v1(
     int64_t* next_tokens,
@@ -30,15 +29,12 @@ __attribute__((global)) void limit_thinking_content_length_kernel_v1(
     const int64_t think_end_id,
     const int bs,
     const int eos_token_id_len);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        int64_t* next_tokens,
                        const int* max_think_lens,
                        const int64_t* step_idx,
@@ -80,7 +76,7 @@ static int cpu_wrapper(Context* ctx,
   }
   return api::SUCCESS;
 }
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         int64_t* next_tokens,
                         const int* max_think_lens,
                         const int64_t* step_idx,
@@ -90,9 +86,9 @@ static int xpu3_wrapper(Context* ctx,
                         const int64_t think_end_id,
                         const int bs,
                         const int eos_token_id_len) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
   auto limit_thinking_content_length_kernel_v1 =
-      xpu3::plugin::limit_thinking_content_length_kernel_v1;
+      fd_xpu3::limit_thinking_content_length_kernel_v1;
   int32_t ret_xre =
       limit_thinking_content_length_kernel_v1<<<1, 64, ctx->xpu_stream>>>(
           reinterpret_cast<XPU_INT64*>(next_tokens),
@@ -108,7 +104,7 @@ static int xpu3_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-int limit_thinking_content_length_kernel_v1(Context* ctx,
+int limit_thinking_content_length_kernel_v1(api::Context* ctx,
                                             int64_t* next_tokens,
                                             const int* max_think_lens,
                                             const int64_t* step_idx,
@@ -141,7 +137,7 @@ int limit_thinking_content_length_kernel_v1(Context* ctx,
                        bs,
                        eos_token_id_len);
   }
-  if (ctx->dev().type() == api::kXPU2 || ctx->dev().type() == api::kXPU3) {
+  if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper(ctx,
                         next_tokens,
                         max_think_lens,
@@ -157,6 +153,4 @@ int limit_thinking_content_length_kernel_v1(Context* ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

@@ -25,6 +25,8 @@ from unittest.mock import MagicMock, Mock, patch
 
 import paddle
 
+import fastdeploy  # noqa: F401
+
 mock_torch = MagicMock()
 mock_xgrammar = MagicMock()
 sys.modules["torch"] = mock_torch

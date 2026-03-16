@@ -264,6 +264,10 @@ class XPUForwardMeta(ForwardMeta):
     # for pd_disaggregation
     kv_signal_sender: Optional[paddle.Tensor] = None
 
+    hidden_states: Optional[paddle.Tensor] = None
+
+    is_draft: bool = False
+
     def copy_from(self, other: "XPUForwardMeta", skip_keys: Optional[list] = None):
         """
         Synchronize attributes from another XPUForwardMeta object

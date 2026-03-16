@@ -14,26 +14,8 @@
 """
 speculative decoding module
 """
-from fastdeploy.platforms import current_platform
 
 from .base import Proposer
-from .mtp import MTPProposer
+from .types import SpecMethod, VerifyStrategy
 
-# XPU is not support ngram proposer now
-if not current_platform.is_xpu():
-    from .ngram import NgramProposer
-__all__ = ["Proposer", "MTPProposer", "NgramProposer"]
-
-# Suffix proposer requires arctic_inference
-try:
-    from .suffix import SuffixProposer
-
-    _suffix_proposer_available = True
-except ImportError:
-    _suffix_proposer_available = False
-    SuffixProposer = None
-
-if _suffix_proposer_available:
-    __all__ = ["Proposer", "MTPProposer", "NgramProposer", "SuffixProposer"]
-else:
-    __all__ = ["Proposer", "MTPProposer", "NgramProposer"]
+__all__ = ["Proposer", "SpecMethod", "VerifyStrategy"]
