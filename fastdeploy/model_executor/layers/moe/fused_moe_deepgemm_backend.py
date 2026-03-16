@@ -559,22 +559,31 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 m_indices,
             )
 
-            # swiglu
-            ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
+            if fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE:
+                ffn_in_x, ffn_in_x_scale_tensor = paddlefleet_ops.fuse_weighted_swiglu_fp8_quant(
+                    ffn_out, dst_weights, using_pow2_scaling=True, use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
+                )
 
-            # down_proj
-            if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
-                ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-                    ffn_out, self.quant_config.weight_block_size[0], self.quant_config.deepgemm_scale_ue8m0
+                ffn_in_x_scale_tensor = paddle.transpose(
+                    paddle.transpose(ffn_in_x_scale_tensor, [1, 0]).contiguous(), [1, 0]
                 )
-                ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous().transpose([1, 0])
             else:
-                ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
-                    ffn_out,
-                    using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
-                    using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
-                )
-                ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
+                # swiglu
+                ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
+
+                # down_proj
+                if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
+                    ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
+                        ffn_out, self.quant_config.weight_block_size[0], self.quant_config.deepgemm_scale_ue8m0
+                    )
+                    ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous().transpose([1, 0])
+                else:
+                    ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
+                        ffn_out,
+                        using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
+                        using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
+                    )
+                    ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
 
             ffn_out = paddle.empty(
                 (token_all_num, getattr(layer, self.added_weight_attrs[1]).shape[1]),
@@ -594,7 +603,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     token_prob_unzipped=dst_weights,
                     total_zipped_tokens=recv_x.shape[0],
                     num_experts=layer.num_local_experts,
-                    using_weighted_combine=True,
+                    using_weighted_combine=not fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE,
                 )
 
             else:
