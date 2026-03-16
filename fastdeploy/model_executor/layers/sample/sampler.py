@@ -97,55 +97,93 @@ def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_le
 def _compute_sampling_mask(
     probs: paddle.Tensor,
     top_p: paddle.Tensor,
+    top_k: Optional[paddle.Tensor] = None,
+    top_k_list: Optional[list] = None,
 ) -> List[np.ndarray]:
     """
-    Compute a top-p (nucleus) sampling mask as sparse retained-token indices.
+    Compute a combined top-k + top-p (nucleus) sampling mask as sparse
+    retained-token indices.
 
-    For each request, find the smallest set of tokens whose cumulative
-    probability >= top_p (standard nucleus sampling).  Return only the
-    indices of those retained tokens rather than a dense vocab-sized mask,
-    which saves both GPU compute (no put_along_axis scatter) and D2H
-    transfer bandwidth (B*max_k  instead of  B*V).
+    Processing order:
+      1. Sort probs descending once (shared by top-k and top-p stages).
+      2. top-k mask  — zero out positions beyond top_k[i] in sorted order.
+      3. top-k renorm — renormalise in-place after truncation.
+      4. top-p mask  — cumsum on the already-sorted renormed probs; no
+                       second argsort needed.
+      5. intersect   — AND of the two masks, applied on GPU before D2H.
 
-    Key insight: after argsort the retained tokens are always the first k_i
-    elements in descending-probability order, so mask_cum is a contiguous
-    prefix of True values per row.  We compute k_i = sum(mask_cum[i]) on GPU
-    and transfer only sorted_indices[:, :max_k].
+    Either filter can be disabled:
+      - top-k is skipped when top_k_list is None or all values <= 0.
+      - top-p[i] >= 1.0  →  keep all tokens for that request.
 
     Args:
-        probs: [num_reqs, vocab_size] softmax probabilities (GPU).
-        top_p: [num_reqs, 1] top-p threshold per request (GPU).
+        probs:      [num_reqs, vocab_size] softmax probabilities (GPU).
+        top_p:      [num_reqs, 1] top-p threshold per request (GPU).
+        top_k:      [num_reqs, 1] top-k per request (GPU, int); 0 = disabled.
+        top_k_list: Python list of top-k values; used to decide whether any
+                    top-k filtering is needed at all.
 
     Returns:
-        List of length num_reqs; element i is a 1-D int32 numpy array
-        containing the vocab indices retained for request i.
+        List of length num_reqs; element i is a 1-D int64 numpy array of the
+        retained vocab indices for request i.
     """
     real_bsz = probs.shape[0]
-    top_p = top_p[:real_bsz]
-    sorted_indices = paddle.argsort(probs, axis=-1, descending=True)
-    sorted_probs = paddle.take_along_axis(probs, sorted_indices, axis=-1)
-    cum_probs = paddle.cumsum(sorted_probs, axis=-1)
+    vocab_size = probs.shape[1]
+    top_p = top_p[:real_bsz]  # [B, 1]
 
-    # mask_cum[i, j] = True  ↔  the j-th token (in sorted order) is retained.
-    # Since probs are sorted descending, this is always a contiguous prefix.
-    mask_cum = (cum_probs - sorted_probs) < top_p  # [B, V]
+    has_top_k = top_k is not None and top_k_list and any(x > 0 for x in top_k_list)
 
-    # top_p >= 1.0: keep all tokens
-    full_mask = (top_p >= 1.0).expand_as(mask_cum)  # [B, V]
-    mask_cum = paddle.where(full_mask, paddle.ones_like(mask_cum), mask_cum)
+    # ------------------------------------------------------------------
+    # Stage 1: single sort — descending by probability.
+    # sorted_indices / sorted_probs are reused by both top-k and top-p.
+    # ------------------------------------------------------------------
+    sorted_indices = paddle.argsort(probs, axis=-1, descending=True)  # [B, V]
+    sorted_probs = paddle.take_along_axis(probs, sorted_indices, axis=-1)  # [B, V]
 
-    # k_per_row[i] = number of retained tokens for request i  (cheap int op, stays GPU)
-    k_per_row = mask_cum.astype("int32").sum(axis=-1)  # [B]
+    # ------------------------------------------------------------------
+    # Stage 2: top-k mask (GPU, no D2H)
+    # ------------------------------------------------------------------
+    if has_top_k:
+        top_k = top_k[:real_bsz]  # [B, 1]
+        # col_idx[0, j] == j; compare against per-row top_k threshold.
+        col_idx = paddle.arange(vocab_size, dtype=top_k.dtype).unsqueeze(0)  # [1, V]
+        # top_k == 0 means "disabled" → keep all columns for that row.
+        effective_k = paddle.where(top_k > 0, top_k, paddle.full_like(top_k, vocab_size))
+        topk_mask = col_idx < effective_k  # [B, V], True = inside top-k
+
+        # Zero out tail, then renorm row-wise.
+        masked_sorted_probs = paddle.where(topk_mask, sorted_probs, paddle.zeros_like(sorted_probs))
+        row_sums = masked_sorted_probs.sum(axis=-1, keepdim=True).clip(min=1e-9)
+        renorm_sorted_probs = masked_sorted_probs / row_sums  # [B, V]
+    else:
+        topk_mask = None
+        renorm_sorted_probs = sorted_probs
+
+    # ------------------------------------------------------------------
+    # Stage 3: top-p mask on already-sorted renormed probs (no re-sort).
+    # ------------------------------------------------------------------
+    cum_probs = paddle.cumsum(renorm_sorted_probs, axis=-1)  # [B, V]
+    topp_mask = (cum_probs - renorm_sorted_probs) < top_p  # [B, V]
+    # When top_p[i] >= 1.0, keep the entire row.
+    topp_mask = paddle.where(
+        (top_p >= 1.0).expand_as(topp_mask),
+        paddle.ones_like(topp_mask),
+        topp_mask,
+    )
+
+    # ------------------------------------------------------------------
+    # Stage 4: intersect on GPU, then minimal D2H.
+    # ------------------------------------------------------------------
+    final_mask = topk_mask & topp_mask if has_top_k else topp_mask  # [B, V]
+
+    k_per_row = final_mask.astype("int32").sum(axis=-1)  # [B]
     max_k = int(k_per_row.max().item())
 
-    # D2H transfer: B * max_k int32 values  (vs. B * V bool values previously)
-    sorted_indices_top_cpu = sorted_indices[:, :max_k].cpu().numpy()  # [B, max_k] int64
-    k_per_row_cpu = k_per_row.numpy()  # [B] int32
+    # Transfer only the leading max_k columns — typically max_k << vocab_size.
+    indices_window_cpu = sorted_indices[:, :max_k].cpu().numpy()  # [B, max_k]
+    mask_window_cpu = final_mask[:, :max_k].cpu().numpy()  # [B, max_k]
 
-    # Slice each row to its actual length, then sort indices in ascending vocab order
-    # so the output is a strictly increasing index list (matching the original bool-mask
-    # convention where positions are enumerated left-to-right in vocab space).
-    return [sorted_indices_top_cpu[i, : k_per_row_cpu[i]] for i in range(real_bsz)]
+    return [indices_window_cpu[i, mask_window_cpu[i]] for i in range(real_bsz)]
 
 
 class GuidedDecoding:
@@ -585,7 +623,12 @@ class Sampler(nn.Layer):
         # Binary mask [num_reqs, vocab_size]: 1 = retained by top_k/top_p, 0 = truncated.
         sampling_mask = None
         if sampling_metadata.keep_sampling_mask:
-            sampling_mask = _compute_sampling_mask(probs, sampling_metadata.top_p)
+            sampling_mask = _compute_sampling_mask(
+                probs,
+                sampling_metadata.top_p,
+                top_k=sampling_metadata.top_k,
+                top_k_list=sampling_metadata.top_k_list,
+            )
 
         _, next_tokens = top_k_top_p_sampling(
             probs,
@@ -928,7 +971,21 @@ class SpeculativeSampler(nn.Layer):
         if keep_sampling_mask:
             # Expand top_p from [batch, 1] to [total_accepted, 1].
             accept_top_p = sampling_metadata.top_p[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
-            sampling_mask = _compute_sampling_mask(target_probs, accept_top_p)
+            accept_top_k = None
+            if (
+                sampling_metadata.top_k is not None
+                and sampling_metadata.top_k_list
+                and any(x > 0 for x in sampling_metadata.top_k_list)
+            ):
+                accept_top_k = (
+                    sampling_metadata.top_k[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
+                )
+            sampling_mask = _compute_sampling_mask(
+                target_probs,
+                accept_top_p,
+                top_k=accept_top_k,
+                top_k_list=sampling_metadata.top_k_list,
+            )
 
         sampler_output = SamplerOutput(
             sampled_token_ids=share_inputs["accept_tokens"],
