@@ -513,6 +513,6 @@ def test_multi_turn_global_cache_pooling(api_url):
     print(f"\nSecond round response: {repr(assistant_reply2)}")
     assert len(assistant_reply2) > 0, "第二轮响应为空"
 
-    #
+    # 校验token命中情况
     print(f"cached_tokens of second round: {cached_tokens}, " f"prompt_tokens_num of first round: {prompt_tokens_num}")
     assert cached_tokens > prompt_tokens_num, "没有从global cache中命中"
