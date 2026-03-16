@@ -367,7 +367,8 @@ void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_this_time,
                            const paddle::Tensor& base_model_seq_lens_encoder,
                            const paddle::Tensor& base_model_stop_flags,
-                           const paddle::Tensor& batch_drop);
+                           const paddle::Tensor& batch_drop,
+                           bool is_dummy_run);
 
 std::vector<paddle::Tensor> EagleGetHiddenStates(
     const paddle::Tensor& input,
@@ -778,6 +779,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("base_model_seq_lens_encoder"),
         py::arg("base_model_stop_flags"),
         py::arg("batch_drop"),
+        py::arg("is_dummy_run"),
         "Postprocess data for draft model in speculative decoding");
 
   m.def("draft_model_update",
