@@ -160,7 +160,7 @@ class CacheTransferManager:
         self.transfer_done_queue = queue.Queue()
         self.n_ranks = args.mp_num
         self.rank = args.rank
-        self.device = args.device
+        self.device = args.device_id
         self.engine_pid = args.engine_pid
         self.cache_dtype = args.cache_dtype
         self._proxy_args = args
