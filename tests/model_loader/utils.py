@@ -19,6 +19,7 @@ import socket
 import subprocess
 import time
 import traceback
+from functools import partial
 from multiprocessing import Process, Queue
 
 import pytest
@@ -54,10 +55,11 @@ def print_logs():
     print(f"\n===== {log_file} end =====\n")
 
 
-def run_with_timeout(target, args, timeout=60 * 5):
+def run_with_timeout(target, args=(), kwargs={}, timeout=60 * 5):
     clear_logs()
     result_queue = Queue()
-    p = Process(target=target, args=(*args, result_queue))
+    wrapped_target = partial(target, result_queue=result_queue)
+    p = Process(target=wrapped_target, args=args, kwargs=kwargs)
     p.start()
     p.join(timeout)
     if p.is_alive():
@@ -86,8 +88,8 @@ def form_model_get_output_topp0(
     quantization,
     load_choices,
     prompts,
-    speculative_config,
-    result_queue,
+    speculative_config={},
+    result_queue=None,
 ):
     try:
         with fd_runner(
