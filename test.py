@@ -30,7 +30,25 @@ B_kmajor = B.transpose([1, 0]).contiguous().transpose([1, 0])
 
 C_fastdeploy = cute_gemm(A, B_kmajor)
 
+
+import numpy as np
+num_tests = 100
+start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
+end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
+for i in range(num_tests):
+    start_events[i].record()
+
+    C_fastdeploy = cute_gemm(A, B_kmajor)
+
+    end_events[i].record()
+paddle.device.cuda.synchronize()
+
+times = np.array([round(s.elapsed_time(e),1) for s, e in zip(start_events, end_events)])[1:]
+print(times[-5:])
+
+
 print(C_fastdeploy)
 print(C_baseline)
+print(C_baseline - C_fastdeploy)
 print((C_fastdeploy - C_baseline).abs().max())
 
