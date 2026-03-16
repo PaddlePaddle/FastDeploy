@@ -277,6 +277,18 @@ std::vector<paddle::Tensor> TopPCandidates(
     int candidates_len,
     int max_seq_len);
 
+std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
+    const paddle::Tensor& ids_remove_padding,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& attn_mask_offsets_full,
+    const paddle::Tensor& attn_mask_offsets_decoder,
+    const paddle::Tensor& is_block_step,
+    const paddle::Tensor& decode_states,
+    const paddle::Tensor& mask_rollback);
+
 void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
                      const paddle::Tensor& accept_tokens,
                      const paddle::Tensor& accept_num,
@@ -322,6 +334,23 @@ void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
                                       int64_t rank_id,
                                       bool save_each_rank,
                                       bool skip_prefill);
+
+void SpeculateScheduleCache(const paddle::Tensor& draft_tokens,
+                            const paddle::Tensor& block_tables,
+                            const paddle::Tensor& stop_flags,
+                            const paddle::Tensor& prompt_lens,
+                            const paddle::Tensor& seq_lens_this_time,
+                            const paddle::Tensor& seq_lens_encoder,
+                            const paddle::Tensor& seq_lens_decoder,
+                            const paddle::Tensor& step_seq_lens_decoder,
+                            const paddle::Tensor& step_draft_tokens,
+                            const paddle::Tensor& step_seq_lens_this_time,
+                            const paddle::Tensor& accept_num,
+                            const paddle::Tensor& accept_tokens,
+                            const paddle::Tensor& is_block_step,
+                            const paddle::Tensor& not_need_stop,
+                            const int block_size,
+                            const int max_draft_tokens);
 
 void SpeculateSaveWithOutputMsgDynamic(const paddle::Tensor& accept_tokens,
                                        const paddle::Tensor& accept_num,
@@ -627,7 +656,6 @@ void UpdateInputs(const paddle::Tensor& stop_flags,
                   const paddle::Tensor& seq_lens_encoder,
                   const paddle::Tensor& seq_lens_decoder,
                   const paddle::Tensor& input_ids,
-                  const paddle::Tensor& stop_nums,
                   const paddle::Tensor& next_tokens,
                   const paddle::Tensor& is_block_step);
 
@@ -641,7 +669,6 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
                     const paddle::Tensor& topk_ids,
                     const paddle::Tensor& input_ids,
                     const paddle::Tensor& block_tables,
-                    const paddle::Tensor& stop_nums,
                     const paddle::Tensor& next_tokens,
                     const paddle::Tensor& is_block_step,
                     const int block_size);
@@ -1125,6 +1152,20 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("mask_rollback"),
         "Update speculative decoding states");
 
+  m.def("update_attn_mask_offsets",
+        &UpdateAttnMaskOffsets,
+        py::arg("ids_remove_padding"),
+        py::arg("seq_lens_this_time"),
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_decoder"),
+        py::arg("cu_seqlens_q"),
+        py::arg("attn_mask_offsets_full"),
+        py::arg("attn_mask_offsets_decoder"),
+        py::arg("is_block_step"),
+        py::arg("decode_states"),
+        py::arg("mask_rollback"),
+        "Update attn mask offset");
+
   m.def("speculate_verify",
         &SpeculateVerify,
         py::arg("sampled_token_ids"),
@@ -1391,7 +1432,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_encoder"),
         py::arg("seq_lens_decoder"),
         py::arg("input_ids"),
-        py::arg("stop_nums"),
         py::arg("next_tokens"),
         py::arg("is_block_step"),
         "Update inputs function");
@@ -1408,7 +1448,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("topk_ids"),
         py::arg("input_ids"),
         py::arg("block_tables"),
-        py::arg("stop_nums"),
         py::arg("next_tokens"),
         py::arg("is_block_step"),
         py::arg("block_size"),

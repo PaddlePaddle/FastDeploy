@@ -158,19 +158,19 @@ func RemoveServers(ctx context.Context, prefillToRemove []string, decodeToRemove
 	for _, id := range prefillToRemove {
 		if worker, exists := DefaultManager.prefillWorkerMap[id]; exists {
 			delete(DefaultManager.prefillWorkerMap, id)
-			logger.Info(ctx, "Removed unhealthy prefill instance: %s", worker.Url)
+			logger.Error(ctx, "Removed unhealthy prefill instance: %s", worker.Url)
 		}
 	}
 	for _, id := range decodeToRemove {
 		if worker, exists := DefaultManager.decodeWorkerMap[id]; exists {
 			delete(DefaultManager.decodeWorkerMap, id)
-			logger.Info(ctx, "Removed unhealthy decode instance: %s", worker.Url)
+			logger.Error(ctx, "Removed unhealthy decode instance: %s", worker.Url)
 		}
 	}
 	for _, id := range mixedToRemove {
 		if worker, exists := DefaultManager.mixedWorkerMap[id]; exists {
 			delete(DefaultManager.mixedWorkerMap, id)
-			logger.Info(ctx, "Removed unhealthy mixed instance: %s", worker.Url)
+			logger.Error(ctx, "Removed unhealthy mixed instance: %s", worker.Url)
 		}
 	}
 }

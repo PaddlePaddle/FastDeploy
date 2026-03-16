@@ -190,7 +190,7 @@ class _VerifyContext:
         self.step_input_ids_now = step_input_ids_now
         self.step_output_ids_flat = step_output_ids_flat
         self.cur_step_idx = cur_step_idx
-        self.output_len_now = 1
+        self.output_len_now = 0
         self.stopped = False
 
     def emit_token(self, pos, token):
@@ -208,13 +208,14 @@ class _VerifyContext:
         return False
 
     def emit_final_token(self, pos, token):
-        """Emit the Phase 2 final token (no output_len_now increment)."""
+        """Emit the Phase 2 final token. Increments output_len_now."""
         self.cur_step_idx += 1
         eos = is_in_end(token, self.end_tokens, self.end_length)
         max_hit = self.cur_step_idx >= int(self.max_dec_len[self.bid])
         if (eos or max_hit) and not eos:
             token = int(self.end_tokens[0])
         self.step_output_ids_flat[self.bid * self.max_step_tokens + pos] = token
+        self.output_len_now += 1
 
 
 def verify_draft_tokens_ref(

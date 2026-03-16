@@ -658,7 +658,7 @@ class PaddleDisWorkerProc:
 
             if num_blocks_local <= 0:
                 raise ValueError(
-                    "The total number of blocks cannot be less than zero. "
+                    f"The total number of blocks cannot be less than zero bug got {num_blocks_local}. "
                     "Please increase gpu_memory_utilization "
                     "Or decrease max_num_batched_tokens(max model length)."
                 )
@@ -1088,6 +1088,12 @@ def parse_args():
         "--enable_overlap_schedule",
         action="store_true",
         help="Enable overlap schedule",
+    )
+
+    parser.add_argument(
+        "--ep_prefill_use_worst_num_tokens",
+        action="store_true",
+        help="enable to avoid cpu sync",
     )
 
     args = parser.parse_args()
