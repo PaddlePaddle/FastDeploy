@@ -20,6 +20,7 @@ import sys
 import types
 
 import paddle
+import pytest
 
 # ---------------------------------------------------------------------------
 # Minimal stub before any fastdeploy import: deep_ep requires distributed setup
@@ -31,6 +32,37 @@ sys.modules["fastdeploy.model_executor.layers.moe.ep.deep_ep"] = deep_ep_stub
 
 from fastdeploy.model_executor.layers.moe import (  # noqa: E402
     fused_moe_deepgemm_backend as backend,
+)
+
+# ---------------------------------------------------------------------------
+# Detect whether deepgemm JIT compilation works on this machine.
+# It requires the host compiler to support C++17 (GCC >= 7).
+# CI machines with older GCC will fail to compile the kernel.
+# ---------------------------------------------------------------------------
+
+
+def _deepgemm_available() -> bool:
+    """Try to JIT-compile a minimal deepgemm kernel; return False on failure."""
+    try:
+        from fastdeploy.model_executor.layers.quantization.fp8_utils import deep_gemm
+
+        lhs = paddle.zeros([128, 128], dtype="float8_e4m3fn")
+        lhs_scale = paddle.ones([128, 1], dtype="float32")
+        rhs = paddle.zeros([1, 128, 128], dtype="float8_e4m3fn")
+        rhs_scale = paddle.ones([1, 1, 1], dtype="float32")
+        out = paddle.empty([128, 128], dtype="bfloat16")
+        m_indices = paddle.zeros([128], dtype="int32")
+        deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous((lhs, lhs_scale), (rhs, rhs_scale), out, m_indices)
+        return True
+    except Exception:
+        return False
+
+
+_DEEPGEMM_AVAILABLE = _deepgemm_available()
+
+requires_deepgemm = pytest.mark.skipif(
+    not _DEEPGEMM_AVAILABLE,
+    reason="deepgemm JIT compilation requires C++17-capable host compiler (GCC >= 7)",
 )
 
 # ---------------------------------------------------------------------------
@@ -155,6 +187,7 @@ def _make_method():
 class TestApplyTp:
     """apply_tp with FD_USE_PHI_FP8_QUANT=True, FD_USE_PHI_MOE_PERMUTE=True."""
 
+    @requires_deepgemm
     def test_apply_tp_noaux_tc_path(self):
         """noaux_tc: get_moe_scores → fp8_quant_blockwise → moe_permute → deepgemm → moe_unpermute."""
         layer = DummyLayer()
@@ -172,6 +205,7 @@ class TestApplyTp:
         assert "topk_ids" in captured
         assert list(out.shape) == [NUM_TOKENS, HIDDEN_SIZE]
 
+    @requires_deepgemm
     def test_apply_tp_aux_path(self):
         """Non-noaux_tc: moe_topk_select → fp8_quant_blockwise → moe_permute → deepgemm → moe_unpermute."""
         layer = DummyLayer()
@@ -270,6 +304,7 @@ class TestApplyEpPrefill:
         out = method.apply_ep_prefill(layer, x, gate)
         assert list(out.shape) == [0, HIDDEN_SIZE]
 
+    @requires_deepgemm
     def test_ep_prefill_contiguous_path(self):
         """token_all_num > 0, num_worst_tokens == 0 → moe_permute + contiguous deepgemm."""
         layer = DummyLayer()
@@ -323,6 +358,7 @@ class TestApplyEpDecode:
 
         return DecodeRunner()
 
+    @requires_deepgemm
     def test_ep_decode_masked_gemm_path(self):
         """dispatch → masked deepgemm → fused_mask_swiglu_fp8_quant → masked deepgemm → combine."""
         layer = DummyLayer()
