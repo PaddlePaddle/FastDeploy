@@ -426,34 +426,25 @@ class PaddleDisWorkerProc:
                 self.rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
             logger.info("redundant_expert: done")
 
-    def _acquire_kvcache_lock(self, tp_rank):
+    def _acquire_kvcache_lock(self):
         """Acquire the GPU KV cache lock for the worker process.
 
-        Uses a file-based lock (fcntl.flock) to ensure mutual exclusion
-        between the worker and the CPU transfer process during model
-        execution. Only rank 0 acquires the lock to avoid deadlock among
-        tensor-parallel workers.
-
-        Args:
-            tp_rank: Tensor parallel rank of the current worker. Only rank 0
-                acquires the lock.
+        Uses a file-based shared lock (fcntl.LOCK_SH) to ensure mutual
+        exclusion between the worker and the CPU transfer process during
+        model execution. All tensor-parallel ranks acquire a shared lock so
+        they can all proceed in parallel with each other, while the CPU
+        transfer process (which uses an exclusive lock) is blocked until
+        every rank has released its shared lock.
         """
         if not envs.FD_USE_KVCACHE_LOCK:
             return
-        if tp_rank == 0:
-            self.gpu_cache_lock.acquire()
+        self.gpu_cache_lock.acquire(shared=True)
 
-    def _release_kvcache_lock(self, tp_rank):
-        """Release the GPU KV cache lock held by the worker process.
-
-        Args:
-            tp_rank: Tensor parallel rank of the current worker. Only rank 0
-                releases the lock.
-        """
+    def _release_kvcache_lock(self):
+        """Release the GPU KV cache lock held by the worker process."""
         if not envs.FD_USE_KVCACHE_LOCK:
             return
-        if tp_rank == 0:
-            self.gpu_cache_lock.release()
+        self.gpu_cache_lock.release()
 
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
@@ -586,9 +577,9 @@ class PaddleDisWorkerProc:
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
 
-            self._acquire_kvcache_lock(tp_rank)
+            self._acquire_kvcache_lock()
             self.worker.execute_model(req_dicts, max_occupied_batch_index)
-            self._release_kvcache_lock(tp_rank)
+            self._release_kvcache_lock()
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 

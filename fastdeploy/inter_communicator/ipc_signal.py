@@ -156,9 +156,16 @@ class IPCLock:
                 )
                 raise RuntimeError(f"IPC lock file not found: {self._lock_path}") from e
 
-    def acquire(self) -> None:
-        """Acquire the lock (blocking). Uses kernel-level flock for atomicity."""
-        fcntl.flock(self._fd, fcntl.LOCK_EX)
+    def acquire(self, shared: bool = False) -> None:
+        """Acquire the lock (blocking). Uses kernel-level flock for atomicity.
+
+        Args:
+            shared: If True, acquires a shared (read) lock (LOCK_SH), allowing
+                multiple processes to hold the lock concurrently. If False
+                (default), acquires an exclusive (write) lock (LOCK_EX).
+        """
+        lock_type = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+        fcntl.flock(self._fd, lock_type)
 
     def release(self) -> None:
         """Release the lock."""
