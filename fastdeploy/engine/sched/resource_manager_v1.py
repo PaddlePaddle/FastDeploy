@@ -76,6 +76,17 @@ class ScheduledPreemptTask:
 
 
 @dataclass
+class ScheduledAbortTask:
+    """
+    Task for terminating inference to recycle resource.
+    """
+
+    idx: int
+    request_id: str
+    task_type: RequestType = RequestType.ABORT
+
+
+@dataclass
 class ScheduledExtendBlocksTask:
     """
     Task for allocating new blocks to extend.
@@ -246,9 +257,15 @@ class ResourceManagerV1(ResourceManager):
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
 
+    def _prepare_abort_task(self, request):
+        return ScheduledAbortTask(idx=request.idx, request_id=request.request_id)
+
     def reschedule_preempt_task(self, request_id, process_func=None):
         with self.lock:
             llm_logger.debug(f"reschedule {request_id} into waiting queue")
+            llm_logger.debug(
+                f"request_id:{request_id} in self.to_be_rescheduled_request_id_set:{request_id in self.to_be_rescheduled_request_id_set}, request_id:{request_id} in self.requests:{request_id in self.requests}"
+            )
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
                 request.has_been_preempted_before = True
@@ -1236,10 +1253,31 @@ class ResourceManagerV1(ResourceManager):
             if request_id in self.req_dict:
                 del self.req_dict[request_id]
 
+    def abort_recycle_resource(self, req: Request):
+        with self.lock:
+            if len(req.block_tables) != 0:
+                self._free_blocks(req)
+            if (
+                req.idx is not None
+                and req.idx >= 0
+                and req.idx < len(self.tasks_list)
+                and self.tasks_list[req.idx] == req
+            ):
+                self.tasks_list[req.idx] = None
+                self.stop_flags[req.idx] = True
+            if req in self.running:
+                self.running.remove(req)
+            if req in self.waiting:
+                self.waiting.remove(req)
+            del self.requests[req.request_id]
+            if req.request_id in self.req_dict:
+                del self.req_dict[req.request_id]
+
     def add_request_in_p(self, requests: list[Request]):
         with self.lock:
             for request in requests:
-                self.running.append(request)
+                if request.request_id in self.requests:
+                    self.running.append(request)
 
     def preallocate_resource_in_p(self, request: Request):
         """

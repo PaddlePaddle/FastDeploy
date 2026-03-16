@@ -206,6 +206,9 @@ class SplitwiseConnector:
         """Check whether the requests have been allocated resources in decode."""
         self.logger.debug(f"check_decode_allocated: {task.request_id}")
         start_time = time.time()
+        if task.request_id in self.resource_manager.abort_req_ids_set:
+            del self.current_request_ids[task.request_id]
+            return False, "task is aborted"
         if task.disaggregate_info is None:
             return True, ""
         if self.enable_decode_cache_task:
@@ -213,10 +216,15 @@ class SplitwiseConnector:
 
         while self.current_request_ids[task.request_id] == "init":
             time.sleep(0.001)
+            if task.request_id in self.resource_manager.abort_req_ids_set:
+                del self.current_request_ids[task.request_id]
+                return False, "task is aborted"
             if time.time() - start_time > envs.FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS:
                 del self.current_request_ids[task.request_id]
                 return False, "prefill waits for decode resource timeout"
-
+        if task.request_id in self.resource_manager.abort_req_ids_set:
+            del self.current_request_ids[task.request_id]
+            return False, "task is aborted"
         msg = self.current_request_ids[task.request_id]
         del self.current_request_ids[task.request_id]
         if msg == "finished":

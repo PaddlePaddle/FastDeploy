@@ -289,7 +289,6 @@ class TokenProcessor:
                         envs.ENABLE_V1_KVCACHE_SCHEDULER and token_ids[-1] == PREEMPTED_TOKEN_ID
                     ) or not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         llm_logger.info(f"Aborted task {task_id} received negative token. Recycling.")
-                        self.resource_manager.abort_req_ids_set.remove(task_id)
                         self._recycle_resources(task_id, i, task)
                         llm_logger.info(f"{task_id} received negative token. Recycle end.")
                         abort_res = RequestOutput(
@@ -298,6 +297,7 @@ class TokenProcessor:
                             error_code=499,
                             error_msg=f"Your request with request_id:{task_id} is aborted.",
                         )
+                        self.resource_manager.abort_req_ids_set.remove(task_id)
                         batch_result.append(abort_res)
                         continue
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -524,6 +524,16 @@ class TokenProcessor:
             start_time = time.time()
             result.metrics.wait_for_sending_cache_time = time.time()
             while True:
+                if task_id in self.resource_manager.abort_req_ids_set:
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                        self.resource_manager.finish_requests_async(task_id)
+                    else:
+                        self.resource_manager.stop_flags[index] = True
+                        self.resource_manager.tasks_list[index] = None
+                        self.resource_manager._recycle_block_tables(task)
+                        if task_id in self.resource_manager.req_dict:
+                            del self.resource_manager.req_dict[task_id]
+                    break
                 finished_task_ids = self.engine_worker_queue.get_finished_req()
                 if len(finished_task_ids) > 0:
                     for finished_task_id in finished_task_ids:
@@ -762,7 +772,6 @@ class TokenProcessor:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.abort_req_ids_set:
                             llm_logger.info(f"Aborted task {task_id} received negative token. Recycling.")
-                            self.resource_manager.abort_req_ids_set.remove(task_id)
                             self._recycle_resources(task_id, i, task)
                             llm_logger.info(f"{task_id} received negative token. Recycle end.")
                             abort_res = RequestOutput(
@@ -771,6 +780,7 @@ class TokenProcessor:
                                 error_code=499,
                                 error_msg=f"Your request with request_id:{task_id} is aborted.",
                             )
+                            self.resource_manager.abort_req_ids_set.remove(task_id)
                             batch_result.append(abort_res)
                             continue
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
@@ -806,7 +816,6 @@ class TokenProcessor:
                             envs.ENABLE_V1_KVCACHE_SCHEDULER and token_id == PREEMPTED_TOKEN_ID
                         ) or not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                             llm_logger.info(f"Aborted task {task_id} received negative token. Recycling.")
-                            self.resource_manager.abort_req_ids_set.remove(task_id)
                             self._recycle_resources(task_id, i, task)
                             llm_logger.info(f"{task_id} received negative token. Recycle end.")
                             abort_res = RequestOutput(
@@ -815,6 +824,7 @@ class TokenProcessor:
                                 error_code=499,
                                 error_msg=f"Your request with request_id:{task_id} is aborted.",
                             )
+                            self.resource_manager.abort_req_ids_set.remove(task_id)
                             batch_result.append(abort_res)
                             continue
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
