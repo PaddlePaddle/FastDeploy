@@ -1753,6 +1753,7 @@ class GPUModelRunner(ModelRunnerBase):
                     full_hidden_states=model_output,
                     step_use_cudagraph=self.forward_meta.step_use_cudagraph,
                     is_dummy_run=True,
+                    async_output_queue=self.async_output_queue,
                 )
             elif self.spec_method == SpecMethod.NAIVE:
                 pass
@@ -2374,7 +2375,9 @@ class GPUModelRunner(ModelRunnerBase):
             if self.speculative_decoding and self.proposer is not None:
                 if self.spec_method == SpecMethod.MTP:
                     self.proposer.run(
-                        full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
+                        full_hidden_states=model_output,
+                        step_use_cudagraph=self.forward_meta.step_use_cudagraph,
+                        async_output_queue=self.async_output_queue,
                     )
                 elif self.spec_method == SpecMethod.NAIVE:
                     pass

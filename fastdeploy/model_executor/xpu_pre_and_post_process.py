@@ -15,18 +15,17 @@
 """
 
 import queue
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
-import numpy as np
 import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.model_executor.forward_meta import XPUForwardMeta
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
-from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
+from fastdeploy.model_executor.pre_and_post_process import async_generate_output
 from fastdeploy.platforms import current_platform
-from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
+from fastdeploy.worker.output import ModelOutputData, SamplerOutput
 
 if current_platform.is_xpu():
     from fastdeploy.model_executor.ops.xpu import (  # step_system_cache,; step_reschedule,
@@ -55,43 +54,6 @@ if current_platform.is_xpu():
         update_inputs_v1,
     )
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
-
-
-def _build_stream_transfer_data(
-    output_tokens: paddle.Tensor,
-    pooler_outputs: List = None,
-    logprobs: Optional[LogprobsTensors] = None,
-    prompt_logprobs_list: Optional[LogprobsTensors] = None,
-):
-    """Split output_tokens and output"""
-    stream_transfer_datas = []
-    if output_tokens is not None:
-        output_tokens = output_tokens.reshape([-1]).numpy()
-        output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
-
-        for bid, output_token_per_sample in enumerate(output_tokens_lists):
-            stream_transfer_data = StreamTransferData(
-                decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
-            )
-            if logprobs:
-                stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
-            if prompt_logprobs_list:
-                stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
-            stream_transfer_datas.append(stream_transfer_data)
-    elif pooler_outputs is not None:
-        for bid, pooler_output in enumerate(pooler_outputs):
-            if pooler_output is None:
-                continue
-            if pooler_output.dtype == paddle.bfloat16:
-                pooler_output = pooler_output.astype("float32")
-
-            pooler_output = pooler_output.numpy()
-
-            stream_transfer_data = StreamTransferData(
-                decoder_state=DecoderState.TEXT, pooler_output=pooler_output, batch_id=bid
-            )
-            stream_transfer_datas.append(stream_transfer_data)
-    return stream_transfer_datas
 
 
 def xpu_pre_process(
@@ -371,13 +333,15 @@ def xpu_post_process_normal(
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             if save_each_rank or model_output.mp_rank == 0:
-                output = _build_stream_transfer_data(
-                    sampled_token_ids,
-                    logprobs=sampler_output.logprobs_tensors,
+                real_bsz = share_inputs["seq_lens_this_time"].shape[0]
+                accept_token_nums = [1] * real_bsz
+                async_generate_output(
+                    async_output_queue=async_output_queue,
+                    sampled_tokens=sampled_token_ids,
+                    accept_token_nums=accept_token_nums,
                     prompt_logprobs_list=model_output.prompt_logprobs_list,
+                    logprobs_tensors=sampler_output.logprobs_tensors,
                 )
-                if async_output_queue is not None:
-                    async_output_queue.put(output)
         else:
             if sampler_output.logprobs_tensors is None:
                 save_output(

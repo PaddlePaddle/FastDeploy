@@ -25,7 +25,7 @@ import paddle
 import pytest
 
 from fastdeploy import envs
-from fastdeploy.engine.request import Request, RequestMetrics, RequestOutput
+from fastdeploy.engine.request import RequestMetrics, RequestOutput
 from fastdeploy.output import token_processor
 from fastdeploy.output.token_processor import (
     MAX_BSZ,
@@ -244,15 +244,6 @@ def test_cleanup_resources_shuts_down_executor():
     processor.executor.shutdown.assert_called_once_with(wait=False)
 
 
-def test_reschedule_preempt_task_use_zmq_reschedules_missing_batch():
-    processor, rm, _, _ = _make_processor()
-    rm.to_be_rescheduled_request_id_set = {"req-a"}
-    rm.requests = {"req-a": types.SimpleNamespace(idx=1)}
-    with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", True):
-        processor._reschedule_preempt_task_use_zmq([types.SimpleNamespace(batch_id=0)])
-    assert "reschedule-req-a" in rm.recycled
-
-
 def test_process_batch_draft_tokens_collects_top_logprobs():
     processor, rm, _, _ = _make_processor(speculative_method="mtp", enable_logprob=True)
     rm.tasks_list[0] = types.SimpleNamespace(request_id="task-0", block_tables=[1])
@@ -267,92 +258,6 @@ def test_process_batch_draft_tokens_collects_top_logprobs():
     assert len(results) == 1
     assert results[0].outputs.draft_top_logprobs.logprob_token_ids[0][0] == 0
     assert results[0].outputs.draft_top_logprobs.sampled_token_ranks[-1] == 1
-
-
-def test_process_batch_output_use_zmq_finishes_on_eos():
-    processor, rm, cache, connector = _make_processor()
-    base_time = time.time()
-    task = Request(
-        request_id="req-zmq",
-        prompt=["hi"],
-        prompt_token_ids=[1, 2],
-        prompt_token_ids_len=2,
-        messages=[[{"content": "hi", "role": "user"}]],
-        history=[],
-        tools=[],
-        system="system",
-        eos_token_ids=[6],
-        metrics=RequestMetrics(
-            arrival_time=base_time,
-            preprocess_start_time=base_time - 0.2,
-            preprocess_end_time=base_time - 0.1,
-            inference_start_time=base_time,
-        ),
-    )
-    task.metrics.decode_inference_start_time = base_time
-    task.disaggregate_info = None
-    task.ic_req_data = None
-    rm.tasks_list[0] = task
-    rm.req_dict[task.request_id] = task
-    rm.requests[task.request_id] = types.SimpleNamespace(idx=0)
-
-    tokens = np.array([5, 6], dtype=np.int64)
-    stream = types.SimpleNamespace(batch_id=0, tokens=tokens, pooler_output=None)
-    with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", False):
-        results = processor._process_batch_output_use_zmq([stream])
-
-    assert results[0].finished is True
-    assert task.output_token_ids == [5, 6]
-    assert rm.stop_flags[0] is True
-    assert connector.calls == []
-
-
-def test_process_batch_output_use_zmq_parses_logprobs():
-    processor, rm, _, _ = _make_processor(enable_logprob=True)
-    base_time = time.time()
-    task = Request(
-        request_id="req-zmq-logprob",
-        prompt=["hi"],
-        prompt_token_ids=[1],
-        prompt_token_ids_len=1,
-        messages=[[{"content": "hi", "role": "user"}]],
-        history=[],
-        tools=[],
-        system="system",
-        eos_token_ids=[6],
-        metrics=RequestMetrics(
-            arrival_time=base_time,
-            preprocess_start_time=base_time - 0.2,
-            preprocess_end_time=base_time - 0.1,
-            inference_start_time=base_time,
-        ),
-    )
-    task.metrics.decode_inference_start_time = base_time
-    task.disaggregate_info = None
-    task.ic_req_data = None
-    rm.tasks_list[0] = task
-    rm.req_dict[task.request_id] = task
-    rm.requests[task.request_id] = types.SimpleNamespace(idx=0)
-
-    logprob_list = token_processor.LogprobsLists(
-        logprob_token_ids=[[1, 2]],
-        logprobs=[[0.1, 0.2]],
-        sampled_token_ranks=[0],
-    )
-    logprob_holder = types.SimpleNamespace(tolists=lambda: logprob_list)
-    stream = types.SimpleNamespace(
-        batch_id=0,
-        tokens=np.array([5], dtype=np.int64),
-        pooler_output=None,
-        logprobs=logprob_holder,
-        prompt_logprobs={"0": -0.1},
-    )
-    with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", False):
-        results = processor._process_batch_output_use_zmq([stream])
-
-    assert results[0].outputs.logprob == 0.1
-    assert results[0].outputs.top_logprobs is logprob_list
-    assert results[0].prompt_logprobs == {"0": -0.1}
 
 
 def test_recycle_resources_updates_metrics_and_state():
@@ -1037,21 +942,6 @@ def test_process_batch_output_speculative_negative_token_reschedules():
     assert rm.recycled[-1] == f"reschedule-{task_id}"
 
 
-def test_process_batch_output_use_zmq_reschedules_negative_token():
-    processor, rm, _, _ = _make_processor()
-    task = types.SimpleNamespace(request_id="req-zmq-neg")
-    rm.tasks_list[0] = task
-    rm.req_dict[task.request_id] = task
-    rm.to_be_rescheduled_request_id_set = {task.request_id}
-
-    stream = types.SimpleNamespace(batch_id=0, tokens=np.array([-9], dtype=np.int64), pooler_output=None)
-    with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", True):
-        results = processor._process_batch_output_use_zmq([stream])
-
-    assert results == []
-    assert rm.recycled[-1] == f"reschedule-{task.request_id}"
-
-
 def test_process_batch_output_records_second_decode_token():
     processor, rm, _, _ = _make_processor()
     processor.cfg.scheduler_config.splitwise_role = "decode"
@@ -1296,9 +1186,3 @@ def test_record_completion_metrics_updates_counters():
         assert metrics_obj.request_decode_time.value is not None
         assert metrics_obj.request_success_total.value == 1
         assert metrics_obj.request_generation_tokens.value == 4
-
-
-def test_process_sampling_results_use_zmq_rejects_speculative():
-    processor, _, _, _ = _make_processor(speculative_method="mtp")
-    with pytest.raises(NotImplementedError):
-        processor.process_sampling_results_use_zmq()
