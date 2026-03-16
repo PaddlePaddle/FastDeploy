@@ -17,6 +17,7 @@ assignment when ENABLE_V1_KVCACHE_SCHEDULER is enabled.
 """
 
 import contextlib
+import os
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
@@ -234,20 +235,15 @@ def _create_fd_config_instance(mock_scheduler, mock_model, mock_cache, mock_para
 @contextlib.contextmanager
 def _patch_env_and_config(enable_v1_scheduler):
     """Context manager to patch all environment variables and config methods."""
-    from fastdeploy import envs as fastdeploy_envs
+    env_vars = {
+        "ENABLE_V1_KVCACHE_SCHEDULER": str(enable_v1_scheduler),
+        "FD_ENABLE_MAX_PREFILL": "0",
+        "FD_FOR_TORCH_MODEL_FORMAT": "0",
+        "FD_MAX_STOP_SEQS_NUM": "10",
+        "FD_STOP_SEQS_MAX_LEN": "100",
+    }
 
-    env_patches = [
-        patch.object(fastdeploy_envs, "ENABLE_V1_KVCACHE_SCHEDULER", enable_v1_scheduler),
-        patch.object(fastdeploy_envs, "FD_ENABLE_MAX_PREFILL", False),
-        patch.object(fastdeploy_envs, "FD_FOR_TORCH_MODEL_FORMAT", False),
-        patch.object(fastdeploy_envs, "FD_MAX_STOP_SEQS_NUM", 10),
-        patch.object(fastdeploy_envs, "FD_STOP_SEQS_MAX_LEN", 100),
-        patch("fastdeploy.config.envs.ENABLE_V1_KVCACHE_SCHEDULER", enable_v1_scheduler),
-    ]
-
-    with contextlib.ExitStack() as stack:
-        for p in env_patches:
-            stack.enter_context(p)
+    with patch.dict(os.environ, env_vars):
         yield
 
 
