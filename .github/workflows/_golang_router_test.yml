@@ -117,6 +117,8 @@ jobs:
           FD_ROUTER_PORT=$((8048 + DEVICE_PORT * 100))
           FD_CONNECTOR_PORT=$((8038 + DEVICE_PORT * 100))
           FD_RDMA_PORT=$((8028 + DEVICE_PORT * 100))
+          FD_MOONCAKE_MASTER_PORT=$((8018 + DEVICE_PORT * 100))
+          FD_MOONCAKE_METADATA_PORT=$((8008 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
@@ -127,6 +129,8 @@ jobs:
           echo "FD_ROUTER_PORT=${FD_ROUTER_PORT}"
           echo "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}"
           echo "FD_RDMA_PORT=${FD_RDMA_PORT}"
+          echo "FD_MOONCAKE_MASTER_PORT=${FD_MOONCAKE_MASTER_PORT}"
+          echo "FD_MOONCAKE_METADATA_PORT=${FD_MOONCAKE_METADATA_PORT}"
           echo "DEVICES=${DEVICES}"
           echo "========================================================="
 
