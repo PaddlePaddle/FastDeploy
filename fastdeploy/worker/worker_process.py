@@ -943,8 +943,12 @@ def parse_args():
 
     parser.add_argument(
         "--enable_keep_sampling_mask",
+        "--enable-keep-sampling-mask",
         action="store_true",
-        help="Enable output of sampling mask (binary mask per token step after top_p/top_k).",
+        help=(
+            "Enable output of keep_sampling_mask as sparse vocab index list per token step "
+            "(Non-MTP: List[int]; MTP: List[List[int]])."
+        ),
     )
 
     parser.add_argument(
