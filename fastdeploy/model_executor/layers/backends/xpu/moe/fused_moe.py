@@ -434,12 +434,6 @@ class XPUMoEMethod(MoEMethodBase):
         w_scale_1 = getattr(layer, self.added_scale_attrs[0], None)
         w_scale_2 = getattr(layer, self.added_scale_attrs[1], None)
 
-        print("getattr(layer, self.added_weight_attrs[0]):", getattr(layer, self.added_weight_attrs[0]))
-        print("getattr(layer, self.added_weight_attrs[1]):", getattr(layer, self.added_weight_attrs[1]))
-        print("getattr(layer, self.added_in_scale_attrs[1]):", getattr(layer, self.added_in_scale_attrs[1]))
-        print("getattr(layer, self.added_scale_attrs[0]):", getattr(layer, self.added_scale_attrs[0]))
-        print("getattr(layer, self.added_scale_attrs[1]):", getattr(layer, self.added_scale_attrs[1]))
-
         ffn_out = moe_expert_ffn(
             ffn1_x,
             token_num_lod,
@@ -457,18 +451,6 @@ class XPUMoEMethod(MoEMethodBase):
             hadamard_block_size,
             valid_token_num,
         )
-        print("ffn1_x:", ffn1_x)
-        print("token_num_lod:", token_num_lod)
-        print("w1:", w1)
-        print("w2:", w2)
-        print("in_scale_1:", in_scale_1)
-        print("in_scale_2:", in_scale_2)
-        print("w_scale_1:", w_scale_1)
-        print("w_scale_2:", w_scale_2)
-        print("self.xpu_moe_quant_type:", self.xpu_moe_quant_type)
-        print("hadamard_block_size:", hadamard_block_size)
-        print("valid_token_num:", valid_token_num)
-        print("ffn_out:", ffn_out)
 
         return ffn_out
 
@@ -482,27 +464,16 @@ class XPUMoEMethod(MoEMethodBase):
         """
         Apply the EP prefill method.
         """
-        import sys, time as _time
-        _t0 = _time.time()
-        print(f"[DEBUG apply_ep_prefill] START x.shape={x.shape}, quant={self.xpu_moe_quant_type}", flush=True, file=sys.stderr)
-        print("[DEBUG apply_ep_prefill input] x: ", x)
         gate_out = gate(x.cast("float32"))
-        print(f"[DEBUG apply_ep_prefill] gate done, gate_out.shape={gate_out}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
-
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
-        print(f"[DEBUG apply_ep_prefill] moe_select done, topk_idx={topk_idx}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
-        print(f"[DEBUG apply_ep_prefill] moe_select done, topk_weights={topk_weights}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
         # 2. Dynamic compute blockwise quantization scales
         if "a_tokenwise_int8" in self.xpu_moe_quant_type:
             x, x_scale = quant2d_per_token(x)
             x_scale = x_scale.unsqueeze(1)
         else:
             x_scale = None
-        # x_scale = getattr(layer, self.added_in_scale_attrs[1])
-        print("self.added_in_scale_attrs[0]: ", getattr(layer, self.added_in_scale_attrs[0]))
-        print("self.added_in_scale_attrs[1]: ", getattr(layer, self.added_in_scale_attrs[1]))
-        print("x_scale: ", x_scale)
+
         # 3. EP Dispatch
         (
             recv_x,
@@ -517,8 +488,6 @@ class XPUMoEMethod(MoEMethodBase):
             topk_weights,
             x_scale=x_scale,
         )
-        print(f"[DEBUG apply_ep_prefill] EP dispatch done, recv_num_tokens={recv_num_tokens_per_expert_list}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
-
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
 
@@ -526,18 +495,13 @@ class XPUMoEMethod(MoEMethodBase):
 
         # 4. Compute ffn
         token_all_num = sum(recv_num_tokens_per_expert_list)
-        print(f"[DEBUG apply_ep_prefill] token_all_num={token_all_num}, recv_x type={type(recv_x)}, recv_x.shape={recv_x if hasattr(recv_x,'shape') else 'N/A'}", flush=True, file=sys.stderr)
         if "a_expertwise_int8" in self.xpu_moe_quant_type:
             moe_dispatch_scale = getattr(layer, self.added_in_scale_attrs[0])
         elif "a_tokenwise_int8" in self.xpu_moe_quant_type:
             moe_dispatch_scale = recv_x_scales
         else:
             moe_dispatch_scale = None
-        print("moe_dispatch_scale: ", moe_dispatch_scale)
-        print("recv_topk_idx: ", recv_topk_idx)
-        print("recv_topk_weights: ", recv_topk_weights)
-        print("recv_num_tokens_per_expert_list: ", recv_num_tokens_per_expert_list)
-        print("token_all_num: ", token_all_num)
+
         (
             permute_input,
             permute_indices_per_token,
@@ -553,14 +517,12 @@ class XPUMoEMethod(MoEMethodBase):
             token_all_num,
             self.moe_quant_type,
         )
-        print(f"[DEBUG apply_ep_prefill] ep_moe_expert_dispatch done, ffn1_x_scale_per_token={ffn1_x_scale_per_token}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         if "a_expertwise_int8" in self.xpu_moe_quant_type or "a_tokenwise_int8" in self.xpu_moe_quant_type:
             ffn1_x_scale = ffn1_x_scale_per_token
         else:
             ffn1_x_scale = None
-        print("ffn1_x_scale: ", ffn1_x_scale)
-        print(f"[DEBUG apply_ep_prefill] calling compute_ffn...", flush=True, file=sys.stderr)
+
         ffn_out = self.compute_ffn(
             layer,
             permute_input,
@@ -568,12 +530,6 @@ class XPUMoEMethod(MoEMethodBase):
             token_num_lod,
             token_all_num,
         )
-        print("permute_input: ", permute_input, paddle.mean(permute_input.astype('float32')))
-        print("token_all_num: ", token_all_num)
-        print("token_num_lod: ", token_num_lod)
-        print("ffn1_x_scale: ", ffn1_x_scale, paddle.mean(ffn1_x_scale.astype('float32')))
-        print("[DEBUG apply_ep_prefill ffn_out] ffn_out: ", ffn_out, paddle.mean(ffn_out.astype('float32')))
-        # print(f"[DEBUG apply_ep_prefill] compute_ffn done, ffn_out={paddle.mean(ffn_out)}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         recv_topk_weights_bf16 = recv_topk_weights.astype("bfloat16")
         tmp_ffn_out = ep_moe_expert_combine(
@@ -587,12 +543,9 @@ class XPUMoEMethod(MoEMethodBase):
         )
 
         # 5. EP combine
-        print(f"[DEBUG apply_ep_prefill] calling EP combine, tmp_ffn_out.shape={paddle.mean(tmp_ffn_out.astype('float32'))}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
         tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
-        print(f"[DEBUG apply_ep_prefill] EP combine done, result.shape={paddle.mean(tmp_ffn_out.astype('float32'))}, elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
-        print("[DEBUG apply_ep_prefill output] fused_moe_out: ", tmp_ffn_out)
         return tmp_ffn_out
 
     def apply_ep_decode(

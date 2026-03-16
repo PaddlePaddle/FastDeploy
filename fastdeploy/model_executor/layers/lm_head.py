@@ -98,7 +98,7 @@ class ParallelLMHead(nn.Layer):
                 set_weight_attrs(
                     self.linear.weight,
                     {
-                        "weight_need_transpose": self.fd_config.model_config.model_format == "torch",
+                        "weight_need_transpose": True,
                     },
                 )
                 set_weight_attrs(self.linear.weight, {"output_dim": True})
@@ -119,7 +119,7 @@ class ParallelLMHead(nn.Layer):
                 set_weight_attrs(
                     self.linear.weight,
                     {
-                        "weight_need_transpose": self.fd_config.model_config.model_format == "torch",
+                        "weight_need_transpose": True,
                     },
                 )
                 set_weight_attrs(self.linear.weight, {"output_dim": False})

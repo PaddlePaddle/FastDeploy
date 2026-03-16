@@ -540,6 +540,8 @@ class Ernie4_5_Model(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         print("===========embed_tokens==========", ids_remove_padding)
+        # if ids_remove_padding.shape == [14]:
+        #     paddle.device.xpu.set_debug_level(0xB1)
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
@@ -705,14 +707,12 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
 
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
                 if model_param_name not in params_dict:
-                    # print(f"{model_param_name} not in params_dict")
                     continue
                 param = params_dict[model_param_name]
                 expert_id = exp_id
                 shard_id = shard_id
                 break
             else:
-                # print("else: loaded_weight_name: ", loaded_weight_name)
                 expert_id = None
                 shard_id = None
                 loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe=False)
@@ -724,11 +724,6 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             # Get weight loader from parameter and set weight
             weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
             sig = inspect.signature(weight_loader)
-            print("sig.parameters: ",sig.parameters)
-            print("expert_id: ", expert_id)
-            print("shard_id: ", shard_id)
-            print("model_param_name: ", model_param_name)
-            print("weight_loader: ", weight_loader)
             if "expert_id" in sig.parameters:
                 weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
             else:
