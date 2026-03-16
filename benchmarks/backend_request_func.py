@@ -281,7 +281,7 @@ async def async_request_eb_openai_chat_completions(
                     if not chunk_bytes:
                         continue
 
-                    chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
+                    chunk = chunk_bytes.decode("utf-8", errors="replace").removeprefix("data: ")
                     if chunk != "[DONE]":
                         # print("####chunk:", chunk, type(chunk))
                         timestamp = time.perf_counter()
@@ -743,7 +743,7 @@ async def async_request_eb_openai_completions(
                         if not chunk_bytes:
                             continue
 
-                        chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
+                        chunk = chunk_bytes.decode("utf-8", errors="replace").removeprefix("data: ")
                         if chunk != "[DONE]":
                             # print("####chunk:", chunk, chunk.usage)
                             timestamp = time.perf_counter()
@@ -844,7 +844,7 @@ async def async_request_tgi(
                         chunk_bytes = chunk_bytes.strip()
                         if not chunk_bytes:
                             continue
-                        chunk_bytes = chunk_bytes.decode("utf-8")
+                        chunk_bytes = chunk_bytes.decode("utf-8", errors="replace")
 
                         # NOTE: Sometimes TGI returns a ping response without
                         # any data, we should skip it.
@@ -915,7 +915,7 @@ async def async_request_trt_llm(
                         if not chunk_bytes:
                             continue
 
-                        chunk = chunk_bytes.decode("utf-8").removeprefix("data:")
+                        chunk = chunk_bytes.decode("utf-8", errors="replace").removeprefix("data:")
 
                         data = json.loads(chunk)
                         output.generated_text += data["text_output"]
@@ -1037,7 +1037,7 @@ async def async_request_openai_completions(
                         if not chunk_bytes:
                             continue
 
-                        chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
+                        chunk = chunk_bytes.decode("utf-8", errors="replace").removeprefix("data: ")
                         if chunk != "[DONE]":
                             # print("####chunk:", chunk, type(chunk))
                             data = json.loads(chunk)
@@ -1146,7 +1146,7 @@ async def async_request_openai_audio(
                             if not chunk_bytes:
                                 continue
 
-                            chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
+                            chunk = chunk_bytes.decode("utf-8", errors="replace").removeprefix("data: ")
                             if chunk != "[DONE]":
                                 timestamp = time.perf_counter()
                                 data = json.loads(chunk)
