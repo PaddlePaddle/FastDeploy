@@ -247,6 +247,21 @@ int speculate_limit_thinking_content_length_kernel(
                       inject_len,
                       splitwise_role_is_decode);
   WRAPPER_DUMP(ctx);
+  WRAPPER_ASSERT_GT(ctx, bs, 0);
+  WRAPPER_ASSERT_GT(ctx, tokens_per_step, 0);
+  WRAPPER_ASSERT_GT(ctx, eos_token_id_len, 0);
+  WRAPPER_ASSERT_GE(ctx, inject_len, 0);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bs * tokens_per_step, next_tokens);
+  WRAPPER_CHECK_PTR(ctx, int, bs, max_think_lens);
+  WRAPPER_CHECK_PTR(ctx, int, bs, max_reply_lens);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bs, step_idx);
+  WRAPPER_CHECK_PTR(ctx, int64_t, eos_token_id_len, eos_token_ids);
+  WRAPPER_CHECK_PTR(ctx, int, bs, limit_status);
+  WRAPPER_CHECK_PTR(ctx, int, bs, accept_num);
+  WRAPPER_CHECK_PTR(ctx, bool, bs, stop_flags);
+  if (inject_len > 0) {
+    WRAPPER_CHECK_PTR(ctx, int64_t, inject_len, inject_token_ids);
+  }
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper(ctx,
                        next_tokens,

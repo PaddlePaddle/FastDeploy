@@ -757,8 +757,9 @@ class GCUModelRunner(ModelRunnerBase):
             self.padding_cudagraph_inputs()
 
             # 3. Run model
+            model_inputs = {"ids_remove_padding": self.share_inputs["ids_remove_padding"]}
             model_output = self.model(
-                ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                model_inputs,
                 forward_meta=self.forward_meta,
             )
 
@@ -985,8 +986,9 @@ class GCUModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda graph
 
         # 3. Execute model
+        model_inputs = {"ids_remove_padding": self.share_inputs["ids_remove_padding"]}
         model_output = self.model(
-            ids_remove_padding=self.share_inputs["ids_remove_padding"],
+            model_inputs,
             forward_meta=self.forward_meta,
         )
 

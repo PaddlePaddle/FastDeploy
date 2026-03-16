@@ -1744,19 +1744,16 @@ class MetaxModelRunner(ModelRunnerBase):
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             self.padding_cudagraph_inputs()
 
-            # 3. Run model
+            model_inputs = {}
+            model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
             if self.enable_mm:
-                model_output = self.model(
-                    self.forward_meta.ids_remove_padding,
-                    self.share_inputs["image_features"],
-                    self.forward_meta,
-                )
-            else:
-                # fallback paddleformers use cuda graph need kwargs
-                model_output = self.model(
-                    ids_remove_padding=self.forward_meta.ids_remove_padding,
-                    forward_meta=self.forward_meta,
-                )
+                model_inputs["image_features"] = self.share_inputs["image_features"]
+
+            # 3. Run model
+            model_output = self.model(
+                model_inputs,
+                self.forward_meta,
+            )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
 
@@ -2034,18 +2031,16 @@ class MetaxModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
-        # 3. Execute model
+        model_inputs = {}
+        model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
         if self.enable_mm:
-            model_output = self.model(
-                self.forward_meta.ids_remove_padding,
-                self.share_inputs["image_features"],
-                self.forward_meta,
-            )
-        else:
-            model_output = self.model(
-                ids_remove_padding=self.forward_meta.ids_remove_padding,
-                forward_meta=self.forward_meta,
-            )
+            model_inputs["image_features"] = self.share_inputs["image_features"]
+
+        # 3. Run model
+        model_output = self.model(
+            model_inputs,
+            self.forward_meta,
+        )
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
