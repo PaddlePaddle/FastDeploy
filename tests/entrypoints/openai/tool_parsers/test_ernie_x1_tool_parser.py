@@ -15,7 +15,6 @@
 """
 
 import unittest
-from unittest.mock import patch
 
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, DeltaMessage
 from fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser import (
@@ -55,46 +54,35 @@ class TestErnieX1ToolParser(unittest.TestCase):
         self.assertFalse(result.tools_called)
 
     def test_extract_tool_calls_exception(self):
-        """Force exception to cover error branch"""
-        with patch(
-            "fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.json.loads", side_effect=Exception("boom")
-        ):
-            output = '<tool_call>{"name": "get_weather", "arguments": {}}</tool_call>'
-            result = self.parser.extract_tool_calls(output, self.dummy_request)
-            self.assertFalse(result.tools_called)
+        """Completely broken JSON triggers the exception branch"""
+        output = "<tool_call>not json at all{{{</tool_call>"
+        result = self.parser.extract_tool_calls(output, self.dummy_request)
+        self.assertFalse(result.tools_called)
 
     def test_extract_tool_calls_partial_json_parser_failure(self):
         """Test partial_json_parser failure path for arguments (L165-166).
-        json.loads fails on malformed JSON, partial_json_parser.loads also fails.
+        json.loads fails on malformed JSON, partial_json_parser.loads also fails on deeply broken args.
         Partial result has _is_partial=True so tools_called=False, but tool_calls is populated."""
-        with patch(
-            "fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.partial_json_parser.loads",
-            side_effect=ValueError("cannot parse"),
-        ):
-            # Malformed JSON inside complete tags: extra `{` breaks json.loads,
-            # regex still finds name and arguments, partial_json_parser raises → L165-166 hit
-            output = '<tool_call>{"name": "test", "arguments": {{"nested_bad": 1}}</tool_call>'
-            result = self.parser.extract_tool_calls(output, self.dummy_request)
-            # _is_partial=True → tools_called=False, but tool_calls list is populated
-            self.assertFalse(result.tools_called)
-            self.assertIsNotNone(result.tool_calls)
-            self.assertEqual(result.tool_calls[0].function.name, "test")
-            # arguments=None → converted to {} → serialized as "{}"
-            self.assertEqual(result.tool_calls[0].function.arguments, "{}")
+        # Malformed JSON: valid name but arguments is a bare invalid token
+        # that breaks both json.loads and partial_json_parser
+        output = '<tool_call>{"name": "test", "arguments": @@@INVALID@@@}</tool_call>'
+        result = self.parser.extract_tool_calls(output, self.dummy_request)
+        # _is_partial=True → tools_called=False, but tool_calls list is populated
+        self.assertFalse(result.tools_called)
+        self.assertIsNotNone(result.tool_calls)
+        self.assertEqual(result.tool_calls[0].function.name, "test")
+        # arguments=None → converted to {} → serialized as "{}"
+        self.assertEqual(result.tool_calls[0].function.arguments, "{}")
 
     def test_partial_json_parser_exception_triggers_debug_log(self):
         """Malformed JSON + partial_json_parser failure exercises L165-166 exactly."""
-        with patch(
-            "fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.partial_json_parser.loads",
-            side_effect=ValueError("mocked parse error"),
-        ):
-            # Malformed: unclosed string in arguments breaks json.loads
-            output = '<tool_call>{"name": "my_tool", "arguments": {"key": "unterminated}</tool_call>'
-            result = self.parser.extract_tool_calls(output, self.dummy_request)
-            # Partial parse → tools_called=False but tool_calls has entries
-            self.assertFalse(result.tools_called)
-            self.assertIsNotNone(result.tool_calls)
-            self.assertEqual(result.tool_calls[0].function.name, "my_tool")
+        # Unclosed string in arguments breaks both json.loads and partial_json_parser
+        output = '<tool_call>{"name": "my_tool", "arguments": {"key": "unterminated}</tool_call>'
+        result = self.parser.extract_tool_calls(output, self.dummy_request)
+        # Partial parse → tools_called=False but tool_calls has entries
+        self.assertFalse(result.tools_called)
+        self.assertIsNotNone(result.tool_calls)
+        self.assertEqual(result.tool_calls[0].function.name, "my_tool")
 
     # ---------------- Streaming extraction tests ----------------
 

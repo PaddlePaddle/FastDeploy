@@ -23,7 +23,7 @@ Why mock:
 
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 def _make_model_config(arch, enable_mm=False):
@@ -52,6 +52,24 @@ class TestInputPreprocessorBranching(unittest.TestCase):
         self.assertEqual(pp.reasoning_parser, "qwen3")
         self.assertEqual(pp.tool_parser, "ernie_x1")
         self.assertEqual(pp.limit_mm_per_prompt, {"image": 2})
+
+    def test_create_processor_text_normal_path(self):
+        """Normal path: non-Ernie, non-MM arch creates a text DataProcessor."""
+        from fastdeploy.input.preprocess import InputPreprocessor
+
+        config = _make_model_config("LlamaForCausalLM", enable_mm=False)
+        pp = InputPreprocessor(model_config=config)
+
+        mock_dp = MagicMock()
+        with (
+            patch.dict("sys.modules", {"fastdeploy.plugins": None, "fastdeploy.plugins.input_processor": None}),
+            patch("fastdeploy.input.preprocess.envs") as mock_envs,
+            patch("fastdeploy.input.text_processor.DataProcessor", return_value=mock_dp),
+        ):
+            mock_envs.ENABLE_V1_DATA_PROCESSOR = False
+            pp.create_processor()
+
+        self.assertIs(pp.processor, mock_dp)
 
     def test_unsupported_mm_arch_raises(self):
         """When enable_mm=True and arch is unrecognized, should raise ValueError."""

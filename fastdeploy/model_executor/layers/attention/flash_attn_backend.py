@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
@@ -27,13 +26,13 @@ from paddleformers.utils.log import logger
 try:
     from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
 except Exception as e:
-    logging.debug(f"flash_attention_v3_varlen not available: {e}")
+    logger.debug(f"flash_attention_v3_varlen not available: {e}")
     flash_attention_v3_varlen = None
 
 try:
     from paddle.nn.functional.flash_attention import flashmask_attention
 except Exception as e:
-    logging.debug(f"flashmask_attention not available: {e}")
+    logger.debug(f"flashmask_attention not available: {e}")
     flashmask_attention = None
 
 from fastdeploy.config import FDConfig

@@ -248,7 +248,6 @@ def _patch_env_and_config(enable_v1_scheduler):
     with contextlib.ExitStack() as stack:
         for p in env_patches:
             stack.enter_context(p)
-        stack.enter_context(patch.object(FDConfig, "_disable_sequence_parallel_moe_if_needed"))
         yield
 
 

@@ -144,15 +144,9 @@ class Router:
         """Select one prefill and one decode server"""
         async with self.lock:
             if not self.prefill_servers:
-                raise RuntimeError(
-                    f"No prefill servers available. "
-                    f"Registered servers: prefill={len(self.prefill_servers)}, decode={len(self.decode_servers)}"
-                )
+                raise RuntimeError(f"No prefill servers available (decode={len(self.decode_servers)})")
             if not self.decode_servers:
-                raise RuntimeError(
-                    f"No decode servers available. "
-                    f"Registered servers: prefill={len(self.prefill_servers)}, decode={len(self.decode_servers)}"
-                )
+                raise RuntimeError(f"No decode servers available (prefill={len(self.prefill_servers)})")
             pidx = random.randint(0, len(self.prefill_servers) - 1)
             didx = random.randint(0, len(self.decode_servers) - 1)
             return self.prefill_servers[pidx], self.decode_servers[didx]

@@ -16,16 +16,16 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import paddle
+from paddleformers.utils.log import logger
 
 try:
     from fastdeploy.model_executor.ops.gpu import get_cur_cu_seq_len_k, moba_attention
 except Exception as e:
-    logging.debug(f"moba_attention ops not available: {e}")
+    logger.debug(f"moba_attention ops not available: {e}")
     moba_attention = None
     get_cur_cu_seq_len_k = None
 

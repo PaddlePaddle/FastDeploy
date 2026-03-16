@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-
 from fastdeploy.metrics.trace import get_trace_info_for_request
 from fastdeploy.trace.constants import EVENT_TO_STAGE_MAP
 from fastdeploy.utils import trace_logger
@@ -47,4 +45,4 @@ def print(event, request_id, user):
             stacklevel=2,
         )
     except Exception as e:
-        logging.debug(f"Failed to log trace event: {e}")
+        trace_logger.debug(f"Failed to log trace event: {e}")

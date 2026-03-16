@@ -14,6 +14,9 @@
 # limitations under the License.
 """
 
+# NOTE: Coverage supplement test — uses mock to reach compilation pipeline
+# branches that require Triton/CUDA toolchain not available in unit tests.
+
 import unittest
 from unittest.mock import MagicMock, patch
 

@@ -14,6 +14,9 @@
 # limitations under the License.
 """
 
+# NOTE: Coverage supplement test — uses mock to reach internal branches
+# that are hard to exercise without a full GPU/multi-process environment.
+
 import os
 import sys
 import unittest

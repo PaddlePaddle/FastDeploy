@@ -103,7 +103,9 @@ async def test_encode_timeout():
 
 @pytest.mark.asyncio
 async def test_encode_invalid_type():
-    """Test invalid encode type raises ValueError (line 130)."""
+    """Test invalid encode type raises ValueError (line 130).
+    NOTE: Public methods hardcode the type param, so we test the private method directly
+    to verify the validation boundary."""
     base_url = "http://testserver"
     client = AsyncTokenizerClient(base_url=base_url)
 
@@ -117,7 +119,9 @@ async def test_encode_invalid_type():
 
 @pytest.mark.asyncio
 async def test_decode_invalid_type():
-    """Test invalid decode type raises ValueError (line 186)."""
+    """Test invalid decode type raises ValueError (line 186).
+    NOTE: Public methods hardcode the type param, so we test the private method directly
+    to verify the validation boundary."""
     base_url = "http://testserver"
     client = AsyncTokenizerClient(base_url=base_url)
 

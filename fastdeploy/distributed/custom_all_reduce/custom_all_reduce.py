@@ -15,7 +15,6 @@
 
 import atexit
 import ctypes
-import logging
 from contextlib import contextmanager
 from typing import List, Optional
 
@@ -36,12 +35,13 @@ from fastdeploy.model_executor.ops.gpu import (
     register_buffer,
     register_graph_buffers,
 )
+from fastdeploy.utils import llm_logger as logger
 
 try:
     meta_size()
     custom_ar = True
 except Exception as e:
-    logging.debug(f"Custom allreduce not available: {e}")
+    logger.debug(f"Custom allreduce not available: {e}")
     custom_ar = False
 
 _instances = []

@@ -76,7 +76,7 @@ class TestEnvsSetattr(unittest.TestCase):
             envs.FD_DEBUG = original
 
     def test_setattr_unknown_var_raises(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(AttributeError):
             envs.UNKNOWN_VAR_XYZ = 1
 
 

@@ -16,8 +16,6 @@
 
 from __future__ import annotations
 
-import logging
-
 import paddle
 
 paddle.enable_compat(scope={"flash_mla"})  # Enable torch proxy before importing flash_mla
@@ -28,11 +26,12 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import paddle
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
+from paddleformers.utils.log import logger
 
 try:
     from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
 except Exception as e:
-    logging.debug(f"flash_attention_v3_varlen not available: {e}")
+    logger.debug(f"flash_attention_v3_varlen not available: {e}")
     flash_attention_v3_varlen = None
 
 from fastdeploy.model_executor.layers.attention.ops import (

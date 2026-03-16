@@ -14,6 +14,9 @@
 # limitations under the License.
 """
 
+# NOTE: Coverage supplement test — uses mock to reach speculative decoding
+# branches that require GPU model loading not available in unit tests.
+
 import unittest
 from unittest.mock import Mock, patch
 
