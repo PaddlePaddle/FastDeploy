@@ -17,8 +17,7 @@
 #include "xpu/refactor/impl_public/wrapper_check.h"
 #include "xpu/xdnn.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 template <typename TX, typename TY>
 __attribute__((global)) void eb_mtp_gather_next_token(TX *src,
                                                       TY *dst,
@@ -29,12 +28,9 @@ __attribute__((global)) void eb_mtp_gather_next_token(TX *src,
                                                       int en_batch,
                                                       int de_batch,
                                                       int64_t copy_size);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 template <typename TX, typename TY>
 static int cpu_wrapper(api::Context *ctx,
@@ -102,18 +98,20 @@ static int xpu3_wrapper(api::Context *ctx,
                         int de_batch,
                         int64_t hidden_dim) {
   auto eb_mtp_gather_next_token_kernel =
-      xpu3::plugin::eb_mtp_gather_next_token<TX, TY>;
+      fd_xpu3::eb_mtp_gather_next_token<TX, TY>;
   // NOTE: Don't change 16 to 64, because kernel use gsm
-  eb_mtp_gather_next_token_kernel<<<ctx->ncluster(), 16, ctx->xpu_stream>>>(
-      const_cast<TX *>(x),
-      y,
-      encoder_seqs_lods.xpu,
-      decoder_seqs_lods.xpu,
-      encoder_batch_map.xpu,
-      decoder_batch_map.xpu,
-      en_batch,
-      de_batch,
-      hidden_dim);
+  int32_t ret_xre =
+      eb_mtp_gather_next_token_kernel<<<ctx->ncluster(), 16, ctx->xpu_stream>>>(
+          const_cast<TX *>(x),
+          y,
+          encoder_seqs_lods.xpu,
+          decoder_seqs_lods.xpu,
+          encoder_batch_map.xpu,
+          decoder_batch_map.xpu,
+          en_batch,
+          de_batch,
+          hidden_dim);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
@@ -222,6 +220,4 @@ INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(float16, bfloat16);
 INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(bfloat16, float);
 INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(float, bfloat16);
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

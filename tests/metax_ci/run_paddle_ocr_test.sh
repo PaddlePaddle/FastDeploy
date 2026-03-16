@@ -36,7 +36,7 @@ SERVER_CMD="python  -m fastdeploy.entrypoints.openai.api_server \
                     --max-num-batched-tokens 16384 \
                     --gpu-memory-utilization 0.7 \
                     --max-num-seqs 256 \
-                    --graph-optimization-config '{\"use_cudagraph\": false}' \
+                    --graph-optimization-config '{\"use_cudagraph\": true}' \
                     --workers 4 \
                     --max-concurrency 8192 \
                     --port 8118 \

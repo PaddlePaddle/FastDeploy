@@ -34,15 +34,14 @@ std::vector<paddle::Tensor> WeightQuantizeKernel(const paddle::Tensor &x,
   if (algo == "weight_only_int8") {
     paddle::Tensor out =
         paddle::full({k, n}, 0, paddle::DataType::INT8, x.place());
-    int ret =
-        baidu::xpu::api::plugin::quant2d_per_channel<XPUType, float, int8_t>(
-            xpu_ctx->x_context(),
-            reinterpret_cast<const XPUType *>(x.template data<T>()),
-            nullptr,
-            out.data<int8_t>(),
-            scale.data<float>(),
-            k,
-            n);
+    int ret = fastdeploy::plugin::quant2d_per_channel<XPUType, float, int8_t>(
+        xpu_ctx->x_context(),
+        reinterpret_cast<const XPUType *>(x.template data<T>()),
+        nullptr,
+        out.data<int8_t>(),
+        scale.data<float>(),
+        k,
+        n);
     PD_CHECK(ret == 0);
     return {out, scale};
   } else if (algo == "weight_only_int4") {

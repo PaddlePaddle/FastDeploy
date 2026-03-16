@@ -25,7 +25,6 @@ from paddle import nn
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
-from fastdeploy.platforms import current_platform
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
 from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed
@@ -37,7 +36,8 @@ logger = get_logger("gpu_worker", "gpu_worker.log")
 
 try:
     ModelRunner = load_model_runner_plugins()
-except:
+except Exception as e:
+    logger.info(f"Plugin ModelRunner not available ({e}), using default GPUModelRunner")
     from fastdeploy.worker.gpu_model_runner import GPUModelRunner as ModelRunner
 
 
@@ -59,7 +59,7 @@ class GpuWorker(WorkerBase):
         """
         Initialize device and construct model runner
         """
-        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.max_chips_per_node = 8
         if self.device_config.device_type == "cuda" and paddle.device.is_compiled_with_cuda():
             # Set environment variable
             self.device_ids = self.parallel_config.device_ids.split(",")
@@ -188,6 +188,10 @@ class GpuWorker(WorkerBase):
         # accurate cache size
         self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
+        # Initialize routing replay manager
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.model_runner.initialize_routing_replay_manager()
+
     def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
         """update weights in place"""
         return self.model_runner.update_weights(version, rsync_config)
@@ -236,6 +240,15 @@ class GpuWorker(WorkerBase):
 
         # Capture CUDAGraph for decode phase (all modes)
         self.model_runner.capture_model()
+
+        # Deterministic mode: reset RNG and share_inputs after warmup.
+        # Warmup _dummy_run() calls consume CUDA RNG state and leave stale
+        # data (infer_seed, stop_flags, seq_lens, etc.) in share_inputs.
+        # Without this reset, the first real request may see different state
+        # than subsequent requests, causing occasional first-run divergence.
+        if envs.FD_DETERMINISTIC_MODE:
+            set_random_seed(self.fd_config.model_config.seed)
+            self.model_runner.share_inputs.reset_share_inputs()
 
     def check_health(self) -> bool:
         """ """
