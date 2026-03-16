@@ -301,6 +301,8 @@ def post_process_specualate(model_output, save_each_rank: bool = False, skip_sav
         model_output.seq_lens_this_time,
         model_output.is_block_step,
         model_output.stop_nums,
+        model_output.preempted_idx,
+        model_output.eos_token_id,
     )
 
     if not skip_save_output:

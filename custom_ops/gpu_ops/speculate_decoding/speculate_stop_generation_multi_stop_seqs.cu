@@ -29,6 +29,7 @@ __global__ void spec_set_value_by_stop_seqs(bool *stop_flags,
                                             const int *stop_seqs_len,
                                             const int *seq_lens,
                                             const int64_t *end_ids,
+                                            const int *preempted_idx,
                                             const int bs,
                                             const int accept_tokens_len,
                                             const int stop_seqs_bs,
@@ -48,6 +49,9 @@ __global__ void spec_set_value_by_stop_seqs(bool *stop_flags,
         if (!stop_flags[bid]) {
             int accept_idx = 0;
             bool is_end = false;
+            if (preempted_idx[bid] == 1){
+                is_end = true;
+            }
             // 遍历起始位置
             for (; accept_idx <= accept_num - 1 && !is_end; accept_idx++) {
                 if (step_idx_now - accept_num + accept_idx + 1 < stop_seq_len) {
@@ -138,7 +142,8 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
                                const paddle::Tensor &seq_lens,
                                const paddle::Tensor &stop_seqs,
                                const paddle::Tensor &stop_seqs_len,
-                               const paddle::Tensor &end_ids) {
+                               const paddle::Tensor &end_ids,
+                               const paddle::Tensor &preempted_idx) {
     PD_CHECK(accept_tokens.dtype() == paddle::DataType::INT64);
     PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
 
@@ -162,6 +167,7 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
         stop_seqs_len.data<int>(),
         seq_lens.data<int>(),
         end_ids.data<int64_t>(),
+        preempted_idx.data<int>(),
         bs_now,
         accept_tokens_len,
         stop_seqs_bs,
@@ -178,7 +184,8 @@ PD_BUILD_STATIC_OP(speculate_set_stop_value_multi_seqs)
              "seq_lens",
              "stop_seqs",
              "stop_seqs_len",
-             "end_ids"})
+             "end_ids",
+             "preempted_idx"})
     .Outputs({"accept_tokens_out", "stop_flags_out"})
     .SetInplaceMap({{"accept_tokens", "accept_tokens_out"},
                     {"stop_flags", "stop_flags_out"}})

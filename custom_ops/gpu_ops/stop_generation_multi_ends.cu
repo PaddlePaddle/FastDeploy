@@ -68,7 +68,8 @@ __global__ void set_value_by_flags(bool *stop_flags,
             }
             if (preempted_idx[bid] == 1){
                 stop_flags[bid] = true;
-                topk_ids[bid] = -1;
+                topk_ids[bid] = end_ids[0];
+                next_tokens[bid] = topk_ids[bid];
             }
         }
         // dealing stop_seqs
@@ -104,6 +105,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &step_idx,
                        const paddle::Tensor &stop_seqs,
                        const paddle::Tensor &stop_seqs_len,
+                       const paddle::Tensor &preempted_idx,
                        const bool beam_search) {
     PD_CHECK(topk_ids.dtype() == paddle::DataType::INT64);
     PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
