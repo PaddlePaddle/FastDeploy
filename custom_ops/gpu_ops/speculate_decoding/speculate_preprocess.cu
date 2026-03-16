@@ -170,9 +170,10 @@ std::vector<paddle::Tensor> SpeculatePreProcess(
   auto cu_seq_lens_q_output =
       paddle::empty({bsz + 1}, paddle::DataType::INT32, input_ids.place());
   auto batch_id_per_token_output =
-      paddle::empty({bsz * max_draft_tokens_per_batch},
-                    paddle::DataType::INT32,
-                    input_ids.place());
+      paddle::full({bsz * max_draft_tokens_per_batch},
+                   -1,
+                   paddle::DataType::INT32,
+                   input_ids.place());
   auto real_output_token_num =
       paddle::empty({1}, paddle::DataType::INT32, input_ids.place());
 

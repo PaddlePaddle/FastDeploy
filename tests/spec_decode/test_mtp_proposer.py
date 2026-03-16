@@ -68,6 +68,7 @@ class TestMTPProposer(unittest.TestCase):
             "seq_lens_encoder": paddle.zeros([2, 1], dtype="int32"),
             "seq_lens_decoder": paddle.zeros([2, 1], dtype="int32"),
             "prompt_lens": paddle.zeros([2, 1], dtype="int64"),
+            "prompt_lens_cpu": paddle.zeros([2, 1], dtype="int64").pin_memory(),
             "step_idx": paddle.zeros([2, 1], dtype="int64"),
             "stop_flags": paddle.zeros([2, 1], dtype="bool"),
             "token_ids_all": paddle.zeros([2, 2048], dtype="int64"),

@@ -380,7 +380,6 @@ class InputBatch:
         swap_data(self.step_seq_lens_encoder, i1, i2)
         swap_data(self.step_seq_lens_decoder, i1, i2)
         swap_data(self.prompt_lens, i1, i2)
-        swap_data(self.prompt_lens_cpu, i1, i2)
         swap_data(self.step_idx, i1, i2)
         swap_data(self.sampled_token_ids, i1, i2)
         swap_data(self.stop_flags, i1, i2)
@@ -427,8 +426,6 @@ class InputBatch:
             swap_data(self.input_ids_cpu, i1, i2)
             swap_data(self.accept_tokens, i1, i2)
             swap_data(self.accept_num, i1, i2)
-            swap_data(self.accept_tokens_cpu, i1, i2)
-            swap_data(self.accept_num_cpu, i1, i2)
             swap_data(self.draft_tokens, i1, i2)
             swap_data(self.actual_draft_token_num, i1, i2)
             if current_platform.is_cuda():
@@ -550,10 +547,8 @@ class InputBatch:
             fill_paddle_tensor(self, "step_seq_lens_encoder", 0)
             fill_paddle_tensor(self, "step_seq_lens_decoder", 0)
             fill_paddle_tensor(self, "prompt_lens", 0)
-            fill_paddle_tensor(self, "prompt_lens_cpu", 0)
             fill_paddle_tensor(self, "step_idx", 0)
             # fill_paddle_tensor(self, "not_need_stop", False)
-            fill_paddle_tensor(self, "not_need_stop_device", False)
             fill_paddle_tensor(self, "sampled_token_ids", -1)
             fill_paddle_tensor(self, "stop_flags", True)
 
@@ -619,9 +614,7 @@ class InputBatch:
                 max_draft_token_num = self.speculative_config.num_speculative_tokens
                 fill_paddle_tensor(self, "input_ids_cpu", -1)
                 fill_paddle_tensor(self, "accept_tokens", 0)
-                fill_paddle_tensor(self, "accept_tokens_cpu", 0)
                 fill_paddle_tensor(self, "accept_num", 0)
-                fill_paddle_tensor(self, "accept_num_cpu", max_draft_token_num)
                 fill_paddle_tensor(self, "draft_tokens", -1)
                 fill_paddle_tensor(self, "actual_draft_token_num", max_draft_token_num)
                 fill_paddle_tensor(self, "output_cum_offsets", 0)
@@ -666,6 +659,20 @@ class InputBatch:
             # Reset other miscellaneous tensors
             fill_paddle_tensor(self, "mask_rollback", 0)
             fill_paddle_tensor(self, "preempted_idx", 0)
+
+            # for overlap
+            self.prompt_lens_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int64").pin_memory()
+            self.seq_lens_decoder_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
+            self.accept_num_cpu = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32").pin_memory()
+            self.accept_tokens_cpu = paddle.full(
+                shape=[max_num_seqs, max_draft_token_num + 1],
+                fill_value=0,
+                dtype="int64",
+            ).pin_memory()
+            self.is_block_step_cpu = paddle.full(shape=[max_num_seqs, 1], fill_value=False, dtype="bool").pin_memory()
+            self.seq_lens_this_time_cpu = paddle.full(
+                shape=[max_num_seqs, 1], fill_value=-1, dtype="int32"
+            ).pin_memory()
 
             logger.info("share_inputs reset completed")
         except Exception as e:
@@ -757,7 +764,6 @@ class ProposerInputBatch(InputBatch):
         # self.caches = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
         self.prompt_lens = self.target_model_input_batch["prompt_lens"]
-        self.prompt_lens_cpu = self.target_model_input_batch["prompt_lens_cpu"]
         self.fake_prompt_lens = paddle.full([self.scheduler_config.max_num_seqs, 1], 0, dtype="int64")
         self.top_p = self.target_model_input_batch["top_p"]
         self.top_k = self.target_model_input_batch["top_k"]
@@ -830,9 +836,7 @@ class ProposerInputBatch(InputBatch):
         self.temp_scaled_logprobs = self.target_model_input_batch["temp_scaled_logprobs"]
         self.top_p_normalized_logprobs = self.target_model_input_batch["top_p_normalized_logprobs"]
         self.accept_num = self.target_model_input_batch["accept_num"]
-        self.accept_num_cpu = self.target_model_input_batch["accept_num_cpu"]
         self.accept_tokens = self.target_model_input_batch["accept_tokens"]
-        self.accept_tokens_cpu = self.target_model_input_batch["accept_tokens_cpu"]
         self.draft_logits = self.target_model_input_batch["draft_logits"]
         self.first_token_hidden_states = paddle.full(
             [self.scheduler_config.max_num_seqs, self.model_config.hidden_size], -1
@@ -884,7 +888,6 @@ class ProposerInputBatch(InputBatch):
         swap_data(self.step_idx, i1, i2)
         swap_data(self.stop_flags, i1, i2)
         swap_data(self.not_need_stop, i1, i2)
-        swap_data(self.not_need_stop_device, i1, i2)
         swap_data(self.pre_ids, i1, i2)
         if current_platform.is_cuda():
             swap_data(self.cu_seqlens_q_output, i1, i2)
@@ -904,8 +907,6 @@ class ProposerInputBatch(InputBatch):
         swap_data(self.encoder_block_lens, i1, i2)
 
         swap_data(self.is_block_step, i1, i2)
-        swap_data(self.is_block_step_cpu, i1, i2)
-        swap_data(self.seq_lens_this_time_cpu, i1, i2)
         swap_data(self.batch_drop, i1, i2)
         swap_data(self.used_list_len, i1, i2)
 
@@ -949,12 +950,10 @@ class ProposerInputBatch(InputBatch):
             self.seq_lens_encoder = paddle.clone(self.target_model_input_batch["seq_lens_encoder"])
             self.seq_lens_decoder = paddle.clone(self.target_model_input_batch["seq_lens_decoder"])
             self.prompt_lens = self.target_model_input_batch["prompt_lens"]
-            self.prompt_lens_cpu = paddle.clone(self.target_model_input_batch["prompt_lens_cpu"])
             self.fake_prompt_lens = paddle.full([self.scheduler_config.max_num_seqs, 1], 0, dtype="int64")
             self.step_idx = paddle.clone(self.target_model_input_batch["step_idx"])
             self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
             self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
-            self.not_need_stop_device = paddle.to_tensor([False], dtype="bool")
             if current_platform.is_cuda():
                 if "token_ids_all" in self.target_model_input_batch:
                     self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
@@ -1034,8 +1033,6 @@ class ProposerInputBatch(InputBatch):
 
             # Reset step and drop flags
             fill_paddle_tensor(self, "is_block_step", False)
-            fill_paddle_tensor(self, "is_block_step_cpu", False)
-            fill_paddle_tensor(self, "seq_lens_this_time_cpu", 0)
             fill_paddle_tensor(self, "batch_drop", False)
             fill_paddle_tensor(self, "used_list_len", 0)
 
@@ -1066,6 +1063,14 @@ class ProposerInputBatch(InputBatch):
                 fill_paddle_tensor(self, "attn_mask_offsets_full", -1)
                 fill_paddle_tensor(self, "attn_mask_offsets_decoder", -1)
                 fill_paddle_tensor(self, "decode_states", -1)
+
+            # for overlap
+            self.is_block_step_cpu = paddle.full(
+                shape=[self.scheduler_config.max_num_seqs, 1], fill_value=False, dtype="bool"
+            ).pin_memory()
+            self.seq_lens_this_time_cpu = paddle.full(
+                shape=[self.scheduler_config.max_num_seqs, 1], fill_value=-1, dtype="int32"
+            ).pin_memory()
 
             logger.info("model_inputs reset completed")
         except Exception as e:

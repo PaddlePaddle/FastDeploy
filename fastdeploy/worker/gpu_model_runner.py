@@ -2046,7 +2046,7 @@ class GPUModelRunner(ModelRunnerBase):
         model_output_data, sampler_output, post_process_event = self._postprocess(
             model_output, p_done_idxs, model_forward_batch, num_running_requests
         )
-        if model_output_data is not None and not self.speculative_decoding:
+        if model_output_data is not None:
             # synchronizes the async DtoH copies of sampled_token_ids.
             post_process_event.synchronize()
             self._save_model_output(model_output_data, sampler_output)
@@ -2374,9 +2374,9 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 5.1. Async cpy
             post_process_event = paddle.device.cuda.create_event()
-            if not self.speculative_decoding:
-                self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
-            else:
+            # if not self.speculative_decoding:
+            self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
+            if self.speculative_decoding:
                 self.share_inputs["accept_tokens_cpu"].copy_(self.share_inputs["accept_tokens"], False)
                 self.share_inputs["accept_num_cpu"].copy_(self.share_inputs["accept_num"], False)
                 self.share_inputs["seq_lens_decoder_cpu"].copy_(self.share_inputs["seq_lens_decoder"], False)

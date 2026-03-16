@@ -132,6 +132,7 @@ class MTPProposer(Proposer):
 
             self._mtp_input_token_num_event = paddle.device.cuda.Event()
             self._draft_output_token_num_event = paddle.device.cuda.Event()
+            self.token_num_event = paddle.device.cuda.create_event()
 
         # CUDA Graph
         self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph
@@ -145,50 +146,8 @@ class MTPProposer(Proposer):
         self.forward_meta = None
 
         self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule
-        self.cached_num_running_requests = -1
-        self.cached_token_num = -1
         self.exist_prefill_flag = False
-
-    def _resolve_current_launch_token_num(self, token_num_event, is_dummy_or_profile_run: bool) -> int:
-        """
-        Resolve token count for current batch.
-
-        In overlap mode, uses cached value from previous batch prediction to avoid GPU-CPU sync.
-        Falls back to fresh computation in certain conditions:
-        - dummy/profile runs need accurate counts
-        - non-overlap mode doesn't support caching
-        - prefill stage changes batch composition
-        - invalid cached value
-        """
-        if (
-            is_dummy_or_profile_run
-            or (not self.enable_overlap_schedule)
-            or self.exist_prefill()
-            or self.cached_token_num <= 0
-        ):
-            token_num_event.synchronize()
-            seq_lens_this_time_cpu = self.model_inputs["seq_lens_this_time_cpu"].numpy()
-            return (seq_lens_this_time_cpu > 0).sum().item(), seq_lens_this_time_cpu.sum().item()
-        return self.cached_num_running_requests, self.cached_token_num
-
-    def _predict_next_launch_token_num(self) -> int:
-        """
-        Predict token count for next batch.
-
-        In overlap scheduling, while current batch executes model forward,
-        the scheduler may have prepared decode requests for next batch.
-        This prediction allows next batch to skip synchronization.
-
-        Returns -1 if prediction is not applicable (non-overlap or prefill exists).
-        """
-        if self.exist_prefill():
-            return -1, -1
-
-        seq_lens_this_time_cpu = self.model_inputs["seq_lens_this_time_cpu"].numpy()
-        is_block_step_cpu = self.model_inputs["is_block_step_cpu"].numpy()
-        next_num_running_requests = (seq_lens_this_time_cpu > 0).sum().item() + (is_block_step_cpu > 0).sum().item()
-        next_launch_token_num = seq_lens_this_time_cpu.sum().item() + is_block_step_cpu.sum().item()
-        return next_num_running_requests, next_launch_token_num
+        self.first_decode = False
 
     def _update_mtp_config(self, main_model):
         """
@@ -886,13 +845,33 @@ class MTPProposer(Proposer):
             Whether to use cuda graph. Use the target model flag to avoid hanging problems with EP.
         """
         for substep in range(self.num_model_steps):
-            # token_num_cpu = self.model_inputs["seq_lens_this_time"].numpy().sum().item()
+            overlap_schedule_flag = (
+                self.enable_overlap_schedule
+                and (not is_dummy_run)
+                and (not self.exist_prefill())
+                and (not self.first_decode)
+            )
+
+            # reuse last batch token_num when overlap schedule
+            if overlap_schedule_flag:
+                self.token_num_event.synchronize()
+                seq_lens_this_time_cpu = self.model_inputs["seq_lens_this_time_cpu"].numpy()
+                is_block_step_cpu = self.model_inputs["is_block_step_cpu"].numpy()
+                num_running_requests = (seq_lens_this_time_cpu > 0).sum().item() + (is_block_step_cpu > 0).sum().item()
+                token_num_cpu = num_running_requests * (self.max_draft_token_num + 1)
+
             self.model_inputs["seq_lens_this_time_cpu"].copy_(self.model_inputs["seq_lens_this_time"], False)
             self.model_inputs["is_block_step_cpu"].copy_(self.model_inputs["is_block_step"], False)
-            token_num_event = paddle.device.cuda.create_event()
-            token_num_event.record()
-            num_running_requests, token_num_cpu = self._resolve_current_launch_token_num(token_num_event, is_dummy_run)
-            if token_num_cpu > 0:
+            self.token_num_event.record()
+
+            # sync current batch token_num when not overlap schedule
+            if not overlap_schedule_flag:
+                self.token_num_event.synchronize()
+                seq_lens_this_time_cpu = self.model_inputs["seq_lens_this_time_cpu"].numpy()
+                num_running_requests = (seq_lens_this_time_cpu > 0).sum().item()
+                token_num_cpu = seq_lens_this_time_cpu.sum().item()
+
+            if num_running_requests > 0:
                 self.model_inputs["substep"] = substep
                 # Remove padding
                 (
@@ -982,21 +961,25 @@ class MTPProposer(Proposer):
                 if self.num_model_steps > 1:
                     self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
 
-                self._mtp_input_token_num_event.synchronize()
-                real_num = int(self._mtp_input_token_num_host)
+                if is_dummy_run or self.exist_prefill():
+                    self._mtp_input_token_num_event.synchronize()
+                    real_num = int(self._mtp_input_token_num_host)
+                else:
+                    real_num = token_num_cpu
                 target_hidden_states = self.model_inputs["target_hidden_states"][:real_num]
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
                     previous_hidden_states=target_hidden_states,
                     forward_meta=self.forward_meta,
                 )
-                token_num_event.synchronize()
-                self.cached_num_running_requests, self.cached_token_num = self._predict_next_launch_token_num()
-                if self.model_inputs["seq_lens_this_time_cpu"].numpy().sum().item() <= 0:
-                    return
                 if self.forward_meta.step_use_cudagraph:
                     model_output = model_output[: self.real_token_num]
 
+                # if (is_dummy_run or self.exist_prefill()):
+                #     self._draft_output_token_num_event.synchronize()
+                #     real_num = int(self._draft_output_token_num_host)
+                # else:
+                #     real_num = token_num_cpu
                 self._draft_output_token_num_event.synchronize()
                 real_num = int(self._draft_output_token_num_host)
                 real_batch_id_per_token_output = self.model_inputs["batch_id_per_token_output"][:real_num]
@@ -1011,6 +994,8 @@ class MTPProposer(Proposer):
                     self.model_inputs["first_token_hidden_states"],
                     self.enable_logprob if substep == 0 else False,
                 )
+                if hidden_states.shape[0] == 0:
+                    return
 
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
@@ -1081,6 +1066,11 @@ class MTPProposer(Proposer):
             else:
                 if hasattr(self.model, "empty_input_forward") and not is_dummy_run:
                     self.model.empty_input_forward(forward_meta=self.forward_meta)
+
+            if self.exist_prefill_flag:
+                self.first_decode = True
+            else:
+                self.first_decode = False
             self.exist_prefill_flag = False
 
     def _propose_xpu(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
