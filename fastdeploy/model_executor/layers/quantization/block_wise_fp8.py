@@ -337,14 +337,27 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
                 using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
             )
             x_scale_tensor = x_scale_tensor.T[: x.shape[0], ...]
-        deep_gemm_fp8_gemm_nt(
-            x,
-            x_scale_tensor,
-            layer.weight,
-            layer.weight_scale_inv,
-            linear_out,
-            layer_output_size=layer.output_size,
-        )
-        if layer.with_bias:
-            linear_out = paddle.add(linear_out, layer.bias)
+
+        if get_sm_version() == 100 and current_platform.is_cuda():
+            deep_gemm_fp8_gemm_nt(
+                x,
+                x_scale_tensor,
+                layer.weight,
+                layer.weight_scale_inv,
+                linear_out,
+                layer_output_size=layer.output_size,
+                bias=layer.bias if layer.with_bias else None,
+            )
+        else:
+            deep_gemm_fp8_gemm_nt(
+                x,
+                x_scale_tensor,
+                layer.weight,
+                layer.weight_scale_inv,
+                linear_out,
+                layer_output_size=layer.output_size,
+            )
+            if layer.with_bias:
+                linear_out = paddle.add(linear_out, layer.bias)
+
         return linear_out
