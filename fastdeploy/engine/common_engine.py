@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections
 import copy
 import json
 import multiprocessing
@@ -1130,6 +1131,9 @@ class EngineService:
             if envs.ZMQ_SEND_BATCH_DATA:
                 # PUSH mode: batch send, no need to receive client handles
                 self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PUSH)
+                # Mapping from request_id to worker_pid for routing batch responses
+                self.request_worker_map = {}
+                self.request_worker_map_lock = threading.Lock()
             else:
                 # ROUTER mode: per-query send, need to receive client handles
                 self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
@@ -1174,8 +1178,16 @@ class EngineService:
                         self.recv_request_server = ZmqIpcServer(name=self.api_server_pid, mode=zmq.PULL)
                     continue
 
+                # Extract worker_pid for per-worker PUSH routing
+                worker_pid = None
+                if envs.ZMQ_SEND_BATCH_DATA and isinstance(data, dict):
+                    worker_pid = data.pop("_worker_pid", None)
+
                 if ControlRequest.is_control_request(data):
                     try:  # todo: run control request async, do not block request generation
+                        if worker_pid is not None:
+                            with self.request_worker_map_lock:
+                                self.request_worker_map[data.get("request_id")] = worker_pid
                         control_req = ControlRequest.from_dict(data)
                         self.run_control_method(control_req)
                     except Exception as e:
@@ -1188,6 +1200,12 @@ class EngineService:
                 request, insert_task = data, []
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
+                    # Store worker_pid mapping for normal/abort requests
+                    if worker_pid is not None:
+                        req_id_for_map = data.get("request_id")
+                        if req_id_for_map:
+                            with self.request_worker_map_lock:
+                                self.request_worker_map[req_id_for_map] = worker_pid
                     status_value = data.get("status", None)
                     if status_value is not None and status_value == RequestStatus.ABORT.value:
                         req_id = data["request_id"]
@@ -1228,7 +1246,9 @@ class EngineService:
                         if self.is_paused:
                             self.llm_logger.warning(f"Engine is paused, drop request: {request}")
                             self._send_error_response(
-                                request.request_id, "Request is aborted since LLM Engine is paused."
+                                request.request_id,
+                                "Request is aborted since LLM Engine is paused.",
+                                worker_pid=worker_pid,
                             )
                             continue
                     except Exception as e:
@@ -1289,6 +1309,12 @@ class EngineService:
         method = control_req.get_method()
         request_id = control_req.request_id
 
+        # Look up worker_pid for routing control response
+        worker_pid = None
+        if envs.ZMQ_SEND_BATCH_DATA and hasattr(self, "request_worker_map"):
+            with self.request_worker_map_lock:
+                worker_pid = self.request_worker_map.pop(request_id, None)
+
         try:
             self.llm_logger.info(f"START run control method {request_id}: {method}")
 
@@ -1298,21 +1324,21 @@ class EngineService:
                 error_result = ControlResponse(request_id, 400, f"unknown control method:{method}")
                 self.llm_logger.error(str(error_result))
                 data = [[error_result]] if envs.ZMQ_SEND_BATCH_DATA else [error_result]
-                self.send_response_server.send_response(request_id, data)
+                self.send_response_server.send_response(request_id, data, worker_pid=worker_pid)
                 return
 
             result = handler(control_req)
             self.llm_logger.info(f"SUCCESS run control method {method}.")
             succ_result = ControlResponse(request_id, 200, "Success", result)
             data = [[succ_result]] if envs.ZMQ_SEND_BATCH_DATA else [succ_result]
-            self.send_response_server.send_response(request_id, data)
+            self.send_response_server.send_response(request_id, data, worker_pid=worker_pid)
 
         except Exception as e:
             error_msg = f"Failed run control method {method}: {str(e)}"
             self.llm_logger.error(f"{error_msg}\n{traceback.format_exc()}")
             error_result = ControlResponse(request_id, 500, error_msg)
             data = [[error_result]] if envs.ZMQ_SEND_BATCH_DATA else [error_result]
-            self.send_response_server.send_response(request_id, data)
+            self.send_response_server.send_response(request_id, data, worker_pid=worker_pid)
 
     def _control_pause(self, control_request: ControlRequest):
         """Pauses the LLM engine and aborts all running/inflight requests.
@@ -1467,7 +1493,7 @@ class EngineService:
         # Use a single asyncio.run() to concurrently wait for all worker responses.
         return asyncio.run(self._wait_all_control_responses(request_id, timeout))
 
-    def _send_error_response(self, request_id, error_msg, error_code: int = 500):
+    def _send_error_response(self, request_id, error_msg, error_code: int = 500, worker_pid=None):
         self.llm_logger.error(
             f"Send error response to client, request_id: {request_id}, error_msg: {error_msg}, error_code: {error_code}"
         )
@@ -1477,12 +1503,16 @@ class EngineService:
             error_code=error_code,
             error_msg=error_msg,
         )
+        # Look up worker_pid from mapping if not provided
+        if worker_pid is None and envs.ZMQ_SEND_BATCH_DATA and hasattr(self, "request_worker_map"):
+            with self.request_worker_map_lock:
+                worker_pid = self.request_worker_map.pop(request_id, None)
         # Since the request is not in scheduler
         # Send result by zmq directly
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
             self.send_response_server.send_response(None, [[error_result]])
         elif envs.ZMQ_SEND_BATCH_DATA:
-            self.send_response_server.send_response(None, [[error_result]])
+            self.send_response_server.send_response(None, [[error_result]], worker_pid=worker_pid)
         else:
             self.send_response_server.send_response(request_id, [error_result])
 
@@ -1544,7 +1574,7 @@ class EngineService:
                         self.send_response_server.send_response(None, new_contents)
 
                 else:
-                    batch_data = []
+                    worker_batches = collections.defaultdict(list)
                     for request_id, contents in results.items():
                         new_contents = []
                         for content in contents:
@@ -1573,11 +1603,19 @@ class EngineService:
                                 new_contents.append(content)
                         if new_contents:
                             if envs.ZMQ_SEND_BATCH_DATA:
-                                batch_data.append(new_contents)
+                                with self.request_worker_map_lock:
+                                    wpid = self.request_worker_map.get(request_id)
+                                worker_batches[wpid].append(new_contents)
+                                is_finished = any(getattr(c, "finished", False) for c in new_contents)
+                                if is_finished:
+                                    with self.request_worker_map_lock:
+                                        self.request_worker_map.pop(request_id, None)
                             else:
                                 self.send_response_server.send_response(request_id, new_contents)
-                    if envs.ZMQ_SEND_BATCH_DATA and batch_data:
-                        self.send_response_server.send_response(None, batch_data)
+                    if envs.ZMQ_SEND_BATCH_DATA:
+                        for wpid, batch_data in worker_batches.items():
+                            if batch_data:
+                                self.send_response_server.send_response(None, batch_data, worker_pid=wpid)
             except Exception as e:
                 self.llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
 
@@ -1736,6 +1774,10 @@ class EngineService:
                 self.cache_task_queue.clear_transfer_task()
             self.send_response_server.req_dict.clear()
             self.recv_request_server.req_dict.clear()
+            # Clean up worker_pid mapping (batch mode)
+            if envs.ZMQ_SEND_BATCH_DATA and hasattr(self, "request_worker_map"):
+                with self.request_worker_map_lock:
+                    self.request_worker_map.clear()
             self.llm_logger.info("Clear Data: Successfully")
             return True
         except Exception as e:

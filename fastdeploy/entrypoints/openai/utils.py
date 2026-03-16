@@ -17,6 +17,7 @@
 import asyncio
 import functools
 import heapq
+import os
 import random
 import time
 import traceback
@@ -109,18 +110,24 @@ class DealerConnectionManager:
 
         if envs.ZMQ_SEND_BATCH_DATA:
             # Create PULL client for batch response reception
+            # Each worker binds on a unique address to avoid PUSH round-robin
             try:
-                self.pull_client = await aiozmq.create_zmq_stream(
-                    zmq.PULL, connect=f"ipc:///dev/shm/response_{self.pid}.push"
-                )
+                self.worker_pid = os.getpid()
+                self.pull_ipc_path = f"/dev/shm/response_{self.pid}_w{self.worker_pid}.pull"
+                self.pull_client = await aiozmq.create_zmq_stream(zmq.PULL, bind=f"ipc://{self.pull_ipc_path}")
                 # Start dispatcher task
                 self.dispatcher_task = asyncio.create_task(self._dispatch_batch_responses())
-                api_server_logger.info(f"Started PULL client for batch response, pid {self.pid}")
+                api_server_logger.info(
+                    f"Started PULL client (bind) for batch response, pid {self.pid}, worker {self.worker_pid}"
+                )
             except Exception as e:
                 api_server_logger.error(f"Failed to create PULL client: {str(e)}")
                 # Reset running flag and propagate error to avoid hanging requests in batch mode
                 self.running = False
-                raise RuntimeError(f"Failed to initialize PULL client for batch response (pid={self.pid})") from e
+                raise RuntimeError(
+                    f"Failed to initialize PULL client for batch response "
+                    f"(pid={self.pid}, worker={getattr(self, 'worker_pid', 'unknown')})"
+                ) from e
         else:
             for index in range(self.max_connections):
                 await self._add_connection(index)
@@ -299,6 +306,15 @@ class DealerConnectionManager:
                 try:
                     self.pull_client.close()
                 except:
+                    pass
+
+            # Clean up IPC file created by bind
+            pull_ipc_path = getattr(self, "pull_ipc_path", None)
+            if pull_ipc_path:
+                try:
+                    if os.path.exists(pull_ipc_path):
+                        os.remove(pull_ipc_path)
+                except OSError:
                     pass
         else:
             for task in self.connection_tasks:
