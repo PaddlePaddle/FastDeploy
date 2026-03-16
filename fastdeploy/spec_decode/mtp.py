@@ -962,9 +962,8 @@ class MTPProposer(Proposer):
                     recover_model_output_map = recover_batch_index_for_output(
                         self.model_inputs,
                         self.model_inputs.index_to_batch_id,
-                        self.model_inputs.enable_pd_reorder[
-                            "batch_token_num", "cu_batch_token_offset", "seq_lens_decoder", "prompt_lens"
-                        ],
+                        self.model_inputs.enable_pd_reorder,
+                        ["batch_token_num", "cu_batch_token_offset", "seq_lens_decoder", "prompt_lens"],
                     )
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
@@ -1064,7 +1063,8 @@ class MTPProposer(Proposer):
                     recover_model_output_map = recover_batch_index_for_output(
                         self.model_inputs,
                         self.model_inputs.index_to_batch_id,
-                        self.model_inputs.enable_pd_reorder["batch_token_num", "cu_batch_token_offset"],
+                        self.model_inputs.enable_pd_reorder,
+                        ["batch_token_num", "cu_batch_token_offset"],
                     )
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
