@@ -509,9 +509,10 @@ class EngineArgs:
 
     enable_keep_sampling_mask: bool = False
     """
-    Flag to enable sampling mask output. Default is False (disabled).
-    When enabled, a binary mask is saved for each generated token indicating which token positions
-    were retained (1) or truncated (0) after top_p/top_k sampling, and streamed to the client.
+    When enabled, the server returns a sparse index list for each generated token, indicating
+    which vocabulary positions were retained after top_p/top_k sampling, and streams it to
+    the client. In MTP (multi-token prediction) scenarios this field is a List[List[int]],
+    where each inner list contains the retained vocabulary indices for a predicted token.
     """
 
     def __post_init__(self):
