@@ -25,7 +25,7 @@
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
-#define MAX_BSZ 512
+#define MAX_BSZ 2048
 
 struct msgdata {
   long mtype;

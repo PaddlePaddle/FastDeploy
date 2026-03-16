@@ -43,6 +43,12 @@ from fastdeploy.utils import (
     parse_ports,
 )
 
+RECOVERY_STOP_SIGNAL = -3
+MAX_DRAFT_TOKENS = 6
+SPECULATE_MAX_BSZ = 2048
+
+MAX_BSZ = 2048
+
 logger = get_logger("config", "config.log")
 
 TaskOption = Literal["auto", "generate", "embedding", "embed"]

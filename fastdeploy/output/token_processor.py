@@ -29,7 +29,13 @@ import zmq
 
 import fastdeploy.metrics.trace as tracing
 from fastdeploy import envs
-from fastdeploy.config import PREEMPTED_TOKEN_ID
+from fastdeploy.config import (
+    MAX_BSZ,
+    MAX_DRAFT_TOKENS,
+    PREEMPTED_TOKEN_ID,
+    RECOVERY_STOP_SIGNAL,
+    SPECULATE_MAX_BSZ,
+)
 from fastdeploy.engine.request import (
     CompletionOutput,
     PoolingOutput,
@@ -48,12 +54,6 @@ from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
 
-RECOVERY_STOP_SIGNAL = -3
-MAX_DRAFT_TOKENS = 6
-SPECULATE_MAX_BSZ = 256
-
-
-MAX_BSZ = 512
 K = 20
 
 
