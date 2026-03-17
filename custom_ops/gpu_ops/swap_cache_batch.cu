@@ -27,6 +27,11 @@ void SwapCacheImplAllLayers(
   typedef PDTraits<D> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
+  // Ensure both block-id lists have the same length before entering the loop
+  assert(swap_block_ids_gpu.size() == swap_block_ids_cpu.size());
+  if (swap_block_ids_gpu.size() == 0) {
+    return;
+  }
   auto stream = cache_gpu_tensors[0].stream();
   for (int layer_idx = 0; layer_idx < cache_gpu_tensors.size(); layer_idx++) {
     const paddle::Tensor& cache_gpu = cache_gpu_tensors[layer_idx];
@@ -34,6 +39,8 @@ void SwapCacheImplAllLayers(
     data_t* cache_gpu_ptr = const_cast<data_t*>(cache_gpu.data<data_t>());
     auto* cache_cpu_ptr = reinterpret_cast<data_t*>(cache_cpu_pointer);
     auto cache_shape = cache_gpu.shape();
+    // Validate that the tensor is either 3-D or 4-D
+    assert(cache_shape.size() == 3 || cache_shape.size() == 4);
     const int64_t max_block_num_gpu = cache_shape[0];
     const int64_t num_heads = cache_shape[1];
     const int64_t block_size = cache_shape[2];
@@ -43,14 +50,13 @@ void SwapCacheImplAllLayers(
     }
     const int64_t cache_stride = num_heads * block_size * head_dim;
 
-    auto stream = cache_gpu.stream();
-    if (swap_block_ids_gpu.size() == 0) {
-      return;
-    }
     int i = 0;
     int64_t consecutive_block_count = 1;
     int64_t last_gpu_block_id = swap_block_ids_gpu[i];
     int64_t last_cpu_block_id = swap_block_ids_cpu[i];
+    // Validate bounds for the first block id
+    assert(last_gpu_block_id >= 0 && last_gpu_block_id < max_block_num_gpu);
+    assert(last_cpu_block_id >= 0 && last_cpu_block_id < max_block_num_cpu);
     int64_t first_gpu_block_id =
         last_gpu_block_id;  // first block id in a consecutive block ids
     int64_t first_cpu_block_id = last_cpu_block_id;
