@@ -452,6 +452,11 @@ elif paddle.is_compiled_with_cuda():
                     "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_fp8.cu",
                     "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_int8.cu",
                     "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_azp_sm90_int8.cu",
+                    # Batch-invariant Gate GEMM (CUTLASS 3.x persistent)
+                    "gpu_ops/cutlass_kernels/batch_invariant_gemm/batch_invariant_gate_gemm.cu",
+                ]
+                nvcc_compile_args += [
+                    "-Igpu_ops/cutlass_kernels/batch_invariant_gemm",
                 ]
             elif cc == 100 and nvcc_version >= 12.9:  # Blackwell SM100 specifics
                 print("SM100 (Blackwell): Applying SM100 configurations.")

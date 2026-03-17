@@ -128,6 +128,278 @@ def matmul_kernel_persistent(
         tl.store(c_ptrs, c, mask=c_mask)
 
 
+# ── Split-K matmul kernel ─────────────────────────────────────────────
+# Split K dimension across multiple SMs to improve utilization for
+# skinny-N problems (e.g. Gate matmul [M,7168]x[7168,256]).
+# Each program computes a partial sum over a K-slice, then a reduction
+# kernel sums the partials in fixed order to preserve batch invariance.
+
+
+@triton.jit
+def matmul_splitk_kernel(
+    a_ptr,
+    b_ptr,
+    partial_ptr,  # [SPLIT_K, M, N] workspace for partial sums
+    M,
+    N,
+    K,
+    stride_am,
+    stride_ak,
+    stride_bk,
+    stride_bn,
+    stride_ps,  # stride for split_k dim of partial_ptr
+    stride_pm,
+    stride_pn,
+    BLOCK_SIZE_M: tl.constexpr,
+    BLOCK_SIZE_N: tl.constexpr,
+    BLOCK_SIZE_K: tl.constexpr,
+    SPLIT_K: tl.constexpr,
+):
+    # 2D grid: (num_m_tiles * num_n_tiles, SPLIT_K)
+    pid_mn = tl.program_id(0)
+    pid_k = tl.program_id(1)
+
+    num_pid_n = tl.cdiv(N, BLOCK_SIZE_N)
+    pid_m = pid_mn // num_pid_n
+    pid_n = pid_mn % num_pid_n
+
+    # K range for this split
+    k_per_split = tl.cdiv(K, SPLIT_K)
+    k_start = pid_k * k_per_split
+    k_end = min(k_start + k_per_split, K)
+
+    offs_m = pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)
+    offs_n = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
+    offs_m = tl.where(offs_m < M, offs_m, 0)
+    offs_n = tl.where(offs_n < N, offs_n, 0)
+    offs_m = tl.max_contiguous(tl.multiple_of(offs_m, BLOCK_SIZE_M), BLOCK_SIZE_M)
+    offs_n = tl.max_contiguous(tl.multiple_of(offs_n, BLOCK_SIZE_N), BLOCK_SIZE_N)
+
+    accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
+    k_tiles = tl.cdiv(k_end - k_start, BLOCK_SIZE_K)
+    for ki in range(0, k_tiles):
+        k_offset = k_start + ki * BLOCK_SIZE_K
+        offs_k = k_offset + tl.arange(0, BLOCK_SIZE_K)
+        k_mask = offs_k < k_end
+
+        a_ptrs = a_ptr + (offs_m[:, None] * stride_am + offs_k[None, :] * stride_ak)
+        b_ptrs = b_ptr + (offs_k[:, None] * stride_bk + offs_n[None, :] * stride_bn)
+
+        a = tl.load(a_ptrs, mask=k_mask[None, :], other=0.0)
+        b = tl.load(b_ptrs, mask=k_mask[:, None], other=0.0)
+        accumulator = tl.dot(a, b, accumulator)
+
+    # Store partial result in fp32
+    offs_cm = pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)
+    offs_cn = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
+    c_mask = (offs_cm[:, None] < M) & (offs_cn[None, :] < N)
+    p_ptrs = partial_ptr + pid_k * stride_ps + offs_cm[:, None] * stride_pm + offs_cn[None, :] * stride_pn
+    tl.store(p_ptrs, accumulator, mask=c_mask)
+
+
+@triton.jit
+def splitk_reduce_kernel(
+    partial_ptr,  # [SPLIT_K, M, N] fp32 partials
+    c_ptr,
+    bias_ptr,
+    M,
+    N,
+    stride_ps,
+    stride_pm,
+    stride_pn,
+    stride_cm,
+    stride_cn,
+    SPLIT_K: tl.constexpr,
+    BLOCK_SIZE_N: tl.constexpr,
+    HAS_BIAS: tl.constexpr,
+):
+    # 1D grid: one program per (row, n_block)
+    pid = tl.program_id(0)
+    num_n_blocks = tl.cdiv(N, BLOCK_SIZE_N)
+    row = pid // num_n_blocks
+    n_block = pid % num_n_blocks
+
+    if row >= M:
+        return
+
+    offs_n = n_block * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
+    n_mask = offs_n < N
+
+    # Sum partials in fixed order (deterministic)
+    acc = tl.zeros((BLOCK_SIZE_N,), dtype=tl.float32)
+    for ki in range(SPLIT_K):
+        p_ptrs = partial_ptr + ki * stride_ps + row * stride_pm + offs_n * stride_pn
+        partial = tl.load(p_ptrs, mask=n_mask, other=0.0)
+        acc += partial
+
+    if HAS_BIAS:
+        bias = tl.load(bias_ptr + offs_n, mask=n_mask, other=0.0).to(tl.float32)
+        acc += bias
+
+    # Store in output dtype
+    c_ptrs = c_ptr + row * stride_cm + offs_n * stride_cn
+    c = acc.to(c_ptr.dtype.element_ty)
+    tl.store(c_ptrs, c, mask=n_mask)
+
+
+def matmul_splitk(a: paddle.Tensor, b: paddle.Tensor, bias: paddle.Tensor | None = None, split_k: int = 8):
+    """Split-K matmul for batch-invariant Gate matmul.
+
+    Splits K dimension across `split_k` groups of SMs, then reduces
+    partial sums in deterministic order. Improves SM utilization for
+    skinny-N problems where the standard persistent kernel only uses
+    a few tiles.
+    """
+    assert a.shape[1] == b.shape[0], "Incompatible dimensions"
+    assert a.dtype == b.dtype, f"Incompatible dtypes: a={a.dtype}, b={b.dtype}"
+
+    M, K = a.shape
+    K, N = b.shape
+    dtype = a.dtype
+
+    configs = {
+        paddle.bfloat16: {
+            "BLOCK_SIZE_M": 128,
+            "BLOCK_SIZE_N": 128,
+            "BLOCK_SIZE_K": 64,
+            "num_stages": 3,
+            "num_warps": 4,
+        },
+        paddle.float16: {
+            "BLOCK_SIZE_M": 128,
+            "BLOCK_SIZE_N": 256,
+            "BLOCK_SIZE_K": 64,
+            "num_stages": 3,
+            "num_warps": 4,
+        },
+        paddle.float32: {
+            "BLOCK_SIZE_M": 128,
+            "BLOCK_SIZE_N": 128,
+            "BLOCK_SIZE_K": 32,
+            "num_stages": 3,
+            "num_warps": 4,
+        },
+    }
+    cfg = configs[dtype]
+    bm, bn, bk = cfg["BLOCK_SIZE_M"], cfg["BLOCK_SIZE_N"], cfg["BLOCK_SIZE_K"]
+
+    # Workspace for partial sums (always fp32 for accumulation accuracy)
+    partial = paddle.empty((split_k, M, N), dtype=paddle.float32)
+    c = paddle.empty((M, N), dtype=dtype)
+
+    # Phase 1: Split-K matmul
+    grid_mn = triton.cdiv(M, bm) * triton.cdiv(N, bn)
+    matmul_splitk_kernel[(grid_mn, split_k)](
+        a,
+        b,
+        partial,
+        M,
+        N,
+        K,
+        a.stride(0),
+        a.stride(1),
+        b.stride(0),
+        b.stride(1),
+        partial.stride(0),
+        partial.stride(1),
+        partial.stride(2),
+        BLOCK_SIZE_M=bm,
+        BLOCK_SIZE_N=bn,
+        BLOCK_SIZE_K=bk,
+        SPLIT_K=split_k,
+        num_stages=cfg["num_stages"],
+        num_warps=cfg["num_warps"],
+    )
+
+    # Phase 2: Reduce partials (deterministic fixed-order sum)
+    reduce_bn = min(bn, N)  # reuse same N block size
+    grid_reduce = triton.cdiv(N, reduce_bn) * M
+    splitk_reduce_kernel[(grid_reduce,)](
+        partial,
+        c,
+        bias,
+        M,
+        N,
+        partial.stride(0),
+        partial.stride(1),
+        partial.stride(2),
+        c.stride(0),
+        c.stride(1),
+        SPLIT_K=split_k,
+        BLOCK_SIZE_N=reduce_bn,
+        HAS_BIAS=int(bias is not None),
+        num_warps=4,
+    )
+    return c
+
+
+# ── CUTLASS batch-invariant Gate GEMM (SM90+) ────────────────────────
+# Uses CUTLASS 3.x PersistentScheduler for deterministic tile ordering.
+# Single kernel launch with TMA + wgmma, no workspace overhead.
+
+_cutlass_gate_gemm_available = None  # lazy init
+
+
+def _check_cutlass_gate_gemm():
+    """Check if the CUTLASS batch_invariant_gate_gemm op is available."""
+    global _cutlass_gate_gemm_available
+    if _cutlass_gate_gemm_available is not None:
+        return _cutlass_gate_gemm_available
+    try:
+        from fastdeploy.model_executor.ops import gpu
+
+        _cutlass_gate_gemm_available = hasattr(gpu, "batch_invariant_gate_gemm")
+    except ImportError:
+        _cutlass_gate_gemm_available = False
+    return _cutlass_gate_gemm_available
+
+
+def transpose_weight_for_cutlass(b: paddle.Tensor) -> paddle.Tensor:
+    """Transpose [K, N] row-major weight to [N, K] column-major for CUTLASS.
+
+    Call this once at model load time and cache the result externally.
+    Do NOT cache inside matmul_cutlass_gate — data_ptr() reuse after
+    tensor deallocation (test) or in-place optimizer update (training)
+    would silently return stale data.
+    """
+    return b.T.contiguous()
+
+
+def matmul_cutlass_gate(a: paddle.Tensor, b: paddle.Tensor, bias: paddle.Tensor | None = None):
+    """CUTLASS batch-invariant GEMM for SM90+.
+
+    a: [M, K] row-major activations
+    b: [K, N] row-major weight — transposed on every call.
+       For inference hot-paths, pre-transpose with transpose_weight_for_cutlass()
+       and call matmul_cutlass_gate_pretransposed() instead.
+    bias: optional [N] vector
+    Returns: [M, N]
+    """
+    b_t = b.T.contiguous()
+    return matmul_cutlass_gate_pretransposed(a, b_t, bias)
+
+
+def matmul_cutlass_gate_pretransposed(a: paddle.Tensor, b_t: paddle.Tensor, bias: paddle.Tensor | None = None):
+    """CUTLASS batch-invariant GEMM with pre-transposed weight.
+
+    a: [M, K] row-major activations
+    b_t: [N, K] column-major weight (already transposed)
+    bias: optional [N] vector
+    Returns: [M, N]
+    """
+    # Use pybind11 direct call to bypass Paddle custom op dispatch overhead
+    # (~8.5us vs ~230us via PD_BUILD_STATIC_OP)
+    from fastdeploy.model_executor.ops.gpu.fastdeploy_ops import (
+        batch_invariant_gate_gemm,
+    )
+
+    M, K = a.shape
+    N = b_t.shape[0]
+    c = paddle.empty([M, N], dtype=a.dtype)
+    batch_invariant_gate_gemm(c, a, b_t, bias)
+    return c
+
+
 def get_compute_units():
     """
     Returns the number of streaming multiprocessors (SMs) or equivalent compute units
