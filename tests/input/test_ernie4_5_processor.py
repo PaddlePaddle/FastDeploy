@@ -260,38 +260,25 @@ class TestErnie4_5Processor(unittest.TestCase):
         self.assertEqual(len(stop_seqs2), 2)
         self.assertEqual(len(stop_lens2), 2)
 
-    def test_process_request_chat_template_kwargs(self):
-        """Test chat_template_kwargs application inside process_request."""
+    def test_process_request_dict_with_chat_template_kwargs(self):
+        """Test chat_template_kwargs application inside process_request_dict."""
 
         proc = self._make_processor()
 
-        class ReqObj(dict):
-            """Mock request object supporting attributes, set(), and to_dict()."""
+        request = {
+            "messages": [{"role": "user", "content": "hello"}],
+            "temperature": 0.5,
+            "top_p": 0.5,
+            "chat_template_kwargs": {"extra": "VALUE"},
+        }
 
-            def set(self, k, v):
-                self[k] = v
+        processed = proc.process_request_dict(request, max_model_len=20)
 
-            def __getattr__(self, item):
-                return self.get(item, None)
-
-            def to_dict(self):
-                return dict(self)
-
-        request = ReqObj(
-            {
-                "messages": [{"role": "user", "content": "hello"}],
-                "temperature": 0.5,
-                "top_p": 0.5,
-            }
-        )
-
-        processed = proc.process_request(request, max_model_len=20, chat_template_kwargs={"extra": "VALUE"})
-
-        self.assertEqual(processed.eos_token_ids, [proc.tokenizer.eos_token_id])
+        self.assertEqual(processed["eos_token_ids"], [proc.tokenizer.eos_token_id])
 
         expected_ids = proc.tokenizer.convert_tokens_to_ids(proc.tokenizer.tokenize("hello"))
-        self.assertIsNotNone(processed.prompt_token_ids)
-        self.assertEqual(processed.prompt_token_ids, expected_ids)
+        self.assertIsNotNone(processed["prompt_token_ids"])
+        self.assertEqual(processed["prompt_token_ids"], expected_ids)
 
         self.assertIn("max_tokens", processed)
         self.assertEqual(processed["max_tokens"], max(1, 20 - len(expected_ids)))

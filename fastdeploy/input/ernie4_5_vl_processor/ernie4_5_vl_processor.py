@@ -20,7 +20,6 @@ from collections.abc import Mapping
 import numpy as np
 from paddleformers.generation import GenerationConfig
 
-from fastdeploy.engine.request import Request
 from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
 from fastdeploy.input.utils import IDS_TYPE_FLAG, process_stop_token_ids
 from fastdeploy.utils import data_processor_logger
@@ -118,16 +117,6 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         set_value(request, "repetition_penalty", 1.0)
         set_value(request, "frequency_penalty", 0.0)
         set_value(request, "presence_penalty", 0.0)
-        return request
-
-    def process_request(self, request, max_model_len=None, **kwargs):
-        """process the input data"""
-        task = request.to_dict()
-        task["chat_template_kwargs"] = kwargs.get("chat_template_kwargs")
-        self.process_request_dict(task, max_model_len)
-        request = Request.from_dict(task)
-        request = self._apply_default_parameters(request)
-
         return request
 
     def _parse_processor_kwargs(self, kwargs):
