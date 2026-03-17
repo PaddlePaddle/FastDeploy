@@ -313,9 +313,11 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
     const int token_nums_this_rank_padded);
 
 std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
-                                          const int block_size);
+                                          const int block_size,
+                                          const bool use_ue8m0);
 std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
-                                                 const int block_size);
+                                                 const int block_size,
+                                                 const bool use_ue8m0);
 
 std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
     paddle::Tensor& input,
@@ -770,6 +772,15 @@ std::vector<paddle::Tensor> SpeculatePreProcess(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder);
 
+std::vector<paddle::Tensor> BuildSamplingParams(
+    const paddle::Tensor& top_p,
+    const paddle::Tensor& top_k,
+    paddle::Tensor& infer_seed,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& cu_seqlens_q_output,
+    const int64_t token_num_output_cpu,
+    const int64_t increment_value);
+
 void SpecTokenPenaltyMultiScores(
     const paddle::Tensor& token_ids_all,
     const paddle::Tensor& prompt_lens,
@@ -799,6 +810,29 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor& accept_tokens,
                                const paddle::Tensor& stop_seqs_len,
                                const paddle::Tensor& end_ids,
                                const paddle::Tensor& min_tokens);
+
+void VerifyDraftTokens(const paddle::Tensor& step_output_ids,
+                       const paddle::Tensor& step_output_len,
+                       const paddle::Tensor& step_input_ids,
+                       const paddle::optional<paddle::Tensor>& target_tokens,
+                       const paddle::optional<paddle::Tensor>& candidate_ids,
+                       const paddle::optional<paddle::Tensor>& candidate_scores,
+                       const paddle::optional<paddle::Tensor>& candidate_lens,
+                       const paddle::Tensor& topp,
+                       const paddle::Tensor& stop_flags,
+                       const paddle::Tensor& seq_lens_encoder,
+                       const paddle::Tensor& seq_lens_this_time,
+                       const paddle::Tensor& end_tokens,
+                       const paddle::Tensor& is_block_step,
+                       const paddle::Tensor& cu_seqlens_q_output,
+                       const paddle::Tensor& reasoning_status,
+                       const paddle::Tensor& max_dec_len,
+                       const paddle::Tensor& step_idx,
+                       int max_seq_len,
+                       int verify_window,
+                       int verify_strategy,
+                       bool reject_all,
+                       bool accept_all);
 
 void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
                      const paddle::Tensor& accept_tokens,
@@ -836,6 +870,25 @@ void SpeculateUpdate(const paddle::Tensor& seq_lens_encoder,
                      const paddle::Tensor& seq_lens_this_time,
                      const paddle::Tensor& is_block_step,
                      const paddle::Tensor& mask_rollback);
+
+void UnifiedUpdateModelStatus(const paddle::Tensor& seq_lens_encoder,
+                              const paddle::Tensor& seq_lens_decoder,
+                              const paddle::Tensor& has_running_seqs,
+                              const paddle::Tensor& step_input_ids,
+                              const paddle::Tensor& adaptive_step_input_len,
+                              const paddle::Tensor& step_output_ids,
+                              const paddle::Tensor& step_output_len,
+                              const paddle::Tensor& stop_flags,
+                              const paddle::Tensor& seq_lens_this_time,
+                              const paddle::Tensor& is_paused,
+                              const paddle::Tensor& mask_rollback,
+                              const paddle::Tensor& token_ids_all,
+                              const paddle::Tensor& prompt_lens,
+                              const paddle::Tensor& step_idx,
+                              const paddle::Tensor& end_tokens,
+                              const paddle::Tensor& max_dec_len,
+                              const bool is_naive_mode,
+                              const bool prefill_one_step_stop);
 
 void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& token_ids_all,
                                     const paddle::Tensor& prompt_lens,
@@ -1133,6 +1186,61 @@ std::vector<paddle::Tensor> get_attn_mask_q(
     const paddle::optional<paddle::Tensor>& attn_mask_kv,
     const int kv_token_num);
 
+std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
+    const paddle::Tensor& x,
+    const paddle::Tensor& scale,
+    const paddle::Tensor& topk_ids,
+    const int num_local_experts,
+    const int max_token_num);
+
+std::vector<paddle::Tensor> DepermutePrefillCombine(
+    const paddle::Tensor& x,
+    const paddle::Tensor& indice_map,
+    const paddle::Tensor& topk_weights,
+    const int num_worst_tokens);
+
+void RadixTopkRaggedTransform(
+    paddle::Tensor& input,
+    paddle::Tensor& output_indices,
+    const paddle::Tensor& offsets,
+    paddle::Tensor& lengths,
+    paddle::optional<paddle::Tensor>& seq_len_decoder,
+    paddle::optional<paddle::Tensor>& batch_id_per_token,
+    paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
+    int top_k,
+    int q_num_heads = 0);
+
+std::vector<paddle::Tensor> DSMLAWriteCacheKernel(
+    const paddle::Tensor& kv_nope,
+    const paddle::Tensor& kv_pe,
+    const paddle::Tensor& kv_cache,
+    const paddle::Tensor& slot_mapping,
+    const paddle::optional<paddle::Tensor>& scale,
+    const std::string& cache_quant_type_str);
+
+std::vector<paddle::Tensor> IndexerKQuantAndCacheKernel(
+    const paddle::Tensor& k,
+    const paddle::Tensor& kv_cache,
+    const paddle::Tensor& slot_mapping,
+    const int64_t quant_block_size,
+    const std::string& scale_fmt);
+
+std::vector<paddle::Tensor> CpGatherIndexerKQuantCacheKernel(
+    const paddle::Tensor& kv_cache,
+    paddle::Tensor& dst_k,
+    paddle::Tensor& dst_scale,
+    const paddle::Tensor& block_table,
+    const paddle::Tensor& cu_seq_lens);
+
+void PerTokenGroupQuantFp8(const paddle::Tensor& input,
+                           paddle::Tensor& output_q,
+                           paddle::Tensor& output_s,
+                           int64_t group_size,
+                           double eps,
+                           double fp8_min,
+                           double fp8_max,
+                           bool scale_ue8m0);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
         &GetExpertTokenNum,
@@ -1284,12 +1392,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &PerTokenQuant,
         py::arg("input"),
         py::arg("block_size"),
+        py::arg("use_ue8m0"),
         "per token per block quant");
 
   m.def("per_token_quant_padding",
         &PerTokenQuantPadding,
         py::arg("input"),
         py::arg("block_size"),
+        py::arg("use_ue8m0"),
         "per token per block quant and padding transpose scale");
 
   m.def("fused_mask_swiglu_fp8_quant",
@@ -1627,6 +1737,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SpeculatePreProcess,
         "speculate_pre_process function");
 
+  m.def("build_sampling_params",
+        &BuildSamplingParams,
+        "build_sampling_params function");
+
   m.def("speculate_get_token_penalty_multi_scores",
         &SpecTokenPenaltyMultiScores,
         "speculate_get_token_penalty_multi_scores function");
@@ -1634,10 +1748,17 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_set_stop_value_multi_seqs",
         &SpecGetStopFlagsMultiSeqs,
         "speculate_set_stop_value_multi_seqs function");
-
   m.def("speculate_verify", &SpeculateVerify, "speculate_verify function");
 
+  m.def("verify_draft_tokens",
+        &VerifyDraftTokens,
+        "verify_draft_tokens function");
+
   m.def("speculate_update", &SpeculateUpdate, "Speculate Update Kernel");
+
+  m.def("unified_update_model_status",
+        &UnifiedUpdateModelStatus,
+        "unified_update_model_status function");
 
   m.def("speculate_set_value_by_flags_and_idx",
         &SpeculateSetValueByFlagsAndIdx,
@@ -1736,4 +1857,38 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("custom_numpy_to_tensor",
         &CustomNumpyToTensor,
         "custom_numpy_to_tensor function");
+  m.def("prefill_permute_to_masked_gemm",
+        &PrefillPermuteToMaskedGemm,
+        py::arg("x"),
+        py::arg("scale"),
+        py::arg("topk_ids"),
+        py::arg("num_local_experts"),
+        py::arg("max_token_num"),
+        "Prefill permute to masked GEMM for MoE");
+
+  m.def("depermute_prefill_combine",
+        &DepermutePrefillCombine,
+        py::arg("x"),
+        py::arg("indice_map"),
+        py::arg("topk_weights"),
+        py::arg("num_worst_tokens"),
+        "Depermute and combine expert outputs for MoE prefill");
+
+  m.def("radix_topk_ragged_transform",
+        &RadixTopkRaggedTransform,
+        "radix_topk_ragged_transform function");
+
+  m.def("dsk_attn_write_cache", &DSMLAWriteCacheKernel, "dsk_attn_write_cache");
+
+  m.def("indexer_k_quant_and_cache",
+        &IndexerKQuantAndCacheKernel,
+        "indexer_k_quant_and_cache");
+
+  m.def("cp_gather_indexer_k_quant_cache",
+        &CpGatherIndexerKQuantCacheKernel,
+        "cp_gather_indexer_k_quant_cache");
+
+  m.def("per_token_group_fp8_quant",
+        &PerTokenGroupQuantFp8,
+        "per_token_group_quant_fp8");
 }

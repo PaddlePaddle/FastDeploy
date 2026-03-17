@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"context"
 )
 
 var (
@@ -15,6 +16,10 @@ var (
 	once        sync.Once
 	logFile     *os.File
 )
+
+type contextKey string
+const RequestIDKey contextKey = "request_id"
+const SessionIDKey contextKey = "session_id"
 
 // Init initialize logger
 func Init(logLevel, output string) {
@@ -53,28 +58,46 @@ func CloseLogFile() {
 	}
 }
 
+func contextPrefix(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	var prefix string
+	if sid, ok := ctx.Value(SessionIDKey).(string); ok && sid != "" {
+		prefix += "[session_id:" + sid + "] "
+	}
+	if rid, ok := ctx.Value(RequestIDKey).(string); ok && rid != "" {
+		prefix += "[request_id:" + rid + "] "
+	}
+	return prefix
+}
+
 // Info logs informational messages
-func Info(format string, v ...interface{}) {
+func Info(ctx context.Context, format string, v ...interface{}) {
 	if level == "debug" || level == "info" {
-		infoLogger.Printf(format, v...)
+		prefix := contextPrefix(ctx)
+		infoLogger.Printf(prefix+format, v...)
 	}
 }
 
 // Error logs error messages
-func Error(format string, v ...interface{}) {
-	errorLogger.Printf(format, v...)
+func Error(ctx context.Context, format string, v ...interface{}) {
+	prefix := contextPrefix(ctx)
+	errorLogger.Printf(prefix+format, v...)
 }
 
 // Warn logs warning messages
-func Warn(format string, v ...interface{}) {
+func Warn(ctx context.Context, format string, v ...interface{}) {
 	if level == "debug" || level == "info" || level == "warn" {
-		warnLogger.Printf(format, v...)
+		prefix := contextPrefix(ctx)
+		warnLogger.Printf(prefix+format, v...)
 	}
 }
 
 // Debug logs debug messages
-func Debug(format string, v ...interface{}) {
+func Debug(ctx context.Context, format string, v ...interface{}) {
 	if level == "debug" {
-		debugLogger.Printf(format, v...)
+		prefix := contextPrefix(ctx)
+		debugLogger.Printf(prefix+format, v...)
 	}
 }

@@ -59,6 +59,7 @@ from fastdeploy.eplb.experts_manager import RedundantExpertManager
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import (
     ExistTaskStatus,
+    IPCLock,
     IPCSignal,
     ModelWeightsStatus,
     RearrangeExpertStatus,
@@ -284,6 +285,14 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+        # gpu_cache_lock: file-based lock for mutual exclusion between worker
+        # and CPU transfer when accessing GPU KV cache.
+        self.gpu_cache_lock = IPCLock(
+            name="gpu_cache_lock",
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
+        )
+
     def update_weights_from_tensor(self, mmap_infos):
         """
         update_weights_from_tensor
@@ -426,6 +435,35 @@ class PaddleDisWorkerProc:
                 self.rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
             logger.info("redundant_expert: done")
 
+    def _acquire_kvcache_lock(self, tp_rank):
+        """Acquire the GPU KV cache lock for the worker process.
+
+        Uses a file-based lock (fcntl.flock) to ensure mutual exclusion
+        between the worker and the CPU transfer process during model
+        execution. Only rank 0 acquires the lock to avoid deadlock among
+        tensor-parallel workers.
+
+        Args:
+            tp_rank: Tensor parallel rank of the current worker. Only rank 0
+                acquires the lock.
+        """
+        if not envs.FD_USE_KVCACHE_LOCK:
+            return
+        if tp_rank == 0:
+            self.gpu_cache_lock.acquire()
+
+    def _release_kvcache_lock(self, tp_rank):
+        """Release the GPU KV cache lock held by the worker process.
+
+        Args:
+            tp_rank: Tensor parallel rank of the current worker. Only rank 0
+                releases the lock.
+        """
+        if not envs.FD_USE_KVCACHE_LOCK:
+            return
+        if tp_rank == 0:
+            self.gpu_cache_lock.release()
+
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
@@ -479,9 +517,13 @@ class PaddleDisWorkerProc:
 
                     self.model_weights_status.value[0] = self.model_weights_signal[0]
                     self.kv_cache_status.value[0] = self.model_weights_signal[0]
+                    cache_flag = (
+                        self.fd_config.cache_config.num_cpu_blocks > 0
+                        or self.fd_config.cache_config.kvcache_storage_backend is not None
+                    )
                     DynamicWeightManager.check_model_weights_status(
                         self.model_weights_status,
-                        self.kv_cache_status if self.fd_config.cache_config.num_cpu_blocks > 0 else None,
+                        self.kv_cache_status if cache_flag else None,
                         # model_weights_signal
                         self.worker.model_runner,
                         self.parallel_config.local_engine_worker_queue_port,
@@ -568,7 +610,11 @@ class PaddleDisWorkerProc:
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
+
+            self._acquire_kvcache_lock(tp_rank)
             self.worker.execute_model(req_dicts, max_occupied_batch_index)
+            self._release_kvcache_lock(tp_rank)
+
             # Only v0 use this signal
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
@@ -612,7 +658,7 @@ class PaddleDisWorkerProc:
 
             if num_blocks_local <= 0:
                 raise ValueError(
-                    "The total number of blocks cannot be less than zero. "
+                    f"The total number of blocks cannot be less than zero bug got {num_blocks_local}. "
                     "Please increase gpu_memory_utilization "
                     "Or decrease max_num_batched_tokens(max model length)."
                 )
@@ -1044,6 +1090,12 @@ def parse_args():
         help="Enable overlap schedule",
     )
 
+    parser.add_argument(
+        "--ep_prefill_use_worst_num_tokens",
+        action="store_true",
+        help="enable to avoid cpu sync",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -1120,7 +1172,10 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     quant_config = parse_quant_config(
         args,
         model_config,
-        is_ernie=ErnieArchitectures.contains_ernie_arch(model_config.architectures),
+        is_ernie=(
+            ErnieArchitectures.contains_ernie_arch(model_config.architectures)
+            or ErnieArchitectures.is_ernie5_arch(model_config.architectures)
+        ),
         is_v1_loader=load_config.load_choices == "default_v1",
     )
 

@@ -154,7 +154,7 @@ class TestErnie4_5Processor(unittest.TestCase):
             f"{MODULE_PATH}.Ernie4_5Tokenizer.from_pretrained", side_effect=lambda path: MockTokenizer()
         )
         self.eos_patcher = patch(
-            "paddleformers.trl.llm_utils.get_eos_token_id",
+            "paddleformers.cli.utils.llm_utils.get_eos_token_id",
             side_effect=lambda tokenizer, cfg: [tokenizer.eos_token_id],
         )
 

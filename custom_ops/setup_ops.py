@@ -363,11 +363,20 @@ elif paddle.is_compiled_with_cuda():
         "-Igpu_ops",
         "-Ithird_party/nlohmann_json/include",
     ]
-    worker_threads = os.cpu_count()
-    nvcc_compile_args += ["-t", str(worker_threads)]
+    # Limit nvcc internal threads to avoid resource exhaustion when Paddle's
+    # ThreadPoolExecutor also launches many parallel compilations.
+    # Total threads ≈ (number of parallel compile jobs) × nvcc_threads, so cap nvcc_threads at 4.
+    nvcc_threads = min(os.cpu_count() or 1, 4)
+    nvcc_compile_args += ["-t", str(nvcc_threads)]
 
     nvcc_version = get_nvcc_version()
     print(f"nvcc_version = {nvcc_version}")
+
+    # CUDA 13.0+ (CCCL 3.0) changes the default -static-global-template-stub behavior
+    # Restore old linking behavior to allow kernel symbols to be visible in shared libraries
+    if nvcc_version >= 13.0:
+        nvcc_compile_args += ["-static-global-template-stub=false"]
+
     if nvcc_version >= 12.0:
         sources += ["gpu_ops/sample_kernels/air_top_p_sampling.cu"]
     cc = max(get_sm_version(archs))
@@ -394,6 +403,8 @@ elif paddle.is_compiled_with_cuda():
         )
         sources += ["gpu_ops/append_attention.cu"]
         sources += find_end_files("gpu_ops/append_attn", ".cu")
+        # sparse indexer
+        sources += find_end_files("gpu_ops/sparse_indexer", ".cu")
         # mla
         sources += ["gpu_ops/multi_head_latent_attention.cu"]
         # gemm_dequant
@@ -571,6 +582,7 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "iluvatar_ops/mixed_fused_attn.cu",
                 "iluvatar_ops/w8a16_group_gemm.cu",
                 "iluvatar_ops/w8a16_group_gemv.cu",
+                "iluvatar_ops/restore_tokens_per_expert.cu",
                 "iluvatar_ops/runtime/iluvatar_context.cc",
                 "iluvatar_ops/cpp_extensions.cc",
             ],

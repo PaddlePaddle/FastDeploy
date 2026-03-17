@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "custom_ftok.h"
 #include "helper.h"
 #include "save_with_output_msg.h"
+#include "cccl_compat.h"  // CCCL 3.0 compatibility
 
 #define RECOVERY_STOP_SIGNAL -3
 
@@ -115,7 +117,8 @@ __global__ void free_and_reschedule(bool *stop_flags,
     // 调度block，根据used_list_len从大到小回收block，直到满足need_block_len，已解码到最后一个block的query不参与调度（马上就结束）
     const int used_block_num = tid < bsz ? used_list_len[tid] : 0;
     cub::KeyValuePair<int, int> kv_pair = {tid, used_block_num};
-    kv_pair = BlockReduce(temp_storage).Reduce(kv_pair, cub::ArgMax());
+    kv_pair =
+        BlockReduce(temp_storage).Reduce(kv_pair, fd_cub_compat::ArgMax());
     if (tid == 0) {
       if (kv_pair.value == 0) {
         step_max_block_flag = true;
@@ -298,7 +301,7 @@ void Schedule(const paddle::Tensor &stop_flags,
             "number.");
       }
     }
-    static key_t key = ftok("/dev/shm", msg_queue_id);
+    static key_t key = custom_ftok("/dev/shm", msg_queue_id);
 
     static int msgid = msgget(key, IPC_CREAT | 0666);
     msg_sed.mtype = 1;

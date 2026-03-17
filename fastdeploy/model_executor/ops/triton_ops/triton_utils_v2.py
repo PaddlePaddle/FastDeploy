@@ -189,7 +189,7 @@ class KernelInterface:
                         else:
                             const_hint_dict[self.arg_names[i]] = ele
                     else:
-                        assert False
+                        assert False, f"Unsupported constexpr type: {type(ele)} for arg '{self.arg_names[i]}'"
                 else:
                     x_list.append(ele)
                     if isinstance(ele, int):
@@ -197,7 +197,7 @@ class KernelInterface:
                     elif isinstance(ele, float):
                         decalare_arg_exclude_constexpr[i] = "const float " + decalare_arg_exclude_constexpr[i]
                     else:
-                        assert False
+                        assert False, f"Unsupported arg type: {type(ele)} for arg '{self.arg_names[i]}'"
 
             python_package_name = f"{op_name}_package"
             tp_rank = paddle.distributed.get_rank()

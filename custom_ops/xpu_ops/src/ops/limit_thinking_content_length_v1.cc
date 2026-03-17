@@ -34,7 +34,7 @@ void LimitThinkingContentLengthV1(const paddle::Tensor& next_tokens,
 
   const int batch_size = next_tokens.shape()[0];
   const int eos_token_id_len = eos_token_ids.shape()[0];
-  int r = baidu::xpu::api::plugin::limit_thinking_content_length_kernel_v1(
+  int r = fastdeploy::plugin::limit_thinking_content_length_kernel_v1(
       xpu_ctx->x_context(),
       const_cast<int64_t*>(next_tokens.data<int64_t>()),
       max_think_lens.data<int>(),
@@ -46,7 +46,7 @@ void LimitThinkingContentLengthV1(const paddle::Tensor& next_tokens,
       batch_size,
       eos_token_id_len);
   PD_CHECK(r == 0,
-           "baidu::xpu::api::plugin::limit_thinking_content_length_kernel_v1 "
+           "fastdeploy::plugin::limit_thinking_content_length_kernel_v1 "
            "failed.");
 }
 

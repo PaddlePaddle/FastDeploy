@@ -35,6 +35,7 @@ def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_over
     model_cfg.print = print
     model_cfg.architectures = ["test_model"]
     model_cfg.mm_max_tokens_per_item = None
+    model_cfg.version = None  # Required for register_info
     cache_cfg.bytes_per_token_per_layer = 1
 
     parallel_cfg = ParallelConfig(args)

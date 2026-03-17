@@ -122,10 +122,13 @@ func portStringToInt(p Port) int {
 	return i
 }
 
-// tpSizeFromWorker calculates tp_size (currently no explicit field, uses device_ids count, minimum 1)
+// tpSizeFromWorker returns tp_size from the worker's registered info, falls back to len(DeviceIDs)
 func tpSizeFromWorker(w *WorkerInfo) int {
 	if w == nil {
 		return 0
+	}
+	if w.TpSize > 0 {
+		return w.TpSize
 	}
 	if len(w.DeviceIDs) > 0 {
 		return len(w.DeviceIDs)
@@ -166,7 +169,7 @@ func RegisterInstanceCore(ctx context.Context, rawInstance *InstanceInfo) error 
 
 	// Check instance health status
 	if !CheckWorkerHealth(ctx, instance.URL()) {
-		return fmt.Errorf("service is not healthy")
+		return fmt.Errorf("%s service is not healthy",instance.URL())
 	}
 
 	allServers := GetAllMapServers(ctx)
@@ -183,6 +186,7 @@ func RegisterInstanceCore(ctx context.Context, rawInstance *InstanceInfo) error 
 		RdmaPorts:             []string(instance.RDMAPorts),
 		DeviceIDs:             []string(instance.DeviceIDs),
 		MetricsPort:           string(instance.MetricsPort),
+		TpSize:                instance.TpSize,
 	}
 
 	id := instance.URL()
@@ -209,7 +213,7 @@ func RegisterInstanceCore(ctx context.Context, rawInstance *InstanceInfo) error 
 	case DECODE:
 		DefaultManager.decodeWorkerMap[id] = workerInfo
 	default:
-		logger.Warn("Instance %s role is unknown", id)
+		logger.Warn(ctx, "Instance %s role is unknown", id)
 	}
 
 	return nil
@@ -236,7 +240,7 @@ func RegisterInstance(c *gin.Context) {
 	}
 
 	if err := RegisterInstanceCore(c.Request.Context(), &rawInstance); err != nil {
-		logger.Error("Failed to register instance: %v", err)
+		logger.Error(c.Request.Context(), "Failed to register instance: %v", err)
 		// Return different HTTP status codes based on error type
 		if strings.Contains(err.Error(), "not healthy") {
 			c.JSON(http.StatusServiceUnavailable, gin.H{
@@ -264,26 +268,26 @@ func RegisterInstancesFromConfig(yamlPath string) {
 	}
 	data, err := os.ReadFile(yamlPath)
 	if err != nil {
-		logger.Error("Failed to read YAML file %s: %v", yamlPath, err)
+		logger.Error(context.Background(), "Failed to read YAML file %s: %v", yamlPath, err)
 		return
 	}
 
 	var config RegisterConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		logger.Error("Failed to unmarshal YAML file %s: %v", yamlPath, err)
+		logger.Error(context.Background(), "Failed to unmarshal YAML file %s: %v", yamlPath, err)
 		return
 	}
 
 	if len(config.Instances) == 0 {
-		logger.Info("No instances found in config file %s", yamlPath)
+		logger.Info(context.Background(), "No instances found in config file %s", yamlPath)
 		return
 	}
 
 	for i, instanceConfig := range config.Instances {
 		if err := RegisterInstanceCore(context.Background(), &instanceConfig); err != nil {
-			logger.Error("Failed to register instance from index %d: %v", i, err)
+			logger.Error(context.Background(), "Failed to register instance from index %d: %v", i, err)
 		} else {
-			logger.Info("Successfully registered instance from index %d", i)
+			logger.Info(context.Background(), "Successfully registered instance from index %d", i)
 		}
 	}
 }
