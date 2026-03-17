@@ -122,13 +122,16 @@ func portStringToInt(p Port) int {
 	return i
 }
 
-// tpSizeFromWorker returns tp_size from the worker's registered info
+// tpSizeFromWorker returns tp_size from the worker's registered info, falls back to len(DeviceIDs)
 func tpSizeFromWorker(w *WorkerInfo) int {
 	if w == nil {
 		return 0
 	}
 	if w.TpSize > 0 {
 		return w.TpSize
+	}
+	if len(w.DeviceIDs) > 0 {
+		return len(w.DeviceIDs)
 	}
 	return 1
 }
