@@ -276,14 +276,12 @@ class LLMEngine:
         task["chat_template_kwargs"] = chat_template_kwargs
 
         # Use dict to call process_request_dict
-        task = self.engine.data_processor.process_request_dict(task, self.cfg.model_config.max_model_len, **kwargs)
+        task = self.engine.data_processor.process_request_dict(task, self.cfg.model_config.max_model_len)
 
         # Create Request struct after processing
         request = Request.from_dict(task)
         request.metrics.scheduler_recv_req_time = time.time()
         llm_logger.info(f"Receive request {request}")
-        if sampling_params is not None:
-            request.sampling_params = sampling_params
         request.metrics.preprocess_start_time = time.time()
 
         request.prompt_token_ids_len = len(request.prompt_token_ids)
