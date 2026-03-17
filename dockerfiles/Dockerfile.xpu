@@ -18,8 +18,17 @@ RUN python -m pip uninstall -y Pillow && rm -rf /usr/local/lib/python3.10/dist-p
 RUN python -m pip install --no-cache-dir --progress-bar off paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
 
 # install fastdeploy-xpu
-RUN python -m pip install -r requirements.txt
-RUN python -m pip install --no-cache-dir fastdeploy-xpu==2.4.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+ARG INSTALL_REQUIREMENTS=true
+ARG INSTALL_FASTDEPLOY=true
+ARG FASTDEPLOY_VERSION=2.4.0
+
+RUN if [ "$INSTALL_REQUIREMENTS" = "true" ]; then \
+        python -m pip install -r requirements.txt; \
+    fi
+
+RUN if [ "$INSTALL_FASTDEPLOY" = "true" ]; then \
+        python -m pip install --no-cache-dir fastdeploy-xpu==${FASTDEPLOY_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple; \
+    fi
 
 
 RUN mkdir -p /workspace/deps && cd /workspace/deps && \
