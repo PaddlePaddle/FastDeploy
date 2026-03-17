@@ -71,7 +71,6 @@ __global__ void speculate_verify(
     const float *verify_scores, const int64_t *max_dec_len,
     const int64_t *end_tokens, const bool *is_block_step,
     const int *output_cum_offsets, const int *actual_candidate_len,
-    const int *preempted_idx,
     const int real_bsz, const int max_draft_tokens, const int end_length,
     const int max_seq_len, const int max_candidate_len, const int verify_window,
     const bool prefill_one_step_stop, const bool benchmark_mode) {
@@ -233,7 +232,6 @@ __global__ void speculate_verify(
             accept_tokens[bid * max_draft_tokens + i] = end_tokens[0];
         }
       }
-      if (preempted_idx[bid])
       accept_num[bid] = accept_num_now;
     }
   }
@@ -251,7 +249,6 @@ void SpeculateVerify(
     const paddle::Tensor &output_cum_offsets,
     const paddle::Tensor &actual_candidate_len,
     const paddle::Tensor &actual_draft_token_nums, const paddle::Tensor &topp,
-    const paddle::Tensor &preempted_idx,
     int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode) {
   //   printf("Enter speculate update\n");
   auto bsz = accept_tokens.shape()[0];
@@ -357,7 +354,7 @@ PD_BUILD_STATIC_OP(speculate_verify)
              "seq_lens_decoder", "stop_flags", "draft_tokens",
              "seq_lens_this_time", "verify_tokens", "verify_scores",
              "max_dec_len", "end_tokens", "is_block_step", "output_cum_offsets",
-             "actual_candidate_len", "actual_draft_token_nums", "topp", "preempted_idx"})
+             "actual_candidate_len", "actual_draft_token_nums", "topp"})
     .Outputs({"accept_tokens_out", "accept_num_out", "step_idx_out",
               "stop_flags_out"})
     .Attrs({"max_seq_len: int", "verify_window: int", "enable_topp: bool", "benchmark_mode: bool"})
