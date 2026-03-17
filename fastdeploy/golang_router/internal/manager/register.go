@@ -122,13 +122,13 @@ func portStringToInt(p Port) int {
 	return i
 }
 
-// tpSizeFromWorker calculates tp_size (currently no explicit field, uses device_ids count, minimum 1)
+// tpSizeFromWorker returns tp_size from the worker's registered info
 func tpSizeFromWorker(w *WorkerInfo) int {
 	if w == nil {
 		return 0
 	}
-	if len(w.DeviceIDs) > 0 {
-		return len(w.DeviceIDs)
+	if w.TpSize > 0 {
+		return w.TpSize
 	}
 	return 1
 }
@@ -183,6 +183,7 @@ func RegisterInstanceCore(ctx context.Context, rawInstance *InstanceInfo) error 
 		RdmaPorts:             []string(instance.RDMAPorts),
 		DeviceIDs:             []string(instance.DeviceIDs),
 		MetricsPort:           string(instance.MetricsPort),
+		TpSize:                instance.TpSize,
 	}
 
 	id := instance.URL()
