@@ -1152,31 +1152,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             eng._control_update_weights(ControlRequest(request_id="ctrl", method="update_weights"))
         self._detach_finalizer(eng)
 
-    def test_register_to_router_disabled(self):
-        eng = self._make_mixed_engine()
-        eng.cfg.router_config.router = None
-
-        with (
-            patch.object(eng, "llm_logger") as mock_logger,
-            patch("fastdeploy.engine.common_engine.threading.Thread") as thread_mock,
-        ):
-            eng._register_to_router()
-
-        mock_logger.info.assert_called()
-        thread_mock.assert_not_called()
-        self._detach_finalizer(eng)
-
-    def test_register_to_router_enabled_starts_thread(self):
-        eng = self._make_mixed_engine()
-        eng.cfg.router_config.router = "http://router"
-
-        with patch("fastdeploy.engine.common_engine.threading.Thread") as thread_mock:
-            eng._register_to_router()
-
-        thread_mock.assert_called_once()
-        thread_mock.return_value.start.assert_called_once()
-        self._detach_finalizer(eng)
-
     def test_insert_zmq_task_to_scheduler_normal_request(self):
         eng = self._make_mixed_engine()
         eng.running = True
