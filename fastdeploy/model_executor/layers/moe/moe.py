@@ -279,8 +279,7 @@ class FusedMoE(nn.Layer):
 
         if not (expert_id - self.expert_id_offset >= 0 and expert_id - self.expert_id_offset < self.num_local_experts):
             return
-        if not param._is_initialized():
-            param.initialize()
+
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
 
         if self.ep_size > 1 or weight_need_transpose:
