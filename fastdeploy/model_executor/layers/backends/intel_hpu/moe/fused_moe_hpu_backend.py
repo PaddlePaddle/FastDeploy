@@ -102,6 +102,7 @@ class HpuMoEMethod(UnquantizedFusedMoEMethod):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Paddle hpu Fused MoE.
@@ -389,6 +390,7 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Paddle hpu Fused MoE.
