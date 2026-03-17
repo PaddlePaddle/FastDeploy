@@ -222,7 +222,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_processor_instance = Mock()
 
-        async def mock_process_response_chat_single(response, stream, include_stop_str_in_output):
+        async def mock_process_response_chat_single(response, stream, include_stop_str_in_output, request=None):
             yield response
 
         mock_processor_instance.process_response_chat = mock_process_response_chat_single
@@ -638,7 +638,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_processor_instance = Mock()
 
-        async def mock_process_response_chat(response, stream, include_stop_str_in_output):
+        async def mock_process_response_chat(response, stream, include_stop_str_in_output, request=None):
             delta_msg_mock = Mock()
             delta_msg_mock.content = response["outputs"]["text"]
             if response["outputs"]["text"] == "a":

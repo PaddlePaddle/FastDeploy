@@ -208,6 +208,26 @@ int speculate_recover_block(api::Context *ctx,
                       first_token_ids);
   WRAPPER_DUMP_PARAM4(ctx, bsz, block_num_per_seq, length, pre_id_length);
   WRAPPER_DUMP(ctx);
+  WRAPPER_ASSERT_GT(ctx, bsz, 0);
+  WRAPPER_ASSERT_GT(ctx, block_num_per_seq, 0);
+  WRAPPER_ASSERT_GT(ctx, length, 0);
+  WRAPPER_ASSERT_GT(ctx, pre_id_length, 0);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, recover_block_list);
+  WRAPPER_CHECK_PTR(ctx, int, 1, recover_len);
+  WRAPPER_CHECK_PTR(ctx, bool, bsz, stop_flags);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_this_time);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, ori_seq_lens_encoder);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, ori_seq_lens_decoder);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_encoder);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_decoder);
+  WRAPPER_CHECK_PTR(ctx, int, bsz *block_num_per_seq, block_tables);
+  WRAPPER_CHECK_PTR(ctx, int, 1, free_list_len);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bsz * length, input_ids);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bsz * pre_id_length, pre_ids);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bsz, step_idx);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, encoder_block_lens);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, used_list_len);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bsz, first_token_ids);
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper(ctx,
                        recover_block_list,  // [bsz]

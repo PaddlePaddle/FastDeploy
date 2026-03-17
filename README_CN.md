@@ -23,7 +23,7 @@
 </p>
 
 --------------------------------------------------------------------------------
-# FastDeploy ：基于飞桨的大语言模型与视觉语言模型推理部署工具包
+# FastDeploy 飞桨大模型高效部署套件
 
 ## 最新活动
 
@@ -86,6 +86,7 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 - [前缀缓存](./docs/zh/features/prefix_caching.md)
 - [分块预填充](./docs/zh/features/chunked_prefill.md)
 - [负载均衡调度Router](./docs/zh/online_serving/router.md)
+- [全局Cache池化](./docs/zh/features/global_cache_pooling.md)
 
 ## 致谢
 

@@ -558,8 +558,6 @@ class EngineArgs:
 
         if not self.tokenizer:
             self.tokenizer = self.model
-        if self.splitwise_role == "decode":
-            self.enable_prefix_caching = False
         if (
             not current_platform.is_cuda()
             and not current_platform.is_xpu()
