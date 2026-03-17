@@ -77,7 +77,8 @@ DLL_EXPORT int get_padding_offset(api::Context* ctx,
                                   const int* cum_offsets,
                                   const int* seq_lens,
                                   const int max_seq_len,
-                                  const int bs);
+                                  const int bs,
+                                  const int64_t token_num);
 
 DLL_EXPORT int speculate_get_padding_offset(api::Context* ctx,
                                             int* batch_id_per_token,

@@ -17,6 +17,7 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/types.h>
+#include "custom_ftok.h"
 #include "msg_utils.h"
 #include "paddle/extension.h"
 
@@ -80,7 +81,7 @@ void SaveOutMmsg(const paddle::Tensor &x,
               << std::endl;
 #endif
   }
-  static key_t key = ftok("/dev/shm", msg_queue_id);
+  static key_t key = custom_ftok("/dev/shm", msg_queue_id);
 
   static int msgid = msgget(key, IPC_CREAT | 0666);
 #ifdef SAVE_WITH_OUTPUT_DEBUG

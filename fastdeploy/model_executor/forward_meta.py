@@ -199,6 +199,10 @@ class ForwardMeta:
         lines = [f"  {key}: {value}" for key, value in simplified_info.items()]
         return "{\n" + ",\n".join(lines) + "\n}"
 
+    def __getattr__(self, name):
+        self.__setattr__(name, None)
+        return None
+
 
 @dataclass
 class XPUForwardMeta(ForwardMeta):

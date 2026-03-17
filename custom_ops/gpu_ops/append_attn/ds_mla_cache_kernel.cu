@@ -41,7 +41,7 @@
  * Prefill stage: Write KV cache with DS MLA FP8 format
  */
 template <paddle::DataType T>
-std::vector<paddle::Tensor> PrefillDSMLAWriteCacheFP8(
+std::vector<paddle::Tensor> DSMLAWriteCacheFP8(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& kv_nope,
     const paddle::Tensor& kv_pe,
@@ -56,9 +56,6 @@ std::vector<paddle::Tensor> PrefillDSMLAWriteCacheFP8(
   auto kv_lora_rank = 512;  // DS MLA uses 512
   auto pe_dim = 64;         // DS MLA uses 64
   auto block_size = meta_data.block_size;
-
-  // Entry size for DS MLA FP8: 512 (fp8) + 16 (scales) + 128 (rope bf16) = 656
-  // bytes
   const int entry_size = 656;
 
   // Launch kernel with 96 threads (64 for NoPE, 32 for RoPE)
@@ -83,52 +80,6 @@ std::vector<paddle::Tensor> PrefillDSMLAWriteCacheFP8(
       kv_lora_rank,
       pe_dim,
       block_size);
-  return {};
-}
-
-/**
- * Decode stage: Write KV cache with DS MLA FP8 format
- */
-template <paddle::DataType T>
-std::vector<paddle::Tensor> DecodeDSMLAWriteCacheFP8(
-    const AppendAttnMetaData& meta_data,
-    const paddle::Tensor& kv_nope,
-    const paddle::Tensor& kv_pe,
-    const paddle::Tensor& slot_mapping,
-    cudaStream_t& stream,
-    paddle::Tensor* kv_cache) {
-  typedef PDTraits<T> traits_;
-  typedef typename traits_::DataType DataType_;
-  typedef typename traits_::data_t data_t;
-
-  auto num_tokens = slot_mapping.dims()[0];
-  auto kv_lora_rank = 512;
-  auto pe_dim = 64;
-  auto block_size = meta_data.block_size;
-  const int entry_size = 656;
-
-  dim3 grid(num_tokens);
-  dim3 block(96);
-
-  const auto& kv_cache_dims = kv_cache->dims();
-  int block_stride = kv_cache->strides()[0];
-  int entry_stride = entry_size;
-  int kv_c_stride = kv_nope.strides()[0];
-  int k_pe_stride = kv_pe.strides()[0];
-
-  ds_mla::concat_and_cache_ds_mla_kernel<DataType_><<<grid, block, 0, stream>>>(
-      reinterpret_cast<DataType_*>(const_cast<data_t*>(kv_nope.data<data_t>())),
-      reinterpret_cast<DataType_*>(const_cast<data_t*>(kv_pe.data<data_t>())),
-      reinterpret_cast<uint8_t*>(kv_cache->data<uint8_t>()),
-      slot_mapping.data<int64_t>(),
-      block_stride,
-      entry_stride,
-      kv_c_stride,
-      k_pe_stride,
-      kv_lora_rank,
-      pe_dim,
-      block_size);
-
   return {};
 }
 
@@ -297,8 +248,7 @@ std::vector<paddle::Tensor> DSMLAWriteCacheKernel(
     const paddle::Tensor& kv_cache,
     const paddle::Tensor& slot_mapping,
     const paddle::optional<paddle::Tensor>& scale,
-    const std::string& cache_quant_type_str,
-    const bool is_prefill) {
+    const std::string& cache_quant_type_str) {
   cudaStream_t stream = kv_pe.stream();
   AppendAttnMetaData meta_data;
 
@@ -320,42 +270,22 @@ std::vector<paddle::Tensor> DSMLAWriteCacheKernel(
     // FP8 DS MLA format
     switch (kv_pe.dtype()) {
       case paddle::DataType::BFLOAT16: {
-        if (is_prefill) {
-          return PrefillDSMLAWriteCacheFP8<paddle::DataType::BFLOAT16>(
-              meta_data,
-              kv_nope,
-              kv_pe,
-              slot_mapping,
-              stream,
-              const_cast<paddle::Tensor*>(&kv_cache));
-        } else {
-          return DecodeDSMLAWriteCacheFP8<paddle::DataType::BFLOAT16>(
-              meta_data,
-              kv_nope,
-              kv_pe,
-              slot_mapping,
-              stream,
-              const_cast<paddle::Tensor*>(&kv_cache));
-        }
+        return DSMLAWriteCacheFP8<paddle::DataType::BFLOAT16>(
+            meta_data,
+            kv_nope,
+            kv_pe,
+            slot_mapping,
+            stream,
+            const_cast<paddle::Tensor*>(&kv_cache));
       }
       case paddle::DataType::FLOAT16: {
-        if (is_prefill) {
-          return PrefillDSMLAWriteCacheFP8<paddle::DataType::FLOAT16>(
-              meta_data,
-              kv_nope,
-              kv_pe,
-              slot_mapping,
-              stream,
-              const_cast<paddle::Tensor*>(&kv_cache));
-        } else {
-          return DecodeDSMLAWriteCacheFP8<paddle::DataType::FLOAT16>(
-              meta_data,
-              kv_nope,
-              kv_pe,
-              slot_mapping,
-              stream,
-              const_cast<paddle::Tensor*>(&kv_cache));
-        }
+        return DSMLAWriteCacheFP8<paddle::DataType::FLOAT16>(
+            meta_data,
+            kv_nope,
+            kv_pe,
+            slot_mapping,
+            stream,
+            const_cast<paddle::Tensor*>(&kv_cache));
       }
       default:
         PD_THROW("Unsupported dtype for DS MLA FP8 cache");
@@ -464,7 +394,7 @@ PD_BUILD_STATIC_OP(ds_mla_write_cache)
              paddle::Optional("scale")})
     .Outputs({"kv_cache_out"})
     .SetInplaceMap({{"kv_cache", "kv_cache_out"}})
-    .Attrs({"cache_quant_type_str: std::string", "is_prefill: bool"})
+    .Attrs({"cache_quant_type_str: std::string"})
     .SetKernelFn(PD_KERNEL(DSMLAWriteCacheKernel));
 
 PD_BUILD_STATIC_OP(indexer_k_quant_and_cache)
