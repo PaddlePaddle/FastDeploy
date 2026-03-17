@@ -36,7 +36,9 @@ def enable_compat_on_triton_kernel(triton_kernel):
             self.kernel = kernel
 
         def __getitem__(self, index):
-            return paddle.use_compat_guard(enable=True, silent=True)(self.kernel[index])
+            if paddle.cuda.is_current_stream_capturing():
+                return paddle.use_compat_guard(enable=True, silent=True)(self.kernel[index])
+            return self.kernel[index]
 
     return WrappedTritonKernel(triton_kernel)
 
