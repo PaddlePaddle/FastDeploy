@@ -2685,7 +2685,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 pass
 
     def test_insert_zmq_abort_request_paused(self):
-        """Cover lines 1180, 1182, 1183: abort request handling when engine is paused."""
+        """Cover abort request handling: abort bypasses is_paused check and routes to add_abort_req_ids (v1)."""
         cfg = self._make_cfg(splitwise_role="mixed")
 
         class DummyQ:
@@ -2695,7 +2695,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
             eng = EngineService(cfg, start_queue=False, use_async_llm=False)
         eng.running = True
-        eng.is_paused = True  # Engine is paused (line 1180)
+        eng.is_paused = True  # Engine is paused, but abort requests bypass this check
 
         abort_data = {
             "request_id": "abort_test_req",
@@ -2724,6 +2724,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         # Setup resource_manager with abort_req_ids_set
         eng.resource_manager.abort_req_ids_set = set()
+        eng.resource_manager.add_abort_req_ids = Mock()
 
         with (
             patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1),
@@ -2734,13 +2735,13 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             mock_status.ABORT.value = 5
             eng._insert_zmq_task_to_scheduler()
 
-            # Verify line 1182: info log was called with paused message
+            # Verify abort request was logged
             info_calls = [str(call) for call in mock_logger.info.call_args_list]
-            paused_logged = any("paused" in call.lower() for call in info_calls)
-            self.assertTrue(paused_logged, "Should log that engine is paused (line 1182)")
+            abort_logged = any("abort" in call.lower() for call in info_calls)
+            self.assertTrue(abort_logged, "Should log 'Receive abort request'")
 
-            # Verify line 1183: abort_req_ids_set should be empty (discarded)
-            self.assertNotIn("abort_test_req", eng.resource_manager.abort_req_ids_set)
+            # Verify add_abort_req_ids was called (v1 scheduler path)
+            eng.resource_manager.add_abort_req_ids.assert_called_once_with("abort_test_req")
 
         if hasattr(eng, "_finalizer"):
             try:
@@ -2749,7 +2750,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 pass
 
     def test_insert_zmq_abort_request_in_requests(self):
-        """Cover line 1184-1188: abort request when req_id is in resource_manager.requests."""
+        """Cover abort request handling: when ENABLE_V1_KVCACHE_SCHEDULER=1, add_abort_req_ids is called."""
         cfg = self._make_cfg(splitwise_role="mixed")
 
         class DummyQ:
@@ -2787,15 +2788,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng.recv_request_server = DummyRecv()
         eng.resource_manager.abort_req_ids_set = set()
 
-        # Mock requests dict with the abort request
-        mock_request = Mock()
-        eng.resource_manager.requests = {"abort_in_requests": mock_request}
-        eng.resource_manager._prepare_preempt_task = Mock(return_value=Mock())
-        eng.resource_manager.real_bsz = 1
-
-        # Mock engine_worker_queue
-        eng.engine_worker_queue = Mock()
-        eng.engine_worker_queue.put_tasks = Mock()
+        # Mock add_abort_req_ids on resource_manager
+        eng.resource_manager.add_abort_req_ids = Mock()
 
         with (
             patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1),
@@ -2806,9 +2800,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             mock_status.ABORT.value = 5
             eng._insert_zmq_task_to_scheduler()
 
-            # Verify preempt task was created and put to queue (lines 1185-1188)
-            eng.resource_manager._prepare_preempt_task.assert_called_once()
-            eng.engine_worker_queue.put_tasks.assert_called_once()
+            # Verify add_abort_req_ids was called with the correct req_id (v1 scheduler path)
+            eng.resource_manager.add_abort_req_ids.assert_called_once_with("abort_in_requests")
 
         if hasattr(eng, "_finalizer"):
             try:
