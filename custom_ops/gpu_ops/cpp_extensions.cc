@@ -272,6 +272,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &step_idx,
                        const paddle::Tensor &stop_seqs,
                        const paddle::Tensor &stop_seqs_len,
+                       const paddle::Tensor &preempted_idx,
                        const bool beam_search);
 
 
@@ -624,12 +625,14 @@ void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &not_need_stop,
                        const paddle::Tensor &draft_tokens,
                        const paddle::Tensor &actual_draft_token_nums,
-                       const paddle::Tensor &accept_tokens,
-                       const paddle::Tensor &accept_num,
-                       const paddle::Tensor &stop_flags,
+                       paddle::Tensor &accept_tokens,
+                       paddle::Tensor &accept_num,
+                       paddle::Tensor &stop_flags,
                        const paddle::Tensor &seq_lens_this_time,
                        const paddle::Tensor &is_block_step,
-                       const paddle::Tensor &stop_nums);
+                       const paddle::Tensor &stop_nums,
+                       const paddle::Tensor &preempted_idx,
+                       const paddle::Tensor &end_ids);
 
 void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
                                     const paddle::Tensor &accept_tokens,

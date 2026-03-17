@@ -20,16 +20,25 @@ __global__ void speculate_update(int *seq_lens_encoder,
                                     bool *not_need_stop,
                                     int64_t *draft_tokens,
                                     int *actual_draft_token_nums,
-                                    const int64_t *accept_tokens,
-                                    const int *accept_num,
+                                    int64_t *accept_tokens,
+                                    int *accept_num,
                                     const bool *stop_flags,
                                     const int *seq_lens_this_time,
                                     const bool *is_block_step,
                                     const int64_t *stop_nums,
+                                    const int *preempted_idx,
+                                    const int64_t *end_ids,
                                     const int real_bsz,
                                     const int max_bsz,
                                     const int max_draft_tokens) {
     const int bid = threadIdx.x;
+    if (!(is_block_step[bid] || bid >= real_bsz)){
+        if (preempted_idx[bid] == 1) {
+            stop_flags[bid] = true;
+            accept_num[bid] = 1;
+            accept_tokens[0] = end_ids[0];
+        }
+    }
     const int accept_num_now = accept_num[bid];
     int stop_flag_now_int = 0;
     if (!(is_block_step[bid] || bid >= real_bsz)) {
@@ -95,12 +104,14 @@ void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &not_need_stop,
                        const paddle::Tensor &draft_tokens,
                        const paddle::Tensor &actual_draft_token_nums,
-                       const paddle::Tensor &accept_tokens,
-                       const paddle::Tensor &accept_num,
-                       const paddle::Tensor &stop_flags,
+                       paddle::Tensor &accept_tokens,
+                       paddle::Tensor &accept_num,
+                       paddle::Tensor &stop_flags,
                        const paddle::Tensor &seq_lens_this_time,
                        const paddle::Tensor &is_block_step,
-                       const paddle::Tensor &stop_nums) {
+                       const paddle::Tensor &stop_nums,
+                       const paddle::Tensor &preempted_idx,
+                       const paddle::Tensor &end_ids) {
     const int real_bsz = seq_lens_this_time.shape()[0];
     const int max_bsz = stop_flags.shape()[0];
     auto max_draft_tokens = draft_tokens.shape()[1];
@@ -120,6 +131,8 @@ void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
         seq_lens_this_time.data<int>(),
         is_block_step.data<bool>(),
         stop_nums.data<int64_t>(),
+        preempted_idx.data<int>(),
+        end_ids.data<int64_t>(),
         real_bsz,
         max_bsz,
         max_draft_tokens);
@@ -141,12 +154,17 @@ PD_BUILD_STATIC_OP(speculate_update)
              "stop_flags",
              "seq_lens_this_time",
              "is_block_step",
-             "stop_nums"})
+             "stop_nums",
+             "preempted_idx",
+             "end_ids"})
     .Outputs({"seq_lens_encoder_out",
               "seq_lens_decoder_out",
               "not_need_stop_out",
               "draft_tokens_out",
-              "actual_draft_token_nums_out"})
+              "actual_draft_token_nums_out"
+              "accept_tokens",
+              "accept_num",
+              "stop_flags"})
     .SetInplaceMap({{"seq_lens_encoder", "seq_lens_encoder_out"},
                     {"seq_lens_decoder", "seq_lens_decoder_out"},
                     {"not_need_stop", "not_need_stop_out"},
