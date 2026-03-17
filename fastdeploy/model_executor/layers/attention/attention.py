@@ -272,6 +272,8 @@ class Attention(nn.Layer):
             compressed_kv: optional compressed key-value cache (for MLA)
             k_pe: optional key positional encoding (for MLA)
         """
+        # if q.shape[0] == 1:
+        #     paddle.device.xpu.set_debug_level(0xA1)
         return forward_meta.attn_backend.forward(
             q,
             k,

@@ -322,7 +322,7 @@ class Ernie4_5_Attention(nn.Layer):
         qkv_out = self.qkv_proj(hidden_states)
         if _bs > 0:
             paddle.device.synchronize()
-            print(f"[DEBUG Attn L{_layer_id}] qkv_proj SYNC OK shape={qkv_out} dtype={qkv_out.dtype} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+            print(f"[DEBUG Attn L{_layer_id}] qkv_proj SYNC OK qkv_out={qkv_out} dtype={qkv_out.dtype} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         attn_out = self.attn(
             qkv=qkv_out,
@@ -330,12 +330,12 @@ class Ernie4_5_Attention(nn.Layer):
         )
         if _bs > 0:
             paddle.device.synchronize()
-            print(f"[DEBUG Attn L{_layer_id}] attn SYNC OK shape={attn_out} dtype={attn_out.dtype} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+            print(f"[DEBUG Attn L{_layer_id}] attn SYNC OK attn_out={attn_out} dtype={attn_out.dtype} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         output = self.o_proj(attn_out)
         if _bs > 0:
             paddle.device.synchronize()
-            print(f"[DEBUG Attn L{_layer_id}] o_proj SYNC OK shape={output} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
+            print(f"[DEBUG Attn L{_layer_id}] o_proj SYNC OK output={output} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
 
         return output
 
@@ -538,10 +538,11 @@ class Ernie4_5_Model(nn.Layer):
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
+        is_dummy_run: bool = False,
     ):
         print("===========embed_tokens==========", ids_remove_padding)
-        # if ids_remove_padding.shape == [14]:
-        #     paddle.device.xpu.set_debug_level(0xB1)
+        # if not is_dummy_run and ids_remove_padding.shape == [1]:
+        #     paddle.device.xpu.set_debug_level(0xA1)
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
@@ -694,7 +695,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             # Map checkpoint suffixes to FD naming convention.
             # This is needed because rename_offline_ckpt_suffix_to_fd_suffix is bypassed
             # when is_checkpoint_bf16=True (e.g. MixQuantConfig with w4a8).
-            print("loaded_weight_name: ", loaded_weight_name)
+            # print("loaded_weight_name: ", loaded_weight_name)
             # if loaded_weight_name.endswith(".activation_scale"):
             #     loaded_weight_name = loaded_weight_name[: -len(".activation_scale")] + ".in_scale"
             # elif loaded_weight_name.endswith(".quant_weight"):
@@ -760,6 +761,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         self,
         inputs: Dict,
         forward_meta: ForwardMeta,
+        is_dummy_run: bool = False,
     ):
         ids_remove_padding = inputs["ids_remove_padding"]
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)

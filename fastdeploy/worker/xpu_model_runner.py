@@ -1116,6 +1116,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.cache_config.block_size,
                 self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
             )
+        if hasattr(self.forward_meta, "cache"):
+            print("debug point forward_meta", self.forward_meta.cache[0])
         self.forward_meta = xpu_pre_process(
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
@@ -1129,7 +1131,8 @@ class XPUModelRunner(ModelRunnerBase):
             forward_meta=self.forward_meta,
             use_cudagraph=self.use_cudagraph,
         )
-
+        if hasattr(self.forward_meta, "cache"):
+            print("debug point forward_meta", self.forward_meta.cache[0])
         if self.use_cudagraph:
             # Update Batch type for cuda graph for only_decode_batch
             if_only_decode = self.only_decode()

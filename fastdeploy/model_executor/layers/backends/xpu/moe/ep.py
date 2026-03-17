@@ -380,10 +380,6 @@ class XPUEPPrefillRunner(XPUEPRunner):
         *args,
         **kwargs,
     ):
-        import sys
-        print(f"[DEBUG EPPrefillRunner.dispatch] START x.shape={x.shape}, topk_idx.shape={topk_idx.shape}, num_experts={self.ep_engine.num_experts}, async_finish={self.ep_engine.async_finish}", flush=True, file=sys.stderr)
-
-        print(f"[DEBUG EPPrefillRunner.dispatch] calling get_dispatch_layout...", flush=True, file=sys.stderr)
         (
             num_tokens_per_rank,
             num_tokens_per_rdma_rank,
@@ -397,7 +393,6 @@ class XPUEPPrefillRunner(XPUEPRunner):
             allocate_on_comm_stream=False,
             async_finish=self.ep_engine.async_finish,
         )
-        print(f"[DEBUG EPPrefillRunner.dispatch] get_dispatch_layout done, num_tokens_per_rank={num_tokens_per_rank}, num_tokens_per_rdma_rank={num_tokens_per_rdma_rank}", flush=True, file=sys.stderr)
 
         x_scale_tensor = kwargs.get("x_scale", None)
         dispatch_args = {
@@ -412,9 +407,7 @@ class XPUEPPrefillRunner(XPUEPRunner):
             "expert_alignment": expert_alignment,
             "previous_event": event,
         }
-        print(f"[DEBUG EPPrefillRunner.dispatch] calling deepep dispatch...", flush=True, file=sys.stderr)
         result = self.ep_engine.deepep_engine.dispatch(**dispatch_args)
-        print(f"[DEBUG EPPrefillRunner.dispatch] deepep dispatch done", flush=True, file=sys.stderr)
         return result
 
     def combine(
@@ -424,8 +417,6 @@ class XPUEPPrefillRunner(XPUEPRunner):
         recv_topk_weights: paddle.Tensor,
         event=None,
     ):
-        import sys
-        print(f"[DEBUG EPPrefillRunner.combine] START tmp_ffn_out.shape={tmp_ffn_out.shape}", flush=True, file=sys.stderr)
         combine_args = {
             "x": tmp_ffn_out,
             "handle": handle,
@@ -433,9 +424,7 @@ class XPUEPPrefillRunner(XPUEPRunner):
             "topk_weights": recv_topk_weights,
             "previous_event": event,
         }
-        print(f"[DEBUG EPPrefillRunner.combine] calling deepep combine...", flush=True, file=sys.stderr)
         fused_moe_out, _, event = self.ep_engine.deepep_engine.combine(**combine_args)
-        print(f"[DEBUG EPPrefillRunner.combine] deepep combine done", flush=True, file=sys.stderr)
 
         return fused_moe_out, event
 

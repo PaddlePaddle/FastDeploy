@@ -247,8 +247,4 @@ class XPUAttentionBackend(AttentionBackend):
             layer.use_neox_rotary_style,
             use_rope3d,
         )
-
-        if _bs > 0:
-            print(f"[DEBUG XPUAttnBackend.forward_mixed] layer={layer.layer_id} block_attn DONE res.shape={res.shape} elapsed={_time.time()-_t0:.4f}s", flush=True, file=sys.stderr)
-
         return res
