@@ -317,10 +317,17 @@ class DataProcessor(BaseDataProcessor):
         # processing prompt_token_ids
         if not request.get("prompt_token_ids"):
             if request.get("prompt"):
-                add_special_tokens = request.get("add_special_tokens", False)
-                request["prompt_token_ids"] = self.text2ids(
-                    request["prompt"], max_model_len, add_special_tokens=add_special_tokens
-                ).tolist()
+                prompt = request["prompt"]
+                assert isinstance(prompt, str) or (
+                    isinstance(prompt, list) and all(isinstance(t, int) for t in prompt)
+                ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
+                if isinstance(prompt, list):
+                    request["prompt_token_ids"] = prompt
+                else:
+                    add_special_tokens = request.get("add_special_tokens", False)
+                    request["prompt_token_ids"] = self.text2ids(
+                        prompt, max_model_len, add_special_tokens=add_special_tokens
+                    ).tolist()
             elif request.get("messages"):
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
