@@ -230,6 +230,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize input batch
         self.share_inputs = InputBatch(self.fd_config)
         self.share_inputs.init_share_inputs()
+        self._init_head_wise_slot_states()
         self.increment_value = (
             4 if not self.speculative_decoding else (self.speculative_config.num_speculative_tokens + 1) * 4
         )
@@ -873,6 +874,7 @@ class GPUModelRunner(ModelRunnerBase):
                     cache_ids_2d = self._normalize_head_wise_cache_ids_2d(cache_ids_2d)
                     if cache_ids_2d is not None:
                         request.block_tables_3d = cache_ids_2d
+                    self._update_block_tables_3d_slot(idx, cache_ids_2d, str(request.request_id))
                     if cache_ids_2d:
                         encoder_block_num = len(cache_ids_2d[0])
                     else:
@@ -946,6 +948,7 @@ class GPUModelRunner(ModelRunnerBase):
                     cache_ids_2d = self._normalize_head_wise_cache_ids_2d(cache_ids_2d)
                     if cache_ids_2d is not None:
                         request.block_tables_3d = cache_ids_2d
+                    self._update_block_tables_3d_slot(idx, cache_ids_2d, str(request.request_id))
                     # Keep cached request metadata in sync for subsequent forward_meta assembly.
                     cached_req = self.forward_batch_reqs_list[idx]
                     if cached_req is not None:
@@ -997,6 +1000,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.prompt_logprobs_reqs.pop(request.request_id, None)
                 self.in_progress_prompt_logprobs.pop(request.request_id, None)
                 self.forward_batch_reqs_list[idx] = None
+                self._clear_block_tables_3d_slot(idx)
 
                 # Routing Replay
                 if self.fd_config.routing_replay_config.enable_routing_replay:
@@ -1088,6 +1092,68 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["block_tables_3d"] = block_tables_3d
         return block_tables_3d
 
+    def _init_head_wise_slot_states(self) -> None:
+        slot_cap = self.scheduler_config.max_num_seqs
+        self._head_wise_slot_req_ids: list[Optional[str]] = [None for _ in range(slot_cap)]
+        self._head_wise_slot_active_rows: list[list[int]] = [[0 for _ in range(self.kv_num_heads)] for _ in range(slot_cap)]
+
+    def _clear_block_tables_3d_slot(self, idx: int) -> None:
+        if not self.enable_head_wise_kv_cache:
+            return
+        if idx < 0 or idx >= len(self._head_wise_slot_active_rows):
+            return
+
+        block_tables_3d = self.share_inputs.get("block_tables_3d", None)
+        active_lens = self._head_wise_slot_active_rows[idx]
+        if block_tables_3d is not None:
+            max_blocks_per_head = block_tables_3d.shape[1]
+            base_row = idx * self.kv_num_heads
+            for h in range(self.kv_num_heads):
+                clear_len = min(int(active_lens[h]), max_blocks_per_head)
+                if clear_len > 0:
+                    block_tables_3d[base_row + h, :clear_len] = -1
+        for h in range(self.kv_num_heads):
+            active_lens[h] = 0
+        self._head_wise_slot_req_ids[idx] = None
+
+    def _update_block_tables_3d_slot(self, idx: int, cache_ids_2d, req_id: Optional[str] = None) -> None:
+        if not self.enable_head_wise_kv_cache:
+            return
+        if idx < 0 or idx >= len(self._head_wise_slot_active_rows):
+            return
+        if cache_ids_2d is None:
+            self._clear_block_tables_3d_slot(idx)
+            return
+
+        if req_id is not None and self._head_wise_slot_req_ids[idx] not in (None, req_id):
+            self._clear_block_tables_3d_slot(idx)
+
+        block_tables_3d = self._get_head_wise_block_tables_buffer()
+        max_blocks_per_head = block_tables_3d.shape[1]
+        base_row = idx * self.kv_num_heads
+        active_lens = self._head_wise_slot_active_rows[idx]
+
+        for h in range(self.kv_num_heads):
+            clear_len = min(int(active_lens[h]), max_blocks_per_head)
+            if clear_len > 0:
+                block_tables_3d[base_row + h, :clear_len] = -1
+
+            row = cache_ids_2d[h] if h < len(cache_ids_2d) and cache_ids_2d[h] is not None else []
+            copy_len = min(len(row), max_blocks_per_head)
+            if copy_len > 0:
+                normalized_row = [(-1 if cid is None else int(cid)) for cid in row[:copy_len]]
+                block_tables_3d[base_row + h, :copy_len] = paddle.to_tensor(normalized_row, dtype="int32")
+            active_lens[h] = copy_len
+
+        self._head_wise_slot_req_ids[idx] = req_id
+
+    def _reset_head_wise_block_tables_state(self) -> None:
+        self._init_head_wise_slot_states()
+        if self.enable_head_wise_kv_cache:
+            block_tables_3d = self.share_inputs.get("block_tables_3d", None)
+            if block_tables_3d is not None:
+                block_tables_3d[:] = -1
+
     def _prepare_block_tables_3d_from_flat_tables(self, num_running_requests: int):
         """
         Build head-wise tables from flattened self.share_inputs["block_tables"] in-place.
@@ -1125,32 +1191,41 @@ class GPUModelRunner(ModelRunnerBase):
 
         max_blocks_per_head = block_tables_3d.shape[1]
         has_request_level_tables = False
-        per_req_head_lens = []
+        collect_prepare_debug_stats = self.head_wise_debug_log and _debug_logging_enabled()
+        should_log_prepare = (
+            collect_prepare_debug_stats
+            and (self._head_wise_prepare_log_count < 50 or self._head_wise_prepare_log_count % 100 == 0)
+        )
+        per_req_head_lens = [] if collect_prepare_debug_stats else None
         req_list = getattr(self, "forward_batch_reqs_list", None)
 
         for b in range(num_running_requests):
             if req_list is None or b >= len(req_list):
-                per_req_head_lens.append([])
+                if per_req_head_lens is not None:
+                    per_req_head_lens.append([])
                 continue
 
             req = req_list[b]
             cache_ids_2d = getattr(req, "block_tables_3d", None) if req is not None else None
             if cache_ids_2d is None:
-                if self.head_wise_debug_log and _debug_logging_enabled():
+                if collect_prepare_debug_stats:
                     logger.debug(f"[headwise _prepare_block_tables_3d] req {b}: cache_ids_2d=None, keep rows as -1")
-                per_req_head_lens.append([])
+                if per_req_head_lens is not None:
+                    per_req_head_lens.append([])
                 continue
 
             has_request_level_tables = True
-            head_lens = []
+            head_lens = [] if per_req_head_lens is not None else None
             for h in range(self.kv_num_heads):
                 if h >= len(cache_ids_2d) or cache_ids_2d[h] is None:
-                    head_lens.append(0)
+                    if head_lens is not None:
+                        head_lens.append(0)
                     continue
 
                 row = cache_ids_2d[h]
-                valid_cnt = sum(1 for cid in row if cid is not None and cid >= 0)
-                head_lens.append(valid_cnt)
+                if head_lens is not None:
+                    valid_cnt = sum(1 for cid in row if cid is not None and cid >= 0)
+                    head_lens.append(valid_cnt)
                 normalized_row = [(-1 if cid is None else int(cid)) for cid in row]
                 copy_len = min(len(normalized_row), max_blocks_per_head)
                 if copy_len > 0:
@@ -1158,47 +1233,45 @@ class GPUModelRunner(ModelRunnerBase):
                     block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(
                         normalized_row[:copy_len], dtype="int32"
                     )
-            per_req_head_lens.append(head_lens)
+            if per_req_head_lens is not None:
+                per_req_head_lens.append(head_lens)
 
         # Fallback for dummy/profile or missing request cache metadata.
         if not has_request_level_tables:
             self._prepare_block_tables_3d_from_flat_tables(num_running_requests)
 
-        active_rows = block_tables_3d[: num_running_requests * self.kv_num_heads]
-        rows_np = active_rows.numpy()
-        valid_ids = rows_np[rows_np >= 0]
-        min_id = int(valid_ids.min()) if valid_ids.size > 0 else -1
-        max_id = int(valid_ids.max()) if valid_ids.size > 0 else -1
-        neg_count = int((rows_np < 0).sum())
+        if collect_prepare_debug_stats:
+            active_rows = block_tables_3d[: num_running_requests * self.kv_num_heads]
+            rows_np = active_rows.numpy()
+            valid_ids = rows_np[rows_np >= 0]
+            min_id = int(valid_ids.min()) if valid_ids.size > 0 else -1
+            max_id = int(valid_ids.max()) if valid_ids.size > 0 else -1
+            neg_count = int((rows_np < 0).sum())
 
-        cache_id_capacity = -1
-        if self.share_inputs.get("caches") and len(self.share_inputs["caches"]) > 0:
-            cache_id_capacity = int(self.share_inputs["caches"][0].shape[0])
-        out_of_range_cnt = int((valid_ids >= cache_id_capacity).sum()) if cache_id_capacity > 0 else 0
+            cache_id_capacity = -1
+            if self.share_inputs.get("caches") and len(self.share_inputs["caches"]) > 0:
+                cache_id_capacity = int(self.share_inputs["caches"][0].shape[0])
+            out_of_range_cnt = int((valid_ids >= cache_id_capacity).sum()) if cache_id_capacity > 0 else 0
 
-        should_log_prepare = (
-            self.head_wise_debug_log
-            and _debug_logging_enabled()
-            and (self._head_wise_prepare_log_count < 50 or self._head_wise_prepare_log_count % 100 == 0)
-        )
-        if should_log_prepare:
-            logger.debug(
-                f"[headwise _prepare_block_tables_3d] shape={active_rows.shape} "
-                f"num_running_requests={num_running_requests} kv_num_heads={self.kv_num_heads} "
-                f"max_blocks_per_head={max_blocks_per_head} min_id={min_id} max_id={max_id} "
-                f"neg_count={neg_count} cache_id_capacity={cache_id_capacity} "
-                f"out_of_range_cnt={out_of_range_cnt} first_rows={rows_np[:min(4, len(rows_np))].tolist()}"
-            )
+            if should_log_prepare:
+                logger.debug(
+                    f"[headwise _prepare_block_tables_3d] shape={active_rows.shape} "
+                    f"num_running_requests={num_running_requests} kv_num_heads={self.kv_num_heads} "
+                    f"max_blocks_per_head={max_blocks_per_head} min_id={min_id} max_id={max_id} "
+                    f"neg_count={neg_count} cache_id_capacity={cache_id_capacity} "
+                    f"out_of_range_cnt={out_of_range_cnt} first_rows={rows_np[:min(4, len(rows_np))].tolist()}"
+                )
+            if out_of_range_cnt > 0:
+                logger.error(
+                    f"[headwise _prepare_block_tables_3d invalid] out_of_range_cnt={out_of_range_cnt}, "
+                    f"cache_id_capacity={cache_id_capacity}, min_id={min_id}, max_id={max_id}"
+                )
         if self.head_wise_debug_log:
             self._head_wise_prepare_log_count += 1
-        if out_of_range_cnt > 0:
-            logger.error(
-                f"[headwise _prepare_block_tables_3d invalid] out_of_range_cnt={out_of_range_cnt}, "
-                f"cache_id_capacity={cache_id_capacity}, min_id={min_id}, max_id={max_id}"
-            )
-        if self.head_wise_debug_log and _debug_logging_enabled() and self._head_wise_debug_log_count < 20:
+        if collect_prepare_debug_stats and self._head_wise_debug_log_count < 20:
             logger.debug(
-                f"[headwise _prepare_block_tables_3d details] per_req_head_lens={per_req_head_lens[:num_running_requests]}"
+                f"[headwise _prepare_block_tables_3d details] "
+                f"per_req_head_lens={per_req_head_lens[:num_running_requests]}"
             )
             self._head_wise_debug_log_count += 1
 
@@ -1376,10 +1449,6 @@ class GPUModelRunner(ModelRunnerBase):
                         f"max_blocks_per_head={self.share_inputs['block_tables_3d'].shape[1]} "
                         f"first_rows={rows_np[:min(4, len(rows_np))].tolist() if len(rows_np) > 0 else []}"
                     )
-            else:
-                # In real run, use forward_batch_reqs_list
-                num_running_requests = int(self.share_inputs["seq_lens_this_time"].shape[0])
-                self._prepare_block_tables_3d(num_running_requests)
         logprobs_reqs = [
             req
             for req in self.forward_batch_reqs_list
@@ -1501,6 +1570,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         list_cap = len(self.forward_batch_reqs_list)
         req_by_batch_id = {}
+        slot_rows_by_batch_id = {}
+        slot_req_id_by_batch_id = {}
         for req in self.forward_batch_reqs_list:
             if req is None:
                 continue
@@ -1508,14 +1579,35 @@ class GPUModelRunner(ModelRunnerBase):
             if req_batch_id is None:
                 continue
             req_by_batch_id[req_batch_id] = req
+        if self.enable_head_wise_kv_cache:
+            for slot_idx, req in enumerate(self.forward_batch_reqs_list):
+                if req is None:
+                    continue
+                req_batch_id = getattr(req, "idx", None)
+                if req_batch_id is None:
+                    continue
+                slot_rows_by_batch_id[req_batch_id] = list(self._head_wise_slot_active_rows[slot_idx])
+                slot_req_id_by_batch_id[req_batch_id] = self._head_wise_slot_req_ids[slot_idx]
 
         aligned_reqs = [None for _ in range(list_cap)]
+        aligned_slot_active_rows = (
+            [[0 for _ in range(self.kv_num_heads)] for _ in range(list_cap)]
+            if self.enable_head_wise_kv_cache
+            else None
+        )
+        aligned_slot_req_ids = [None for _ in range(list_cap)] if self.enable_head_wise_kv_cache else None
         for slot_idx, batch_id in index_to_batch_id.items():
             if slot_idx < 0 or slot_idx >= list_cap:
                 continue
             aligned_reqs[slot_idx] = req_by_batch_id.get(batch_id)
+            if self.enable_head_wise_kv_cache and batch_id in slot_rows_by_batch_id:
+                aligned_slot_active_rows[slot_idx] = slot_rows_by_batch_id[batch_id]
+                aligned_slot_req_ids[slot_idx] = slot_req_id_by_batch_id.get(batch_id)
 
         self.forward_batch_reqs_list = aligned_reqs
+        if self.enable_head_wise_kv_cache:
+            self._head_wise_slot_active_rows = aligned_slot_active_rows
+            self._head_wise_slot_req_ids = aligned_slot_req_ids
 
     def load_model(self) -> None:
         """load or download model"""
@@ -2979,9 +3071,13 @@ class GPUModelRunner(ModelRunnerBase):
         self.in_progress_prompt_logprobs.clear()
         self.forward_batch_reqs_list = [None for _ in range(self.scheduler_config.max_num_seqs)]
 
+        self._reset_head_wise_block_tables_state()
         # Routing Replay
         if self.routing_replay_manager:
-            self.routing_replay_manager.clear_all_request()
+            if hasattr(self.routing_replay_manager, "put_table_to_store"):
+                self.routing_replay_manager.put_table_to_store()
+            else:
+                self.routing_replay_manager.clear_all_request()
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
@@ -2992,6 +3088,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Reset share_inputs
         self.share_inputs.reset_share_inputs()
+        self._reset_head_wise_block_tables_state()
         if self.spec_method == SpecMethod.MTP:
             self.proposer.model_inputs.reset_model_inputs()
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
