@@ -20,8 +20,7 @@
 #include "xpu/kernel/cluster_primitive.h"
 #include "xpu/kernel/xtdk_io.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __global__ void speculate_get_seq_lens_output(int* seq_lens_output,
                                               const int* seq_lens_this_time,
@@ -54,5 +53,4 @@ __global__ void speculate_get_seq_lens_output(int* seq_lens_output,
   }
 }
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

@@ -54,8 +54,10 @@ class InstanceInfo:
                 # handle default and default_factory
                 if field_def.default is not MISSING:
                     value = field_def.default
-                else:
+                elif field_def.default_factory is not MISSING:
                     value = field_def.default_factory()
+                else:
+                    raise KeyError(f"Missing required field '{name}' in instance info dict")
             kwargs[name] = value
         return cls(**kwargs)
 

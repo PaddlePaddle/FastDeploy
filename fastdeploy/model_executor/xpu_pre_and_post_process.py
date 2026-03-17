@@ -351,7 +351,6 @@ def xpu_post_process_normal(
                 sampled_token_ids,
                 model_output.input_ids,
                 share_inputs["block_tables"],
-                model_output.stop_nums,
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
@@ -364,7 +363,6 @@ def xpu_post_process_normal(
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
                 model_output.input_ids,
-                model_output.stop_nums,
                 sampled_token_ids,
                 model_output.is_block_step,
             )

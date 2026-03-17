@@ -412,15 +412,40 @@ class ErnieVlRotaryEmbedding3D:
     ):
         self.rotary_dim = rotary_dim
         self.base = base
-        self.paritial_rotary_factor = partial_rotary_factor
+        self.partial_rotary_factor = partial_rotary_factor
         self.max_position = max_position
         self.freq_allocation = freq_allocation
+        self.mrope_section = rope_scaling.get("mrope_section", None)
+        self._init_using_position_axis()
+
+    def _init_using_position_axis(self):
+        point_num = self.rotary_dim // 2
+        if self.mrope_section is not None:
+            # Configurable self.mrope_section: [t_count, h_count, w_count]
+            assert len(self.mrope_section) == 3
+            assert (point_num - self.mrope_section[0]) % sum(self.mrope_section[1:]) == 0
+            using_position_axis = []
+            for i, n in enumerate(self.mrope_section[1:]):
+                using_position_axis.extend([i + 1] * n)
+            using_position_axis = using_position_axis * (
+                (point_num - self.mrope_section[0]) // sum(self.mrope_section[1:])
+            )
+            using_position_axis.extend([0] * self.mrope_section[0])
+        else:
+            # Fallback: build default HWHW...TTT pattern from freq_allocation
+            hw_count = point_num - self.freq_allocation
+            using_position_axis = []
+            for _ in range(hw_count // 2):
+                using_position_axis.extend([1, 2])
+            if hw_count % 2 == 1:
+                using_position_axis.append(1)
+            using_position_axis.extend([0] * self.freq_allocation)
+        self.using_position_axis = paddle.to_tensor(using_position_axis, dtype="int64")
 
     def __call__(self, position_ids, max_len_lst, cumsum_seqlens):
-        rot_emb = paddle.zeros((2, 1, self.max_position, 1, self.rotary_dim // 2), dtype="float32")
-
         bsz = len(cumsum_seqlens) - 1
-        # position_ids_3d: [bsz, seq_len, 3]
+
+        # Build position_ids_3d: [bsz, max_position, 3]
         position_ids_3d = paddle.tile(
             paddle.arange(self.max_position, dtype="int64").unsqueeze(0).unsqueeze(-1),
             [bsz, 1, 3],
@@ -436,68 +461,33 @@ class ErnieVlRotaryEmbedding3D:
             position_ids_3d_real = paddle.concat([position_ids_cur, dec_pos_ids], axis=0)
             position_ids_3d[i, : position_ids_3d_real.shape[0], :] = position_ids_3d_real
 
-        # position_ids: [bsz(1), seq_len]
-        position_ids = paddle.arange(0, self.max_position, 1, dtype="float32").reshape((1, -1))
-
-        position_ids = position_ids / self.paritial_rotary_factor
-
-        indices = paddle.arange(0, self.rotary_dim, 2, dtype="float32")
-        indices = 1 / self.base ** (indices / self.rotary_dim)
-        # sinusoid_inp: [bsz(1), seq_len, 1, head_dim // 2]
-        sinusoid_inp = position_ids.unsqueeze(-1) * indices.unsqueeze(0)
-        # pos_emb: [bsz(1), seq_len, 1, head_dim]
-        pos_emb = paddle.concat([paddle.sin(sinusoid_inp), paddle.cos(sinusoid_inp)], axis=-1)
-        # pos_emb: [bsz(1), 1, seq_len, head_dim]
-        pos_emb = paddle.reshape(pos_emb, (-1, 1, self.max_position, self.rotary_dim))
-        # pos_emb: [bsz(1), seq_len, 1, head_dim]
-        pos_emb = pos_emb.transpose([0, 2, 1, 3])
-        # sin: [bsz(1), seq_len, 1, head_dim // 2]
-        sin, cos = paddle.chunk(pos_emb, 2, axis=-1)
-        batch_indices = paddle.arange(end=position_ids.shape[0]).cast("int64")
-        # batch_indices: [[0]]
-        batch_indices = batch_indices[..., None]
-        # sin, cos: [3, seq_len, 1, head_dim // 2]
-        sin = sin.tile([position_ids.shape[0], 1, 1, 1])
-        cos = cos.tile([position_ids.shape[0], 1, 1, 1])
-
-        tmp_pos_id_0 = position_ids_3d[..., 0].astype("int64")
-        tmp_pos_id_1 = position_ids_3d[..., 1].astype("int64")
-        tmp_pos_id_2 = position_ids_3d[..., 2].astype("int64")
-
-        sin_bsz = paddle.index_select(sin, index=batch_indices, axis=0)
+        # inv_freq: [rotary_dim // 2]
+        inv_freq = 1.0 / (self.base ** (paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim))
 
         rot_emb_list = []
         for i in range(bsz):
-            # [HWHWHW...TTT..]
-            sin_t = paddle.index_select(sin_bsz, index=tmp_pos_id_0[i], axis=1)[:, :, :, -self.freq_allocation :]
-            sin_h = paddle.index_select(sin_bsz, index=tmp_pos_id_1[i], axis=1)[
-                :, :, :, : self.rotary_dim // 2 - self.freq_allocation : 2
-            ]
-            sin_w = paddle.index_select(sin_bsz, index=tmp_pos_id_2[i], axis=1)[
-                :, :, :, 1 : self.rotary_dim // 2 - self.freq_allocation : 2
-            ]
-            sin_hw = paddle.stack([sin_h, sin_w], axis=-1).reshape(sin_h.shape[:-1] + [sin_h.shape[-1] * 2])
-            sin_thw = paddle.concat([sin_hw, sin_t], axis=-1)
-
-            cos_bsz = paddle.index_select(cos, index=batch_indices, axis=0)
-            cos_t = paddle.index_select(cos_bsz, index=tmp_pos_id_0[i], axis=1)[:, :, :, -self.freq_allocation :]
-            cos_h = paddle.index_select(cos_bsz, index=tmp_pos_id_1[i], axis=1)[
-                :, :, :, : self.rotary_dim // 2 - self.freq_allocation : 2
-            ]
-            cos_w = paddle.index_select(cos_bsz, index=tmp_pos_id_2[i], axis=1)[
-                :, :, :, 1 : self.rotary_dim // 2 - self.freq_allocation : 2
-            ]
-            cos_hw = paddle.stack([cos_h, cos_w], axis=-1).reshape(cos_h.shape[:-1] + [cos_h.shape[-1] * 2])
-            cos_thw = paddle.concat([cos_hw, cos_t], axis=-1)
-
-            rot_emb[0] = cos_thw
-            rot_emb[1] = sin_thw
+            # Expand 3D positions using using_position_axis mapping
+            # position_ids_3d[i]: [max_position, 3] -> expand_pos: [max_position, rotary_dim//2]
+            expand_pos = paddle.index_select(
+                position_ids_3d[i].cast("float32") / self.partial_rotary_factor,
+                self.using_position_axis,
+                axis=-1,
+            )
+            # freqs: [max_position, rotary_dim//2]
+            freqs = expand_pos * inv_freq
+            # cos/sin: [max_position, rotary_dim//2]
+            #   -> unsqueeze(0): [1, max_position, rotary_dim//2]
+            #   -> unsqueeze(0): [1, 1, max_position, rotary_dim//2]
+            #   -> unsqueeze(3): [1, 1, max_position, 1, rotary_dim//2]
+            cos_emb = paddle.cos(freqs).unsqueeze(0).unsqueeze(0).unsqueeze(3)
+            sin_emb = paddle.sin(freqs).unsqueeze(0).unsqueeze(0).unsqueeze(3)
+            # rot_emb: [2, 1, max_position, 1, rotary_dim//2]
+            rot_emb = paddle.concat([cos_emb, sin_emb], axis=0)
 
             if current_platform.is_iluvatar():
                 rot_emb = paddle.stack([rot_emb, rot_emb], axis=-1).reshape(
                     [2, 1, self.max_position, 1, self.rotary_dim]
                 )
-
             rot_emb_list.append(rot_emb)
 
         return rot_emb_list

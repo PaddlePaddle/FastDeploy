@@ -39,7 +39,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
   std::vector<int64_t> shape = topk_ids.shape();
   int64_t bs_now = shape[0];
   int64_t end_length = end_ids.shape()[0];
-  int r = baidu::xpu::api::plugin::set_stop_value_multi_ends<int64_t>(
+  int r = fastdeploy::plugin::set_stop_value_multi_ends<int64_t>(
       xpu_ctx->x_context(),
       const_cast<bool *>(stop_flags.data<bool>()),
       const_cast<int64_t *>(topk_ids.data<int64_t>()),
@@ -49,7 +49,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
       bs_now,
       end_length,
       beam_search);
-  PD_CHECK(r == 0, "xpu::plugin::set_stop_value_multi_ends failed.");
+  PD_CHECK(r == 0, "fastdeploy::plugin::set_stop_value_multi_ends failed.");
 }
 
 PD_BUILD_OP(set_stop_value_multi_ends)

@@ -221,7 +221,15 @@ class Qwen3VLProcessor(TextProcessor):
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
             request.sampling_params.bad_words_token_ids = bad_words_token_ids
 
-        if request.prompt:
+        if request.prompt_token_ids:
+            messages = request.messages
+            if messages:
+                self._check_mm_limits(messages)
+            if request.enable_thinking is None:
+                request.enable_thinking = kwargs.get("enable_thinking", False)
+            outputs = self.processor.prompt_token_ids2outputs(request)
+
+        elif request.prompt:
             multimodal_data = request.multimodal_data
             if multimodal_data is None:
                 multimodal_data = {}
@@ -257,7 +265,11 @@ class Qwen3VLProcessor(TextProcessor):
 
         outputs = self.pack_outputs(outputs)
 
-        request.prompt_token_ids = outputs["input_ids"].tolist()
+        request.prompt_token_ids = (
+            outputs["input_ids"].tolist()
+            if not getattr(request, "prompt_token_ids", None)
+            else request.prompt_token_ids
+        )
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         request.multimodal_inputs = outputs
 

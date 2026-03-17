@@ -156,6 +156,8 @@ func isValidPort(p Port) bool {
 }
 
 func isValidIP(ip string) bool {
+	ip = strings.TrimPrefix(ip, "https://")
+	ip = strings.TrimPrefix(ip, "http://")
 	return net.ParseIP(ip) != nil
 }
 

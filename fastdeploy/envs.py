@@ -16,6 +16,8 @@ Environment variables used by FastDeploy.
 """
 
 import os
+import sys
+from types import ModuleType
 from typing import Any, Callable
 
 
@@ -194,12 +196,16 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FMQ_CONFIG_JSON": lambda: os.getenv("FMQ_CONFIG_JSON", None),
     "FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS": lambda: int(os.getenv("FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS", "500")),
     "FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE": lambda: int(os.getenv("FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE", "64")),
-    "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT": lambda: int(os.getenv("FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", "120")),
+    "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT": lambda: float(os.getenv("FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", "120")),
     "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
     # Whether to enable low latency in mixed scenario
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
     # Whether to use phi FP8 quantization,if 1,use paddle default.
     "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
+    # Whether to use phi MOE permute,if 1,use paddle default.
+    "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))),
+    # Control class SiluAndMul to use swiglu or fusid_bias_act operator in the forward_cuda function
+    "FD_SiluAndMul_USE_PHI_SWIGLU": lambda: bool(int(os.getenv("FD_SiluAndMul_USE_PHI_SWIGLU", "0"))),
     # Reserve output blocks for decoding requests when schedule new prefill requests
     "FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
         os.getenv("FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "16")
@@ -214,10 +220,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
     # File path for file storage backend
     "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
-    # Custom all-reduce max buffer size in MB (default 8MB).
+    # Custom all-reduce max buffer size in MB (default 64MB).
     # Increase this to avoid NCCL fallback for large tensors in deterministic mode.
     # E.g. FD_CUSTOM_AR_MAX_SIZE_MB=128 for 128MB.
-    "FD_CUSTOM_AR_MAX_SIZE_MB": lambda: int(os.getenv("FD_CUSTOM_AR_MAX_SIZE_MB", "8")),
+    "FD_CUSTOM_AR_MAX_SIZE_MB": lambda: int(os.getenv("FD_CUSTOM_AR_MAX_SIZE_MB", "64")),
     # Enable deterministic inference mode for chunked prefill alignment
     "FD_DETERMINISTIC_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_MODE", "0"))),
     # Split KV block size for deterministic alignment (must be power of 2 and > 0, default 16)
@@ -233,15 +239,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Under certain DP+EP configurations, concurrent access (even read-only)
     # has been observed to cause NaN computation errors.
     # Set to 1 to enable the lock; defaults to 0 (disabled).
-    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("USE_KVCACHE_LOCK", "0"))),
+    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
 }
-
-
-def __getattr__(name: str):
-    # lazy evaluation of environment variables
-    if name in environment_variables:
-        return environment_variables[name]()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def get_unique_name(self, name):
@@ -252,10 +251,39 @@ def get_unique_name(self, name):
     return name + f"_{shm_uuid}"
 
 
-def __setattr__(name: str, value: Any):
-    assert name in environment_variables
-    environment_variables[name] = lambda: value
+class _EnvsModule(ModuleType):
+    """Custom module class to support __setattr__ for environment variables."""
+
+    def __getattr__(self, name: str):
+        if name in environment_variables:
+            return environment_variables[name]()
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    def __setattr__(self, name: str, value: Any):
+        if name in environment_variables:
+            # Convert bool to "1"/"0" so int(os.getenv(...)) works correctly
+            if isinstance(value, bool):
+                value = int(value)
+            os.environ[name] = str(value)
+        elif name.startswith("_"):
+            # Allow Python-internal attrs (__spec__, __loader__, etc.)
+            super().__setattr__(name, value)
+        else:
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    def __delattr__(self, name: str):
+        # Support unittest.mock.patch cleanup which calls delattr to restore original state
+        if name in environment_variables:
+            os.environ.pop(name, None)
+        elif name.startswith("_"):
+            super().__delattr__(name)
+        else:
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    def __dir__(self):
+        return list(environment_variables.keys())
 
 
-def __dir__():
-    return list(environment_variables.keys())
+# Replace the module with our custom class
+_current_module = sys.modules[__name__]
+_current_module.__class__ = _EnvsModule
