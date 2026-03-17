@@ -38,6 +38,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.spec_decode import SpecMethod
 
 
 @dataclass
@@ -92,7 +93,7 @@ class XPUAttentionBackend(AttentionBackend):
         )
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
+        self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
 
         self.kv_num_heads: int = kv_num_heads
         self.num_heads: int = num_heads
@@ -189,7 +190,8 @@ class XPUAttentionBackend(AttentionBackend):
         else:
             q_norm_weight = None
             k_norm_weight = None
-
+        # draft model not use rope3d now
+        use_rope3d = self.rope_3d and not forward_meta.is_draft
         res = block_attn(
             qkv,
             forward_meta.caches[2 * layer.layer_id],
@@ -228,7 +230,7 @@ class XPUAttentionBackend(AttentionBackend):
             metadata.kv_signal_data_list[layer.layer_id],
             forward_meta.kv_signal_sender,
             layer.use_neox_rotary_style,
-            self.rope_3d,
+            use_rope3d,
         )
 
         return res

@@ -41,6 +41,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #ifdef PADDLE_WITH_HIP
@@ -52,16 +54,14 @@ namespace cub = hipcub;
 #define GPU(str) cuda##str
 #endif
 
-#define checkCudaErrors(call)             \
-  do {                                    \
-    GPU(Error_t) err = call;              \
-    if (err != GPU(Success)) {            \
-      printf("CUDA error at %s %d: %s\n", \
-             __FILE__,                    \
-             __LINE__,                    \
-             GPU(GetErrorString)(err));   \
-      exit(EXIT_FAILURE);                 \
-    }                                     \
+#define checkCudaErrors(call)                                             \
+  do {                                                                    \
+    GPU(Error_t) err = call;                                              \
+    if (err != GPU(Success)) {                                            \
+      throw std::runtime_error(std::string("CUDA error at ") + __FILE__ + \
+                               ":" + std::to_string(__LINE__) + " '" +    \
+                               GPU(GetErrorString)(err) + "'");           \
+    }                                                                     \
   } while (0)
 
 typedef struct shmStruct_st {

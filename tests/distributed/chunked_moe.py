@@ -106,7 +106,7 @@ class MockAttentionBackend:
 
 
 class MockQuantMethod:
-    def apply(self, layer, x, gate, topk_ids_hookfunc=None):
+    def apply(self, layer, x, gate, topk_ids_hookfunc=None, shared_experts=None):
         return x
 
 

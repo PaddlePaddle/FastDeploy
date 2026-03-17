@@ -84,6 +84,7 @@ Learn how to download models, enable using the torch format, and more:
 - [Prefix Caching](./docs/features/prefix_caching.md)
 - [Chunked Prefill](./docs/features/chunked_prefill.md)
 - [Load-Balancing Scheduling Router](./docs/online_serving/router.md)
+- [Global Cache Pooling](./docs/features/global_cache_pooling.md)
 
 ## Acknowledgement
 

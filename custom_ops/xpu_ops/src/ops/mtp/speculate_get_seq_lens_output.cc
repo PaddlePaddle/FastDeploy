@@ -38,7 +38,7 @@ std::vector<paddle::Tensor> SpeculateGetSeqLensOutput(
   auto seq_lens_output = paddle::full(
       {bsz}, 0, paddle::DataType::INT32, seq_lens_this_time.place());
 
-  int r = baidu::xpu::api::plugin::speculate_get_seq_lens_output(
+  int r = fastdeploy::plugin::speculate_get_seq_lens_output(
       ctx,
       seq_lens_output.data<int>(),
       seq_lens_this_time.data<int>(),

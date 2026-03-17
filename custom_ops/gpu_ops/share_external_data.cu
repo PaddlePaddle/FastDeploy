@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "helper.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -22,6 +21,7 @@
 #include <sys/mman.h>
 #include <stdio.h>
 #include "cuda_multiprocess.h"
+#include "helper.h"
 #include "paddle/phi/core/tensor_meta.h"
 
 std::vector<paddle::Tensor> ShareExternalData(paddle::Tensor &input,
@@ -30,9 +30,9 @@ std::vector<paddle::Tensor> ShareExternalData(paddle::Tensor &input,
   volatile shmStruct *shm = NULL;
   sharedMemoryInfo info;
   if (sharedMemoryOpen(shm_name.c_str(), sizeof(shmStruct), &info) != 0) {
-    printf("Failed to create shared memory slab\n");
-    printf("Func ShareExternalData. Shm_name: %s\n", shm_name.c_str());
-    exit(EXIT_FAILURE);
+    throw std::runtime_error(
+        "Failed to open shared memory slab in ShareExternalData, shm_name: " +
+        shm_name + ", errno: " + std::string(strerror(errno)));
   }
   shm = (volatile shmStruct *)info.addr;
   void *ptr = nullptr;

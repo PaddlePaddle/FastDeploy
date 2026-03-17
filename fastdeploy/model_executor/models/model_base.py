@@ -123,8 +123,6 @@ class ModelRegistry:
 
     def _register_enhanced_models(self):
         for arch, model_info in self._enhanced_models.items():
-            if arch == "DeepseekV32ForCausalLM":
-                model_info["module_name"] = "deepseek_v3"
             model = LazyRegisteredModel(
                 module_name=model_info["module_name"],
                 module_path=model_info["module_path"],
@@ -247,7 +245,9 @@ class ModelRegistry:
             architectures = [architectures]
 
         if not architectures:
-            raise ValueError("No model architectures are specified")
+            raise ValueError(
+                "No model architectures are specified. " "Please set 'architectures' in the model's config.json."
+            )
 
         # First, check if PaddleFormers is explicitly requested
         if model_config is not None and architectures:

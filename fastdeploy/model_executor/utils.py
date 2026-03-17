@@ -51,7 +51,7 @@ class BitMaskTracker:
             end (int): End index (exclusive)
         """
         if start < 0 or end > self.length or start >= end:
-            raise ValueError("Invalid mark range")
+            raise ValueError(f"Invalid mark range: start={start}, end={end}, length={self.length}")
         block = ((1 << (end - start)) - 1) << start
         self.mask |= block
 
@@ -82,7 +82,7 @@ class TensorTracker:
             self.track_dim = 2 if output_dim else 1
             self.trackers = [BitMaskTracker(shape[self.track_dim]) for _ in range(batch)]
         else:
-            raise ValueError("Only 2D or 3D tensors supported")
+            raise ValueError(f"Only 2D or 3D tensors supported, got {len(shape)}D tensor with shape={shape}")
 
     def mark(self, start: int = 0, end: int = None, batch_id: int = None):
         """
@@ -607,6 +607,8 @@ def reconstruct_memory(model):
     reconstruct_memory to avoid memory chunks
     """
     if paddle.is_compiled_with_cuda():
+        paddle.distributed.communication.group.Group.__deepcopy__ = lambda self, _: self
+        paddle.distributed.communication.group.Group.to_json = lambda self: repr(self)
         _offload_model(model)
         paddle.device.cuda.empty_cache()
         _reload_model(model)

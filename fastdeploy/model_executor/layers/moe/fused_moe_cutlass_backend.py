@@ -137,6 +137,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -229,6 +230,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.

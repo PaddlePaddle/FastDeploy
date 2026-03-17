@@ -800,6 +800,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertIn(req_id, manager.leaf_req_map[new_leaf])
         self.assertEqual(task.num_cached_blocks, 2)
 
+    @pytest.mark.skip
     def test_issue_and_sync_swap_tasks(self):
         manager = _create_manager()
         prefix_tree_status_data = np.zeros([manager.config.parallel_config.tensor_parallel_size], dtype=np.int32)

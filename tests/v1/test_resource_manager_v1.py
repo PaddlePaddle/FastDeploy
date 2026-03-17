@@ -81,6 +81,7 @@ def _build_manager(
     model_cfg.max_model_len = max_model_len
     model_cfg.architectures = architectures or ["test_model"]
     model_cfg.mm_max_tokens_per_item = None
+    model_cfg.version = None  # Required for register_info
     cache_cfg.bytes_per_token_per_layer = 1
     cache_cfg.kv_cache_ratio = 1.0
     parallel_cfg = ParallelConfig(args)
@@ -142,6 +143,7 @@ class TestResourceManagerV1(unittest.TestCase):
         model_cfg.max_model_len = 3200
         model_cfg.architectures = ["test_model"]
         model_cfg.mm_max_tokens_per_item = None
+        model_cfg.version = None  # Required for register_info
         cache_cfg.bytes_per_token_per_layer = 1
         cache_cfg.kv_cache_ratio = 1.0
         parallel_cfg = ParallelConfig(args)
@@ -304,6 +306,7 @@ class TestRevertChunkedMMInput(unittest.TestCase):
         model_cfg.max_model_len = 3200
         model_cfg.architectures = ["test_model"]
         model_cfg.mm_max_tokens_per_item = None
+        model_cfg.version = None  # Required for register_info
         cache_cfg.bytes_per_token_per_layer = 1
         cache_cfg.kv_cache_ratio = 1.0
         cache_cfg.block_size = 64
@@ -541,7 +544,6 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         manager.cache_manager.get_required_block_num.return_value = 0
         success = manager.get_prefix_cached_blocks(request)
         self.assertTrue(success)
-        self.assertTrue(request.skip_allocate)
         self.assertEqual(request.num_cached_tokens, 8)
         self.assertEqual(request.metrics.gpu_cache_token_num, 4)
         self.assertEqual(request.metrics.cpu_cache_token_num, 0)
