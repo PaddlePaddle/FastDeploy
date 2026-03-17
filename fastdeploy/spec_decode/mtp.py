@@ -120,7 +120,9 @@ class MTPProposer(Proposer):
         elif current_platform.is_cuda() or current_platform.is_maca():
             self._propose = self._propose_cuda
         else:
-            raise RuntimeError("Unsupported platform.")
+            raise RuntimeError(
+                f"Unsupported platform for MTP: {current_platform}. " f"Supported platforms: CUDA, MACA, XPU"
+            )
 
         self.sampler = MTPSampler(fd_config)
         self.model_inputs = ProposerInputBatch(self.fd_config, self.target_model_inputs)

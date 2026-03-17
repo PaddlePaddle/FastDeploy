@@ -140,8 +140,8 @@ def get_compute_units():
             paddle.device.get_device()  # Triton + Paddle may can't get the device
             device_properties = paddle.cuda.get_device_properties(0)
             NUM_SMS = device_properties.multi_processor_count
-        except Exception:
-            logger.warning("Could not get CUDA device properties. Falling back to CPU threads.")
+        except Exception as e:
+            logger.warning(f"Could not get CUDA device properties ({e}), falling back to CPU core count")
             # TODO(liujundong): Paddle lacks a torch.get_num_threads() equivalent for the *configured* thread count.
             # Using os.cpu_count() (total logical cores) as a fallback, which may not be correct.
             # Must check downstream logic to determine if this impacts correctness.
@@ -660,6 +660,9 @@ def mm_batch_invariant(a, b, transpose_x=False, transpose_y=False, out=None):
     if transpose_y:
         b = b.T
     result = matmul_persistent(a, b)
+    if out is not None:
+        out.copy_(result, False)
+        return out
     return result
 
 
