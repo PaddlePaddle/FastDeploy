@@ -3338,12 +3338,20 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_register_to_router_inner_function_runs(self):
-        """Lines 1781-1782: _register inner function body executes (timeout and sleep_seconds set)."""
+        """_register inner function body executes (timeout and sleep_seconds set)."""
+        from fastdeploy.engine.register_manager import RegisterManager
+
         eng = self._make_mixed_engine()
         eng.cfg.router_config.router = "http://fake-router"
         eng.cfg.router_config.api_server_host = "127.0.0.1"
         eng.cfg.router_config.api_server_port = 19999
         eng.cfg.register_info = {"name": "test-server"}
+
+        reg_mgr = RegisterManager(
+            cfg=eng.cfg,
+            engine_worker_queue=MagicMock(),
+            get_is_paused=lambda: False,
+        )
 
         captured_target = [None]
 
@@ -3356,13 +3364,13 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def start(self):
                 pass  # don't auto-start
 
-        with patch("fastdeploy.engine.common_engine.threading.Thread", _CapturingThread):
-            eng._register_to_router()
+        with patch("fastdeploy.engine.register_manager.threading.Thread", _CapturingThread):
+            reg_mgr._register_to_router()
 
         # Verify the inner _register function was captured
         self.assertIsNotNone(captured_target[0])
 
-        # Now invoke the inner _register function directly to cover lines 1781-1782
+        # Now invoke the inner _register function directly.
         # Mock out check_service_health to return False so it doesn't hang,
         # and time.sleep to raise StopIteration to break the while True loop.
         call_count = [0]
@@ -3373,9 +3381,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 raise StopIteration("stop")
 
         with (
-            patch("fastdeploy.engine.common_engine.check_service_health", return_value=False),
-            patch("fastdeploy.engine.common_engine.time.sleep", _fake_sleep),
-            patch.object(eng, "llm_logger"),
+            patch("fastdeploy.engine.register_manager.check_service_health", return_value=False),
+            patch("fastdeploy.engine.register_manager.time.sleep", _fake_sleep),
         ):
             try:
                 captured_target[0]()
