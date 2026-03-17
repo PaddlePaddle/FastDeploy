@@ -17,6 +17,7 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/types.h>
+#include "custom_ftok.h"
 #include "msg_utils.h"
 #include "paddle/extension.h"
 
@@ -29,9 +30,9 @@ void GetOutputKVSignal(const paddle::Tensor& x,
     std::string msg_que_str(msg_que_str_tmp);
     msg_queue_id = std::stoi(msg_que_str);
   }
-  msg_queue_id += rank_id;
+  msg_queue_id = msg_queue_id << 4 + rank_id;
   static struct msgdatakv msg_rcv;
-  static key_t key = ftok("/opt/", msg_queue_id);
+  static key_t key = custom_ftok("/opt/", msg_queue_id);
   static int msgid = msgget(key, IPC_CREAT | 0666);
 
   int* out_data = const_cast<int*>(x.data<int>());
@@ -70,7 +71,7 @@ void GetOutput(const paddle::Tensor& x,
 #endif
     msg_queue_id = inference_msg_queue_id_from_env;
   }
-  static key_t key = ftok("/dev/shm", msg_queue_id);
+  static key_t key = custom_ftok("/dev/shm", msg_queue_id);
   static int msgid = msgget(key, IPC_CREAT | 0666);
 
 #ifdef GET_OUTPUT_DEBUG

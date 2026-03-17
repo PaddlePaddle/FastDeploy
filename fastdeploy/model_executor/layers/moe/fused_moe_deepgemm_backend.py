@@ -497,7 +497,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     permute_scale,
                     m_indices,
                 ) = paddle.nn.functional.moe_permute(
-                    hidden_states=recv_x,
+                    hidden_states=recv_x_value,
                     scale=recv_x_scale,
                     expert_routemap_topk=recv_topk_idx,
                     expert_prob_topk=recv_topk_weights,
@@ -521,7 +521,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     cumsum_idx_gpu,
                     m_indices,
                 ) = fastdeploy.model_executor.ops.gpu.ep_moe_expert_dispatch_fp8(
-                    recv_x,
+                    recv_x_value,
                     recv_x_scale,
                     recv_topk_idx,
                     recv_topk_weights,
@@ -581,7 +581,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     zipped_expertwise_rowmap=permute_indices_per_token,
                     expert_routemap_topk=recv_topk_idx,
                     token_prob_unzipped=dst_weights,
-                    total_zipped_tokens=recv_x.shape[0],
+                    total_zipped_tokens=recv_x_value.shape[0],
                     num_experts=layer.num_local_experts,
                     using_weighted_combine=True,
                 )

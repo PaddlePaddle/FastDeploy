@@ -35,11 +35,13 @@ from fastdeploy.model_executor.ops.gpu import (
     register_buffer,
     register_graph_buffers,
 )
+from fastdeploy.utils import llm_logger as logger
 
 try:
     meta_size()
     custom_ar = True
-except Exception:
+except Exception as e:
+    logger.debug(f"Custom allreduce not available: {e}")
     custom_ar = False
 
 _instances = []
@@ -61,6 +63,7 @@ class CustomAllreduce:
         """
         self.capturing = False
         self.group = group
+        self._initialized = False
 
         if not custom_ar:
             # disable because of missing custom allreduce library
@@ -102,6 +105,7 @@ class CustomAllreduce:
         self._ptr = init_custom_all_reduce(self.meta_ptrs, self.rank_data, rank, self.full_nvlink)
         register_buffer(self._ptr, self.buffer_ptrs)
 
+        self._initialized = True
         _instances.append(self)
 
     @staticmethod
@@ -134,6 +138,8 @@ class CustomAllreduce:
         lib.cudaFree(ctypes.c_void_p(pointers[rank]))
 
     def should_custom_ar(self, inp: paddle.Tensor):
+        if not self._initialized:
+            return False
         inp_size = tensor_byte_size(inp)
         if inp_size > self.max_size:
             return False
