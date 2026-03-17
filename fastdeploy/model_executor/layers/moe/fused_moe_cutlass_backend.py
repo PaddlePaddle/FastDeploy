@@ -293,6 +293,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         Paddle Cutlass compute Fused MoE.
         """
+        logger.info(f"输入x:{x}")
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
         if layer.topk_method == "noaux_tc":

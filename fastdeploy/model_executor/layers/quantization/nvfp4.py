@@ -523,7 +523,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}},
         )
 
-        logger.info(f"extra_weight_attrs:{extra_weight_attrs}")
+        # logger.info(f"extra_weight_attrs:{extra_weight_attrs}")
         set_weight_attrs(layer.up_gate_proj_weight_scale_2, {**extra_weight_attrs, "weight_type": "weight_scale_2"})
         set_weight_attrs(layer.down_proj_weight_scale_2, {**extra_weight_attrs, "weight_type": "weight_scale_2"})
         set_weight_attrs(layer.up_gate_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
@@ -585,6 +585,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         """
         flashinfer nvfp4 fusedmoe for Model Optimizer
         """
+        logger.info(f"输入x:{x}")
         gate_out = gate(x.cast("float32"))
         topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
             gate_out,
@@ -600,6 +601,11 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         output_dtype = x.dtype
         x_sf = None
         output = paddle.empty_like(x)
+
+        logger.info(f"up_gate_proj_input_scale_quant:{layer.up_gate_proj_input_scale_quant}")
+        logger.info(f"g1_alphas:{layer.g1_alphas}")
+        logger.info(f"down_proj_input_scale_quant:{layer.down_proj_input_scale_quant}")
+        logger.info(f"layer.g2_alphas:{layer.g2_alphas}")
 
         if self.backend == "flashinfer-cutlass":
             # flashinfer cutlass

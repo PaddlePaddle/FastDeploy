@@ -19,6 +19,7 @@ from typing import Optional
 import numpy as np
 import paddle
 from paddle import nn
+from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import (
@@ -72,7 +73,7 @@ class UnquantizedLinearMethod(QuantMethodBase):
         )
 
     def process_weights_after_loading(self, layer):
-        if self.model_format == "torch":
+        if self.model_format == "torch1":
             process_weight_transpose(layer, "weight")
 
     def process_loaded_weights(self, layer, weights) -> None:
@@ -82,6 +83,8 @@ class UnquantizedLinearMethod(QuantMethodBase):
         layer.weight.set_value(weights)
 
     def apply(self, layer: nn.Layer, x: paddle.Tensor) -> paddle.Tensor:
+
+        # logger.info(f"layer.weight:{layer.weight}")
         linear_out = paddle.matmul(x, layer.weight)
         if layer.with_bias:
             linear_out = paddle.add(linear_out, layer.bias)
@@ -168,13 +171,14 @@ class LinearBase(nn.Layer):
             self.input_size,
             self.output_size,
         ]
-
+        logger.info(f"skip_quant:{skip_quant}")
         if (
             fd_config.quant_config
             and not skip_quant
             and modules_to_convert(prefix, self.fd_config)
             and fd_config.quant_config.get_quant_method(self)
         ):
+
             self.quant_method = fd_config.quant_config.get_quant_method(self)
         else:
             self.quant_method: Optional[QuantMethodBase] = UnquantizedLinearMethod()
@@ -468,6 +472,7 @@ class ColumnParallelLinear(LinearBase):
             ),
             model_format=fd_config.model_config.model_format,
         )
+        logger.info(f"self.quant_method:{self.quant_method}")
 
         if self.tp_size > 0:
             if self.with_bias:
@@ -1159,7 +1164,8 @@ class QKVGateParallelLinear(ColumnParallelLinear):
         input_size = self.hidden_size
 
         print(input_size, output_size)
-        print("niubi")
+        # logger.info(f"skip_quant:{skip_quant}")
+
         super().__init__(
             fd_config=fd_config,
             prefix=prefix,
@@ -1169,7 +1175,11 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             skip_quant=skip_quant,
             weight_dtype=weight_dtype,
         )
-        print(self.weight_shape)
+        logger.info(f"QKVGateParallelLinear weight_shape={self.weight_shape}")
+        logger.info(f"tp_size={self.tp_size}, local_rank={self.local_rank}")
+        logger.info(
+            f"num_heads_per_rank={self.num_heads_per_rank}, kv_num_heads_per_rank={self.kv_num_heads_per_rank}"
+        )
 
     def _get_shard_size_mapping(self, loaded_shard_id: str, head_dim: int):
         shard_size_mapping = {
@@ -1185,6 +1195,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             "gate",
         ], f"loaded_shard_id must be one of ['qkv', 'gate'], but got {loaded_shard_id}"
 
+        logger.info(f"loaded_shard_id:{loaded_shard_id}")
         if loaded_shard_id == "qkv":
             self.qkv_weight_loader(param, loaded_weight, None)
         else:
@@ -1192,6 +1203,8 @@ class QKVGateParallelLinear(ColumnParallelLinear):
 
     def qkv_weight_loader(self, param, loaded_weight, loaded_shard_id):
         output_dim = getattr(param, "output_dim", None)
+        # eb5-mini
+        # output_dim = True
         assert output_dim is not None
         dim = -1 if output_dim else 0
 
@@ -1259,16 +1272,26 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             h2d_copy(param, loaded_weight)
 
     def gate_weight_loader(self, param, loaded_weight):
-        output_dim = getattr(param, "output_dim", None)
+        # output_dim = getattr(param, "output_dim", None)
+        output_dim = True
         assert output_dim is not None
         dim = -1 if output_dim else 0
-        # q_head + gate_head + kv_head
-        head_dim = param.shape[dim] // (2 * self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
-        weight_need_transpose = getattr(param, "weight_need_transpose", False)
 
+        logger.info(f"param:{param.shape}")
+
+        # gate only: 2 * num_heads_per_rank heads
+        head_dim = param.shape[dim] // (2 * self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
+        logger.info(f"gate head_dim:{head_dim}")
+
+        weight_need_transpose = getattr(param, "weight_need_transpose", False)
+        logger.info(f"weight_need_transpose:{weight_need_transpose}")
+
+        # Transpose BEFORE slicing (same as qkv_weight_loader)
         if weight_need_transpose:
             loaded_weight = get_tensor(loaded_weight)
             loaded_weight = loaded_weight.transpose([1, 0])
+            logger.info(f"transpose loaded_weight:{loaded_weight}")
+            # Avoid redundant transpose on subsequent calls
 
         # Tensor parallelism splits the weight along the output_dim
         if self.tp_size > 1 and output_dim is not None:
@@ -1286,8 +1309,12 @@ class QKVGateParallelLinear(ColumnParallelLinear):
         if hasattr(param, "tensor_track"):
             param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
+        logger.info(f"param:{len(param)}")
+        logger.info(f"output_dim:{output_dim}")
+        logger.info(f"param_shard_offset:{param_shard_offset}")
+        logger.info(f"param_shard_size:{param_shard_size}")
         param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-
+        logger.info(f"slicn_fn后param:{param}")
         assert param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -1308,6 +1335,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
         """
         qkv_weight_tensor = get_tensor(state_dict.pop(self.qkv_weight_key))
         gate_weight_tensor = get_tensor(state_dict.pop(self.gate_weight_key))
+        logger.info(f"qkv_weight_tensor.shape={qkv_weight_tensor.shape}")
         qkvg_weight_tensor = paddle.concat([qkv_weight_tensor, gate_weight_tensor], axis=-1)
 
         self.quant_method.process_loaded_weights(self, qkvg_weight_tensor)
