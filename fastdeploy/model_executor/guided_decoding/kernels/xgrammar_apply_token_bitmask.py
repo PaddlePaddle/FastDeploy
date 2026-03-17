@@ -20,13 +20,13 @@ from typing import List, Optional
 
 import paddle
 
-from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
-    enable_compat_on_triton_kernel,
-)
-
 try:
     import triton
     import triton.language as tl
+
+    from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+        enable_compat_on_triton_kernel,
+    )
 except ImportError as err:
     raise ImportError("Triton is not installed") from err
 
