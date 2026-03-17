@@ -1160,7 +1160,9 @@ class HPUModelRunner(ModelRunnerBase):
         """
         Initialize attention backends and forward metadata
         """
-        assert len(self.attn_backends) == 0
+        assert (
+            len(self.attn_backends) == 0
+        ), f"attn_backends should be empty before initialization, got {len(self.attn_backends)} backends"
 
         # TODO(gongshaotian): Get rank from config
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size

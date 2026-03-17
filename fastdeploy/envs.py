@@ -16,6 +16,8 @@ Environment variables used by FastDeploy.
 """
 
 import os
+import sys
+from types import ModuleType
 from typing import Any, Callable
 
 
@@ -194,7 +196,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FMQ_CONFIG_JSON": lambda: os.getenv("FMQ_CONFIG_JSON", None),
     "FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS": lambda: int(os.getenv("FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS", "500")),
     "FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE": lambda: int(os.getenv("FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE", "64")),
-    "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT": lambda: int(os.getenv("FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", "120")),
+    "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT": lambda: float(os.getenv("FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", "120")),
     "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
     # Whether to enable low latency in mixed scenario
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
@@ -241,13 +243,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
 }
 
 
-def __getattr__(name: str):
-    # lazy evaluation of environment variables
-    if name in environment_variables:
-        return environment_variables[name]()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 def get_unique_name(self, name):
     """
     Get unique name for config
@@ -256,10 +251,39 @@ def get_unique_name(self, name):
     return name + f"_{shm_uuid}"
 
 
-def __setattr__(name: str, value: Any):
-    assert name in environment_variables
-    environment_variables[name] = lambda: value
+class _EnvsModule(ModuleType):
+    """Custom module class to support __setattr__ for environment variables."""
+
+    def __getattr__(self, name: str):
+        if name in environment_variables:
+            return environment_variables[name]()
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    def __setattr__(self, name: str, value: Any):
+        if name in environment_variables:
+            # Convert bool to "1"/"0" so int(os.getenv(...)) works correctly
+            if isinstance(value, bool):
+                value = int(value)
+            os.environ[name] = str(value)
+        elif name.startswith("_"):
+            # Allow Python-internal attrs (__spec__, __loader__, etc.)
+            super().__setattr__(name, value)
+        else:
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    def __delattr__(self, name: str):
+        # Support unittest.mock.patch cleanup which calls delattr to restore original state
+        if name in environment_variables:
+            os.environ.pop(name, None)
+        elif name.startswith("_"):
+            super().__delattr__(name)
+        else:
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    def __dir__(self):
+        return list(environment_variables.keys())
 
 
-def __dir__():
-    return list(environment_variables.keys())
+# Replace the module with our custom class
+_current_module = sys.modules[__name__]
+_current_module.__class__ = _EnvsModule

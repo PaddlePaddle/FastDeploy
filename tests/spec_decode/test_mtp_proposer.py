@@ -14,6 +14,9 @@
 # limitations under the License.
 """
 
+# NOTE: Coverage supplement test — uses mock to reach speculative decoding
+# branches that require GPU model loading not available in unit tests.
+
 import unittest
 from unittest.mock import Mock, patch
 
@@ -646,6 +649,23 @@ class TestMTPProposer(unittest.TestCase):
 
         self.assertTrue(proposer.model_inputs["stop_flags"][0].item())
         self.assertEqual(proposer.model_inputs["seq_lens_this_time_buffer"][0].item(), 0)
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.worker.input_batch.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.current_platform")
+    def test_unsupported_platform_raises_runtime_error(
+        self, mock_platform, mock_rope, mock_attn_backend, mock_model_loader
+    ):
+        """Cover RuntimeError in __init__ when platform is unsupported (line 120)."""
+        mock_platform.is_xpu.return_value = False
+        mock_platform.is_cuda.return_value = False
+        mock_platform.is_maca.return_value = False
+        mock_platform.__str__ = lambda self: "UnsupportedPlatform"
+
+        with self.assertRaises(RuntimeError) as ctx:
+            MTPProposer(self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs)
+        self.assertIn("Unsupported platform for MTP", str(ctx.exception))
 
 
 if __name__ == "__main__":

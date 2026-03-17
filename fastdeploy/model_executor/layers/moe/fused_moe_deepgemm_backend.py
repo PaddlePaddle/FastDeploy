@@ -521,7 +521,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     cumsum_idx_gpu,
                     m_indices,
                 ) = fastdeploy.model_executor.ops.gpu.ep_moe_expert_dispatch_fp8(
-                    recv_x,
+                    recv_x_value,
                     recv_x_scale,
                     recv_topk_idx,
                     recv_topk_weights,
