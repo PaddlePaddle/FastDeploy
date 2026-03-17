@@ -153,8 +153,10 @@ class Ernie4_5Processor(BaseDataProcessor):
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request.set("temperature", 1)
+            request.set("top_k", 1)
         if request.get("top_p") < _SAMPLING_EPS:
             request.set("top_p", _SAMPLING_EPS)
+            request.set("top_k", 1)
         if self.reasoning_parser:
             model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
             parts = request.request_id.split("_")
@@ -247,8 +249,10 @@ class Ernie4_5Processor(BaseDataProcessor):
         if request.sampling_params.temperature < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request.sampling_params.temperature = 1
+            request.sampling_params.top_k = 1
         if request.sampling_params.top_p < _SAMPLING_EPS:
             request.sampling_params.top_p = _SAMPLING_EPS
+            request.sampling_params.top_k = 1
 
         if self.reasoning_parser:
             model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)

@@ -24,6 +24,8 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_gcu():
     from fastdeploy.model_executor.ops.gcu import top_p_sampling as gcu_top_p_sampling
 
+from paddleformers.utils.log import logger
+
 _DETERMINISTIC_RNG_SEED = 42
 
 
@@ -50,14 +52,12 @@ def top_k_top_p_sampling(
         used to specify the top_p corresponding to each query.
     top_k(Tensor|None, optional): A 1-D Tensor with type int64,
         used to specify the top_k corresponding to each query.
-        Only used when FD_SAMPLING_CLASS is `rejection`.
     threshold(Tensor|None, optional): A 1-D Tensor with type float32, float16 and bfloat16,
         used to avoid sampling low score tokens.
     topp_seed(Tensor|None, optional): A 1-D Tensor with type int64,
         used to specify the random seed for each query.
     seed(int, optional): the random seed. Default is -1,
     k(int): the number of top_k scores/ids to be returned. Default is 0.
-        Only used when FD_SAMPLING_CLASS is `air`.
     mode(str): The mode to choose sampling strategy. If the mode is `truncated`, sampling will truncate the probability at top_p_value.
         If the mode is `non-truncated`, it will not be truncated. Default is `truncated`.
         Only used when FD_SAMPLING_CLASS is `air` or `base`.
@@ -78,32 +78,26 @@ def top_k_top_p_sampling(
     if envs.FD_DETERMINISTIC_MODE:
         _reset_cuda_generator_for_determinism()
 
-    if top_p_class == "air":
-        _, ids = air_top_p_sampling(x, top_p, threshold, topp_seed, seed=seed, k=k, mode=mode)
-    elif top_p_class == "rejection":
+    if top_p_class == "rejection":
         ids = rejection_top_p_sampling(x, top_p, top_k, top_k_list, seed, order)
         _ = None
-    elif top_p_class == "base_non_truncated":
-        if topp_seed is not None:
-            topp_seed_device = paddle.empty(shape=topp_seed.shape, dtype=topp_seed.dtype)
-            topp_seed_device.copy_(topp_seed, False)
-        _, ids = paddle.tensor.top_p_sampling(
-            x,
-            top_p,
-            threshold=threshold,
-            topp_seed=topp_seed_device,
-            seed=seed,
-            k=k,
-            mode="non-truncated",
-        )
     else:
-        if current_platform.is_gcu():
-            _, ids = gcu_top_p_sampling(x, top_p)
-        elif current_platform.is_dcu():
-            from fastdeploy.model_executor.layers.backends import native_top_p_sampling
+        if top_k_list and any(x > 0 for x in top_k_list):
+            try:
+                if current_platform.is_iluvatar():
+                    from fastdeploy.model_executor.ops.iluvatar import (
+                        top_k_renorm_probs,
+                    )
+                else:
+                    from fastdeploy.model_executor.ops.gpu import top_k_renorm_probs
+                x = top_k_renorm_probs(x, top_k)
+            except ImportError:
+                logger.warning("top_k sampling is not supported on current platform, skipping top_k filtering.")
 
-            _, ids = native_top_p_sampling(x, top_p)
-        else:
+        if top_p_class == "air":
+            _, ids = air_top_p_sampling(x, top_p, threshold, topp_seed, seed=seed, k=k, mode=mode)
+
+        elif top_p_class == "base_non_truncated":
             if topp_seed is not None:
                 topp_seed_device = paddle.empty(shape=topp_seed.shape, dtype=topp_seed.dtype)
                 topp_seed_device.copy_(topp_seed, False)
@@ -114,8 +108,30 @@ def top_k_top_p_sampling(
                 topp_seed=topp_seed_device,
                 seed=seed,
                 k=k,
-                mode="truncated",
+                mode="non-truncated",
             )
+        else:
+            if current_platform.is_gcu():
+                _, ids = gcu_top_p_sampling(x, top_p)
+            elif current_platform.is_dcu():
+                from fastdeploy.model_executor.layers.backends import (
+                    native_top_p_sampling,
+                )
+
+                _, ids = native_top_p_sampling(x, top_p)
+            else:
+                if topp_seed is not None:
+                    topp_seed_device = paddle.empty(shape=topp_seed.shape, dtype=topp_seed.dtype)
+                    topp_seed_device.copy_(topp_seed, False)
+                _, ids = paddle.tensor.top_p_sampling(
+                    x,
+                    top_p,
+                    threshold=threshold,
+                    topp_seed=topp_seed_device,
+                    seed=seed,
+                    k=k,
+                    mode="truncated",
+                )
     return _, ids
 
 
