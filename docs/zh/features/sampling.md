@@ -21,10 +21,10 @@
 
 在部署时，可以通过设置环境变量 `FD_SAMPLING_CLASS` 来选择采样算法。可选择的值有 `base`, `base_non_truncated`, `air`或 `rejection`。
 
-* `base`：直接使用 `top_p` 的值进行归一化，倾向于采样概率更大的token。
+* `base`(default)：直接使用 `top_p` 的值进行归一化，倾向于采样概率更大的token。
 * `base_non_truncated`：严格按照 Top-p 采样的逻辑执行，首先选择使累积概率达到 `top_p` 的最小集合，然后对这些选择的元素进行归一化。
 * `air`：该算法参考 [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)的实现，支持 Top-p 采样。
-* `rejection`(default)：该算法参考 [flashinfer](https://github.com/flashinfer-ai/flashinfer) 的实现，支持灵活设置 `top_k` 和 `top_p` 参数进行 Top-p 或 Top-k_top-p 采样。
+* `rejection`：该算法参考 [flashinfer](https://github.com/flashinfer-ai/flashinfer) 的实现，支持灵活设置 `top_k` 和 `top_p` 参数进行 Top-p 或 Top-k_top-p 采样。
 
 ## 配置方式
 
