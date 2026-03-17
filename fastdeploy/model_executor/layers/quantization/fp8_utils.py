@@ -18,9 +18,11 @@ import paddle
 import triton
 from paddleformers.utils.log import logger
 
-from fastdeploy.model_executor.ops.gpu import per_token_group_fp8_quant
 from fastdeploy.model_executor.ops.triton_ops import _per_token_group_quant_fp8
 from fastdeploy.platforms import current_platform
+
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import per_token_group_fp8_quant
 
 from ..utils import get_sm_version
 
@@ -163,6 +165,7 @@ def per_token_group_quant_fp8(
     """
 
     dtype = paddle.float8_e4m3fn  # current_platform.fp8_dtype() if dtype is None else dtype
+    assert x.ndim == 2, f"per_token_group_fp8_quant only supports ndim == 2, but got shape {tuple(x.shape)}"
     assert x.shape[-1] % group_size == 0, (
         f"the last dimension of `x` {x.shape[-1]} must be divisible " f"by `group_size` {group_size}"
     )
@@ -179,7 +182,6 @@ def per_token_group_quant_fp8(
     x_s = paddle.empty(shape, dtype=paddle.float32)
 
     if current_platform.is_cuda():
-
         per_token_group_fp8_quant(x.contiguous(), x_q, x_s, group_size, eps, fp8_min, fp8_max, use_ue8m0)
 
     else:

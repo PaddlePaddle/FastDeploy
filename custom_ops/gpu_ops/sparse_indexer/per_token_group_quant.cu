@@ -601,6 +601,10 @@ void PerTokenGroupQuantFp8Packed(const paddle::Tensor& input,
           static_cast<float>(fp8_min),
           static_cast<float>(fp8_max),
           stream);
+    } else {
+      PD_CHECK(false,
+               "PerTokenGroupQuantFp8 only supports output_q dtypes "
+               "FLOAT8_E4M3FN and INT8 for BFLOAT16 input.");
     }
   } else if (input_dtype == paddle::DataType::FLOAT16) {
     if (output_dtype == paddle::DataType::FLOAT8_E4M3FN) {
@@ -623,6 +627,10 @@ void PerTokenGroupQuantFp8Packed(const paddle::Tensor& input,
           static_cast<float>(fp8_min),
           static_cast<float>(fp8_max),
           stream);
+    } else {
+      PD_CHECK(false,
+               "PerTokenGroupQuantFp8 only supports output_q dtypes "
+               "FLOAT8_E4M3FN and INT8 for FLOAT16 input.");
     }
   } else if (input_dtype == paddle::DataType::FLOAT32) {
     if (output_dtype == paddle::DataType::FLOAT8_E4M3FN) {
@@ -645,7 +653,15 @@ void PerTokenGroupQuantFp8Packed(const paddle::Tensor& input,
           static_cast<float>(fp8_min),
           static_cast<float>(fp8_max),
           stream);
+    } else {
+      PD_CHECK(false,
+               "PerTokenGroupQuantFp8 only supports output_q dtypes "
+               "FLOAT8_E4M3FN and INT8 for FLOAT32 input.");
     }
+  } else {
+    PD_CHECK(false,
+             "PerTokenGroupQuantFp8 only supports input dtypes BFLOAT16, "
+             "FLOAT16 and FLOAT32.");
   }
 }
 
