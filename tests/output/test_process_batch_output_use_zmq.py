@@ -158,11 +158,14 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
         # Set up task as aborted
         task_id = "test_aborted_request"
         self.task_mock.request_id = task_id
-        self.processor.resource_manager.abort_req_ids_set = {task_id}
+        self.processor.resource_manager.to_be_aborted_req_id_set = {task_id}
+        self.processor.resource_manager.recycle_abort_task = MagicMock(
+            side_effect=lambda rid: self.processor.resource_manager.to_be_aborted_req_id_set.discard(rid)
+        )
 
-        # Create stream data with negative token
+        # Create stream data with negative token (PREEMPTED_TOKEN_ID = -9)
         stream_data = MagicMock()
-        stream_data.tokens = np.array([1, 2, -1])  # Last token is negative
+        stream_data.tokens = np.array([1, 2, -9])  # Last token is PREEMPTED_TOKEN_ID
         stream_data.batch_id = 0
 
         # Mock _recycle_resources to track if it's called
@@ -171,19 +174,16 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
         # Mock the llm_logger module and envs.ENABLE_V1_KVCACHE_SCHEDULER
         with (
             patch("fastdeploy.output.token_processor.llm_logger") as mock_logger,
-            patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0),
+            patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1),
         ):
             # Call the method
             result = self.processor._process_batch_output_use_zmq([stream_data])
 
             # Verify the recycling logic was triggered
-            mock_logger.info.assert_any_call(f"Aborted task {task_id} received negative token. Recycling.")
-            self.processor._recycle_resources.assert_called_once_with(task_id, 0, self.task_mock)
-            self.assertNotIn(task_id, self.processor.resource_manager.abort_req_ids_set)
-            self.assertEqual(len(result), 1)  # Should return abort result
-            self.assertEqual(result[0].finished, True)
-            self.assertEqual(result[0].error_code, 499)
-            self.assertIn("aborted", result[0].error_msg.lower())
+            mock_logger.info.assert_any_call(f"start to recycle abort request_id {task_id}")
+            self.processor.resource_manager.recycle_abort_task.assert_called_once_with(task_id)
+            self.assertNotIn(task_id, self.processor.resource_manager.to_be_aborted_req_id_set)
+            self.assertEqual(len(result), 0)  # Aborted task is skipped (continue)
 
     def test_process_batch_output_use_zmq_non_aborted_task_negative_token(self):
         """Test non-aborted task receiving negative token does not trigger recycling"""
