@@ -259,13 +259,34 @@ inline bool launch_cache_enabled() {
   return enabled;
 }
 
+// Per-template persistent workspace (CUDAGraph-safe).
+// CUDAGraph captures the workspace pointer during graph recording.
+// If workspace is freed before replay, the pointer becomes dangling → NaN.
+// This holder uses cudaMalloc with grow-only semantics to ensure the pointer
+// remains valid for the entire process lifetime.
+template <typename GemmOp>
+struct PersistentWorkspace {
+  void *ptr = nullptr;
+  size_t capacity = 0;
+
+  static PersistentWorkspace &instance() {
+    static PersistentWorkspace ws;
+    return ws;
+  }
+
+  void ensure(size_t needed) {
+    if (needed <= capacity) return;
+    if (ptr) CUDA_CHECK(cudaFree(ptr));
+    CUDA_CHECK(cudaMalloc(&ptr, needed));
+    capacity = needed;
+  }
+};
+
 // Per-template-instantiation launch cache (like cuBLAS handle).
 // One instance per Gemm type, lives for the process lifetime.
 template <typename GemmOp>
 struct LaunchCache {
   GemmOp gemm_op;
-  void *workspace_ptr = nullptr;
-  size_t workspace_capacity = 0;
   int sm_count = 0;
   int splits = -1;  // cached for (N, K) — M-independent
   int cached_N = 0;
@@ -275,14 +296,6 @@ struct LaunchCache {
   static LaunchCache &instance() {
     static LaunchCache cache;
     return cache;
-  }
-
-  // Grow-only workspace: only re-allocate when needed size exceeds capacity.
-  void ensure_workspace(size_t needed, paddle::Tensor const &ref_tensor) {
-    if (needed <= workspace_capacity) return;
-    if (workspace_ptr) cudaFree(workspace_ptr);
-    cudaMalloc(&workspace_ptr, needed);
-    workspace_capacity = needed;
   }
 
   int get_sm_count() {
@@ -444,12 +457,13 @@ void launch_gate_gemm(
 
     // Workspace: grow-only, bypass Paddle allocator
     size_t ws_needed = cache.gemm_op.get_workspace_size(args);
-    cache.ensure_workspace(ws_needed, out);
+    auto &ws = PersistentWorkspace<GemmOp>::instance();
+    ws.ensure(ws_needed);
 
     auto t5 = std::chrono::high_resolution_clock::now();
 
     auto stream = paddle::GetCurrentCUDAStream(out.place())->raw_stream();
-    CUTLASS_CHECK(cache.gemm_op.initialize(args, cache.workspace_ptr, stream));
+    CUTLASS_CHECK(cache.gemm_op.initialize(args, ws.ptr, stream));
 
     auto t6 = std::chrono::high_resolution_clock::now();
 
@@ -496,13 +510,13 @@ void launch_gate_gemm(
   auto t4 = std::chrono::high_resolution_clock::now();
 
   size_t workspace_size = gemm_op.get_workspace_size(args);
-  phi::Allocator *allocator = paddle::GetAllocator(out.place());
-  auto workspace = allocator->Allocate(workspace_size);
+  auto &ws = PersistentWorkspace<GemmOp>::instance();
+  ws.ensure(workspace_size);
 
   auto t5 = std::chrono::high_resolution_clock::now();
 
   auto stream = paddle::GetCurrentCUDAStream(out.place())->raw_stream();
-  cutlass::Status status = gemm_op.initialize(args, workspace->ptr(), stream);
+  cutlass::Status status = gemm_op.initialize(args, ws.ptr, stream);
   CUTLASS_CHECK(status);
 
   auto t6 = std::chrono::high_resolution_clock::now();
