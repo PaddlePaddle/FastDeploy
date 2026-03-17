@@ -17,13 +17,9 @@
 import triton
 import triton.language as tl
 
-from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
-    enable_compat_on_triton_kernel,
-)
 from fastdeploy.utils import ceil_div
 
 
-@enable_compat_on_triton_kernel
 @triton.jit
 def qk_rmsnorm_fused_kernel(
     x_ptr,
