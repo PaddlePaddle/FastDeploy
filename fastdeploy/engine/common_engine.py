@@ -1297,13 +1297,15 @@ class EngineService:
         if self.cfg.scheduler_config.name != "local":
             raise Exception(f"pause only supported in local scheduler, current {self.cfg.scheduler_config.name}")
 
+        self.llm_logger.info("Start to pause request generation.")
+
         with self._pause_cond:
             if self.is_paused:
-                self.llm_logger.info("Pause Request Generation: already paused.")
+                self.llm_logger.info("Engine is already paused, no need to pause again.")
                 return
             self.is_paused = True
 
-        self.llm_logger.info("Start Abort Running Requests")
+        self.llm_logger.info("Abort running requests.")
 
         self.resource_manager.log_status()
         # preempted all running reqs. preempted reqs will be append to ResourceManager.waiting queue
@@ -1314,7 +1316,7 @@ class EngineService:
             if count >= timeout * 1000:
                 break
         if count >= timeout * 1000:
-            error_msg = f"wait engine_worker_queue tasks empty timeout after {timeout} seconds, worker may Hanged"
+            error_msg = f"Emptying engine worker queue timed out after {timeout} seconds, worker may hanged!"
             self.llm_logger.error(error_msg)
             raise Exception(error_msg)
         running_reqs = self.resource_manager.preempted_all()
@@ -1329,21 +1331,22 @@ class EngineService:
 
         # abort inflight requests to user
         inflight_requests = self.scheduler.get_inflight_requests()
-        self.llm_logger.info(f"Start Abort Inflight Requests, total {len(inflight_requests)} waiting requests")
+        self.llm_logger.info(f"Abort inflight requests (total {len(inflight_requests)}).")
         for req in inflight_requests:
-            self._send_error_response(req.request_id, "Request is aborted since LLM Engine is paused.")
+            self._send_error_response(req.request_id, "Request is aborted since engine is paused.")
         self.scheduler.reset()
 
         # pause cache transfer
         if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
-            self.llm_logger.info("Pause cache transfer")
+            self.llm_logger.info("Start to pause cache transfer.")
             pause_transfer_request = ControlRequest(request_id="pause_transfer", method="pause")
             self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, pause_transfer_request))
             # Wait for cache_transfer responses
             asyncio.run(self._wait_for_control_responses("pause_transfer", 60, executors=["cache_transfer"]))
+            self.llm_logger.info("Successfully paused cache transfer.")
 
         self.resource_manager.cache_manager.reset()
-        self.llm_logger.info("END Pause Request Generation")
+        self.llm_logger.info("Successfully paused request generation.")
         return None
 
     def _control_resume(self, control_request: ControlRequest) -> Optional[dict]:
@@ -1355,23 +1358,24 @@ class EngineService:
         Args:
             control_request: Control request object containing resume operation information
         """
-        self.llm_logger.info("START Resume Request Generation")
+        self.llm_logger.info("Start to resume request generation.")
         with self._pause_cond:
             if not self.is_paused:
-                self.llm_logger.info("Resume Request Generation: not paused.")
+                self.llm_logger.info("Engine is not paused, no need to resume.")
                 return None
             self.is_paused = False
             self._pause_cond.notify_all()
 
         # resume cache transfer
         if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
-            self.llm_logger.info("Resume cache transfer")
+            self.llm_logger.info("Start to resume cache transfer.")
             resume_transfer_request = ControlRequest(request_id="resume_transfer", method="resume")
             self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, resume_transfer_request))
             # Wait for cache_transfer responses
             asyncio.run(self._wait_for_control_responses("resume_transfer", 60, executors=["cache_transfer"]))
+            self.llm_logger.info("Successfully resumed cache transfer.")
 
-        self.llm_logger.info("END Resume Request Generation")
+        self.llm_logger.info("Successfully resumed request generation.")
         return None
 
     def _control_is_paused(self, control_request: ControlRequest) -> bool:
@@ -1422,9 +1426,16 @@ class EngineService:
         allowed_tags = ["weight", "kv_cache"]
         tags = control_request.args.get("tags", "")
 
+        if tags is None or tags == "":
+            tags = ",".join(allowed_tags)
+            control_request.args["tags"] = tags
+            self.llm_logger.info(
+                f"Detected empty tags of request {control_request.request_id}, defaulting to tags: {tags}"
+            )
+
         for tag in tags.split(","):
             if tag not in allowed_tags:
-                raise ValueError(f"unsupported tag [{tag}] in [{tags}], expected one of {allowed_tags}")
+                raise ValueError(f"Unsupported tag [{tag}] in [{tags}], expected one of {allowed_tags}")
 
         # Make sure llm engine is paused.
         self.llm_logger.warning(
@@ -1461,9 +1472,16 @@ class EngineService:
         allowed_tags = ["weight", "kv_cache"]
         tags = control_request.args.get("tags", "")
 
+        if tags is None or tags == "":
+            tags = ",".join(allowed_tags)
+            control_request.args["tags"] = tags
+            self.llm_logger.info(
+                f"Detected empty tags of request {control_request.request_id}, defaulting to tags: {tags}"
+            )
+
         for tag in tags.split(","):
             if tag not in allowed_tags:
-                raise ValueError(f"unsupported tag {tag} in {tags}, expected one of {allowed_tags}")
+                raise ValueError(f"Unsupported tag {tag} in {tags}, expected one of {allowed_tags}")
 
         # Determine which executors are needed for the wakeup command
         executors = set()
@@ -1601,8 +1619,6 @@ class EngineService:
         """
         while self.running:
             try:
-                with self._pause_cond:
-                    self._pause_cond.wait_for(lambda: not self.is_paused)
                 results = self.scheduler.get_results()
                 if len(results) == 0:
                     time.sleep(0.005)
