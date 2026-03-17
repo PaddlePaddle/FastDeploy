@@ -20,6 +20,10 @@ from typing import List, Optional
 
 import paddle
 
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
+
 try:
     import triton
     import triton.language as tl
@@ -27,6 +31,7 @@ except ImportError as err:
     raise ImportError("Triton is not installed") from err
 
 
+@enable_compat_on_triton_kernel
 @triton.jit
 def apply_token_bitmask_inplace_kernel(
     logits_ptr,
