@@ -18,6 +18,8 @@ import argparse
 import asyncio
 import json
 import os
+import sys
+import tempfile
 import time
 import traceback
 from typing import Tuple
@@ -710,7 +712,8 @@ class PaddleDisWorkerProc:
                 self.parallel_config.local_engine_worker_queue_port,
             )
         else:
-            task_address = f"/dev/shm/fd_task_queue_{self.parallel_config.local_engine_worker_queue_port}.sock"
+            _shm_dir = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
+            task_address = f"{_shm_dir}/fd_task_queue_{self.parallel_config.local_engine_worker_queue_port}.sock"
         logger.info(f"connect task queue address {task_address}")
         self.task_queue = TaskQueue(
             address=task_address,

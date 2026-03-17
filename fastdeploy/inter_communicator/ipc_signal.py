@@ -14,9 +14,12 @@
 # limitations under the License.
 """
 
-import fcntl
 import os
+import sys
 from multiprocessing.shared_memory import SharedMemory
+
+if sys.platform != "win32":
+    import fcntl
 
 import numpy as np
 
@@ -137,7 +140,12 @@ class IPCLock:
         if suffix is not None:
             name = f"{name}.{suffix}"
 
-        lock_dir = "/dev/shm" if os.path.isdir("/dev/shm") else "/tmp"
+        if sys.platform == "win32":
+            import tempfile
+
+            lock_dir = tempfile.gettempdir()
+        else:
+            lock_dir = "/dev/shm" if os.path.isdir("/dev/shm") else "/tmp"
         self._lock_path = os.path.join(lock_dir, f"fd_lock_{name}")
 
         if create:
@@ -158,11 +166,21 @@ class IPCLock:
 
     def acquire(self) -> None:
         """Acquire the lock (blocking). Uses kernel-level flock for atomicity."""
-        fcntl.flock(self._fd, fcntl.LOCK_EX)
+        if sys.platform == "win32":
+            import msvcrt
+
+            msvcrt.locking(self._fd, msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(self._fd, fcntl.LOCK_EX)
 
     def release(self) -> None:
         """Release the lock."""
-        fcntl.flock(self._fd, fcntl.LOCK_UN)
+        if sys.platform == "win32":
+            import msvcrt
+
+            msvcrt.locking(self._fd, msvcrt.LK_UNLCK, 1)
+        else:
+            fcntl.flock(self._fd, fcntl.LOCK_UN)
 
     def clear(self) -> None:
         """Close the file descriptor and remove the lock file."""

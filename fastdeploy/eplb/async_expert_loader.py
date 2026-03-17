@@ -16,6 +16,8 @@
 
 import ctypes
 import os
+import sys
+import tempfile
 import time
 import traceback
 from typing import List, Tuple
@@ -61,6 +63,7 @@ TOTAL_MODEL_SIZE = 350
 MAIN_MODEL_REDUNDANT_SHM_SIZE = 5
 
 MODEL_MAIN_NAME = "eplb_main"
+_shm_dir = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
 
 
 def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, eplb_config: EPLBConfig, logger=None):
@@ -77,7 +80,7 @@ def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, epl
 
     mmap_infos = {}
     for name in model_name:
-        expert_weight_file = f"/dev/shm/{name}_rank_{ep_rank}_expert_weight_{shm_uuid}"
+        expert_weight_file = f"{_shm_dir}/{name}_rank_{ep_rank}_expert_weight_{shm_uuid}"
         shm_size = main_size
 
         if not os.path.isfile(expert_weight_file):
@@ -420,7 +423,7 @@ def load_model_weights_process(
             )
             if success:
                 model_name = MODEL_MAIN_NAME
-                file_path = f"/dev/shm/{model_name}_rank_{rank}_expert_weight_{shm_uuid}"
+                file_path = f"{_shm_dir}/{model_name}_rank_{rank}_expert_weight_{shm_uuid}"
                 weight_infos = save_tensor_to_shm_mem(ep_loader.cached_weights, file_path, logger)
                 logger.info(
                     "redundant_expert: async load save_tensor_to_shm_mem, "

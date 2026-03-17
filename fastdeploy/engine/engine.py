@@ -24,6 +24,7 @@ import re
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -432,8 +433,11 @@ class LLMEngine:
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
-                    pgid = os.getpgid(p.pid)
-                    os.killpg(pgid, signal.SIGTERM)
+                    if sys.platform != "win32":
+                        pgid = os.getpgid(p.pid)
+                        os.killpg(pgid, signal.SIGTERM)
+                    else:
+                        p.terminate()
                 except Exception as e:
                     console_logger.error(
                         f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
@@ -446,8 +450,11 @@ class LLMEngine:
 
         if hasattr(self, "worker_proc") and self.worker_proc is not None:
             try:
-                pgid = os.getpgid(self.worker_proc.pid)
-                os.killpg(pgid, signal.SIGTERM)
+                if sys.platform != "win32":
+                    pgid = os.getpgid(self.worker_proc.pid)
+                    os.killpg(pgid, signal.SIGTERM)
+                else:
+                    self.worker_proc.terminate()
             except Exception as e:
                 console_logger.error(f"Error extracting sub services: {e}, {str(traceback.format_exc())}")
 
@@ -671,7 +678,7 @@ class LLMEngine:
             pd_cmd,
             stdout=subprocess.PIPE,
             shell=True,
-            preexec_fn=os.setsid,
+            **({} if sys.platform == "win32" else {"preexec_fn": os.setsid}),
         )
         return p
 
@@ -805,7 +812,10 @@ class LLMEngine:
                             int(self.cfg.parallel_config.engine_worker_queue_port[i]),
                         )
                     else:
-                        address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
+                        _shm_dir = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
+                        address = (
+                            f"{_shm_dir}/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
+                        )
 
                     llm_logger.info(f"dp start queue service {address}")
                     self.dp_engine_worker_queue_server.append(
@@ -816,7 +826,7 @@ class LLMEngine:
                             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                         )
                     )
-                    ctx = multiprocessing.get_context("fork")
+                    ctx = multiprocessing.get_context("spawn" if sys.platform == "win32" else "fork")
                     cfg = copy.deepcopy(self.cfg)
                     self.dp_processed.append(
                         ctx.Process(
