@@ -14,9 +14,11 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/types.h>
+#endif
 #include "paddle/extension.h"
 #include "../custom_ftok.h"
 
@@ -31,6 +33,10 @@ void SpeculateGetOutput(const paddle::Tensor& x,
                         bool wait_flag,
                         int msg_queue_id,
                         bool get_each_rank) {
+#ifdef _WIN32
+  PD_THROW(
+      "SpeculateGetOutput is not supported on Windows (POSIX IPC required).");
+#else
   if (!get_each_rank && rank_id > 0) {
     return;
   }
@@ -76,6 +82,7 @@ void SpeculateGetOutput(const paddle::Tensor& x,
     out_data[i] = (int64_t)msg_rcv.mtext[i];
   }
   return;
+#endif
 }
 
 void SpeculateGetOutputStatic(const paddle::Tensor& x,
