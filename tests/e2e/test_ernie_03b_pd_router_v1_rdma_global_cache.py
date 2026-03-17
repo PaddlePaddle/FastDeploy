@@ -203,7 +203,6 @@ def setup_and_run_server():
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
     env_prefill["FD_LOG_DIR"] = "log_prefill"
     os.makedirs("log_prefill", exist_ok=True)
-    env_prefill["KVCACHE_RDMA_NICS"] = rdma_nics.strip()
     # Mooncake environment variables for prefill
     for k, v in mooncake_env.items():
         env_prefill[k] = v
@@ -257,7 +256,6 @@ def setup_and_run_server():
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
     env_decode["FD_LOG_DIR"] = "log_decode"
     os.makedirs("log_decode", exist_ok=True)
-    env_decode["KVCACHE_RDMA_NICS"] = rdma_nics.strip()
     # Mooncake environment variables for decode
     for k, v in mooncake_env.items():
         env_decode[k] = v

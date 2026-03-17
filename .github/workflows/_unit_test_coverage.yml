@@ -197,6 +197,8 @@ jobs:
           -e "FD_ROUTER_PORT=${FD_ROUTER_PORT}" \
           -e "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}" \
           -e "FD_RDMA_PORT=${FD_RDMA_PORT}" \
+          -e "FD_MOONCAKE_MASTER_PORT=${FD_MOONCAKE_MASTER_PORT}" \
+          -e "FD_MOONCAKE_METADATA_PORT=${FD_MOONCAKE_METADATA_PORT}" \
           -e "CLEAN_CUDA=1" \
           -e TZ="Asia/Shanghai" \
           -e "fd_wheel_url=${fd_wheel_url}" \
