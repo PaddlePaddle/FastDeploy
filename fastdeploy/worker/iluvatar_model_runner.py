@@ -100,8 +100,8 @@ class IluvatarModelRunner(GPUModelRunner):
         super(IluvatarModelRunner, self).initialize_kv_cache(profile)
         paddle.device.empty_cache()
 
-    def initialize_forward_meta(self, is_dummy_or_profile_run=False):
-        super(IluvatarModelRunner, self).initialize_forward_meta(is_dummy_or_profile_run)
+    def initialize_forward_meta(self, is_dummy_or_profile_run=False, num_running_requests=-1):
+        super(IluvatarModelRunner, self).initialize_forward_meta(is_dummy_or_profile_run, num_running_requests)
         only_decode = self.forward_meta.attn_backend.prefill_len == 0
         self.fd_config.model_config.moe_phase.phase = "decode" if only_decode else "prefill"
 

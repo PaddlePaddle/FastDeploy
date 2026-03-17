@@ -34,7 +34,7 @@ class DCUModelRunner(GPUModelRunner):
             fd_config=fd_config, device=device, device_id=device_id, rank=rank, local_rank=local_rank
         )
 
-    def initialize_forward_meta(self):
+    def initialize_forward_meta(self, is_dummy_or_profile_run=False, num_running_requests=-1):
         """
         Initialize forward meta and attention meta data
         """

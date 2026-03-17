@@ -731,7 +731,11 @@ class MTPProposer(Proposer):
             self.model_inputs["seq_lens_encoder"],
             self.model_inputs["seq_lens_decoder"],
             self.model_inputs["step_idx"],
-            self.model_inputs["not_need_stop_device"],
+            (
+                self.model_inputs["not_need_stop_device"]
+                if current_platform.is_cuda()
+                else self.model_inputs["not_need_stop"]
+            ),
             self.model_inputs["batch_drop"],
             self.model_inputs["is_block_step"],
             self.model_inputs["pre_ids"],
@@ -801,7 +805,11 @@ class MTPProposer(Proposer):
                 else self.model_inputs["output_cum_offsets"]
             ),
             self.model_inputs["stop_flags"],
-            self.model_inputs["not_need_stop_device"],
+            (
+                self.model_inputs["not_need_stop_device"]
+                if current_platform.is_cuda()
+                else self.model_inputs["not_need_stop"]
+            ),
             self.model_inputs["max_dec_len"],
             self.model_inputs["eos_token_id"],
             self.model_inputs["base_model_draft_tokens"],

@@ -378,11 +378,11 @@ class TestMTPProposer(unittest.TestCase):
             self.assertEqual(proposer.forward_meta.pos_emb_type, "NORMAL")
 
         # Test exist_prefill
-        proposer.share_inputs = {"seq_lens_encoder": paddle.ones([2, 1], dtype="int32")}
+        proposer.exist_prefill_flag = True
         result = proposer.exist_prefill()
         self.assertEqual(result, 1)
 
-        proposer.share_inputs = {"seq_lens_encoder": paddle.zeros([2, 1], dtype="int32")}
+        proposer.exist_prefill_flag = False
         result = proposer.exist_prefill()
         self.assertEqual(result, 0)
 
