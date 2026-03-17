@@ -350,9 +350,13 @@ class MetaxModelRunner(ModelRunnerBase):
         """
         Init speculative proposer
         """
+        if self.speculative_method is None:
+            self.proposer = None
+            return
+
+        # MTP-specific: swap seq_lens_this_time to the buffer tensor
         if self.speculative_method == SpecMethod.MTP:
             self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
-
         self.proposer = self.speculative_method.create_proposer(
             self.fd_config,
             main_model=self.get_model(),
@@ -1437,7 +1441,9 @@ class MetaxModelRunner(ModelRunnerBase):
         """
         Initialize attention backends
         """
-        assert len(self.attn_backends) == 0
+        assert (
+            len(self.attn_backends) == 0
+        ), f"attn_backends should be empty before initialization, got {len(self.attn_backends)} backends"
 
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
         self.model_config.kv_num_heads = max(
@@ -1740,19 +1746,16 @@ class MetaxModelRunner(ModelRunnerBase):
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             self.padding_cudagraph_inputs()
 
-            # 3. Run model
+            model_inputs = {}
+            model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
             if self.enable_mm:
-                model_output = self.model(
-                    self.forward_meta.ids_remove_padding,
-                    self.share_inputs["image_features"],
-                    self.forward_meta,
-                )
-            else:
-                # fallback paddleformers use cuda graph need kwargs
-                model_output = self.model(
-                    ids_remove_padding=self.forward_meta.ids_remove_padding,
-                    forward_meta=self.forward_meta,
-                )
+                model_inputs["image_features"] = self.share_inputs["image_features"]
+
+            # 3. Run model
+            model_output = self.model(
+                model_inputs,
+                self.forward_meta,
+            )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
 
@@ -2030,18 +2033,16 @@ class MetaxModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
-        # 3. Execute model
+        model_inputs = {}
+        model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
         if self.enable_mm:
-            model_output = self.model(
-                self.forward_meta.ids_remove_padding,
-                self.share_inputs["image_features"],
-                self.forward_meta,
-            )
-        else:
-            model_output = self.model(
-                ids_remove_padding=self.forward_meta.ids_remove_padding,
-                forward_meta=self.forward_meta,
-            )
+            model_inputs["image_features"] = self.share_inputs["image_features"]
+
+        # 3. Run model
+        model_output = self.model(
+            model_inputs,
+            self.forward_meta,
+        )
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,

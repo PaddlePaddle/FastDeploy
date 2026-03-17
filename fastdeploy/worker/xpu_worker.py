@@ -34,7 +34,8 @@ logger = get_logger("xpu_worker", "xpu_worker.log")
 
 try:
     XPUModelRunner = load_model_runner_plugins()
-except:
+except Exception as e:
+    logger.info(f"Plugin ModelRunner not available ({e}), using default XPUModelRunner")
     from fastdeploy.worker.xpu_model_runner import XPUModelRunner
 
 

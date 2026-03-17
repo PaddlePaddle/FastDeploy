@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "cuda_multiprocess.h"
 #include "helper.h"
 #include "paddle/extension.h"
 
@@ -47,24 +48,24 @@ void SwapCacheImpl(const paddle::Tensor& cache_gpu,   // gpu
     auto* cache_gpu_ptr_now = cache_gpu_ptr + gpu_block_id * cache_stride;
     auto* cache_cpu_ptr_now = cache_cpu_ptr + cpu_block_id * cache_stride;
     if (mode == 0) {  // copy from device to host
-      cudaMemcpyAsync(cache_cpu_ptr_now,
-                      cache_gpu_ptr_now,
-                      cache_stride * sizeof(DataType_),
-                      cudaMemcpyDeviceToHost,
-                      stream);
+      checkCudaErrors(cudaMemcpyAsync(cache_cpu_ptr_now,
+                                      cache_gpu_ptr_now,
+                                      cache_stride * sizeof(DataType_),
+                                      cudaMemcpyDeviceToHost,
+                                      stream));
       // cudaMemcpy(cache_dst_ptr_now, cache_src_ptr_now, cache_stride *
       // sizeof(DataType_), cudaMemcpyDeviceToHost);
     } else {  // copy from host to device
-      cudaMemcpyAsync(cache_gpu_ptr_now,
-                      cache_cpu_ptr_now,
-                      cache_stride * sizeof(DataType_),
-                      cudaMemcpyHostToDevice,
-                      stream);
+      checkCudaErrors(cudaMemcpyAsync(cache_gpu_ptr_now,
+                                      cache_cpu_ptr_now,
+                                      cache_stride * sizeof(DataType_),
+                                      cudaMemcpyHostToDevice,
+                                      stream));
       // cudaMemcpy(cache_dst_ptr_now, cache_src_ptr_now, cache_stride *
       // sizeof(DataType_), cudaMemcpyHostToDevice);
     }
   }
-  cudaStreamSynchronize(stream);
+  checkCudaErrors(cudaStreamSynchronize(stream));
 }
 
 void SwapCache(const paddle::Tensor& cache_gpu,  // gpu
@@ -74,7 +75,7 @@ void SwapCache(const paddle::Tensor& cache_gpu,  // gpu
                const std::vector<int64_t>& swap_block_ids_cpu,
                int rank,
                int mode) {
-  cudaSetDevice(rank);  // used for distributed launch
+  checkCudaErrors(cudaSetDevice(rank));  // used for distributed launch
   switch (cache_gpu.dtype()) {
     case paddle::DataType::BFLOAT16:
       return SwapCacheImpl<paddle::DataType::BFLOAT16>(cache_gpu,

@@ -3,8 +3,7 @@
 #include "xpu/kernel/cluster_primitive.h"
 #include "xpu/kernel/xtdk_io.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __global__ void update_attn_mask_offsets(int* attn_mask_offsets,
                                          const int* seq_lens_this_time,
@@ -73,5 +72,4 @@ __global__ void update_attn_mask_offsets(int* attn_mask_offsets,
   }
 }
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

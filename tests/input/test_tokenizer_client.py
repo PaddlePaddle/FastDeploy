@@ -99,3 +99,63 @@ async def test_encode_timeout():
 
     with pytest.raises(TimeoutError):
         await client.encode_image(request)
+
+
+@pytest.mark.asyncio
+async def test_encode_invalid_type():
+    """Test invalid encode type raises ValueError (line 130).
+    NOTE: Public methods hardcode the type param, so we test the private method directly
+    to verify the validation boundary."""
+    base_url = "http://testserver"
+    client = AsyncTokenizerClient(base_url=base_url)
+
+    request = ImageEncodeRequest(
+        version="v1", req_id="req_invalid", is_gen=False, resolution=256, image_url="http://example.com/image.jpg"
+    )
+
+    with pytest.raises(ValueError, match="Invalid encode type"):
+        await client._async_encode_request("invalid_type", request.model_dump())
+
+
+@pytest.mark.asyncio
+async def test_decode_invalid_type():
+    """Test invalid decode type raises ValueError (line 186).
+    NOTE: Public methods hardcode the type param, so we test the private method directly
+    to verify the validation boundary."""
+    base_url = "http://testserver"
+    client = AsyncTokenizerClient(base_url=base_url)
+
+    with pytest.raises(ValueError, match="Invalid decode type"):
+        await client._async_decode_request("invalid_type", {})
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_encode_network_error_continues_polling():
+    """Test network error during polling is caught and logged (line 164)."""
+    base_url = "http://testserver"
+    client = AsyncTokenizerClient(base_url=base_url, max_wait=2, poll_interval=0.1)
+
+    # Mock create task
+    respx.post(f"{base_url}/image/encode").mock(
+        return_value=httpx.Response(200, json={"code": 0, "task_tag": "task_network_error"})
+    )
+
+    # First poll fails with network error, second succeeds
+    call_count = 0
+
+    def side_effect(request):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise httpx.RequestError("Network error")
+        return httpx.Response(200, json={"state": "Finished", "result": {"key": "value"}})
+
+    respx.get(f"{base_url}/encode/get").mock(side_effect=side_effect)
+
+    request = ImageEncodeRequest(
+        version="v1", req_id="req_network", is_gen=False, resolution=256, image_url="http://example.com/image.jpg"
+    )
+
+    result = await client.encode_image(request)
+    assert result["key"] == "value"

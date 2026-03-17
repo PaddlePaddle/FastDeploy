@@ -192,8 +192,11 @@ def test_speculative_sampler():
     logits = _create_fake_logits(batch_size * (max_draft_token_num + 1), vocab_size)
     share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
 
+    token_num_output_cpu = int(share_inputs["cu_seqlens_q_output"][-1])
+    increment_value = (max_draft_token_num + 1) * 4
+
     sampler = SpeculativeSampler(fd_config)
-    sampler(logits, sampling_metadata, max_model_len, share_inputs)
+    sampler(logits, sampling_metadata, max_model_len, share_inputs, token_num_output_cpu, increment_value)
 
 
 def test_speculative_sampler_logprobs():
@@ -211,11 +214,14 @@ def test_speculative_sampler_logprobs():
     sampling_metadata.share_inputs = share_inputs
     logits = _create_fake_logits(batch_size * (max_draft_token_num + 1), vocab_size)
 
+    token_num_output_cpu = int(share_inputs["cu_seqlens_q_output"][-1])
+    increment_value = (max_draft_token_num + 1) * 4
+
     logprobs_mode_list = ["raw_logprobs", "raw_logits"]
     for logprobs_mode in logprobs_mode_list:
         fd_config.model_config.logprobs_mode = logprobs_mode
         sampler = SpeculativeSampler(fd_config)
-        sampler(logits, sampling_metadata, max_model_len, share_inputs)
+        sampler(logits, sampling_metadata, max_model_len, share_inputs, token_num_output_cpu, increment_value)
 
 
 def test_mtp_sampler():

@@ -113,6 +113,17 @@ class TestPrefillPermuteToMaskedGemm(unittest.TestCase):
                 topk_ids_np[i, :] = experts
         mask = np.random.rand(num_tokens, topk) < sparsity
         topk_ids_np[mask] = -1
+
+        # The kernel breaks early when a block encounters an all-(-1) row,
+        # so valid rows must come first in token order.
+        # Sort rows: rows with at least one valid expert first, all-(-1) rows last.
+        valid_mask = (topk_ids_np >= 0).any(axis=1)
+        sorted_idx = np.concatenate([np.where(valid_mask)[0], np.where(~valid_mask)[0]])
+        topk_ids_np = topk_ids_np[sorted_idx]
+        x_np = x_np[sorted_idx]
+        scale_np = scale_np[sorted_idx]
+        x = paddle.to_tensor(x_np).cast(x_dtype)
+        scale = paddle.to_tensor(scale_np).cast(scale_dtype).contiguous()
         topk_ids = paddle.to_tensor(topk_ids_np).cast(paddle.int64)
 
         permute_x, permute_scale, permuted_indice_map, token_nums_per_expert = call_prefill_permute_to_masked_gemm(

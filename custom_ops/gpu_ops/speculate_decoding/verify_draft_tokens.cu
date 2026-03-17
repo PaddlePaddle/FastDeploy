@@ -116,8 +116,8 @@ struct VerifyContext {
   }
 
   // Emit the final token at position `pos` in Phase 2.
-  // Same EOS/max_dec_len logic, but does NOT increment output_len_now
-  // (Phase 2's token is already counted in the initial output_len_now=1).
+  // Same EOS/max_dec_len logic. Increments output_len_now since
+  // Phase 2 produces one additional token.
   __device__ __forceinline__ void emit_final_token(int pos, int64_t token) {
     cur_step_idx++;
     bool is_eos = is_in_end(token, end_tokens, end_length);
@@ -126,6 +126,7 @@ struct VerifyContext {
       token = end_tokens[0];
     }
     step_output_ids[bid * max_step_tokens + pos] = token;
+    output_len_now++;
   }
 
   // TOPP-only: verify_window bulk-accept fallback.
@@ -278,7 +279,7 @@ __global__ void verify_draft_tokens(
   ctx.step_input_ids_now = step_input_ids + bid * max_step_tokens;
   ctx.step_output_ids = step_output_ids;
   ctx.cur_step_idx = step_idx[bid];
-  ctx.output_len_now = 1;
+  ctx.output_len_now = 0;
   ctx.stopped = false;
 
   // ======== Phase 1: Verify draft tokens ========

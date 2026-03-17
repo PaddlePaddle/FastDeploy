@@ -27,6 +27,7 @@ Test scenarios:
 7. Production-scale correctness: bs=19 SGLang-scale, seq=4096, mixed lengths, prefix
 8. Cross-validation: naive vs sdpa reference, triton vs sdpa (triple validation)
 
+
 Usage:
     source /root/paddlejob/workspace/env_run/gongweibao/archfd/fdarchenv/bin/activate
     CUDA_VISIBLE_DEVICES=0 python -m pytest tests/deterministic/test_unified_extend_attention.py -v

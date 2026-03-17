@@ -261,6 +261,15 @@ class ModelConfig:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         # Align external multimodal rope_3d configuration
+        if hasattr(self, "mrope_section"):
+            if (
+                hasattr(self, "rope_scaling")
+                and isinstance(self.rope_scaling, dict)
+                and "mrope_section" not in self.rope_scaling
+            ):
+                self.rope_scaling["mrope_section"] = self.mrope_section
+            elif not hasattr(self, "rope_scaling"):
+                setattr(self, "rope_scaling", {"mrope_section": self.mrope_section})
         if (
             hasattr(self, "rope_scaling")
             and isinstance(self.rope_scaling, dict)
@@ -1993,9 +2002,6 @@ class FDConfig:
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
         self.cache_config.postprocess(self.get_max_chunk_tokens(), self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            self.cache_config.enable_prefix_caching = False
-        if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
-            # TODO(gongshaotian): R3 support prefix caching
             self.cache_config.enable_prefix_caching = False
         if (
             self.structured_outputs_config is not None
