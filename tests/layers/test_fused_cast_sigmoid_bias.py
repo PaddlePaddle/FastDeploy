@@ -1,43 +1,31 @@
 """
-Test for fused_cast_sigmoid_bias CUDA custom op.
-Tests: functionality, accuracy, and performance.
-
-Usage:
-    conda activate fd_fused_cast_test
-    python /ssd2/bingoo/code/fastdeploy/FastDeploy/tests/layers/test_fused_cast_sigmoid_bias.py
+# Copyright (c) 2026  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """
-
-import os
 
 import paddle
 import paddle.nn.functional as F
-from paddle.utils.cpp_extension import load
+
+from fastdeploy.model_executor.layers.moe.fused_cast_sigmoid_bias import (
+    fused_cast_sigmoid_bias,
+)
 
 DTYPE_MAP = {
     "float16": paddle.float16,
     "bfloat16": paddle.bfloat16,
     "float32": paddle.float32,
 }
-
-# Load the custom op directly via paddle JIT compilation
-_basedir = os.path.join(os.path.dirname(__file__), "../../custom_ops")
-_basedir = os.path.abspath(_basedir)
-_ops = load(
-    name="fused_cast_sigmoid_bias_op",
-    sources=[os.path.join(_basedir, "gpu_ops/fused_cast_sigmoid_bias.cu")],
-    extra_include_paths=[
-        os.path.join(_basedir, "gpu_ops"),
-        os.path.join(_basedir, "third_party/nlohmann_json/include"),
-        os.path.join(_basedir, "third_party/cutlass/include"),
-    ],
-    extra_cuda_cflags=["-gencode", "arch=compute_80,code=sm_80", "-DPADDLE_DEV"],
-    build_directory="/tmp/fused_cast_build_test",
-)
-
-
-def fused_cast_sigmoid_bias(gate_out, bias, cast_type="float32"):
-    """Wrapper for the custom op."""
-    return _ops.static_op_fused_cast_sigmoid_bias(gate_out, bias, cast_type)
 
 
 def reference_cast_sigmoid_bias(gate_out, bias, cast_type="float32"):
