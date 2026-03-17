@@ -1628,8 +1628,12 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         class DummyRM:
             def __init__(self):
                 self.abort_req_ids_set = set()
+                self.waiting_abort_req_id_set = set()
                 self.real_bsz = 1
                 self.requests = {"rid": Mock()}
+
+            def add_abort_req_ids(self, req_id):
+                self.waiting_abort_req_id_set.add(req_id)
 
             def _prepare_preempt_task(self, req):
                 return Request(request_id="rid", prompt_token_ids=[1], prompt_token_ids_len=1)
@@ -1649,7 +1653,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         ):
             eng._insert_zmq_task_to_scheduler()
 
-        eng.engine_worker_queue.put_tasks.assert_called_once()
+        # Verify abort request was handled correctly - added to waiting_abort_req_id_set
+        self.assertIn("rid", eng.resource_manager.waiting_abort_req_id_set)
         self._detach_finalizer(eng)
 
     def test_insert_zmq_task_to_scheduler_paused_sends_error(self):

@@ -53,6 +53,7 @@ class MockConfig:
 
     class SchedulerConfig:
         name = "default"
+        splitwise_role = "decode"
 
     class CacheConfig:
         enable_prefix_caching = False
@@ -104,14 +105,14 @@ class MockResourceManager:
         self.stop_flags = [False]
         self.tasks_list = [MockTask()]
         self.to_be_rescheduled_request_id_set = set()
+        self.to_be_aborted_req_id_set = set()
         self.abort_req_ids_set = set()
         self.req_dict = {}
+        self.recycle_abort_task = MagicMock(side_effect=lambda rid: self.to_be_aborted_req_id_set.discard(rid))
+        self.reschedule_preempt_task = MagicMock()
 
     def info(self):
         return "Mock resource manager info"
-
-    def reschedule_preempt_task(self, task_id):
-        pass
 
 
 class MockCachedGeneratedTokens:
@@ -323,7 +324,7 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         task_id = "test_aborted_request"
         task = processor.resource_manager.tasks_list[0]
         task.request_id = task_id
-        processor.resource_manager.abort_req_ids_set = {task_id}
+        processor.resource_manager.to_be_aborted_req_id_set = {task_id}
 
         # Add the task to req_dict to prevent _recycle_aborted_task from processing it early
         # batch_id should be < batch_size - 1 to avoid early recycling
@@ -339,8 +340,8 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         # Set up output tokens with negative token
         # batch = 2 (so batch_id=0 is < batch_size-1=1)
         processor.output_tokens[1, 0].set_tensor(paddle.to_tensor(2))
-        # Set negative token for first task (batch_id=0)
-        processor.output_tokens[2, 0].set_tensor(paddle.to_tensor(-1))
+        # Set negative token (PREEMPTED_TOKEN_ID) for first task (batch_id=0)
+        processor.output_tokens[2, 0].set_tensor(paddle.to_tensor(-9))
         # Set positive token for second task (batch_id=1)
         processor.output_tokens[3, 0].set_tensor(paddle.to_tensor(100))
 
@@ -356,15 +357,15 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         # Mock llm_logger to capture the log message and envs.ENABLE_V1_KVCACHE_SCHEDULER
         with (
             patch("fastdeploy.output.token_processor.llm_logger") as mock_logger,
-            patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0),
+            patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1),
         ):
             # Call the method
             processor._process_batch_output()
+            print(mock_logger)
 
             # Verify the recycling logic was triggered
-            mock_logger.info.assert_any_call(f"Aborted task {task_id} received negative token. Recycling.")
-            processor._recycle_resources.assert_called_once_with(task_id, 0, task)
-            self.assertNotIn(task_id, processor.resource_manager.abort_req_ids_set)
+            processor.resource_manager.recycle_abort_task.assert_called_once_with(task_id)
+            self.assertNotIn(task_id, processor.resource_manager.to_be_aborted_req_id_set)
 
     def test_process_batch_output_non_aborted_task_negative_token(self):
         """Test non-aborted task receiving negative token does not trigger recycling"""
