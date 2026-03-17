@@ -1077,11 +1077,11 @@ class MTPProposer(Proposer):
                 if hasattr(self.model, "empty_input_forward") and not is_dummy_run:
                     self.model.empty_input_forward(forward_meta=self.forward_meta)
 
-            if self.exist_prefill_flag:
-                self.first_decode = True
-            else:
-                self.first_decode = False
-            self.exist_prefill_flag = False
+        if self.exist_prefill_flag:
+            self.first_decode = True
+        else:
+            self.first_decode = False
+        self.exist_prefill_flag = False
 
     def _propose_xpu(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
         """
