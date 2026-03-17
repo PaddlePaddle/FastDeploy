@@ -1174,9 +1174,11 @@ class EngineService:
                         self.recv_request_server = ZmqIpcServer(name=self.api_server_pid, mode=zmq.PULL)
                     continue
 
-                # Extract zmq_worker_pid for per-worker PUSH routing
+                # Extract zmq_worker_pid for per-worker PUSH routing.
+                # Only needed when ZMQ_SEND_BATCH_DATA=True AND not using internal adapter,
+                # because FD_ENABLE_INTERNAL_ADAPTER uses ROUTER (worker_pid is irrelevant).
                 worker_pid = None
-                if envs.ZMQ_SEND_BATCH_DATA:
+                if envs.ZMQ_SEND_BATCH_DATA and not envs.FD_ENABLE_INTERNAL_ADAPTER:
                     worker_pid = data["zmq_worker_pid"]
 
                 if ControlRequest.is_control_request(data):
