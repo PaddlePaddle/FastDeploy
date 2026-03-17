@@ -692,7 +692,8 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                                     float routed_scaling_factor);
 
 std::vector<paddle::Tensor> FusedCastSigmoidBias(const paddle::Tensor& input,
-                                                 const paddle::Tensor& bias);
+                                                 const paddle::Tensor& bias,
+                                                 std::string cast_type);
 
 std::vector<paddle::Tensor> NoauxTcRedundant(
     paddle::Tensor& scores,
@@ -1704,7 +1705,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("fused_cast_sigmoid_bias",
         &FusedCastSigmoidBias,
-        "Fused cast+sigmoid+bias for MoE gating scores");
+        "Fused cast+sigmoid+bias for MoE gating scores",
+        py::arg("input"),
+        py::arg("bias"),
+        py::arg("cast_type") = std::string("float32"));
 
   m.def("noaux_tc_redundant",
         &NoauxTcRedundant,

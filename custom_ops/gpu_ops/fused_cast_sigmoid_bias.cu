@@ -14,24 +14,24 @@
 
 #include "helper.h"
 
-// Fused kernel: cast(input, fp32) -> sigmoid -> scores, scores + bias ->
+// Fused kernel: cast(input, cast_type) -> sigmoid -> scores, scores + bias ->
 // scores_with_bias
 //
 // For each element (token i, expert j):
-//   scores[i][j] = sigmoid(float(input[i][j]))
-//   scores_with_bias[i][j] = scores[i][j] + bias[j]
+//   scores[i][j] = OutT(sigmoid(float(input[i][j])))
+//   scores_with_bias[i][j] = OutT(sigmoid(float(input[i][j])) + bias[j])
 //
 // Input:  input [num_tokens, num_experts] bf16/fp16/fp32
 //         bias  [num_experts] or [1, num_experts] fp32
-// Output: scores [num_tokens, num_experts] fp32
-//         scores_with_bias [num_tokens, num_experts] fp32
+// Output: scores [num_tokens, num_experts] cast_type (fp32/fp16/bf16)
+//         scores_with_bias [num_tokens, num_experts] cast_type (fp32/fp16/bf16)
 
-template <typename InT>
+template <typename InT, typename OutT>
 __global__ void fused_cast_sigmoid_bias_kernel(
     const InT* __restrict__ input,
     const float* __restrict__ bias,
-    float* __restrict__ scores,
-    float* __restrict__ scores_with_bias,
+    OutT* __restrict__ scores,
+    OutT* __restrict__ scores_with_bias,
     const int num_experts) {
   const int64_t token_idx = blockIdx.x;
   const int64_t offset = token_idx * num_experts;
@@ -40,30 +40,31 @@ __global__ void fused_cast_sigmoid_bias_kernel(
     float val = static_cast<float>(input[offset + j]);
     // sigmoid: 1 / (1 + exp(-x))
     float s = 1.0f / (1.0f + expf(-val));
-    scores[offset + j] = s;
-    scores_with_bias[offset + j] = s + bias[j];
+    scores[offset + j] = static_cast<OutT>(s);
+    scores_with_bias[offset + j] = static_cast<OutT>(s + bias[j]);
   }
 }
 
 // Vectorized version for better memory throughput
-template <typename InT, int kVecSize>
+template <typename InT, typename OutT, int kVecSize>
 __global__ void fused_cast_sigmoid_bias_vec_kernel(
     const InT* __restrict__ input,
     const float* __restrict__ bias,
-    float* __restrict__ scores,
-    float* __restrict__ scores_with_bias,
+    OutT* __restrict__ scores,
+    OutT* __restrict__ scores_with_bias,
     const int num_experts) {
   const int64_t token_idx = blockIdx.x;
   const int64_t offset = token_idx * num_experts;
 
   using in_vec_t = AlignedVector<InT, kVecSize>;
-  using out_vec_t = AlignedVector<float, kVecSize>;
+  using out_vec_t = AlignedVector<OutT, kVecSize>;
+  using bias_vec_t = AlignedVector<float, kVecSize>;
 
   const int vec_count = num_experts / kVecSize;
   for (int idx = threadIdx.x; idx < vec_count; idx += blockDim.x) {
     const int base = idx * kVecSize;
     in_vec_t in_vec;
-    out_vec_t bias_vec;
+    bias_vec_t bias_vec;
     Load(input + offset + base, &in_vec);
     Load(bias + base, &bias_vec);
 
@@ -72,8 +73,8 @@ __global__ void fused_cast_sigmoid_bias_vec_kernel(
     for (int i = 0; i < kVecSize; ++i) {
       float val = static_cast<float>(in_vec[i]);
       float s = 1.0f / (1.0f + expf(-val));
-      s_vec[i] = s;
-      sb_vec[i] = s + bias_vec[i];
+      s_vec[i] = static_cast<OutT>(s);
+      sb_vec[i] = static_cast<OutT>(s + bias_vec[i]);
     }
 
     Store(s_vec, scores + offset + base);
@@ -86,13 +87,22 @@ __global__ void fused_cast_sigmoid_bias_vec_kernel(
        j += blockDim.x) {
     float val = static_cast<float>(input[offset + j]);
     float s = 1.0f / (1.0f + expf(-val));
-    scores[offset + j] = s;
-    scores_with_bias[offset + j] = s + bias[j];
+    scores[offset + j] = static_cast<OutT>(s);
+    scores_with_bias[offset + j] = static_cast<OutT>(s + bias[j]);
   }
 }
 
+static paddle::DataType ParseCastType(const std::string& cast_type) {
+  if (cast_type == "float32") return paddle::DataType::FLOAT32;
+  if (cast_type == "float16") return paddle::DataType::FLOAT16;
+  if (cast_type == "bfloat16") return paddle::DataType::BFLOAT16;
+  PD_THROW("Unsupported cast_type: " + cast_type +
+           ". Only float32, float16, bfloat16 are supported.");
+}
+
 std::vector<paddle::Tensor> FusedCastSigmoidBias(const paddle::Tensor& input,
-                                                 const paddle::Tensor& bias) {
+                                                 const paddle::Tensor& bias,
+                                                 std::string cast_type) {
   auto input_shape = input.shape();
   PD_CHECK(input_shape.size() == 2,
            "input must be 2D [num_tokens, num_experts]");
@@ -109,11 +119,11 @@ std::vector<paddle::Tensor> FusedCastSigmoidBias(const paddle::Tensor& input,
 
   auto place = input.place();
   auto stream = input.stream();
+  auto out_dtype = ParseCastType(cast_type);
 
-  auto scores = paddle::empty(
-      {num_tokens, num_experts}, paddle::DataType::FLOAT32, place);
-  auto scores_with_bias = paddle::empty(
-      {num_tokens, num_experts}, paddle::DataType::FLOAT32, place);
+  auto scores = paddle::empty({num_tokens, num_experts}, out_dtype, place);
+  auto scores_with_bias =
+      paddle::empty({num_tokens, num_experts}, out_dtype, place);
 
   if (num_tokens == 0) {
     return {scores, scores_with_bias};
@@ -125,31 +135,36 @@ std::vector<paddle::Tensor> FusedCastSigmoidBias(const paddle::Tensor& input,
   block_size = ((block_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
   dim3 block(block_size);
 
-  DISPATCH_FLOAT_FP6_DTYPE(input.dtype(), scalar_t, {
-    constexpr int kVecSize = 16 / sizeof(scalar_t);
-    if (num_experts % kVecSize == 0 && num_experts >= kVecSize) {
-      fused_cast_sigmoid_bias_vec_kernel<scalar_t, kVecSize>
-          <<<grid, block, 0, stream>>>(input.data<scalar_t>(),
-                                       bias.data<float>(),
-                                       scores.data<float>(),
-                                       scores_with_bias.data<float>(),
-                                       num_experts);
-    } else {
-      fused_cast_sigmoid_bias_kernel<scalar_t>
-          <<<grid, block, 0, stream>>>(input.data<scalar_t>(),
-                                       bias.data<float>(),
-                                       scores.data<float>(),
-                                       scores_with_bias.data<float>(),
-                                       num_experts);
-    }
+  DISPATCH_FLOAT_FP6_DTYPE(input.dtype(), in_scalar_t, {
+    DISPATCH_FLOAT_FP6_DTYPE(out_dtype, out_scalar_t, {
+      constexpr int kVecSize = 16 / sizeof(in_scalar_t);
+      if (num_experts % kVecSize == 0 && num_experts >= kVecSize) {
+        fused_cast_sigmoid_bias_vec_kernel<in_scalar_t, out_scalar_t, kVecSize>
+            <<<grid, block, 0, stream>>>(input.data<in_scalar_t>(),
+                                         bias.data<float>(),
+                                         scores.data<out_scalar_t>(),
+                                         scores_with_bias.data<out_scalar_t>(),
+                                         num_experts);
+      } else {
+        fused_cast_sigmoid_bias_kernel<in_scalar_t, out_scalar_t>
+            <<<grid, block, 0, stream>>>(input.data<in_scalar_t>(),
+                                         bias.data<float>(),
+                                         scores.data<out_scalar_t>(),
+                                         scores_with_bias.data<out_scalar_t>(),
+                                         num_experts);
+      }
+    });
   });
 
   return {scores, scores_with_bias};
 }
 
 std::vector<paddle::DataType> FusedCastSigmoidBiasInferDtype(
-    const paddle::DataType& input_dtype, const paddle::DataType& bias_dtype) {
-  return {paddle::DataType::FLOAT32, paddle::DataType::FLOAT32};
+    const paddle::DataType& input_dtype,
+    const paddle::DataType& bias_dtype,
+    std::string cast_type) {
+  auto out_dtype = ParseCastType(cast_type);
+  return {out_dtype, out_dtype};
 }
 
 std::vector<std::vector<int64_t>> FusedCastSigmoidBiasInferShape(
@@ -161,6 +176,7 @@ std::vector<std::vector<int64_t>> FusedCastSigmoidBiasInferShape(
 PD_BUILD_STATIC_OP(fused_cast_sigmoid_bias)
     .Inputs({"input", "bias"})
     .Outputs({"scores", "scores_with_bias"})
+    .Attrs({"cast_type: std::string"})
     .SetKernelFn(PD_KERNEL(FusedCastSigmoidBias))
     .SetInferShapeFn(PD_INFER_SHAPE(FusedCastSigmoidBiasInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(FusedCastSigmoidBiasInferDtype));

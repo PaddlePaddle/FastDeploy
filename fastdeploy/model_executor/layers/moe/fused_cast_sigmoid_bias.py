@@ -24,21 +24,23 @@ from fastdeploy.model_executor.ops.gpu import (
 def fused_cast_sigmoid_bias(
     gate_out: paddle.Tensor,
     e_score_correction_bias: paddle.Tensor,
+    cast_type: str = "float32",
 ) -> tuple:
     """
-    Fused operation: cast gate_out to float32, apply sigmoid, and add bias.
+    融合操作：将gate_out转换为指定类型，应用sigmoid函数，并添加偏置。
 
-    This fuses three separate operations:
-      1. gate_out = gate_out.cast("float32")
+    该函数融合了以下三个独立操作：
+      1. gate_out = gate_out.cast(cast_type)
       2. scores = sigmoid(gate_out)
       3. scores_with_bias = scores + e_score_correction_bias
 
     Args:
-        gate_out: [num_tokens, num_experts], bf16/fp16/fp32 - raw gate output
-        e_score_correction_bias: [num_experts], fp32 - correction bias
+        gate_out: [num_tokens, num_experts]，bf16/fp16/fp32类型 - 原始gate输出
+        e_score_correction_bias: [num_experts]，fp32类型 - 修正偏置
+        cast_type: 输出数据类型字符串，支持"float32"、"float16"、"bfloat16"
 
     Returns:
-        scores: [num_tokens, num_experts], fp32 - sigmoid(gate_out)
-        scores_with_bias: [num_tokens, num_experts], fp32 - scores + bias
+        scores: [num_tokens, num_experts]，cast_type类型 - sigmoid(gate_out)的结果
+        scores_with_bias: [num_tokens, num_experts]，cast_type类型 - 加上偏置后的分数
     """
-    return _fused_cast_sigmoid_bias_cuda(gate_out, e_score_correction_bias)
+    return _fused_cast_sigmoid_bias_cuda(gate_out, e_score_correction_bias, cast_type)

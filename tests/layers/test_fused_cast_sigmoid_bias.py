@@ -3,31 +3,57 @@ Test for fused_cast_sigmoid_bias CUDA custom op.
 Tests: functionality, accuracy, and performance.
 
 Usage:
-    conda activate fd_py12_bin
-    export PYTHONPATH="/workspace2/bingoo/code/FastDeploy"
-    python /workspace2/bingoo/code/FastDeploy/tests/model_executor/layers/moe/test_fused_cast_sigmoid_bias.py
+    conda activate fd_fused_cast_test
+    python /ssd2/bingoo/code/fastdeploy/FastDeploy/tests/layers/test_fused_cast_sigmoid_bias.py
 """
+
+import os
 
 import paddle
 import paddle.nn.functional as F
+from paddle.utils.cpp_extension import load
 
-from fastdeploy.model_executor.layers.moe.fused_cast_sigmoid_bias import (
-    fused_cast_sigmoid_bias,
+DTYPE_MAP = {
+    "float16": paddle.float16,
+    "bfloat16": paddle.bfloat16,
+    "float32": paddle.float32,
+}
+
+# Load the custom op directly via paddle JIT compilation
+_basedir = os.path.join(os.path.dirname(__file__), "../../custom_ops")
+_basedir = os.path.abspath(_basedir)
+_ops = load(
+    name="fused_cast_sigmoid_bias_op",
+    sources=[os.path.join(_basedir, "gpu_ops/fused_cast_sigmoid_bias.cu")],
+    extra_include_paths=[
+        os.path.join(_basedir, "gpu_ops"),
+        os.path.join(_basedir, "third_party/nlohmann_json/include"),
+        os.path.join(_basedir, "third_party/cutlass/include"),
+    ],
+    extra_cuda_cflags=["-gencode", "arch=compute_80,code=sm_80", "-DPADDLE_DEV"],
+    build_directory="/tmp/fused_cast_build_test",
 )
 
 
-def reference_cast_sigmoid_bias(gate_out, bias):
-    """Reference implementation: 3 separate ops."""
+def fused_cast_sigmoid_bias(gate_out, bias, cast_type="float32"):
+    """Wrapper for the custom op."""
+    return _ops.static_op_fused_cast_sigmoid_bias(gate_out, bias, cast_type)
+
+
+def reference_cast_sigmoid_bias(gate_out, bias, cast_type="float32"):
+    """Reference implementation: compute in fp32, cast output to cast_type."""
     gate_fp32 = gate_out.cast("float32")
-    scores = F.sigmoid(gate_fp32)
-    scores_with_bias = scores + bias
+    scores_fp32 = F.sigmoid(gate_fp32)
+    scores_with_bias_fp32 = scores_fp32 + bias
+    scores = scores_fp32.cast(cast_type)
+    scores_with_bias = scores_with_bias_fp32.cast(cast_type)
     return scores, scores_with_bias
 
 
 def test_functionality():
-    """Test basic functionality: correct shapes and dtypes."""
+    """Test basic functionality: correct shapes and dtypes (default cast_type=float32)."""
     print("=" * 60)
-    print("Test 1: Functionality")
+    print("Test 1: Functionality (default cast_type=float32)")
     print("=" * 60)
 
     for dtype_name in ["float16", "bfloat16", "float32"]:
@@ -59,10 +85,43 @@ def test_functionality():
     print("  All functionality tests passed.\n")
 
 
-def test_accuracy():
-    """Test numerical accuracy against reference implementation."""
+def test_functionality_cast_types():
+    """Test functionality with different cast_type values."""
     print("=" * 60)
-    print("Test 2: Accuracy")
+    print("Test 1b: Functionality with different cast_type")
+    print("=" * 60)
+
+    for input_dtype in ["float16", "bfloat16", "float32"]:
+        for cast_type in ["float16", "bfloat16", "float32"]:
+            expected_paddle_dtype = DTYPE_MAP[cast_type]
+            for num_tokens in [1, 64, 256]:
+                for num_experts in [8, 64, 256]:
+                    gate_out = paddle.randn([num_tokens, num_experts], dtype=input_dtype)
+                    bias = paddle.randn([num_experts], dtype="float32")
+
+                    scores, scores_with_bias = fused_cast_sigmoid_bias(gate_out, bias, cast_type)
+
+                    assert scores.shape == [num_tokens, num_experts], f"scores shape mismatch: {scores.shape}"
+                    assert scores_with_bias.shape == [
+                        num_tokens,
+                        num_experts,
+                    ], f"scores_with_bias shape mismatch: {scores_with_bias.shape}"
+                    assert (
+                        scores.dtype == expected_paddle_dtype
+                    ), f"scores dtype mismatch: got {scores.dtype}, expected {expected_paddle_dtype}"
+                    assert (
+                        scores_with_bias.dtype == expected_paddle_dtype
+                    ), f"scores_with_bias dtype mismatch: got {scores_with_bias.dtype}, expected {expected_paddle_dtype}"
+
+            print(f"  [PASS] input_dtype={input_dtype}, cast_type={cast_type}")
+
+    print("  All cast_type functionality tests passed.\n")
+
+
+def test_accuracy():
+    """Test numerical accuracy against reference implementation (default cast_type=float32)."""
+    print("=" * 60)
+    print("Test 2: Accuracy (default cast_type=float32)")
     print("=" * 60)
 
     test_cases = [
@@ -109,6 +168,76 @@ def test_accuracy():
     print("  All accuracy tests passed.\n")
 
 
+def test_accuracy_cast_types():
+    """Test numerical accuracy with different cast_type values."""
+    print("=" * 60)
+    print("Test 2b: Accuracy with different cast_type")
+    print("=" * 60)
+
+    # (input_dtype, cast_type, num_tokens, num_experts)
+    test_cases = [
+        # cast to float32 (original behavior)
+        ("float16", "float32", 128, 256),
+        ("bfloat16", "float32", 128, 256),
+        ("float32", "float32", 128, 256),
+        # cast to float16
+        ("float16", "float16", 128, 256),
+        ("bfloat16", "float16", 128, 256),
+        ("float32", "float16", 128, 256),
+        # cast to bfloat16
+        ("float16", "bfloat16", 128, 256),
+        ("bfloat16", "bfloat16", 128, 256),
+        ("float32", "bfloat16", 128, 256),
+        # different shapes
+        ("bfloat16", "float16", 1, 8),
+        ("bfloat16", "float16", 1024, 256),
+        ("float16", "bfloat16", 1, 8),
+        ("float16", "bfloat16", 1024, 256),
+    ]
+
+    for input_dtype, cast_type, num_tokens, num_experts in test_cases:
+        gate_out = paddle.randn([num_tokens, num_experts], dtype=input_dtype)
+        bias = paddle.randn([num_experts], dtype="float32")
+
+        # Fused kernel
+        fused_scores, fused_scores_with_bias = fused_cast_sigmoid_bias(gate_out, bias, cast_type)
+
+        # Reference
+        ref_scores, ref_scores_with_bias = reference_cast_sigmoid_bias(gate_out, bias, cast_type)
+
+        # Compare in float32 for stable diff computation
+        scores_diff = paddle.abs(fused_scores.cast("float32") - ref_scores.cast("float32")).max().item()
+        scores_bias_diff = (
+            paddle.abs(fused_scores_with_bias.cast("float32") - ref_scores_with_bias.cast("float32")).max().item()
+        )
+
+        # Tolerance depends on cast_type precision
+        if cast_type == "float32":
+            atol = 1e-6
+        elif cast_type == "bfloat16":
+            atol = 1e-2  # bfloat16 has fewer mantissa bits
+        else:  # float16
+            atol = 1e-3
+
+        passed = scores_diff < atol and scores_bias_diff < atol
+
+        status = "PASS" if passed else "FAIL"
+        print(
+            f"  [{status}] input={input_dtype}, cast_type={cast_type}, "
+            f"tokens={num_tokens}, experts={num_experts} | "
+            f"scores_diff={scores_diff:.2e}, bias_diff={scores_bias_diff:.2e}"
+        )
+
+        if not passed:
+            raise AssertionError(
+                f"Accuracy test failed for input={input_dtype}, cast_type={cast_type}, "
+                f"tokens={num_tokens}, experts={num_experts}. "
+                f"scores_diff={scores_diff}, bias_diff={scores_bias_diff}, atol={atol}"
+            )
+
+    print("  All cast_type accuracy tests passed.\n")
+
+
 def test_accuracy_extreme_values():
     """Test accuracy with extreme input values."""
     print("=" * 60)
@@ -142,6 +271,39 @@ def test_accuracy_extreme_values():
         print(f"  [PASS] dtype={dtype_name}, zeros: max_diff={diff:.2e}")
 
     print("  All extreme value tests passed.\n")
+
+
+def test_accuracy_extreme_values_cast_types():
+    """Test accuracy with extreme values across different cast_type values."""
+    print("=" * 60)
+    print("Test 3b: Accuracy with extreme values + different cast_type")
+    print("=" * 60)
+
+    num_tokens, num_experts = 64, 256
+
+    for input_dtype in ["float16", "bfloat16"]:
+        for cast_type in ["float16", "bfloat16", "float32"]:
+            bias = paddle.zeros([num_experts], dtype="float32")
+
+            # Large positive
+            gate_out = paddle.full([num_tokens, num_experts], 10.0, dtype=input_dtype)
+            fused_scores, _ = fused_cast_sigmoid_bias(gate_out, bias, cast_type)
+            ref_scores, _ = reference_cast_sigmoid_bias(gate_out, bias, cast_type)
+            diff = paddle.abs(fused_scores.cast("float32") - ref_scores.cast("float32")).max().item()
+            atol = 1e-2 if cast_type == "bfloat16" else 1e-5
+            status = "PASS" if diff < atol else "FAIL"
+            print(f"  [{status}] input={input_dtype}, cast={cast_type}, " f"large positive: diff={diff:.2e}")
+
+            # Zero values
+            gate_out = paddle.zeros([num_tokens, num_experts], dtype=input_dtype)
+            fused_scores, _ = fused_cast_sigmoid_bias(gate_out, bias, cast_type)
+            ref_scores, _ = reference_cast_sigmoid_bias(gate_out, bias, cast_type)
+            diff = paddle.abs(fused_scores.cast("float32") - ref_scores.cast("float32")).max().item()
+            atol = 1e-2 if cast_type == "bfloat16" else 1e-5
+            assert diff < atol, f"Zero input test failed: input={input_dtype}, cast={cast_type}, diff={diff}"
+            print(f"  [PASS] input={input_dtype}, cast={cast_type}, " f"zeros: diff={diff:.2e}")
+
+    print("  All extreme value cast_type tests passed.\n")
 
 
 def test_performance():
@@ -214,8 +376,11 @@ if __name__ == "__main__":
     print("Running fused_cast_sigmoid_bias tests...\n")
 
     test_functionality()
+    test_functionality_cast_types()
     test_accuracy()
+    test_accuracy_cast_types()
     test_accuracy_extreme_values()
+    test_accuracy_extreme_values_cast_types()
     test_performance()
 
     print("=" * 60)
