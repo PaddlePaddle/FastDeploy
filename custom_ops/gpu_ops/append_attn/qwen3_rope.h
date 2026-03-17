@@ -98,10 +98,10 @@ __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
 
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        src_vec0[i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-        src_vec1[i] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+        src_vec0[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                     __fmul_rn(input_right, sin_tmp));
+        src_vec1[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                     __fmul_rn(input_left, sin_tmp));
       }
     }
     Store<T, VecSize>(src_vec0, &qkv_out[read_idx]);

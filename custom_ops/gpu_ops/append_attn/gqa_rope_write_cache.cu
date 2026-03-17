@@ -117,8 +117,10 @@ __global__ void GQAVariableLengthRotarySplitKernel(
           const float input_right = static_cast<float>(src_vec[2 * i + 1]);
           const float cos_tmp = cos_emb_vec[i];
           const float sin_tmp = sin_emb_vec[i];
-          float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
-          float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
+          float tmp1 =
+              __fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp);
+          float tmp2 =
+              __fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp);
           tmp_vec[2 * i] = tmp1;
           tmp_vec[2 * i + 1] = tmp2;
           thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
@@ -156,10 +158,10 @@ __global__ void GQAVariableLengthRotarySplitKernel(
           const float input_right = static_cast<float>(src_vec[2 * i + 1]);
           const float cos_tmp = cos_emb_vec[i];
           const float sin_tmp = sin_emb_vec[i];
-          src_vec[2 * i] =
-              static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-          src_vec[2 * i + 1] =
-              static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+          src_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                          __fmul_rn(input_right, sin_tmp));
+          src_vec[2 * i + 1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                              __fmul_rn(input_left, sin_tmp));
         }
       }
     }
@@ -328,11 +330,11 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel(
           const float cos_tmp = cos_emb_vec[i];
           const float sin_tmp = sin_emb_vec[i];
           if (h_bias < half_rotary_dim) {
-            src_vec[i] =
-                static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            src_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                        __fmul_rn(input_right, sin_tmp));
           } else {
-            src_vec[i] =
-                static_cast<T>(input_left * cos_tmp + input_right * sin_tmp);
+            src_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) +
+                                        __fmul_rn(input_right, sin_tmp));
           }
         }
       }
