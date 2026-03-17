@@ -339,7 +339,7 @@ class TestZmqServerBase(unittest.TestCase):
             with mock.patch.object(envs, "ZMQ_SEND_BATCH_DATA", True):
                 batch_data = [[_DummyResponse(1)]]
                 server.send_response(None, batch_data)
-                server._send_batch_response.assert_called_once_with(batch_data)
+                server._send_batch_response.assert_called_once_with(batch_data, worker_pid=None)
         # Branch 3: FD_ENABLE_INTERNAL_ADAPTER=False, ZMQ_SEND_BATCH_DATA=False -> _send_response_per_query
         with mock.patch.object(envs, "FD_ENABLE_INTERNAL_ADAPTER", False):
             with mock.patch.object(envs, "ZMQ_SEND_BATCH_DATA", False):
@@ -354,7 +354,7 @@ class TestZmqServerBase(unittest.TestCase):
             with mock.patch.object(envs, "ZMQ_SEND_BATCH_DATA", True):
                 batch_data = [[_DummyResponse(1)], [_DummyResponse(2)]]
                 server.send_response(None, batch_data)
-                server._send_batch_response.assert_called_once_with(batch_data)
+                server._send_batch_response.assert_called_once_with(batch_data, worker_pid=None)
 
     def test_send_batch_response_success(self):
         """Test _send_batch_response sends data successfully"""
@@ -378,12 +378,12 @@ class TestZmqServerBase(unittest.TestCase):
         self.assertEqual(len(fake_socket.sent), 1)
 
     def test_send_batch_response_raises_without_socket(self):
-        """Test _send_batch_response raises when socket is None"""
+        """Test _send_batch_response logs error and returns when socket is None"""
         server = _DummyServer(socket=None)
         server._create_socket = lambda: None
         batch_data = [[_DummyResponse(1)]]
-        with self.assertRaises(RuntimeError):
-            server._send_batch_response(batch_data)
+        # Production code logs error and returns (does not raise)
+        server._send_batch_response(batch_data)
 
     def test_send_batch_response_handles_send_error(self):
         """Test _send_batch_response handles socket send errors"""

@@ -416,6 +416,13 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 eng.running = False
                 return error, payload
 
+            def receive_pyobj_once(self, block):
+                eng.running = False
+                return error, payload
+
+            def close(self):
+                pass
+
         return DummyRecv()
 
     @staticmethod
@@ -705,7 +712,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", True),
         ):
             eng._send_error_response("rid2", "boom", error_code=400)
-            eng.send_response_server.send_response.assert_called_with(None, [ANY])
+            eng.send_response_server.send_response.assert_called_with(None, [ANY], worker_pid=None)
 
         eng.send_response_server.reset_mock()
         with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True):
@@ -1227,6 +1234,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         with (
             patch("fastdeploy.engine.common_engine.main_process_metrics", DummyMetrics()),
             patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
             eng._insert_zmq_task_to_scheduler()
@@ -1657,6 +1665,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
             eng._insert_zmq_task_to_scheduler()
@@ -1684,7 +1693,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             },
         )
 
-        with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
             eng._insert_zmq_task_to_scheduler()
 
         eng._send_error_response.assert_called_once()
@@ -1796,6 +1808,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
             eng._zmq_send_generated_tokens()
@@ -1811,7 +1824,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         self._make_scheduler_with_output(eng, [1], 0, True, include_raw=True)
 
-        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
+        ):
             eng._zmq_send_generated_tokens()
 
         eng.send_response_server.send_response.assert_called_once()
@@ -1919,6 +1935,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
             eng._zmq_send_generated_tokens()
@@ -2534,7 +2551,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                     mock_request.metrics.scheduler_recv_req_time = 0
                     MockRequest.from_dict.return_value = mock_request
 
-                    with patch("fastdeploy.engine.common_engine.trace_print"):
+                    with (
+                        patch("fastdeploy.engine.common_engine.trace_print"),
+                        patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
+                    ):
                         eng._insert_zmq_task_to_scheduler()
 
                         # Verify trace_set_proc_propagate_context was called with correct args (lines 1165-1167)
@@ -2560,7 +2580,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                     mock_request.metrics.scheduler_recv_req_time = 0
                     MockRequest.from_dict.return_value = mock_request
 
-                    with patch("fastdeploy.engine.common_engine.trace_print"):
+                    with (
+                        patch("fastdeploy.engine.common_engine.trace_print"),
+                        patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
+                    ):
                         eng._insert_zmq_task_to_scheduler()
 
                         # Verify trace_set_proc_propagate_context was NOT called when no trace_carrier
@@ -2699,6 +2722,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch.object(eng, "llm_logger") as mock_logger,
             patch("fastdeploy.engine.common_engine.RequestStatus") as mock_status,
         ):
@@ -2770,6 +2794,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch.object(eng, "llm_logger"),
             patch("fastdeploy.engine.common_engine.RequestStatus") as mock_status,
         ):
@@ -2909,6 +2934,12 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
             eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+
+        # Initialize request_worker_map for batch mode routing
+        import threading as _threading
+
+        eng.request_worker_map = {}
+        eng.request_worker_map_lock = _threading.Lock()
 
         # Setup scheduler to return results
         mock_output = Mock()

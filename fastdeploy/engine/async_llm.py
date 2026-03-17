@@ -442,6 +442,8 @@ class AsyncLLM(EngineServiceClient):
                     f"Cache request with request_id ({request.get('request_id')}), "
                     f"preprocess time cost {preprocess_cost_time}"
                 )
+            if envs.ZMQ_SEND_BATCH_DATA and self.connection_manager is not None:
+                request["zmq_worker_pid"] = self.connection_manager.worker_pid
             if not envs.ENABLE_V1_DATA_PROCESSOR and self.cfg.model_config.enable_mm:
                 self.request_client.send_pyobj(request)
             else:

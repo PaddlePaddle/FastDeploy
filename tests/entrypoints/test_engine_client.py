@@ -1718,6 +1718,7 @@ def minimal_engine_client():
     client.clear_update_lock.__enter__ = Mock(return_value=None)
     client.clear_update_lock.__exit__ = Mock(return_value=None)
     client.zmq_client = MagicMock(send_json=Mock(), send_pyobj=Mock())
+    client.worker_pid = os.getpid()
     return client
 
 
