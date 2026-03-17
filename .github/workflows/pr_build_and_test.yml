@@ -15,8 +15,8 @@ jobs:
     uses: ./.github/workflows/_unit_test_coverage.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
-      FASTDEPLOY_ARCHIVE_URL: "https://paddle-whl.bj.bcebos.com/stable/fastdeploy-gpu-80_90/fastdeploy-gpu/fastdeploy_gpu-2.4.0-py3-none-any.whl"
-      FASTDEPLOY_WHEEL_URL: "https://paddle-qa.bj.bcebos.com/TAG/FastDeploy/v2.4.0/bbe9731f464bf6a8283b30d52a997d637a717144/FastDeploy.tar.gz"
+      FASTDEPLOY_ARCHIVE_URL: "https://paddle-qa.bj.bcebos.com/TAG/FastDeploy/v2.4.0/bbe9731f464bf6a8283b30d52a997d637a717144/FastDeploy.tar.gz"
+      FASTDEPLOY_WHEEL_URL: "https://paddle-whl.bj.bcebos.com/stable/fastdeploy-gpu-80_90/fastdeploy-gpu/fastdeploy_gpu-2.4.0-py3-none-any.whl"
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -35,8 +35,8 @@ jobs:
     uses: ./.github/workflows/_pre_ce_test.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
-      FASTDEPLOY_ARCHIVE_URL: "https://paddle-whl.bj.bcebos.com/stable/fastdeploy-gpu-80_90/fastdeploy-gpu/fastdeploy_gpu-2.4.0-py3-none-any.whl"
-      FASTDEPLOY_WHEEL_URL: "https://paddle-qa.bj.bcebos.com/TAG/FastDeploy/v2.4.0/bbe9731f464bf6a8283b30d52a997d637a717144/FastDeploy.tar.gz"
+      FASTDEPLOY_ARCHIVE_URL: "https://paddle-qa.bj.bcebos.com/TAG/FastDeploy/v2.4.0/bbe9731f464bf6a8283b30d52a997d637a717144/FastDeploy.tar.gz"
+      FASTDEPLOY_WHEEL_URL: "https://paddle-whl.bj.bcebos.com/stable/fastdeploy-gpu-80_90/fastdeploy-gpu/fastdeploy_gpu-2.4.0-py3-none-any.whl"
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
 
   base_test:
@@ -44,8 +44,8 @@ jobs:
     uses: ./.github/workflows/_base_test.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
-      FASTDEPLOY_ARCHIVE_URL: "https://paddle-whl.bj.bcebos.com/stable/fastdeploy-gpu-80_90/fastdeploy-gpu/fastdeploy_gpu-2.4.0-py3-none-any.whl"
-      FASTDEPLOY_WHEEL_URL: "https://paddle-qa.bj.bcebos.com/TAG/FastDeploy/v2.4.0/bbe9731f464bf6a8283b30d52a997d637a717144/FastDeploy.tar.gz"
+      FASTDEPLOY_ARCHIVE_URL: "https://paddle-qa.bj.bcebos.com/TAG/FastDeploy/v2.4.0/bbe9731f464bf6a8283b30d52a997d637a717144/FastDeploy.tar.gz"
+      FASTDEPLOY_WHEEL_URL: "https://paddle-whl.bj.bcebos.com/stable/fastdeploy-gpu-80_90/fastdeploy-gpu/fastdeploy_gpu-2.4.0-py3-none-any.whl"
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
 
   stable_test:
@@ -53,6 +53,6 @@ jobs:
     uses: ./.github/workflows/_stable_test.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
-      FASTDEPLOY_ARCHIVE_URL: "https://paddle-whl.bj.bcebos.com/stable/fastdeploy-gpu-80_90/fastdeploy-gpu/fastdeploy_gpu-2.4.0-py3-none-any.whl"
-      FASTDEPLOY_WHEEL_URL: "https://paddle-qa.bj.bcebos.com/TAG/FastDeploy/v2.4.0/bbe9731f464bf6a8283b30d52a997d637a717144/FastDeploy.tar.gz"
+      FASTDEPLOY_ARCHIVE_URL: "https://paddle-qa.bj.bcebos.com/TAG/FastDeploy/v2.4.0/bbe9731f464bf6a8283b30d52a997d637a717144/FastDeploy.tar.gz"
+      FASTDEPLOY_WHEEL_URL: "https://paddle-whl.bj.bcebos.com/stable/fastdeploy-gpu-80_90/fastdeploy-gpu/fastdeploy_gpu-2.4.0-py3-none-any.whl"
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
