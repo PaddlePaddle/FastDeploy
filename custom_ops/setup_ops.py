@@ -365,7 +365,7 @@ elif paddle.is_compiled_with_cuda():
     ]
     # Limit nvcc internal threads to avoid resource exhaustion when Paddle's
     # ThreadPoolExecutor also launches many parallel compilations.
-    # Total threads ≈ MAX_JOBS × nvcc_threads, so cap nvcc_threads at 4.
+    # Total threads ≈ (number of parallel compile jobs) × nvcc_threads, so cap nvcc_threads at 4.
     nvcc_threads = min(os.cpu_count() or 1, 4)
     nvcc_compile_args += ["-t", str(nvcc_threads)]
 
