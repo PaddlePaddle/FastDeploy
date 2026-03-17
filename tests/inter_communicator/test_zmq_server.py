@@ -518,6 +518,89 @@ class TestZmqServers(unittest.TestCase):
         server.running = False
         server.close()
 
+    def test_zmq_ipc_server_unsupported_mode_raises(self):
+        """Line 422: ZmqIpcServer.__init__ with unsupported ZMQ mode raises ValueError."""
+        fake_context = _FakeContext()
+        with mock.patch("fastdeploy.inter_communicator.zmq_server.zmq.Context", return_value=fake_context):
+            with self.assertRaises(ValueError):
+                ZmqIpcServer("test", zmq.PUB)
+
+    def test_zmq_ipc_server_get_worker_push_socket_creates_and_caches(self):
+        """Lines 436-447: _get_worker_push_socket creates a new PUSH socket and caches it."""
+        # Track all sockets created by context.socket()
+        created_sockets = []
+
+        class _TrackingContext(_FakeContext):
+            def socket(self, mode):
+                sock = _FakeSocket()
+                sock.mode = mode
+                sock.connected_to = None
+                sock.connect = lambda addr: setattr(sock, "connected_to", addr)
+                created_sockets.append(sock)
+                return sock
+
+        tracking_ctx = _TrackingContext()
+        with mock.patch("fastdeploy.inter_communicator.zmq_server.zmq.Context", return_value=tracking_ctx):
+            server = ZmqIpcServer("myservice", zmq.PUSH)
+
+        # First call: should create a new PUSH socket and connect it
+        sock1 = server._get_worker_push_socket(1234)
+        self.assertIsNotNone(sock1)
+        self.assertIn(1234, server.worker_push_sockets)
+        self.assertIsNotNone(sock1.connected_to)
+        self.assertIn("1234", sock1.connected_to)
+
+        # Second call with same worker_pid: should return cached socket
+        sock2 = server._get_worker_push_socket(1234)
+        self.assertIs(sock1, sock2)
+
+        # Different worker_pid: should create a new socket
+        sock3 = server._get_worker_push_socket(5678)
+        self.assertIsNot(sock1, sock3)
+        self.assertIn(5678, server.worker_push_sockets)
+
+    def test_send_batch_response_with_worker_pid_none_uses_default_socket(self):
+        """Line 323: _send_batch_response with worker_pid=None uses the default socket (via _ensure_socket)."""
+        fake_socket = _FakeSocket()
+        server = _DummyServer(socket=fake_socket)
+        server.address = "test-address"
+
+        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
+            batch_data = [[_DummyResponse(1, finished=True)]]
+            # worker_pid=None -> goes to the else branch that calls _ensure_socket / uses self.socket
+            server._send_batch_response(batch_data, worker_pid=None)
+
+        # The default socket should have been used to send the data
+        self.assertEqual(len(fake_socket.sent), 1)
+        self.assertEqual(fake_socket.sent[0][0], "send")
+
+    def test_zmq_ipc_server_close_with_worker_push_sockets(self):
+        """Lines 473-475: close() iterates and closes per-worker PUSH sockets, swallowing errors."""
+        fake_context = _FakeContext()
+        with mock.patch("fastdeploy.inter_communicator.zmq_server.zmq.Context", return_value=fake_context):
+            server = ZmqIpcServer("test", zmq.PULL)
+
+        # Add a well-behaved push socket
+        good_sock = _FakeSocket()
+        server.worker_push_sockets[100] = good_sock
+
+        # Add a push socket whose close() raises
+        class _BadPushSocket(_FakeSocket):
+            def close(self):
+                raise RuntimeError("push close failed")
+
+        bad_sock = _BadPushSocket()
+        server.worker_push_sockets[200] = bad_sock
+
+        # close() should not raise even if a push socket close() fails
+        server.close()
+
+        self.assertFalse(server.running)
+        # worker_push_sockets should be cleared
+        self.assertEqual(len(server.worker_push_sockets), 0)
+        # The good socket should have been closed
+        self.assertTrue(good_sock.closed)
+
 
 if __name__ == "__main__":
     unittest.main()
