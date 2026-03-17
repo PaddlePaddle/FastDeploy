@@ -126,6 +126,15 @@ def setup_and_run_server():
 
     # ======================== Start Mooncake Master ========================
     print("=== Starting Mooncake Master ===")
+
+    # Ensure mooncake_master binary is available before starting the test
+    if shutil.which("mooncake_master") is None:
+        raise RuntimeError(
+            "mooncake_master is not installed or not in PATH. "
+            "Please install Mooncake and ensure `mooncake_master` is available in PATH "
+            "before running this e2e test."
+        )
+
     env_master = os.environ.copy()
     env_master["FD_LOG_DIR"] = "log_master"
     os.makedirs("log_master", exist_ok=True)
@@ -150,6 +159,13 @@ def setup_and_run_server():
     # Wait for Mooncake Master to be ready
     if not wait_for_mooncake_master(port=FD_MOONCAKE_MASTER_PORT, timeout=30):
         print("[ERROR] Mooncake Master failed to start")
+        # Print mooncake master log for debugging
+        master_log_path = "log_master/nohup"
+        if os.path.exists(master_log_path):
+            print(f"\n===== Mooncake Master Log ({master_log_path}) =====")
+            with open(master_log_path, "r") as f:
+                print(f.read())
+            print("===== End of Mooncake Master Log =====\n")
         try:
             os.killpg(process_master.pid, signal.SIGTERM)
         except Exception:
