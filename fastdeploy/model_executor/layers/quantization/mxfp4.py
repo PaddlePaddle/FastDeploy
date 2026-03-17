@@ -450,7 +450,12 @@ class MXFP4MoeMethod(MoEMethodBase):
             )
 
     def apply(
-        self, layer: nn.Layer, x: paddle.Tensor, router: nn.Layer, topk_ids_hookfunc: Callable = None
+        self,
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        router: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         router_out = router(x.cast("float32"))
 

@@ -190,7 +190,7 @@ server:
   splitwise: true # true enables PD disaggregation; false disables it
 
 scheduler:
-  policy: "power_of_two" # Scheduling policy (optional): random, power_of_two, round_robin, process_tokens, request_num, cache_aware, fd_metrics_score
+  policy: "power_of_two" # Scheduling policy (optional): random, power_of_two, round_robin, process_tokens, request_num, cache_aware, remote_cache_aware, fd_metrics_score, fd_remote_metrics_score
   prefill-policy: "cache_aware" # Prefill scheduling policy in PD mode
   decode-policy: "fd_metrics_score" # Decode scheduling policy in PD mode
   eviction-interval-secs: 60 # Cache eviction interval for CacheAware scheduling
@@ -199,9 +199,13 @@ scheduler:
   hit-ratio-weight: 1.0 # Cache hit ratio weight
   load-balance-weight: 0.05 # Load balancing weight
   cache-block-size: 4 # Cache block size
-  tokenizer-url: "http://0.0.0.0:8098" # Tokenizer service endpoint (optional)
-  tokenizer-timeout-secs: 2 # Tokenizer service timeout
+  # tokenizer-url: "http://0.0.0.0:8098" # Tokenizer service endpoint (optional), cache_aware uses character-level tokenization when not configured.
+  #                                         Note: Enabling this option causes a synchronous remote tokenizer call on every scheduling decision,
+  #                                         introducing additional network latency. Only enable it when precise token-level tokenization
+  #                                         is needed to improve cache hit rate.
+  # tokenizer-timeout-secs: 2 # Tokenizer service timeout; default: 2
   waiting-weight: 10 # Waiting weight for CacheAware scheduling
+  stats-interval-secs: 5 # Stats logging interval in seconds, includes load and cache hit rate statistics; default: 5
 
 manager:
   health-failure-threshold: 3 # Number of failed health checks before marking unhealthy
@@ -253,6 +257,24 @@ Instance Registration Parameters：
 * metrics_port: Port number of the inference instance's metrics
 
 Among these, `role`, `host_ip`, and `port` are required; all other parameters are optional.
+
+## Scheduling Strategies
+
+The Router supports the following scheduling strategies, configurable via `policy` (mixed mode), `prefill-policy`, and `decode-policy` (PD disaggregated mode) fields in the configuration file.
+
+**Default strategies**: When not configured, prefill nodes default to `process_tokens`, mixed and decode nodes default to `request_num`.
+
+| Strategy | Applicable Scenario | Implementation |
+|----------|---------------------|----------------|
+| `random` | General | Randomly selects one available instance, stateless, suitable for lightweight scenarios. |
+| `round_robin` | General | Uses atomic counter to cycle through instance list, distributing requests evenly in order. |
+| `power_of_two` | General | Randomly picks two instances, compares their concurrent request counts, selects the one with lower load. |
+| `process_tokens` | **prefill (default)** | Iterates all instances, selects the one with the fewest tokens currently being processed (in-memory counting), suitable for prefill long-request load balancing. |
+| `request_num` | **mixed / decode (default)** | Iterates all instances, selects the one with the fewest concurrent requests (in-memory counting), suitable for decode and mixed scenarios. |
+| `fd_metrics_score` | mixed / decode | Uses in-memory counting to get running/waiting request counts, scores by `running + waiting × waitingWeight`, selects the instance with the lowest score. |
+| `fd_remote_metrics_score` | mixed / decode | Fetches running/waiting request counts from each instance's remote `/metrics` endpoint in real-time, scores by `running + waiting × waitingWeight`, selects the instance with the lowest score. Requires `metrics_port` in instance registration. **Note: A synchronous remote HTTP request is issued on every scheduling decision. With a large number of instances or poor network conditions, this can significantly increase scheduling latency. Evaluate your deployment conditions carefully before enabling this strategy.** |
+| `cache_aware` | prefill | Maintains KV Cache prefix hit information per instance via Radix Tree, selects instances by combining hit ratio and load scores (in-memory counting); automatically falls back to `process_tokens` when load is severely imbalanced. |
+| `remote_cache_aware` | prefill | Same cache-aware strategy as `cache_aware`, but uses remote `/metrics` endpoint for instance load data. Requires `metrics_port` in instance registration. **Note: A synchronous remote HTTP request is issued on every scheduling decision. With a large number of instances or poor network conditions, this can significantly increase scheduling latency. Evaluate your deployment conditions carefully before enabling this strategy.** |
 
 ## Troubleshooting
 
