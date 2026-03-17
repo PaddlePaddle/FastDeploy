@@ -96,10 +96,10 @@ __global__ void IntVariableLengthRotaryKernel(
       if (qkv_id < 2) {  // qk rope
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        bias_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-        bias_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+        bias_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                         __fmul_rn(input_right, sin_tmp));
+        bias_vec[2 * i + 1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                             __fmul_rn(input_left, sin_tmp));
       } else {
         bias_vec[2 * i] = static_cast<T>(input_left);
         bias_vec[2 * i + 1] = static_cast<T>(input_right);
@@ -170,10 +170,10 @@ __global__ void VariableLengthRotaryKernel(
       const float input_right = static_cast<float>(src_vec[2 * i + 1]);
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
-      src_vec[2 * i] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-      src_vec[2 * i + 1] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+      src_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                      __fmul_rn(input_right, sin_tmp));
+      src_vec[2 * i + 1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                          __fmul_rn(input_left, sin_tmp));
     }
     Store<T, VecSize>(src_vec, &qkv_out[base_idx]);
   }
@@ -270,10 +270,10 @@ __global__ void IntNeoxVariableLengthRotaryKernel(
       if (qkv_id < 2) {  // qk rope
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        left_bias_vec[i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-        right_bias_vec[i] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+        left_bias_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                          __fmul_rn(input_right, sin_tmp));
+        right_bias_vec[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                           __fmul_rn(input_left, sin_tmp));
       } else {
         left_bias_vec[i] = static_cast<T>(input_left);
         right_bias_vec[i] = static_cast<T>(input_right);
@@ -351,10 +351,10 @@ __global__ void NeoxVariableLengthRotaryKernel(
       const float input_right = static_cast<float>(right_vec[i]);
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
-      left_vec[i] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-      right_vec[i] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+      left_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                   __fmul_rn(input_right, sin_tmp));
+      right_vec[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                    __fmul_rn(input_left, sin_tmp));
     }
     Store<T, VecSize>(left_vec, &qkv_out[base_idx_left]);
     Store<T, VecSize>(right_vec, &qkv_out[base_idx_right]);
@@ -441,10 +441,10 @@ __global__ void IntGQAVariableLengthRotaryKernel(
       if (hi < q_num_head + kv_num_head) {  // qk rope
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        bias_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-        bias_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+        bias_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                         __fmul_rn(input_right, sin_tmp));
+        bias_vec[2 * i + 1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                             __fmul_rn(input_left, sin_tmp));
       } else {
         bias_vec[2 * i] = static_cast<T>(input_left);
         bias_vec[2 * i + 1] = static_cast<T>(input_right);
@@ -525,8 +525,10 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
       const float input_right = static_cast<float>(src_vec[2 * i + 1]);
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
-      float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
-      float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
+      float tmp1 =
+          __fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp);
+      float tmp2 =
+          __fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp);
       tmp_vec[2 * i] = tmp1;
       tmp_vec[2 * i + 1] = tmp2;
       thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
@@ -613,10 +615,10 @@ __global__ void GQAVariableLengthRotaryKernel(const T *qkv,
       const float input_right = static_cast<float>(src_vec[2 * i + 1]);
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
-      src_vec[2 * i] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-      src_vec[2 * i + 1] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+      src_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                      __fmul_rn(input_right, sin_tmp));
+      src_vec[2 * i + 1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                          __fmul_rn(input_left, sin_tmp));
     }
     Store<T, VecSize>(src_vec, &qkv_out[base_idx]);
   }
@@ -702,21 +704,21 @@ __global__ void IntGQAVariableLengthRotaryQuantKVKernel(
       if (hi < q_num_head) {  // qk rope
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        bias_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-        bias_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+        bias_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                         __fmul_rn(input_right, sin_tmp));
+        bias_vec[2 * i + 1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                             __fmul_rn(input_left, sin_tmp));
       } else if (hi < q_num_head + kv_num_head) {
         int k_hi = hi - q_num_head;
         const int scale_idx = k_hi * last_dim + h_bias;
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        bias_vec[2 * i] =
-            static_cast<T>((input_left * cos_tmp - input_right * sin_tmp) *
-                           float(cache_k_scales[scale_idx + 2 * i]));
-        bias_vec[2 * i + 1] =
-            static_cast<T>((input_right * cos_tmp + input_left * sin_tmp) *
-                           float(cache_k_scales[scale_idx + 2 * i + 1]));
+        bias_vec[2 * i] = static_cast<T>(
+            (__fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp)) *
+            float(cache_k_scales[scale_idx + 2 * i]));
+        bias_vec[2 * i + 1] = static_cast<T>(
+            (__fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp)) *
+            float(cache_k_scales[scale_idx + 2 * i + 1]));
       } else {
         int v_hi = hi - q_num_head - kv_num_head;
         const int scale_idx = v_hi * last_dim + h_bias;
@@ -803,27 +805,28 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(
               : static_cast<float>(src_vec[2 * i + 1]);
       // const float cos_tmp = cos_emb_vec[i];
       // const float sin_tmp = sin_emb_vec[i];
-      // src_vec[2 * i] = static_cast<T>(input_left * cos_tmp - input_right *
-      // sin_tmp); src_vec[2 * i + 1] = static_cast<T>(input_right * cos_tmp +
-      // input_left * sin_tmp);
+      // src_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+      // input_right * sin_tmp); src_vec[2 * i + 1] =
+      // static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+      // __fmul_rn(input_left, sin_tmp));
       if (hi < q_num_head) {  // qk rope
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        src_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-        src_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+        src_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                        __fmul_rn(input_right, sin_tmp));
+        src_vec[2 * i + 1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                            __fmul_rn(input_left, sin_tmp));
       } else if (hi < q_num_head + kv_num_head) {
         int k_hi = hi - q_num_head;
         const int scale_idx = k_hi * last_dim + h_bias;
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        src_vec[2 * i] =
-            static_cast<T>((input_left * cos_tmp - input_right * sin_tmp) *
-                           float(cache_k_scales[scale_idx + 2 * i]));
-        src_vec[2 * i + 1] =
-            static_cast<T>((input_right * cos_tmp + input_left * sin_tmp) *
-                           float(cache_k_scales[scale_idx + 2 * i + 1]));
+        src_vec[2 * i] = static_cast<T>(
+            (__fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp)) *
+            float(cache_k_scales[scale_idx + 2 * i]));
+        src_vec[2 * i + 1] = static_cast<T>(
+            (__fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp)) *
+            float(cache_k_scales[scale_idx + 2 * i + 1]));
       } else {
         int v_hi = hi - q_num_head - kv_num_head;
         const int scale_idx = v_hi * last_dim + h_bias;
@@ -925,10 +928,10 @@ __global__ void IntGQANeoxVariableLengthRotaryKernel(
       if (hi < (q_num_head + kv_num_head)) {  // qk rope
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        left_bias_vec[i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-        right_bias_vec[i] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+        left_bias_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                          __fmul_rn(input_right, sin_tmp));
+        right_bias_vec[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                           __fmul_rn(input_left, sin_tmp));
       } else {
         left_bias_vec[i] = static_cast<T>(input_left);
         right_bias_vec[i] = static_cast<T>(input_right);
@@ -1004,10 +1007,10 @@ __global__ void GQANeoxVariableLengthRotaryKernel(const T *qkv,
       const float input_right = static_cast<float>(right_vec[i]);
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
-      left_vec[i] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-      right_vec[i] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+      left_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                   __fmul_rn(input_right, sin_tmp));
+      right_vec[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                    __fmul_rn(input_left, sin_tmp));
     }
     Store<T, VecSize>(left_vec, &qkv_out[base_idx_left]);
     Store<T, VecSize>(right_vec, &qkv_out[base_idx_right]);
@@ -1081,10 +1084,10 @@ __global__ void GQANeoxVariableLengthPartialRotaryKernel(
       const float input_right = static_cast<float>(right_vec[i]);
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
-      left_vec[i] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-      right_vec[i] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+      left_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
+                                   __fmul_rn(input_right, sin_tmp));
+      right_vec[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
+                                    __fmul_rn(input_left, sin_tmp));
     }
     Store<T, VecSize>(left_vec, &qkv_out[base_idx_left]);
     Store<T, VecSize>(right_vec, &qkv_out[base_idx_right]);
