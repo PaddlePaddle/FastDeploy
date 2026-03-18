@@ -317,6 +317,8 @@ class ReplicatedLinear(LinearBase):
             model_format=fd_config.model_config.model_format if model_format is None else model_format,
         )
 
+        set_weight_attrs(self.weight, {"model_format": fd_config.model_config.model_format})
+
 
 class MergedReplicatedLinear(ReplicatedLinear):
     """

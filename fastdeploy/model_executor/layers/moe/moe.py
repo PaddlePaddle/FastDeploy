@@ -290,6 +290,10 @@ class FusedMoE(nn.Layer):
         if self.ep_size > 1 or weight_need_transpose:
             loaded_weight = get_tensor(loaded_weight)
 
+        loaded_weight = (
+            loaded_weight.transpose([1, 0]) if "torch" == self.fd_config.model_config.model_format else loaded_weight
+        )
+
         if shard_id is None:
             # 1.gate up fused in disk
             if weight_need_transpose:
