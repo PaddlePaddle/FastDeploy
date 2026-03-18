@@ -76,6 +76,9 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                         const int kv_head_num,
                         const int head_dim);
 
+paddle::Tensor CUTEGEMM(const paddle::Tensor &A,
+                                    const paddle::Tensor &B);
+
 std::vector<paddle::Tensor> AppendAttention(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
@@ -1317,6 +1320,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 #ifdef ENABLE_FLASH_MASK_ATTENTION
   m.def("flash_mask_attention", &FlashAttentionMask, "flash_mask_attention");
 #endif
+  m.def("cute_gemm", &CUTEGEMM, "flash_mask_attention");
 
   /**
    * gqa_rope_write_cache.cu

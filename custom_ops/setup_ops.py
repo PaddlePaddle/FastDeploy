@@ -313,6 +313,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/reasoning_phase_token_constraint.cu",
         "gpu_ops/get_attn_mask_q.cu",
     ]
+    sources += find_end_files("gpu_ops/cute_examples/", ".cu")
 
     # pd_disaggregation
     sources += [
