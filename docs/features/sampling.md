@@ -30,17 +30,17 @@ During deployment, you can choose the sampling algorithm by setting the environm
 
 ## Configuration Method
 
-### Greedy 采样
+### Greedy Sampling
 
-1. 在部署时，设置环境变量以选择采样算法，默认为base：
+1. During deployment, set the environment variable to select the sampling algorithm, default is base:
 
 ```bash
 export FD_SAMPLING_CLASS=rejection  # base, base_non_truncated, or air
 ```
 
-2. 在发送请求时，指定top_p参数：
+2. When sending a request, specify the following parameters:
 
-* 使用 curl 命令发送用户请求示例如下：
+* Example request with curl:
 
 ```bash
 
@@ -55,7 +55,7 @@ curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
 # or "top_p": 0.0
 ```
 
-* 使用 python 脚本发送用户请求示例如下：
+* Example request with Python:
 
 ```python
 import openai
