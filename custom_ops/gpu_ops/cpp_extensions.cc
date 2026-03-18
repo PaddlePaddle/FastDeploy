@@ -1243,16 +1243,6 @@ void PerTokenGroupQuantFp8(const paddle::Tensor& input,
                            double fp8_max,
                            bool scale_ue8m0);
 
-// void TopKPageTableTransform(
-//     paddle::Tensor& input,
-//     paddle::Tensor& output_page_table,
-//     const paddle::Tensor& src_page_table,
-//     int64_t src_stride,
-//     paddle::optional<paddle::Tensor>& row_to_batch,
-//     paddle::Tensor& lengths,
-//     paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
-//     int top_k);
-
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
         &GetExpertTokenNum,
@@ -1903,6 +1893,4 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("per_token_group_fp8_quant",
         &PerTokenGroupQuantFp8,
         "per_token_group_quant_fp8");
-
-  //   m.def("topk_pagetable_transform",&TopKPageTableTransform,"TopKPageTableTransform");
 }

@@ -289,6 +289,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -677,6 +678,7 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -971,6 +973,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -1756,6 +1759,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
