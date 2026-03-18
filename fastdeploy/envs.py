@@ -192,8 +192,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
     # Whether to use phi FP8 quantization,if 1,use paddle default.
     "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
-    # Whether to use paddle.nn.functional.rms_norm for QKRmsnorm. Default is False.
-    "FD_USE_PHI_RMSNORM": lambda: bool(int(os.getenv("FD_USE_PHI_RMSNORM", "0"))),
     # Whether to use phi MOE permute,if 1,use paddle op.
     "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))),
     # Control class SiluAndMul to use swiglu or fusid_bias_act operator in the forward_cuda function
