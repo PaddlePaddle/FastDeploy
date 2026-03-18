@@ -243,8 +243,12 @@ class InputBatch:
         )
         self.kv_num_heads = kv_num_heads
         self.pre_max_block_num = pre_max_block_num
-        # In head-wise mode, block_tables needs to accommodate all heads
-        block_tables_cols = pre_max_block_num * kv_num_heads
+        if self.enable_head_wise_kv_cache:
+            # In head-wise mode, block_tables needs to accommodate all heads
+            block_tables_cols = pre_max_block_num * kv_num_heads
+        else:
+            # In non head-wise mode, keep original semantics: one block table per sequence
+            block_tables_cols = pre_max_block_num
         self.block_tables = paddle.full([max_num_seqs, block_tables_cols], -1, dtype="int32")
         # Head-wise KV cache table buffer.
         # Keep this tensor shape fixed to make CUDA Graph replay safe.
