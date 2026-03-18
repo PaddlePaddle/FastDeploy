@@ -76,19 +76,6 @@ class BaseDataProcessor(ABC):
         set_value(request, "presence_penalty", 0.0)
         return request
 
-    @abstractmethod
-    def process_response(self, response_dict):
-        """
-        Preprocess the response
-
-        Args:
-            response_dict (Dict): response for engine, contain ids fields
-
-        Returns:
-            Dict: response contain text fields
-        """
-        raise NotImplementedError
-
     def text2ids(self, text, max_model_len=None):
         """
         text to token ids
@@ -387,39 +374,6 @@ class DataProcessor(BaseDataProcessor):
         full_text = self.tokenizer.decode(token_ids, **kwargs)
         return full_text
 
-    def process_response(self, response_dict, **kwargs):
-        """
-        Preprocess the response
-
-        Args:
-            response_dict (Dict): response for engine, contain ids fields
-
-        Returns:
-            Dict: response contain text fields
-        """
-        req_id = response_dict.request_id
-        token_ids = response_dict.outputs.token_ids
-        if token_ids[-1] == self.tokenizer.eos_token_id:
-            token_ids = token_ids[:-1]
-        full_text = self.tokenizer.decode(token_ids)
-        response_dict.outputs.text = full_text
-        if self.reasoning_parser:
-            reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                full_text, response_dict, self.model_status_dict[req_id]
-            )
-            response_dict.outputs.text = text
-            response_dict.outputs.reasoning_content = reasoning_content
-        if self.tool_parser_obj:
-            tool_parser = self.tool_parser_obj(self.tokenizer)
-            tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
-            if tool_call_info.tools_called:
-                response_dict.outputs.tool_calls = tool_call_info.tool_calls
-        if req_id in self.model_status_dict:
-            del self.model_status_dict[req_id]
-        data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
-
-        return response_dict
-
     def process_response_dict_normal(self, response_dict, **kwargs):
         """
         Preprocess the response
@@ -477,7 +431,6 @@ class DataProcessor(BaseDataProcessor):
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
         request = kwargs.get("request", None)
-        response_dict["outputs"]["enable_parser"] = False
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] in self.eos_token_ids:
@@ -489,7 +442,6 @@ class DataProcessor(BaseDataProcessor):
         response_dict["outputs"]["tool_calls"] = None
         response_dict["outputs"]["reasoning_content"] = ""
         if self.reasoning_parser:
-            response_dict["outputs"]["enable_parser"] = True
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
                 previous_texts + delta_text,
@@ -509,7 +461,6 @@ class DataProcessor(BaseDataProcessor):
                 if not is_end:
                     response_dict["outputs"]["skipped"] = True
         if self.tool_parser_obj:
-            response_dict["outputs"]["enable_parser"] = True
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
             tool_parser = self.tool_parser_dict[req_id]
