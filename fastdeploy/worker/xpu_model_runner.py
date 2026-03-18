@@ -742,8 +742,6 @@ class XPUModelRunner(ModelRunnerBase):
             request = req_dicts[i]
             idx = request.idx
             length = len(request.prompt_token_ids)
-            print("==========> length: ", length)
-            print("==========> prompt_token_ids: ", request.prompt_token_ids)
             assert length > 0, "The prompt requested must not be empty."
 
             # Is Decode Node
@@ -1116,8 +1114,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self.cache_config.block_size,
                 self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
             )
-        if hasattr(self.forward_meta, "cache"):
-            print("debug point forward_meta", self.forward_meta.cache[0])
         self.forward_meta = xpu_pre_process(
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
@@ -1131,8 +1127,7 @@ class XPUModelRunner(ModelRunnerBase):
             forward_meta=self.forward_meta,
             use_cudagraph=self.use_cudagraph,
         )
-        if hasattr(self.forward_meta, "cache"):
-            print("debug point forward_meta", self.forward_meta.cache[0])
+
         if self.use_cudagraph:
             # Update Batch type for cuda graph for only_decode_batch
             if_only_decode = self.only_decode()
