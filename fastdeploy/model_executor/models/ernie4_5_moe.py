@@ -538,7 +538,6 @@ class Ernie4_5_Model(nn.Layer):
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
-        is_dummy_run: bool = False,
     ):
         print("===========embed_tokens==========", ids_remove_padding)
         # if not is_dummy_run and ids_remove_padding.shape == [1]:
@@ -761,7 +760,6 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         self,
         inputs: Dict,
         forward_meta: ForwardMeta,
-        is_dummy_run: bool = False,
     ):
         ids_remove_padding = inputs["ids_remove_padding"]
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
