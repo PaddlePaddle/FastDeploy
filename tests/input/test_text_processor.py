@@ -346,14 +346,9 @@ class DataProcessorTestCase(unittest.TestCase):
             def _load_tokenizer(self):
                 return DummyTokenizer()
 
-            def process_response(self, response_dict):
-                return super().process_response(response_dict)
-
         processor = MinimalProcessor()
         defaults = processor._apply_default_parameters({})
         self.assertAlmostEqual(defaults["top_p"], 0.5)
-        with self.assertRaises(NotImplementedError):
-            processor.process_response({})
         with self.assertRaises(NotImplementedError):
             processor.text2ids("text")
         with self.assertRaises(NotImplementedError):
@@ -450,14 +445,15 @@ class DataProcessorTestCase(unittest.TestCase):
         processor.reasoning_parser = self.create_dummy_reasoning(processor.tokenizer)
         processor.tool_parser_obj = self.create_dummy_tool_parser(processor.tokenizer, content="tool-only")
 
-        response = SimpleNamespace(
-            request_id="resp",
-            outputs=SimpleNamespace(token_ids=[1, processor.tokenizer.eos_token_id]),
-        )
+        response = {
+            "request_id": "resp",
+            "finished": True,
+            "outputs": {"token_ids": [1, processor.tokenizer.eos_token_id]},
+        }
 
-        processed = processor.process_response(response)
-        self.assertEqual(processed.outputs.reasoning_content, "think")
-        self.assertEqual(processed.outputs.tool_calls, ["tool"])
+        processed = processor.process_response_dict(response, stream=False)
+        self.assertEqual(processed["outputs"]["reasoning_content"], "think")
+        self.assertEqual(processed["outputs"]["tool_calls"], ["tool"])
 
     def test_process_response_streaming_clears_state(self):
         processor = self.processor

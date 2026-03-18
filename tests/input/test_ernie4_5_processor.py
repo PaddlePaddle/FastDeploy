@@ -308,21 +308,14 @@ class TestErnie4_5Processor(unittest.TestCase):
     def test_process_response_with_tool_parser(self):
         """Verify tool_call extraction in process_response."""
         proc = self._make_processor(tool=True)
-
-        class RespObj:
-            """Mock response carrying token_ids and index for testing."""
-
-            def __init__(self):
-                self.request_id = "reqx"
-                self.outputs = MagicMock()
-                self.outputs.token_ids = [9, proc.tokenizer.eos_token_id]
-                self.outputs.index = 0
-
-        resp = RespObj()
-        result = proc.process_response(resp)
-
-        self.assertTrue(hasattr(result.outputs, "tool_calls"))
-        self.assertEqual(result.outputs.tool_calls[0]["name"], "fake_tool")
+        resp = {
+            "request_id": "reqx",
+            "outputs": {"token_ids": [9, proc.tokenizer.eos_token_id], "index": 0},
+            "finished": True,
+        }
+        result = proc.process_response_dict(resp, False)
+        assert "tool_calls" in result["outputs"]
+        self.assertEqual(result["outputs"]["tool_calls"][0]["name"], "fake_tool")
 
     def test_process_response_dict_normal_with_tool(self):
         """Verify tool_call extraction in normal (non-streaming) response mode."""

@@ -722,7 +722,7 @@ class LLMEngine:
             is_end = result.finished
             if stream and not is_end:
                 output = self.engine.data_processor.process_response_dict(
-                    result.to_dict(), stream=True, include_stop_str_in_output=False
+                    result.to_dict(), stream=False, include_stop_str_in_output=False
                 )
                 if output is None:
                     continue
