@@ -500,6 +500,14 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
     const paddle::Tensor& seq_len,
     const paddle::Tensor& seq_lens_encoder);
 
+std::vector<paddle::Tensor> SpeculatePreProcess(
+    const int64_t cpu_token_num,
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& seq_len,
+    const paddle::Tensor& draft_tokens,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder);
+
 void StepPaddle(const paddle::Tensor& stop_flags,
                 const paddle::Tensor& seq_lens_this_time,
                 const paddle::Tensor& ori_seq_lens_encoder,
@@ -1245,6 +1253,16 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_output"),
         py::arg("max_seq_len"),
         "Get output padding offset");
+
+  m.def("speculate_pre_process",
+        &SpeculatePreProcess,
+        py::arg("cpu_token_num"),
+        py::arg("input_ids"),
+        py::arg("seq_len"),
+        py::arg("draft_tokens"),
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_decoder"),
+        "speculate pre process to remove padding and to acquire cu_seq_len");
 
   m.def("speculate_get_padding_offset",
         &SpeculateGetPaddingOffset,
