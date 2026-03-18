@@ -1310,11 +1310,14 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["encoder_block_lens"][idx : idx + 1] = block_num
             if self.enable_head_wise_kv_cache:
                 # In head-wise mode, block_tables should have shape [bsz, kv_num_heads * max_blocks_per_head]
-                # Each head gets its own set of block IDs
+                # Each head is laid out with fixed stride max_blocks_per_head.
+                max_blocks_per_head = self.share_inputs["block_tables"].shape[1] // self.kv_num_heads
                 base = idx * self.kv_num_heads * block_num
-                # Expand block_tables to include all heads
-                block_ids = np.arange(base, base + self.kv_num_heads * block_num, 1)
-                self.share_inputs["block_tables"][idx, : len(block_ids)] = block_ids
+                for head_idx in range(self.kv_num_heads):
+                    head_offset = head_idx * max_blocks_per_head
+                    head_base = base + head_idx * block_num
+                    head_block_ids = np.arange(head_base, head_base + block_num, 1, dtype="int32")
+                    self.share_inputs["block_tables"][idx, head_offset : head_offset + block_num] = head_block_ids
             else:
                 self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                     idx * block_num, (idx + 1) * block_num, 1
