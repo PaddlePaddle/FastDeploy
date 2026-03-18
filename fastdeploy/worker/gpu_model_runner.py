@@ -1183,6 +1183,13 @@ class GPUModelRunner(ModelRunnerBase):
         return normalized_cache_ids_2d
 
     def _flatten_head_wise_cache_ids_2d(self, cache_ids_2d):
+        """
+        Runtime compatibility helper for share_inputs["block_tables"] mirror.
+        This intentionally flattens by concatenation (variable valid length), while
+        authoritative head-wise routing uses block_tables_3d.
+        Fixed-stride layout for dummy/profile is handled in _dummy_prefill_inputs
+        + _prepare_block_tables_3d_from_flat_tables.
+        """
         if not cache_ids_2d:
             return []
         tables = []
