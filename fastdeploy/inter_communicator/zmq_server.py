@@ -330,7 +330,7 @@ class ZmqServerBase(ABC):
 
         try:
             if not envs.ENABLE_V1_DATA_PROCESSOR:
-                result = ForkingPickler.dumps([[output.to_dict() for output in outputs] for outputs in batch_data])
+                result = msgpack.packb([[output.to_dict() for output in outputs] for outputs in batch_data])
             else:
                 result = ForkingPickler.dumps(batch_data)
             result_len = len(result)

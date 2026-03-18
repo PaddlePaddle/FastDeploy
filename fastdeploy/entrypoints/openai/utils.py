@@ -24,6 +24,7 @@ import traceback
 from multiprocessing.reduction import ForkingPickler
 
 import aiozmq
+import msgpack
 import zmq
 from fastapi import Request
 
@@ -216,12 +217,11 @@ class DealerConnectionManager:
         """
         consecutive_errors = 0
         max_consecutive_errors = 5
-        loop = asyncio.get_running_loop()
         while self.running:
             try:
                 raw_data = await self.pull_client.read()
-                # Deserialize in thread pool to avoid blocking the event loop
-                batch_data = await loop.run_in_executor(None, ForkingPickler.loads, raw_data[-1])
+                # Deserialize batch response
+                batch_data = msgpack.unpackb(raw_data[-1])
 
                 # Record metrics
                 _zmq_metrics_stats = ZMQMetricsStats()
