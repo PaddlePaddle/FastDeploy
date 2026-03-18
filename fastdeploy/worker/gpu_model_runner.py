@@ -1286,6 +1286,12 @@ class GPUModelRunner(ModelRunnerBase):
         """Set dummy prefill inputs to share_inputs"""
         batch_size = len(input_length_list)
         self.share_inputs["block_tables"][:, :] = -1
+        # Clear stale lengths from previous dummy/profile rounds.
+        self.share_inputs["seq_lens_this_time_buffer"][:] = 0
+        self.share_inputs["step_seq_lens_encoder"][:] = 0
+        self.share_inputs["seq_lens_encoder"][:] = 0
+        self.share_inputs["seq_lens_decoder"][:] = 0
+        self.share_inputs["encoder_block_lens"][:] = 0
         for i in range(batch_size):
             idx = i
             input_length = input_length_list[i]
@@ -1348,7 +1354,10 @@ class GPUModelRunner(ModelRunnerBase):
         if self.enable_head_wise_kv_cache:
             if is_dummy_or_profile_run:
                 # In dummy/profile run, construct block_tables_3d from block_tables
-                num_running_requests = int(self.share_inputs["seq_lens_this_time"].shape[0])
+                # seq_lens_this_time may point to max_num_seqs-sized buffer;
+                # only positive-length rows are active in dummy/profile rounds.
+                seq_lens_this_time = self.share_inputs["seq_lens_this_time"]
+                num_running_requests = int((seq_lens_this_time > 0).astype("int64").sum().item())
                 self._prepare_block_tables_3d_from_flat_tables(num_running_requests)
                 if num_running_requests > 0:
                     rows_np = self.share_inputs["block_tables_3d"][: num_running_requests * self.kv_num_heads].numpy()
