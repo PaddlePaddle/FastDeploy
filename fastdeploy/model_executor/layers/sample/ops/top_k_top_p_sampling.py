@@ -52,6 +52,8 @@ def top_k_top_p_sampling(
         used to specify the top_p corresponding to each query.
     top_k(Tensor|None, optional): A 1-D Tensor with type int64,
         used to specify the top_k corresponding to each query.
+    top_k_list(list|None, optional): CPU-side mirror of top_k as a Python list,
+        used for fast host-side checks (e.g. all-greedy detection) without GPU sync.
     threshold(Tensor|None, optional): A 1-D Tensor with type float32, float16 and bfloat16,
         used to avoid sampling low score tokens.
     topp_seed(Tensor|None, optional): A 1-D Tensor with type int64,
