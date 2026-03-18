@@ -42,8 +42,8 @@ from utils.serving_utils import (
 FD_CONNECTOR_PORT = int(os.getenv("FD_CONNECTOR_PORT", 8433))
 FD_ROUTER_PORT = int(os.getenv("FD_ROUTER_PORT", 8533))
 FD_RDMA_PORT = int(os.getenv("FD_RDMA_PORT", 8623))
-FD_MOONCAKE_MASTER_PORT = FD_RDMA_PORT + 1
-FD_MOONCAKE_METADATA_PORT = FD_RDMA_PORT + 2
+FD_MOONCAKE_MASTER_PORT = FD_RDMA_PORT + 2
+FD_MOONCAKE_METADATA_PORT = FD_RDMA_PORT + 3
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [
