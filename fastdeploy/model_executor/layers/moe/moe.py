@@ -47,10 +47,14 @@ def get_moe_method(layer=None):
     return moe method based on device platform
     """
 
-    if current_platform.is_cuda() or current_platform.is_iluvatar():
+    if current_platform.is_cuda():
         from .fused_moe_cutlass_backend import CutlassMoEMethod
 
         return CutlassMoEMethod(None)
+    elif current_platform.is_iluvatar():
+        from fastdeploy.model_executor.layers.backends import IluvatarCutlassMoEMethod
+
+        return IluvatarCutlassMoEMethod(None)
     elif current_platform.is_xpu():
         from fastdeploy.model_executor.layers.backends import XPUMoEMethod
 
