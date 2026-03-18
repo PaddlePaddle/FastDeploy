@@ -275,9 +275,14 @@ __global__ void multi_query_append_attention_c8_kernel(
   uint32_t kv_idx_base = chunk_start;
   // In head-wise mode, cache_k and cache_v don't have the head dimension in
   // stride
-  const uint32_t const_offset =
+  const uint32_t const_k_offset =
       (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
-      (wid * 8 + tid / 4) * kv_b_stride + tid % 8 * num_elems_per_128b<T>();
+      (wid * 4 + tid / 8) * kv_b_stride +
+      tid % 8 * num_elems_per_128b<CacheT>();
+  const uint32_t const_v_offset =
+      (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
+      (wid * 8 + tid / 4) * kv_d_stride +
+      tid % 4 * num_elems_per_128b<CacheT>();
 
   produce_k_blockwise_c8<SharedMemFillMode::kNoFill,
                          NUM_WARPS,
@@ -294,7 +299,7 @@ __global__ void multi_query_append_attention_c8_kernel(
                                      kv_b_stride,
                                      kv_idx_base,
                                      chunk_end,
-                                     const_offset);
+                                     const_k_offset);
   if constexpr (IsDynamicC8) {
     produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
                                              BLOCK_SIZE,
@@ -324,7 +329,7 @@ __global__ void multi_query_append_attention_c8_kernel(
                                      kv_d_stride,
                                      kv_idx_base,
                                      chunk_end,
-                                     const_offset);
+                                     const_v_offset);
   if constexpr (IsDynamicC8) {
     produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
                                              BLOCK_SIZE,
@@ -407,7 +412,7 @@ __global__ void multi_query_append_attention_c8_kernel(
                                        kv_b_stride,
                                        kv_idx_base,
                                        chunk_end,
-                                       const_offset);
+                                       const_k_offset);
     if constexpr (IsDynamicC8) {
       produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
                                                BLOCK_SIZE,
@@ -457,7 +462,7 @@ __global__ void multi_query_append_attention_c8_kernel(
                                        kv_d_stride,
                                        kv_idx_base,
                                        chunk_end,
-                                       const_offset);
+                                       const_v_offset);
     if constexpr (IsDynamicC8) {
       produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
                                                BLOCK_SIZE,
@@ -832,7 +837,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
           wid * 8 + tid / 4, tid % 4);
 
   uint32_t kv_idx_base = chunk_start;
-  const uint32_t const_offset =
+  const uint32_t const_k_offset =
       (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
       (wid * 4 + tid / 8) * kv_b_stride +
       tid % 8 * num_elems_per_128b<CacheT>();
@@ -857,7 +862,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                      kv_b_stride,
                                      kv_idx_base,
                                      chunk_end,
-                                     const_offset);
+                                     const_k_offset);
   if constexpr (IsDynamicC8) {
     produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
                                              BLOCK_SIZE,
@@ -887,7 +892,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                      kv_d_stride,
                                      kv_idx_base,
                                      chunk_end,
-                                     const_offset);
+                                     const_v_offset);
   if constexpr (IsDynamicC8) {
     produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
                                              BLOCK_SIZE,
@@ -971,7 +976,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                        kv_b_stride,
                                        kv_idx_base,
                                        chunk_end,
-                                       const_offset);
+                                       const_k_offset);
     if constexpr (IsDynamicC8) {
       produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
                                                BLOCK_SIZE,
@@ -1021,7 +1026,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                        kv_d_stride,
                                        kv_idx_base,
                                        chunk_end,
-                                       const_offset);
+                                       const_v_offset);
     if constexpr (IsDynamicC8) {
       produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
                                                BLOCK_SIZE,
