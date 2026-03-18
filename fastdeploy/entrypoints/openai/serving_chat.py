@@ -294,6 +294,7 @@ class OpenAIServingChat:
                     response,
                     stream=True,
                     include_stop_str_in_output=include_stop_str_in_output,
+                    request=request,
                 )
 
                 async for res in generator:
@@ -603,6 +604,7 @@ class OpenAIServingChat:
                     response,
                     stream=False,
                     include_stop_str_in_output=include_stop_str_in_output,
+                    request=request,
                 )
                 async for data in generator:
                     if data.get("error_code", 200) != 200:

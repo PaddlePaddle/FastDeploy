@@ -50,6 +50,7 @@ static int get_padding_offset_cpu(int *padding_offset,
   for (int i = 0; i < bs; i++) {
     int cum_offset = i == 0 ? 0 : cum_offsets[i - 1];
     for (int j = 0; j < seq_lens[i]; j++) {
+      // TODO(mayang02): check offset of padding_offset
       padding_offset[i * max_seq_len - cum_offset + j] = cum_offset;
     }
     cum_offsets_out[i] = cum_offset;
@@ -70,6 +71,7 @@ static int remove_padding_cpu(int64_t *x_remove_padding,
     for (int j = 0; j < seq_lens[i]; j++) {
       const int tgt_seq_id = i * sequence_length - cum_offsets[i] + j;
       const int src_seq_id = i * sequence_length + j;
+      // TODO(mayang02): check offset of x_remove_padding
       x_remove_padding[tgt_seq_id] = input_data[src_seq_id];
     }
   }
@@ -146,7 +148,8 @@ int get_padding_offset(api::Context *ctx,
                        const int *cum_offsets,
                        const int *seq_lens,
                        const int max_seq_len,
-                       const int bs) {
+                       const int bs,
+                       const int64_t token_num) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(ctx, "get_padding_offset", int);
   WRAPPER_DUMP_PARAM4(
@@ -154,6 +157,16 @@ int get_padding_offset(api::Context *ctx,
   WRAPPER_DUMP_PARAM4(ctx, x_remove_padding, input_ids, cum_offsets, seq_lens);
   WRAPPER_DUMP_PARAM2(ctx, max_seq_len, bs);
   WRAPPER_DUMP(ctx);
+  WRAPPER_ASSERT_GT(ctx, bs, 0);
+  WRAPPER_ASSERT_GT(ctx, max_seq_len, 0);
+  WRAPPER_CHECK_PTR(ctx, int, token_num, padding_offset);
+  WRAPPER_CHECK_PTR(ctx, int, bs, cum_offsets_out);
+  WRAPPER_CHECK_PTR(ctx, int, bs + 1, cu_seqlens_q);
+  WRAPPER_CHECK_PTR(ctx, int, bs + 1, cu_seqlens_k);
+  WRAPPER_CHECK_PTR(ctx, int64_t, token_num, x_remove_padding);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bs * max_seq_len, input_ids);
+  WRAPPER_CHECK_PTR(ctx, int, bs, cum_offsets);
+  WRAPPER_CHECK_PTR(ctx, int, bs, seq_lens);
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper(ctx,
                        padding_offset,

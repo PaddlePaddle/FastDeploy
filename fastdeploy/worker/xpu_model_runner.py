@@ -1291,7 +1291,9 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Initialize attention backends and forward metadata
         """
-        assert len(self.attn_backends) == 0
+        assert (
+            len(self.attn_backends) == 0
+        ), f"attn_backends should be empty before initialization, got {len(self.attn_backends)} backends"
 
         # TODO(gongshaotian): Get rank from config
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
@@ -1564,16 +1566,15 @@ class XPUModelRunner(ModelRunnerBase):
 
             # 2. Padding inputs for cuda grph
 
-            # 3. Execute model
+            model_inputs = {}
+            model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
             if self.enable_mm:
-                model_output = self.model(
-                    self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"], self.forward_meta
-                )
-            else:
-                model_output = self.model(
-                    ids_remove_padding=self.share_inputs["ids_remove_padding"],
-                    forward_meta=self.forward_meta,
-                )
+                model_inputs["image_features"] = self.share_inputs["image_features"]
+            # 3. Execute model
+            model_output = self.model(
+                model_inputs,
+                forward_meta=self.forward_meta,
+            )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
             hidden_states = xpu_process_output(

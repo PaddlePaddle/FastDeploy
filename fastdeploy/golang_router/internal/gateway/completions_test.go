@@ -365,6 +365,146 @@ func TestReadPrefillRecv(t *testing.T) {
 	})
 }
 
+func TestGetSessionID(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]any
+		expected string
+	}{
+		{
+			name: "top-level session_id",
+			input: map[string]any{
+				"session_id": "top-level-sid",
+				"messages":   []any{},
+			},
+			expected: "top-level-sid",
+		},
+		{
+			name: "extra_body session_id",
+			input: map[string]any{
+				"messages": []any{},
+				"extra_body": map[string]any{
+					"session_id": "extra-body-sid",
+				},
+			},
+			expected: "extra-body-sid",
+		},
+		{
+			name: "top-level takes priority over extra_body",
+			input: map[string]any{
+				"session_id": "top-level-sid",
+				"extra_body": map[string]any{
+					"session_id": "extra-body-sid",
+				},
+			},
+			expected: "top-level-sid",
+		},
+		{
+			name: "no session_id provided",
+			input: map[string]any{
+				"messages": []any{},
+			},
+			expected: "",
+		},
+		{
+			name:     "empty request",
+			input:    map[string]any{},
+			expected: "",
+		},
+		{
+			name: "top-level session_id is empty string, fallback to extra_body",
+			input: map[string]any{
+				"session_id": "",
+				"extra_body": map[string]any{
+					"session_id": "extra-body-sid",
+				},
+			},
+			expected: "extra-body-sid",
+		},
+		{
+			name: "both session_id are empty strings",
+			input: map[string]any{
+				"session_id": "",
+				"extra_body": map[string]any{
+					"session_id": "",
+				},
+			},
+			expected: "",
+		},
+		{
+			name: "extra_body exists but no session_id in it",
+			input: map[string]any{
+				"extra_body": map[string]any{
+					"other_field": "value",
+				},
+			},
+			expected: "",
+		},
+		{
+			name: "extra_body is not a map",
+			input: map[string]any{
+				"extra_body": "not-a-map",
+			},
+			expected: "",
+		},
+		{
+			name: "session_id is not a string (integer)",
+			input: map[string]any{
+				"session_id": 12345,
+			},
+			expected: "",
+		},
+		{
+			name: "session_id is not a string (bool)",
+			input: map[string]any{
+				"session_id": true,
+			},
+			expected: "",
+		},
+		{
+			name: "extra_body session_id is not a string",
+			input: map[string]any{
+				"extra_body": map[string]any{
+					"session_id": 12345,
+				},
+			},
+			expected: "",
+		},
+		{
+			name: "session_id from JSON unmarshal (top-level)",
+			input: func() map[string]any {
+				var m map[string]any
+				json.Unmarshal([]byte(`{"session_id": "json-sid", "messages": []}`), &m)
+				return m
+			}(),
+			expected: "json-sid",
+		},
+		{
+			name: "session_id from JSON unmarshal (extra_body)",
+			input: func() map[string]any {
+				var m map[string]any
+				json.Unmarshal([]byte(`{"extra_body": {"session_id": "json-extra-sid"}, "messages": []}`), &m)
+				return m
+			}(),
+			expected: "json-extra-sid",
+		},
+		{
+			name: "session_id is nil",
+			input: map[string]any{
+				"session_id": nil,
+			},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getSessionID(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func TestCommonCompletions(t *testing.T) {
 	// Setup a basic test server for backend responses
 	backendServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

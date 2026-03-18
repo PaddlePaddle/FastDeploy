@@ -391,6 +391,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -423,11 +424,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         # 2. Dynamic compute blockwise quantization scales
         if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
-            x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
+            x_fp8, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
                 x, self.quant_config.weight_block_size[0], self.quant_config.deepgemm_scale_ue8m0
             )
         else:
-            x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
+            x_fp8, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
                 x,
                 using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
                 output_scale_transpose=self.quant_config.deepgemm_scale_ue8m0,
@@ -452,7 +453,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             handle,
             event,
         ) = self.ep_prefill_runner.dispatch(
-            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128, previous_event=event
+            x_fp8, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128, previous_event=event
         )
 
         if self.ep_prefill_runner.num_worst_tokens > 0:
@@ -583,7 +584,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     permute_scale,
                     m_indices,
                 ) = paddle.nn.functional.moe_permute(
-                    hidden_states=recv_x,
+                    hidden_states=recv_x_value,
                     scale=recv_x_scale,
                     expert_routemap_topk=recv_topk_idx,
                     expert_prob_topk=recv_topk_weights,
@@ -607,7 +608,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     cumsum_idx_gpu,
                     m_indices,
                 ) = fastdeploy.model_executor.ops.gpu.ep_moe_expert_dispatch_fp8(
-                    recv_x,
+                    recv_x_value,
                     recv_x_scale,
                     recv_topk_idx,
                     recv_topk_weights,
@@ -676,7 +677,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     zipped_expertwise_rowmap=permute_indices_per_token,
                     expert_routemap_topk=recv_topk_idx,
                     token_prob_unzipped=dst_weights,
-                    total_zipped_tokens=recv_x.shape[0],
+                    total_zipped_tokens=recv_x_value.shape[0],
                     num_experts=layer.num_local_experts,
                     using_weighted_combine=not fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE,
                 )
@@ -694,6 +695,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 )
         else:
             tmp_ffn_out = paddle.empty([0, hidden_size], paddle.bfloat16)
+
+        if shared_experts is not None:
+            s_x = shared_experts(x)
+
         # 5. EP combine
         event = deep_ep.Buffer.capture()
         if self.ep_prefill_runner.num_worst_tokens <= 0:
@@ -709,6 +714,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             event.current_stream_wait()
 
         global_values[thread_name]["combine_out"] = tmp_ffn_out
+        if shared_experts is not None:
+            tmp_ffn_out += s_x
 
         return tmp_ffn_out
 
@@ -718,6 +725,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -785,8 +793,16 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             token_nums_per_expert,
             expected_m,
         )
+
+        if shared_experts is not None:
+            s_x = shared_experts(x)
+
         # 4. EP combine
-        return self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
+        out = self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
+
+        if shared_experts is not None:
+            out += s_x
+        return out
 
     def apply_tp(
         self,
