@@ -14,26 +14,24 @@
 
 #pragma once
 
-#include <fcntl.h>
+#include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/ipc.h>
-#include <sys/mman.h>
-#include <sys/msg.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <unistd.h>
-#include "paddle/extension.h"
 
-#define MAX_BSZ 512
-
-struct msgdata {
-  long mtype;
-  int mtext[MAX_BSZ + 2];  // stop_flag, bsz, tokens
-};
-
-struct msgdatakv {
-  long mtype;
-  int mtext[MAX_BSZ * 3 + 2];  // encoder_count, layer_id, bid- pair
-};
+// Custom ftok that uses the low 20 bits of id instead of only 8 bits.
+// This avoids dependency on filesystem paths while preserving queue separation.
+inline key_t custom_ftok(const char* path, int id) {
+  struct stat st;
+  if (stat(path, &st) < 0) {
+    fprintf(stderr,
+            "[custom_ftok] stat(\"%s\") failed (errno=%d), "
+            "msg queue key will be invalid!\n",
+            path,
+            errno);
+    return static_cast<key_t>(-1);
+  }
+  // low 4 bits of st_dev | low 8 bits of st_ino | low 20 bits of id
+  return static_cast<key_t>(((st.st_dev & 0x0f) << 28) |
+                            ((st.st_ino & 0xff) << 20) | (id & 0xfffff));
+}
