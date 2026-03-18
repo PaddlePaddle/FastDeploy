@@ -116,6 +116,9 @@ std::vector<paddle::Tensor> FusedCastSigmoidBias(const paddle::Tensor& input,
   int64_t num_experts = input_shape[1];
   int64_t bias_numel = (bias_shape.size() == 1) ? bias_shape[0] : bias_shape[1];
   PD_CHECK(bias_numel == num_experts, "bias size must match num_experts");
+  PD_CHECK(bias.dtype() == paddle::DataType::FLOAT32,
+           "bias must be float32, got ",
+           bias.dtype());
 
   auto place = input.place();
   auto stream = input.stream();
