@@ -480,10 +480,10 @@ class DataProcessor(BaseDataProcessor):
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request["temperature"] = 1
-            request.set("top_k", 1)
+            request["top_k"] = 1
         if request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
-            request.set("top_k", 1)
+            request["top_k"] = 1
         if self.reasoning_parser:
             model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
             parts = request["request_id"].split("_")
