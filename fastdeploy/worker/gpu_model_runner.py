@@ -1132,7 +1132,10 @@ class GPUModelRunner(ModelRunnerBase):
             copy_len = min(len(row), max_blocks_per_head)
             if copy_len > 0:
                 normalized_row = [(-1 if cid is None else int(cid)) for cid in row[:copy_len]]
-                block_tables_3d[base_row + h, :copy_len] = paddle.to_tensor(normalized_row, dtype="int32")
+                if current_platform.is_cuda():
+                    async_set_value(block_tables_3d[base_row + h, :copy_len], normalized_row)
+                else:
+                    block_tables_3d[base_row + h, :copy_len] = np.array(normalized_row, dtype="int32")
             active_lens[h] = copy_len
 
         self._head_wise_slot_req_ids[idx] = req_id
