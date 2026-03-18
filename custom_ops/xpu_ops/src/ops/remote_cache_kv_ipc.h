@@ -20,7 +20,8 @@
 #include <unistd.h>
 #include <cstdint>
 #include <vector>
-#include "msg_utils.h"  // NOLINT
+#include "custom_ftok.h"  // NOLINT
+#include "msg_utils.h"    // NOLINT
 
 struct RemoteCacheKvIpc {
   struct save_cache_kv_complete_signal_layerwise_meta_data {
@@ -70,8 +71,8 @@ struct RemoteCacheKvIpc {
           std::string msg_que_str(msg_que_str_tmp);
           msg_queue_id = std::stoi(msg_que_str);
         }
-        msg_queue_id += rank;
-        key_t key = ftok("/opt/", msg_queue_id);
+        msg_queue_id = msg_queue_id << 4 + rank;
+        key_t key = custom_ftok("/opt/", msg_queue_id);
         msgid = msgget(key, IPC_CREAT | 0666);
         inited = true;
       }

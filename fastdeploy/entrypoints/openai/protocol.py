@@ -1079,8 +1079,10 @@ PoolingChatRequest = EmbeddingChatRequest
 
 class ChatRewardRequest(BaseModel):
     model: Optional[str] = None
+    prompt_token_ids: Optional[List[int]] = None
     messages: Union[List[Any], List[int]]
     user: Optional[str] = None
+    return_token_ids: Optional[bool] = None
 
     dimensions: Optional[int] = None
     truncate_prompt_tokens: Optional[Annotated[int, Field(ge=-1)]] = None
@@ -1151,6 +1153,8 @@ class ChatRewardRequest(BaseModel):
 class ChatRewardData(BaseModel):
     index: Optional[int] = None
     object: str = "reward"
+    prompt_token_ids: Optional[List[int]] = None
+    prompt_tokens: Optional[str] = None
     score: List[float]
 
 

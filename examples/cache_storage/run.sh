@@ -2,6 +2,7 @@
 set -e
 
 export MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
+# export MODEL_NAME="/work/models/PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
 export MOONCAKE_CONFIG_PATH=./mooncake_config.json
 export FD_DEBUG=1
 
@@ -15,8 +16,8 @@ S0_PORT=52700
 S1_PORT=52800
 
 ports=(
-    $S0_PORT $((S0_PORT + 1)) $((S0_PORT + 2)) $((S0_PORT + 3))
-    $S1_PORT $((S1_PORT + 1)) $((S1_PORT + 2)) $((S1_PORT + 3))
+    $S0_PORT
+    $S1_PORT
 )
 check_ports "${ports[@]}" || {
     echo "❌ Some ports are in use. Please release them."
@@ -41,9 +42,6 @@ echo "server 0 port: ${S0_PORT}"
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
        --port ${S0_PORT} \
-       --metrics-port $((S0_PORT + 1)) \
-       --engine-worker-queue-port $((S0_PORT + 2)) \
-       --cache-queue-port $((S0_PORT + 3)) \
        --max-model-len 32768 \
        --max-num-seqs 32 \
        --kvcache-storage-backend mooncake \
@@ -58,9 +56,6 @@ echo "server 1 port: ${S1_PORT}"
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
        --port ${S1_PORT} \
-       --metrics-port $((S1_PORT + 1)) \
-       --engine-worker-queue-port $((S1_PORT + 2)) \
-       --cache-queue-port $((S1_PORT + 3)) \
        --max-model-len 32768 \
        --max-num-seqs 32 \
        --kvcache-storage-backend mooncake \

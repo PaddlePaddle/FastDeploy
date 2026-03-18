@@ -20,7 +20,6 @@ from typing import Optional
 
 import paddle
 from paddle.nn.quant import weight_quantize
-from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
@@ -150,6 +149,22 @@ class WeightOnlyConfig(QuantConfigBase):
             else:
 
                 return GPUWeightOnlyLinearMethod(self)
+        elif current_platform.is_iluvatar():
+            if isinstance(layer, FusedMoE):
+                if layer.use_method == "cutlass":
+                    from fastdeploy.model_executor.layers.backends import (
+                        IluvatarCutlassWeightOnlyMoEMethod,
+                    )
+
+                    return IluvatarCutlassWeightOnlyMoEMethod(self)
+                else:
+                    raise ValueError(f"Unsupported MOE backend {layer.use_method}")
+            else:
+                from fastdeploy.model_executor.layers.backends import (
+                    IluvatarWeightOnlyLinearMethod,
+                )
+
+                return IluvatarWeightOnlyLinearMethod(self)
         else:
             if isinstance(layer, FusedMoE):
                 if layer.use_method == "cutlass":
@@ -181,7 +196,7 @@ class WeightOnlyConfig(QuantConfigBase):
                     and check_machete_supports_shape(layer.weight_shape[0], layer.weight_shape[1])
                 ):
                     self.group_size = query_machete_supported_group_size(layer.weight_shape[0])
-                    logger.info(f"Using Machete kernel for WeightOnlyLinearMethod, group size: {self.group_size}")
+                    # logger.info(f"Using Machete kernel for WeightOnlyLinearMethod, group size: {self.group_size}")
                     return MacheteWeightOnlyLinearMethod(self)
                 return GPUWeightOnlyLinearMethod(self)
 

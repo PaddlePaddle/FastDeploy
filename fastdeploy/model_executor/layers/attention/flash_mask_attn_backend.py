@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from fastdeploy.platforms import current_platform
+from fastdeploy.spec_decode import SpecMethod
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import merge_prefill_decode_output
@@ -109,7 +110,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
         self.use_speculate = self.speculative_method is not None
         self.speculate_max_draft_token_num = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
+        self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
 
         self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode
 
@@ -166,7 +167,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
         elif metadata._dtype == "float32":
             metadata._fuse_kernel_compute_dtype = "fp32"
 
-        forward_meta.attention_metadata = metadata
+        self.attention_metadata = metadata
 
     def forward_mixed(
         self,
@@ -179,7 +180,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
         layer: Attention,
         forward_meta: ForwardMeta,
     ):
-        metadata = forward_meta.attention_metadata
+        metadata = self.attention_metadata
 
         norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
         q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None

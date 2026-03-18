@@ -20,7 +20,7 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.layers.attention import IluvatarAttnBackend
+from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
 
 
@@ -59,6 +59,8 @@ class IluvatarModelRunner(GPUModelRunner):
         assert not self.cache_config.enable_prefix_caching, "Iluvatar does not support prefix caching"
         self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         assert not self.mla_cache, "Iluvatar does not support MLA"
+        self.dsa_cache = envs.FD_ATTENTION_BACKEND == "DSA_ATTN"
+        assert not self.dsa_cache, "Iluvatar does not support DSA_ATTN"
         if self.enable_mm:
             assert (
                 not self.cache_config.enable_chunked_prefill
@@ -79,14 +81,17 @@ class IluvatarModelRunner(GPUModelRunner):
         """
         Initialize attention backends
         """
-        assert len(self.attn_backends) == 0
+        assert (
+            len(self.attn_backends) == 0
+        ), f"attn_backends should be empty before initialization, got {len(self.attn_backends)} backends"
 
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
         self.model_config.kv_num_heads = max(
             1,
             int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
         )
-        attn_backend = IluvatarAttnBackend(
+        attn_cls = get_attention_backend()
+        attn_backend = attn_cls(
             self.fd_config,
             kv_num_heads=self.model_config.kv_num_heads,
             num_heads=num_heads,

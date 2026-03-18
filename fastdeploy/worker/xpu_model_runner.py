@@ -62,7 +62,7 @@ from fastdeploy.model_executor.xpu_pre_and_post_process import (
     xpu_pre_process,
     xpu_process_output,
 )
-from fastdeploy.spec_decode import MTPProposer
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.utils import get_logger
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
@@ -187,8 +187,9 @@ class XPUModelRunner(ModelRunnerBase):
         self.zmq_client = None
         self.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            logger.info(f"zmq client get_save_output_rank{local_rank}")
-            self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
+            port = self.fd_config.parallel_config.local_engine_worker_queue_port
+            logger.info(f"zmq client get_save_output_rank{local_rank}_{port}")
+            self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}_{port}", mode=zmq.PUSH)
             self.zmq_client.connect()
             self.zmq_client.socket.SNDTIMEO = 3000
             self.async_output_queue: queue.Queue = queue.Queue()
@@ -727,7 +728,7 @@ class XPUModelRunner(ModelRunnerBase):
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
@@ -876,7 +877,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
                 request, "temp_scaled_logprobs", False
             )
@@ -947,7 +948,6 @@ class XPUModelRunner(ModelRunnerBase):
             [1], False, dtype="bool"
         ).cpu()  # TODO(gongshaotian): move to pinnd memory
         self.share_inputs["stop_flags"] = paddle.full([max_num_seqs, 1], True, dtype="bool")
-        self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
 
         self.share_inputs["bad_tokens"] = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
         self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 1, dtype="int64")
@@ -1291,7 +1291,9 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Initialize attention backends and forward metadata
         """
-        assert len(self.attn_backends) == 0
+        assert (
+            len(self.attn_backends) == 0
+        ), f"attn_backends should be empty before initialization, got {len(self.attn_backends)} backends"
 
         # TODO(gongshaotian): Get rank from config
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
@@ -1368,7 +1370,7 @@ class XPUModelRunner(ModelRunnerBase):
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
         if self.fd_config.parallel_config.enable_expert_parallel:
-            input_length = min(input_length, 32)
+            input_length = min(input_length, 1)
 
         block_num = (
             input_length + self.cache_config.block_size - 1
@@ -1433,7 +1435,7 @@ class XPUModelRunner(ModelRunnerBase):
             block_num=block_num,
         )
 
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
                 batch_size=batch_size,
@@ -1450,17 +1452,16 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Init speculative proposer
         """
-        if self.speculative_method == "ngram":
+        if self.speculative_method == SpecMethod.NGRAM:
             # xpu not support ngram proposer now
-            # self.proposer = NgramProposer(self.fd_config)
             self.proposer = None
-        elif self.speculative_method == "mtp":
-            self.proposer = MTPProposer(
+        elif self.speculative_method == SpecMethod.MTP:
+            self.proposer = self.speculative_method.create_proposer(
                 self.fd_config,
-                self.get_model(),
-                self.local_rank,
-                self.device_id,
-                self.share_inputs,
+                main_model=self.get_model(),
+                local_rank=self.local_rank,
+                device_id=self.device_id,
+                share_inputs=self.share_inputs,
             )
         else:
             self.proposer = None
@@ -1565,16 +1566,15 @@ class XPUModelRunner(ModelRunnerBase):
 
             # 2. Padding inputs for cuda grph
 
-            # 3. Execute model
+            model_inputs = {}
+            model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
             if self.enable_mm:
-                model_output = self.model(
-                    self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"], self.forward_meta
-                )
-            else:
-                model_output = self.model(
-                    ids_remove_padding=self.share_inputs["ids_remove_padding"],
-                    forward_meta=self.forward_meta,
-                )
+                model_inputs["image_features"] = self.share_inputs["image_features"]
+            # 3. Execute model
+            model_output = self.model(
+                model_inputs,
+                forward_meta=self.forward_meta,
+            )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
             hidden_states = xpu_process_output(
@@ -1607,7 +1607,6 @@ class XPUModelRunner(ModelRunnerBase):
                 eos_token_id=self.share_inputs["eos_token_id"],
                 not_need_stop=self.share_inputs["not_need_stop"],
                 input_ids=self.share_inputs["input_ids"],
-                stop_nums=self.share_inputs["stop_nums"],
                 seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
                 seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
                 is_block_step=self.share_inputs["is_block_step"],
@@ -1631,7 +1630,7 @@ class XPUModelRunner(ModelRunnerBase):
             )
 
             skip_save_output = is_dummy_run or (
-                self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill"
+                self.speculative_config.method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill"
             )
 
             if self.speculative_decoding:
@@ -1657,7 +1656,7 @@ class XPUModelRunner(ModelRunnerBase):
                 )
 
             # 6. Draft model propose
-            if self.speculative_method == "mtp":
+            if self.speculative_method == SpecMethod.MTP:
                 self.proposer.run(full_hidden_states=model_output)
 
             # 7. Updata 'infer_seed' and step_paddle()
@@ -1688,7 +1687,6 @@ class XPUModelRunner(ModelRunnerBase):
                     self.share_inputs["accept_tokens"],
                     self.share_inputs["is_block_step"],
                     self.share_inputs["not_need_stop"],
-                    self.share_inputs["stop_nums"],
                     self.cache_config.block_size,
                     self.speculative_config.num_speculative_tokens,
                 )
@@ -1711,7 +1709,7 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         self.num_gpu_blocks = self.cache_config.total_block_num
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
         self.initialize_kv_cache(profile=True)
 
@@ -1733,7 +1731,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if self.speculative_method in ["mtp"]:
+        if self.speculative_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
 

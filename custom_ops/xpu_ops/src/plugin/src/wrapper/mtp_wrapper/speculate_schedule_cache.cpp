@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 __attribute__((global)) void speculate_schedule_cache(
     const int64_t *draft_tokens,
     int *block_tables,
@@ -34,7 +33,6 @@ __attribute__((global)) void speculate_schedule_cache(
     int64_t *accept_tokens,
     bool *is_block_step,
     bool *not_need_stop,
-    const int64_t *stop_nums,
     const int real_bsz,
     const int max_bsz,
     const int max_next_step_tokens,
@@ -43,15 +41,12 @@ __attribute__((global)) void speculate_schedule_cache(
     const int block_size,
     const int block_num_per_seq,
     const bool prefill_one_step_stop);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        const int64_t *draft_tokens,
                        int *block_tables,
                        bool *stop_flags,
@@ -66,7 +61,6 @@ static int cpu_wrapper(Context *ctx,
                        int64_t *accept_tokens,
                        bool *is_block_step,
                        bool *not_need_stop,
-                       const int64_t *stop_nums,
                        const int real_bsz,
                        const int max_bsz,
                        const int max_next_step_tokens,
@@ -131,11 +125,11 @@ static int cpu_wrapper(Context *ctx,
   // }
 
   // printf("stop_sum %d \n", stop_sum);
-  not_need_stop[0] = stop_sum_now < stop_nums[0];
+  not_need_stop[0] = stop_sum_now < max_bsz;
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context *ctx,
+static int xpu3_wrapper(api::Context *ctx,
                         const int64_t *draft_tokens,
                         int *block_tables,
                         bool *stop_flags,
@@ -150,7 +144,6 @@ static int xpu3_wrapper(Context *ctx,
                         int64_t *accept_tokens,
                         bool *is_block_step,
                         bool *not_need_stop,
-                        const int64_t *stop_nums,
                         const int real_bsz,
                         const int max_bsz,
                         const int max_next_step_tokens,
@@ -159,36 +152,37 @@ static int xpu3_wrapper(Context *ctx,
                         const int block_size,
                         const int block_num_per_seq,
                         const bool prefill_one_step_stop) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  using XPU_TI = typename XPUIndexType<int64_t>::type;
-  xpu3::plugin::speculate_schedule_cache<<<1, 64, ctx->xpu_stream>>>(
-      (const XPU_TI *)draft_tokens,
-      block_tables,
-      stop_flags,
-      (const XPU_TI *)prompt_lens,
-      seq_lens_this_time,
-      seq_lens_encoder,
-      seq_lens_decoder,
-      step_seq_lens_decoder,
-      reinterpret_cast<XPU_TI *>(step_draft_tokens),
-      step_seq_lens_this_time,
-      accept_num,
-      reinterpret_cast<XPU_TI *>(accept_tokens),
-      is_block_step,
-      not_need_stop,
-      (const XPU_TI *)stop_nums,
-      real_bsz,
-      max_bsz,
-      max_next_step_tokens,
-      draft_tokens_len,
-      accept_tokens_len,
-      block_size,
-      block_num_per_seq,
-      prefill_one_step_stop);
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  using XPU_TI = typename api::XPUIndexType<int64_t>::type;
+  int32_t ret_xre =
+      fd_xpu3::speculate_schedule_cache<<<1, 64, ctx->xpu_stream>>>(
+          (const XPU_TI *)draft_tokens,
+          block_tables,
+          stop_flags,
+          (const XPU_TI *)prompt_lens,
+          seq_lens_this_time,
+          seq_lens_encoder,
+          seq_lens_decoder,
+          step_seq_lens_decoder,
+          reinterpret_cast<XPU_TI *>(step_draft_tokens),
+          step_seq_lens_this_time,
+          accept_num,
+          reinterpret_cast<XPU_TI *>(accept_tokens),
+          is_block_step,
+          not_need_stop,
+          real_bsz,
+          max_bsz,
+          max_next_step_tokens,
+          draft_tokens_len,
+          accept_tokens_len,
+          block_size,
+          block_num_per_seq,
+          prefill_one_step_stop);
+  KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
-int speculate_schedule_cache(Context *ctx,
+int speculate_schedule_cache(api::Context *ctx,
                              const int64_t *draft_tokens,
                              int *block_tables,
                              bool *stop_flags,
@@ -203,7 +197,6 @@ int speculate_schedule_cache(Context *ctx,
                              int64_t *accept_tokens,
                              bool *is_block_step,
                              bool *not_need_stop,
-                             const int64_t *stop_nums,
                              const int real_bsz,
                              const int max_bsz,
                              const int max_next_step_tokens,
@@ -228,10 +221,9 @@ int speculate_schedule_cache(Context *ctx,
                       step_seq_lens_this_time,
                       accept_num,
                       accept_tokens);
-  WRAPPER_DUMP_PARAM6(ctx,
+  WRAPPER_DUMP_PARAM5(ctx,
                       is_block_step,
                       not_need_stop,
-                      stop_nums,
                       real_bsz,
                       max_bsz,
                       max_next_step_tokens);
@@ -274,7 +266,6 @@ int speculate_schedule_cache(Context *ctx,
                        accept_tokens,
                        is_block_step,
                        not_need_stop,
-                       stop_nums,
                        real_bsz,
                        max_bsz,
                        max_next_step_tokens,
@@ -300,7 +291,6 @@ int speculate_schedule_cache(Context *ctx,
                         accept_tokens,
                         is_block_step,
                         not_need_stop,
-                        stop_nums,
                         real_bsz,
                         max_bsz,
                         max_next_step_tokens,
@@ -314,6 +304,4 @@ int speculate_schedule_cache(Context *ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

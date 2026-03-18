@@ -42,7 +42,7 @@ void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
   int length = pre_ids_all_shape[1];
   int max_draft_tokens = accept_tokens.shape()[1];
 
-  int r = baidu::xpu::api::plugin::speculate_set_value_by_flag_and_id(
+  int r = fastdeploy::plugin::speculate_set_value_by_flag_and_id(
       ctx,
       const_cast<int64_t *>(pre_ids_all.data<int64_t>()),
       accept_tokens.data<int64_t>(),

@@ -143,7 +143,7 @@ class TestErnie4_5Processor(unittest.TestCase):
             f"{MODULE_PATH}.Ernie4_5Tokenizer.from_pretrained", side_effect=lambda path: MockTokenizer()
         )
         self.eos_patcher = patch(
-            "paddleformers.trl.llm_utils.get_eos_token_id",
+            "paddleformers.cli.utils.llm_utils.get_eos_token_id",
             side_effect=lambda tokenizer, cfg: [tokenizer.eos_token_id],
         )
 
@@ -194,6 +194,7 @@ class TestErnie4_5Processor(unittest.TestCase):
 
         self.assertEqual(processed["max_tokens"], max(1, 10 - len(expected_ids)))
         self.assertEqual(processed["temperature"], 1)
+        self.assertEqual(processed["top_k"], 1)
         self.assertAlmostEqual(processed["top_p"], _SAMPLING_EPS)
         self.assertEqual(processed["prompt_tokens"], "hello")
 

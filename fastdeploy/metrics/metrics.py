@@ -36,6 +36,7 @@ from fastdeploy.metrics.prometheus_multiprocess_setup import (
     setup_multiprocess_prometheus,
 )
 from fastdeploy.metrics.stats import ZMQMetricsStats
+from fastdeploy.spec_decode import SpecMethod
 
 
 class SimpleCollector(Collector):
@@ -480,13 +481,13 @@ class MetricsManager:
         "msg_recv_total": {
             "type": Counter,
             "name": "fastdeploy:zmq:msg_recv_total",
-            "description": "Total number of zmq messages recieved",
+            "description": "Total number of zmq messages received",
             "kwargs": {"labelnames": ["address"]},
         },
         "msg_bytes_recv_total": {
             "type": Counter,
             "name": "fastdeploy:zmq:msg_bytes_recv_total",
-            "description": "Total number of bytes recieved over zmq",
+            "description": "Total number of bytes received over zmq",
             "kwargs": {"labelnames": ["address"]},
         },
         "zmq_latency": {
@@ -668,7 +669,7 @@ class MetricsManager:
                 "kwargs": {},
             },
         }
-        if speculative_method == "mtp":
+        if speculative_method == SpecMethod.MTP:
             self.SPECULATIVE_METRICS["spec_decode_efficiency"] = {
                 "type": Gauge,
                 "name": "fastdeploy:spec_decode_efficiency",

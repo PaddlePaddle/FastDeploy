@@ -57,10 +57,12 @@ func main() {
 	go manager.MonitorInstanceHealth(context.Background(), intervalSecs)
 	intervalCleanupSecs := cfg.Scheduler.EvictionIntervalSecs
 	go scheduler_handler.StartBackupCleanupTask(context.Background(), intervalCleanupSecs)
+	statsIntervalSecs := cfg.Scheduler.StatsIntervalSecs
+	go scheduler_handler.StartStatsReporter(context.Background(), statsIntervalSecs)
 
 	// Start server
 	addr := ":" + cfg.Server.Port
-	logger.Info("Starting server on %s", addr)
+	logger.Info(context.Background(), "Starting server on %s", addr)
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

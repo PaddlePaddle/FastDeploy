@@ -152,6 +152,7 @@ class ExpertService:
 
         if self.do_profile:
             get_profile_block_num = np.zeros([1], dtype=np.int32)
+            attempt = 0
             while True:
                 try:
                     self.get_profile_block_num_signal = IPCSignal(
@@ -162,7 +163,13 @@ class ExpertService:
                         create=False,
                     )
                     break
-                except:
+                except Exception as e:
+                    attempt += 1
+                    if attempt % 30 == 0:
+                        console_logger.warning(
+                            f"Waiting for IPC signal 'get_profile_block_num' to be created, "
+                            f"retried {attempt} times: {e}"
+                        )
                     time.sleep(1)
             self.reset_kvcache_blocks()
 
@@ -205,18 +212,14 @@ class ExpertService:
             self.zmq_server.close()
 
 
-def start_data_parallel_service(
-    cfg, local_data_parallel_id, ipc_signal_suffix=None, request_queues_for_dp_ipc=None, result_queues_for_dp_ipc=None
-):
+def start_data_parallel_service(cfg, local_data_parallel_id, ipc_signal_suffix=None):
     """
     Start expert service
     """
     expert_service = ExpertService(cfg, local_data_parallel_id, start_queue=False)
 
     try:
-        expert_service.start(
-            ipc_signal_suffix, local_data_parallel_id, request_queues_for_dp_ipc, result_queues_for_dp_ipc
-        )
+        expert_service.start(ipc_signal_suffix, local_data_parallel_id)
 
         def deamon_thread():
             while True:

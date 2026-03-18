@@ -46,3 +46,4 @@ einops
 setproctitle
 aistudio_sdk
 py-cpuinfo
+transformers>=4.55.1,<5.0.0

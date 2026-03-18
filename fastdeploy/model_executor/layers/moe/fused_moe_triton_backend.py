@@ -289,6 +289,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -677,6 +678,7 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -971,6 +973,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -1236,7 +1239,7 @@ def python_op_fused_moe_kernel_paddle(
     from .triton_moe_kernels import fused_moe_kernel_paddle
 
     if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
-        x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, quant_config.weight_block_size[0])
+        x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, quant_config.weight_block_size[0], False)
     else:
         x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
             x, using_pow2_scale=False, output_scale_transpose=False
@@ -1293,7 +1296,7 @@ def python_op_fused_moe_kernel_paddle(
     grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) * ceil_div(hidden_size, config["BLOCK_SIZE_N"]),)
     if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
         x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(
-            intermediate_cache2, quant_config.weight_block_size[0]
+            intermediate_cache2, quant_config.weight_block_size[0], False
         )
     else:
         x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
@@ -1756,6 +1759,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.

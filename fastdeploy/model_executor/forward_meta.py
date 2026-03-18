@@ -158,6 +158,8 @@ class ForwardMeta:
     # for prefill
     exist_prefill: bool = False
 
+    position_ids: Optional[paddle.Tensor] = None
+
     def clear_caches(self):
         """Safely clean up the caches"""
         if self.caches:
@@ -196,6 +198,10 @@ class ForwardMeta:
         simplified_info = format_str(self.__dict__)
         lines = [f"  {key}: {value}" for key, value in simplified_info.items()]
         return "{\n" + ",\n".join(lines) + "\n}"
+
+    def __getattr__(self, name):
+        self.__setattr__(name, None)
+        return None
 
 
 @dataclass
@@ -261,6 +267,10 @@ class XPUForwardMeta(ForwardMeta):
     total_enc_len: Optional[paddle.Tensor] = None
     # for pd_disaggregation
     kv_signal_sender: Optional[paddle.Tensor] = None
+
+    hidden_states: Optional[paddle.Tensor] = None
+
+    is_draft: bool = False
 
     def copy_from(self, other: "XPUForwardMeta", skip_keys: Optional[list] = None):
         """

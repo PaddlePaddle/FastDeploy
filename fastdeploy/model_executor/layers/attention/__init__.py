@@ -17,9 +17,9 @@ from .attention import Attention
 from .attention_selecter import get_attention_backend
 from .base_attention_backend import AttentionBackend
 from .block_multihead_attn_backend import BlockAttentionBackend
+from .dsa_attention_backend import DSAAttentionBackend
 from .flash_attn_backend import FlashAttentionBackend
 from .flash_mask_attn_backend import FlashMaskAttentionBackend
-from .iluvatar_attn_backend import IluvatarAttnBackend
 from .mla_attention_backend import MLAAttentionBackend
 from .moba_attention_backend import PlasAttentionBackend
 from .native_paddle_backend import PaddleNativeAttnBackend
@@ -30,8 +30,8 @@ __all__ = [
     "get_attention_backend",
     "AppendAttentionBackend",
     "MLAAttentionBackend",
+    "DSAAttentionBackend",
     "FlashAttentionBackend",
-    "IluvatarAttnBackend",
     "BlockAttentionBackend",
     "Attention",
     "PlasAttentionBackend",

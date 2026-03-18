@@ -8,9 +8,11 @@ import (
 	"math"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/PaddlePaddle/FastDeploy/router/pkg/logger"
+	"github.com/PaddlePaddle/FastDeploy/router/pkg/metrics"
 )
 
 type prefillCacheStrategy struct {
@@ -20,6 +22,12 @@ type prefillCacheStrategy struct {
 	loadBalanceWeight float64
 	cache             *radixPrefixCache
 	tokenizer         TokenizerClient
+
+	// session-based cache hit tracking
+	sessionWorkerMap map[string]string // session_id -> last selected prefill worker URL
+	sessionMu        sync.RWMutex
+	cacheHitCount    atomic.Int64 // periodic counter (reset each stats interval)
+	cacheTotalCount  atomic.Int64 // periodic counter (reset each stats interval)
 }
 
 type schedulerConfigSnapshot struct {
@@ -41,23 +49,40 @@ func newPrefillCacheStrategy(cfg *schedulerConfigSnapshot) *prefillCacheStrategy
 		loadBalanceWeight: cfg.loadBalanceWeight,
 		cache:             newRadixPrefixCache(cfg.cacheBlockSize),
 		tokenizer:         NewHTTPTokenizer(cfg.tokenizerURL, cfg.tokenizerTimeout),
+		sessionWorkerMap:  make(map[string]string),
 	}
 }
 
 // CacheAwarePrefillSelectWorker fallbacks to min tokens on extreme imbalance; otherwise scores by hit rate and load
 func CacheAwarePrefillSelectWorker(ctx context.Context, workers []string, message string) (string, error) {
+	return cacheAwareSelectWorkerImpl(ctx, workers, message, false)
+}
+
+// RemoteCacheAwarePrefillSelectWorker uses remote metrics for load balancing decisions
+func RemoteCacheAwarePrefillSelectWorker(ctx context.Context, workers []string, message string) (string, error) {
+	return cacheAwareSelectWorkerImpl(ctx, workers, message, true)
+}
+
+func cacheAwareSelectWorkerImpl(ctx context.Context, workers []string, message string, useRemoteMetrics bool) (string, error) {
 	if len(workers) == 0 {
 		return "", nil
 	}
 	if DefaultScheduler == nil || DefaultScheduler.prefillCache == nil {
+		logger.Info(ctx, "cache-aware prefill: final strategy: process_tokens, reason: strategy not initialized")
 		return ProcessTokensSelectWorker(ctx, workers, message)
 	}
 
 	strategy := DefaultScheduler.prefillCache
 
 	// 1) Fetch node load; fallback to min tokens on extreme imbalance
-	loads := strategy.getRunningRequests(ctx, workers)
+	var loads map[string]uint64
+	if useRemoteMetrics {
+		loads = strategy.getRemoteRunningRequests(ctx, workers)
+	} else {
+		loads = strategy.getRunningRequests(ctx, workers)
+	}
 	if strategy.isLoadImbalanced(loads) {
+		logger.Info(ctx, "cache-aware prefill: final strategy: process_tokens, reason: load imbalanced, loads=%v. ts_ms=%s", loads, time.Now().Format("2006-01-02 15:04:05.000"))
 		return ProcessTokensSelectWorker(ctx, workers, message)
 	}
 
@@ -65,21 +90,26 @@ func CacheAwarePrefillSelectWorker(ctx context.Context, workers []string, messag
 	tokens, err := strategy.tokenize(ctx, message)
 	if err != nil || len(tokens) == 0 {
 		if err != nil {
-			logger.Warn("cache-aware prefill: tokenizer failed, fallback to process_tokens: %v", err)
+			logger.Info(ctx, "cache-aware prefill: final strategy: process_tokens, reason: tokenize failed: %v. ts_ms=%s", err, time.Now().Format("2006-01-02 15:04:05.000"))
 		}
 		return ProcessTokensSelectWorker(ctx, workers, message)
 	}
 
 	// 3) Compute prefix tree hit rate
 	hitRatios := strategy.cache.Match(tokens, toWorkerSet(workers))
-	logger.Debug("cache-aware prefill: hashes=%d workers=%d load=%v hit=%v", len(strategy.cache.hasher.prefixHashes(tokens)), len(workers), loads, hitRatios)
+	logger.Debug(ctx, "cache-aware prefill: hashes=%d workers=%d load=%v hit=%v", len(strategy.cache.hasher.prefixHashes(tokens)), len(workers), loads, hitRatios)
 
 	// 4) Compute weighted score from hit rate and load
 	selected := strategy.chooseByScore(ctx, workers, loads, hitRatios)
 
 	// 5) Record prefix
 	strategy.cache.Record(tokens, selected)
-	logger.Debug("cache-aware prefill: selected=%s", selected)
+
+	// 6) Track session-based cache hit rate
+	strategy.trackSessionCacheHit(ctx, selected)
+
+	logger.Info(ctx, "cache-aware prefill: final strategy: cache_aware_scoring, selected=%s, loads=%v, hitRatios=%v. ts_ms=%s",
+		selected, loads, hitRatios, time.Now().Format("2006-01-02 15:04:05.000"))
 	return selected, nil
 }
 
@@ -94,10 +124,10 @@ func (p *prefillCacheStrategy) tokenize(ctx context.Context, message string) ([]
 	}
 	tokens, err := p.tokenizer.Tokenize(ctx, message)
 	if err != nil {
-		logger.Warn("cache-aware prefill: tokenizer failed, fallback to char tokens: %v", err)
+		logger.Warn(ctx, "cache-aware prefill: tokenizer failed, fallback to char tokens: %v", err)
 		return charsToTokens(message), nil
 	}
-	logger.Debug("cache-aware prefill: tokenizer tokens=%v", tokens)
+	logger.Debug(ctx, "cache-aware prefill: tokenizer tokens=%v", tokens)
 	return tokens, nil
 }
 
@@ -153,7 +183,7 @@ func (p *prefillCacheStrategy) chooseByScore(ctx context.Context, workers []stri
 		}
 
 		score := (100.0-hit)/100*p.hitRatioWeight + loadRatio*p.loadBalanceWeight
-		logger.Debug("cache-aware score: worker=%s hit=%.1f loadRatio=%.3f score=%.3f", w, hit, loadRatio, score)
+		logger.Debug(ctx, "cache-aware score: worker=%s hit=%.1f loadRatio=%.3f score=%.3f", w, hit, loadRatio, score)
 
 		if score < bestScore {
 			bestScore = score
@@ -174,7 +204,7 @@ func (p *prefillCacheStrategy) chooseByScore(ctx context.Context, workers []stri
 	return selected
 }
 
-// getRunningRequests retrieves running request metrics
+// getRunningRequests retrieves running request metrics (in-memory counting)
 func (p *prefillCacheStrategy) getRunningRequests(ctx context.Context, workers []string) map[string]uint64 {
 	result := make(map[string]uint64, len(workers))
 	if DefaultScheduler == nil || DefaultScheduler.managerAPI == nil {
@@ -186,6 +216,64 @@ func (p *prefillCacheStrategy) getRunningRequests(ctx context.Context, workers [
 		result[w] = uint64(running)
 	}
 	return result
+}
+
+// getRemoteRunningRequests retrieves running request metrics from remote /metrics endpoint
+func (p *prefillCacheStrategy) getRemoteRunningRequests(ctx context.Context, workers []string) map[string]uint64 {
+	result := make(map[string]uint64, len(workers))
+	if DefaultScheduler == nil || DefaultScheduler.managerAPI == nil {
+		return result
+	}
+
+	for _, w := range workers {
+		running, _, _ := DefaultScheduler.managerAPI.GetRemoteMetrics(ctx, w)
+		result[w] = uint64(running)
+	}
+	return result
+}
+
+// trackSessionCacheHit checks if the same session_id was routed to the same prefill worker
+func (p *prefillCacheStrategy) trackSessionCacheHit(ctx context.Context, selectedWorker string) {
+	sessionID, _ := ctx.Value(logger.SessionIDKey).(string)
+	if sessionID == "" {
+		return
+	}
+
+	prevWorker, exists := p.getSessionWorker(sessionID)
+
+	p.cacheTotalCount.Add(1)
+	metrics.RouterCacheRequestTotal.Inc()
+
+	if exists && prevWorker == selectedWorker {
+		p.cacheHitCount.Add(1)
+		metrics.RouterCacheHitTotal.Inc()
+	}
+
+	p.setSessionWorker(sessionID, selectedWorker)
+}
+
+func (p *prefillCacheStrategy) getSessionWorker(sessionID string) (string, bool) {
+	p.sessionMu.RLock()
+	defer p.sessionMu.RUnlock()
+	prevWorker, exists := p.sessionWorkerMap[sessionID]
+	return prevWorker, exists
+}
+
+func (p *prefillCacheStrategy) setSessionWorker(sessionID, worker string) {
+	p.sessionMu.Lock()
+	defer p.sessionMu.Unlock()
+	p.sessionWorkerMap[sessionID] = worker
+}
+
+// GetAndResetCacheHitStats returns periodic cache hit stats and resets counters
+func GetAndResetCacheHitStats() (hits int64, total int64) {
+	if DefaultScheduler == nil || DefaultScheduler.prefillCache == nil {
+		return 0, 0
+	}
+	strategy := DefaultScheduler.prefillCache
+	hits = strategy.cacheHitCount.Swap(0)
+	total = strategy.cacheTotalCount.Swap(0)
+	return hits, total
 }
 
 // Track prefix hits using a radix tree keyed by block hash
@@ -243,7 +331,7 @@ func (c *radixPrefixCache) Match(tokens []int, allowed map[string]struct{}) map[
 	c.mu.RLock()
 	node, matched := c.matchPrefixHelper(c.root, hashes)
 	length := matched
-	logger.Debug("radix match: hashes=%d matched_len=%d node_children=%d", len(hashes), matched, len(node.children))
+	logger.Debug(context.Background(), "radix match: hashes=%d matched_len=%d node_children=%d", len(hashes), matched, len(node.children))
 	for n := node; n != nil; n = n.parent {
 		ratio := 0
 		if len(hashes) > 0 {
@@ -291,7 +379,7 @@ func (c *radixPrefixCache) Record(tokens []int, worker string) {
 		}
 		n.workers[worker] = now
 	}
-	logger.Debug("radix record: worker=%s hashes=%d node_depth=%d", worker, len(hashes), node.contextLen)
+	logger.Debug(context.Background(), "radix record: worker=%s hashes=%d node_depth=%d", worker, len(hashes), node.contextLen)
 }
 
 // evictionWorker periodically evicts inactive nodes
@@ -313,7 +401,7 @@ func (c *radixPrefixCache) evictExpired() {
 		removed += c.evictSubtreeIfExpired(c.root, childKey, child, now)
 	}
 	if removed > 0 {
-		logger.Debug("radix eviction: removed=%d nodeCount=%d", removed, c.nodeCount)
+		logger.Debug(context.Background(), "radix eviction: removed=%d nodeCount=%d", removed, c.nodeCount)
 	}
 }
 
@@ -533,6 +621,7 @@ func charsToTokens(message string) []int {
 	for _, r := range message {
 		tokens = append(tokens, int(r))
 	}
+	// rune
 	return tokens
 }
 

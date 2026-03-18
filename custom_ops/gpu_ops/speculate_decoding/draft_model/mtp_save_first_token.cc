@@ -18,6 +18,7 @@
 #include <sys/msg.h>
 #include <sys/types.h>
 #include "../speculate_msg.h"
+#include "../../custom_ftok.h"
 #include "paddle/extension.h"
 
 #ifndef PD_BUILD_STATIC_OP
@@ -66,7 +67,7 @@ void MTPSaveFirstToken(const paddle::Tensor& x,
     msg_queue_id = inference_msg_queue_id_from_env;
   }
 
-  static key_t key = ftok("./", msg_queue_id);
+  static key_t key = custom_ftok("./", msg_queue_id);
   static int msgid = msgget(key, IPC_CREAT | 0666);
 
   msg_sed.mtype = 1;

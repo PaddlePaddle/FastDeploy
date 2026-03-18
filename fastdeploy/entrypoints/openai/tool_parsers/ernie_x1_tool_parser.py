@@ -162,7 +162,8 @@ class ErnieX1ToolParser(ToolParser):
                         if args_match:
                             try:
                                 tool_data["arguments"] = partial_json_parser.loads(args_match.group(1), flags=flags)
-                            except:
+                            except Exception as e:
+                                data_processor_logger.debug(f"Failed to parse tool arguments: {e}")
                                 tool_data["arguments"] = None
 
                         if isinstance(tool_data, dict):
