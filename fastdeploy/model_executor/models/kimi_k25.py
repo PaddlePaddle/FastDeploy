@@ -32,7 +32,7 @@ class KimiK25ForConditionalGeneration(DeepseekV3ForCausalLM):
     """
 
     def __init__(self, fd_config: FDConfig):
-        super.__init__(fd_config)
+        super().__init__(fd_config)
 
     @classmethod
     def name(cls):
