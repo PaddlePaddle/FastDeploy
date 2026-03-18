@@ -90,13 +90,14 @@ struct AttentionKernelTraits {
   static constexpr bool USE_TMA_LOAD_KV = USE_TMA_LOAD_KV_;
   static constexpr int GROUP_SIZE = GROUP_SIZE_;
   static constexpr int BLOCK_SHAPE_Q = BLOCK_SHAPE_Q_;
-  static_assert(BLOCK_SHAPE_Q % 64 == 0);
+  static_assert(BLOCK_SHAPE_Q % 64 == 0,
+                "BLOCK_SHAPE_Q must be a multiple of 64");
   static constexpr int BLOCK_SHAPE_KV = BLOCK_SHAPE_KV_;
   static constexpr int HEAD_DIM_QK = HEAD_DIM_QK_;
   static constexpr int HEAD_DIM_VO = HEAD_DIM_VO_;
   static constexpr int NUM_PER_STAGE = BLOCK_SHAPE_KV * HEAD_DIM_QK;
-  static_assert(HEAD_DIM_QK % 32 == 0);
-  static_assert(HEAD_DIM_VO % 32 == 0);
+  static_assert(HEAD_DIM_QK % 32 == 0, "HEAD_DIM_QK must be a multiple of 32");
+  static_assert(HEAD_DIM_VO % 32 == 0, "HEAD_DIM_VO must be a multiple of 32");
 
   static constexpr int NUM_WARPS = 12;
   static constexpr int NUM_THREADS = 384;

@@ -198,7 +198,9 @@ class EngineServiceClient:
                         suffix=ipc_suffix,
                         create=False,
                     )
-                except:
+                except (
+                    Exception
+                ):  # IPCSignal may not yet be created by workers; broad except covers platform-specific IPC errors
                     # Signal not ready yet
                     time.sleep(wait_interval)
                     elapsed_time += wait_interval
@@ -523,7 +525,6 @@ class AsyncLLM(EngineServiceClient):
             remaining = num_choices
             while remaining > 0:
                 response_list = await response_queue.get()
-
                 for response_item in response_list:
                     if (
                         isinstance(response_item, dict) or isinstance(response_item, Request)

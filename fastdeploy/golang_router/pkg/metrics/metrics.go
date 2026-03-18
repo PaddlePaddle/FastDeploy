@@ -8,6 +8,8 @@ func init() {
 	prometheus.MustRegister(TotalRequests)
 	prometheus.MustRegister(InferenceRequests)
 	prometheus.MustRegister(RequestDuration)
+	prometheus.MustRegister(RouterCacheHitTotal)
+	prometheus.MustRegister(RouterCacheRequestTotal)
 }
 
 // TotalRequests tracks the total number of HTTP requests
@@ -36,4 +38,20 @@ var RequestDuration = prometheus.NewSummaryVec(
 		Objectives: map[float64]float64{0.95: 0.01, 0.99: 0.01}, // Objectives define the required quantiles
 	},
 	[]string{"method", "endpoint"},
+)
+
+// RouterCacheHitTotal tracks the cumulative number of cache hits (session routed to same prefill worker)
+var RouterCacheHitTotal = prometheus.NewCounter(
+	prometheus.CounterOpts{
+		Name: "router_cache_hit_total",
+		Help: "Cumulative number of cache hits (same session_id routed to same prefill worker)",
+	},
+)
+
+// RouterCacheRequestTotal tracks the cumulative number of cache-aware requests with session_id
+var RouterCacheRequestTotal = prometheus.NewCounter(
+	prometheus.CounterOpts{
+		Name: "router_cache_request_total",
+		Help: "Cumulative number of cache-aware scheduling requests with session_id",
+	},
 )

@@ -72,7 +72,7 @@ class ChatResponseProcessor:
             else:
                 self._multipart_buffer.append({"decode_type": decode_type, "request_output": request_output})
 
-    async def process_response_chat(self, request_outputs, stream, include_stop_str_in_output):
+    async def process_response_chat(self, request_outputs, stream, include_stop_str_in_output, request):
         """
         Process a list of responses into a generator that yields each processed response as it's generated.
         Args:
@@ -101,6 +101,7 @@ class ChatResponseProcessor:
                                 include_stop_str_in_output=include_stop_str_in_output,
                                 audio_tokens=all_audio_tokens,
                                 tts=tts,
+                                request=request,
                             )
                         else:
                             response = self.data_processor.process_response_dict(
@@ -109,6 +110,7 @@ class ChatResponseProcessor:
                                 include_stop_str_in_output=include_stop_str_in_output,
                                 audio_tokens=all_audio_tokens,
                                 tts=tts,
+                                request=request,
                             )
                         yield response
                     elif decode_type == 2:  # audio
@@ -125,6 +127,7 @@ class ChatResponseProcessor:
                         response_dict=request_output,
                         stream=stream,
                         include_stop_str_in_output=include_stop_str_in_output,
+                        request=request,
                     )
             elif stream:
                 decode_type = request_output["outputs"].get("decode_type", 0)
@@ -156,12 +159,14 @@ class ChatResponseProcessor:
                             response_dict=request_output,
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
+                            request=request,
                         )
                     else:
                         self.data_processor.process_response_dict(
                             response_dict=request_output,
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
+                            request=request,
                         )
                     text = {"type": "text", "text": request_output["outputs"]["text"]}
                     request_output["outputs"]["multipart"] = [text]
@@ -183,12 +188,14 @@ class ChatResponseProcessor:
                                     response_dict=part["request_output"],
                                     stream=False,
                                     include_stop_str_in_output=include_stop_str_in_output,
+                                    request=request,
                                 )
                             else:
                                 self.data_processor.process_response_dict(
                                     response_dict=request_output,
                                     stream=stream,
                                     include_stop_str_in_output=include_stop_str_in_output,
+                                    request=request,
                                 )
                             text = {"type": "text", "text": part["request_output"]["outputs"]["text"]}
                             multipart.append(text)

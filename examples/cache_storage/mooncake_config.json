@@ -1,7 +1,6 @@
 {
-    "local_hostname":"localhost",
     "metadata_server":"http://0.0.0.0:15002/metadata",
-    "global_segment_size":8589934592,
+    "global_segment_size":1000000000,
     "local_buffer_size":134217728,
     "protocol":"rdma",
     "rdma_devices": "",

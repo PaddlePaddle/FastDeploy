@@ -63,6 +63,7 @@ class FakeModelConfig:
         self.logprobs_mode = "raw_logprobs"
         self.architectures = ["test_model"]
         self.mm_max_tokens_per_item = None
+        self.version = None  # Required for register_info
 
 
 class FakeLoadConfig:

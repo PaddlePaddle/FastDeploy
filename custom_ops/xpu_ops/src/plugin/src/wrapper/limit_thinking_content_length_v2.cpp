@@ -127,6 +127,12 @@ int limit_thinking_content_length_kernel_v2(api::Context* ctx,
                       stop_flags);
   WRAPPER_DUMP_PARAM3(ctx, think_end_id, line_break_id, bs);
   WRAPPER_DUMP(ctx);
+  WRAPPER_ASSERT_GT(ctx, bs, 0);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bs, next_tokens);
+  WRAPPER_CHECK_PTR(ctx, int, bs, max_think_lens);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bs, step_idx);
+  WRAPPER_CHECK_PTR(ctx, int, bs, limit_think_status);
+  WRAPPER_CHECK_PTR(ctx, bool, bs, stop_flags);
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper(ctx,
                        next_tokens,

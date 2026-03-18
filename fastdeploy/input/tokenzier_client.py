@@ -127,7 +127,7 @@ class AsyncTokenizerClient:
                 elif type == "audio":
                     url = f"{self.base_url}/audio/encode"
                 else:
-                    raise ValueError("Invalid type")
+                    raise ValueError(f"Invalid encode type: '{type}', expected 'image', 'video', or 'audio'")
 
                 resp = await client.post(url, json=request)
                 resp.raise_for_status()
@@ -159,9 +159,9 @@ class AsyncTokenizerClient:
                     elif data.get("state") == "Error":
                         raise RuntimeError(f"Tokenize task failed: {data.get('message')}")
 
-                except httpx.RequestError:
-                    # 网络问题时继续轮询
-                    pass
+                except httpx.RequestError as e:
+                    # Network error, keep polling
+                    data_processor_logger.debug(f"Request error while polling tokenize task {task_tag}: {e}")
 
                 # 超时检测
                 if asyncio.get_event_loop().time() - start_time > self.max_wait:
@@ -183,7 +183,7 @@ class AsyncTokenizerClient:
                 elif type == "audio":
                     url = f"{self.base_url}/audio/decode"
                 else:
-                    raise ValueError("Invalid type")
+                    raise ValueError(f"Invalid decode type: '{type}', expected 'image' or 'audio'")
 
                 for attempt in range(self.max_retries):
                     try:

@@ -363,8 +363,11 @@ elif paddle.is_compiled_with_cuda():
         "-Igpu_ops",
         "-Ithird_party/nlohmann_json/include",
     ]
-    worker_threads = os.cpu_count()
-    nvcc_compile_args += ["-t", str(worker_threads)]
+    # Limit nvcc internal threads to avoid resource exhaustion when Paddle's
+    # ThreadPoolExecutor also launches many parallel compilations.
+    # Total threads ≈ (number of parallel compile jobs) × nvcc_threads, so cap nvcc_threads at 4.
+    nvcc_threads = min(os.cpu_count() or 1, 4)
+    nvcc_compile_args += ["-t", str(nvcc_threads)]
 
     nvcc_version = get_nvcc_version()
     print(f"nvcc_version = {nvcc_version}")

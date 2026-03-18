@@ -338,6 +338,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         token_ids = response_obj.outputs.token_ids
         is_end = response_obj.finished
         req_id = response_obj.request_id
+        request = kwargs.get("request", None)
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
@@ -349,7 +350,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 response_obj.outputs.enable_parser = True
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
                     full_text,
-                    response_obj,
+                    request,
                     self.model_status_dict[req_id],
                 )
                 response_obj.outputs.text = text
@@ -359,7 +360,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             if self.tool_parser_obj:
                 response_obj.outputs.enable_parser = True
                 tool_parser = self.tool_parser_obj(self.tokenizer)
-                tool_call_info = tool_parser.extract_tool_calls(full_text, response_obj)
+                tool_call_info = tool_parser.extract_tool_calls(full_text, request)
                 if tool_call_info.tools_called:
                     response_obj.outputs.tool_calls = tool_call_info.tool_calls
                     response_obj.outputs.text = tool_call_info.content
@@ -383,6 +384,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         token_ids = response_obj.outputs.token_ids
         is_end = response_obj.finished
         req_id = response_obj.request_id
+        request = kwargs.get("request", None)
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] == self.tokenizer.eos_token_id:
@@ -425,7 +427,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
-                response_obj,
+                request,
             )
             if tool_call_delta_message is None or tool_call_delta_message.tool_calls:
                 response_obj.outputs.delta_message = tool_call_delta_message
