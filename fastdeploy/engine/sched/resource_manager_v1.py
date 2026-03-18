@@ -1751,10 +1751,14 @@ class ResourceManagerV1(ResourceManager):
                 if self.enable_head_wise_kv_cache and hasattr(task, "block_tables_3d") and task.block_tables_3d:
                     # block_tables_3d is a 2D list: [[cache_ids_head0], [cache_ids_head1], ...]
                     for head_blocks in task.block_tables_3d:
-                        blocks_used_by_tasks.update(head_blocks)
+                        for cache_id in head_blocks:
+                            if cache_id is not None and cache_id >= 0:
+                                blocks_used_by_tasks.add(cache_id)
                 else:
                     # Non-head-wise mode: block_tables is a list of block_ids
-                    blocks_used_by_tasks.update(task.block_tables)
+                    for block_id in task.block_tables:
+                        if block_id is not None and block_id >= 0:
+                            blocks_used_by_tasks.add(block_id)
         main_process_metrics.available_gpu_block_num.set(self.total_block_number() - len(blocks_used_by_tasks))
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
