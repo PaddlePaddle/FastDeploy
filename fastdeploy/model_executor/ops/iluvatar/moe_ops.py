@@ -100,19 +100,13 @@ def iluvatar_moe_expert_ffn(
     up_gate_proj_bias: Optional[paddle.Tensor],
     up_gate_proj_scale: Optional[paddle.Tensor],
     down_proj_scale: Optional[paddle.Tensor],
-    down_proj_in_scale: Optional[paddle.Tensor],
-    expert_idx_per_token: Optional[paddle.Tensor],
     quant_method: str,
-    used_in_ep_low_latency: bool,
     moe_phase: str,
 ):
     assert up_gate_proj_bias is None
     assert up_gate_proj_scale is not None
     assert down_proj_scale is not None
-    assert down_proj_in_scale is None
-    assert expert_idx_per_token is None
     assert quant_method in ("weight_only_int8")
-    assert not used_in_ep_low_latency
     group_gemm_func, tokens_per_expert = _pre_process_expert_ffn(moe_phase, tokens_expert_prefix_sum)
     ffn1_output = group_gemm_func(permute_input, up_gate_proj_weight, up_gate_proj_scale, tokens_per_expert, -1)
     act_out = swiglu(ffn1_output)

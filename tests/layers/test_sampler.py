@@ -448,5 +448,84 @@ def test_top_k_top_p_sampling_resets_cuda_rng_in_deterministic_mode(monkeypatch)
     mock_reset.assert_called_once()
 
 
+def test_top_k_1_returns_argmax(monkeypatch):
+    """top_k=1 should produce argmax results regardless of FD_DETERMINISTIC_MODE."""
+    import sys
+
+    import fastdeploy.envs as envs
+
+    sampling_mod = sys.modules["fastdeploy.model_executor.layers.sample.ops.top_k_top_p_sampling"]
+
+    # Enable deterministic mode and force "base" sampling class
+    monkeypatch.setattr(envs, "FD_DETERMINISTIC_MODE", True)
+    monkeypatch.setattr(envs, "FD_SAMPLING_CLASS", "base")
+
+    # Probs with clear argmax: row0 -> col2, row1 -> col0
+    probs = paddle.to_tensor([[0.1, 0.2, 0.7], [0.6, 0.3, 0.1]], dtype="float32")
+    top_p = paddle.to_tensor([[0.9], [0.9]], dtype="float32")
+    expected = paddle.argmax(probs, axis=-1, keepdim=True)
+
+    # --- All-greedy: both rows top_k=1 ---
+    top_k = paddle.to_tensor([[1], [1]], dtype="int64")
+    top_k_list = [1, 1]
+
+    _, ids = sampling_mod.top_k_top_p_sampling(probs, top_p, top_k, top_k_list)
+    assert paddle.equal_all(ids, expected), f"all-greedy: {ids.numpy()} != {expected.numpy()}"
+
+    # --- Mixed batch: row0 greedy, row1 sampled ---
+    top_k_mixed = paddle.to_tensor([[1], [50]], dtype="int64")
+    top_k_list_mixed = [1, 50]
+
+    # Mock the base sampling to return a fixed token for all rows
+    monkeypatch.setattr(
+        sampling_mod.paddle.tensor,
+        "top_p_sampling",
+        lambda *a, **k: (None, paddle.to_tensor([[99], [99]], dtype="int64")),
+    )
+
+    _, ids_mixed = sampling_mod.top_k_top_p_sampling(probs, top_p, top_k_mixed, top_k_list_mixed)
+    # Row 0 (greedy) must be argmax=2, row 1 keeps sampled value=99
+    assert ids_mixed[0, 0].item() == 2, f"mixed row0: expected 2, got {ids_mixed[0, 0].item()}"
+    assert ids_mixed[1, 0].item() == 99, f"mixed row1: expected 99, got {ids_mixed[1, 0].item()}"
+
+
+def test_top_k_1_returns_argmax_without_deterministic_mode(monkeypatch):
+    """top_k=1 should trigger argmax even when FD_DETERMINISTIC_MODE is False."""
+    import sys
+
+    import fastdeploy.envs as envs
+
+    sampling_mod = sys.modules["fastdeploy.model_executor.layers.sample.ops.top_k_top_p_sampling"]
+
+    # Disable deterministic mode, force "base" sampling class
+    monkeypatch.setattr(envs, "FD_DETERMINISTIC_MODE", False)
+    monkeypatch.setattr(envs, "FD_SAMPLING_CLASS", "base")
+
+    probs = paddle.to_tensor([[0.1, 0.2, 0.7], [0.6, 0.3, 0.1]], dtype="float32")
+    top_p = paddle.to_tensor([[0.9], [0.9]], dtype="float32")
+    expected = paddle.argmax(probs, axis=-1, keepdim=True)
+
+    # --- All-greedy ---
+    top_k = paddle.to_tensor([[1], [1]], dtype="int64")
+    top_k_list = [1, 1]
+
+    _, ids = sampling_mod.top_k_top_p_sampling(probs, top_p, top_k, top_k_list)
+    assert paddle.equal_all(ids, expected), f"all-greedy: {ids.numpy()} != {expected.numpy()}"
+
+    # --- Mixed batch: row0 greedy, row1 sampled ---
+    top_k_mixed = paddle.to_tensor([[1], [50]], dtype="int64")
+    top_k_list_mixed = [1, 50]
+
+    monkeypatch.setattr(
+        sampling_mod.paddle.tensor,
+        "top_p_sampling",
+        lambda *a, **k: (None, paddle.to_tensor([[99], [99]], dtype="int64")),
+    )
+
+    _, ids_mixed = sampling_mod.top_k_top_p_sampling(probs, top_p, top_k_mixed, top_k_list_mixed)
+    assert ids_mixed[0, 0].item() == 2, f"mixed row0: expected 2, got {ids_mixed[0, 0].item()}"
+    assert ids_mixed[1, 0].item() == 99, f"mixed row1: expected 99, got {ids_mixed[1, 0].item()}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
