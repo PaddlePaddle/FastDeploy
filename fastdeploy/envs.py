@@ -236,6 +236,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
+    "FD_CUTEDSL_MOE_SCALAR_INPUT_SCALE": lambda: int(os.getenv("FD_CUTEDSL_MOE_SCALAR_INPUT_SCALE", "1")),
     # Whether to enable KV cache lock, enforcing mutual exclusion between
     # PrefixCacheManager and Worker when accessing GPU KV cache.
     # Under certain DP+EP configurations, concurrent access (even read-only)
