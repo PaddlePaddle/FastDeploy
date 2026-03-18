@@ -1475,8 +1475,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         list_cap = len(self.forward_batch_reqs_list)
         req_by_batch_id = {}
-        slot_rows_by_batch_id = {}
-        slot_req_id_by_batch_id = {}
         for req in self.forward_batch_reqs_list:
             if req is None:
                 continue
@@ -1484,35 +1482,33 @@ class GPUModelRunner(ModelRunnerBase):
             if req_batch_id is None:
                 continue
             req_by_batch_id[req_batch_id] = req
-        if self.enable_head_wise_kv_cache:
-            for slot_idx, req in enumerate(self.forward_batch_reqs_list):
-                if req is None:
-                    continue
-                req_batch_id = getattr(req, "idx", None)
-                if req_batch_id is None:
-                    continue
-                slot_rows_by_batch_id[req_batch_id] = list(self._head_wise_slot_active_rows[slot_idx])
-                slot_req_id_by_batch_id[req_batch_id] = self._head_wise_slot_req_ids[slot_idx]
 
         aligned_reqs = [None for _ in range(list_cap)]
-        aligned_slot_active_rows = (
-            [[0 for _ in range(self.kv_num_heads)] for _ in range(list_cap)]
-            if self.enable_head_wise_kv_cache
-            else None
-        )
-        aligned_slot_req_ids = [None for _ in range(list_cap)] if self.enable_head_wise_kv_cache else None
         for slot_idx, batch_id in index_to_batch_id.items():
             if slot_idx < 0 or slot_idx >= list_cap:
                 continue
             aligned_reqs[slot_idx] = req_by_batch_id.get(batch_id)
-            if self.enable_head_wise_kv_cache and batch_id in slot_rows_by_batch_id:
-                aligned_slot_active_rows[slot_idx] = slot_rows_by_batch_id[batch_id]
-                aligned_slot_req_ids[slot_idx] = slot_req_id_by_batch_id.get(batch_id)
 
         self.forward_batch_reqs_list = aligned_reqs
         if self.enable_head_wise_kv_cache:
-            self._head_wise_slot_active_rows = aligned_slot_active_rows
-            self._head_wise_slot_req_ids = aligned_slot_req_ids
+            # InputBatch.swap_states/condense currently only reorders block_tables (2D).
+            # Rebuild block_tables_3d explicitly to keep cache-id rows aligned with reordered slots.
+            self._reset_head_wise_block_tables_state()
+            for slot_idx, req in enumerate(aligned_reqs):
+                if req is None:
+                    continue
+                cache_ids_2d = getattr(req, "block_tables_3d", None)
+                if cache_ids_2d is None and req.block_tables and isinstance(req.block_tables[0], list):
+                    cache_ids_2d = req.block_tables
+                cache_ids_2d = self._normalize_head_wise_cache_ids_2d(cache_ids_2d)
+                if cache_ids_2d is not None:
+                    req.block_tables_3d = cache_ids_2d
+                req_id = getattr(req, "request_id", None)
+                self._update_block_tables_3d_slot(
+                    slot_idx,
+                    cache_ids_2d,
+                    str(req_id) if req_id is not None else None,
+                )
 
     def load_model(self) -> None:
         """load or download model"""
