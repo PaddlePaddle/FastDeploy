@@ -878,7 +878,7 @@ class DeepSeekV3DecoderLayer(nn.Layer):
         super().__init__()
         layer_id = int(prefix.split(sep=".")[-1])
 
-        if fd_config.model_config.model_type == "deepseek_v32":
+        if fd_config.model_config.model_type in ["deepseek_v32", "glm_moe_dsa"]:
             self.self_attn = DeepseekV32DSAAttention(
                 fd_config=fd_config,
                 layer_id=layer_id,

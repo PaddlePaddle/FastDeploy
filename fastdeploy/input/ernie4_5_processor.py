@@ -149,8 +149,9 @@ class Ernie4_5Processor(BaseDataProcessor):
         else:
             request["max_tokens"] = min(max_tokens, request["max_tokens"])
         if request.get("temperature") < _SAMPLING_EPS:
-            # zero temperature is equivalent to greedy sampling
+            # zero temperature means greedy decoding: set top_k=1 to force argmax
             request["temperature"] = 1
+            request["top_k"] = 1
         if request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
 

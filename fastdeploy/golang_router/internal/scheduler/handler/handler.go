@@ -98,8 +98,12 @@ func SelectWorker(ctx context.Context, workers []string, message string, workerT
 		strategyFunc = RequestNumSelectWorker
 	case "fd_metrics_score":
 		strategyFunc = FDMetricsScoreSelectWorker
+	case "fd_remote_metrics_score":
+		strategyFunc = FDRemoteMetricsScoreSelectWorker
 	case "cache_aware":
 		strategyFunc = CacheAwarePrefillSelectWorker
+	case "remote_cache_aware":
+		strategyFunc = RemoteCacheAwarePrefillSelectWorker
 	default:
 		strategyFunc = RandomSelectWorker
 	}
@@ -137,6 +141,9 @@ func SelectWorker(ctx context.Context, workers []string, message string, workerT
 
 // Release decreases the counter for the specified worker URL
 func Release(ctx context.Context, url string) {
+	if DefaultScheduler == nil {
+		return
+	}
 	counter := GetOrCreateCounter(ctx, url)
 	counter.Dec()
 	logger.Info(ctx, "release worker: %s, count: %d", url, counter.Get())
@@ -277,10 +284,50 @@ func estimateTokens(message string) uint64 {
 
 // ReleasePrefillTokens releases the corresponding token load when request ends
 func ReleasePrefillTokens(ctx context.Context, url, message string) {
-	if url == "" || message == "" {
+	if DefaultScheduler == nil || url == "" || message == "" {
 		return
 	}
 	tokenCounter := GetOrCreateTokenCounter(ctx, url)
 	tokenCounter.Sub(estimateTokens(message))
 	logger.Info(ctx, "release prefill tokens: %s, tokens: %d", url, tokenCounter.Get())
+}
+
+// StartStatsReporter periodically logs all worker loads and cache hit rate
+func StartStatsReporter(ctx context.Context, interval float64) {
+	ticker := time.NewTicker(time.Duration(interval * float64(time.Second)))
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			reportStats(ctx)
+		}
+	}
+}
+
+func reportStats(ctx context.Context) {
+	if DefaultScheduler == nil || DefaultScheduler.managerAPI == nil {
+		return
+	}
+
+	healthyURLs := DefaultScheduler.managerAPI.GetHealthyURLs(ctx)
+
+	totalRunning := 0
+	var workerLoads []string
+	for _, url := range healthyURLs {
+		running, _, _ := DefaultScheduler.managerAPI.GetMetrics(ctx, url)
+		totalRunning += running
+		workerLoads = append(workerLoads, fmt.Sprintf("%s: running=%d", url, running))
+	}
+
+	// Cache hit stats (periodic reset)
+	hits, total := GetAndResetCacheHitStats()
+	hitRate := 0.0
+	if total > 0 {
+		hitRate = float64(hits) * 100 / float64(total)
+	}
+
+	logger.Info(ctx, "[stats] total_running=%d, workers: [%s], cache_hit_rate=%.2f%% (hits=%d/total=%d)",
+		totalRunning, strings.Join(workerLoads, ", "), hitRate, hits, total)
 }
