@@ -16,6 +16,7 @@
 """
 
 import pickle
+from collections.abc import Mapping
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -28,11 +29,11 @@ from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_vl_processor import read_video_decord
 from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
-from fastdeploy.input.utils import IDS_TYPE_FLAG
+from fastdeploy.input.utils import IDS_TYPE_FLAG, MAX_IMAGE_DIMENSION
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
 
-from .image_processor import ImageProcessor, ceil_by_factor, floor_by_factor
+from .image_processor import ImageProcessor, ceil_by_factor, floor_by_factor, smart_resize
 
 VIDEO_MIN_PIXELS = 128 * 28 * 28
 VIDEO_MAX_PIXELS = 768 * 28 * 28
@@ -815,3 +816,66 @@ class DataProcessor(MMBaseDataProcessor):
         req = pickle.dumps((mm_hashes, mm_items))
         socket.send_multipart([b"", req])
         data_processor_logger.info(f"Update cache of mm_hashes: {mm_hashes}")
+
+    def get_max_image_tokens(self, seq_len: int) -> int:
+        """
+        Get the maximum number of image tokens for a single image.
+
+        Args:
+            seq_len: Maximum sequence length
+
+        Returns:
+            Maximum number of image tokens
+        """
+        resized_height, resized_width = smart_resize(
+            height=MAX_IMAGE_DIMENSION,
+            width=MAX_IMAGE_DIMENSION,
+            factor=self.image_processor.patch_size * self.image_processor.merge_size,
+            min_pixels=self.image_processor.min_pixels,
+            max_pixels=self.image_processor.max_pixels,
+        )
+        grid_h, grid_w = (
+            resized_height // self.image_processor.patch_size,
+            resized_width // self.image_processor.patch_size,
+        )
+        num_image_tokens = grid_h * grid_w // (self.image_processor.merge_size**2)
+        return min(num_image_tokens, seq_len)
+
+    def get_max_video_tokens(self, seq_len: int) -> int:
+        """
+        Get the maximum number of video tokens for a single video chunk.
+
+        Args:
+            seq_len: Maximum sequence length
+
+        Returns:
+            Maximum number of video tokens per chunk
+        """
+        resized_height, resized_width = smart_resize(
+            height=MAX_IMAGE_DIMENSION,
+            width=MAX_IMAGE_DIMENSION,
+            factor=self.image_processor.patch_size * self.image_processor.merge_size,
+            min_pixels=VIDEO_MIN_PIXELS,
+            max_pixels=VIDEO_MAX_PIXELS,
+        )
+        grid_h, grid_w = (
+            resized_height // self.image_processor.patch_size,
+            resized_width // self.image_processor.patch_size,
+        )
+        # For video, temporal dimension is considered but we return per-frame tokens
+        num_video_tokens = grid_h * grid_w // (self.image_processor.merge_size**2)
+        return min(num_video_tokens, seq_len)
+
+    def get_mm_max_tokens_per_item(self, seq_len: int) -> Mapping[str, int]:
+        """
+        Return the maximum number of tokens per item for each modality.
+
+        Args:
+            seq_len: Maximum sequence length
+
+        Returns:
+            A mapping from modalities to their respective maximum token counts.
+        """
+        max_image_tokens = self.get_max_image_tokens(seq_len)
+        max_video_tokens = self.get_max_video_tokens(seq_len)
+        return {"image": max_image_tokens, "video": max_video_tokens}

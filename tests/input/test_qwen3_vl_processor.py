@@ -1067,6 +1067,51 @@ class TestQwen3VLProcessor(unittest.TestCase):
         self.assertIn("video_patch_id", result)
         self.assertIn("mm_num_token_func", result)
 
+    def test_get_max_image_tokens(self):
+        """Test get_max_image_tokens method"""
+        seq_len = 100000
+        max_tokens = self.processor.get_max_image_tokens(seq_len)
+
+        # Verify return value is positive integer and does not exceed seq_len
+        self.assertIsInstance(max_tokens, int)
+        self.assertGreater(max_tokens, 0)
+        self.assertLessEqual(max_tokens, seq_len)
+
+    def test_get_max_video_tokens(self):
+        """Test get_max_video_tokens method"""
+        seq_len = 100000
+        max_tokens = self.processor.get_max_video_tokens(seq_len)
+
+        # Verify return value is positive integer and does not exceed seq_len
+        self.assertIsInstance(max_tokens, int)
+        self.assertGreater(max_tokens, 0)
+        self.assertLessEqual(max_tokens, seq_len)
+
+    def test_get_mm_max_tokens_per_item(self):
+        """Test get_mm_max_tokens_per_item method"""
+        seq_len = 100000
+        result = self.processor.get_mm_max_tokens_per_item(seq_len)
+
+        # Verify return format
+        self.assertIsInstance(result, dict)
+        self.assertIn("image", result)
+        self.assertIn("video", result)
+        self.assertIsInstance(result["image"], int)
+        self.assertIsInstance(result["video"], int)
+        self.assertGreater(result["image"], 0)
+        self.assertGreater(result["video"], 0)
+        self.assertLessEqual(result["image"], seq_len)
+        self.assertLessEqual(result["video"], seq_len)
+
+    def test_get_mm_max_tokens_per_item_with_small_seq_len(self):
+        """Test get_mm_max_tokens_per_item truncation with small seq_len"""
+        small_seq_len = 100
+        result = self.processor.get_mm_max_tokens_per_item(small_seq_len)
+
+        # Verify return values are truncated to seq_len
+        self.assertLessEqual(result["image"], small_seq_len)
+        self.assertLessEqual(result["video"], small_seq_len)
+
 
 class TestSampleFrames(unittest.TestCase):
     """
