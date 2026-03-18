@@ -29,6 +29,9 @@ from fastdeploy.model_executor.utils import (
 )
 
 from .quant_base import QuantConfigBase, QuantMethodBase
+from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
+from paddle import nn
+from typing import Callable
 
 paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
@@ -96,6 +99,7 @@ class ModelOptNvFp4Config(QuantConfigBase):
 
     @classmethod
     def from_config(cls, config: dict) -> "ModelOptNvFp4Config":
+        print("111111111100000")
         quant_config = config
         quant_method = quant_config.get("quant_algo", "")
         if not quant_method:
@@ -140,7 +144,7 @@ class ModelOptNvFp4Config(QuantConfigBase):
                 raise ValueError(
                     f"NVFP4 quantization requires the following fields in " f"hf_quant_config.json: {missing_fields}"
                 )
-
+        print("1111111111")
         return cls(
             is_checkpoint_nvfp4_serialized=is_checkpoint_nvfp4_serialized,
             kv_cache_quant_algo=kv_cache_quant_algo,
@@ -355,7 +359,7 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         return out
 
 
-class ModelOptNvFp4FusedMoE(QuantMethodBase):
+class ModelOptNvFp4FusedMoE(MoEMethodBase):
     """Fused MoE method for Model Optimizer NVFP4.
     Supports loading NVFP4 checkpoints with the following structure:
 
@@ -548,6 +552,36 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         layer.down_proj_weight_scale = None
         create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
 
+
+    def apply_ep_prefill(
+            self,
+            layer: nn.Layer,
+            x: paddle.Tensor,
+            gate: nn.Layer,
+            topk_ids_hookfunc: Callable = None,
+        ) -> paddle.Tensor:
+        pass
+
+    def apply_ep_decode(
+            self,
+            layer: nn.Layer,
+            x: paddle.Tensor,
+            gate: nn.Layer,
+            topk_ids_hookfunc: Callable = None,
+        ) -> paddle.Tensor:
+        pass
+
+
+    def apply_tp(
+            self,
+            layer: nn.Layer,
+            x: paddle.Tensor,
+            gate: nn.Layer,
+            topk_ids_hookfunc: Callable = None,
+        ) -> paddle.Tensor:
+        pass
+
+
     def apply(
         self,
         layer,
@@ -573,6 +607,14 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         output_dtype = x.dtype
         x_sf = None
         output = paddle.empty_like(x)
+
+        # 2. EP Dispatch
+        permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
+            x, topk_ids, topk_weights, use_fp8=False, use_ue8m0=False
+        )
+        print(permute_input.shape)
+
+        return x
 
         if self.backend == "flashinfer-cutlass":
             # flashinfer cutlass
@@ -603,6 +645,16 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
                 tune_max_num_tokens=next_power_of_2(x.shape[0]),
                 output=output,
             )
+
+            # quant_scales=[
+            #     layer.up_gate_proj_input_scale_quant,
+            #     layer.up_gate_proj_blockscale_swizzled,
+            #     layer.g1_alphas,
+            #     layer.down_proj_input_scale_quant,
+            #     layer.down_proj_blockscale_swizzled,
+            #     layer.g2_alphas,
+            # ]
+            # print(quant_scales)
 
             return output
 
