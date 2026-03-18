@@ -5,6 +5,11 @@ import (
 	"math"
 )
 
+func computeScore(ctx context.Context, runningCnt int, waitingCnt int) float64 {
+	score := float64(runningCnt) + float64(waitingCnt)*waitingWeight
+	return score
+}
+
 func FDRemoteMetricsScoreSelectWorker(ctx context.Context, workers []string, message string) (string, error) {
 	if len(workers) == 0 {
 		return "", nil

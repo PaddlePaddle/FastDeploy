@@ -96,8 +96,6 @@ func SelectWorker(ctx context.Context, workers []string, message string, workerT
 	case "request_num":
 		// Decode/mixed: prioritize the instance with the smallest number of current requests
 		strategyFunc = RequestNumSelectWorker
-	case "fd_metrics_score":
-		strategyFunc = FDMetricsScoreSelectWorker
 	case "fd_remote_metrics_score":
 		strategyFunc = FDRemoteMetricsScoreSelectWorker
 	case "cache_aware":
