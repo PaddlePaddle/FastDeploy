@@ -29,6 +29,8 @@ class TestProcessBatchDraftTokens(unittest.TestCase):
     def setUp(self):
         # 模拟 cfg
         cfg = MagicMock()
+        cfg.parallel_config.local_data_parallel_id = 0
+        cfg.parallel_config.engine_worker_queue_port = ["9700"]
         cfg.speculative_config = MagicMock()
         cfg.speculative_config.method = "mtp"
         cfg.speculative_config.num_speculative_tokens = 3

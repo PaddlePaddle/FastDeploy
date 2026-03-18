@@ -124,6 +124,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
+        self.enable_keep_sampling_mask = fd_config.model_config.enable_keep_sampling_mask
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
         self.ori_vocab_size = self.fd_config.model_config.ori_vocab_size
@@ -220,6 +221,17 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Rollout routing replay config
         self.routing_replay_manager = None
+
+        # ZMQ side-channel for sampling_mask in non-FD_USE_GET_SAVE_OUTPUT_V1 path
+        self.sampling_mask_zmq_client = None
+        if not envs.FD_USE_GET_SAVE_OUTPUT_V1 and self.enable_keep_sampling_mask:
+            rank_id = self.parallel_config.local_data_parallel_id
+            port = self.parallel_config.engine_worker_queue_port
+            self.sampling_mask_zmq_client = ZmqIpcClient(
+                name=f"sampling_mask_output_rank_{rank_id}_{port}", mode=zmq.PUSH
+            )
+            self.sampling_mask_zmq_client.connect()
+            logger.info(f"create send zmq sampling_mask_output_rank_{rank_id}_{port}")
 
         self.zmq_client = None
         self.async_output_queue = None
@@ -1635,6 +1647,7 @@ class GPUModelRunner(ModelRunnerBase):
             top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
             logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
+            keep_sampling_mask=self.enable_keep_sampling_mask,
         )
 
     def load_model(self) -> None:
@@ -2481,6 +2494,7 @@ class GPUModelRunner(ModelRunnerBase):
                 async_output_queue=self.async_output_queue,
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
                 routing_replay_manager=self.routing_replay_manager,
+                sampling_mask_zmq_client=self.sampling_mask_zmq_client,
             )
 
             return None
@@ -2611,6 +2625,7 @@ class GPUModelRunner(ModelRunnerBase):
                 splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
                 routing_replay_manager=self.routing_replay_manager,
+                sampling_mask_zmq_client=self.sampling_mask_zmq_client,
             )
             if self.guided_backend is not None and sampler_output is not None:
                 self.sampler.post_process(sampler_output.sampled_token_ids)

@@ -697,14 +697,7 @@ class EngineService:
                 else:
                     max_num_batched_tokens = self.cfg.model_config.max_model_len
 
-                # In multi-mode scenarios, using available_block_num to pull requests to prevent heavy rescheduling
-                # in the frequency domain due to insufficient blocks
-                if self.cfg.model_config.enable_mm:
-                    self.resource_manager.check_and_free_block_tables()
-                    available_blocks = self.resource_manager.available_block_num()
-                else:
-                    available_blocks = self.cfg.cache_config.max_block_num_per_seq
-
+                available_blocks = self.cfg.cache_config.max_block_num_per_seq
                 tasks = self.scheduler.get_requests(
                     available_blocks=available_blocks,
                     block_size=self.cfg.cache_config.block_size,
