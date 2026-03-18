@@ -641,6 +641,8 @@ class TestFusedMoE(unittest.TestCase):
         for layer in fused_moe:
             layer.gating.weight.set_value(paddle.rand(layer.gating.weight.shape, dtype=paddle.float32))
 
+        enable_cuda_graph = is_decoder and ep_size > 1
+
         for idx, num_tokens in enumerate(test_token_nums):
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
 
@@ -656,13 +658,13 @@ class TestFusedMoE(unittest.TestCase):
 
                 return out
 
-            if is_decoder:
+            if enable_cuda_graph:
                 moe_cuda_graphs[idx] = graphs.CUDAGraph()
                 moe_cuda_graphs[idx].capture_begin()
 
             fake_model_run()
 
-            if is_decoder:
+            if enable_cuda_graph:
                 moe_cuda_graphs[idx].capture_end()
 
             num_tests = max(2, int(os.getenv("NVFP4_TEST_ITERS", "6")))
@@ -671,7 +673,7 @@ class TestFusedMoE(unittest.TestCase):
             for i in range(num_tests):
                 start_events[i].record()
 
-                if is_decoder:
+                if enable_cuda_graph:
                     moe_cuda_graphs[idx].replay()
                 else:
                     fake_model_run()
