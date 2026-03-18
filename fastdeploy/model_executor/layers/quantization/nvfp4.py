@@ -936,7 +936,95 @@ class ModelOptNvFp4FusedMoECuteDSL(MoEMethodBase):
         gate,
         topk_ids_hookfunc=None,
     ):
-        raise NotImplementedError(
-            "NVFP4 CuteDSL + DeepEP prefill is not supported yet. "
-            "Please run decode mode (splitwise_role=decode / moe_phase=decode)."
-        )
+        if layer.fd_config.parallel_config.use_internode_ll_two_stage:
+            raise NotImplementedError("NVFP4 CuteDSL EP prefill does not support DeepEP two-stage low-latency.")
+
+        gate_out = gate(x.cast("float32"))
+        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
+
+        from fastdeploy.model_executor.layers.moe.ep import deep_ep
+
+        event = deep_ep.Buffer.capture()
+        (
+            recv_x,
+            recv_topk_idx,
+            recv_topk_weights,
+            recv_num_tokens_per_expert_list,
+            handle,
+            event,
+        ) = self.ep_prefill_runner.dispatch(x, topk_idx, topk_weights, previous_event=event)
+
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+
+        token_all_num = sum(recv_num_tokens_per_expert_list)
+        if token_all_num > 0:
+            (
+                permute_input,
+                permute_indices_per_token,
+                recv_num_tokens_per_expert_list_cumsum,
+                dst_weights,
+                dst_indices,
+                _cumsum_idx_gpu,
+                _expert_idx_per_token,
+                _dequant_scale,
+            ) = fastdeploy.model_executor.ops.gpu.ep_moe_expert_dispatch(
+                recv_x,
+                recv_topk_idx,
+                recv_topk_weights,
+                None,
+                recv_num_tokens_per_expert_list,
+                token_all_num,
+                "w16a16",
+            )
+
+            token_cumsum = recv_num_tokens_per_expert_list_cumsum.cast("int32")
+            token_counts = paddle.zeros_like(token_cumsum)
+            token_counts[0] = token_cumsum[0]
+            if layer.num_local_experts > 1:
+                token_counts[1:] = token_cumsum[1:] - token_cumsum[:-1]
+
+            max_m = max(1, int(token_counts.max()))
+            hidden_states_3d = paddle.zeros([layer.num_local_experts, max_m, x.shape[1]], dtype=permute_input.dtype)
+
+            prev = 0
+            for expert_id in range(layer.num_local_experts):
+                cur = int(token_cumsum[expert_id])
+                count = cur - prev
+                if count > 0:
+                    hidden_states_3d[expert_id, :count, :] = permute_input[prev:cur]
+                prev = cur
+
+            ffn_out_3d = self._run_cutedsl_grouped_masked(layer, hidden_states_3d, token_counts)
+
+            flat_ffn_out = paddle.empty([token_all_num, x.shape[1]], dtype=ffn_out_3d.dtype)
+            prev = 0
+            for expert_id in range(layer.num_local_experts):
+                cur = int(token_cumsum[expert_id])
+                count = cur - prev
+                if count > 0:
+                    flat_ffn_out[prev:cur] = ffn_out_3d[expert_id, :count, :]
+                prev = cur
+
+            tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
+                flat_ffn_out,
+                dst_weights,
+                permute_indices_per_token,
+                dst_indices,
+                None,
+                False,
+                1.0,
+            )
+        else:
+            tmp_ffn_out = recv_x
+
+        event = deep_ep.Buffer.capture()
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+
+        return tmp_ffn_out
+
