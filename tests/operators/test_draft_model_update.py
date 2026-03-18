@@ -45,6 +45,7 @@ def draft_model_update_kernel(
     step_idx,
     cu_seqlens_q_output,
     stop_flags,
+    drop_batch,
     not_need_stop,
     max_dec_len,
     end_ids,
@@ -101,8 +102,9 @@ def draft_model_update_kernel(
                 stop_flags[tid] = True
                 stop_flag_now_int = 1
                 # max_dec_len
-            elif step_idx[tid] >= max_dec_len[tid]:
+            elif step_idx[tid] >= max_dec_len[tid] - 2:
                 stop_flags[tid] = True
+                drop_batch[tid] = True
                 draft_token_now[seq_len_this_time - 1] = end_ids[0]
                 base_model_draft_tokens_now[substep + 1] = end_ids[0]
                 stop_flag_now_int = 1
@@ -132,6 +134,7 @@ def draft_model_update_ref(
     step_idx,
     cu_seqlens_q_output,
     stop_flags,
+    drop_batch,
     not_need_stop,
     max_dec_len,
     end_ids,
@@ -163,6 +166,7 @@ def draft_model_update_ref(
         step_idx,
         cu_seqlens_q_output,
         stop_flags,
+        drop_batch,
         not_need_stop,
         max_dec_len,
         end_ids,
@@ -203,6 +207,7 @@ class TestDraftModelUpdate(unittest.TestCase):
         cu_seqlens_q_output = paddle.randint(0, 2, shape=(max_bsz,), dtype="int32")
         cu_seqlens_q_output[0] = 0
         stop_flags = paddle.zeros([max_bsz], dtype="bool")
+        drop_batch = paddle.zeros([max_bsz], dtype="bool")
         not_need_stop = paddle.zeros([1], dtype="bool").to(device=paddle.CPUPlace())
         max_dec_len = paddle.randint(100, 102, shape=(max_bsz,), dtype="int64")
         end_ids = paddle.to_tensor([2], dtype="int64")
@@ -218,6 +223,7 @@ class TestDraftModelUpdate(unittest.TestCase):
             step_idx,
             cu_seqlens_q_output,
             stop_flags,
+            drop_batch,
             not_need_stop,
             max_dec_len,
             end_ids,

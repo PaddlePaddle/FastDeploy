@@ -23,53 +23,57 @@ __global__ void draft_model_update_seq_lens_this_time_kernel(
     int* base_model_seq_lens_this_time,
     const int* base_model_seq_lens_encoder,
     const bool* base_model_stop_flags,
+    const bool* batch_drop,
     int bsz,
     int base_model_draft_token_len) {
-    int tid = threadIdx.x;
-    if (tid < bsz) {
-        if (!base_model_stop_flags[tid] &&
-            base_model_seq_lens_encoder[tid] == 0) {
-            const int64_t* base_model_draft_tokens_now =
-                base_model_draft_tokens + tid * base_model_draft_token_len;
-            int token_num = 0;
+  int tid = threadIdx.x;
+  if (tid < bsz) {
+    if (!base_model_stop_flags[tid] && base_model_seq_lens_encoder[tid] == 0) {
+      const int64_t* base_model_draft_tokens_now =
+          base_model_draft_tokens + tid * base_model_draft_token_len;
+      int token_num = 0;
 
-            for (int i = 0; i < base_model_draft_token_len; ++i) {
-                if (base_model_draft_tokens_now[i] != -1) {
-                    token_num++;
-                }
-            }
-            base_model_seq_lens_this_time[tid] = token_num;
-        } else if (base_model_stop_flags[tid]) {
-            base_model_seq_lens_this_time[tid] = 0;
+      for (int i = 0; i < base_model_draft_token_len; ++i) {
+        if (base_model_draft_tokens_now[i] != -1) {
+          token_num++;
         }
+      }
+      if (batch_drop[tid]) {
+        base_model_seq_lens_this_time[tid] = 1;
+      } else {
+        base_model_seq_lens_this_time[tid] = token_num;
+      }
+    } else if (base_model_stop_flags[tid]) {
+      base_model_seq_lens_this_time[tid] = 0;
     }
+  }
 }
 
 void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_this_time,
                            const paddle::Tensor& base_model_seq_lens_encoder,
-                           const paddle::Tensor& base_model_stop_flags) {
-    int real_bsz = base_model_seq_lens_this_time.shape()[0];
-    auto cu_stream = base_model_seq_lens_this_time.stream();
-    int block_size = (real_bsz + 32 - 1) / 32 * 32;
-    int base_model_draft_token_len = base_model_draft_tokens.shape()[1];
-    draft_model_update_seq_lens_this_time_kernel<<<1,
-                                                   block_size,
-                                                   0,
-                                                   cu_stream>>>(
-        base_model_draft_tokens.data<int64_t>(),
-        const_cast<int*>(base_model_seq_lens_this_time.data<int>()),
-        base_model_seq_lens_encoder.data<int>(),
-        base_model_stop_flags.data<bool>(),
-        real_bsz,
-        base_model_draft_token_len);
+                           const paddle::Tensor& base_model_stop_flags,
+                           const paddle::Tensor& batch_drop) {
+  int real_bsz = base_model_seq_lens_this_time.shape()[0];
+  auto cu_stream = base_model_seq_lens_this_time.stream();
+  int block_size = (real_bsz + 32 - 1) / 32 * 32;
+  int base_model_draft_token_len = base_model_draft_tokens.shape()[1];
+  draft_model_update_seq_lens_this_time_kernel<<<1, block_size, 0, cu_stream>>>(
+      base_model_draft_tokens.data<int64_t>(),
+      const_cast<int*>(base_model_seq_lens_this_time.data<int>()),
+      base_model_seq_lens_encoder.data<int>(),
+      base_model_stop_flags.data<bool>(),
+      batch_drop.data<bool>(),
+      real_bsz,
+      base_model_draft_token_len);
 }
 
 PD_BUILD_STATIC_OP(draft_model_postprocess)
     .Inputs({"base_model_draft_tokens",
              "base_model_seq_lens_this_time",
              "base_model_seq_lens_encoder",
-             "base_model_stop_flags"})
+             "base_model_stop_flags",
+             "batch_drop"})
     .Outputs({"base_model_draft_tokens_out",
               "base_model_seq_lens_this_time_out",
               "base_model_stop_flags_out"})

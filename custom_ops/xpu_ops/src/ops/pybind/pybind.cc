@@ -212,6 +212,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& step_idx,
                       const paddle::Tensor& output_cum_offsets,
                       const paddle::Tensor& stop_flags,
+                      const paddle::Tensor& batch_drop,
                       const paddle::Tensor& not_need_stop,
                       const paddle::Tensor& max_dec_len,
                       const paddle::Tensor& end_ids,
@@ -364,7 +365,8 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
 void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_this_time,
                            const paddle::Tensor& base_model_seq_lens_encoder,
-                           const paddle::Tensor& base_model_stop_flags);
+                           const paddle::Tensor& base_model_stop_flags,
+                           const paddle::Tensor& batch_drop);
 
 std::vector<paddle::Tensor> EagleGetHiddenStates(
     const paddle::Tensor& input,
@@ -379,6 +381,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
 
 std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& input,
+    const paddle::Tensor& last_seq_lens_encoder,
     const paddle::Tensor& last_seq_lens_this_time,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& step_idx);
@@ -773,6 +776,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("base_model_seq_lens_this_time"),
         py::arg("base_model_seq_lens_encoder"),
         py::arg("base_model_stop_flags"),
+        py::arg("batch_drop"),
         "Postprocess data for draft model in speculative decoding");
 
   m.def("draft_model_update",
@@ -787,6 +791,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("step_idx"),                 // 步骤索引张量
         py::arg("output_cum_offsets"),       // 输出累积偏移量张量
         py::arg("stop_flags"),               // 停止标志张量
+        py::arg("batch_drop"),               // MTP 停止推理标志张量
         py::arg("not_need_stop"),            // 无需停止标志张量
         py::arg("max_dec_len"),              // 最大解码长度张量
         py::arg("end_ids"),                  // 结束ID张量
@@ -811,6 +816,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("eagle_get_self_hidden_states",
         &EagleGetSelfHiddenStates,
         py::arg("input"),
+        py::arg("last_seq_lens_encoder"),
         py::arg("last_seq_lens_this_time"),
         py::arg("seq_lens_this_time"),
         py::arg("step_idx"),

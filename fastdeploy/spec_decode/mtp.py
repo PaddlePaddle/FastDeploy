@@ -186,6 +186,7 @@ class MTPProposer(Proposer):
             self.model_inputs["step_idx"][idx : idx + 1] = 0
             self.model_inputs["max_dec_len"][idx : idx + 1] = max_dec_len
             self.model_inputs["stop_flags"][idx : idx + 1] = False
+            self.model_inputs["batch_drop"][idx : idx + 1] = False
 
             self.model_inputs["encoder_block_lens"][idx : idx + 1] = block_num
             self.model_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
@@ -705,8 +706,8 @@ class MTPProposer(Proposer):
             self.model_inputs["seq_lens_decoder"],
             self.model_inputs["step_idx"],
             self.model_inputs["not_need_stop"],
-            self.model_inputs["batch_drop"],
             self.model_inputs["is_block_step"],
+            self.model_inputs["batch_drop"],
             self.model_inputs["pre_ids"],
             self.model_inputs["mask_rollback"],
             self.model_inputs["recompute_token_num"],
@@ -760,6 +761,7 @@ class MTPProposer(Proposer):
                 else self.model_inputs["output_cum_offsets"]
             ),
             self.model_inputs["stop_flags"],
+            self.model_inputs["batch_drop"],
             self.model_inputs["not_need_stop"],
             self.model_inputs["max_dec_len"],
             self.model_inputs["eos_token_id"],
@@ -885,6 +887,7 @@ class MTPProposer(Proposer):
                 # paddle.clone would raise error 700 in cudaGraph mode
                 if self.num_model_steps > 1:
                     self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
+                    self.model_inputs.last_seq_lens_encoder.copy_(self.model_inputs["seq_lens_encoder"], False)
 
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
@@ -1075,6 +1078,7 @@ class MTPProposer(Proposer):
     def _get_self_hidden_states(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(
             hidden_states,
+            self.model_inputs.last_seq_lens_encoder,
             self.model_inputs.last_seq_lens_this_time,
             self.model_inputs["seq_lens_this_time"],
             self.model_inputs["step_idx"],
@@ -1120,6 +1124,7 @@ class MTPProposer(Proposer):
             self.target_model_inputs["seq_lens_this_time"],
             self.target_model_inputs["seq_lens_encoder"],
             self.target_model_inputs["stop_flags"],
+            self.model_inputs["batch_drop"],
         )
         if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             mtp_step_paddle(
