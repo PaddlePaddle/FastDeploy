@@ -205,12 +205,14 @@ class DynamicWeightManager:
         """Update using IPC snapshot strategy for elastic recovery.
 
         Loading priority:
-          1. Chunked part files  (model_state.tpR{id}.part{N}.pdparams)
-          2. Single full file    (model_state.tpR{id}.pdparams)
-          3. Shared fallback dir (/shared_ipc_meta/...)
+          1. Chunked part files  (model_state.tp{rank}.{id}.part{N}.pdparams)
+          2. Single full file    (model_state.tp{rank}.{id}.pdparams)
+          3. Legacy format       (model_state.tp0{id}.pdparams)
+          4. Shared fallback dir (/shared_ipc_meta/...)
         """
         model_dir = self.fd_config.model_config.model
-        base_name = f"model_state.tp{paddle.distributed.get_rank()}{self.meta_src_id}"
+        base_name = f"model_state.tp{paddle.distributed.get_rank()}.{self.meta_src_id}"
+        legacy_base_name = f"model_state.tp0{self.meta_src_id}"
 
         # --- Priority 1: load from chunked part files to avoid memory spike ---
         part_pattern = os.path.join(model_dir, f"{base_name}.part*.pdparams")
@@ -227,12 +229,10 @@ class DynamicWeightManager:
                 self._update_model_from_state(ipc_state_dict, f"snapshot-part{idx}")
                 del ipc_state_dict
                 gc.collect()
-            logger.info(
-                f"IPC snapshot update completed from {len(part_files)} part files under {model_dir}"
-            )
+            logger.info(f"IPC snapshot update completed from {len(part_files)} part files under {model_dir}")
             return
 
-        # --- Priority 2: single full pdparams file (legacy) ---
+        # --- Priority 2: single full pdparams file ---
         model_path = os.path.join(model_dir, f"{base_name}.pdparams")
         if os.path.exists(model_path):
             ipc_state_dict = paddle.load(model_path, safetensors=True)
@@ -240,12 +240,19 @@ class DynamicWeightManager:
             logger.info(f"IPC snapshot update completed from {model_path}")
             return
 
-        # --- Priority 3: shared directory fallback (oldest legacy path) ---
+        # --- Priority 3: legacy format (model_state.tp0{id}.pdparams) ---
+        legacy_path = os.path.join(model_dir, f"{legacy_base_name}.pdparams")
+        if os.path.exists(legacy_path):
+            ipc_state_dict = paddle.load(legacy_path, safetensors=True)
+            self._update_model_from_state(ipc_state_dict, "snapshot")
+            logger.info(f"IPC snapshot update completed from legacy format {legacy_path}")
+            return
+
+        # --- Priority 4: shared directory fallback ---
         fallback_path = f"/shared_ipc_meta/{base_name}.pdparams"
         if not os.path.exists(fallback_path):
             raise FileNotFoundError(
-                f"No snapshot found for {base_name}: "
-                f"checked {model_dir} and {fallback_path}"
+                f"No snapshot found for {base_name}: " f"checked {model_dir} (new/legacy) and {fallback_path}"
             )
         logger.info(f"No local snapshot in {model_dir}, fallback to {fallback_path}")
         ipc_state_dict = paddle.load(fallback_path)
