@@ -870,35 +870,36 @@ class ModelOptNvFp4FusedMoECuteDSL(MoEMethodBase):
 
         num_local_experts = layer.num_local_experts
         hidden_dim = x.shape[1]
-        flat_topk_ids = topk_ids.reshape([-1]).cast("int64")
-        flat_weights = topk_weights.reshape([-1]).cast(x.dtype)
+        flat_topk_ids = topk_ids.reshape([-1])
 
-        masked_m = paddle.bincount(flat_topk_ids, minlength=num_local_experts).cast("int32")
+        masked_m = paddle.zeros([num_local_experts], dtype=paddle.int32)
+        for i in range(num_local_experts):
+            masked_m[i] = int((flat_topk_ids == i).sum())
+
         max_m = max(1, int(masked_m.max()))
-
         hidden_states_3d = paddle.zeros([num_local_experts, max_m, hidden_dim], dtype=x.dtype)
-        expert_token_indices = [None] * num_local_experts
+        for i in range(num_local_experts):
+            count = int(masked_m[i])
+            if count > 0:
+                token_indices = paddle.nonzero(flat_topk_ids == i).squeeze(-1)
+                src_indices = token_indices // layer.top_k
+                hidden_states_3d[i, :count, :] = x[src_indices]
 
+        ffn_out = self._run_cutedsl_grouped_masked(layer, hidden_states_3d, masked_m)
+
+        bs = x.shape[0]
+        output = paddle.zeros([bs, hidden_dim], dtype=ffn_out.dtype)
+        flat_weights = topk_weights.reshape([-1])
         for i in range(num_local_experts):
             count = int(masked_m[i])
             if count == 0:
                 continue
             token_indices = paddle.nonzero(flat_topk_ids == i).squeeze(-1)
-            expert_token_indices[i] = token_indices
-            src_indices = (token_indices // layer.top_k).cast("int64")
-            hidden_states_3d[i, :count, :] = x[src_indices]
-
-        ffn_out = self._run_cutedsl_grouped_masked(layer, hidden_states_3d, masked_m)
-
-        output = paddle.zeros([x.shape[0], hidden_dim], dtype=ffn_out.dtype)
-        for i in range(num_local_experts):
-            token_indices = expert_token_indices[i]
-            if token_indices is None:
-                continue
-            count = token_indices.shape[0]
-            batch_indices = (token_indices // layer.top_k).cast("int64")
-            weighted_out = ffn_out[i, :count, :] * flat_weights[token_indices].cast(ffn_out.dtype).unsqueeze(-1)
-            output = paddle.index_add(output, index=batch_indices, axis=0, value=weighted_out)
+            batch_indices = (token_indices // layer.top_k).tolist()
+            weights_list = flat_weights[token_indices].cast(ffn_out.dtype)
+            expert_out = ffn_out[i, :count, :]
+            for j, b in enumerate(batch_indices):
+                output[b] += expert_out[j] * weights_list[j]
 
         return output
 
