@@ -224,6 +224,10 @@ class ModelOutputData:
         the length of stop sequence
     """
     stop_seqs_len: paddle.Tensor = None
+    """
+        preempted flag
+    """
+    preempted_idx: paddle.Tensor = None
 
 
 @dataclass
