@@ -388,10 +388,15 @@ class DataProcessor(BaseDataProcessor):
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         request = kwargs.get("request", None)
+        direct_decode = kwargs.get("direct_decode", False)
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] in self.eos_token_ids:
                 token_ids = token_ids[:-1]
-        delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
+        if direct_decode:
+            delta_text = self.tokenizer.decode(token_ids)
+            previous_texts = ""
+        else:
+            delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
             response_dict["outputs"]["completion_tokens"] = full_text
@@ -411,8 +416,9 @@ class DataProcessor(BaseDataProcessor):
                 tool_call_info = tool_parser.extract_tool_calls(full_text, request)
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_calls"] = tool_call_info.tool_calls
-            data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
-            del self.decode_status[req_id]
+            if req_id in self.decode_status:
+                data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
+                del self.decode_status[req_id]
             if req_id in self.model_status_dict:
                 del self.model_status_dict[req_id]
         return response_dict

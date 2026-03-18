@@ -568,7 +568,7 @@ class LLM:
                     result = self.req_output.pop(req_id)
                     result_dict = result.to_dict()
                     result_dict = self.llm_engine.data_processor.process_response_dict(
-                        result_dict, stream=False, include_stop_str_in_output=False
+                        result_dict, stream=False, include_stop_str_in_output=False, direct_decode=True
                     )
                     result = RequestOutput.from_dict(result_dict)
 

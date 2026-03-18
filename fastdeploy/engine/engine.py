@@ -731,7 +731,7 @@ class LLMEngine:
             # Exit loop if termination condition is met
             if is_end:
                 output = self.engine.data_processor.process_response_dict(
-                    result.to_dict(), stream=False, include_stop_str_in_output=False
+                    result.to_dict(), stream=False, include_stop_str_in_output=False, direct_decode=not stream
                 )
                 llm_logger.debug(f"Generate result: {output}")
                 if not stream:
