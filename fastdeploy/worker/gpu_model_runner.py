@@ -143,8 +143,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.device_id = device_id
         self.enable_head_wise_kv_cache = envs.FD_HEAD_WISE_KV_CACHE == 1
         self.head_wise_debug_log = bool(int(os.getenv("FD_HEAD_WISE_KV_LOG", "0")))
-        self._head_wise_debug_log_count = 0
-        self._head_wise_prepare_log_count = 0
         self.kv_num_heads = max(
             1,
             int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
@@ -887,11 +885,7 @@ class GPUModelRunner(ModelRunnerBase):
                     if self.enable_head_wise_kv_cache:
                         # In head-wise mode, expand cache_ids_2d to include all heads
                         # block_tables format: [bsz, kv_num_heads * max_blocks_per_head]
-                        tables = []
-                        for head_tables in cache_ids_2d:
-                            if head_tables is None:
-                                continue
-                            tables.extend(head_tables)
+                        tables = self._flatten_head_wise_cache_ids_2d(cache_ids_2d)
                         if self.head_wise_debug_log and _debug_logging_enabled():
                             logger.debug(f"[headwise prefill] req {idx} cache_ids_2d={cache_ids_2d} tables={tables}")
                     else:
@@ -970,11 +964,7 @@ class GPUModelRunner(ModelRunnerBase):
                     if self.enable_head_wise_kv_cache:
                         # In head-wise mode, expand cache_ids_2d to include all heads
                         # block_tables format: [bsz, kv_num_heads * max_blocks_per_head]
-                        tables = []
-                        for head_tables in cache_ids_2d:
-                            if head_tables is None:
-                                continue
-                            tables.extend(head_tables)
+                        tables = self._flatten_head_wise_cache_ids_2d(cache_ids_2d)
                     else:
                         tables = request.block_tables
                     if current_platform.is_cuda():
@@ -1180,101 +1170,6 @@ class GPUModelRunner(ModelRunnerBase):
                     flat_block_tables[b][start:end], dtype="int32"
                 )
 
-    def _prepare_block_tables_3d(self, num_running_requests: int):
-        if not self.enable_head_wise_kv_cache:
-            self.share_inputs["block_tables_3d"] = None
-            return
-        block_tables_3d = self._get_head_wise_block_tables_buffer()
-        block_tables_3d[:] = -1
-        if num_running_requests is None or num_running_requests <= 0:
-            return
-
-        max_blocks_per_head = block_tables_3d.shape[1]
-        has_request_level_tables = False
-        collect_prepare_debug_stats = self.head_wise_debug_log and _debug_logging_enabled()
-        should_log_prepare = (
-            collect_prepare_debug_stats
-            and (self._head_wise_prepare_log_count < 50 or self._head_wise_prepare_log_count % 100 == 0)
-        )
-        per_req_head_lens = [] if collect_prepare_debug_stats else None
-        req_list = getattr(self, "forward_batch_reqs_list", None)
-
-        for b in range(num_running_requests):
-            if req_list is None or b >= len(req_list):
-                if per_req_head_lens is not None:
-                    per_req_head_lens.append([])
-                continue
-
-            req = req_list[b]
-            cache_ids_2d = getattr(req, "block_tables_3d", None) if req is not None else None
-            if cache_ids_2d is None:
-                if collect_prepare_debug_stats:
-                    logger.debug(f"[headwise _prepare_block_tables_3d] req {b}: cache_ids_2d=None, keep rows as -1")
-                if per_req_head_lens is not None:
-                    per_req_head_lens.append([])
-                continue
-
-            has_request_level_tables = True
-            head_lens = [] if per_req_head_lens is not None else None
-            for h in range(self.kv_num_heads):
-                if h >= len(cache_ids_2d) or cache_ids_2d[h] is None:
-                    if head_lens is not None:
-                        head_lens.append(0)
-                    continue
-
-                row = cache_ids_2d[h]
-                if head_lens is not None:
-                    valid_cnt = sum(1 for cid in row if cid is not None and cid >= 0)
-                    head_lens.append(valid_cnt)
-                normalized_row = [(-1 if cid is None else int(cid)) for cid in row]
-                copy_len = min(len(normalized_row), max_blocks_per_head)
-                if copy_len > 0:
-                    row_idx = b * self.kv_num_heads + h
-                    block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(
-                        normalized_row[:copy_len], dtype="int32"
-                    )
-            if per_req_head_lens is not None:
-                per_req_head_lens.append(head_lens)
-
-        # Fallback for dummy/profile or missing request cache metadata.
-        if not has_request_level_tables:
-            self._prepare_block_tables_3d_from_flat_tables(num_running_requests)
-
-        if collect_prepare_debug_stats:
-            active_rows = block_tables_3d[: num_running_requests * self.kv_num_heads]
-            rows_np = active_rows.numpy()
-            valid_ids = rows_np[rows_np >= 0]
-            min_id = int(valid_ids.min()) if valid_ids.size > 0 else -1
-            max_id = int(valid_ids.max()) if valid_ids.size > 0 else -1
-            neg_count = int((rows_np < 0).sum())
-
-            cache_id_capacity = -1
-            if self.share_inputs.get("caches") and len(self.share_inputs["caches"]) > 0:
-                cache_id_capacity = int(self.share_inputs["caches"][0].shape[0])
-            out_of_range_cnt = int((valid_ids >= cache_id_capacity).sum()) if cache_id_capacity > 0 else 0
-
-            if should_log_prepare:
-                logger.debug(
-                    f"[headwise _prepare_block_tables_3d] shape={active_rows.shape} "
-                    f"num_running_requests={num_running_requests} kv_num_heads={self.kv_num_heads} "
-                    f"max_blocks_per_head={max_blocks_per_head} min_id={min_id} max_id={max_id} "
-                    f"neg_count={neg_count} cache_id_capacity={cache_id_capacity} "
-                    f"out_of_range_cnt={out_of_range_cnt} first_rows={rows_np[:min(4, len(rows_np))].tolist()}"
-                )
-            if out_of_range_cnt > 0:
-                logger.error(
-                    f"[headwise _prepare_block_tables_3d invalid] out_of_range_cnt={out_of_range_cnt}, "
-                    f"cache_id_capacity={cache_id_capacity}, min_id={min_id}, max_id={max_id}"
-                )
-        if self.head_wise_debug_log:
-            self._head_wise_prepare_log_count += 1
-        if collect_prepare_debug_stats and self._head_wise_debug_log_count < 20:
-            logger.debug(
-                f"[headwise _prepare_block_tables_3d details] "
-                f"per_req_head_lens={per_req_head_lens[:num_running_requests]}"
-            )
-            self._head_wise_debug_log_count += 1
-
     def _normalize_head_wise_cache_ids_2d(self, cache_ids_2d):
         """Keep sparse per-head rows while normalizing None entries to -1."""
         if cache_ids_2d is None:
@@ -1286,6 +1181,16 @@ class GPUModelRunner(ModelRunnerBase):
                 continue
             normalized_cache_ids_2d.append([(-1 if cid is None else int(cid)) for cid in head_tables])
         return normalized_cache_ids_2d
+
+    def _flatten_head_wise_cache_ids_2d(self, cache_ids_2d):
+        if not cache_ids_2d:
+            return []
+        tables = []
+        for head_tables in cache_ids_2d:
+            if head_tables is None:
+                continue
+            tables.extend(head_tables)
+        return tables
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         raise NotImplementedError("GPUs only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")
