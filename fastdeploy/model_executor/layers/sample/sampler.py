@@ -872,7 +872,9 @@ class SpeculativeSampler(nn.Layer):
             share_inputs["seq_lens_this_time"],
             share_inputs["seq_lens_encoder"],
         )
-        _, sampled_token_ids = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, topp_seed=topp_seed)
+        _, sampled_token_ids = top_k_top_p_sampling(
+            probs, top_p=top_p, top_k=top_k, top_k_list=sampling_metadata.top_k_list, topp_seed=topp_seed
+        )
 
         verify_scores, verify_tokens, actual_candidate_len = top_p_candidates(
             probs,
