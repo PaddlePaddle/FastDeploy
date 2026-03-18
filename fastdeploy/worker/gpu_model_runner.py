@@ -1085,7 +1085,9 @@ class GPUModelRunner(ModelRunnerBase):
     def _init_head_wise_slot_states(self) -> None:
         slot_cap = self.scheduler_config.max_num_seqs
         self._head_wise_slot_req_ids: list[Optional[str]] = [None for _ in range(slot_cap)]
-        self._head_wise_slot_active_rows: list[list[int]] = [[0 for _ in range(self.kv_num_heads)] for _ in range(slot_cap)]
+        self._head_wise_slot_active_rows: list[list[int]] = [
+            [0 for _ in range(self.kv_num_heads)] for _ in range(slot_cap)
+        ]
 
     def _clear_block_tables_3d_slot(self, idx: int) -> None:
         if not self.enable_head_wise_kv_cache:
@@ -1169,9 +1171,7 @@ class GPUModelRunner(ModelRunnerBase):
                 if copy_len <= 0:
                     continue
                 row_idx = b * self.kv_num_heads + h
-                block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(
-                    flat_block_tables[b][start:end], dtype="int32"
-                )
+                block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(flat_block_tables[b][start:end], dtype="int32")
 
     def _normalize_head_wise_cache_ids_2d(self, cache_ids_2d):
         """Keep sparse per-head rows while normalizing None entries to -1."""

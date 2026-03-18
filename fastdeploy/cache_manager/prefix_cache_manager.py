@@ -86,12 +86,6 @@ class PrefixCacheManager:
             # Head-wise mode uses logical block count from total_block_num.
             self.num_gpu_blocks = self.cache_config.total_block_num
 
-        if self.enable_head_wise_kv_cache and envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            logger.warning(
-                "[HEAD_WISE] Head-wise KV cache mode is enabled but v1 scheduler is also enabled. "
-                "Please ensure head-wise allocation is supported in this scheduler path."
-            )
-
         if self.enable_head_wise_kv_cache:
             # Head-wise mode with true cache_id-based architecture.
             # cache_id is global (not encoded with head info).
