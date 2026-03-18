@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "custom_ftok.h"
 #include "driver_types.h"
 #include "msg_utils.h"
 #include "paddle/extension.h"
@@ -79,8 +80,8 @@ struct RemoteCacheKvIpc {
           std::string msg_que_str(msg_que_str_tmp);
           msg_queue_id = std::stoi(msg_que_str);
         }
-        msg_queue_id += rank;
-        key_t key = ftok("/opt/", msg_queue_id);
+        msg_queue_id = msg_queue_id << 4 + rank;
+        key_t key = custom_ftok("/opt/", msg_queue_id);
         msgid = msgget(key, IPC_CREAT | 0666);
         inited = true;
       }

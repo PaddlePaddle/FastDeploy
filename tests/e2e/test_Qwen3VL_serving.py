@@ -173,7 +173,7 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     content1 = result1["choices"][0]["message"]["content"]
 
     # base result
-    content2 = "视频中手机支架的颜色是黑色。"
+    content2 = "视频中手机支架的颜色是黑色的。"
 
     # Verify that result is same as the base result
     assert content1.startswith(content2), content1
