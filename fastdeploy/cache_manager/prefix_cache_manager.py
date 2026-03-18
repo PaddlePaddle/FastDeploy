@@ -860,8 +860,17 @@ class PrefixCacheManager:
                     prefix_block_key = [] if match_block_node.hash_value is None else [match_block_node.hash_value]
                     cur_token_idx = match_token_num
                     no_match_block_keys = []
+                    mm_idx = 0
                     while cur_token_idx <= input_token_num - block_size:
                         cur_block_token_ids = input_token_ids[cur_token_idx : cur_token_idx + block_size]
+                        # Get extra hash keys for multimodal content (images, videos, etc.)
+                        mm_idx, extra_keys = self.get_block_hash_extra_keys(
+                            request=task,
+                            start_idx=cur_token_idx,
+                            end_idx=cur_token_idx + block_size,
+                            mm_idx=mm_idx,
+                        )
+                        prefix_block_key.extend(extra_keys)
                         cur_block_key = get_hash_str(cur_block_token_ids, prefix_block_key)
                         no_match_block_keys.append(cur_block_key)
                         cur_token_idx += block_size
