@@ -363,8 +363,9 @@ class DataProcessor(BaseDataProcessor):
         else:
             request.set("max_tokens", min(max_tokens, request.get("max_tokens")))
         if request.get("temperature") < _SAMPLING_EPS:
-            # zero temperature is equivalent to greedy sampling
+            # zero temperature means greedy decoding: set top_k=1 to force argmax
             request.set("temperature", 1)
+            request.set("top_k", 1)
         if request.get("top_p") < _SAMPLING_EPS:
             request.set("top_p", _SAMPLING_EPS)
         if self.reasoning_parser:
@@ -469,8 +470,9 @@ class DataProcessor(BaseDataProcessor):
             request.sampling_params.max_tokens = min(max_tokens, request.sampling_params.max_tokens)
 
         if request.sampling_params.temperature < _SAMPLING_EPS:
-            # zero temperature is equivalent to greedy sampling
+            # zero temperature means greedy decoding: set top_k=1 to force argmax
             request.sampling_params.temperature = 1
+            request.sampling_params.top_k = 1
         if request.sampling_params.top_p < _SAMPLING_EPS:
             request.sampling_params.top_p = _SAMPLING_EPS
         if self.reasoning_parser:
