@@ -1629,7 +1629,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                     )
                     weight[expert_id].copy_(weight_quant, False)
             else:
-                if fastdeploy.envs.FD_USE_FLEET_FP8_QUANT:
+                if fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
                     num_expert = layer.num_local_experts
                     expert_weight_list = [getattr(layer, unquantized_weight_name)[i] for i in range(num_expert)]
                     weight = paddle.empty(shape=weight_shape, dtype=weight_dtype)

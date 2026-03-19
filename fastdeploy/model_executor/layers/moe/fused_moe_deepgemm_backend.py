@@ -403,7 +403,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         # 1. Select topk experts and weights
         if (
-            fastdeploy.envs.FD_USE_PHI_TOPK
+            fastdeploy.envs.FD_USE_PHI_MOE_TOPK
             and layer.redundant_table_manger is None
             and layer.topk_method == "noaux_tc"
         ):
@@ -820,7 +820,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         if layer.topk_method == "noaux_tc":
 
-            if not fastdeploy.envs.FD_USE_PHI_TOPK:
+            if not fastdeploy.envs.FD_USE_PHI_MOE_TOPK:
                 _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(
                     gate_out,
                     layer.n_group,

@@ -157,7 +157,7 @@ class TestFP8FusedMoeWithUe8m0Scale(unittest.TestCase):
         return fake_fused
 
     def test_fleet_fp8_quant_single_chunk(self):
-        """FD_USE_FLEET_FP8_QUANT=True, num_experts <= 64: single chunk path runs without error."""
+        """FD_USE_PHI_FP8_QUANT=True, num_experts <= 64: single chunk path runs without error."""
         import fastdeploy.envs as _fd_envs
 
         fd_config = mock.MagicMock()
@@ -182,7 +182,7 @@ class TestFP8FusedMoeWithUe8m0Scale(unittest.TestCase):
 
         method.model_format = "torch"
         # Force gate_up branch so the fleet-FP8 chunk path is exercised for up_gate_proj_weight
-        with mock.patch.object(_fd_envs, "FD_USE_FLEET_FP8_QUANT", True):
+        with mock.patch.object(_fd_envs, "FD_USE_PHI_FP8_QUANT", True):
             with mock.patch.object(moe_backend_module, "weight_fully_copied", return_value=True):
                 with mock.patch.object(
                     moe_backend_module,
@@ -196,7 +196,7 @@ class TestFP8FusedMoeWithUe8m0Scale(unittest.TestCase):
         self.assertEqual(layer.up_gate_proj_weight_scale_inv.shape[0], num_experts)
 
     def test_fleet_fp8_quant_multi_chunk(self):
-        """FD_USE_FLEET_FP8_QUANT=True, num_experts=70>64: two chunks processed and concat'd."""
+        """FD_USE_PHI_FP8_QUANT=True, num_experts=70>64: two chunks processed and concat'd."""
         import fastdeploy.envs as _fd_envs
 
         fd_config = mock.MagicMock()
@@ -228,7 +228,7 @@ class TestFP8FusedMoeWithUe8m0Scale(unittest.TestCase):
 
         method.model_format = "torch"
         # Force gate_up branch to exercise the multi-chunk concat logic
-        with mock.patch.object(_fd_envs, "FD_USE_FLEET_FP8_QUANT", True):
+        with mock.patch.object(_fd_envs, "FD_USE_PHI_FP8_QUANT", True):
             with mock.patch.object(moe_backend_module, "weight_fully_copied", return_value=True):
                 with mock.patch.object(moe_backend_module, "fused_stack_transpose_quant", recording_fake):
                     method.process_weights_after_loading(layer)
@@ -303,9 +303,10 @@ class TestFusedStackTransposeQuant(unittest.TestCase):
         expert_weights = self._make_expert_weights(num_experts, out, inp)
 
         with mock.patch.object(fp8_utils_module, "paddlefleet_ops", fake_ops):
-            # Force non-Blackwell (SM < 10)
-            with mock.patch("paddle.device.cuda.get_device_capability", return_value=(9, 0)):
-                w_out, scale_out = fp8_utils_module.fused_stack_transpose_quant(expert_weights, use_ue8m0=False)
+            # Force non-Blackwell (SM < 100)
+            with mock.patch.object(fp8_utils_module, "get_sm_version", return_value=90):
+                with mock.patch.object(fp8_utils_module.current_platform, "is_cuda", return_value=True):
+                    w_out, scale_out = fp8_utils_module.fused_stack_transpose_quant(expert_weights, use_ue8m0=False)
 
         self.assertIs(w_out, stacked_w)
         self.assertIs(scale_out, scale)
@@ -334,8 +335,9 @@ class TestFusedStackTransposeQuant(unittest.TestCase):
         expert_weights = self._make_expert_weights(num_experts, out, inp)
 
         with mock.patch.object(fp8_utils_module, "paddlefleet_ops", fake_ops):
-            with mock.patch("paddle.device.cuda.get_device_capability", return_value=(9, 0)):
-                w_out, scale_out = fp8_utils_module.fused_stack_transpose_quant(expert_weights, use_ue8m0=True)
+            with mock.patch.object(fp8_utils_module, "get_sm_version", return_value=90):
+                with mock.patch.object(fp8_utils_module.current_platform, "is_cuda", return_value=True):
+                    w_out, scale_out = fp8_utils_module.fused_stack_transpose_quant(expert_weights, use_ue8m0=True)
 
         # Shape should be the transpose of original
         self.assertEqual(list(scale_out.shape), list(reversed(original_shape)))
@@ -360,8 +362,9 @@ class TestFusedStackTransposeQuant(unittest.TestCase):
         expert_weights = self._make_expert_weights(num_experts, out, inp)
 
         with mock.patch.object(fp8_utils_module, "paddlefleet_ops", fake_ops):
-            with mock.patch("paddle.device.cuda.get_device_capability", return_value=(10, 0)):
-                fp8_utils_module.fused_stack_transpose_quant(expert_weights, use_ue8m0=False)
+            with mock.patch.object(fp8_utils_module, "get_sm_version", return_value=100):
+                with mock.patch.object(fp8_utils_module.current_platform, "is_cuda", return_value=True):
+                    fp8_utils_module.fused_stack_transpose_quant(expert_weights, use_ue8m0=False)
 
         self.assertTrue(received["use_pow2_scale"])
 
@@ -385,8 +388,9 @@ class TestFusedStackTransposeQuant(unittest.TestCase):
         expert_weights = self._make_expert_weights(num_experts, out, inp)
 
         with mock.patch.object(fp8_utils_module, "paddlefleet_ops", fake_ops):
-            with mock.patch("paddle.device.cuda.get_device_capability", return_value=(9, 0)):
-                fp8_utils_module.fused_stack_transpose_quant(expert_weights, use_ue8m0=False)
+            with mock.patch.object(fp8_utils_module, "get_sm_version", return_value=90):
+                with mock.patch.object(fp8_utils_module.current_platform, "is_cuda", return_value=True):
+                    fp8_utils_module.fused_stack_transpose_quant(expert_weights, use_ue8m0=False)
 
         self.assertFalse(received["use_pow2_scale"])
 
@@ -408,8 +412,9 @@ class TestFusedStackTransposeQuant(unittest.TestCase):
         expert_weights = self._make_expert_weights(num_experts=2, out_features=128, in_features=64)
 
         with mock.patch.object(fp8_utils_module, "paddlefleet_ops", fake_ops):
-            with mock.patch("paddle.device.cuda.get_device_capability", return_value=(8, 0)):
-                fp8_utils_module.fused_stack_transpose_quant(expert_weights)
+            with mock.patch.object(fp8_utils_module, "get_sm_version", return_value=90):
+                with mock.patch.object(fp8_utils_module.current_platform, "is_cuda", return_value=True):
+                    fp8_utils_module.fused_stack_transpose_quant(expert_weights)
 
         self.assertIs(received_list["weights"], expert_weights)
 
@@ -433,8 +438,9 @@ class TestFusedStackTransposeQuant(unittest.TestCase):
         expert_weights = self._make_expert_weights(num_experts, out, inp)
 
         with mock.patch.object(fp8_utils_module, "paddlefleet_ops", fake_ops):
-            with mock.patch("paddle.device.cuda.get_device_capability", return_value=(10, 0)):
-                w_out, scale_out = fp8_utils_module.fused_stack_transpose_quant(expert_weights, use_ue8m0=True)
+            with mock.patch.object(fp8_utils_module, "get_sm_version", return_value=100):
+                with mock.patch.object(fp8_utils_module.current_platform, "is_cuda", return_value=True):
+                    w_out, scale_out = fp8_utils_module.fused_stack_transpose_quant(expert_weights, use_ue8m0=True)
 
         self.assertTrue(received["use_pow2_scale"])
         self.assertTrue(received["use_ue8m0_w"])

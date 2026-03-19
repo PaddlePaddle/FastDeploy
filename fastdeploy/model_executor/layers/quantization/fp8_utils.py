@@ -242,10 +242,10 @@ def per_token_group_quant_fp8(
 def fused_stack_transpose_quant(expert_weight_list, use_ue8m0=False):
     """fused_stack_transpose_quant"""
     if hasattr(paddlefleet_ops, "fuse_stack_transpose_fp8_quant"):
-        use_pow2_scale = False
-        if paddle.device.cuda.get_device_capability()[0] == 10:
-            # Blackwell GPUs require the use of pow2_scales quantization.
-            use_pow2_scale = True
+        # Blackwell (SM100) GPUs require pow2_scale quantization.
+        # Guard with is_cuda() so non-CUDA environments do not call into
+        # paddle.device.cuda.* and cause a crash.
+        use_pow2_scale = current_platform.is_cuda() and get_sm_version() == 100
 
         w, scale = paddlefleet_ops.fuse_stack_transpose_fp8_quant(
             expert_weight_list,
