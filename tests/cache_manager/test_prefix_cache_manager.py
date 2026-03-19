@@ -1226,6 +1226,111 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
                 is_sync=False,
             )
 
+    def test_get_block_hash_extra_keys_boundary_cases(self):
+        """
+        覆盖 image 与 block 的各种位置关系，验证 hash_keys 的正确性。
+
+        数据布局 (block_size=4):
+          tokens:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15
+          img0:              [====]                        [2,5)  hash-0
+          img1:                              [========]       [8,12) hash-1
+          img2:                                          [==] [14,16) hash-2
+          blocks: [====][====][====][====]
+                  [0,4) [4,8) [8,12)[12,16)
+        """
+        manager = _create_manager()
+        request = SimpleNamespace(
+            multimodal_inputs={
+                "mm_positions": [
+                    SimpleNamespace(offset=2, length=3),  # [2,5)
+                    SimpleNamespace(offset=8, length=4),  # [8,12)
+                    SimpleNamespace(offset=14, length=2),  # [14,16)
+                ],
+                "mm_hashes": ["hash-0", "hash-1", "hash-2"],
+            },
+            num_total_tokens=16,
+        )
+
+        # ---- Block [0,4): img0 跨越右边界 [2,5) ∩ [0,4) ----
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=0, end_idx=4, mm_idx=0)
+        self.assertIn("hash-0", hash_keys)
+        self.assertNotIn("hash-1", hash_keys)
+        self.assertNotIn("hash-2", hash_keys)
+
+        # ---- Block [4,8): img0 跨越左边界 [2,5) ∩ [4,8), 恰好 end==start(5==4 无交集，已修复) ----
+        # 修复前: img0[2,5) 误判为与 [4,8) 有重叠; 修复后: 5<=4? No, 但 2<4 且 5<=8 走 else 仍返回 hash-0
+        # 注: img0 虽然不与新 block 重叠，但由于它跨越了前一个 block 的边界，
+        #     调用者已经跳过了该 image 的 mm_idx，所以这里不会重复处理
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=4, end_idx=8, mm_idx=1)
+        self.assertEqual(hash_keys, [])  # img1[8,12) 在 block 之后，无重叠
+
+        # ---- Block [8,12): img1 恰好填满整个 block [8,12) ----
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=8, end_idx=12, mm_idx=1)
+        self.assertEqual(hash_keys, ["hash-1"])
+
+        # ---- Block [12,16): img2 完全在 block 内部 [14,16) ⊂ [12,16) ----
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=12, end_idx=16, mm_idx=2)
+        self.assertEqual(hash_keys, ["hash-2"])
+
+    def test_get_block_hash_extra_keys_no_overlap_at_boundaries(self):
+        """image 与 block 恰好相接时不应有重叠。"""
+        manager = _create_manager()
+
+        # image 恰好在 block 之前: img[0,4), block[4,8)
+        request = SimpleNamespace(
+            multimodal_inputs={
+                "mm_positions": [SimpleNamespace(offset=0, length=4)],
+                "mm_hashes": ["hash-a"],
+            },
+            num_total_tokens=8,
+        )
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=4, end_idx=8, mm_idx=0)
+        self.assertEqual(hash_keys, [])
+
+        # image 恰好在 block 之后: img[8,10), block[4,8)
+        request = SimpleNamespace(
+            multimodal_inputs={
+                "mm_positions": [SimpleNamespace(offset=0, length=4), SimpleNamespace(offset=8, length=2)],
+                "mm_hashes": ["hash-a", "hash-b"],
+            },
+            num_total_tokens=12,
+        )
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=4, end_idx=8, mm_idx=1)
+        self.assertEqual(hash_keys, [])
+
+    def test_get_block_hash_extra_keys_image_crosses_block_boundary(self):
+        """image 跨越 block 边界时 hash 应被包含。"""
+        manager = _create_manager()
+
+        # image 跨越 block 右边界: img[6,10), block[4,8)
+        request = SimpleNamespace(
+            multimodal_inputs={
+                "mm_positions": [SimpleNamespace(offset=6, length=4)],
+                "mm_hashes": ["hash-cross"],
+            },
+            num_total_tokens=12,
+        )
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=4, end_idx=8, mm_idx=0)
+        self.assertEqual(hash_keys, ["hash-cross"])
+
+        # image 跨越整个 block: img[3,9), block[4,8)
+        request = SimpleNamespace(
+            multimodal_inputs={
+                "mm_positions": [SimpleNamespace(offset=3, length=6)],
+                "mm_hashes": ["hash-span"],
+            },
+            num_total_tokens=12,
+        )
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=4, end_idx=8, mm_idx=0)
+        self.assertEqual(hash_keys, ["hash-span"])
+
+    def test_get_block_hash_extra_keys_no_mm_inputs(self):
+        """无多模态输入时应返回空。"""
+        manager = _create_manager()
+        request = SimpleNamespace(multimodal_inputs=None, num_total_tokens=12)
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=0, end_idx=4, mm_idx=0)
+        self.assertEqual(hash_keys, [])
+
     def test_get_block_hash_extra_keys_handles_multimodal_segments(self):
         manager = _create_manager()
         request = SimpleNamespace(

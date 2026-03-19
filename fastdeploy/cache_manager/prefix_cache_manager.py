@@ -1624,7 +1624,7 @@ class PrefixCacheManager:
             mm_inputs["mm_hashes"]
         ), f"mm_idx {mm_idx} out of range {len(mm_inputs['mm_hashes'])}"
 
-        if mm_inputs["mm_positions"][-1].offset + mm_inputs["mm_positions"][-1].length < start_idx:
+        if mm_inputs["mm_positions"][-1].offset + mm_inputs["mm_positions"][-1].length <= start_idx:
             # non images in current block
             return mm_idx, hash_keys
 
@@ -1632,7 +1632,7 @@ class PrefixCacheManager:
             image_offset = mm_inputs["mm_positions"][img_idx].offset
             image_length = mm_inputs["mm_positions"][img_idx].length
 
-            if image_offset + image_length < start_idx:
+            if image_offset + image_length <= start_idx:
                 # image before block
                 continue
             elif image_offset >= end_idx:
