@@ -184,8 +184,6 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
                 "No valid NVFP4 GEMM backend found. Please check your platform capability and installtion of Flashinfer."
             )
 
-        logger.info(f"Using {self.backend} for NVFP4 GEMM")
-
     def create_weights(
         self,
         layer,
@@ -390,8 +388,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             raise ValueError(
                 "No valid NVFP4 flashinfer MoE backend found. Please check your platform capability and installtion of FlashInfer."
             )
-
-        logger.info(f"Using {self.backend} for NVFP4 FusedMoE")
+        #logger.info(f"-----{self.backend} -----")
 
     def init_ep(self, layer: nn.Layer) -> None:
         if layer.ep_size <= 1:
@@ -595,6 +592,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         
+        logger.info(f"------apply_ep_prefill nvfp4 flashinfer-cutedsl-------")
+
         if layer.fd_config.parallel_config.use_internode_ll_two_stage:
             raise NotImplementedError("NVFP4 CuteDSL EP prefill does not support DeepEP two-stage low-latency.")
 
@@ -694,6 +693,9 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
+        
+        logger.info(f"----------apply_ep_decode nvfp4 flashinfer-cutedsl-------")
+
         if layer.fd_config.parallel_config.use_internode_ll_two_stage:
             raise NotImplementedError("NVFP4 CuteDSL EP decode does not support DeepEP two-stage low-latency.")
 
@@ -721,6 +723,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         
+        logger.info(f"----------apply tp nvfp4 flashinfer-cutedsl-------")
         gate_out = gate(x.cast("float32"))
         topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
             gate_out,
@@ -773,57 +776,62 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         layer,
         x,
         gate,
-        topk_ids_hookfunc=None,
+        topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ):
         """
         flashinfer nvfp4 fusedmoe for Model Optimizer
         """
-        gate_out = gate(x.cast("float32"))
-        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            layer.top_k,
-            True,  # apply_norm_weight,
-            False,
-        )
+        logger.info(f"--------apply nvfp4 flashinfer-cutlass---------")
+        return super().apply(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
+    
+        # gate_out = gate(x.cast("float32"))
+        # topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+        #     gate_out,
+        #     layer.gate_correction_bias,
+        #     layer.top_k,
+        #     True,  # apply_norm_weight,
+        #     False,
+        # )
 
-        if topk_ids_hookfunc is not None:
-            topk_ids_hookfunc(topk_ids)
+        # if topk_ids_hookfunc is not None:
+        #     topk_ids_hookfunc(topk_ids)
 
-        output_dtype = x.dtype
-        x_sf = None
-        output = paddle.empty_like(x)
+        # output_dtype = x.dtype
+        # x_sf = None
+        # output = paddle.empty_like(x)
 
-        if self.backend == "flashinfer-cutlass":
-            # flashinfer cutlass
-            from flashinfer.fused_moe import (
-                cutlass_fused_moe as flashinfer_cutlass_fused_moe,
-            )
+        # if self.backend == "flashinfer-cutlass":
+        #     # flashinfer cutlass
+        #     from flashinfer.fused_moe import (
+        #         cutlass_fused_moe as flashinfer_cutlass_fused_moe,
+        #     )
 
-            _ = flashinfer_cutlass_fused_moe(
-                input=x,
-                token_selected_experts=topk_ids.to(paddle.int),
-                token_final_scales=topk_weights,
-                fc1_expert_weights=getattr(layer, self.added_weight_attrs[0]).view(paddle.long),
-                fc2_expert_weights=getattr(layer, self.added_weight_attrs[1]).view(paddle.long),
-                output_dtype=output_dtype,
-                input_sf=x_sf,
-                quant_scales=[
-                    layer.up_gate_proj_input_scale_quant,
-                    layer.up_gate_proj_blockscale_swizzled.view(paddle.int32),
-                    layer.g1_alphas,
-                    layer.down_proj_input_scale_quant,
-                    layer.down_proj_blockscale_swizzled.view(paddle.int32),
-                    layer.g2_alphas,
-                ],
-                ep_size=layer.ep_size,
-                ep_rank=layer.ep_rank,
-                tp_size=layer.tp_size,
-                tp_rank=layer.tp_rank,
-                tune_max_num_tokens=next_power_of_2(x.shape[0]),
-                output=output,
-            )
+        #     _ = flashinfer_cutlass_fused_moe(
+        #         input=x,
+        #         token_selected_experts=topk_ids.to(paddle.int),
+        #         token_final_scales=topk_weights,
+        #         fc1_expert_weights=getattr(layer, self.added_weight_attrs[0]).view(paddle.long),
+        #         fc2_expert_weights=getattr(layer, self.added_weight_attrs[1]).view(paddle.long),
+        #         output_dtype=output_dtype,
+        #         input_sf=x_sf,
+        #         quant_scales=[
+        #             layer.up_gate_proj_input_scale_quant,
+        #             layer.up_gate_proj_blockscale_swizzled.view(paddle.int32),
+        #             layer.g1_alphas,
+        #             layer.down_proj_input_scale_quant,
+        #             layer.down_proj_blockscale_swizzled.view(paddle.int32),
+        #             layer.g2_alphas,
+        #         ],
+        #         ep_size=layer.ep_size,
+        #         ep_rank=layer.ep_rank,
+        #         tp_size=layer.tp_size,
+        #         tp_rank=layer.tp_rank,
+        #         tune_max_num_tokens=next_power_of_2(x.shape[0]),
+        #         output=output,
+        #     )
 
-            return output
-
-        return output
+        #     return output
+        
+        # # flashinfer-trtllm
+        # return output
