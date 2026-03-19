@@ -66,7 +66,7 @@ std::vector<paddle::Tensor> RecoverBatchSequenceKernel(
   paddle::Tensor out;
   out = paddle::empty({token_num, dim}, x.type(), x.place());
 
-  int r = baidu::xpu::api::plugin::eb_recover_batch_sequence<XPUType, XPUType>(
+  int r = fastdeploy::plugin::eb_recover_batch_sequence<XPUType, XPUType>(
       ctx,
       reinterpret_cast<const XPUType*>(x.data<data_t>()),
       reinterpret_cast<XPUType*>(out.data<data_t>()),
@@ -75,7 +75,7 @@ std::vector<paddle::Tensor> RecoverBatchSequenceKernel(
       encoder_batch_map_vp,
       decoder_batch_map_vp,
       dim);
-  PD_CHECK(r == 0, "xpu::plugin::eb_recover_batch_sequence failed.");
+  PD_CHECK(r == 0, "fastdeploy::plugin::eb_recover_batch_sequence failed.");
   return {out};
 }
 

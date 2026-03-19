@@ -25,12 +25,14 @@ from paddleformers.utils.log import logger
 
 try:
     from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
-except:
+except Exception as e:
+    logger.debug(f"flash_attention_v3_varlen not available: {e}")
     flash_attention_v3_varlen = None
 
 try:
     from paddle.nn.functional.flash_attention import flashmask_attention
-except:
+except Exception as e:
+    logger.debug(f"flashmask_attention not available: {e}")
     flashmask_attention = None
 
 from fastdeploy.config import FDConfig

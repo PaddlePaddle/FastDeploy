@@ -131,7 +131,7 @@ class ResourceManager:
         elif required_type == "decoder":
             block_num = self.get_decoder_block_number()
         else:
-            raise ValueError("unknown required type")
+            raise ValueError(f"unknown required type: '{required_type}', expected 'all', 'encoder', or 'decoder'")
 
         block_list = list()
         current_block_num = self.available_block_num()

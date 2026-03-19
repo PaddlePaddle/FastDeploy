@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cstring>
+
 #include "cuda_multiprocess.h"
 #include "paddle/extension.h"
 
@@ -53,9 +55,9 @@ void ReadDataIpc(const paddle::Tensor &tmp_input,
   volatile shmStruct *shm = NULL;
   sharedMemoryInfo info;
   if (sharedMemoryOpen(shm_name.c_str(), sizeof(shmStruct), &info) != 0) {
-    printf("Failed to create shared memory slab\n");
-    printf("Func ReadDataIpc. Shm_name: %s\n", shm_name.c_str());
-    exit(EXIT_FAILURE);
+    throw std::runtime_error(
+        "Failed to open shared memory slab in ReadDataIpc, shm_name: " +
+        shm_name + ", errno: " + std::string(strerror(errno)));
   }
   shm = (volatile shmStruct *)info.addr;
   void *ptr = nullptr;

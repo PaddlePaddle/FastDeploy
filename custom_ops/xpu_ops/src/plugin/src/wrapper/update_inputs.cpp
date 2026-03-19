@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __attribute__((global)) void update_inputs(bool *not_need_stop,
                                            int *seq_lens_this_time,
@@ -32,15 +31,12 @@ __attribute__((global)) void update_inputs(bool *not_need_stop,
                                            const int max_bsz,
                                            const int input_ids_stride);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        bool *not_need_stop,
                        int *seq_lens_this_time,
                        int *seq_lens_encoder,
@@ -77,7 +73,7 @@ static int cpu_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context *ctx,
+static int xpu3_wrapper(api::Context *ctx,
                         bool *not_need_stop,
                         int *seq_lens_this_time,
                         int *seq_lens_encoder,
@@ -89,8 +85,8 @@ static int xpu3_wrapper(Context *ctx,
                         const int bsz,
                         const int max_bsz,
                         const int input_ids_stride) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  auto update_inputs = xpu3::plugin::update_inputs;
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  auto update_inputs = fd_xpu3::update_inputs;
   int32_t ret_xre = update_inputs<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
       not_need_stop,
       seq_lens_this_time,
@@ -107,7 +103,7 @@ static int xpu3_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-int update_inputs(Context *ctx,
+int update_inputs(api::Context *ctx,
                   bool *not_need_stop,
                   int *seq_lens_this_time,
                   int *seq_lens_encoder,
@@ -130,6 +126,18 @@ int update_inputs(Context *ctx,
   WRAPPER_DUMP_PARAM3(ctx, stop_flags, is_block_step, next_tokens);
   WRAPPER_DUMP_PARAM3(ctx, bsz, max_bsz, input_ids_stride);
   WRAPPER_DUMP(ctx);
+  WRAPPER_ASSERT_GT(ctx, bsz, 0);
+  WRAPPER_ASSERT_GT(ctx, max_bsz, 0);
+  WRAPPER_ASSERT_GE(ctx, max_bsz, bsz);
+  WRAPPER_ASSERT_GT(ctx, input_ids_stride, 0);
+  WRAPPER_CHECK_PTR(ctx, bool, 1, not_need_stop);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_this_time);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_encoder);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_decoder);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bsz * input_ids_stride, input_ids);
+  WRAPPER_CHECK_PTR(ctx, bool, bsz, stop_flags);
+  WRAPPER_CHECK_PTR(ctx, bool, bsz, is_block_step);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bsz, next_tokens);
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper(ctx,
                        not_need_stop,
@@ -144,7 +152,7 @@ int update_inputs(Context *ctx,
                        max_bsz,
                        input_ids_stride);
   }
-  if (ctx->dev().type() == api::kXPU2 || ctx->dev().type() == api::kXPU3) {
+  if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper(ctx,
                         not_need_stop,
                         seq_lens_this_time,
@@ -162,6 +170,4 @@ int update_inputs(Context *ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

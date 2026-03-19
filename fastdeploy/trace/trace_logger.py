@@ -44,5 +44,5 @@ def print(event, request_id, user):
             extra={"attributes": attributes},
             stacklevel=2,
         )
-    except:
-        pass
+    except Exception as e:
+        trace_logger.debug(f"Failed to log trace event: {e}")
