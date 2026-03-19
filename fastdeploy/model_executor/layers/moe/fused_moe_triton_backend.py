@@ -793,6 +793,8 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
             use_int8_w8a16=False,
             per_channel_quant=True,
             even_Ks=hidden_size % config["BLOCK_SIZE_K"] == 0,
+            num_warps=config.get("num_warps", 4),
+            num_stages=config.get("num_stages", 4),
         )
 
         down_proj_input = paddle.incubate.nn.functional.swiglu(up_gate_proj_out)
@@ -849,6 +851,8 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
             use_int8_w8a16=False,
             per_channel_quant=True,
             even_Ks=moe_intermediate_size % config["BLOCK_SIZE_K"] == 0,
+            num_warps=config.get("num_warps", 4),
+            num_stages=config.get("num_stages", 4),
         )
 
         down_proj_out.reshape_([token_num, top_k, hidden_size])
