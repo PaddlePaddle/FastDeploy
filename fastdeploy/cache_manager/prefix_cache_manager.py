@@ -628,7 +628,20 @@ class PrefixCacheManager:
                 if item is not None and item >= 0:
                     normalized.append(item)
 
-        normalized = list(dict.fromkeys(normalized))
+        unique_normalized = list(dict.fromkeys(normalized))
+        if len(unique_normalized) != len(normalized):
+            dup_count_map = {}
+            for cid in normalized:
+                dup_count_map[cid] = dup_count_map.get(cid, 0) + 1
+            duplicate_ids = [cid for cid, cnt in dup_count_map.items() if cnt > 1]
+            logger.error(
+                "req_id:%s detected duplicate cache_ids in head-wise recycle path, total_ids=%d, unique_ids=%d, duplicate_ids(sample)=%s",
+                req_id,
+                len(normalized),
+                len(unique_normalized),
+                duplicate_ids[:16],
+            )
+        normalized = unique_normalized
         logger.debug(f"req_id:{req_id} recycle head-wise cache_ids after normalization: {normalized}")
 
         if not normalized:
