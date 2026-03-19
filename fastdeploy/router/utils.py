@@ -17,7 +17,7 @@
 import asyncio
 from dataclasses import MISSING, asdict, dataclass, field, fields
 from enum import Enum
-from typing import Any, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
 import requests
@@ -41,6 +41,9 @@ class InstanceInfo:
     rdma_ports: Union[List[str], List[int]] = field(default_factory=list)
     device_ids: Union[List[str], List[int]] = field(default_factory=list)
     tp_size: int = 1
+    is_paused: bool = False
+    version: Optional[str] = None
+    connected_decodes: List[Dict] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, info_dict: dict[str, Any]) -> "InstanceInfo":
@@ -91,6 +94,10 @@ class InstanceInfo:
         if not url.startswith(("http://", "https://")):
             url = f"http://{url}"
         return url
+
+    def get_key(self) -> str:
+        """Generate unique identifier for an instance: 'host_ip:port'."""
+        return f"{self.host_ip}:{self.port}"
 
 
 def check_service_health(base_url: str, timeout: int = 3) -> bool:

@@ -14,9 +14,10 @@
 # limitations under the License.
 """
 
-from typing import Optional
+from typing import Callable, Optional
 
 import paddle
+from paddle import nn
 from paddleformers.utils.log import logger
 
 import fastdeploy
@@ -553,7 +554,8 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         layer,
         x,
         gate,
-        topk_ids_hookfunc=None,
+        topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ):
         """
         flashinfer nvfp4 fusedmoe for Model Optimizer
