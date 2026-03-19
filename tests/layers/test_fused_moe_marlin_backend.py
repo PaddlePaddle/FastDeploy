@@ -19,18 +19,25 @@ from types import SimpleNamespace
 import paddle
 import pytest
 
-# Stub GPU-only ops for CPU environments (cf. test_fused_moe_cutlass_backend.py)
-# Use __getattr__ catchall so the entire import chain (moe → attention → ops.gpu)
-# can resolve any GPU op name without an explicit allowlist.
+# Stub GPU-only ops so the import chain (moe → triton_backend → fp8_utils →
+# ops.gpu.deep_gemm) resolves without compiled CUDA extensions.
+# Must be installed BEFORE any fastdeploy import that touches ops.gpu.
 
 
 class _GpuOpsStub(types.ModuleType):
+    """Catchall module: any attribute access returns None."""
+
+    __path__ = []  # marks as package so `import X.Y.Z` can traverse
+
     def __getattr__(self, name):
         return None
 
 
-if "fastdeploy.model_executor.ops.gpu" not in sys.modules:
-    sys.modules["fastdeploy.model_executor.ops.gpu"] = _GpuOpsStub("fastdeploy.model_executor.ops.gpu")
+sys.modules["fastdeploy.model_executor.ops.gpu"] = _GpuOpsStub("fastdeploy.model_executor.ops.gpu")
+# fp8_utils.py:52 uses `import ...ops.gpu.deep_gemm as deep_gemm`
+sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm"] = types.ModuleType(
+    "fastdeploy.model_executor.ops.gpu.deep_gemm"
+)
 _gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
 
 from fastdeploy.model_executor.layers.moe import (  # noqa: E402
