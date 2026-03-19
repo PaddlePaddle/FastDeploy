@@ -330,6 +330,53 @@ class TestCompositeLoading:
         result = lwu.load_ep_checkpoint(mock_cls, str(tmp_path), cfg, return_numpy=True)
         np.testing.assert_allclose(result["w"], [1.0, 2.0], rtol=1e-6)
 
+    def test_load_ep_checkpoint_tp_sequence_parallel(self, tmp_path):
+        expert_key = "ernie.mtp_block.0.mlp.experts.0.up_gate_proj.weight"
+        o_proj_key = "ernie.mtp_block.0.self_attn.o_proj.weight"
+        generic_key = "ernie.mtp_block.0.self_attn.q_proj.weight"
+        save_file(
+            {
+                expert_key: np.array([1.0, 2.0], dtype=np.float32),
+                o_proj_key: np.array([3.0, 4.0], dtype=np.float32),
+                generic_key: np.array([5.0, 6.0], dtype=np.float32),
+            },
+            str(tmp_path / "s1.safetensors"),
+        )
+        with open(str(tmp_path / "model.safetensors.index.json"), "w") as f:
+            json.dump(
+                {
+                    "weight_map": {
+                        expert_key: "s1.safetensors",
+                        o_proj_key: "s1.safetensors",
+                        generic_key: "s1.safetensors",
+                    }
+                },
+                f,
+            )
+
+        cfg = _cfg()
+        cfg.parallel_config.tensor_parallel_size = 2
+        cfg.parallel_config.use_sequence_parallel_moe = True
+        cfg.parallel_config.num_experts_start_offset = 0
+        cfg.parallel_config.num_experts_per_rank = 1
+        cfg.model_config.moe_num_experts = [2]
+        cfg.model_config.moe_layer_start_index = 0
+        cfg.model_config.num_hidden_layers = 1
+        cfg.speculative_config = SimpleNamespace(model_type="mtp")
+
+        tp_actions = {
+            expert_key: lambda w: w * 2,
+            o_proj_key: lambda w: w * 10,
+            generic_key: lambda w: w * 3,
+        }
+        mock_cls = SimpleNamespace(_get_tensor_parallel_mappings=lambda _: tp_actions)
+        result = lwu.load_ep_checkpoint(mock_cls, str(tmp_path), cfg, return_numpy=True)
+
+        # Experts and o_proj are excluded from TP action under sequence-parallel MoE path.
+        np.testing.assert_allclose(result[expert_key], [1.0, 2.0], rtol=1e-6)
+        np.testing.assert_allclose(result[o_proj_key], [3.0, 4.0], rtol=1e-6)
+        np.testing.assert_allclose(result[generic_key], [15.0, 18.0], rtol=1e-6)
+
     def test_composite_checkpoint_ep(self, tmp_path, monkeypatch):
         save_file({"w": np.array([1.0], dtype=np.float32)}, str(tmp_path / "s1.safetensors"))
         index = {"weight_map": {"w": "s1.safetensors"}}
