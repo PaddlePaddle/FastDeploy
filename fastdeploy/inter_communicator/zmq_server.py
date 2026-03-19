@@ -31,6 +31,22 @@ from fastdeploy.metrics.stats import ZMQMetricsStats
 from fastdeploy.utils import llm_logger
 
 
+def _msgpack_default(obj):
+    """Fallback serializer for types msgpack cannot handle natively."""
+    if hasattr(obj, "tolist"):
+        # paddle.Tensor, numpy.ndarray
+        return obj.tolist()
+    if hasattr(obj, "_asdict"):
+        # NamedTuple (LogprobsTensors, LogprobsLists, etc.)
+        return list(obj)
+    if hasattr(obj, "__dataclass_fields__"):
+        # dataclass (Logprob, SpeculateMetrics, etc.)
+        from dataclasses import asdict
+
+        return asdict(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not msgpack serializable")
+
+
 class ZmqServerBase(ABC):
     """
     ZmqServerBase
@@ -330,7 +346,10 @@ class ZmqServerBase(ABC):
 
         try:
             if not envs.ENABLE_V1_DATA_PROCESSOR:
-                result = ForkingPickler.dumps([[output.to_dict() for output in outputs] for outputs in batch_data])
+                result = msgpack.packb(
+                    [[output.to_dict() for output in outputs] for outputs in batch_data],
+                    default=_msgpack_default,
+                )
             else:
                 result = ForkingPickler.dumps(batch_data)
             result_len = len(result)

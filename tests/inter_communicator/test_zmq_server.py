@@ -25,6 +25,7 @@ from fastdeploy.inter_communicator.zmq_server import (
     ZmqIpcServer,
     ZmqServerBase,
     ZmqTcpServer,
+    _msgpack_default,
 )
 
 
@@ -122,6 +123,80 @@ class _DummyServer(ZmqServerBase):
 
     def close(self):
         self.closed = True
+
+
+class TestMsgpackDefault(unittest.TestCase):
+    """Tests for _msgpack_default fallback serializer."""
+
+    def test_tensor_with_tolist(self):
+        """Test serialization of objects with tolist method (paddle.Tensor, numpy.ndarray)."""
+        # Test with paddle tensor
+        tensor = paddle.to_tensor([1, 2, 3])
+        result = _msgpack_default(tensor)
+        self.assertEqual(result, [1, 2, 3])
+
+        # Test with numpy array
+        import numpy as np
+
+        arr = np.array([[1, 2], [3, 4]])
+        result = _msgpack_default(arr)
+        self.assertEqual(result, [[1, 2], [3, 4]])
+
+    def test_namedtuple(self):
+        """Test serialization of NamedTuple objects."""
+
+        from collections import namedtuple
+
+        Point = namedtuple("Point", ["x", "y"])
+        point = Point(10, 20)
+        result = _msgpack_default(point)
+        self.assertEqual(result, [10, 20])
+
+    def test_dataclass(self):
+        """Test serialization of dataclass objects."""
+        from dataclasses import dataclass
+
+        @dataclass
+        class SampleData:
+            name: str
+            value: int
+
+        data = SampleData(name="test", value=42)
+        result = _msgpack_default(data)
+        self.assertEqual(result, {"name": "test", "value": 42})
+
+    def test_unsupported_type_raises(self):
+        """Test that unsupported types raise TypeError."""
+
+        class UnsupportedClass:
+            pass
+
+        with self.assertRaises(TypeError) as ctx:
+            _msgpack_default(UnsupportedClass())
+        self.assertIn("UnsupportedClass", str(ctx.exception))
+        self.assertIn("not msgpack serializable", str(ctx.exception))
+
+    def test_integration_with_msgpack(self):
+        """Test that _msgpack_default works correctly with msgpack.packb."""
+        # Test with mixed data types
+        from dataclasses import dataclass
+
+        @dataclass
+        class Config:
+            lr: float
+            steps: int
+
+        data = {
+            "tensor": paddle.to_tensor([1.0, 2.0, 3.0]),
+            "config": Config(lr=0.001, steps=100),
+            "regular_list": [1, 2, 3],
+        }
+        packed = msgpack.packb(data, default=_msgpack_default)
+        unpacked = msgpack.unpackb(packed)
+
+        self.assertEqual(unpacked["tensor"], [1.0, 2.0, 3.0])
+        self.assertEqual(unpacked["config"], {"lr": 0.001, "steps": 100})
+        self.assertEqual(unpacked["regular_list"], [1, 2, 3])
 
 
 class TestZmqServerBase(unittest.TestCase):

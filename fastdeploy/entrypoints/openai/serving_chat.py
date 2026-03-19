@@ -916,23 +916,30 @@ class OpenAIServingChat:
 
         token_ids, logprobs, ranks = prompt_logprobs_tensors
 
+        # Normalize to plain Python lists (support both Tensor and list inputs)
+        if hasattr(token_ids, "tolist"):
+            token_ids = token_ids.tolist()
+            logprobs = logprobs.tolist()
+            ranks = ranks.tolist()
+
         # Detokenize non-incrementally.
         # Output is flat: [num_tok, num_lps] -> [num_tok * num_lps]
         if include_logprobs_decode_token:
             decoded_tokens = [
                 self.engine_client.data_processor.process_logprob_response(token_id)
-                for token_id in token_ids.flatten().tolist()
+                for row in token_ids
+                for token_id in row
             ]
         else:
             decoded_tokens = None
 
         # Recover shapes.
-        num_prompt_tokens, num_logprobs = logprobs.shape
+        num_prompt_tokens = len(logprobs)
+        num_logprobs = len(logprobs[0]) if num_prompt_tokens > 0 else 0
 
-        # Pythonize the paddle tensors.
-        prompt_token_ranks = ranks.tolist()
-        prompt_logprobs = logprobs.tolist()
-        token_ids = token_ids.tolist()
+        # Build result.
+        prompt_token_ranks = ranks
+        prompt_logprobs = logprobs
         result: Optional[PromptLogprobs] = [None]
         # Make Logprob for each position.
         for pos in range(num_prompt_tokens):
