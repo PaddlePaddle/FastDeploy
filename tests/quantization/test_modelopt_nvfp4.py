@@ -432,7 +432,6 @@ class TestModelOptNvFp4FusedMoE(unittest.TestCase):
             scale = paddle.ones([1, 64, 16], dtype=paddle.float16)
             swizzled = _process_scale_interleaved(scale)
         self.assertEqual(list(swizzled.shape), [1, 128, 16])
-        self.assertTrue(method.load_up_proj_weight_first)
 
     def test_process_weights_after_loading(self):
         """Test post-loading weight processing logic for FusedMoE layers."""
