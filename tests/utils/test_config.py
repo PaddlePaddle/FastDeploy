@@ -129,6 +129,7 @@ def _fd_model(**ov):
         model_format="paddle",
         moe_phase=MoEPhase(),
         first_k_dense_replace=0,
+        version="init",
     )
     d.update(ov)
     return SimpleNamespace(**d)
