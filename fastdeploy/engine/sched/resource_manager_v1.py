@@ -1670,6 +1670,9 @@ class ResourceManagerV1(ResourceManager):
             else:
                 self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
         request.block_tables = []
+        if hasattr(request, "block_tables_3d"):
+            # Avoid stale head-wise cache-id tables on reschedule/reuse.
+            request.block_tables_3d = []
 
         if request.request_id in self.using_extend_tables_req_id:
             reuse_block_num = self.reuse_block_num_map[request.request_id]
