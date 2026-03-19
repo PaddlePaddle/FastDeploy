@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 from functools import partial
+from typing import Dict
 
 import paddle
 from paddle import nn
@@ -25,7 +26,6 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
@@ -109,9 +109,15 @@ class Glm4MoeMLP(nn.Layer):
 
     def forward(self, x, forward_meta=None):
         """ """
+        paddle.cuda.nvtx.range_push("Glm4MoeMLP/up_gate_proj")
         gate_up_out = self.up_gate_proj(x)
+        paddle.cuda.nvtx.range_pop()
+        paddle.cuda.nvtx.range_push("Glm4MoeMLP/act_fn")
         act_out = self.act_fn(gate_up_out)
+        paddle.cuda.nvtx.range_pop()
+        paddle.cuda.nvtx.range_push("Glm4MoeMLP/down_proj")
         down_out = self.down_proj(act_out)
+        paddle.cuda.nvtx.range_pop()
         return down_out
 
 
@@ -160,16 +166,8 @@ class Glm4Moe(nn.Layer):
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
-        # In pure-TP mode (tp>1, ep=1) both branches return partial sums, so we
-        # defer the all-reduce to after combining them — saving one collective.
-        # In all other modes (EP, EP+attn-TP, no parallelism) each branch handles
-        # its own reduction internally (reduce_results default=True), so we must
-        # NOT add an extra all-reduce here.
-        self._pure_tp = self.use_tp and not self.use_ep
-
         self.experts = FusedMoE(
             fd_config,
-            reduce_results=not self._pure_tp,
             renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.n_routed_experts,
@@ -190,16 +188,17 @@ class Glm4Moe(nn.Layer):
                 intermediate_size=shared_experts_intermediate_size,
                 layer_id=layer_id,
                 prefix=f"{prefix}.shared_experts",
-                reduce_results=not self._pure_tp,
             )
 
     def forward(self, x, forward_meta: ForwardMeta = None):
+        paddle.cuda.nvtx.range_push("Glm4Moe/fused_experts")
         out = self.experts(x, self.gate, forward_meta)
+        paddle.cuda.nvtx.range_pop()
         if self.n_shared_experts > 0:
-            out = out + self.shared_experts(x)
-        if self._pure_tp:
-            # Both branches produced partial sums; combine first, then single all-reduce.
-            out = tensor_model_parallel_all_reduce(out, self.tp_group)
+            paddle.cuda.nvtx.range_push("Glm4Moe/shared_experts")
+            shared_experts_out = self.shared_experts(x)
+            paddle.cuda.nvtx.range_pop()
+            out = out + shared_experts_out
         return out
 
 
@@ -253,14 +252,22 @@ class Glm4MoeAttention(nn.Layer):
         hidden_states: paddle.Tensor,
     ):
         """ """
+        paddle.cuda.nvtx.range_push("Glm4MoeAttn/qkv_proj")
         qkv_out = self.qkv_proj(hidden_states)
+        paddle.cuda.nvtx.range_pop()
         if self.use_qk_norm:
+            paddle.cuda.nvtx.range_push("Glm4MoeAttn/qk_norm")
             qkv_out = self.qk_norm(qkv_out)
+            paddle.cuda.nvtx.range_pop()
+        paddle.cuda.nvtx.range_push("Glm4MoeAttn/attn_kernel")
         atten_out = self.attn(
             qkv=qkv_out,
             forward_meta=forward_meta,
         )
+        paddle.cuda.nvtx.range_pop()
+        paddle.cuda.nvtx.range_push("Glm4MoeAttn/o_proj")
         output = self.o_proj(atten_out)
+        paddle.cuda.nvtx.range_pop()
         return output
 
 
@@ -276,6 +283,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
         super().__init__()
 
         layer_id = int(prefix.split(sep=".")[-1])
+        self.layer_id = layer_id
         self.self_attn = Glm4MoeAttention(
             fd_config=fd_config,
             layer_id=layer_id,
@@ -317,19 +325,27 @@ class Glm4MoeDecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
+        lid = self.layer_id
+        paddle.cuda.nvtx.range_push(f"layer{lid}/input_layernorm")
         hidden_states, residual = self.input_layernorm(
             hidden_states, residual_input=residual, forward_meta=forward_meta
         )
+        paddle.cuda.nvtx.range_pop()
 
+        paddle.cuda.nvtx.range_push(f"layer{lid}/self_attn")
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
+        paddle.cuda.nvtx.range_pop()
 
-        # Fully Connected
+        paddle.cuda.nvtx.range_push(f"layer{lid}/post_attn_layernorm")
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+        paddle.cuda.nvtx.range_pop()
 
+        paddle.cuda.nvtx.range_push(f"layer{lid}/mlp")
         hidden_states = self.mlp(hidden_states, forward_meta)
+        paddle.cuda.nvtx.range_pop()
 
         return hidden_states, residual
 
@@ -383,18 +399,25 @@ class Glm4MoeModel(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        """ """
+        paddle.cuda.nvtx.range_push("Glm4MoeModel/embed_tokens")
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
+        paddle.cuda.nvtx.range_pop()
 
         residual = None
 
         for i in range(self.num_layers):
+            paddle.cuda.nvtx.range_push(f"Glm4MoeModel/layer{i}")
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
+            paddle.cuda.nvtx.range_pop()
 
+        paddle.cuda.nvtx.range_push("Glm4MoeModel/final_norm")
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+        paddle.cuda.nvtx.range_pop()
 
         if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            paddle.cuda.nvtx.range_push("Glm4MoeModel/norm_allgather")
             out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
+            paddle.cuda.nvtx.range_pop()
 
         return out
 
@@ -518,7 +541,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         """
         assert False, "glm4_moe only support --load-choices default_v1."
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         """ """
         logits = self.lm_head(hidden_states)
         logits = logits.astype(paddle.float32)
@@ -542,12 +565,13 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
+        inputs: Dict,
         forward_meta: ForwardMeta,
     ):
-        """ """
+        paddle.cuda.nvtx.range_push("Glm4MoeForCausalLM/forward")
+        ids_remove_padding = inputs["ids_remove_padding"]
         hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
-
+        paddle.cuda.nvtx.range_pop()
         return hidden_states
 
     def clear_grpah_opt_backend(self):
