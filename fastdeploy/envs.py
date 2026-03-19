@@ -269,6 +269,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SiluAndMul_USE_PHI_SWIGLU": lambda: bool(int(os.getenv("FD_SiluAndMul_USE_PHI_SWIGLU", "0"))),
     # Whether to enable FP8 quantization with pow2scale.
     "FD_FP8_QUANT_WITH_POW2SCALE": lambda: bool(int(os.getenv("FD_FP8_QUANT_WITH_POW2SCALE", "0"))),
+    # enable kv cache manager v1
+    "ENABLE_V1_KVCACHE_MANAGER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_MANAGER", "0")),
 }
 
 
