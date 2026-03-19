@@ -292,6 +292,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request.enable_thinking = model_status == "think_start"
         if request.sampling_params.top_p is not None and request.sampling_params.top_p < _SAMPLING_EPS:
             request.sampling_params.top_p = _SAMPLING_EPS
+            request.sampling_params.top_k = 1
         if request.sampling_params.response_max_tokens is not None and request.enable_thinking is False:
             request.sampling_params.max_tokens = min(
                 request.sampling_params.response_max_tokens, request.sampling_params.max_tokens

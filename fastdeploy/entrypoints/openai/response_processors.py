@@ -19,7 +19,6 @@ from typing import Any, Dict, List, Optional
 
 from fastdeploy.entrypoints.openai.usage_calculator import count_tokens
 from fastdeploy.input.tokenzier_client import AsyncTokenizerClient, ImageDecodeRequest
-from fastdeploy.utils import api_server_logger
 
 
 class ChatResponseProcessor:
@@ -81,7 +80,6 @@ class ChatResponseProcessor:
             include_stop_str_in_output: Whether or not to include stop strings in the output.
         """
         for request_output in request_outputs:
-            api_server_logger.debug(f"request_output {request_output}")
             if not self.enable_mm_output:
                 outputs = request_output.get("outputs", None)
                 token_ids = outputs.get("token_ids", None) if outputs is not None else None
