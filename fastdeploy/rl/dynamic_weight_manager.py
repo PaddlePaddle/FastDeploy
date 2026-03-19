@@ -246,10 +246,13 @@ class DynamicWeightManager:
 
         if part_files:
             logger.info(f"Found {len(part_files)} snapshot part files for {base_name}")
-            for idx, part_path in enumerate(part_files, start=1):
-                logger.info(f"Loading snapshot part {idx}/{len(part_files)} from {part_path}")
+            for load_idx, part_path in enumerate(part_files):
+                match = re.search(r"\.part(\d+)\.", part_path)
+                # Use part index parsed from filename to keep logs and src_type consistent with file naming
+                part_index = int(match.group(1)) if match else load_idx
+                logger.info(f"Loading snapshot part {part_index+1}/{len(part_files)} from {part_path}")
                 ipc_state_dict = paddle.load(part_path, safetensors=True)
-                self._update_model_from_state(ipc_state_dict, f"snapshot-part{idx}")
+                self._update_model_from_state(ipc_state_dict, f"snapshot-part{part_index}")
                 del ipc_state_dict
                 gc.collect()
             logger.info(f"IPC snapshot update completed from {len(part_files)} part files under {model_dir}")
