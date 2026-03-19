@@ -74,6 +74,7 @@ class _DummyResourceManager:
         self.req_dict = {}
         self.requests = {}
         self.to_be_rescheduled_request_id_set = set()
+        self.to_be_aborted_req_id_set = set()
         self.abort_req_ids_set = set()
         self.recycled = []
         self.cached_tasks = []
@@ -84,6 +85,10 @@ class _DummyResourceManager:
 
     def reschedule_preempt_task(self, request_id):
         self.recycled.append(f"reschedule-{request_id}")
+
+    def recycle_abort_task(self, request_id):
+        self.recycled.append(f"recycle-abort-{request_id}")
+        self.to_be_aborted_req_id_set.discard(request_id)
 
     def finish_requests_async(self, request_id):
         self.recycled.append(f"finish-{request_id}")

@@ -279,6 +279,25 @@ int speculate_free_and_dispatch_block(api::Context *ctx,
   WRAPPER_DUMP_PARAM4(
       ctx, bsz, block_size, block_num_per_seq, max_decoder_block_num);
   WRAPPER_DUMP(ctx);
+  WRAPPER_ASSERT_GT(ctx, bsz, 0);
+  WRAPPER_ASSERT_GT(ctx, block_size, 0);
+  WRAPPER_ASSERT_GT(ctx, block_num_per_seq, 0);
+  WRAPPER_ASSERT_GT(ctx, max_decoder_block_num, 0);
+  WRAPPER_ASSERT_GT(ctx, max_draft_tokens, 0);
+  WRAPPER_CHECK_PTR(ctx, bool, bsz, stop_flags);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_this_time);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_decoder);
+  WRAPPER_CHECK_PTR(ctx, int, bsz *block_num_per_seq, block_tables);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, encoder_block_lens);
+  WRAPPER_CHECK_PTR(ctx, bool, bsz, is_block_step);
+  WRAPPER_CHECK_PTR(ctx, int, 1, step_len);
+  WRAPPER_CHECK_PTR(ctx, int, 1, recover_len);
+  WRAPPER_CHECK_PTR(ctx, int, 1, need_block_len);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, used_list_len);
+  WRAPPER_CHECK_PTR(ctx, int, bsz *block_num_per_seq, free_list);
+  WRAPPER_CHECK_PTR(ctx, int, 1, free_list_len);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bsz, first_token_ids);
+  // TODO(mayang02): add more checks
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper(ctx,
                        stop_flags,

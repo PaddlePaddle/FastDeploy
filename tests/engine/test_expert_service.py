@@ -14,6 +14,9 @@
 # limitations under the License.
 """
 
+# NOTE: Coverage supplement test — uses mock to reach internal branches
+# that are hard to exercise without a full GPU/multi-process environment.
+
 import os
 import sys
 import unittest
@@ -235,6 +238,52 @@ class TestExpertService(unittest.TestCase):
 
         # 验证异常被记录
         mock_llm_logger.exception.assert_called_once()
+
+    @patch("fastdeploy.engine.expert_service.EngineService")
+    @patch("fastdeploy.engine.expert_service.time")
+    @patch("fastdeploy.engine.expert_service.threading")
+    @patch("fastdeploy.engine.expert_service.envs")
+    @patch("fastdeploy.engine.expert_service.IPCSignal")
+    @patch("fastdeploy.engine.expert_service.console_logger")
+    def test_start_with_profile_retry_logic(
+        self, mock_console_logger, mock_ipc_signal, mock_envs, mock_threading, mock_time, mock_engine_service
+    ):
+        """Test IPCSignal retry logic when do_profile is True (lines 169-172)."""
+        mock_envs.FD_ENABLE_RETURN_TEXT = False
+        mock_envs.FD_ENABLE_MULTI_API_SERVER = False
+
+        local_data_parallel_id = 0
+
+        mock_process = Mock()
+        mock_process.pid = 1234
+
+        mock_engine_instance = mock_engine_service.return_value
+        mock_engine_instance.start_cache_service.return_value = [mock_process]
+
+        # Enable profiling
+        self.mock_cfg.do_profile = True
+
+        expert_service = ExpertService(self.mock_cfg, local_data_parallel_id)
+
+        # Simulate IPCSignal failing twice then succeeding
+        call_count = [0]
+
+        def ipc_signal_side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] < 3:
+                raise RuntimeError("IPCSignal not ready")
+            return Mock(value=[100])
+
+        mock_ipc_signal.side_effect = ipc_signal_side_effect
+
+        # Mock time.sleep to avoid actual delays
+        mock_time.time.return_value = 0
+
+        result = expert_service.start(None, local_data_parallel_id)
+
+        # Verify retry logic was triggered
+        self.assertEqual(call_count[0], 3)  # Failed twice, succeeded on third try
+        self.assertTrue(result)
 
 
 if __name__ == "__main__":
