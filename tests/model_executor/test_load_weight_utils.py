@@ -416,6 +416,55 @@ class TestCompositeLoading:
         result = lwu.load_composite_checkpoint(str(tmp_path), mock_cls, cfg, return_numpy=True)
         assert "w" in result
 
+    def test_load_reordered_experts(self, tmp_path, monkeypatch):
+        index = {"weight_map": {"expert.0.w": "s1.safetensors"}}
+        with open(str(tmp_path / "model.safetensors.index.json"), "w") as f:
+            json.dump(index, f)
+
+        class _FakeSafe:
+            def keys(self):
+                return ["expert.0.w"]
+
+            def get_tensor(self, k):
+                return np.array([1.0, 2.0], dtype=np.float32)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+        sentinel = SimpleNamespace(_copy_to=lambda place, blocking: sentinel)
+        monkeypatch.setattr("safetensors.safe_open", lambda path, framework, device: _FakeSafe())
+        monkeypatch.setattr(paddle, "Tensor", lambda w, zero_copy: sentinel)
+        monkeypatch.setattr(paddle.framework, "_current_expected_place", lambda: "cpu")
+        result = lwu.load_reordered_experts(str(tmp_path), "expert.0.w")
+        assert result is sentinel
+
+    def test_composite_checkpoint_pre_sharded(self, tmp_path, monkeypatch):
+        (tmp_path / "rank0").mkdir()
+        (tmp_path / "rank1").mkdir()
+        cfg = _cfg()
+        cfg.parallel_config.tensor_parallel_size = 2
+        cfg.parallel_config.tensor_parallel_rank = 0
+        monkeypatch.setattr(
+            "fastdeploy.model_executor.load_weight_utils.load_pre_sharded_checkpoint",
+            lambda path, rank: {"w": np.ones(4)},
+        )
+        mock_cls = SimpleNamespace(_get_tensor_parallel_mappings=lambda _: {})
+        result = lwu.load_composite_checkpoint(str(tmp_path), mock_cls, cfg, return_numpy=True)
+        assert "w" in result
+
+    def test_composite_checkpoint_empty_state_dict(self, tmp_path, monkeypatch):
+        cfg = _cfg()
+        monkeypatch.setattr(
+            "fastdeploy.model_executor.load_weight_utils.load_tp_checkpoint",
+            lambda *a, **kw: {},
+        )
+        mock_cls = SimpleNamespace(_get_tensor_parallel_mappings=lambda _: {})
+        with pytest.raises(ValueError, match="weight not found"):
+            lwu.load_composite_checkpoint(str(tmp_path), mock_cls, cfg)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
