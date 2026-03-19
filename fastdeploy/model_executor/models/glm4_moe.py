@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import re
 from functools import partial
-from typing import Dict
 
 import paddle
 from paddle import nn
@@ -565,11 +564,10 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
 
     def forward(
         self,
-        inputs: Dict,
+        ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
         paddle.cuda.nvtx.range_push("Glm4MoeForCausalLM/forward")
-        ids_remove_padding = inputs["ids_remove_padding"]
         hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         paddle.cuda.nvtx.range_pop()
         return hidden_states

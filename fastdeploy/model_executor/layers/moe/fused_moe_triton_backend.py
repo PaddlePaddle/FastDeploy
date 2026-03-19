@@ -83,7 +83,8 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         ]
         self.model_format = extra_weight_attrs.get("model_format")
         # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
-        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
+        is_bf16_checkpoint = self.quant_config is None or self.quant_config.is_checkpoint_bf16
+        if is_bf16_checkpoint and layer.fd_config.load_config.load_choices == "default_v1":
             if self.model_format != "torch":
                 up_gate_proj_weight_shape = [
                     layer.num_local_experts,
@@ -228,7 +229,8 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         """ """
 
         def _process_quantize(weight_idx):
-            algo = layer.quant_method.quant_config.name()
+            qc = layer.quant_method.quant_config
+            algo = qc.name() if qc is not None else "wint8"
             assert algo == "wint8"
             max_bound = 127
             # weight
@@ -267,18 +269,29 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             getattr(layer, weight_name).copy_(quanted_weight, False)
             getattr(layer, scale_name).copy_(quanted_weight_scale, False)
 
-        if self.quant_config.is_checkpoint_bf16:
+        is_bf16_checkpoint = self.quant_config is None or self.quant_config.is_checkpoint_bf16
+        if is_bf16_checkpoint:
             weight_id_map = {"gate_up": 0, "down": 1}
-            if weight_fully_copied(layer.up_gate_proj_weight):
-                weight_type = "gate_up"
+            if self.quant_config is None:
+                # unquantized bf16: process both weights at once in process_final_after_loading
+                for weight_type in ("gate_up", "down"):
+                    if self.model_format == "torch":
+                        unquantized_weight_name = self.added_weight_attrs[weight_id_map[weight_type]].replace(
+                            "quant_weight", "weight"
+                        )
+                        process_weight_transpose(layer, unquantized_weight_name)
+                    _process_quantize(weight_id_map[weight_type])
             else:
-                weight_type = "down"
-            if self.model_format == "torch":
-                unquantized_weight_name = self.added_weight_attrs[weight_id_map[weight_type]].replace(
-                    "quant_weight", "weight"
-                )
-                process_weight_transpose(layer, unquantized_weight_name)
-            _process_quantize(weight_id_map[weight_type])
+                if weight_fully_copied(layer.up_gate_proj_weight):
+                    weight_type = "gate_up"
+                else:
+                    weight_type = "down"
+                if self.model_format == "torch":
+                    unquantized_weight_name = self.added_weight_attrs[weight_id_map[weight_type]].replace(
+                        "quant_weight", "weight"
+                    )
+                    process_weight_transpose(layer, unquantized_weight_name)
+                _process_quantize(weight_id_map[weight_type])
 
         else:
             return
