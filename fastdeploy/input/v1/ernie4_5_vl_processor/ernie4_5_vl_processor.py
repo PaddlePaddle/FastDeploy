@@ -216,6 +216,11 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
             request.sampling_params.bad_words_token_ids = bad_words_token_ids
 
+        logits_processors_args = self._prepare_think_stop_sentence(
+            getattr(request.sampling_params, "logits_processors_args", None) or {}, max_model_len
+        )
+        request.sampling_params.logits_processors_args = logits_processors_args
+
         if request.prompt_token_ids:
             messages = request.messages
             if messages:
@@ -267,6 +272,10 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         # 截断超过长度限制的prompt
         if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
             request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
+        logits_processors_args = self._update_thinking_prompt_state(
+            request.prompt_token_ids, getattr(request.sampling_params, "logits_processors_args", None) or {}
+        )
+        request.sampling_params.logits_processors_args = logits_processors_args
 
         max_tokens = max_model_len - len(request.prompt_token_ids)
         if getattr(request.sampling_params, "max_tokens", None) is None:
