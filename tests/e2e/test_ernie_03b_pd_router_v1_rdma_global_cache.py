@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Test splitwise deployment: use local_scheduler + router,
-# set ENABLE_V1_KVCACHE_SCHEDULER is 1, use rdma to transfer cache.
+# Test splitwise deployment with global cache pooling (Mooncake):
+# - Use local_scheduler + router
+# - Set ENABLE_V1_KVCACHE_SCHEDULER is 1, use rdma to transfer cache
+# - Enable Mooncake storage backend for global cache pooling
+# - Enable output caching on decode instance
 
 import json
 import os
@@ -32,12 +35,15 @@ from utils.serving_utils import (
     FD_METRICS_PORT,
     clean,
     get_registered_number,
+    is_port_open,
 )
 
 # Read ports from environment variables; use default values if not set
 FD_CONNECTOR_PORT = int(os.getenv("FD_CONNECTOR_PORT", 8433))
 FD_ROUTER_PORT = int(os.getenv("FD_ROUTER_PORT", 8533))
 FD_RDMA_PORT = int(os.getenv("FD_RDMA_PORT", 8623))
+FD_MOONCAKE_MASTER_PORT = FD_RDMA_PORT + 2
+FD_MOONCAKE_METADATA_PORT = FD_RDMA_PORT + 3
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [
@@ -54,7 +60,22 @@ PORTS_TO_CLEAN = [
     FD_CONNECTOR_PORT + 1,
     FD_RDMA_PORT + 1,
     FD_ROUTER_PORT,
+    FD_MOONCAKE_MASTER_PORT,
+    FD_MOONCAKE_METADATA_PORT,
 ]
+
+
+def wait_for_mooncake_master(host: str = "127.0.0.1", port: int = FD_MOONCAKE_MASTER_PORT, timeout: int = 30):
+    """
+    Wait for Mooncake master to be ready.
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if is_port_open(host, port, timeout=1.0):
+            print(f"Mooncake master is ready on port {port}")
+            return True
+        time.sleep(1)
+    return False
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -62,6 +83,7 @@ def setup_and_run_server():
     """
     Pytest fixture that runs once per test session:
     - Cleans ports before tests
+    - Starts Mooncake Master for global cache pooling
     - Starts the API server as a subprocess
     - Waits for server port to open (up to 30 seconds)
     - Tears down server after all tests finish
@@ -76,6 +98,8 @@ def setup_and_run_server():
         shutil.rmtree("log_prefill")
     if os.path.exists("log_decode") and os.path.isdir("log_decode"):
         shutil.rmtree("log_decode")
+    if os.path.exists("log_master") and os.path.isdir("log_master"):
+        shutil.rmtree("log_master")
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
@@ -91,11 +115,69 @@ def setup_and_run_server():
     _, rdma_nics = output.split("=")
     print(f"shell_path: {shell_path}, rdma_nics: {rdma_nics}")
 
-    # router
+    # Mooncake environment variables
+    master_ip = "127.0.0.1"
+    mooncake_env = {
+        "MOONCAKE_MASTER_SERVER_ADDR": f"{master_ip}:{FD_MOONCAKE_MASTER_PORT}",
+        "MOONCAKE_METADATA_SERVER": f"http://{master_ip}:{FD_MOONCAKE_METADATA_PORT}/metadata",
+        "MOONCAKE_GLOBAL_SEGMENT_SIZE": "1000000000",
+        "MOONCAKE_PROTOCOL": "rdma",
+    }
+
+    # ======================== Start Mooncake Master ========================
+    print("=== Starting Mooncake Master ===")
+
+    # Ensure mooncake_master binary is available before starting the test
+    if shutil.which("mooncake_master") is None:
+        raise RuntimeError(
+            "mooncake_master is not installed or not in PATH. "
+            "Please install Mooncake and ensure `mooncake_master` is available in PATH "
+            "before running this e2e test."
+        )
+
+    env_master = os.environ.copy()
+    env_master["FD_LOG_DIR"] = "log_master"
+    os.makedirs("log_master", exist_ok=True)
+
+    master_cmd = [
+        "mooncake_master",
+        f"--port={FD_MOONCAKE_MASTER_PORT}",
+        "--enable_http_metadata_server=true",
+        "--http_metadata_server_host=0.0.0.0",
+        f"--http_metadata_server_port={FD_MOONCAKE_METADATA_PORT}",
+    ]
+
+    with open("log_master/nohup", "w") as logfile:
+        process_master = subprocess.Popen(
+            master_cmd,
+            stdout=logfile,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            env=env_master,
+        )
+
+    # Wait for Mooncake Master to be ready
+    if not wait_for_mooncake_master(port=FD_MOONCAKE_MASTER_PORT, timeout=30):
+        print("[ERROR] Mooncake Master failed to start")
+        # Print mooncake master log for debugging
+        master_log_path = "log_master/nohup"
+        if os.path.exists(master_log_path):
+            print(f"\n===== Mooncake Master Log ({master_log_path}) =====")
+            with open(master_log_path, "r") as f:
+                print(f.read())
+            print("===== End of Mooncake Master Log =====\n")
+        try:
+            os.killpg(process_master.pid, signal.SIGTERM)
+        except Exception:
+            pass
+        raise RuntimeError("Mooncake Master did not start")
+
+    # ======================== Start Router ========================
     print("start router...")
     env_router = os.environ.copy()
     env_router["FD_LOG_DIR"] = "log_router"
-    router_log_path = "router.log"
+    os.makedirs("log_router", exist_ok=True)
+    router_log_path = "log_router/nohup.log"
 
     router_cmd = [
         sys.executable,
@@ -115,14 +197,17 @@ def setup_and_run_server():
             env=env_router,
         )
 
-    # prefill实例
+    # ======================== Start Prefill Instance ========================
     print("start prefill...")
     env_prefill = os.environ.copy()
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
     env_prefill["FD_LOG_DIR"] = "log_prefill"
-    # env_prefill["KVCACHE_RDMA_NICS"] = rdma_nics
+    os.makedirs("log_prefill", exist_ok=True)
+    # Mooncake environment variables for prefill
+    for k, v in mooncake_env.items():
+        env_prefill[k] = v
 
-    prefill_log_path = "prefill.log"
+    prefill_log_path = "log_prefill/nohup.log"
     prefill_cmd = [
         sys.executable,
         "-m",
@@ -149,6 +234,9 @@ def setup_and_run_server():
         str(FD_CONNECTOR_PORT),
         "--router",
         f"0.0.0.0:{FD_ROUTER_PORT}",
+        "--kvcache-storage-backend",
+        "mooncake",
+        "--enable-output-caching",
     ]
 
     # Start subprocess in new process group
@@ -162,14 +250,17 @@ def setup_and_run_server():
         )
     time.sleep(1)
 
-    # decode实例
+    # ======================== Start Decode Instance ========================
     print("start decode...")
     env_decode = os.environ.copy()
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
     env_decode["FD_LOG_DIR"] = "log_decode"
-    # env_decode["KVCACHE_RDMA_NICS"] = rdma_nics
+    os.makedirs("log_decode", exist_ok=True)
+    # Mooncake environment variables for decode
+    for k, v in mooncake_env.items():
+        env_decode[k] = v
 
-    decode_log_path = "decode.log"
+    decode_log_path = "log_decode/nohup.log"
     decode_cmd = [
         sys.executable,
         "-m",
@@ -196,6 +287,9 @@ def setup_and_run_server():
         str(FD_CONNECTOR_PORT + 1),
         "--router",
         f"0.0.0.0:{FD_ROUTER_PORT}",
+        "--kvcache-storage-backend",
+        "mooncake",
+        "--enable-output-caching",
     ]
 
     # Start subprocess in new process group
@@ -218,6 +312,7 @@ def setup_and_run_server():
     else:
         print("[TIMEOUT] API server failed to start in 5 minutes. Cleaning up...")
         try:
+            os.killpg(process_master.pid, signal.SIGTERM)
             os.killpg(process_router.pid, signal.SIGTERM)
             os.killpg(process_prefill.pid, signal.SIGTERM)
             os.killpg(process_decode.pid, signal.SIGTERM)
@@ -230,10 +325,13 @@ def setup_and_run_server():
 
     print("\n===== Post-test server cleanup... =====")
     try:
+        os.killpg(process_master.pid, signal.SIGTERM)
         os.killpg(process_router.pid, signal.SIGTERM)
         os.killpg(process_prefill.pid, signal.SIGTERM)
         os.killpg(process_decode.pid, signal.SIGTERM)
         clean(PORTS_TO_CLEAN)
+        print(f"Master server (pid={process_master.pid}) terminated")
+        print(f"Router server (pid={process_router.pid}) terminated")
         print(f"Prefill server (pid={process_prefill.pid}) terminated")
         print(f"Decode server (pid={process_decode.pid}) terminated")
     except Exception as e:
@@ -336,7 +434,7 @@ def test_chat_usage_stream(api_url):
     response = send_request(url=api_url, payload=payload)
     chunks = get_stream_chunks(response)
     result = "".join([x["choices"][0]["delta"]["content"] for x in chunks[:-1]])
-    print("Decode Response:", result)
+    print("Decode Response:", repr(result))
     assert result != "", "结果为空"
     usage = chunks[-1]["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
@@ -345,79 +443,90 @@ def test_chat_usage_stream(api_url):
     assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
 
 
-def test_chat_usage_non_stream(api_url):
-    """测试非流式chat usage"""
-    payload = {
+def test_multi_turn_global_cache_pooling(api_url):
+    """
+    测试多轮对话全局cache池化功能。
+
+    测试流程：
+    1. 第一轮请求：发送问题，D实例生成答案并写入全局cache（prompt + output）
+    2. 第二轮请求：发送第二轮对话（第一轮Q&A + 追问），P实例应该命中全局cache（包括D实例第一轮的输出）
+    """
+    # 第一轮问题
+    msg1 = (
+        "深圳是中国经济实力最强的城市之一。近年来，深圳 GDP 持续稳步增长，"
+        "2023 年突破 3.4 万亿元人民币，2024 年接近 3.7 万亿元，长期位居全国城市前列。"
+        "深圳经济以第二产业和第三产业为主，高端制造业、电子信息产业和现代服务业发达，"
+        "形成了以科技创新为核心的产业结构。依托华为、腾讯、大疆等龙头企业，"
+        "深圳在数字经济、人工智能、新能源等领域具有显著优势。同时，深圳进出口总额常年位居全国城市第一，"
+        "是中国对外开放和高质量发展的重要引擎。深圳2024年 GDP 是多少？"
+    )
+
+    # 第一轮请求
+    print("\n>>> Request 1: First round question")
+    print("    Purpose: D instance generates output and writes to global cache (prompt + output)")
+
+    payload1 = {
         "model": "default",
         "temperature": 0,
         "top_p": 0,
         "seed": 33,
         "messages": [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "牛顿的三大运动定律是什么？"},
+            {"role": "user", "content": msg1},
         ],
-        "max_tokens": 50,
+        "max_tokens": 200,
+        "min_tokens": 130,
         "stream": False,
-        "metadata": {"min_tokens": 10},
+        "collect_metrics": True,
     }
 
-    response = send_request(url=api_url, payload=payload).json()
-    usage = response["usage"]
-    result = response["choices"][0]["message"]["content"]
-    assert result != "", "结果为空"
-    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+    response1 = send_request(url=api_url, payload=payload1, timeout=120)
+    assert response1 is not None, "第一轮请求失败"
+    response1_json = response1.json()
+    assert "choices" in response1_json, f"第一轮响应格式错误: {response1_json}"
+    prompt_tokens_num = response1_json["usage"]["prompt_tokens"]
+    # print(f"response1_json: {response1_json}")
 
+    assistant_reply = response1_json["choices"][0]["message"]["content"]
+    print(f"First round response: {repr(assistant_reply)}...")
+    assert len(assistant_reply) > 0, "第一轮响应为空"
 
-def test_non_chat_usage_stream(api_url):
-    """测试流式非chat usage"""
-    payload = {
+    # 等待D实例将output cache写入全局存储
+    print("\n>>> Waiting for D instance to write output cache to global storage...")
+    time.sleep(1)
+
+    # 第二轮追问
+    msg2 = "那深圳2023年的GDP是多少？和2024年相比增长了多少？"
+
+    print("\n>>> Request 2: Second round (multi-turn conversation)")
+    print("    Purpose: P instance should hit global cache including D's output from Request 1")
+    print("    Check log_prefill/prefill.log for 'storage_match' to verify cache hit")
+
+    payload2 = {
         "model": "default",
         "temperature": 0,
         "top_p": 0,
         "seed": 33,
-        "prompt": "牛顿的三大运动定律是什么？",
-        "max_tokens": 50,
-        "stream": True,
-        "stream_options": {"include_usage": True, "continuous_usage_stats": True},
-        "metadata": {"min_tokens": 10},
-    }
-    api_url = api_url.replace("chat/completions", "completions")
-
-    response = send_request(url=api_url, payload=payload)
-    chunks = get_stream_chunks(response)
-    result = "".join([x["choices"][0]["text"] for x in chunks[:-1]])
-    print("Decode Response:", result)
-    assert result != "", "结果为空"
-    usage = chunks[-1]["usage"]
-    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
-
-
-def test_non_chat_usage_non_stream(api_url):
-    """测试非流式非chat usage"""
-    payload = {
-        "model": "default",
-        "temperature": 0,
-        "top_p": 0,
-        "seed": 33,
-        "prompt": "牛顿的三大运动定律是什么？",
-        "max_tokens": 50,
+        "messages": [
+            {"role": "user", "content": msg1},
+            {"role": "assistant", "content": assistant_reply},
+            {"role": "user", "content": msg2},
+        ],
+        "max_tokens": 100,
         "stream": False,
-        "metadata": {"min_tokens": 10},
+        "collect_metrics": True,
     }
-    api_url = api_url.replace("chat/completions", "completions")
 
-    response = send_request(url=api_url, payload=payload).json()
-    usage = response["usage"]
-    result = response["choices"][0]["text"]
-    print("Decode Response:", result)
-    assert result != "", "结果为空"
-    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+    response2 = send_request(url=api_url, payload=payload2, timeout=120)
+    assert response2 is not None, "第二轮请求失败"
+    response2_json = response2.json()
+    assert "choices" in response2_json, f"第二轮响应格式错误: {response2_json}"
+    # print(f"response2_json: {response2_json}")
+    cached_tokens = response2_json["usage"]["prompt_tokens_details"]["cached_tokens"]
+
+    assistant_reply2 = response2_json["choices"][0]["message"]["content"]
+    print(f"\nSecond round response: {repr(assistant_reply2)}")
+    assert len(assistant_reply2) > 0, "第二轮响应为空"
+
+    # 校验token命中情况
+    print(f"cached_tokens of second round: {cached_tokens}, " f"prompt_tokens_num of first round: {prompt_tokens_num}")
+    assert cached_tokens > prompt_tokens_num, "没有从global cache中命中"
