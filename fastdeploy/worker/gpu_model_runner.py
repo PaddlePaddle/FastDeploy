@@ -1369,7 +1369,7 @@ class GPUModelRunner(ModelRunnerBase):
                 seq_lens_this_time = self.share_inputs["seq_lens_this_time"]
                 num_running_requests = int((seq_lens_this_time > 0).astype("int64").sum().item())
                 self._prepare_block_tables_3d_from_flat_tables(num_running_requests)
-                if num_running_requests > 0:
+                if num_running_requests > 0 and self.head_wise_debug_log and _debug_logging_enabled():
                     rows_np = self.share_inputs["block_tables_3d"][: num_running_requests * self.kv_num_heads].numpy()
                     logger.debug(
                         f"[headwise dummy run] block_tables_3d shape={rows_np.shape} "
