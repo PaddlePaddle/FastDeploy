@@ -51,6 +51,8 @@ def top_k_top_p_sampling(
     top_k(Tensor|None, optional): A 1-D Tensor with type int64,
         used to specify the top_k corresponding to each query.
         Only used when FD_SAMPLING_CLASS is `rejection`.
+    top_k_list(list|None, optional): CPU-side mirror of top_k as a Python list,
+        used for fast host-side checks (e.g. all-greedy detection) without GPU sync.
     threshold(Tensor|None, optional): A 1-D Tensor with type float32, float16 and bfloat16,
         used to avoid sampling low score tokens.
     topp_seed(Tensor|None, optional): A 1-D Tensor with type int64,
@@ -77,6 +79,19 @@ def top_k_top_p_sampling(
     # topp_seed the sole source of per-request randomness.
     if envs.FD_DETERMINISTIC_MODE:
         _reset_cuda_generator_for_determinism()
+
+    # Greedy decoding fast-path: top_k=1 is equivalent to argmax.
+    # In non-rejection sampling modes, top_k is ignored by the backend,
+    # so we must handle it explicitly.
+    all_greedy = False
+    if top_k_list is not None:
+        all_greedy = all(k == 1 for k in top_k_list)
+    elif top_k is not None:
+        all_greedy = bool(paddle.all(top_k == 1))
+
+    if all_greedy:
+        ids = paddle.argmax(x, axis=-1, keepdim=True)
+        return None, ids
 
     if top_p_class == "air":
         _, ids = air_top_p_sampling(x, top_p, threshold, topp_seed, seed=seed, k=k, mode=mode)
@@ -116,6 +131,18 @@ def top_k_top_p_sampling(
                 k=k,
                 mode="truncated",
             )
+    # Mixed batch: override top_k=1 rows with argmax.
+    # Shape guard: in overlap/speculative paths, x may be padded (e.g. [8,V])
+    # while top_k remains per-request (e.g. [2,1]). Skip when shapes disagree.
+    if not all_greedy and top_k is not None and top_k.shape[0] == ids.shape[0]:
+        has_greedy = (top_k_list is not None and any(k == 1 for k in top_k_list)) or (
+            top_k_list is None and bool(paddle.any(top_k == 1))
+        )
+        if has_greedy:
+            argmax_ids = paddle.argmax(x, axis=-1, keepdim=True)
+            greedy_mask = top_k == 1
+            ids = paddle.where(greedy_mask, argmax_ids, ids)
+
     return _, ids
 
 
