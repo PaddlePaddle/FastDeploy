@@ -395,6 +395,37 @@ def test_health_and_task_queue(pw):
         assert tq.call_args[1]["address"] == ("10.0.0.1", 8888)
 
 
+def test_init_health_status_data_parallel_branch(pw):
+    """init_health_status: data_parallel_size > 1 path with launched signal wait."""
+
+    class _Sig:
+        def __init__(self, value):
+            self.value = value
+
+    calls = []
+
+    def _mk_signal(name=None, array=None, **kwargs):
+        calls.append(name)
+        if name == "launched_expert_service_signal":
+            return _Sig(np.array([1, 0], dtype=np.int32))
+        return _Sig(np.array(array, copy=True))
+
+    with patch(f"{WP}.envs") as env, patch(f"{WP}.IPCSignal", side_effect=_mk_signal), patch(f"{WP}.IPCLock"):
+        env.FD_ENABLE_MULTI_API_SERVER = False
+        p = _make(
+            pw,
+            **{
+                "parallel_config.data_parallel_size": 2,
+                "parallel_config.local_data_parallel_id": 0,
+                "parallel_config.tensor_parallel_size": 2,
+                "nnode": 1,
+            },
+        )
+        p.init_health_status()
+        assert "launched_expert_service_signal" in calls
+        assert p.worker_ready_signal.value[0] == 1
+
+
 def test_load_model_and_graph(pw):
     """load_model, init_device, graph_optimize_and_warm_up_model."""
     with patch(f"{WP}.IPCSignal") as ipc:
@@ -573,6 +604,38 @@ def test_barrier_broadcast_update(pw):
         p4.update_weights_from_tensor({"main": "data"})
         load.assert_called_once()
         assert p4.experts_manager.tensor_infos is None
+
+
+def test_update_weights_from_tensor_waits_once(pw):
+    """update_weights_from_tensor: waits when tensor infos are initially unavailable."""
+
+    class _TensorInfos:
+        def __init__(self):
+            self._values = [None, {"x": 1}, {"x": 1}]
+
+        @property
+        def tensor_infos(self):
+            if len(self._values) > 1:
+                return self._values.pop(0)
+            return self._values[0]
+
+        @tensor_infos.setter
+        def tensor_infos(self, value):
+            self._values = [value]
+
+    tm = _TensorInfos()
+    with (
+        patch(f"{WP}.load_tensor_from_shm_mem") as load,
+        patch(f"{WP}.MODEL_MAIN_NAME", "main"),
+        patch("time.sleep") as sleep_mock,
+    ):
+        p = _make(pw)
+        p.experts_manager = tm
+        p.experts_manager.get_ep_rank_to_expert_id_list = lambda: ([1], {0: 1}, 1)
+        load.return_value = {"w": np.zeros(1)}
+        p.update_weights_from_tensor({"main": "data"})
+        sleep_mock.assert_called_once()
+        assert p.experts_manager.tensor_infos is None
 
 
 # -- run_worker_proc -----------------------------------------------------------
