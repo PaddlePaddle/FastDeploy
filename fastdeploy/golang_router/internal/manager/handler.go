@@ -28,6 +28,7 @@ type WorkerInfo struct {
 	RdmaPorts             []string `json:"rdma_ports"`
 	DeviceIDs             []string `json:"device_ids"`
 	MetricsPort           string   `json:"metrics_port"`
+	TpSize                int      `json:"tp_size"`
 }
 
 var DefaultManager *Manager
