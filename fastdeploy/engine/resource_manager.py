@@ -356,10 +356,19 @@ class ResourceManager:
             for task in self.tasks_list:
                 if task and getattr(task, "block_tables_3d", None):
                     head_tables = task.block_tables_3d
-                    if head_tables and len(head_tables) > 0:
-                        # Count all blocks across all heads for each task
-                        for head_blocks in head_tables:
-                            num_blocks_used_by_tasks += len(head_blocks)
+                    if head_tables:
+                        # Count logical blocks (not per-head physical cache_ids) in head-wise mode.
+                        # Use max per-head length to tolerate sparse/uneven rows (e.g. SWA).
+                        per_head_block_counts = [
+                            len(head_blocks)
+                            for head_blocks in head_tables
+                            if head_blocks is not None and len(head_blocks) > 0
+                        ]
+                        if per_head_block_counts:
+                            num_blocks_used_by_tasks += max(per_head_block_counts)
+                elif task:
+                    # Compatibility fallback: if 3D tables are absent, fall back to 2D mirror.
+                    num_blocks_used_by_tasks += len(task.block_tables) if task.block_tables else 0
         else:
             num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
         main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
