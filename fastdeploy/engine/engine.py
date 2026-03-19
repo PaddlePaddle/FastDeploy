@@ -268,7 +268,7 @@ class LLMEngine:
         if sampling_params is not None:
             if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
                 sampling_params.temperature = 1e-06
-            task.update(asdict(sampling_params))
+            task.update({k: v for k, v in asdict(sampling_params).items() if v is not None})
 
         # Prepare chat_template_kwargs before calling process_request_dict
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
