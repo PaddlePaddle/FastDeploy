@@ -148,6 +148,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             request.set("top_k", 1)
         if request.get("top_p") < _SAMPLING_EPS:
             request.set("top_p", _SAMPLING_EPS)
+            request.set("top_k", 1)
         if self.reasoning_parser:
             model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
             parts = request.request_id.split("_")
@@ -237,6 +238,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             request["top_k"] = 1
         if request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
+            request["top_k"] = 1
 
         if self.reasoning_parser:
             model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])

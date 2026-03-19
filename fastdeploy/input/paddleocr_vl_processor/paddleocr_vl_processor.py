@@ -256,6 +256,7 @@ class PaddleOCRVLProcessor(TextProcessor):
 
         if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
+            request["top_k"] = 1
 
         if self.reasoning_parser:
             model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
