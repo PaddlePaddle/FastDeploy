@@ -226,5 +226,63 @@ def test_empty_input_forward():
     assert len(layers[1].mlp.calls) == 1
 
 
+def test_tp_mappings_non_gqa_and_rank_slice():
+    """Cover non-GQA mapping path and rank-selected split branch."""
+    cfg = SimpleNamespace(
+        tensor_model_parallel_size=2,
+        tensor_parallel_rank=1,
+        num_attention_heads=4,
+        num_key_value_heads=4,
+        hidden_size=8,
+        num_hidden_layers=1,
+        moe_layer_start_index=0,
+    )
+    split_map = ernie4_5_mtp.Ernie4_5_MTPPretrainedModel._get_tensor_parallel_mappings(cfg, is_split=True)
+    key = "ernie.mtp_block.0.self_attn.qkv_proj.weight"
+    w = np.arange(48, dtype=np.float32).reshape(3, 16)
+    out = split_map[key](w)
+    assert isinstance(out, np.ndarray)
+    assert out.shape == (3, 8)
+
+
+def test_model_forward_without_allgather(mtp):
+    """Forward path when sequence parallel allgather is disabled."""
+    fd = _make_fd_config(hidden_size=4, num_layers=1, use_sp_moe=False)
+    model = mtp.Ernie4_5_MTPModel(fd_config=fd)
+    ids = paddle.to_tensor([0, 1], dtype="int64")
+    prev = paddle.ones([2, 4], dtype="float32")
+    meta = SimpleNamespace(ids_remove_padding=ids)
+    out = model(ids_remove_padding=ids, previous_hidden_states=prev, forward_meta=meta)
+    assert out.shape == (2, 4)
+    assert not fd.speculative_config.sharing_model.ernie.norm.allgather_called
+
+
+def test_causallm_name_forward_and_empty_input_range(mtp):
+    """Cover name(), forward(), and empty_input_forward no-op range branch."""
+    fd = _make_fd_config(hidden_size=4, num_layers=1, use_sp_moe=False)
+    model = mtp.Ernie4_5_MTPForCausalLM(fd)
+    assert model.name() == "Ernie4_5_MTPForCausalLM"
+
+    ids = paddle.to_tensor([0, 1], dtype="int64")
+    prev = paddle.ones([2, 4], dtype="float32")
+    meta = SimpleNamespace(ids_remove_padding=ids)
+    out = model.forward(ids_remove_padding=ids, previous_hidden_states=prev, forward_meta=meta)
+    assert out.shape == (2, 4)
+
+    # empty_input_forward: start==end should skip fused_moe calls.
+    class _StubMLP:
+        def __init__(self):
+            self.calls = 0
+
+        def fused_moe(self, hidden_states=None, forward_meta=None):
+            self.calls += 1
+
+    model.fd_config.model_config.moe_layer_start_index = 1
+    model.fd_config.model_config.num_hidden_layers = 1
+    model.ernie.layers = [SimpleNamespace(mlp=_StubMLP())]
+    model.empty_input_forward(SimpleNamespace())
+    assert model.ernie.layers[0].mlp.calls == 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
