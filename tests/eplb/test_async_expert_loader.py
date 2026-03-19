@@ -264,6 +264,27 @@ def test_load_experts_weight_paths(monkeypatch):
     assert not ok
 
 
+def test_load_experts_weight_mismatch_length(monkeypatch):
+    """load_experts_weight_from_disk: mismatch old/new expert id lengths."""
+    loader = _make_loader(safetensors=False, moe_layer_start_index=0, expert_per_rank=3)
+    loader.old_model_ep_rank_to_expert_id_list = np.array([[0, 1]], dtype=object)
+    loader.new_model_ep_rank_to_expert_id_list = np.array([[0, 1, 2]], dtype=object)
+    monkeypatch.setattr(loader, "load_weight_bf16_from_disk", lambda *a: (True, "ok"))
+    ok, msg = loader.load_experts_weight_from_disk()
+    assert ok is False
+    assert "length not equal" in msg
+
+
+def test_load_experts_weight_exception_path():
+    """load_experts_weight_from_disk: unexpected exception branch."""
+    loader = _make_loader()
+    loader.old_model_ep_rank_to_expert_id_list = None
+    loader.new_model_ep_rank_to_expert_id_list = np.array([[0, 1]])
+    ok, msg = loader.load_experts_weight_from_disk()
+    assert ok is False
+    assert "Failed to load_experts_weight_from_disk" in msg
+
+
 def test_bf16_from_disk(tmp_path):
     """load_weight_bf16_from_disk: success + exception."""
     with pytest.MonkeyPatch.context() as mp:
