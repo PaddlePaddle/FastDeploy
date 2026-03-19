@@ -322,8 +322,8 @@ class FusedMoE(nn.Layer):
                 shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
             )
 
-    def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None, is_sharded=False):
-        if self.tp_size > 1 and not is_sharded and not self.fd_config.load_config.is_pre_sharded:
+    def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
+        if self.tp_size > 1 and not self.fd_config.load_config.is_pre_sharded:
             tp_shard_dim = shard_dim
             weight_dim = -1 if tp_shard_dim else 0
             size = loaded_weight.shape[weight_dim]
