@@ -32,6 +32,13 @@ for subdir in "$run_path"*/; do
                 ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9
 
                 if [ $exit_code -ne 0 ]; then
+                    if [ -d "${subdir%/}/log" ]; then
+                        echo ">>> grep error in ${subdir%/}/log/"
+                        grep -Rni --color=auto "error" "${subdir%/}/log/" || true
+                    else
+                        echo "${subdir%/}/log directory not found"
+                    fi
+
                     if [ -f "${subdir%/}/log/workerlog.0" ]; then
                         echo "---------------- log/workerlog.0 -------------------"
                         cat "${subdir%/}/log/workerlog.0"
