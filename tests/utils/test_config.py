@@ -282,6 +282,42 @@ class TestModelConfig:
         with pytest.raises(ValueError, match="greater than the vocabulary"):
             _make_model_config(monkeypatch, tmp_path, args={"max_logprobs": 99999})
 
+    def test_mrope_and_tail_layer(self, monkeypatch, tmp_path):
+        mrope_pre = {
+            **_BASE_PRETRAINED,
+            "mrope_section": [16, 24, 24],
+            "rope_scaling": {"type": "mrope", "factor": 1.0},
+        }
+        cfg = _make_model_config(monkeypatch, tmp_path, pretrained=mrope_pre)
+        assert cfg.rope_3d is True
+        assert cfg.rope_scaling["mrope_section"] == [16, 24, 24]
+        assert cfg.freq_allocation == 16
+
+        no_rope_pre = {**_BASE_PRETRAINED, "mrope_section": [8, 12, 12]}
+        cfg2 = _make_model_config(monkeypatch, tmp_path, pretrained=no_rope_pre)
+        assert cfg2.rope_3d is True
+        assert cfg2.rope_scaling == {"mrope_section": [8, 12, 12]}
+
+        tail_pre = {**_BASE_PRETRAINED, "remove_tail_layer": True}
+        cfg3 = _make_model_config(monkeypatch, tmp_path, pretrained=tail_pre)
+        assert cfg3.num_hidden_layers == _BASE_PRETRAINED["num_hidden_layers"] - 1
+
+    def test_runner_validation_generate_and_pooling(self, monkeypatch, tmp_path):
+        with pytest.raises(ValueError, match="does not support.*generate"):
+            _make_model_config(
+                monkeypatch,
+                tmp_path,
+                args={"runner": "generate", "model_impl": "fastdeploy"},
+                registry=_FakeRegistry(generative=False),
+            )
+        with pytest.raises(ValueError, match="does not support.*pooling"):
+            _make_model_config(
+                monkeypatch,
+                tmp_path,
+                args={"runner": "pooling", "convert": "none"},
+                registry=_FakeRegistry(generative=False, pooling=False),
+            )
+
     @pytest.mark.parametrize(
         ("config_json", "expected_format"),
         [
