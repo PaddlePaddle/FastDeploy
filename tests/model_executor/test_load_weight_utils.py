@@ -98,6 +98,9 @@ class TestFileDiscovery:
         cfg.parallel_config.tensor_parallel_size = 2
         cfg.parallel_config.tensor_parallel_rank = 1
         assert lwu.get_model_path(cfg) == str(tmp_path / "rank1")
+        cfg.parallel_config.tensor_parallel_size = 1
+        with pytest.raises(ValueError, match="tp2"):
+            lwu.get_model_path(cfg)
 
 
 class TestWeightIterators:
@@ -129,6 +132,31 @@ class TestWeightIterators:
         results = dict(lwu.get_weight_iterator(str(tmp_path)))
         np.testing.assert_allclose(results["w"].numpy(), [1.0, 2.0], rtol=1e-6)
 
+    def test_get_weight_iterator_ordered_and_kv_scale(self, tmp_path):
+        save_file(
+            {
+                "layers.0.w": np.array([1.0], dtype=np.float32),
+                "layers.1.w": np.array([2.0], dtype=np.float32),
+                "layers.0.b": np.array([3.0], dtype=np.float32),
+            },
+            str(tmp_path / "model-001.safetensors"),
+        )
+        with open(str(tmp_path / "model.safetensors.index.json"), "w") as f:
+            json.dump(
+                {
+                    "weight_map": {
+                        "layers.0.w": "model-001.safetensors",
+                        "layers.1.w": "model-001.safetensors",
+                        "layers.0.b": "model-001.safetensors",
+                    }
+                },
+                f,
+            )
+        with open(str(tmp_path / "kv_cache_scale.json"), "w") as f:
+            json.dump({"layer.0.k_scale": 0.5}, f)
+        results = dict(lwu.get_weight_iterator(str(tmp_path)))
+        assert "layers.0.w" in results and "layer.0.k_scale" in results
+
 
 class TestCaching:
     def test_load_weights_from_cache(self):
@@ -138,6 +166,36 @@ class TestCaching:
         np.testing.assert_allclose(linear.weight.numpy(), new_w.numpy(), rtol=1e-6)
         with pytest.raises(ValueError, match="Shape mismatch"):
             lwu.load_weights_from_cache(linear, iter([("weight", paddle.randn([5, 3]))]))
+
+        # Unknown weights should be ignored without raising.
+        lwu.load_weights_from_cache(linear, iter([("not_exists", paddle.randn([1]))]))
+
+        class _DummyKVLinear:
+            def __init__(self):
+                self.called = 0
+
+            def process_weights_after_loading(self):
+                self.called += 1
+
+        class _DummyParam:
+            def __init__(self):
+                self.shape = [2, 2]
+
+            def copy_(self, *args, **kwargs):
+                return None
+
+        dummy_kv = _DummyKVLinear()
+        monkey_model = SimpleNamespace(
+            named_parameters=lambda: [("w", _DummyParam())],
+            named_sublayers=lambda: [("kv", dummy_kv)],
+        )
+        monkeypatch_kv = pytest.MonkeyPatch()
+        monkeypatch_kv.setattr(lwu, "KVBatchLinear", _DummyKVLinear)
+        try:
+            lwu.load_weights_from_cache(monkey_model, iter([("w", paddle.ones([2, 2]))]))
+        finally:
+            monkeypatch_kv.undo()
+        assert dummy_kv.called == 1
 
     def test_weight_cache_lifecycle(self, tmp_path, monkeypatch):
         monkeypatch.setenv("FD_ENABLE_MODEL_LOAD_CACHE", "0")
@@ -183,6 +241,39 @@ class TestCaching:
         mock_model = SimpleNamespace(state_dict=lambda: {"w": 1})
         result = dummy_load(mock_model, cfg)
         assert result == {"loaded": True}
+        assert "path" in saved
+
+    def test_save_model_cache_branches(self, tmp_path, monkeypatch):
+        cfg = _cfg()
+        cfg.model_config.model = str(tmp_path)
+        cfg.quant_config.is_checkpoint_bf16 = True
+        cfg.parallel_config.tensor_parallel_rank = 0
+        monkeypatch.setattr(lwu.envs, "FD_ENABLE_MODEL_LOAD_CACHE", True)
+
+        @lwu.save_model()
+        def dummy_load(model, fd_config):
+            return {"loaded": True}
+
+        model = SimpleNamespace(state_dict=lambda: {"w": 1})
+
+        # Branch where cache is enabled but path is unavailable.
+        monkeypatch.setattr(
+            lwu,
+            "is_weight_cache_enabled",
+            lambda _cfg: (False, None, lwu.contextlib.nullcontext()),
+        )
+        assert dummy_load(model, cfg) == {"loaded": True}
+
+        # Branch where cache path is created and saved.
+        cache_root = tmp_path / "cache_root"
+        monkeypatch.setattr(
+            lwu,
+            "is_weight_cache_enabled",
+            lambda _cfg: (True, str(cache_root), lwu.contextlib.nullcontext()),
+        )
+        saved = {}
+        monkeypatch.setattr("paddle.save", lambda sd, p: saved.update({"path": p}))
+        assert dummy_load(model, cfg) == {"loaded": True}
         assert "path" in saved
 
 
