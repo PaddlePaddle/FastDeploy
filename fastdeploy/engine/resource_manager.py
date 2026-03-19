@@ -152,7 +152,7 @@ class ResourceManager:
             return block_list
         block_list = self.cache_manager.allocate_gpu_blocks(block_num)
         if self.enable_head_wise_kv_cache:
-            llm_logger.info(
+            llm_logger.debug(
                 f"[HEAD_WISE] _get_block_tables: allocated {block_num} blocks, "
                 f"cache_ids_2d shape: [{len(block_list)}][{len(block_list[0]) if block_list else 0}]"
             )
@@ -194,7 +194,7 @@ class ResourceManager:
                 self.cache_manager.recycle_gpu_blocks(cache_ids_2d, req_id)
                 cur_number = self.available_block_num()
                 main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
-                llm_logger.info(
+                llm_logger.debug(
                     f"[HEAD_WISE] recycle {req_id} {cur_number - ori_number} blocks. "
                     f"cache_ids_2d shape: [{len(cache_ids_2d)}][{len(cache_ids_2d[0]) if cache_ids_2d else 0}]"
                 )
