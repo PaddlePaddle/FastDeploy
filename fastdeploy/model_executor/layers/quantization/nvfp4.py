@@ -503,14 +503,16 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         set_weight_attrs(layer.up_gate_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
         set_weight_attrs(layer.down_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
 
-    @property
-    def load_up_proj_weight_first(self) -> bool:
-        # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
-        # 目前默认给True
-        return True
-
     def process_weights_after_loading(self, layer):
         """ """
+
+        # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
+
+        [a, b] = layer.up_gate_proj_weight.split(2, axis=1)
+        layer.up_gate_proj_weight.set_value(paddle.concat([b, a], axis=1))
+        [a, b] = layer.up_gate_proj_weight_scale.split(2, axis=1)
+        layer.up_gate_proj_weight_scale.set_value(paddle.concat([b, a], axis=1))
+
         up_gate_proj_weight_scale_2 = layer.up_gate_proj_weight_scale_2[:, 0]
         free_tensor(layer.up_gate_proj_weight_scale_2)
         create_parameter_and_copy(layer, name="up_gate_proj_weight_scale_2", weight=up_gate_proj_weight_scale_2)
@@ -602,6 +604,14 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         output_dtype = x.dtype
         x_sf = None
         output = paddle.empty_like(x)
+
+        # # 2. EP Dispatch
+        # permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
+        #     x, topk_ids, topk_weights, use_fp8=False, use_ue8m0=False
+        # )
+        # print(permute_input.shape)
+
+        # return x
 
         if self.backend == "flashinfer-cutlass":
             # flashinfer cutlass

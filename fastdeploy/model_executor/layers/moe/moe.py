@@ -291,7 +291,7 @@ class FusedMoE(nn.Layer):
         if weight_need_transpose:
             loaded_weight = loaded_weight.transpose([1, 0])
 
-        if shard_id is None:
+        if shard_id is None and len(param.shape) == 3:
             # 1.gate up fused in disk
             output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
             shard_offsets = [
@@ -313,13 +313,13 @@ class FusedMoE(nn.Layer):
                 )
         else:
             # 2.gate up splited in disk
-            assert shard_id in ["gate", "down", "up"]
+            assert shard_id in ["gate", "down", "up", None]
             self._load_expert_weight(
                 param=param,
                 expert_id=expert_id,
                 loaded_weight=loaded_weight,
                 shard_id=shard_id,
-                shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
+                shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id] if shard_id is not None else -1,
             )
 
     def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None, is_sharded=False):
@@ -334,8 +334,7 @@ class FusedMoE(nn.Layer):
         expert_param = param[expert_id - self.expert_id_offset]
         dim = -1 if shard_dim else 0
         param_shard_size = expert_param.shape[dim] // 2
-        switch_w13 = getattr(self.quant_method, "load_up_proj_weight_first", False)
-        if (shard_id == "gate" and not switch_w13) or (shard_id == "up" and switch_w13):
+        if shard_id == "gate":
             param_shard_offset = 0
         else:
             param_shard_offset = param_shard_size
@@ -439,6 +438,9 @@ class FusedMoE(nn.Layer):
             expert_param[idx].set_value(loaded_weight)
         elif shard_id == "down":
             expert_param.set_value(loaded_weight)
+        elif shard_id == None:
+            expert_param[0].set_value(loaded_weight)
+            expert_param[1].set_value(loaded_weight)
 
     def _load_expert_weight(
         self,
