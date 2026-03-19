@@ -217,7 +217,7 @@ def moe_topk_select(
     renormalize: bool = False,
 ):
     """
-    EB topk selection, referencing ernie-core calc_topk_probs_indices logic.
+    Topk selection using paddle PHI topk API.
 
     Args:
         gating_output: gate output logits, shape [seq_len, n_experts]
