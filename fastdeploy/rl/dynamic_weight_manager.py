@@ -216,10 +216,33 @@ class DynamicWeightManager:
 
         # --- Priority 1: load from chunked part files to avoid memory spike ---
         part_pattern = os.path.join(model_dir, f"{base_name}.part*.pdparams")
-        part_files = sorted(
-            glob.glob(part_pattern),
-            key=lambda p: int(re.search(r"\.part(\d+)\.", p).group(1)),
-        )
+        all_part_files = glob.glob(part_pattern)
+
+        valid_part_files = []
+        invalid_part_files = []
+        part_regex = re.compile(r"\.part(\d+)\.")
+
+        for path in all_part_files:
+            match = part_regex.search(path)
+            if not match:
+                invalid_part_files.append(os.path.basename(path))
+                continue
+            try:
+                part_idx = int(match.group(1))
+            except (TypeError, ValueError):
+                invalid_part_files.append(os.path.basename(path))
+                continue
+            valid_part_files.append((part_idx, path))
+
+        if invalid_part_files:
+            logger.warning(
+                "Found snapshot part files with invalid naming pattern under %s: %s. "
+                "These files will be ignored when loading IPC snapshot parts.",
+                model_dir,
+                ", ".join(invalid_part_files),
+            )
+
+        part_files = [p for _, p in sorted(valid_part_files, key=lambda item: item[0])]
 
         if part_files:
             logger.info(f"Found {len(part_files)} snapshot part files for {base_name}")
