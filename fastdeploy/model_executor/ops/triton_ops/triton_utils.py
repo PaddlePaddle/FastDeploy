@@ -18,6 +18,7 @@ import inspect
 import os
 import re
 import sys
+from importlib.metadata import PackageNotFoundError, distribution
 
 import paddle
 import triton
@@ -30,7 +31,19 @@ link_file = triton.__path__[0] + "/tools/link.py"
 python_path = sys.executable
 
 
+def _is_package_installed(dist_name: str) -> bool:
+    try:
+        distribution(dist_name)
+        return True
+    except PackageNotFoundError:
+        return False
+
+
 def enable_compat_on_triton_kernel(triton_kernel):
+    # When torch is not installed, this decorator does not do anything, just return the original triton kernel.
+    if not _is_package_installed("torch"):
+        return triton_kernel
+
     class WrappedTritonKernel:
         def __init__(self, kernel):
             self.kernel = kernel
