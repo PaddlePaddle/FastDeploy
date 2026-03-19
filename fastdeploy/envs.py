@@ -62,7 +62,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ATTENTION_BACKEND": lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
     # Set sampling class. "base", "base_non_truncated", "air" and "rejection" can be set currently.
     "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
-    # Set moe backend."cutlass","marlin", "triton", "flashinfer-cutlass" and "flashinfer-trtllm" can be set currently.
+    # Set moe backend."cutlass","marlin", "triton", "flashinfer-cutlass", "flashinfer-cutedsl" and "flashinfer-trtllm" can be set currently.
     "FD_MOE_BACKEND": lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
     # Set mxfp4 backend."flashinfer" can be set currently.
     "FD_MOE_MXFP4_BACKEND": lambda: os.getenv("FD_MOE_MXFP4_BACKEND", "flashinfer"),
@@ -236,7 +236,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
-    "FD_CUTEDSL_MOE_SCALAR_INPUT_SCALE": lambda: int(os.getenv("FD_CUTEDSL_MOE_SCALAR_INPUT_SCALE", "1")),
     # Whether to enable KV cache lock, enforcing mutual exclusion between
     # PrefixCacheManager and Worker when accessing GPU KV cache.
     # Under certain DP+EP configurations, concurrent access (even read-only)

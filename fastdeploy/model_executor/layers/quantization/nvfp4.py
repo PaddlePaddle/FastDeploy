@@ -14,9 +14,10 @@
 # limitations under the License.
 """
 
-from typing import Optional
+from typing import Callable, Optional
 
 import paddle
+from paddle import nn
 from paddleformers.utils.log import logger
 
 import fastdeploy
@@ -32,9 +33,6 @@ from fastdeploy.model_executor.utils import (
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 paddle.compat.enable_torch_proxy(scope={"flashinfer"})
-
-CUTEDSL_MOE_SCALAR_INPUT_SCALE = bool(envs.FD_CUTEDSL_MOE_SCALAR_INPUT_SCALE)
-
 
 def next_power_of_2(n: int):
     return 1 << (n - 1).bit_length() if n > 0 else 1
@@ -156,9 +154,6 @@ class ModelOptNvFp4Config(QuantConfigBase):
         Get quantization method.
         """
         if isinstance(layer, FusedMoE):
-            if envs.FD_MOE_BACKEND == "flashinfer-cutedsl":
-                logger.info("Using ModelOptNvFp4FusedMoECuteDSL for FusedMoE")
-                return ModelOptNvFp4FusedMoECuteDSL(self)
             return ModelOptNvFp4FusedMoE(self)
         else:
             return ModelOptNvFp4LinearMethod(self)
@@ -361,7 +356,7 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         return out
 
 
-class ModelOptNvFp4FusedMoE(QuantMethodBase):
+class ModelOptNvFp4FusedMoE(MoEMethodBase):
     """Fused MoE method for Model Optimizer NVFP4.
     Supports loading NVFP4 checkpoints with the following structure:
 
@@ -397,6 +392,20 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             )
 
         logger.info(f"Using {self.backend} for NVFP4 FusedMoE")
+
+    def init_ep(self, layer: nn.Layer) -> None:
+        if layer.ep_size <= 1:
+            return
+
+        # In prefill-only role, DeepEP dispatch may hang for NVFP4 CuteDSL.
+        # Initialize EP runners as mixed to provision both prefill/decode buffers.
+        if (
+            layer.fd_config.model_config.moe_phase.phase == "prefill"
+            and layer.fd_config.scheduler_config.splitwise_role == "prefill"
+        ):
+            layer.fd_config.scheduler_config.splitwise_role = "mixed"
+
+        super().init_ep(layer)
 
     def create_weights(self, layer, **extra_weight_attrs):
         """
@@ -554,388 +563,38 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         layer.down_proj_weight_scale = None
         create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
 
-    def apply(
-        self,
-        layer,
-        x,
-        gate,
-        topk_ids_hookfunc=None,
-    ):
-        """
-        flashinfer nvfp4 fusedmoe for Model Optimizer
-        """
-        gate_out = gate(x.cast("float32"))
-        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            layer.top_k,
-            True,  # apply_norm_weight,
-            False,
-        )
-
-        if topk_ids_hookfunc is not None:
-            topk_ids_hookfunc(topk_ids)
-
-        output_dtype = x.dtype
-        x_sf = None
-        output = paddle.empty_like(x)
-
-        if self.backend == "flashinfer-cutlass":
-            # flashinfer cutlass
-            from flashinfer.fused_moe import (
-                cutlass_fused_moe as flashinfer_cutlass_fused_moe,
-            )
-
-            _ = flashinfer_cutlass_fused_moe(
-                input=x,
-                token_selected_experts=topk_ids.to(paddle.int),
-                token_final_scales=topk_weights,
-                fc1_expert_weights=getattr(layer, self.added_weight_attrs[0]).view(paddle.long),
-                fc2_expert_weights=getattr(layer, self.added_weight_attrs[1]).view(paddle.long),
-                output_dtype=output_dtype,
-                input_sf=x_sf,
-                quant_scales=[
-                    layer.up_gate_proj_input_scale_quant,
-                    layer.up_gate_proj_blockscale_swizzled.view(paddle.int32),
-                    layer.g1_alphas,
-                    layer.down_proj_input_scale_quant,
-                    layer.down_proj_blockscale_swizzled.view(paddle.int32),
-                    layer.g2_alphas,
-                ],
-                ep_size=layer.ep_size,
-                ep_rank=layer.ep_rank,
-                tp_size=layer.tp_size,
-                tp_rank=layer.tp_rank,
-                tune_max_num_tokens=next_power_of_2(x.shape[0]),
-                output=output,
-            )
-
-            return output
-
-        return output
-
-
-class ModelOptNvFp4FusedMoECuteDSL(MoEMethodBase):
-    def __init__(self, quant_config: ModelOptNvFp4Config):
-        super().__init__(quant_config)
-        self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
-        self.added_scale_attrs = [
-            "up_gate_proj_weight_scale",
-            "down_proj_weight_scale",
-        ]
-        self.backend = "flashinfer-cutedsl"
-
-        logger.info(f"Using {self.backend} for NVFP4 FusedMoE")
-
-    def create_weights(self, layer, **extra_weight_attrs):
-        if not self.quant_config.is_checkpoint_nvfp4_serialized:
-            raise ValueError("NVFP4 quantization was selected, " " dynamic quantization is not supported.")
-        if self.quant_config.group_size != 16:
-            raise ValueError(
-                f"flashinfer-cutedsl NVFP4 requires group_size=16, got {self.quant_config.group_size}"
-            )
-
-        self.up_gate_proj_weight_shape = [
-            layer.num_local_experts,
-            layer.moe_intermediate_size * 2,
-            layer.hidden_size // 2,
-        ]
-        self.down_proj_weight_shape = [
-            layer.num_local_experts,
-            layer.hidden_size,
-            layer.moe_intermediate_size // 2,
-        ]
-        self.up_gate_proj_scale_shape = self.up_gate_proj_weight_shape[0:2] + [
-            layer.hidden_size // self.quant_config.group_size
-        ]
-        self.down_proj_scale_shape = self.down_proj_weight_shape[0:2] + [
-            layer.moe_intermediate_size // self.quant_config.group_size
-        ]
-
-        self.weight_scale_dtype = paddle.float8_e4m3fn
-        self.weight_dtype = paddle.uint8
-        up_gate_proj_weight_name = self.added_weight_attrs[0]
-        down_proj_weight_name = self.added_weight_attrs[1]
-        up_gate_proj_scale_name = self.added_scale_attrs[0]
-        down_proj_scale_name = self.added_scale_attrs[1]
-        setattr(
-            layer,
-            up_gate_proj_weight_name,
-            layer.create_parameter(
-                shape=self.up_gate_proj_weight_shape,
-                dtype=self.weight_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        setattr(
-            layer,
-            down_proj_weight_name,
-            layer.create_parameter(
-                shape=self.down_proj_weight_shape,
-                dtype=self.weight_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        # weight_scale
-        setattr(
-            layer,
-            up_gate_proj_scale_name,
-            layer.create_parameter(
-                shape=self.up_gate_proj_scale_shape,
-                dtype=self.weight_scale_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        setattr(
-            layer,
-            down_proj_scale_name,
-            layer.create_parameter(
-                shape=self.down_proj_scale_shape,
-                dtype=self.weight_scale_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        # weight_scale_2
-        layer.up_gate_proj_weight_scale_2 = layer.create_parameter(
-            shape=[layer.num_local_experts, 2],
-            dtype="float32",
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
-        layer.down_proj_weight_scale_2 = layer.create_parameter(
-            shape=[layer.num_local_experts],
-            dtype="float32",
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
-        # input_scale
-        layer.up_gate_proj_input_scale = layer.create_parameter(
-            shape=[layer.num_experts, 2],
-            dtype="float32",
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
-        layer.down_proj_input_scale = layer.create_parameter(
-            shape=[layer.num_experts],
-            dtype="float32",
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
-
-        set_weight_attrs(
-            getattr(layer, up_gate_proj_weight_name),
-            {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}},
-        )
-        set_weight_attrs(
-            getattr(layer, up_gate_proj_scale_name),
-            {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}},
-        )
-
-        set_weight_attrs(
-            getattr(layer, down_proj_weight_name),
-            {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}},
-        )
-        set_weight_attrs(
-            getattr(layer, down_proj_scale_name),
-            {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}},
-        )
-
-        set_weight_attrs(layer.up_gate_proj_weight_scale_2, {**extra_weight_attrs, "weight_type": "weight_scale_2"})
-        set_weight_attrs(layer.down_proj_weight_scale_2, {**extra_weight_attrs, "weight_type": "weight_scale_2"})
-        set_weight_attrs(layer.up_gate_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
-        set_weight_attrs(layer.down_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
-
-    def process_weights_after_loading(self, layer):
-        if layer.up_gate_proj_weight_scale_2.ndim == 1:
-            up_gate_proj_weight_scale_2 = layer.up_gate_proj_weight_scale_2
-        else:
-            if layer.up_gate_proj_weight_scale_2.shape[1] >= 2 and not paddle.allclose(
-                layer.up_gate_proj_weight_scale_2[:, 0],
-                layer.up_gate_proj_weight_scale_2[:, 1],
-            ):
-                logger.warning_once(
-                    "up_proj_weight_scale_2 must match gate_proj_weight_scale2. " "Accuracy may be affected"
-                )
-            up_gate_proj_weight_scale_2 = layer.up_gate_proj_weight_scale_2[:, 0]
-
-        free_tensor(layer.up_gate_proj_weight_scale_2)
-        create_parameter_and_copy(layer, name="up_gate_proj_weight_scale_2", weight=up_gate_proj_weight_scale_2)
-
-        if CUTEDSL_MOE_SCALAR_INPUT_SCALE:
-            up_gate_proj_input_scale = (
-                layer.up_gate_proj_input_scale.max().cast("float32").expand([layer.up_gate_proj_input_scale.shape[0]])
-            )
-        else:
-            up_gate_proj_input_scale = layer.up_gate_proj_input_scale.max(axis=1).values.cast("float32")
-
-        down_proj_input_scale = layer.down_proj_input_scale.cast("float32")
-
-        def _slice_scale(w):
-            assert (
-                w.shape[0] == layer.num_experts
-            ), f"Expected scale shape[0] == num_experts ({layer.num_experts}), got {w.shape[0]}"
-            assert layer.ep_size * layer.num_local_experts == layer.num_experts
-            return w[layer.ep_rank * layer.num_local_experts : (layer.ep_rank + 1) * layer.num_local_experts]
-
-        up_gate_proj_input_scale = _slice_scale(up_gate_proj_input_scale)
-        down_proj_input_scale = _slice_scale(down_proj_input_scale)
-
-        # Step4: 计算并注册 g1_alphas / g2_alphas（= input_scale * weight_scale_2）
-        create_parameter_and_copy(
-            layer,
-            "g1_alphas",
-            (up_gate_proj_input_scale * up_gate_proj_weight_scale_2).cast("float32"),
-        )
-        create_parameter_and_copy(
-            layer,
-            "g2_alphas",
-            (down_proj_input_scale * layer.down_proj_weight_scale_2).cast("float32"),
-        )
-
-        create_parameter_and_copy(
-            layer,
-            "up_gate_proj_input_scale_quant",
-            (1.0 / up_gate_proj_input_scale).cast("float32"),
-        )
-        create_parameter_and_copy(
-            layer,
-            "down_proj_input_scale_quant",
-            (1.0 / down_proj_input_scale).cast("float32"),
-        )
-
-        assert_dim = 2
-        # Step6: 处理 blockscale swizzle（cutedsl 使用与 cutlass 相同的 swizzle 布局）
-        for name, weight_scale in [
-            ("up_gate", layer.up_gate_proj_weight_scale),
-            ("down", layer.down_proj_weight_scale),
-        ]:
-            if weight_scale.shape[assert_dim] % 4 != 0:
-                logger.warning(
-                    "NVFP4 %s_weight_scale K' not multiple of 4: shape=%s, groop_size=%s",
-                    name,
-                    tuple(weight_scale.shape),
-                    getattr(self.quant_config, "group_size", None),
-                )
-            assert (
-                weight_scale.dtype == paddle.float8_e4m3fn
-            ), f"{name} Weight Blockscale must be represented as FP8-E4M3"
-
-        up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
-        free_tensor(layer.up_gate_proj_weight_scale)
-        layer.up_gate_proj_weight_scale = None
-        create_parameter_and_copy(
-            layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
-        )
-
-        down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
-        free_tensor(layer.down_proj_weight_scale)
-        layer.down_proj_weight_scale = None
-        create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
-
     def _run_cutedsl_grouped_masked(self, layer, hidden_states_3d, masked_m):
-        from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
-            flashinfer_cutedsl_moe_masked,
-        )
 
-        if isinstance(hidden_states_3d, tuple):
-            hidden_states_3d = hidden_states_3d[0]
+        if self.backend == "flashinfer-cutedsl":
+            from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
+                flashinfer_cutedsl_moe_masked,
+            )
 
-        return flashinfer_cutedsl_moe_masked(
-            hidden_states=(hidden_states_3d, None),
-            input_global_scale=layer.up_gate_proj_input_scale_quant,
-            w1=layer.up_gate_proj_weight,
-            w1_blockscale=layer.up_gate_proj_blockscale_swizzled,
-            w1_alpha=layer.g1_alphas,
-            w2=layer.down_proj_weight,
-            a2_global_scale=layer.down_proj_input_scale_quant,
-            w2_blockscale=layer.down_proj_blockscale_swizzled,
-            w2_alpha=layer.g2_alphas,
-            masked_m=masked_m.cast(paddle.int32),
-        )
+            if isinstance(hidden_states_3d, tuple):
+                hidden_states_3d = hidden_states_3d[0]
 
-    def apply_tp(
-        self,
-        layer,
-        x,
-        gate,
-        topk_ids_hookfunc=None,
-    ):
-        gate_out = gate(x.cast("float32"))
-        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            layer.top_k,
-            True,
-            False,
-        )
-
-        if topk_ids_hookfunc is not None:
-            topk_ids_hookfunc(topk_ids)
-
-        num_local_experts = layer.num_local_experts
-        hidden_dim = x.shape[1]
-        flat_topk_ids = topk_ids.reshape([-1])
-
-        masked_m = paddle.zeros([num_local_experts], dtype=paddle.int32)
-        for i in range(num_local_experts):
-            masked_m[i] = int((flat_topk_ids == i).sum())
-
-        max_m = max(1, int(masked_m.max()))
-        hidden_states_3d = paddle.zeros([num_local_experts, max_m, hidden_dim], dtype=x.dtype)
-        for i in range(num_local_experts):
-            count = int(masked_m[i])
-            if count > 0:
-                token_indices = paddle.nonzero(flat_topk_ids == i).squeeze(-1)
-                src_indices = token_indices // layer.top_k
-                hidden_states_3d[i, :count, :] = x[src_indices]
-
-        ffn_out = self._run_cutedsl_grouped_masked(layer, hidden_states_3d, masked_m)
-
-        bs = x.shape[0]
-        output = paddle.zeros([bs, hidden_dim], dtype=ffn_out.dtype)
-        flat_weights = topk_weights.reshape([-1])
-        for i in range(num_local_experts):
-            count = int(masked_m[i])
-            if count == 0:
-                continue
-            token_indices = paddle.nonzero(flat_topk_ids == i).squeeze(-1)
-            batch_indices = (token_indices // layer.top_k).tolist()
-            weights_list = flat_weights[token_indices].cast(ffn_out.dtype)
-            expert_out = ffn_out[i, :count, :]
-            for j, b in enumerate(batch_indices):
-                output[b] += expert_out[j] * weights_list[j]
-
-        return output
-
-    def apply_ep_decode(
-        self,
-        layer,
-        x,
-        gate,
-        topk_ids_hookfunc=None,
-    ):
-        if layer.fd_config.parallel_config.use_internode_ll_two_stage:
-            raise NotImplementedError("NVFP4 CuteDSL EP decode does not support DeepEP two-stage low-latency.")
-
-        gate_out = gate(x.cast("float32"))
-        topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
-
-        if topk_ids_hookfunc is not None:
-            topk_ids_hookfunc(topk_ids=topk_idx)
-
-        recv_x, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
-            x,
-            topk_idx,
-            topk_weights,
-            use_fp8=False,
-        )
-
-        ffn_out = self._run_cutedsl_grouped_masked(layer, recv_x, token_nums_per_expert)
-        return self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
+            return flashinfer_cutedsl_moe_masked(
+                hidden_states=(hidden_states_3d, None),
+                input_global_scale=layer.up_gate_proj_input_scale_quant,
+                w1=layer.up_gate_proj_weight,
+                w1_blockscale=layer.up_gate_proj_blockscale_swizzled,
+                w1_alpha=layer.g1_alphas,
+                w2=layer.down_proj_weight,
+                a2_global_scale=layer.down_proj_input_scale_quant,
+                w2_blockscale=layer.down_proj_blockscale_swizzled,
+                w2_alpha=layer.g2_alphas,
+                masked_m=masked_m.cast(paddle.int32),
+            )
+        raise NotImplementedError("NVFP4 EP backend only supports CuteDSL implementation.")
 
     def apply_ep_prefill(
         self,
-        layer,
-        x,
-        gate,
-        topk_ids_hookfunc=None,
-    ):
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
+    ) -> paddle.Tensor:
+        
         if layer.fd_config.parallel_config.use_internode_ll_two_stage:
             raise NotImplementedError("NVFP4 CuteDSL EP prefill does not support DeepEP two-stage low-latency.")
 
@@ -1028,3 +687,143 @@ class ModelOptNvFp4FusedMoECuteDSL(MoEMethodBase):
 
         return tmp_ffn_out
 
+    def apply_ep_decode(
+        self,
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
+    ) -> paddle.Tensor:
+        if layer.fd_config.parallel_config.use_internode_ll_two_stage:
+            raise NotImplementedError("NVFP4 CuteDSL EP decode does not support DeepEP two-stage low-latency.")
+
+        gate_out = gate(x.cast("float32"))
+        topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
+
+        recv_x, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
+            x,
+            topk_idx,
+            topk_weights,
+            use_fp8=False,
+        )
+
+        ffn_out = self._run_cutedsl_grouped_masked(layer, recv_x, token_nums_per_expert)
+        return self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
+
+    def apply_tp(
+        self,
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
+    ) -> paddle.Tensor:
+        
+        gate_out = gate(x.cast("float32"))
+        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+            gate_out,
+            layer.gate_correction_bias,
+            layer.top_k,
+            True,
+            False,
+        )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids)
+
+        num_local_experts = layer.num_local_experts
+        hidden_dim = x.shape[1]
+        flat_topk_ids = topk_ids.reshape([-1])
+
+        masked_m = paddle.zeros([num_local_experts], dtype=paddle.int32)
+        for i in range(num_local_experts):
+            masked_m[i] = int((flat_topk_ids == i).sum())
+
+        max_m = max(1, int(masked_m.max()))
+        hidden_states_3d = paddle.zeros([num_local_experts, max_m, hidden_dim], dtype=x.dtype)
+        for i in range(num_local_experts):
+            count = int(masked_m[i])
+            if count > 0:
+                token_indices = paddle.nonzero(flat_topk_ids == i).squeeze(-1)
+                src_indices = token_indices // layer.top_k
+                hidden_states_3d[i, :count, :] = x[src_indices]
+
+        ffn_out = self._run_cutedsl_grouped_masked(layer, hidden_states_3d, masked_m)
+
+        bs = x.shape[0]
+        output = paddle.zeros([bs, hidden_dim], dtype=ffn_out.dtype)
+        flat_weights = topk_weights.reshape([-1])
+        for i in range(num_local_experts):
+            count = int(masked_m[i])
+            if count == 0:
+                continue
+            token_indices = paddle.nonzero(flat_topk_ids == i).squeeze(-1)
+            batch_indices = (token_indices // layer.top_k).tolist()
+            weights_list = flat_weights[token_indices].cast(ffn_out.dtype)
+            expert_out = ffn_out[i, :count, :]
+            for j, b in enumerate(batch_indices):
+                output[b] += expert_out[j] * weights_list[j]
+
+        return output
+
+    def apply(
+        self,
+        layer,
+        x,
+        gate,
+        topk_ids_hookfunc=None,
+    ):
+        """
+        flashinfer nvfp4 fusedmoe for Model Optimizer
+        """
+        gate_out = gate(x.cast("float32"))
+        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+            gate_out,
+            layer.gate_correction_bias,
+            layer.top_k,
+            True,  # apply_norm_weight,
+            False,
+        )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids)
+
+        output_dtype = x.dtype
+        x_sf = None
+        output = paddle.empty_like(x)
+
+        if self.backend == "flashinfer-cutlass":
+            # flashinfer cutlass
+            from flashinfer.fused_moe import (
+                cutlass_fused_moe as flashinfer_cutlass_fused_moe,
+            )
+
+            _ = flashinfer_cutlass_fused_moe(
+                input=x,
+                token_selected_experts=topk_ids.to(paddle.int),
+                token_final_scales=topk_weights,
+                fc1_expert_weights=getattr(layer, self.added_weight_attrs[0]).view(paddle.long),
+                fc2_expert_weights=getattr(layer, self.added_weight_attrs[1]).view(paddle.long),
+                output_dtype=output_dtype,
+                input_sf=x_sf,
+                quant_scales=[
+                    layer.up_gate_proj_input_scale_quant,
+                    layer.up_gate_proj_blockscale_swizzled.view(paddle.int32),
+                    layer.g1_alphas,
+                    layer.down_proj_input_scale_quant,
+                    layer.down_proj_blockscale_swizzled.view(paddle.int32),
+                    layer.g2_alphas,
+                ],
+                ep_size=layer.ep_size,
+                ep_rank=layer.ep_rank,
+                tp_size=layer.tp_size,
+                tp_rank=layer.tp_rank,
+                tune_max_num_tokens=next_power_of_2(x.shape[0]),
+                output=output,
+            )
+
+            return output
+
+        return output
