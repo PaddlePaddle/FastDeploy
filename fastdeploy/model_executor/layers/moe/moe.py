@@ -290,12 +290,15 @@ class FusedMoE(nn.Layer):
             # 1.gate up fused in disk
             if weight_need_transpose:
                 loaded_weight = loaded_weight.transpose([1, 0])
+            # logger.info(f"param:{param}")
             output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
             shard_offsets = [
                 # (shard_id, shard_offset, shard_size)
                 ("gate", 0, output_size // 2 * self.tp_size),
                 ("up", output_size // 2 * self.tp_size, output_size // 2 * self.tp_size),
             ]
+
+            # logger.info(f"shard_offsets是啥:{shard_offsets}")
 
             for shard_id, shard_offset, shard_size in shard_offsets:
                 loaded_weight_shard = slice_fn(
@@ -305,8 +308,11 @@ class FusedMoE(nn.Layer):
         else:
             if weight_need_transpose and source != "fused":
                 loaded_weight = loaded_weight.transpose([1, 0])
+
+            # logger.info(f"loaded_weight:{loaded_weight}")
             # 2.gate up splited in disk
             assert shard_id in ["gate", "down", "up"]
+            # logger.info(f"shard_id:{shard_id}")
             self._load_expert_weight(
                 param=param,
                 expert_id=expert_id,
@@ -328,6 +334,8 @@ class FusedMoE(nn.Layer):
         dim = -1 if shard_dim else 0
         param_shard_size = expert_param.shape[dim] // 2
         switch_w13 = getattr(self.quant_method, "load_up_proj_weight_first", False)
+        # logger.info(f"switch_w13:{switch_w13}")
+        # logger.info(f"shard_id:{shard_id}")
         if (shard_id == "gate" and not switch_w13) or (shard_id == "up" and switch_w13):
             param_shard_offset = 0
         else:
@@ -445,8 +453,14 @@ class FusedMoE(nn.Layer):
         if weight_type in ["weight_scale_2", "input_scale"]:
             self._load_per_tensor_weight_scale(param, expert_id, loaded_weight, shard_id)
         elif shard_id == "down":
+            # logger.info(f"param:{param}")
+            # logger.info(f"expert_id:{expert_id}")
+            # logger.info(f"loaded_weight:{loaded_weight.shape}")
+            # logger.info(f"shard_id:{shard_id}")
+            # logger.info(f"shard_dim:{shard_dim}")
             self._load_down_weight(param, expert_id, loaded_weight, shard_id, shard_dim)
         elif shard_id in ["gate", "up"]:
+            # logger.info(f"loaded_weight:{loaded_weight}")
             self._load_gate_up_weight(param, expert_id, loaded_weight, shard_id, shard_dim)
 
     @classmethod

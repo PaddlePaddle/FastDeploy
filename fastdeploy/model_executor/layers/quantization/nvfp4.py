@@ -407,12 +407,14 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             layer.hidden_size,
             layer.moe_intermediate_size // 2,
         ]
+        # logger.info(f"self.down_proj_weight_shaoe前面:{self.down_proj_scale_shape}")
         self.up_gate_proj_scale_shape = self.up_gate_proj_weight_shape[0:2] + [
             layer.hidden_size // self.quant_config.group_size
         ]
         self.down_proj_scale_shape = self.down_proj_weight_shape[0:2] + [
             layer.moe_intermediate_size // self.quant_config.group_size
         ]
+        # logger.info(f"后面down:{self.down_proj_scale_shape}")
 
         self.weight_scale_dtype = paddle.float8_e4m3fn
         self.weight_dtype = paddle.uint8
@@ -507,7 +509,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
     def load_up_proj_weight_first(self) -> bool:
         # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
         # 目前默认给True
-        return True
+        return False
 
     def process_weights_after_loading(self, layer):
         """ """
@@ -529,25 +531,38 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         )
         create_parameter_and_copy(layer, "down_proj_input_scale_quant", (1 / down_proj_input_scale).cast("float32"))
 
+        # logger.info(f"layer.down_proj.weight_scale:{layer.down_proj_weight_scale}")
         for name, weight_scale in [
             ("up_gate", layer.up_gate_proj_weight_scale),
             ("down", layer.down_proj_weight_scale),
         ]:
-            assert weight_scale.shape[2] % 16 == 0, f"Expected {name}_weight_scale.dim(2) to be divisible by 16"
-            assert (
-                weight_scale.dtype == paddle.float8_e4m3fn
-            ), f"{name} Weight Blockscale must be represented as FP8-E4M3"
 
-        up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
-        free_tensor(layer.up_gate_proj_weight_scale)
-        layer.up_gate_proj_weight_scale = None
+            if weight_scale.shape[2] % 4 != 0:
+                logger.warning(
+                    "NVFP4 %s_weight_scale K' not multiple of 4: shape=%s, group_size=%s",
+                    name,
+                    tuple(weight_scale.shape),
+                    getattr(self.quant_config, "group_size", None),
+                )
+
+        # up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
+        up_gate_proj_blockscale_swizzled = layer.up_gate_proj_weight_scale
         create_parameter_and_copy(
             layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
         )
-        down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
+        free_tensor(layer.up_gate_proj_weight_scale)
+        layer.up_gate_proj_weight_scale = None
+
+        # down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
+        down_proj_blockscale_swizzled = layer.down_proj_weight_scale
+        create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
         free_tensor(layer.down_proj_weight_scale)
         layer.down_proj_weight_scale = None
-        create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
+
+        logger.info(f"up_gate_proj_input_scale:{up_gate_proj_input_scale}")
+        logger.info(f"up_gate_proj_weight_scale_2:{up_gate_proj_weight_scale_2}")
+        logger.info(f"down_proj_input_scale:{down_proj_input_scale}")
+        logger.info(f"down_proj_weight_scale_2:{layer.down_proj_weight_scale_2}")
 
     def apply(
         self,
@@ -581,6 +596,21 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             from flashinfer.fused_moe import (
                 cutlass_fused_moe as flashinfer_cutlass_fused_moe,
             )
+
+            # up_gate_proj_weight=getattr(layer, self.added_weight_attrs[0]).view(paddle.uint8)
+            # down_proj_weight=getattr(layer, self.added_weight_attrs[1]).view(paddle.uint8)
+            # logger.info(f"up_gate_proj_weight:{up_gate_proj_weight}")
+            # logger.info(f"down_proj_weight:{down_proj_weight}")
+            logger.info(f"up_gate_proj_input_scale:{layer.up_gate_proj_input_scale_quant}")
+            logger.info(f"g1_alphas:{layer.g1_alphas}")
+            logger.info(
+                f"layer.up_gate_proj_blockscale_swizzled:{layer.up_gate_proj_blockscale_swizzled.view(paddle.float8_e4m3fn)}"
+            )
+            logger.info(f"down_proj_input_scale_quant:{layer.down_proj_input_scale_quant}")
+            logger.info(
+                f"layer.down_proj_blockscale_swizzled:{layer.down_proj_blockscale_swizzled.view(paddle.float8_e4m3fn)}"
+            )
+            logger.info(f"g2_alphas:{layer.g2_alphas}")
 
             _ = flashinfer_cutlass_fused_moe(
                 input=x,
