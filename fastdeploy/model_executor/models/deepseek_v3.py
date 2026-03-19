@@ -811,9 +811,6 @@ class DeepseekV32DSAAttention(nn.Layer):
         mask_encoder_batch: paddle.Tensor,
     ):
         """ """
-        forward_meta.position_ids = position_ids
-        fmha_out = None
-
         qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
 
         query, compressed_kv, key_pe = qkv_a_out.split(
@@ -1181,11 +1178,11 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         ids_remove_padding = inputs["ids_remove_padding"]
-        position_ids, mask_encoder_batch = self.pre_process(forward_meta)
+        forward_meta.position_ids, mask_encoder_batch = self.pre_process(forward_meta)
         hidden_states = self.model(
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
-            position_ids=position_ids,
+            position_ids=forward_meta.position_ids,
             mask_encoder_batch=mask_encoder_batch,
         )
         return hidden_states
