@@ -50,6 +50,7 @@ jobs:
 
   run_xpu_4cards_cases:
     runs-on: [self-hosted, XPU-P800-4Cards]
+    needs: check_bypass
     if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
     timeout-minutes: 60
     steps:

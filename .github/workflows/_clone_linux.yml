@@ -27,6 +27,7 @@ jobs:
   code-clone:
     runs-on:
       group: HK-Clone
+    needs: check_bypass
     if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
     outputs:
       repo_archive_url: ${{ steps.set_output.outputs.repo_archive_url }}

@@ -50,6 +50,7 @@ jobs:
 
   xpu-build-test:
     runs-on: [self-hosted, XPU-P800]
+    needs: check_bypass
     if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
     outputs:
       wheel_path: ${{ steps.set_output.outputs.wheel_path }}
