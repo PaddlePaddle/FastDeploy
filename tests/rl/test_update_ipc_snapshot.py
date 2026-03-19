@@ -54,8 +54,8 @@ class TestUpdateIpcSnapshot(unittest.TestCase):
     def setUp(self):
         # Pre-import the module so that fastdeploy.rl is set in fastdeploy.__dict__
         # before @patch decorators resolve their targets via _importer.
-        # Without this, fastdeploy.__getattr__ silently returns None for "rl",
-        # causing _importer to fail with AttributeError when the test runs first
+        # Without this, fastdeploy.__getattr__ prints a warning and returns None for "rl",
+        # causing _importer to later fail with AttributeError when the test runs first
         # (e.g., alphabetical order in unittest).
         import fastdeploy.rl.dynamic_weight_manager  # noqa: F401
 

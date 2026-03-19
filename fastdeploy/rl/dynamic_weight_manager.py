@@ -216,17 +216,43 @@ class DynamicWeightManager:
 
         # --- Priority 1: load from chunked part files to avoid memory spike ---
         part_pattern = os.path.join(model_dir, f"{base_name}.part*.pdparams")
-        part_files = sorted(
-            glob.glob(part_pattern),
-            key=lambda p: int(re.search(r"\.part(\d+)\.", p).group(1)),
-        )
+        all_part_files = glob.glob(part_pattern)
+
+        valid_part_files = []
+        invalid_part_files = []
+        part_regex = re.compile(r"\.part(\d+)\.")
+
+        for path in all_part_files:
+            match = part_regex.search(path)
+            if not match:
+                invalid_part_files.append(os.path.basename(path))
+                continue
+            try:
+                part_idx = int(match.group(1))
+            except (TypeError, ValueError):
+                invalid_part_files.append(os.path.basename(path))
+                continue
+            valid_part_files.append((part_idx, path))
+
+        if invalid_part_files:
+            logger.warning(
+                "Found snapshot part files with invalid naming pattern under %s: %s. "
+                "These files will be ignored when loading IPC snapshot parts.",
+                model_dir,
+                ", ".join(invalid_part_files),
+            )
+
+        part_files = [p for _, p in sorted(valid_part_files, key=lambda item: item[0])]
 
         if part_files:
             logger.info(f"Found {len(part_files)} snapshot part files for {base_name}")
-            for idx, part_path in enumerate(part_files, start=1):
-                logger.info(f"Loading snapshot part {idx}/{len(part_files)} from {part_path}")
+            for load_idx, part_path in enumerate(part_files):
+                match = re.search(r"\.part(\d+)\.", part_path)
+                # Use part index parsed from filename to keep logs and src_type consistent with file naming
+                part_index = int(match.group(1)) if match else load_idx
+                logger.info(f"Loading snapshot part {part_index+1}/{len(part_files)} from {part_path}")
                 ipc_state_dict = paddle.load(part_path, safetensors=True)
-                self._update_model_from_state(ipc_state_dict, f"snapshot-part{idx}")
+                self._update_model_from_state(ipc_state_dict, f"snapshot-part{part_index}")
                 del ipc_state_dict
                 gc.collect()
             logger.info(f"IPC snapshot update completed from {len(part_files)} part files under {model_dir}")
