@@ -170,6 +170,40 @@ class TestConfigTypes:
             phase.phase = "invalid"
         assert DeviceConfig({"device_type": "xpu"}).device_type == "xpu"
 
+    def test_structured_outputs_and_routing_replay(self):
+        from fastdeploy.config import RoutingReplayConfig, StructuredOutputsConfig
+
+        so = StructuredOutputsConfig({"guided_decoding_backend": "xgrammar", "reasoning_parser": "test"})
+        assert so.guided_decoding_backend == "xgrammar"
+        assert "xgrammar" in str(so)
+        rr = RoutingReplayConfig({"enable_routing_replay": True, "routing_store_type": "rdma"})
+        assert rr.enable_routing_replay is True
+        assert "rdma" in rr.to_json_string()
+        rr_none = RoutingReplayConfig(None)
+        assert rr_none.enable_routing_replay is False
+
+    def test_ernie_helpers_negative_paths(self):
+        assert not ErnieArchitectures.contains_ernie_arch(["LlamaForCausalLM"])
+        assert not ErnieArchitectures.is_ernie_arch("ErnieUnknownForCausalLM")
+        assert not ErnieArchitectures.is_ernie5_arch(["LlamaForCausalLM"])
+
+        non_ernie = type("_N", (), {"name": staticmethod(lambda: "LlamaForCausalLM")})
+        before = set(ErnieArchitectures.ARCHITECTURES)
+        ErnieArchitectures.register_ernie_model_arch(non_ernie)
+        assert ErnieArchitectures.ARCHITECTURES == before
+
+    def test_architecture_defaults_with_filters(self):
+        assert try_match_architecture_defaults("ToyForCausalLM", runner_type="generate") == (
+            "ForCausalLM",
+            ("generate", "none"),
+        )
+        assert try_match_architecture_defaults("ToyForCausalLM", runner_type="pooling") is None
+        assert try_match_architecture_defaults("ToyRewardModel", convert_type="reward") == (
+            "RewardModel",
+            ("pooling", "reward"),
+        )
+        assert try_match_architecture_defaults("ToyForImageClassification", convert_type="reward") is None
+
     def test_graph_cache_speculative_and_parallel(self, monkeypatch, tmp_path):
         g = GraphOptimizationConfig({})
         assert isinstance(g.use_cudagraph, bool)
@@ -321,6 +355,24 @@ class TestFDConfig:
 
         pf = _make_fdconfig(monkeypatch, ips="0.0.0.0", scheduler={"splitwise_role": "prefill"})
         assert pf.model_config.moe_phase.phase == "prefill"
+
+    def test_mm_ernie5_dynamic_load_and_spec_prefill(self, monkeypatch):
+        mm = _make_fdconfig(
+            monkeypatch,
+            model_config=_fd_model(enable_mm=True, mm_max_tokens_per_item={"image": 256, "video": 0, "audio": 0}),
+        )
+        assert mm.cache_config.max_encoder_cache == 0
+
+        e5 = _make_fdconfig(monkeypatch, model_config=_fd_model(architectures=["Ernie5ForCausalLM"]))
+        assert getattr(e5.cache_config, "disable_chunked_mm_input", False) is True
+
+        dyn = _make_fdconfig(monkeypatch, load_config=LoadConfig({"dynamic_load_weight": True}))
+        assert dyn.graph_opt_config.graph_opt_level == 0
+
+        sp = SpeculativeConfig({"method": "mtp", "num_speculative_tokens": 1})
+        spf = _make_fdconfig(monkeypatch, speculative_config=sp, scheduler={"splitwise_role": "prefill"})
+        assert spf.speculative_config.num_speculative_tokens == 1
+        assert spf.speculative_config.num_model_steps == 1
 
 
 if __name__ == "__main__":
