@@ -1,4 +1,4 @@
-FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310-cibase
+FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:cuda126-dev
 RUN apt update && apt install -y jq psmisc
 COPY ../../requirements.txt ./requirements.txt
 RUN python -m pip install --no-cache-dir -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -7,13 +7,13 @@ RUN python -m pip install --no-cache-dir -r unittest_requirement.txt -i https://
 COPY ./requirements_paddle_nv.txt ./requirements_paddle_nv.txt
 RUN python -m pip install --no-cache-dir -r requirements_paddle_nv.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
-RUN wget -q --no-proxy https://paddle-qa.bj.bcebos.com/FastDeploy/MLNX_OFED_LINUX-24.10-3.2.5.0-ubuntu20.04-x86_64.tgz \
-    && tar xf MLNX_OFED_LINUX-24.10-3.2.5.0-ubuntu20.04-x86_64.tgz
+RUN wget -q --no-proxy https://paddle-qa.bj.bcebos.com/FastDeploy/MLNX_OFED_LINUX-24.10-2.1.8.0-ubuntu22.04-x86_64.tgz \
+    && tar xf MLNX_OFED_LINUX-24.10-2.1.8.0-ubuntu22.04-x86_64.tgz
 
 RUN rm -f /etc/apt/sources.list  \
-    && echo "deb http://archive.ubuntu.com/ubuntu focal main restricted universe multiverse\ndeb http://archive.ubuntu.com/ubuntu focal-updates main restricted universe multiverse\ndeb http://archive.ubuntu.com/ubuntu focal-security main restricted universe multiverse" | tee /etc/apt/sources.list > /dev/null
+    && echo "deb http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse\ndeb http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse\ndeb http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse" | tee /etc/apt/sources.list > /dev/null
 
-RUN cd MLNX_OFED_LINUX-24.10-3.2.5.0-ubuntu20.04-x86_64  \
+RUN cd MLNX_OFED_LINUX-24.10-2.1.8.0-ubuntu22.04-x86_64  \
     && apt clean \
     && apt update --fix-missing \
     && apt-get install -y librdmacm-dev libibverbs-dev \
@@ -25,6 +25,6 @@ RUN apt install -y build-essential tcl \
     && tar xzf redis-7.2.0.tar.gz && cd redis-7.2.0 \
     && make && make PREFIX=/usr/local/redis install
 
-RUN rm -rf MLNX_OFED_LINUX-24.10-3.2.5.0-ubuntu20.04-x86_64* redis*
+RUN rm -rf MLNX_OFED_LINUX-24.10-2.1.8.0-ubuntu22.04-x86_64* redis*
 
 ENV PATH="/usr/local/redis/bin:${PATH}"
