@@ -242,6 +242,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # has been observed to cause NaN computation errors.
     # Set to 1 to enable the lock; defaults to 0 (disabled).
     "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
+    # Cache transfer manager mode: "indie" launches standalone processes, "proxy" embeds in GPUModelRunner.
+    "FD_CACHE_TRANSFER_MANAGER_MODE": lambda: os.getenv("FD_CACHE_TRANSFER_MANAGER_MODE", "indie").lower(),
 }
 
 

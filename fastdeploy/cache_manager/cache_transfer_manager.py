@@ -16,6 +16,7 @@
 
 import argparse
 import concurrent.futures
+import contextlib
 import gc
 import json
 import os
@@ -52,6 +53,8 @@ from fastdeploy.config import CacheConfig, SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import console_logger, get_logger
+
+logger = None
 
 
 def parse_args():
@@ -96,7 +99,6 @@ def parse_args():
         help="engine worker queue port",
     )
     parser.add_argument("--num_cpu_blocks", type=int, default=4, help="cpu cache block number")
-    parser.add_argument("--ipc_suffix", type=str, default=None, help="engine pid")
     parser.add_argument(
         "--protocol",
         type=str,
@@ -127,6 +129,13 @@ def parse_args():
         help="KVCache write policy",
     )
     parser.add_argument("--model_path", type=str, help="The path of model")
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="indie",
+        choices=["indie", "proxy"],
+        help="cache transfer manager mode: indie launches standalone process, proxy is embedded in GPUModelRunner",
+    )
 
     args = parser.parse_args()
     return args
@@ -142,15 +151,32 @@ def get_key_prefix_from_version(version_file_path):
         return key_prefix
 
 
+def init_logger(args):
+    global logger
+    tp_rank = args.rank
+    dp_rank = args.local_data_parallel_id
+    tp_size = args.mp_num
+    rank = dp_rank * tp_size + tp_rank
+    logger = get_logger("cache_transfer_manager", f"cache_transfer_{rank}.log")
+
+
 class CacheTransferManager:
     """
     管理CPU和GPU之间缓存的交换传输
     """
 
-    def __init__(self, args):
+    def __init__(self, args, execution_lock=None):
         """
         初始化CacheTransferManager
         """
+        if logger is None:
+            init_logger(args)
+
+        self.mode = args.mode
+        if self.mode not in ["indie", "proxy"]:
+            raise ValueError(f"Invalid mode: {self.mode}")
+
+        self.execution_lock = execution_lock if execution_lock is not None else contextlib.nullcontext()
         self.gpu_cache_kvs = {}
         self.cpu_cache_kvs = {}
         self.gpu_cache_k_tensors = []
@@ -189,7 +215,6 @@ class CacheTransferManager:
         self.rank = args.rank
         self.device = args.device_id
         self.num_layers = args.num_layers
-        self.ipc_suffix = args.ipc_suffix
         self.local_data_parallel_id = args.local_data_parallel_id
         self.num_extra_layers = self.speculative_config.num_extra_cache_layer
         self.num_extra_layer_gpu_blocks = int(self.num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
@@ -201,16 +226,13 @@ class CacheTransferManager:
         self.write_back_storage_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.timeout_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         self.transfer_task_queue = queue.Queue()  # 用来接收传输任务
-        self.tansfer_done_queue = queue.Queue()  # 用来告知任务执行完毕
+        self.transfer_done_queue = queue.Queue()  # 用来告知任务执行完毕
+        self.cache_task_queue = None
+        self._proxy_args = args
+        self._proxy_service_started = False
 
-        address = (args.pod_ip, args.cache_queue_port)
-        self.cache_task_queue = EngineCacheQueue(
-            address=address,
-            is_server=False,
-            num_client=args.mp_num,
-            client_id=self.rank,
-            local_data_parallel_id=args.local_data_parallel_id,
-        )
+        if self.mode == "indie":
+            self._connect_cache_task_queue(args)
 
         cache_ready_signal_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
         self.cache_ready_signal = IPCSignal(
@@ -284,7 +306,8 @@ class CacheTransferManager:
             suffix=args.engine_worker_queue_port,
             create=False,
         )
-        threading.Thread(target=self.check_cache_status, args=[args], daemon=True).start()
+        if self.mode == "indie":
+            threading.Thread(target=self.check_cache_status, args=[args], daemon=True).start()
 
         self.is_paused = False  # transfer manager state
         self.inflight = 0  # number of inflight transfer tasks
@@ -409,10 +432,49 @@ class CacheTransferManager:
             self.storage_value_scale_write_buffer = write_buffer + scale_buffer_total_bytes // 2
             self.storage_backend.register_buffer(write_buffer, scale_buffer_total_bytes)
 
+    def bind_gpu_cache(
+        self,
+        gpu_cache_kvs,
+        gpu_cache_k_tensors,
+        gpu_cache_v_tensors,
+        gpu_cache_scales_k_tensors,
+        gpu_cache_scales_v_tensors,
+    ):
+        self.gpu_cache_kvs = gpu_cache_kvs
+        self.gpu_cache_k_tensors = gpu_cache_k_tensors
+        self.gpu_cache_v_tensors = gpu_cache_v_tensors
+        self.gpu_cache_scales_k_tensors = gpu_cache_scales_k_tensors
+        self.gpu_cache_scales_v_tensors = gpu_cache_scales_v_tensors
+        if self.mode == "proxy" and not self._proxy_service_started:
+            self._proxy_service_started = True
+            threading.Thread(target=self._run_proxy_transfer_service, args=[self._proxy_args], daemon=True).start()
+
+    def _connect_cache_task_queue(self, args):
+        address = (args.pod_ip, args.cache_queue_port)
+        logger.info(f"Connecting to cache task queue {address}")
+        self.cache_task_queue = EngineCacheQueue(
+            address=address,
+            is_server=False,
+            num_client=args.mp_num,
+            client_id=self.rank,
+            local_data_parallel_id=args.local_data_parallel_id,
+        )
+
+    def _run_proxy_transfer_service(self, args):
+        while self.cache_task_queue is None:
+            try:
+                self._connect_cache_task_queue(args)
+            except Exception as e:
+                logger.info(f"[rank {self.rank}/{self.n_ranks}] waiting cache task queue service: {e}")
+                time.sleep(1)
+
+        threading.Thread(target=self.check_cache_status, args=[args], daemon=True).start()
+        self.do_data_transfer()
+
     def _init_gpu_cache(self, args):
 
         if not args.create_cache_tensor:
-            logger.info(f"[rank {self.rank}/{self.n_ranks}] Waiting for runners or messagers to create kv cache.")
+            logger.info(f"[rank {self.rank}/{self.n_ranks}] Waiting for runners or messagers to create gpu cache.")
             while self.cache_ready_signal.value[self.rank] != 1:
                 time.sleep(0.1)
             logger.info(f"[rank {self.rank}/{self.n_ranks}] OK! Stop waiting.")
@@ -422,7 +484,7 @@ class CacheTransferManager:
         else:
             cache_type = args.cache_dtype
 
-        logger.info(f"[rank {self.rank}/{self.n_ranks}] Initializing kv cache for all layers.")
+        logger.info(f"[rank {self.rank}/{self.n_ranks}] Initializing gpu cache for all layers.")
         set_device(self.device)
         for i in range(self.num_layers + self.num_extra_layers):
             # NOTE: num_extra_layer_gpu_blocks is usually equal to num_gpu_blocks
@@ -446,8 +508,12 @@ class CacheTransferManager:
                     self.value_cache_shape[3],
                 ]
             if args.create_cache_tensor:
+                if self.mode == "proxy":
+                    raise RuntimeError(
+                        "In cache transfer manager proxy mode, cache transfer manager should not create gpu kv cache!"
+                    )
                 logger.info(
-                    f"[rank {self.rank}/{self.n_ranks}] ..creating kv cache for layer {i}: {key_cache_shape} {value_cache_shape}"
+                    f"[rank {self.rank}/{self.n_ranks}] ..creating gpu cache for layer {i}: {key_cache_shape} {value_cache_shape}"
                 )
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
                 set_data_ipc(key_cache, key_name)
@@ -471,8 +537,13 @@ class CacheTransferManager:
                         )
                         set_data_ipc(value_cache_scales, value_cache_scales_name)
             else:
+                if self.mode == "proxy":
+                    logger.info(
+                        f"[rank {self.rank}/{self.n_ranks}] ..skip attaching gpu cache for layer {i} in proxy mode"
+                    )
+                    continue
                 logger.info(
-                    f"[rank {self.rank}/{self.n_ranks}] ..attaching kv cache for layer {i}: {key_cache_shape} {value_cache_shape}"
+                    f"[rank {self.rank}/{self.n_ranks}] ..attaching gpu cache for layer {i}: {key_cache_shape} {value_cache_shape}"
                 )
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 val_cache = paddle.empty(shape=[], dtype=cache_type)
@@ -509,7 +580,7 @@ class CacheTransferManager:
                     self.gpu_cache_scales_v_tensors.append(self.gpu_cache_kvs[value_cache_scales_name])
 
         if args.create_cache_tensor:
-            logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ kv cache is ready!")
+            logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ gpu cache is ready!")
             self.cache_ready_signal.value[self.rank] = 1
 
         cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in self.gpu_cache_kvs.items()])
@@ -539,7 +610,6 @@ class CacheTransferManager:
             self.swap_space_ready_signal.value[self.rank] = 1
             return
         logger.info(f"[rank {self.rank}/{self.n_ranks}] Initializing swap space (cpu cache) for all layers.")
-        paddle.set_device("cpu")
         self.k_dst_ptrs = []
         self.v_dst_ptrs = []
         self.k_scales_ptrs = []
@@ -981,13 +1051,14 @@ class CacheTransferManager:
         self.cache_task_queue.swap_to_cpu_barrier1.wait()
         if self.rank == 0:
             self.cache_task_queue.swap_to_cpu_barrier1.reset()
-        result = self._transfer_data(
-            swap_node_ids,
-            gpu_block_id,
-            cpu_block_id,
-            event_type,
-            transfer_task_id,
-        )
+        with self.execution_lock:
+            result = self._transfer_data(
+                swap_node_ids,
+                gpu_block_id,
+                cpu_block_id,
+                event_type,
+                transfer_task_id,
+            )
         self.cache_task_queue.swap_to_cpu_barrier2.wait()
         if self.rank == 0:
             self.cache_task_queue.swap_to_cpu_barrier2.reset()
@@ -1009,13 +1080,14 @@ class CacheTransferManager:
         self.cache_task_queue.swap_to_gpu_barrier1.wait()
         if self.rank == 0:
             self.cache_task_queue.swap_to_gpu_barrier1.reset()
-        result = self._transfer_data(
-            swap_node_ids,
-            gpu_block_id,
-            cpu_block_id,
-            event_type,
-            transfer_task_id,
-        )
+        with self.execution_lock:
+            result = self._transfer_data(
+                swap_node_ids,
+                gpu_block_id,
+                cpu_block_id,
+                event_type,
+                transfer_task_id,
+            )
         self.cache_task_queue.swap_to_gpu_barrier2.wait()
         if self.rank == 0:
             self.cache_task_queue.swap_to_gpu_barrier2.reset()
@@ -1304,7 +1376,6 @@ class CacheTransferManager:
                     logger.info("[RL] start clearing caches")
                     logger.debug("[RL] start clearing cpu caches")
                     if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
-                        paddle.set_device("cpu")
                         for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
                             cuda_host_free(ptrs)
                         self.cpu_cache_kvs.clear()
@@ -1340,9 +1411,10 @@ class CacheTransferManager:
                         paddle.device.cuda.empty_cache()
                         logger.debug("[RL] successfully cleared gpu caches")
                     else:
-                        for name, tensor in self.gpu_cache_kvs.items():
-                            unset_data_ipc(tensor, name, True, False)
-                        logger.debug("[RL] successfully unlinked gpu caches cuda ipc")
+                        if self.mode == "indie":
+                            for name, tensor in self.gpu_cache_kvs.items():
+                                unset_data_ipc(tensor, name, True, False)
+                            logger.debug("[RL] successfully unlinked gpu caches cuda ipc")
                         self.cache_ready_signal.value[self.rank] = 0
 
                     while np.sum(self.cache_ready_signal.value) != 0:
@@ -1403,7 +1475,7 @@ class CacheTransferManager:
             time.sleep(0.1)
 
     def pause(self):
-        if self.n_ranks > 1:
+        if self.n_ranks > 1 and self.cache_task_queue is not None:
             self.cache_task_queue.pause_barrier.wait()
             if self.rank == 0:
                 self.cache_task_queue.pause_barrier.reset()
@@ -1414,7 +1486,7 @@ class CacheTransferManager:
         logger.info("[RL] 🔴 pause transfer manager and stop do transfer tasks")
 
     def resume(self):
-        if self.n_ranks > 1:
+        if self.n_ranks > 1 and self.cache_task_queue is not None:
             self.cache_task_queue.resume_barrier.wait()
             if self.rank == 0:
                 self.cache_task_queue.resume_barrier.reset()
@@ -1450,12 +1522,7 @@ def main():
 if __name__ == "__main__":
 
     args = parse_args()
-    rank_id = args.rank + args.local_data_parallel_id * args.mp_num
-    if args.mp_num > 1:
-        logger = get_logger("cache_transfer", f"cache_transfer_{rank_id}.log")
-    else:
-        logger = get_logger("cache_transfer", "cache_transfer.log")
-
+    init_logger(args)
     logger.info(f"args: {vars(args)}")
     set_device(args.device_id)
     try:
