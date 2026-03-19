@@ -235,11 +235,21 @@ class ResourceManagerV1(ResourceManager):
         # SWA recycle
         self.request_head_recycle_upto = {}
         self.swa_window_size = getattr(self.config.model_config, "window_size", 0)
+        self.swa_kv_head_indices = []
+        self.full_kv_head_indices = []
 
         if self.enable_head_wise_kv_cache:
-            num_kv_heads = self.config.model_config.num_key_value_heads
+            # Use local kv_num_heads (after tensor-parallel split) to keep indices
+            # aligned with request.block_tables_3d shape on this rank.
+            num_kv_heads = self.kv_num_heads
             swa_ratio = getattr(self.config.model_config, "head_wise_swa_ratio", 0.75)
+            try:
+                swa_ratio = float(swa_ratio)
+            except (TypeError, ValueError):
+                swa_ratio = 0.75
+            swa_ratio = max(0.0, min(1.0, swa_ratio))
             num_swa_heads = int(num_kv_heads * swa_ratio)
+            num_swa_heads = max(0, min(num_kv_heads, num_swa_heads))
 
             self.swa_kv_head_indices = list(range(num_kv_heads - num_swa_heads, num_kv_heads))
             self.full_kv_head_indices = list(range(0, num_kv_heads - num_swa_heads))
@@ -248,8 +258,6 @@ class ResourceManagerV1(ResourceManager):
                 f"swa_ratio={swa_ratio}, num_kv_heads={num_kv_heads}, "
                 f"swa_heads={self.swa_kv_head_indices}, full_heads={self.full_kv_head_indices}"
             )
-        else:
-            self.head_wise_kv_cache = None
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
