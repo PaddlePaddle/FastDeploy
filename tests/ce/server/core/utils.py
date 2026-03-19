@@ -26,7 +26,7 @@ def build_request_payload(template_name: str, case_data: dict) -> dict:
     return final_payload
 
 
-def send_request(url, payload, timeout=600, stream=False):
+def send_request(url, payload, timeout=60, stream=False):
     """
     向指定URL发送POST请求，并返回响应结果。
 
