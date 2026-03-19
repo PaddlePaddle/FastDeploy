@@ -17,12 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu2 {
-namespace plugin {}  // namespace plugin
-}  // namespace xpu2
-
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __attribute__((global)) void mtp_free_and_dispatch_block(
     bool *base_model_stop_flags,
@@ -40,15 +35,12 @@ __attribute__((global)) void mtp_free_and_dispatch_block(
     const int block_num_per_seq,
     const int max_draft_tokens);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        bool *base_model_stop_flags,
                        bool *stop_flags,
                        bool *batch_drop,
@@ -133,27 +125,27 @@ static int cpu_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-static int xpu2or3_wrapper(Context *ctx,
-                           bool *base_model_stop_flags,
-                           bool *stop_flags,
-                           bool *batch_drop,
-                           int *seq_lens_this_time,
-                           int *seq_lens_decoder,
-                           int *block_tables,
-                           int *encoder_block_lens,
-                           int *used_list_len,
-                           int *free_list,
-                           int *free_list_len,
-                           const int bsz,
-                           const int block_size,
-                           const int block_num_per_seq,
-                           const int max_draft_tokens) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
+static int xpu3_wrapper(api::Context *ctx,
+                        bool *base_model_stop_flags,
+                        bool *stop_flags,
+                        bool *batch_drop,
+                        int *seq_lens_this_time,
+                        int *seq_lens_decoder,
+                        int *block_tables,
+                        int *encoder_block_lens,
+                        int *used_list_len,
+                        int *free_list,
+                        int *free_list_len,
+                        const int bsz,
+                        const int block_size,
+                        const int block_num_per_seq,
+                        const int max_draft_tokens) {
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
   bool is_xpu3 = ctx->dev().type() == api::kXPU3;
   if (!is_xpu3) {
     WRAPPER_UNIMPLEMENTED(ctx);
   }
-  auto mtp_free_and_dispatch_block = xpu3::plugin::mtp_free_and_dispatch_block;
+  auto mtp_free_and_dispatch_block = fd_xpu3::mtp_free_and_dispatch_block;
   int32_t ret_xre = mtp_free_and_dispatch_block<<<12, 64, ctx->xpu_stream>>>(
       base_model_stop_flags,
       stop_flags,
@@ -173,7 +165,7 @@ static int xpu2or3_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-int mtp_free_and_dispatch_block(Context *ctx,
+int mtp_free_and_dispatch_block(api::Context *ctx,
                                 bool *base_model_stop_flags,
                                 bool *stop_flags,
                                 bool *batch_drop,
@@ -229,27 +221,25 @@ int mtp_free_and_dispatch_block(Context *ctx,
                        block_num_per_seq,
                        max_draft_tokens);
   }
-  if (ctx->dev().type() == api::kXPU2 || ctx->dev().type() == api::kXPU3) {
-    return xpu2or3_wrapper(ctx,
-                           base_model_stop_flags,
-                           stop_flags,
-                           batch_drop,
-                           seq_lens_this_time,
-                           seq_lens_decoder,
-                           block_tables,
-                           encoder_block_lens,
-                           used_list_len,
-                           free_list,
-                           free_list_len,
-                           bsz,
-                           block_size,
-                           block_num_per_seq,
-                           max_draft_tokens);
+  if (ctx->dev().type() == api::kXPU3) {
+    return xpu3_wrapper(ctx,
+                        base_model_stop_flags,
+                        stop_flags,
+                        batch_drop,
+                        seq_lens_this_time,
+                        seq_lens_decoder,
+                        block_tables,
+                        encoder_block_lens,
+                        used_list_len,
+                        free_list,
+                        free_list_len,
+                        bsz,
+                        block_size,
+                        block_num_per_seq,
+                        max_draft_tokens);
   }
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

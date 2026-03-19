@@ -59,7 +59,7 @@ void SpeculateTokenPenaltyMultiScores(
     case paddle::DataType::BFLOAT16: {
       using XPUType = typename XPUTypeTrait<paddle::bfloat16>::Type;
       typedef paddle::bfloat16 data_t;
-      int r = baidu::xpu::api::plugin::speculate_token_penalty_multi_scores(
+      int r = fastdeploy::plugin::speculate_token_penalty_multi_scores(
           ctx,
           pre_ids.data<int64_t>(),
           reinterpret_cast<XPUType*>(
@@ -81,12 +81,13 @@ void SpeculateTokenPenaltyMultiScores(
           length_bad_words,
           token_num,
           max_seq_len);
-      PD_CHECK(r == 0, "xpu::plugin::token_penalty_multi_scores failed.");
+      PD_CHECK(r == 0,
+               "fastdeploy::plugin::token_penalty_multi_scores failed.");
     } break;
     case paddle::DataType::FLOAT16: {
       using XPUType = typename XPUTypeTrait<float16>::Type;
       typedef paddle::float16 data_t;
-      int r = baidu::xpu::api::plugin::speculate_token_penalty_multi_scores(
+      int r = fastdeploy::plugin::speculate_token_penalty_multi_scores(
           ctx,
           pre_ids.data<int64_t>(),
           reinterpret_cast<XPUType*>(
@@ -108,10 +109,11 @@ void SpeculateTokenPenaltyMultiScores(
           length_bad_words,
           token_num,
           max_seq_len);
-      PD_CHECK(r == 0, "xpu::plugin::token_penalty_multi_scores failed.");
+      PD_CHECK(r == 0,
+               "fastdeploy::plugin::token_penalty_multi_scores failed.");
     } break;
     case paddle::DataType::FLOAT32: {
-      int r = baidu::xpu::api::plugin::speculate_token_penalty_multi_scores(
+      int r = fastdeploy::plugin::speculate_token_penalty_multi_scores(
           ctx,
           pre_ids.data<int64_t>(),
           const_cast<float*>(logits.data<float>()),
@@ -132,7 +134,8 @@ void SpeculateTokenPenaltyMultiScores(
           length_bad_words,
           token_num,
           max_seq_len);
-      PD_CHECK(r == 0, "xpu::plugin::token_penalty_multi_scores failed.");
+      PD_CHECK(r == 0,
+               "fastdeploy::plugin::token_penalty_multi_scores failed.");
     } break;
     default:
       PD_THROW(

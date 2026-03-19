@@ -25,6 +25,7 @@ from fastdeploy.inter_communicator.zmq_server import (
     ZmqIpcServer,
     ZmqServerBase,
     ZmqTcpServer,
+    _msgpack_default,
 )
 
 
@@ -114,12 +115,88 @@ class _DummyServer(ZmqServerBase):
         self.mutex = threading.Lock()
         self.req_dict = {}
         self.aggregate_send = False
+        self.address = "test-address"
+        self.response_token_lock = threading.Lock()
 
     def _create_socket(self):
         return self.socket
 
     def close(self):
         self.closed = True
+
+
+class TestMsgpackDefault(unittest.TestCase):
+    """Tests for _msgpack_default fallback serializer."""
+
+    def test_tensor_with_tolist(self):
+        """Test serialization of objects with tolist method (paddle.Tensor, numpy.ndarray)."""
+        # Test with paddle tensor
+        tensor = paddle.to_tensor([1, 2, 3])
+        result = _msgpack_default(tensor)
+        self.assertEqual(result, [1, 2, 3])
+
+        # Test with numpy array
+        import numpy as np
+
+        arr = np.array([[1, 2], [3, 4]])
+        result = _msgpack_default(arr)
+        self.assertEqual(result, [[1, 2], [3, 4]])
+
+    def test_namedtuple(self):
+        """Test serialization of NamedTuple objects."""
+
+        from collections import namedtuple
+
+        Point = namedtuple("Point", ["x", "y"])
+        point = Point(10, 20)
+        result = _msgpack_default(point)
+        self.assertEqual(result, [10, 20])
+
+    def test_dataclass(self):
+        """Test serialization of dataclass objects."""
+        from dataclasses import dataclass
+
+        @dataclass
+        class SampleData:
+            name: str
+            value: int
+
+        data = SampleData(name="test", value=42)
+        result = _msgpack_default(data)
+        self.assertEqual(result, {"name": "test", "value": 42})
+
+    def test_unsupported_type_raises(self):
+        """Test that unsupported types raise TypeError."""
+
+        class UnsupportedClass:
+            pass
+
+        with self.assertRaises(TypeError) as ctx:
+            _msgpack_default(UnsupportedClass())
+        self.assertIn("UnsupportedClass", str(ctx.exception))
+        self.assertIn("not msgpack serializable", str(ctx.exception))
+
+    def test_integration_with_msgpack(self):
+        """Test that _msgpack_default works correctly with msgpack.packb."""
+        # Test with mixed data types
+        from dataclasses import dataclass
+
+        @dataclass
+        class Config:
+            lr: float
+            steps: int
+
+        data = {
+            "tensor": paddle.to_tensor([1.0, 2.0, 3.0]),
+            "config": Config(lr=0.001, steps=100),
+            "regular_list": [1, 2, 3],
+        }
+        packed = msgpack.packb(data, default=_msgpack_default)
+        unpacked = msgpack.unpackb(packed)
+
+        self.assertEqual(unpacked["tensor"], [1.0, 2.0, 3.0])
+        self.assertEqual(unpacked["config"], {"lr": 0.001, "steps": 100})
+        self.assertEqual(unpacked["regular_list"], [1, 2, 3])
 
 
 class TestZmqServerBase(unittest.TestCase):
@@ -327,12 +404,75 @@ class TestZmqServerBase(unittest.TestCase):
         server = _DummyServer(socket=_FakeSocket())
         server._send_response_per_step = mock.Mock()
         server._send_response_per_query = mock.Mock()
+        server._send_batch_response = mock.Mock()
+        # Branch 1: FD_ENABLE_INTERNAL_ADAPTER=True -> _send_response_per_step
         with mock.patch.object(envs, "FD_ENABLE_INTERNAL_ADAPTER", True):
             server.send_response("req", [_DummyResponse(1)])
             server._send_response_per_step.assert_called_once()
+        # Branch 2: FD_ENABLE_INTERNAL_ADAPTER=False, ZMQ_SEND_BATCH_DATA=True -> _send_batch_response
         with mock.patch.object(envs, "FD_ENABLE_INTERNAL_ADAPTER", False):
-            server.send_response("req", [_DummyResponse(1)])
-            server._send_response_per_query.assert_called_once()
+            with mock.patch.object(envs, "ZMQ_SEND_BATCH_DATA", True):
+                batch_data = [[_DummyResponse(1)]]
+                server.send_response(None, batch_data)
+                server._send_batch_response.assert_called_once_with(batch_data, worker_pid=None)
+        # Branch 3: FD_ENABLE_INTERNAL_ADAPTER=False, ZMQ_SEND_BATCH_DATA=False -> _send_response_per_query
+        with mock.patch.object(envs, "FD_ENABLE_INTERNAL_ADAPTER", False):
+            with mock.patch.object(envs, "ZMQ_SEND_BATCH_DATA", False):
+                server.send_response("req", [_DummyResponse(1)])
+                server._send_response_per_query.assert_called_once()
+
+    def test_send_response_with_none_req_id(self):
+        """Test send_response with req_id=None (batch format)"""
+        server = _DummyServer(socket=_FakeSocket())
+        server._send_batch_response = mock.Mock()
+        with mock.patch.object(envs, "FD_ENABLE_INTERNAL_ADAPTER", False):
+            with mock.patch.object(envs, "ZMQ_SEND_BATCH_DATA", True):
+                batch_data = [[_DummyResponse(1)], [_DummyResponse(2)]]
+                server.send_response(None, batch_data)
+                server._send_batch_response.assert_called_once_with(batch_data, worker_pid=None)
+
+    def test_send_batch_response_success(self):
+        """Test _send_batch_response sends data successfully"""
+        fake_socket = _FakeSocket()
+        server = _DummyServer(socket=fake_socket)
+        server.address = "test-address"
+        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
+            batch_data = [[_DummyResponse(1, finished=True)]]
+            server._send_batch_response(batch_data)
+        self.assertEqual(len(fake_socket.sent), 1)
+        self.assertEqual(fake_socket.sent[0][0], "send")
+
+    def test_send_batch_response_v1_processor(self):
+        """Test _send_batch_response with ENABLE_V1_DATA_PROCESSOR=True"""
+        fake_socket = _FakeSocket()
+        server = _DummyServer(socket=fake_socket)
+        server.address = "test-address"
+        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", True):
+            batch_data = [[_DummyResponse(1, finished=True)]]
+            server._send_batch_response(batch_data)
+        self.assertEqual(len(fake_socket.sent), 1)
+
+    def test_send_batch_response_raises_without_socket(self):
+        """Test _send_batch_response logs error and returns when socket is None"""
+        server = _DummyServer(socket=None)
+        server._create_socket = lambda: None
+        batch_data = [[_DummyResponse(1)]]
+        # Production code logs error and returns (does not raise)
+        server._send_batch_response(batch_data)
+
+    def test_send_batch_response_handles_send_error(self):
+        """Test _send_batch_response handles socket send errors"""
+
+        class _ErrorSocket(_FakeSocket):
+            def send(self, msg, flags=0, **kwargs):
+                raise RuntimeError("send failed")
+
+        server = _DummyServer(socket=_ErrorSocket())
+        server.address = "test-address"
+        batch_data = [[_DummyResponse(1)]]
+        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
+            # Should not raise, error is caught and logged
+            server._send_batch_response(batch_data)
 
     def test_recv_result_handle_paths(self):
         fake_socket = _FakeSocket()
@@ -452,6 +592,89 @@ class TestZmqServers(unittest.TestCase):
 
         server.running = False
         server.close()
+
+    def test_zmq_ipc_server_unsupported_mode_raises(self):
+        """Line 422: ZmqIpcServer.__init__ with unsupported ZMQ mode raises ValueError."""
+        fake_context = _FakeContext()
+        with mock.patch("fastdeploy.inter_communicator.zmq_server.zmq.Context", return_value=fake_context):
+            with self.assertRaises(ValueError):
+                ZmqIpcServer("test", zmq.PUB)
+
+    def test_zmq_ipc_server_get_worker_push_socket_creates_and_caches(self):
+        """Lines 436-447: _get_worker_push_socket creates a new PUSH socket and caches it."""
+        # Track all sockets created by context.socket()
+        created_sockets = []
+
+        class _TrackingContext(_FakeContext):
+            def socket(self, mode):
+                sock = _FakeSocket()
+                sock.mode = mode
+                sock.connected_to = None
+                sock.connect = lambda addr: setattr(sock, "connected_to", addr)
+                created_sockets.append(sock)
+                return sock
+
+        tracking_ctx = _TrackingContext()
+        with mock.patch("fastdeploy.inter_communicator.zmq_server.zmq.Context", return_value=tracking_ctx):
+            server = ZmqIpcServer("myservice", zmq.PUSH)
+
+        # First call: should create a new PUSH socket and connect it
+        sock1 = server._get_worker_push_socket(1234)
+        self.assertIsNotNone(sock1)
+        self.assertIn(1234, server.worker_push_sockets)
+        self.assertIsNotNone(sock1.connected_to)
+        self.assertIn("1234", sock1.connected_to)
+
+        # Second call with same worker_pid: should return cached socket
+        sock2 = server._get_worker_push_socket(1234)
+        self.assertIs(sock1, sock2)
+
+        # Different worker_pid: should create a new socket
+        sock3 = server._get_worker_push_socket(5678)
+        self.assertIsNot(sock1, sock3)
+        self.assertIn(5678, server.worker_push_sockets)
+
+    def test_send_batch_response_with_worker_pid_none_uses_default_socket(self):
+        """Line 323: _send_batch_response with worker_pid=None uses the default socket (via _ensure_socket)."""
+        fake_socket = _FakeSocket()
+        server = _DummyServer(socket=fake_socket)
+        server.address = "test-address"
+
+        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
+            batch_data = [[_DummyResponse(1, finished=True)]]
+            # worker_pid=None -> goes to the else branch that calls _ensure_socket / uses self.socket
+            server._send_batch_response(batch_data, worker_pid=None)
+
+        # The default socket should have been used to send the data
+        self.assertEqual(len(fake_socket.sent), 1)
+        self.assertEqual(fake_socket.sent[0][0], "send")
+
+    def test_zmq_ipc_server_close_with_worker_push_sockets(self):
+        """Lines 473-475: close() iterates and closes per-worker PUSH sockets, swallowing errors."""
+        fake_context = _FakeContext()
+        with mock.patch("fastdeploy.inter_communicator.zmq_server.zmq.Context", return_value=fake_context):
+            server = ZmqIpcServer("test", zmq.PULL)
+
+        # Add a well-behaved push socket
+        good_sock = _FakeSocket()
+        server.worker_push_sockets[100] = good_sock
+
+        # Add a push socket whose close() raises
+        class _BadPushSocket(_FakeSocket):
+            def close(self):
+                raise RuntimeError("push close failed")
+
+        bad_sock = _BadPushSocket()
+        server.worker_push_sockets[200] = bad_sock
+
+        # close() should not raise even if a push socket close() fails
+        server.close()
+
+        self.assertFalse(server.running)
+        # worker_push_sockets should be cleared
+        self.assertEqual(len(server.worker_push_sockets), 0)
+        # The good socket should have been closed
+        self.assertTrue(good_sock.closed)
 
 
 if __name__ == "__main__":

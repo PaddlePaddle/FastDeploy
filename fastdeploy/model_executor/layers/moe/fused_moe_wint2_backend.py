@@ -299,6 +299,7 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Use Wint2 Triton Fusedmoe compute Fused MoE.
@@ -371,6 +372,7 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Use Wint2 Triton Fusedmoe compute Fused MoE.

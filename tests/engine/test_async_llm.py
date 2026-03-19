@@ -625,6 +625,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
             mock_queue.get.side_effect = GeneratorExit("Generator closed")
             mock_connection_manager.get_connection.return_value = (AsyncMock(), mock_queue)
             mock_connection_manager.running = True
+            mock_connection_manager.worker_pid = os.getpid()
 
             with patch.object(self.engine, "connection_manager", mock_connection_manager):
                 generator = self.engine.generate("test", SamplingParams(max_tokens=10))

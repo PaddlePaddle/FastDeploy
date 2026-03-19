@@ -15,8 +15,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 template <typename T>
 __attribute__((global)) void RebuildAppendPaddingKernel(
     const T* full_hidden_states,
@@ -28,16 +27,13 @@ __attribute__((global)) void RebuildAppendPaddingKernel(
     int dim_embed,
     int elem_nums,
     T* out);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 template <typename T>
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        T* full_hidden_states,
                        int* cum_offsets,
                        int* seq_len_encoder,
@@ -68,7 +64,7 @@ static int cpu_wrapper(Context* ctx,
 }
 
 template <typename T>
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         T* full_hidden_states,
                         int* cum_offsets,
                         int* seq_len_encoder,
@@ -78,7 +74,7 @@ static int xpu3_wrapper(Context* ctx,
                         int dim_embed,
                         int elem_nums,
                         T* out) {
-  int32_t ret_xre = xpu3::plugin::RebuildAppendPaddingKernel<T>
+  int32_t ret_xre = fd_xpu3::RebuildAppendPaddingKernel<T>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(full_hidden_states,
                                                  cum_offsets,
                                                  seq_len_encoder,
@@ -93,7 +89,7 @@ static int xpu3_wrapper(Context* ctx,
 }
 
 template <typename T>
-int speculate_rebuild_append_padding(Context* ctx,
+int speculate_rebuild_append_padding(api::Context* ctx,
                                      T* full_hidden_states,
                                      int* cum_offsets,
                                      int* seq_len_encoder,
@@ -146,12 +142,10 @@ int speculate_rebuild_append_padding(Context* ctx,
 }
 
 template int speculate_rebuild_append_padding(
-    Context*, bfloat16*, int*, int*, int*, int*, int, int, int, bfloat16*);
+    api::Context*, bfloat16*, int*, int*, int*, int*, int, int, int, bfloat16*);
 template int speculate_rebuild_append_padding(
-    Context*, float16*, int*, int*, int*, int*, int, int, int, float16*);
+    api::Context*, float16*, int*, int*, int*, int*, int, int, int, float16*);
 template int speculate_rebuild_append_padding(
-    Context*, float*, int*, int*, int*, int*, int, int, int, float*);
+    api::Context*, float*, int*, int*, int*, int*, int, int, int, float*);
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

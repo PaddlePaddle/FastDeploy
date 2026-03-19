@@ -184,6 +184,7 @@ class GCUFusedMoeMethod(UnquantizedFusedMoEMethod):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Paddle gcu compute Fused MoE.
@@ -387,6 +388,7 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Paddle gcu compute Fused MoE.

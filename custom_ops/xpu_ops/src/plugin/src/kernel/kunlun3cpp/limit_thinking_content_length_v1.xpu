@@ -7,8 +7,7 @@
 #include "xpu/kernel/xtdk.h"
 #include "xpu/kernel/xtdk_io.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 template <typename T>
 static inline __device__ bool is_in_end(const T id,
@@ -94,5 +93,4 @@ __global__ void limit_thinking_content_length_kernel_v1(
   }
 }
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
