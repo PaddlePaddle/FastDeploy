@@ -602,14 +602,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         x_sf = None
         output = paddle.empty_like(x)
 
-        # # 2. EP Dispatch
-        # permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
-        #     x, topk_ids, topk_weights, use_fp8=False, use_ue8m0=False
-        # )
-        # print(permute_input.shape)
-
-        # return x
-
         if self.backend == "flashinfer-cutlass":
             # flashinfer cutlass
             from flashinfer.fused_moe import (
