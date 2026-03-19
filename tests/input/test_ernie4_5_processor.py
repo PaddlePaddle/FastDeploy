@@ -194,6 +194,7 @@ class TestErnie4_5Processor(unittest.TestCase):
 
         self.assertEqual(processed["max_tokens"], max(1, 10 - len(expected_ids)))
         self.assertEqual(processed["temperature"], 1)
+        self.assertEqual(processed["top_k"], 1)
         self.assertAlmostEqual(processed["top_p"], _SAMPLING_EPS)
         self.assertEqual(processed["prompt_tokens"], "hello")
 

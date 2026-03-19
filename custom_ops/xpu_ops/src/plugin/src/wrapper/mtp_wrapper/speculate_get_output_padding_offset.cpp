@@ -15,8 +15,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 __attribute__((global)) void speculate_get_output_padding_offset(
     int* output_padding_offset,
     int* output_cum_offsets,
@@ -24,15 +23,12 @@ __attribute__((global)) void speculate_get_output_padding_offset(
     const int* seq_lens_output,
     const int bsz,
     const int max_seq_len);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        int* output_padding_offset,
                        int* output_cum_offsets,
                        const int* output_cum_offsets_tmp,
@@ -50,21 +46,21 @@ static int cpu_wrapper(Context* ctx,
           cum_offset;
     }
   }
-  return SUCCESS;
+  return api::SUCCESS;
 }
 
-static int xpu2or3_wrapper(Context* ctx,
-                           int* output_padding_offset,
-                           int* output_cum_offsets,
-                           const int* output_cum_offsets_tmp,
-                           const int* seq_lens_output,
-                           const int bsz,
-                           const int max_seq_len) {
-  ctx_guard RAII_GUARD(ctx);
+static int xpu3_wrapper(api::Context* ctx,
+                        int* output_padding_offset,
+                        int* output_cum_offsets,
+                        const int* output_cum_offsets_tmp,
+                        const int* seq_lens_output,
+                        const int bsz,
+                        const int max_seq_len) {
+  api::ctx_guard RAII_GUARD(ctx);
   int32_t ret_xre =
-      xpu3::plugin::speculate_get_output_padding_offset<<<ctx->ncluster(),
-                                                          64,
-                                                          ctx->xpu_stream>>>(
+      fd_xpu3::speculate_get_output_padding_offset<<<ctx->ncluster(),
+                                                     64,
+                                                     ctx->xpu_stream>>>(
           output_padding_offset,
           output_cum_offsets,
           output_cum_offsets_tmp,
@@ -75,7 +71,7 @@ static int xpu2or3_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-int speculate_get_output_padding_offset(Context* ctx,
+int speculate_get_output_padding_offset(api::Context* ctx,
                                         int* output_padding_offset,
                                         int* output_cum_offsets,
                                         const int* output_cum_offsets_tmp,
@@ -102,19 +98,17 @@ int speculate_get_output_padding_offset(Context* ctx,
                        max_seq_len);
   }
   if (ctx->dev().type() == api::kXPU3) {
-    return xpu2or3_wrapper(ctx,
-                           output_padding_offset,
-                           output_cum_offsets,
-                           output_cum_offsets_tmp,
-                           seq_lens_output,
-                           bsz,
-                           max_seq_len);
+    return xpu3_wrapper(ctx,
+                        output_padding_offset,
+                        output_cum_offsets,
+                        output_cum_offsets_tmp,
+                        seq_lens_output,
+                        bsz,
+                        max_seq_len);
   }
 
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

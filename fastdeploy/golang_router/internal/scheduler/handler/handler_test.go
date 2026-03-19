@@ -19,6 +19,10 @@ func (m *mockManagerAPI) GetMetrics(ctx context.Context, url string) (int, int, 
 	return 0, 0, 0 // 返回默认值用于测试
 }
 
+func (m *mockManagerAPI) GetRemoteMetrics(ctx context.Context, url string) (int, int, int) {
+	return 0, 0, 0 // 返回默认值用于测试
+}
+
 func TestSchedulerInit(t *testing.T) {
 	cfg := &config.Config{
 		Scheduler: config.SchedulerConfig{

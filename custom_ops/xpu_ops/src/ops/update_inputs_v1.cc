@@ -44,7 +44,7 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
   const int input_ids_stride = input_ids.shape()[1];
   const int block_num_per_seq = block_tables.shape()[1];
   auto not_need_stop_gpu = not_need_stop.copy_to(stop_flags.place(), false);
-  int r = baidu::xpu::api::plugin::update_inputs_v1(
+  int r = fastdeploy::plugin::update_inputs_v1(
       xpu_ctx->x_context(),
       const_cast<bool*>(not_need_stop_gpu.data<bool>()),
       const_cast<int*>(seq_lens_this_time.data<int>()),
@@ -63,7 +63,7 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
       input_ids_stride,
       block_num_per_seq,
       block_size);
-  PD_CHECK(r == 0, "baidu::xpu::api::plugin::update_inputs_kernel_v1 failed.");
+  PD_CHECK(r == 0, "fastdeploy::plugin::update_inputs_kernel_v1 failed.");
   auto not_need_stop_cpu =
       not_need_stop_gpu.copy_to(not_need_stop.place(), false);
   bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());

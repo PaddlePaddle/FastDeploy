@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __attribute__((global)) void speculate_free_and_reschedule(
     bool *stop_flags,
@@ -43,15 +42,12 @@ __attribute__((global)) void speculate_free_and_reschedule(
     const int max_decoder_block_num,
     const int max_draft_tokens);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        bool *stop_flags,
                        int *seq_lens_this_time,
                        int *seq_lens_decoder,
@@ -76,7 +72,7 @@ static int cpu_wrapper(Context *ctx,
   return -1;
 }
 
-static int xpu3_wrapper(Context *ctx,
+static int xpu3_wrapper(api::Context *ctx,
                         bool *stop_flags,
                         int *seq_lens_this_time,
                         int *seq_lens_decoder,
@@ -98,9 +94,8 @@ static int xpu3_wrapper(Context *ctx,
                         const int block_num_per_seq,
                         const int max_decoder_block_num,
                         const int max_draft_tokens) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  auto speculate_free_and_reschedule =
-      xpu3::plugin::speculate_free_and_reschedule;
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  auto speculate_free_and_reschedule = fd_xpu3::speculate_free_and_reschedule;
   int32_t ret_xre =
       speculate_free_and_reschedule<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           stop_flags,
@@ -128,7 +123,7 @@ static int xpu3_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-int speculate_free_and_reschedule(Context *ctx,
+int speculate_free_and_reschedule(api::Context *ctx,
                                   bool *stop_flags,
                                   int *seq_lens_this_time,
                                   int *seq_lens_decoder,
@@ -227,6 +222,4 @@ int speculate_free_and_reschedule(Context *ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

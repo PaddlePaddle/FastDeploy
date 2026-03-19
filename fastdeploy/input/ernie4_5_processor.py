@@ -143,8 +143,9 @@ class Ernie4_5Processor(BaseDataProcessor):
         else:
             request.set("max_tokens", min(max_tokens, request.get("max_tokens")))
         if request.get("temperature") < _SAMPLING_EPS:
-            # zero temperature is equivalent to greedy sampling
+            # zero temperature means greedy decoding: set top_k=1 to force argmax
             request.set("temperature", 1)
+            request.set("top_k", 1)
         if request.get("top_p") < _SAMPLING_EPS:
             request.set("top_p", _SAMPLING_EPS)
         if self.reasoning_parser:
@@ -231,8 +232,9 @@ class Ernie4_5Processor(BaseDataProcessor):
         else:
             request["max_tokens"] = min(max_tokens, request["max_tokens"])
         if request.get("temperature") < _SAMPLING_EPS:
-            # zero temperature is equivalent to greedy sampling
+            # zero temperature means greedy decoding: set top_k=1 to force argmax
             request["temperature"] = 1
+            request["top_k"] = 1
         if request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
 
@@ -321,6 +323,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         token_ids = response_dict["outputs"]["token_ids"]
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
+        request = kwargs.get("request", None)
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
@@ -332,7 +335,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             if self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
                     full_text,
-                    response_dict,
+                    request,
                     self.model_status_dict[req_id],
                 )
                 response_dict["outputs"]["text"] = text
@@ -341,7 +344,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
-                tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
+                tool_call_info = tool_parser.extract_tool_calls(full_text, request)
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_calls"] = tool_call_info.tool_calls
                     response_dict["outputs"]["text"] = tool_call_info.content
@@ -365,6 +368,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
+        request = kwargs.get("request", None)
         response_dict["outputs"]["enable_parser"] = False
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
@@ -407,7 +411,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
-                response_dict,
+                request,
             )
             if tool_call_delta_message:
                 if tool_call_delta_message.tool_calls:

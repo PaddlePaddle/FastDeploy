@@ -79,6 +79,11 @@ class MooncakeStoreConfig:
             logger.info(f"No RDMA devices specified, defaulting to all available devices: {rdma_devices}")
         if metadata_server is None or master_server_addr is None:
             raise ValueError("Both MOONCAKE_METADATA_SERVER and MOONCAKE_MASTER_SERVER_ADDR must be provided.")
+        if local_hostname == "localhost":
+            raise ValueError(
+                "The local hostname for mooncake must not be `localhost` to avoid "
+                "potential error, please do not manually set this param."
+            )
 
         return MooncakeStoreConfig(
             local_hostname=local_hostname,

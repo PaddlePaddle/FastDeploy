@@ -190,7 +190,8 @@ class XPUAttentionBackend(AttentionBackend):
         else:
             q_norm_weight = None
             k_norm_weight = None
-
+        # draft model not use rope3d now
+        use_rope3d = self.rope_3d and not forward_meta.is_draft
         res = block_attn(
             qkv,
             forward_meta.caches[2 * layer.layer_id],
@@ -229,7 +230,7 @@ class XPUAttentionBackend(AttentionBackend):
             metadata.kv_signal_data_list[layer.layer_id],
             forward_meta.kv_signal_sender,
             layer.use_neox_rotary_style,
-            self.rope_3d,
+            use_rope3d,
         )
 
         return res

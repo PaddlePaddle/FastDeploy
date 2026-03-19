@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 template <typename T>
 __attribute__((global)) void min_length_logits_process(
@@ -63,12 +62,9 @@ __attribute__((global)) void ban_bad_words(T *logits,
                                            const int64_t length,
                                            const int64_t bad_words_length);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 void update_repeat_times_cpu(const int64_t *pre_ids,
@@ -104,7 +100,7 @@ void ban_bad_words_cpu(float *logits,
 }
 
 template <typename T>
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        const int64_t *pre_ids,
                        T *logits,
                        const T *penalty_scores,
@@ -169,7 +165,7 @@ static int cpu_wrapper(Context *ctx,
 }
 
 template <typename T>
-static int xpu3_wrapper(Context *ctx,
+static int xpu3_wrapper(api::Context *ctx,
                         const int64_t *pre_ids,
                         T *logits,
                         const T *penalty_scores,
@@ -186,17 +182,16 @@ static int xpu3_wrapper(Context *ctx,
                         const int64_t end_length,
                         const int64_t length_bad_words) {
   api::ctx_guard RAII_GUARD(ctx);
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  auto min_length_logits_process_kernel =
-      xpu3::plugin::min_length_logits_process<T>;
-  auto update_repeat_times_kernel = xpu3::plugin::update_repeat_times;
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  auto min_length_logits_process_kernel = fd_xpu3::min_length_logits_process<T>;
+  auto update_repeat_times_kernel = fd_xpu3::update_repeat_times;
   auto update_value_by_repeat_times_kernel =
-      xpu3::plugin::update_value_by_repeat_times<T>;
+      fd_xpu3::update_value_by_repeat_times<T>;
   if (length % 16 == 0) {
     update_value_by_repeat_times_kernel =
-        xpu3::plugin::update_value_by_repeat_times_simd<T>;
+        fd_xpu3::update_value_by_repeat_times_simd<T>;
   }
-  auto ban_bad_words_kernel = xpu3::plugin::ban_bad_words<T>;
+  auto ban_bad_words_kernel = fd_xpu3::ban_bad_words<T>;
 
   int *repeat_times = RAII_GUARD.alloc_l3_or_gm<int>(bs * length);
   WRAPPER_ASSERT_WORKSPACE(ctx, repeat_times);
@@ -250,7 +245,7 @@ static int xpu3_wrapper(Context *ctx,
 }
 
 template <typename T>
-int token_penalty_multi_scores(Context *ctx,
+int token_penalty_multi_scores(api::Context *ctx,
                                const int64_t *pre_ids,
                                T *logits,
                                const T *penalty_scores,
@@ -327,7 +322,7 @@ int token_penalty_multi_scores(Context *ctx,
                           end_length,
                           length_bad_words);
   }
-  if (ctx->dev().type() == api::kXPU2 || ctx->dev().type() == api::kXPU3) {
+  if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper<T>(ctx,
                            pre_ids,
                            logits,
@@ -348,7 +343,7 @@ int token_penalty_multi_scores(Context *ctx,
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
-template int token_penalty_multi_scores<float>(Context *ctx,
+template int token_penalty_multi_scores<float>(api::Context *ctx,
                                                const int64_t *pre_ids,
                                                float *logits,
                                                const float *penalty_scores,
@@ -365,7 +360,7 @@ template int token_penalty_multi_scores<float>(Context *ctx,
                                                const int64_t end_length,
                                                const int64_t length_bad_words);
 template int token_penalty_multi_scores<float16>(
-    Context *ctx,
+    api::Context *ctx,
     const int64_t *pre_ids,
     float16 *logits,
     const float16 *penalty_scores,
@@ -382,6 +377,4 @@ template int token_penalty_multi_scores<float16>(
     const int64_t end_length,
     const int64_t length_bad_words);
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

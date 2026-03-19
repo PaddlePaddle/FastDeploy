@@ -221,7 +221,7 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
     def name(self):
         return "PaddleOCRVLForConditionalGeneration"
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, paddle.float32)
         logits[:, self.vocab_size :] = -float("inf")
@@ -246,10 +246,11 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
-        image_features: Optional[paddle.Tensor],
+        inputs: Dict,
         forward_meta: ForwardMeta,
     ):
+        ids_remove_padding = inputs["ids_remove_padding"]
+        image_features = inputs["image_features"]
         input_embeddings = self.get_input_embeddings(
             ids_remove_padding=ids_remove_padding, image_features=image_features, forward_meta=forward_meta
         )

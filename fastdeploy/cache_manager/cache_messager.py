@@ -107,6 +107,8 @@ def get_decode_ip_idx(task):
     """For compatibility, get decode ip and idx from task"""
     if "decode_ip" in task:
         decode_ip = task["decode_ip"]
+    elif "host_ip" in task:
+        decode_ip = task["host_ip"]
     else:
         decode_ip = task["ip"]
     if "decode_rdma_ports" in task:
@@ -911,6 +913,7 @@ class CacheMessagerV1:
                         response = {"task_id": task_id, "success": True}
                 self.engine_worker_queue.connect_task_response_barrier.wait()
                 self.engine_worker_queue.put_connect_rdma_task_response(response)
+                logger.debug(f"_handle_connect_task send response: {response}")
             except Exception as e:
                 logger.error(f"handle_connect_task has exception: {e}, {traceback.format_exc()}")
 

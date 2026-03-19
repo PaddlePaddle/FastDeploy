@@ -39,9 +39,9 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class IluvatarAttentionMetadata(AttentionMetadata):
+class MhaAttentionMetadata(AttentionMetadata):
     """
-    IluvatarAttentionMetadata
+    MhaAttentionMetadata
     """
 
     alibi_slopes: Optional[paddle.Tensor] = None
@@ -60,7 +60,7 @@ class IluvatarAttentionMetadata(AttentionMetadata):
     decode_block_tables: paddle.Tensor = None
 
 
-class IluvatarAttnBackend(AttentionBackend):
+class MhaAttnBackend(AttentionBackend):
     """
     The backend class that uses paddle native attention implementation.
     Which is used only for testing purpose.
@@ -76,7 +76,7 @@ class IluvatarAttnBackend(AttentionBackend):
         decoder_block_shape_q: int = -1,
     ):
         super().__init__()
-        self.attention_metadata = IluvatarAttentionMetadata()
+        self.attention_metadata = MhaAttentionMetadata()
         self.block_size = fd_config.cache_config.block_size
         assert self.block_size == 16, "Iluvatar paged attn requires block_size must be 16."
         self.max_context_len = fd_config.model_config.max_model_len

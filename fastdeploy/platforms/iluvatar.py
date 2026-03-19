@@ -11,7 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .base import Platform
+
+from fastdeploy.utils import console_logger as logger
+
+from .base import Platform, _Backend
 
 
 class IluvatarPlatform(Platform):
@@ -22,4 +25,11 @@ class IluvatarPlatform(Platform):
         """
         get_attention_backend_cls
         """
-        return "fastdeploy.model_executor.layers.attention.IluvatarAttnBackend"
+        if selected_backend == _Backend.APPEND_ATTN:
+            logger.info("Using ixinfer MHA backend instead of append attention")
+            return "fastdeploy.model_executor.layers.backends.iluvatar.MhaAttnBackend"
+        else:
+            raise ValueError(
+                "Invalid attention backend you specified.\n"
+                "Now only support [NATIVE_ATTN, MLA_ATTN, APPEND_ATTN] in cuda place."
+            )

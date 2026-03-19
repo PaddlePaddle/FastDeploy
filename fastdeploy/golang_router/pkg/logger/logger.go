@@ -19,6 +19,7 @@ var (
 
 type contextKey string
 const RequestIDKey contextKey = "request_id"
+const SessionIDKey contextKey = "session_id"
 
 // Init initialize logger
 func Init(logLevel, output string) {
@@ -61,10 +62,14 @@ func contextPrefix(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
-	if rid, ok := ctx.Value(RequestIDKey).(string); ok && rid != "" {
-		return "[request_id:" + rid + "] "
+	var prefix string
+	if sid, ok := ctx.Value(SessionIDKey).(string); ok && sid != "" {
+		prefix += "[session_id:" + sid + "] "
 	}
-	return ""
+	if rid, ok := ctx.Value(RequestIDKey).(string); ok && rid != "" {
+		prefix += "[request_id:" + rid + "] "
+	}
+	return prefix
 }
 
 // Info logs informational messages

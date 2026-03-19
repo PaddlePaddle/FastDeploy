@@ -27,7 +27,7 @@ void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
   auto xpu_ctx = static_cast<const phi::XPUContext*>(dev_ctx);
   const int max_bsz = seq_lens_decoder.shape()[0];
-  int r = baidu::xpu::api::plugin::speculate_clear_accept_nums(
+  int r = fastdeploy::plugin::speculate_clear_accept_nums(
       xpu_ctx->x_context(),
       const_cast<int*>(accept_num.data<int>()),
       seq_lens_decoder.data<int>(),

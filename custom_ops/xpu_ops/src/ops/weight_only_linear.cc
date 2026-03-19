@@ -51,9 +51,6 @@ std::vector<paddle::Tensor> WeightOnlyLinearKernel(
   int64_t n = w_shape[0];
   int64_t k = w_shape[1];
   int64_t m = x.numel() / k;
-  if (weight_dtype == "int4_t") {
-    n = n * 2;
-  }
   paddle::Tensor out = paddle::empty({m, n}, x.dtype(), x.place());
   if (m == 0) {
     return {out};
@@ -148,7 +145,7 @@ std::vector<paddle::Tensor> WeightOnlyLinear(
 #define APPLY_FFN_KERNEL(TX, TW)         \
   return WeightOnlyLinearKernel<TX, TW>( \
       x, weight, weight_scale, bias, weight_dtype);
-
+  PD_CHECK(weight_dtype != "int4_t", "WeightOnlyLinear not support wint4");
   if (x_type == paddle::DataType::BFLOAT16 &&
       w_type == paddle::DataType::INT8) {
     APPLY_FFN_KERNEL(paddle::bfloat16, int8_t);

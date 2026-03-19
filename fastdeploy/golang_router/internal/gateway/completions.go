@@ -213,7 +213,17 @@ func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte, isSt
 }
 
 func readPrefillRecv(ctx context.Context, url string, isStream bool, message string, backendResp *http.Response) {
+	released := false
+	defer func() {
+		if !released {
+			scheduler_handler.Release(ctx, url)
+			scheduler_handler.ReleasePrefillTokens(ctx, url, message)
+			logger.Info(ctx, "[prefill] release in defer (fallback) url=%s, isStream=%v", url, isStream)
+		}
+	}()
+
 	if backendResp == nil || backendResp.Body == nil {
+		logger.Info(ctx, "[prefill] backendResp is nil or backendResp.Body is nil, url=%s", url)
 		return
 	}
 	defer backendResp.Body.Close()
@@ -226,16 +236,6 @@ func readPrefillRecv(ctx context.Context, url string, isStream bool, message str
 		scanner := bufio.NewScanner(backendResp.Body)
 		scanner.Buffer(buffer.B, maxCapacity)
 
-		released := false
-		defer func() {
-			// Fallback to ensure release
-			if !released {
-				scheduler_handler.Release(ctx, url)
-				scheduler_handler.ReleasePrefillTokens(ctx, url, message)
-				logger.Debug(ctx, "[prefill] release in defer (fallback) url=%s", url)
-			}
-		}()
-
 		for scanner.Scan() {
 			_ = scanner.Text()
 
@@ -244,19 +244,22 @@ func readPrefillRecv(ctx context.Context, url string, isStream bool, message str
 				scheduler_handler.Release(ctx, url)
 				scheduler_handler.ReleasePrefillTokens(ctx, url, message)
 				released = true
-
 				logger.Info(ctx, "[prefill] first chunk received, release counter url=%s", url)
 			}
 		}
 
 		if err := scanner.Err(); err != nil {
-			logger.Debug(ctx, "[prefill] scanner error: %v", err)
+			logger.Error(ctx, "[prefill] scanner error: %v, message=%s", err, message)
 		}
 	} else {
 		_, err := io.Copy(io.Discard, backendResp.Body)
 		if err != nil {
-			logger.Debug(ctx, "[prefill] copy error: %v", err)
+			logger.Error(ctx, "[prefill] copy error: %v, message=%s", err, message)
 		}
+		scheduler_handler.Release(ctx, url)
+		scheduler_handler.ReleasePrefillTokens(ctx, url, message)
+		released = true
+		logger.Info(ctx, "[prefill] non-stream prefill response done, release counter url=%s", url)
 	}
 }
 
@@ -266,6 +269,21 @@ func getRequestID(ctx context.Context, rawReq map[string]any) string {
 		rawReq["request_id"] = newRequestID()
 	}
 	return rawReq["request_id"].(string)
+}
+
+// getSessionID extracts session_id from top-level or extra_body, top-level takes priority
+func getSessionID(rawReq map[string]any) string {
+	// Priority 1: top-level session_id (same level as messages)
+	if sid, ok := rawReq["session_id"].(string); ok && sid != "" {
+		return sid
+	}
+	// Priority 2: extra_body.session_id
+	if extraBody, ok := rawReq["extra_body"].(map[string]any); ok {
+		if sid, ok := extraBody["session_id"].(string); ok && sid != "" {
+			return sid
+		}
+	}
+	return ""
 }
 
 // ChatCompletions implements request forwarding to actual large model inference service
@@ -299,17 +317,22 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 	isSplitwise := manager.GetSplitwise(ctx)
 
 	var (
-		destURL         string
-		releaseTargets  []string
-		requestBodyData []byte
-		prefillURL      string
-		decodeURL       string
-		message         string
+		destURL           string
+		releaseTargets    []string
+		requestBodyData   []byte
+		prefillURL        string
+		decodeURL         string
+		message           string
+		prefillHandedOff  bool // true once readPrefillRecv goroutine takes ownership of prefill counters
 	)
 
 	if isSplitwise {
 		requestID := getRequestID(ctx, rawReq)
 		ctx = context.WithValue(ctx, logger.RequestIDKey, requestID)
+		sessionID := getSessionID(rawReq)
+		if sessionID != "" {
+			ctx = context.WithValue(ctx, logger.SessionIDKey, sessionID)
+		}
 		c.Request = c.Request.WithContext(ctx)
 
 		// PD mode: select instances for Prefill/Decode separately
@@ -327,6 +350,22 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 			c.Writer.Write([]byte(`{"error": "No available prefill/decode workers"}`))
 			return
 		}
+
+		// Both prefill and decode counters are now incremented.
+		// Register defer to guarantee release on ALL subsequent paths.
+		releaseTargets = []string{decodeURL}
+		defer func() {
+			// Always release decode request counter
+			for _, url := range releaseTargets {
+				scheduler_handler.Release(ctx, url)
+			}
+			// Release prefill counters only if readPrefillRecv was NOT launched
+			if !prefillHandedOff {
+				scheduler_handler.Release(ctx, prefillURL)
+				scheduler_handler.ReleasePrefillTokens(ctx, prefillURL, message)
+				logger.Info(ctx, "[prefill] release in CommonCompletions defer (error path) url=%s", prefillURL)
+			}
+		}()
 
 		// Construct disaggregate_info to ensure selected P/D work in pairs within FastDeploy
 		disagg, err := manager.BuildDisaggregateInfo(ctx, prefillURL, decodeURL)
@@ -347,7 +386,6 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		}
 
 		destURL = decodeURL
-		releaseTargets = []string{decodeURL}
 
 		// Expose scheduling results to caller for debugging/validating scheduling strategy
 		c.Writer.Header().Set("X-Router-Prefill-URL", prefillURL)
@@ -364,14 +402,14 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		destURL = dest
 		releaseTargets = []string{destURL}
 		requestBodyData = bodyBytes
-	}
 
-	// Maintain request_num count for related instances (Inc done in SelectWorker, Release here)
-	defer func() {
-		for _, url := range releaseTargets {
-			scheduler_handler.Release(ctx, url)
-		}
-	}()
+		// Maintain request_num count for mixed instances
+		defer func() {
+			for _, url := range releaseTargets {
+				scheduler_handler.Release(ctx, url)
+			}
+		}()
+	}
 
 	isStream := false
 	if v, ok := rawReq["stream"]; ok {
@@ -394,6 +432,11 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		c.Writer.Write([]byte(`{"error": "Failed to connect to backend service"}`))
 		logger.Info(ctx, "Request completed with an error.")
 		return
+	}
+
+	// PostToPD succeeded: readPrefillRecv goroutine now owns prefill counter release
+	if isSplitwise {
+		prefillHandedOff = true
 	}
 	defer backendResp.Body.Close()
 

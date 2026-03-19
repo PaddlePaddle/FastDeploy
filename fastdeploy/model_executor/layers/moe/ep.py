@@ -650,9 +650,12 @@ class EPPrefillRunner(EPRunner):
             "expert_alignment": expert_alignment,
             "allocate_on_comm_stream": EPPrefillRunner.allocate_on_comm_stream,
             "previous_event": event,
-            "num_worst_tokens": self.num_worst_tokens,
-            "skip_x_record_stream": self.num_worst_tokens > 0,
         }
+
+        if envs.FD_USE_PFCC_DEEP_EP:
+            dispatch_args["num_worst_tokens"] = self.num_worst_tokens
+            dispatch_args["skip_x_record_stream"] = self.num_worst_tokens > 0
+
         return buffer.dispatch(**dispatch_args)
 
     def combine(
@@ -674,8 +677,11 @@ class EPPrefillRunner(EPRunner):
             "topk_weights": recv_topk_weights,
             "previous_event": event,
             "allocate_on_comm_stream": EPPrefillRunner.allocate_on_comm_stream,
-            "skip_x_record_stream": self.num_worst_tokens > 0,
         }
+
+        if envs.FD_USE_PFCC_DEEP_EP:
+            combine_args["skip_x_record_stream"] = self.num_worst_tokens > 0
+
         fused_moe_out, _, event = buffer.combine(**combine_args)
         return fused_moe_out, event
 
