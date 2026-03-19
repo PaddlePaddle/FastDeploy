@@ -674,12 +674,142 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
 
-        logger.info(f"------apply_ep_prefill nvfp4 flashinfer-cutedsl-------")
+        logger.info(f"------apply_ep_prefill nvfp4 flashinfer-cutedsl (deepep batch)-------")
 
         if layer.fd_config.parallel_config.use_internode_ll_two_stage:
             raise NotImplementedError("NVFP4 CuteDSL EP prefill does not support DeepEP two-stage low-latency.")
 
-        return self.apply_ep_decode(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
+        from fastdeploy.model_executor.layers.moe.ep import deep_ep
+
+        # 1. Gate routing
+        gate_out = gate(x.cast("float32"))
+        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
+
+        # 2. DeepEP batch dispatch (BF16, no FP8 pre-quantization).
+        # Returns:
+        #   recv_x:                       [N_recv, H]     unique received tokens
+        #   recv_topk_idx:                [N_recv, top_k] LOCAL expert indices per token
+        #   recv_topk_weights:            [N_recv, top_k] expert weights per token
+        #   recv_num_tokens_per_expert:   padded buffer sizes per local expert (multiples of 128)
+        event = deep_ep.Buffer.capture()
+        (
+            recv_x,
+            recv_topk_idx,
+            recv_topk_weights,
+            recv_num_tokens_per_expert_list,
+            handle,
+            event,
+        ) = self.ep_prefill_runner.dispatch(
+            x,
+            topk_idx,
+            topk_weights,
+            expert_alignment=128,
+            previous_event=event,
+        )
+
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+
+        hidden_size = x.shape[-1]
+        num_local_experts = int(layer.num_local_experts)
+
+        # Unwrap tuple if dispatch returns (x_value, scale)
+        if isinstance(recv_x, tuple):
+            recv_x = recv_x[0]
+
+        # Padded per-expert buffer sizes (for max_m computation).
+        padded_counts = [int(c) for c in recv_num_tokens_per_expert_list]
+        max_m = max(padded_counts) if padded_counts else 1
+        N_received = recv_x.shape[0]
+
+        if N_received > 0:
+            # 3. Build expert-major hidden_states_3d [E, max_m, H].
+            #
+            # recv_topk_idx may be [N, top_k] (each token has multiple assignments)
+            # or [N] (one assignment per token).  Values are LOCAL expert indices.
+            if recv_topk_idx.ndim == 2:
+                top_k_local = recv_topk_idx.shape[1]
+                expert_flat = recv_topk_idx.reshape([-1]).cast(paddle.int64)       # [N*k]
+                token_flat  = (
+                    paddle.arange(N_received, dtype=paddle.int64)
+                    .unsqueeze(1)
+                    .expand([N_received, top_k_local])
+                    .reshape([-1])
+                )                                                                    # [N*k]
+            else:
+                expert_flat = recv_topk_idx.cast(paddle.int64)                     # [N]
+                token_flat  = paddle.arange(N_received, dtype=paddle.int64)        # [N]
+
+            # Sort pairs by (expert, token) to get expert-major ordering.
+            sort_key   = expert_flat * (N_received + 1) + token_flat
+            sort_order = paddle.argsort(sort_key)
+            sorted_token = token_flat[sort_order]   # token index per sorted pair
+
+            # Actual (unpadded) token count per local expert
+            real_counts = paddle.bincount(
+                expert_flat, minlength=num_local_experts
+            ).cast(paddle.int32)                                                    # [E]
+
+            # Fill expert e's rows in hidden_states_3d with its assigned tokens
+            hidden_states_3d = paddle.zeros(
+                [num_local_experts, max_m, hidden_size], dtype=recv_x.dtype
+            )
+            cum = 0
+            for e in range(num_local_experts):
+                cnt = int(real_counts[e])
+                if cnt > 0:
+                    hidden_states_3d[e, :cnt] = recv_x[sorted_token[cum : cum + cnt]]
+                cum += cnt
+
+            # 4. NVFP4 grouped GEMM: [E, max_m, H] → [E, max_m, H]
+            ffn_out = self._run_cutedsl_grouped_masked(layer, hidden_states_3d, real_counts)
+
+            # 5. Weighted sum across experts → tmp_ffn_out [N_recv, H].
+            #
+            # combine() expects tmp_ffn_out.shape[0] == N_received (one row per unique
+            # received token, with expert contributions already combined via weights).
+            #
+            # For each expert e and its assigned tokens (sorted_token[cum:cum+cnt]):
+            #   weight for expert e on token t = recv_topk_weights[t, k] where
+            #   recv_topk_idx[t, k] == e.  We select it via masked dot product.
+            tmp_ffn_out = paddle.zeros([N_received, hidden_size], dtype=ffn_out.dtype)
+            cum = 0
+            for e in range(num_local_experts):
+                cnt = int(real_counts[e])
+                if cnt > 0:
+                    tokens_e = sorted_token[cum : cum + cnt]   # [cnt] token indices
+                    if recv_topk_idx.ndim == 2:
+                        # mask-select weight for expert e at each token
+                        idx_e = recv_topk_idx[tokens_e]        # [cnt, top_k]
+                        w_e   = recv_topk_weights[tokens_e]    # [cnt, top_k]
+                        # Exactly one column per row satisfies idx_e[:,k] == e
+                        w_scalar = (
+                            (idx_e == e).cast(w_e.dtype) * w_e
+                        ).sum(axis=1)                          # [cnt]
+                    else:
+                        w_scalar = recv_topk_weights[tokens_e] # [cnt]
+                    # Scatter-add weighted expert output to each token's slot
+                    tmp_ffn_out[tokens_e] = (
+                        tmp_ffn_out[tokens_e]
+                        + w_scalar.unsqueeze(-1) * ffn_out[e, :cnt]
+                    )
+                cum += cnt
+        else:
+            tmp_ffn_out = paddle.zeros([N_received, hidden_size], dtype=paddle.bfloat16)
+
+        # 6. DeepEP combine: all-to-all back to originating ranks.
+        event = deep_ep.Buffer.capture()
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(
+            tmp_ffn_out, handle, recv_topk_weights, event
+        )
+
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+
+        return tmp_ffn_out
 
     def apply_ep_decode(
         self,

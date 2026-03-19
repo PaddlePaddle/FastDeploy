@@ -518,8 +518,8 @@ class FuseMoEWrapper(paddle.nn.Layer):
             moe_intermediate_size=self.fd_config.model_config.moe_intermediate_size,
             num_experts=self.fd_config.model_config.moe_num_experts,
             top_k=self.fd_config.model_config.moe_k,
-            # avoiding invoke clean_low_latency_buffer in mixed ep.
-            layer_idx=666,
+            # Keep start-layer index so mixed-EP low-latency buffer cleanup can run.
+            layer_idx=0,
             weight_key_map=weight_key_map,
             topk_method="noaux_tc",
             topk_group=4,
@@ -613,6 +613,25 @@ class TestFusedMoE(unittest.TestCase):
         # 这行代码必须保留，否则影响均匀性！
         paddle.seed(ep_rank + 100)
 
+        # Compute the token list first so we can size the DeepEP low-latency buffer
+        # (num_max_dispatch_tokens_per_rank) correctly before creating FuseMoEWrapper.
+        token_list_env = os.getenv("NVFP4_TEST_TOKEN_LIST", "")
+        if token_list_env:
+            test_token_nums = [int(v.strip()) for v in token_list_env.split(",") if v.strip()]
+        else:
+            # Keep CI as a correctness/perf-smoke test by default.
+            test_token_nums = [60, 64, 1024]
+
+        test_mode = os.getenv("NVFP4_TEST_MODE", "decode").lower()
+        # Default to decode for any unrecognised value (mirrors env-var default).
+        is_decoder = test_mode != "prefill"
+
+        # For decode mode the DeepEP low-latency buffer must be pre-sized to hold
+        # at least max(test_token_nums) tokens.  The framework default is 128, which
+        # is too small for the 1024-token case.
+        if is_decoder and ep_size > 1:
+            self.model_config.num_max_dispatch_tokens_per_rank = max(test_token_nums)
+
         num_layers = self.num_layers
         real_weight_layers = num_layers // 2
         fused_moe = [None] * real_weight_layers
@@ -621,27 +640,20 @@ class TestFusedMoE(unittest.TestCase):
 
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
-        default_decoder = fused_moe[0].fd_config.model_config.moe_phase.phase == "decode"
-        test_mode = os.getenv("NVFP4_TEST_MODE", "decode").lower()
-        if test_mode == "decode":
-            is_decoder = True
-        elif test_mode == "prefill":
-            is_decoder = False
-        else:
-            is_decoder = default_decoder
 
-        token_list_env = os.getenv("NVFP4_TEST_TOKEN_LIST", "")
-        if token_list_env:
-            test_token_nums = [int(v.strip()) for v in token_list_env.split(",") if v.strip()]
-        else:
-            # Keep CI as a correctness/perf-smoke test by default.
-            test_token_nums = [64]
+        # For decode mode: set moe_phase to "decode" so apply_ep_decode is used,
+        # which is CUDA-graph-compatible (uses ep_decoder_runner / low-latency dispatch).
+        # For prefill mode: keep "prefill" so apply_ep_prefill uses ep_prefill_runner.
+        if is_decoder:
+            for layer_wrapper in fused_moe:
+                if layer_wrapper is not None:
+                    layer_wrapper.fd_config.model_config.moe_phase.phase = "decode"
 
         # Avoid per-iteration weight mutation in hot path.
         for layer in fused_moe:
             layer.gating.weight.set_value(paddle.rand(layer.gating.weight.shape, dtype=paddle.float32))
 
-        enable_cuda_graph = is_decoder and ep_size > 1
+        enable_cuda_graph = False  # grouped_gemm_nt_masked (CuteDSL) is not CUDA-graph-capturable
 
         for idx, num_tokens in enumerate(test_token_nums):
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
