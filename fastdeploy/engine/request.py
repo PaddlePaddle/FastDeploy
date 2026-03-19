@@ -129,6 +129,7 @@ class Request:
         top_logprobs: Optional[int] = None,
         # from PoolingRequest
         add_special_tokens: Optional[bool] = False,
+        zmq_worker_pid: Optional[int] = None,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -217,6 +218,7 @@ class Request:
         self.top_logprobs = top_logprobs
         # from PoolingRequest
         self.add_special_tokens = add_special_tokens
+        self.zmq_worker_pid = zmq_worker_pid
 
     @classmethod
     def _process_guided_json(cls, r: T):

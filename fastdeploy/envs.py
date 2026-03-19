@@ -242,6 +242,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # has been observed to cause NaN computation errors.
     # Set to 1 to enable the lock; defaults to 0 (disabled).
     "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
+    # Whether to use batch send data in zmq
+    "ZMQ_SEND_BATCH_DATA": lambda: int(os.getenv("ZMQ_SEND_BATCH_DATA", "1")),
 }
 
 
