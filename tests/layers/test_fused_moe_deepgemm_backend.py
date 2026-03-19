@@ -27,19 +27,28 @@ import pytest
 
 
 class _GpuOpsStub(types.ModuleType):
-    """Catchall module: any attribute access returns None."""
+    """Catchall module: returns registered sub-modules or None for unknown attrs."""
 
     __path__ = []  # marks as package so `import X.Y.Z` can traverse
 
     def __getattr__(self, name):
+        # Return registered sub-modules from sys.modules so `from X import Y` works
+        fqn = f"{self.__name__}.{name}"
+        sub = sys.modules.get(fqn)
+        if sub is not None:
+            return sub
         return None
 
 
 sys.modules["fastdeploy.model_executor.ops.gpu"] = _GpuOpsStub("fastdeploy.model_executor.ops.gpu")
 # fp8_utils.py:52 uses `import ...ops.gpu.deep_gemm as deep_gemm`
-sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm"] = types.ModuleType(
-    "fastdeploy.model_executor.ops.gpu.deep_gemm"
-)
+_deep_gemm_stub = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm")
+# Provide dummy callables so `deep_gemm.m_grouped_*` attribute access succeeds
+_deep_gemm_stub.m_grouped_fp8_gemm_nt_contiguous = None
+_deep_gemm_stub.m_grouped_fp8_gemm_nt_masked = None
+_deep_gemm_stub.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous = None
+_deep_gemm_stub.m_grouped_gemm_fp8_fp8_bf16_nt_masked = None
+sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm"] = _deep_gemm_stub
 _gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
 
 _ep_mod = types.ModuleType("fastdeploy.model_executor.layers.moe.ep")
@@ -89,9 +98,9 @@ class _DummyLayer(paddle.nn.Layer):
                 model="test",
                 moe_phase=SimpleNamespace(phase="prefill"),
             ),
-            scheduler_config=SimpleNamespace(splitwise_role="prefill"),
+            scheduler_config=SimpleNamespace(splitwise_role="prefill", max_num_batched_tokens=4),
             eplb_config=SimpleNamespace(redundant_experts_num=0),
-            parallel_config=SimpleNamespace(ep_group=None, use_internode_ll_two_stage=False),
+            parallel_config=SimpleNamespace(ep_group=None, use_internode_ll_two_stage=False, tensor_parallel_size=1),
             load_config=SimpleNamespace(load_strategy="meta", load_choices="default_v1"),
         )
         self.weight_key_map = {
@@ -303,10 +312,10 @@ def test_apply_ep_prefill(monkeypatch):
     H = layer.hidden_size
 
     class _PrefillRunner:
-        def __init__(self, n):
+        def __init__(self, n, num_worst_tokens=0):
             self._n = n
             self.ep_engine = SimpleNamespace(async_finish=True)
-            self.num_worst_tokens = 0
+            self.num_worst_tokens = num_worst_tokens
 
         def moe_select(self, _layer, gate_out):
             return paddle.zeros([gate_out.shape[0], 1], "int64"), paddle.ones([gate_out.shape[0], 1], "float32")
@@ -373,6 +382,33 @@ def test_apply_ep_prefill(monkeypatch):
     m.ep_prefill_runner = _PrefillRunner(n=2)
     out_phi = m.apply_ep_prefill(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
     assert out_phi.shape[-1] == H
+
+    # num_worst_tokens > 0 branch — covers L410-482 (masked gemm path)
+    monkeypatch.setattr(dgb.fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", False)
+    monkeypatch.setattr(
+        dgb,
+        "call_prefill_permute_to_masked_gemm",
+        lambda x, scale, topk_ids, num_local_experts, max_token_num: (
+            x,
+            scale,
+            paddle.zeros([num_local_experts, max_token_num, 1], "int32"),
+            paddle.zeros([num_local_experts], "int32"),
+        ),
+    )
+    monkeypatch.setattr(dgb, "m_grouped_fp8_gemm_nt_masked", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        _gpu,
+        "fused_mask_swiglu_fp8_quant",
+        lambda t, tn, bs, **kw: (paddle.zeros_like(t), paddle.zeros([1], "float32")),
+    )
+    monkeypatch.setattr(
+        dgb,
+        "call_depermute_prefill_combine",
+        lambda x, indice_map, topk_weights, num_worst_tokens: paddle.zeros([num_worst_tokens, x.shape[-1]], "float32"),
+    )
+    m.ep_prefill_runner = _PrefillRunner(n=2, num_worst_tokens=2)
+    out_worst = m.apply_ep_prefill(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
+    assert out_worst.shape[-1] == H
 
 
 def test_apply_ep_decode(monkeypatch):
