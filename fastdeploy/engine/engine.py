@@ -266,9 +266,9 @@ class LLMEngine:
         # TODO 输入输出长度确认
 
         if sampling_params is not None:
-            task.update(asdict(sampling_params))
             if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
                 sampling_params.temperature = 1e-06
+            task.update(asdict(sampling_params))
 
         # Prepare chat_template_kwargs before calling process_request_dict
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
