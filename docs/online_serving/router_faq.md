@@ -23,6 +23,12 @@ For basic Router usage, please refer to [Load-Balancing Scheduling Router](route
 | `Failed to register instance from index {index}: {error}` | Instance at index {index} in config file failed to register | That instance was not registered | Health status, registration parameters |
 | `failed to send request to {url} with error: {error}` | Health check request failed to send | The instance may be marked as unhealthy | Network connectivity, proxy settings |
 | `scanner error: {error}` | Error occurred while reading backend streaming response | The current request may fail | Backend instance status |
+| `[prefill] scanner error: {error}, message={message}` | Error occurred while reading Prefill backend streaming response | The current Prefill request may fail | Backend instance status |
+| `[prefill] copy error: {error}, message={message}` | Error occurred while copying Prefill response data | The current Prefill request may fail | Backend instance status |
+| `Panic recovered: {error}` | A panic occurred during request processing and was recovered | The current request fails, but the service continues running | Backend instance status, request content |
+| `empty baseURL provided` | Health check received an empty base URL | Health check cannot be performed | Registration parameters |
+| `failed to create request: {error}` | Failed to create health check request | The instance may be marked as unhealthy | Network environment |
+| `failed to read response body: {error}` | Failed to read health check response body | The instance may be marked as unhealthy | Backend instance status |
 
 ### Warn-Level Logs
 
@@ -30,7 +36,9 @@ For basic Router usage, please refer to [Load-Balancing Scheduling Router](route
 | :--- | :--- | :--- | :--- |
 | `Server {url} is not healthy` | The instance at this URL failed health check | Router cannot register the instance, or will remove it from the registered list | Health status |
 | `Instance {url} role is unknown` | Instance role cannot be recognized | The instance will not be added to the scheduling list | Registration parameters |
-| `cache-aware prefill: tokenizer failed, fallback to process_tokens: {error}` | Tokenizer service call failed, automatically falling back to process_tokens strategy | Prefill scheduling temporarily does not use cache_aware strategy; normal request processing is not affected | Tokenizer service status |
+| `cache-aware prefill: tokenizer failed, fallback to char tokens: {error}` | Tokenizer service call failed, automatically falling back to character-based tokenization | cache_aware strategy remains active, using character-based tokenization for cache matching instead of the Tokenizer; normal request processing is not affected | Tokenizer service status |
+| `cache-aware prefill: tokenize failed, fallback to process_tokens: {error}` | Tokenization completely failed (e.g., empty input), falling back to process_tokens strategy | Prefill scheduling temporarily does not use cache_aware strategy; normal request processing is not affected | Request content, Tokenizer service status |
+| `cache-aware prefill: final strategy: process_tokens, reason: tokenize failed: {error}. ts_ms={ts}` | Tokenization failed (new format), falling back to process_tokens strategy | Prefill scheduling temporarily does not use cache_aware strategy; normal request processing is not affected | Request content, Tokenizer service status |
 
 ### Info-Level Logs
 
@@ -42,6 +50,42 @@ For basic Router usage, please refer to [Load-Balancing Scheduling Router](route
 | `No instances found in config file {path}` | No instances found in the registration config file | Check whether register.yaml is empty |
 | `Request completed successfully.` | Request processing completed | Normal operation log |
 | `Request failed, retrying...` | Request failed, retrying | Router will retry up to 3 times |
+| `select worker (prefill): {url}, tokens: {tokens}` | Prefill scheduler selected a worker, showing current token processing count | Normal operation log |
+| `select worker ({type}): {url}, count: {count}` | Decode/Mixed scheduler selected a worker, showing current request concurrency | Normal operation log |
+| `release worker: {url}, count: {count}` | Request ended, worker counter released | Normal operation log |
+| `release prefill tokens: {url}, tokens: {tokens}` | Prefill request ended, token load released | Normal operation log |
+| `cleanup unhealthy worker counter: {url}` | Cleaned up counter for unhealthy worker | Normal operation log |
+| `removed counters for {count} unhealthy workers: {urls}` | Batch cleanup of counters for unhealthy workers | Normal operation log |
+| `[stats] total_running={n}, workers: [{loads}], cache_hit_rate={rate}% (hits={hits}/total={total})` | Periodic stats: total requests, worker loads, cache hit rate | Normal operation log, useful for monitoring and tuning |
+| `Parsing completed; starting worker selection.` | Request parsing completed, starting worker selection | Normal operation log |
+| `Request completed with an error.` | Request processing completed with an error | Check backend instance status |
+| `[SelectWorkerPair] decode selection failed, releasing prefill counter url={url}` | Decode selection failed in PD disaggregated mode, releasing Prefill counter | Error handling log |
+| `[prefill] first chunk received, release counter url={url}` | Prefill streaming response received first chunk, counter released | Normal operation log |
+| `[prefill] non-stream prefill response done, release counter url={url}` | Prefill non-streaming response completed, counter released | Normal operation log |
+| `[prefill] backendResp is nil or backendResp.Body is nil, url={url}` | Prefill backend response is nil | May indicate backend connection issue |
+| `[prefill] release in defer (fallback) url={url}, isStream={bool}` | Fallback resource release when Prefill request exits abnormally | Error handling log |
+| `[prefill] release in CommonCompletions defer (error path) url={url}` | Prefill resource release on error path | Error handling log |
+| `cache-aware prefill: final strategy: process_tokens, reason: strategy not initialized` | cache_aware strategy not initialized, falling back to process_tokens | Check cache_aware configuration |
+| `cache-aware prefill: final strategy: process_tokens, reason: load imbalanced, loads={loads}. ts_ms={ts}` | Load imbalanced across instances, falling back to process_tokens strategy | Normal operation log, automatic load balancing switch |
+| `cache-aware prefill: final strategy: cache_aware_scoring, selected={url}, loads={loads}, hitRatios={ratios}. ts_ms={ts}` | cache_aware scoring strategy selected a worker | Normal operation log, showing loads and hit ratios |
+| `[{method}] {path} {proto} {status} {latency} {clientIP}` | HTTP request access log | Normal operation log, records basic info for each request |
+| `before SelectWorker prefill. ts_ms={ts}` | Starting Prefill worker selection in PD disaggregated mode | Normal operation log, for performance tracing |
+| `before SelectWorker decode, after prefill. ts_ms={ts}` | Starting Decode worker selection after Prefill selection | Normal operation log, for performance tracing |
+| `after SelectWorker decode, before return. ts_ms={ts}` | Decode worker selection completed | Normal operation log, for performance tracing |
+
+### Debug-Level Logs
+
+> Debug-level logs are only output when the log level is set to `debug`, typically used for development debugging.
+
+| Log Message | Meaning | Description |
+| :--- | :--- | :--- |
+| `Healthy instances: prefill={urls}, decode={urls}, mixed={urls}` | Lists healthy instances for each role | Useful for verifying instance discovery |
+| `cache-aware prefill: hashes={n} workers={n} load={loads} hit={hits}` | Hash count, worker count, and load info for cache_aware strategy | Useful for debugging cache hits |
+| `cache-aware prefill: tokenizer tokens={tokens}` | Tokenizer tokenization result | Useful for debugging tokenization results |
+| `cache-aware score: worker={url} hit={hit} loadRatio={ratio} score={score}` | Scoring details for cache_aware strategy | Useful for debugging scheduling decisions |
+| `radix match: hashes={n} matched_len={n} node_children={n}` | Radix tree match details | Useful for debugging cache matching |
+| `radix record: worker={url} hashes={n} node_depth={n}` | Radix tree record details | Useful for debugging cache recording |
+| `radix eviction: removed={n} nodeCount={n}` | Radix tree eviction details | Useful for debugging cache eviction |
 
 ## Common Response Output Analysis
 
@@ -189,9 +233,10 @@ If `Failed to start server` appears in startup logs, check:
 
 ### Tokenizer Service (cache_aware Strategy)
 
-When using the `cache_aware` scheduling strategy, the Router calls a Tokenizer service to tokenize requests for cache hit ratio computation. When the Tokenizer service is unavailable, the Router will log a Warn-level message: `tokenizer failed, fallback to process_tokens`.
+When using the `cache_aware` scheduling strategy, the Router calls a Tokenizer service to tokenize requests for cache hit ratio computation. When the Tokenizer service is unavailable, the Router has a two-level degradation mechanism:
 
-**This does not affect normal request processing** — the Router has a built-in degradation mechanism that automatically falls back to the `process_tokens` strategy for continued scheduling. The only impact is the temporary loss of cache-aware optimization.
+1. **Fallback to character-based tokenization** (common case): The log will show `tokenizer failed, fallback to char tokens`. The cache_aware strategy remains active, using character-based tokenization for cache matching instead of the Tokenizer. Cache hit accuracy may decrease, but normal request processing is not affected.
+2. **Fallback to process_tokens strategy** (extreme case): When tokenization completely fails (e.g., empty request content), the log will show `tokenize failed, fallback to process_tokens`. The cache_aware strategy temporarily becomes inactive, and scheduling falls back to token processing volume. Normal request processing is not affected.
 
 To restore full cache_aware functionality:
 

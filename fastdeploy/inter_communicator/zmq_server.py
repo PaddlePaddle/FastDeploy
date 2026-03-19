@@ -31,6 +31,22 @@ from fastdeploy.metrics.stats import ZMQMetricsStats
 from fastdeploy.utils import llm_logger
 
 
+def _msgpack_default(obj):
+    """Fallback serializer for types msgpack cannot handle natively."""
+    if hasattr(obj, "tolist"):
+        # paddle.Tensor, numpy.ndarray
+        return obj.tolist()
+    if hasattr(obj, "_asdict"):
+        # NamedTuple (LogprobsTensors, LogprobsLists, etc.)
+        return list(obj)
+    if hasattr(obj, "__dataclass_fields__"):
+        # dataclass (Logprob, SpeculateMetrics, etc.)
+        from dataclasses import asdict
+
+        return asdict(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not msgpack serializable")
+
+
 class ZmqServerBase(ABC):
     """
     ZmqServerBase
@@ -313,9 +329,69 @@ class ZmqServerBase(ABC):
                     llm_logger.info(f"send_multipart finished, req_id: {req_id}")
                     self.req_dict.pop(req_id, None)
 
-    def send_response(self, req_id, data):
+    def _send_batch_response(self, batch_data, worker_pid=None):
+        """
+        Batch send responses for multiple requests to a specific worker.
+        batch_data: List[List[output, ...], ...]
+        worker_pid: Target worker process ID for routing.
+        """
+        if worker_pid is not None:
+            sock = self._get_worker_push_socket(worker_pid)
+        elif self.socket is not None:
+            sock = self.socket
+        else:
+            llm_logger.error("No PUSH socket available: worker_pid is required in batch mode")
+            return
+
+        metrics_address = self.address or self.worker_push_addresses.get(worker_pid, "unknown")
+
+        try:
+            if not envs.ENABLE_V1_DATA_PROCESSOR:
+                result = msgpack.packb(
+                    [[output.to_dict() for output in outputs] for outputs in batch_data],
+                    default=_msgpack_default,
+                )
+            else:
+                result = ForkingPickler.dumps(batch_data)
+            result_len = len(result)
+
+            # Only hold lock for the actual socket send
+            start_send = time.time()
+            _zmq_metrics_stats = ZMQMetricsStats()
+            with self.response_token_lock:
+                try:
+                    sock.send(result, copy=False)
+                    _zmq_metrics_stats.msg_bytes_send_total += result_len
+                except Exception as e:
+                    _zmq_metrics_stats.msg_send_failed_total += 1
+                    raise e
+                finally:
+                    _zmq_metrics_stats.msg_send_total += 1
+                    main_process_metrics.record_zmq_stats(_zmq_metrics_stats, metrics_address)
+
+            llm_logger.debug(
+                f"send_batch to worker {worker_pid}: {len(batch_data)} requests, elapse: {time.time() - start_send}"
+            )
+
+        except Exception as e:
+            llm_logger.error(f"Send batch response to worker {worker_pid} failed: {e}")
+
+    def send_response(self, req_id, data, worker_pid=None):
+        """
+        Unified response sending interface.
+
+        Args:
+            req_id: Request ID (None for batch mode)
+            data: Response data
+                  - Internal Adapter mode: List[List[output]] (batch per step)
+                  - Batch mode (ZMQ_SEND_BATCH_DATA=1): List[List[output]], req_id is always None
+                  - Per-query mode (ZMQ_SEND_BATCH_DATA=0): List[output], sent via ROUTER per request
+            worker_pid: Target worker process ID (batch mode only)
+        """
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
             self._send_response_per_step(req_id, data)
+        elif envs.ZMQ_SEND_BATCH_DATA:
+            self._send_batch_response(data, worker_pid=worker_pid)
         else:
             self._send_response_per_query(req_id, data)
 
@@ -337,10 +413,6 @@ class ZmqIpcServer(ZmqServerBase):
         self.name = name
         self.mode = mode
         self.cached_results = defaultdict(list)
-        if mode == zmq.PULL:
-            self.file_name = f"/dev/shm/{name}.socket"
-        elif mode == zmq.ROUTER:
-            self.file_name = f"/dev/shm/router_{name}.ipc"
         self.ZMQ_SNDHWM = int(envs.FD_ZMQ_SNDHWM)
         self.aggregate_send = envs.FD_USE_AGGREGATE_SEND
         self.mutex = threading.Lock()
@@ -348,6 +420,27 @@ class ZmqIpcServer(ZmqServerBase):
         self.req_dict = dict()
         self.running = True
         self.context = zmq.Context()
+
+        # Per-worker PUSH sockets for batch mode (worker_pid -> zmq.Socket)
+        self.worker_push_sockets = {}
+        self.worker_push_addresses = {}
+        self.worker_push_lock = threading.Lock()
+
+        if mode == zmq.PUSH:
+            # Batch mode: don't bind a single socket here.
+            # Per-worker PUSH sockets are created on demand via _get_worker_push_socket().
+            self.push_name_prefix = name
+            self.socket = None
+            self.address = None
+            self.file_name = None
+            return
+
+        if mode == zmq.PULL:
+            self.file_name = f"/dev/shm/{name}.socket"
+        elif mode == zmq.ROUTER:
+            self.file_name = f"/dev/shm/router_{name}.ipc"
+        else:
+            raise ValueError(f"Unsupported ZMQ mode: {mode}")
         self._create_socket()
 
     def _create_socket(self):
@@ -358,6 +451,22 @@ class ZmqIpcServer(ZmqServerBase):
         self.address = f"ipc://{self.file_name}"
         self.socket.bind(self.address)
         return self.socket
+
+    def _get_worker_push_socket(self, worker_pid):
+        """Get or create a PUSH socket for the given worker (batch mode only)."""
+        with self.worker_push_lock:
+            if worker_pid in self.worker_push_sockets:
+                return self.worker_push_sockets[worker_pid]
+
+            sock = self.context.socket(zmq.PUSH)
+            sock.setsockopt(zmq.SNDHWM, self.ZMQ_SNDHWM)
+            sock.setsockopt(zmq.SNDTIMEO, -1)
+            address = f"ipc:///dev/shm/response_{self.push_name_prefix}_w{worker_pid}.pull"
+            sock.connect(address)
+            self.worker_push_sockets[worker_pid] = sock
+            self.worker_push_addresses[worker_pid] = address
+            llm_logger.info(f"PUSH connected to worker {worker_pid}: {address}")
+            return sock
 
     def _clear_ipc(self, name):
         """
@@ -379,11 +488,22 @@ class ZmqIpcServer(ZmqServerBase):
         self.running = False
         llm_logger.info("ZMQ server is closing connection...")
         try:
+            # Close per-worker PUSH sockets (batch mode)
+            with self.worker_push_lock:
+                for wpid, sock in self.worker_push_sockets.items():
+                    try:
+                        sock.close()
+                    except Exception:
+                        pass
+                self.worker_push_sockets.clear()
+                self.worker_push_addresses.clear()
+
             if self.socket is not None and not self.socket.closed:
                 self.socket.close()
             if not self.context.closed:
                 self.context.term()
-            self._clear_ipc(self.file_name)
+            if self.file_name:
+                self._clear_ipc(self.file_name)
         except Exception as e:
             llm_logger.warning(f"ZMQ server failed to close connection - {e}")
             return
