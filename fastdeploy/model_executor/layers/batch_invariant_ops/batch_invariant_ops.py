@@ -682,8 +682,13 @@ def addmm_batch_invariant(
     return result
 
 
-def _log_softmax_batch_invariant(x: paddle.Tensor, axis: int = -1) -> paddle.Tensor:
-    return log_softmax(input=x, axis=axis)
+def _log_softmax_batch_invariant(x: paddle.Tensor, axis: int = -1, out=None) -> paddle.Tensor:
+    result = log_softmax(input=x, axis=axis)
+    # Handle out parameter if provided
+    if out is not None:
+        out.copy_(result)
+        return out
+    return result
 
 
 def mean_batch_invariant(
