@@ -116,6 +116,7 @@ class DealerConnectionManager:
                 self.worker_pid = os.getpid()
                 self.pull_ipc_path = f"/dev/shm/response_{self.pid}_w{self.worker_pid}.pull"
                 self.pull_client = await aiozmq.create_zmq_stream(zmq.PULL, bind=f"ipc://{self.pull_ipc_path}")
+                self.pull_metrics_address = self.pull_client.transport.getsockopt(zmq.LAST_ENDPOINT)
                 # Start dispatcher task
                 self.dispatcher_task = asyncio.create_task(self._dispatch_batch_responses())
                 api_server_logger.info(
@@ -226,8 +227,7 @@ class DealerConnectionManager:
                 # Record metrics
                 _zmq_metrics_stats = ZMQMetricsStats()
                 _zmq_metrics_stats.msg_recv_total += 1
-                address = f"ipc:///dev/shm/response_{self.pid}.push"
-                main_process_metrics.record_zmq_stats(_zmq_metrics_stats, address)
+                main_process_metrics.record_zmq_stats(_zmq_metrics_stats, self.pull_metrics_address)
 
                 # Parse req_id from outputs and dispatch in a single pass
                 for outputs in batch_data:

@@ -337,12 +337,13 @@ class ZmqServerBase(ABC):
         """
         if worker_pid is not None:
             sock = self._get_worker_push_socket(worker_pid)
-        else:
-            self._ensure_socket()
+        elif self.socket is not None:
             sock = self.socket
-        if sock is None:
-            llm_logger.error(f"No PUSH socket available for worker {worker_pid}")
+        else:
+            llm_logger.error("No PUSH socket available: worker_pid is required in batch mode")
             return
+
+        metrics_address = self.address or self.worker_push_addresses.get(worker_pid, "unknown")
 
         try:
             if not envs.ENABLE_V1_DATA_PROCESSOR:
@@ -366,7 +367,7 @@ class ZmqServerBase(ABC):
                     raise e
                 finally:
                     _zmq_metrics_stats.msg_send_total += 1
-                    main_process_metrics.record_zmq_stats(_zmq_metrics_stats, self.address)
+                    main_process_metrics.record_zmq_stats(_zmq_metrics_stats, metrics_address)
 
             llm_logger.debug(
                 f"send_batch to worker {worker_pid}: {len(batch_data)} requests, elapse: {time.time() - start_send}"
@@ -422,6 +423,7 @@ class ZmqIpcServer(ZmqServerBase):
 
         # Per-worker PUSH sockets for batch mode (worker_pid -> zmq.Socket)
         self.worker_push_sockets = {}
+        self.worker_push_addresses = {}
         self.worker_push_lock = threading.Lock()
 
         if mode == zmq.PUSH:
@@ -462,6 +464,7 @@ class ZmqIpcServer(ZmqServerBase):
             address = f"ipc:///dev/shm/response_{self.push_name_prefix}_w{worker_pid}.pull"
             sock.connect(address)
             self.worker_push_sockets[worker_pid] = sock
+            self.worker_push_addresses[worker_pid] = address
             llm_logger.info(f"PUSH connected to worker {worker_pid}: {address}")
             return sock
 
@@ -493,6 +496,7 @@ class ZmqIpcServer(ZmqServerBase):
                     except Exception:
                         pass
                 self.worker_push_sockets.clear()
+                self.worker_push_addresses.clear()
 
             if self.socket is not None and not self.socket.closed:
                 self.socket.close()
