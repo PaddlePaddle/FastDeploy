@@ -347,19 +347,9 @@ class DataProcessorTestCase(unittest.TestCase):
             def _load_tokenizer(self):
                 return DummyTokenizer()
 
-            def process_request(self, request, **kwargs):
-                return super().process_request(request, **kwargs)
-
-            def process_response(self, response_dict):
-                return super().process_response(response_dict)
-
         processor = MinimalProcessor()
         defaults = processor._apply_default_parameters({})
         self.assertAlmostEqual(defaults["top_p"], 0.5)
-        with self.assertRaises(NotImplementedError):
-            processor.process_request({}, max_model_len=None)
-        with self.assertRaises(NotImplementedError):
-            processor.process_response({})
         with self.assertRaises(NotImplementedError):
             processor.text2ids("text")
         with self.assertRaises(NotImplementedError):
@@ -392,28 +382,28 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertTrue(processed["enable_thinking"])
         self.assertEqual(processed["prompt_tokens"], "system prompt hello")
 
-    def test_process_request_object_handles_sequences(self):
-        request = DummyRequest(
-            prompt=[1, 2, 3, 4, 5, 6],
-            stop=["stop"],
-            bad_words=["zz"],
-            temperature=0,
-            top_p=0,
-        )
-        processed = self.processor.process_request(request, max_model_len=5)
+    def test_process_request_dict_handles_sequences(self):
+        request = {
+            "prompt": [1, 2, 3, 4, 5, 6],
+            "stop": ["stop"],
+            "bad_words": ["zz"],
+            "temperature": 0,
+            "top_p": 0,
+        }
+        processed = self.processor.process_request_dict(request, max_model_len=5)
 
-        self.assertEqual(processed.prompt_token_ids, [1, 2, 3, 4])
-        self.assertEqual(processed.sampling_params.max_tokens, 1)
-        self.assertEqual(processed.sampling_params.stop_token_ids, [[4]])
-        self.assertEqual(set(processed.sampling_params.bad_words_token_ids), {2, 3})
-        self.assertEqual(processed.sampling_params.temperature, 1)
-        self.assertEqual(processed.sampling_params.top_k, 1)
-        self.assertAlmostEqual(processed.sampling_params.top_p, 1e-5)
+        self.assertEqual(processed["prompt_token_ids"], [1, 2, 3, 4])
+        self.assertEqual(processed["max_tokens"], 1)
+        self.assertEqual(processed["stop_token_ids"], [[4]])
+        self.assertEqual(set(processed["bad_words_token_ids"]), {2, 3})
+        self.assertEqual(processed["temperature"], 1)
+        self.assertEqual(processed["top_k"], 1)
+        self.assertAlmostEqual(processed["top_p"], 1e-5)
 
-    def test_process_request_requires_prompt_or_messages(self):
-        request = DummyRequest(prompt=None, messages=None, prompt_token_ids=None)
-        with self.assertRaisesRegex(ValueError, "should have `input_ids`, `text` or `messages`"):
-            self.processor.process_request(request, max_model_len=5)
+    def test_process_request_dict_requires_prompt_or_messages(self):
+        request = {"prompt": None, "messages": None, "prompt_token_ids": None}
+        with self.assertRaisesRegex(ValueError, "Request must contain"):
+            self.processor.process_request_dict(request, max_model_len=5)
 
     def test_process_request_dict_rejects_bad_kwargs(self):
         request = {
@@ -458,14 +448,15 @@ class DataProcessorTestCase(unittest.TestCase):
         processor.reasoning_parser = self.create_dummy_reasoning(processor.tokenizer)
         processor.tool_parser_obj = self.create_dummy_tool_parser(processor.tokenizer, content="tool-only")
 
-        response = SimpleNamespace(
-            request_id="resp",
-            outputs=SimpleNamespace(token_ids=[1, processor.tokenizer.eos_token_id]),
-        )
+        response = {
+            "request_id": "resp",
+            "finished": True,
+            "outputs": {"token_ids": [1, processor.tokenizer.eos_token_id]},
+        }
 
-        processed = processor.process_response(response)
-        self.assertEqual(processed.outputs.reasoning_content, "think")
-        self.assertEqual(processed.outputs.tool_calls, ["tool"])
+        processed = processor.process_response_dict(response, stream=False)
+        self.assertEqual(processed["outputs"]["reasoning_content"], "think")
+        self.assertEqual(processed["outputs"]["tool_calls"], ["tool"])
 
     def test_process_response_streaming_clears_state(self):
         processor = self.processor
