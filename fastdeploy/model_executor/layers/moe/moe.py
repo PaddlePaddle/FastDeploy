@@ -39,6 +39,16 @@ try:
     from fastdeploy.model_executor.ops.gpu import noaux_tc, noaux_tc_redundant
 except:
     logger.warning("import noaux_tc Failed!")
+
+try:
+    from fastdeploy.model_executor.layers.moe.fused_cast_sigmoid_bias import (
+        fused_cast_sigmoid_bias,
+    )
+
+    _FUSED_CAST_SIGMOID_BIAS_AVAILABLE = True
+except Exception:
+    _FUSED_CAST_SIGMOID_BIAS_AVAILABLE = False
+
 import numpy as np
 
 
@@ -91,13 +101,17 @@ def get_moe_scores(
     tokens_per_expert_stats_list: paddle.Tensor = None,
     redundant_ep_rank_num_plus_one: int = 1,
     topk_reduce_func: Callable = lambda x: x.sum(axis=-1, keepdim=True) + 1e-20,
+    use_fused_cast: bool = False,
 ) -> paddle.Tensor:
     """
     compute moe scores using e_score_correction_bias.
     """
-    scores = paddle.nn.functional.sigmoid(gating_output)
     assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
-    scores_with_bias = scores + e_score_correction_bias
+    if use_fused_cast and _FUSED_CAST_SIGMOID_BIAS_AVAILABLE:
+        scores, scores_with_bias = fused_cast_sigmoid_bias(gating_output, e_score_correction_bias)
+    else:
+        scores = paddle.nn.functional.sigmoid(gating_output)
+        scores_with_bias = scores + e_score_correction_bias
 
     if envs.FD_USE_PHI_MOE_TOPK:
         # calculate renormalize and routed_scaling_factor value outside the noaux_tc
