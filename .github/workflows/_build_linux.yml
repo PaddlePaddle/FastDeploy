@@ -71,6 +71,7 @@ jobs:
 
   fd-build:
     runs-on: [self-hosted, GPU-Build]
+    needs: check_bypass
     if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
     timeout-minutes: 360
     outputs:
