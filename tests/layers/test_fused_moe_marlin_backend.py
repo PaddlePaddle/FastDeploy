@@ -25,19 +25,26 @@ import pytest
 
 
 class _GpuOpsStub(types.ModuleType):
-    """Catchall module: any attribute access returns None."""
+    """Catchall module: returns registered sub-modules or None for unknown attrs."""
 
     __path__ = []  # marks as package so `import X.Y.Z` can traverse
 
     def __getattr__(self, name):
+        fqn = f"{self.__name__}.{name}"
+        sub = sys.modules.get(fqn)
+        if sub is not None:
+            return sub
         return None
 
 
 sys.modules["fastdeploy.model_executor.ops.gpu"] = _GpuOpsStub("fastdeploy.model_executor.ops.gpu")
 # fp8_utils.py:52 uses `import ...ops.gpu.deep_gemm as deep_gemm`
-sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm"] = types.ModuleType(
-    "fastdeploy.model_executor.ops.gpu.deep_gemm"
-)
+_deep_gemm_stub = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm")
+_deep_gemm_stub.m_grouped_fp8_gemm_nt_contiguous = None
+_deep_gemm_stub.m_grouped_fp8_gemm_nt_masked = None
+_deep_gemm_stub.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous = None
+_deep_gemm_stub.m_grouped_gemm_fp8_fp8_bf16_nt_masked = None
+sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm"] = _deep_gemm_stub
 _gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
 
 from fastdeploy.model_executor.layers.moe import (  # noqa: E402
