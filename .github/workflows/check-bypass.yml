@@ -65,7 +65,7 @@ jobs:
 
           can_skip_docs=true
           for f in $files; do
-            if [[ ! "$f" =~ \.(md|txt|yaml|yml|go)$ ]]; then
+            if [[ ! "$f" =~ \.(md|txt|yaml|go)$ ]]; then
               can_skip_docs=false
               break
             fi
