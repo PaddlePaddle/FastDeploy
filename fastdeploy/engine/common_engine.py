@@ -195,6 +195,11 @@ class EngineService:
             self.ipc_signal_suffix = None
             self.cache_manager_processes = None
 
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            from fastdeploy.cache_manager.v1.cache_utils import get_request_block_hasher
+
+            self._block_hasher = get_request_block_hasher(block_size=self.cfg.cache_config.block_size)
+
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
     def start(self, async_llm_pid=None):
@@ -429,19 +434,20 @@ class EngineService:
                         self.cfg.parallel_config.local_engine_worker_queue_port,
                     )
 
-            if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
-                self.llm_logger.info(
-                    f"Starting engine cache queue server service at {self.cfg.cache_config.local_cache_queue_port}"
-                )
-                self.cache_task_queue = EngineCacheQueue(
-                    address=(self.cfg.master_ip, self.cfg.cache_config.local_cache_queue_port),
-                    authkey=b"cache_queue_service",
-                    is_server=True,
-                    num_client=self.cfg.parallel_config.tensor_parallel_size,
-                    client_id=-1,
-                    local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
-                )
-                self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
+            if not envs.ENABLE_V1_KVCACHE_MANAGER:
+                if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+                    self.llm_logger.info(
+                        f"Starting engine cache queue server service at {self.cfg.cache_config.local_cache_queue_port}"
+                    )
+                    self.cache_task_queue = EngineCacheQueue(
+                        address=(self.cfg.master_ip, self.cfg.cache_config.local_cache_queue_port),
+                        authkey=b"cache_queue_service",
+                        is_server=True,
+                        num_client=self.cfg.parallel_config.tensor_parallel_size,
+                        client_id=-1,
+                        local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
+                    )
+                    self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
 
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
@@ -856,6 +862,10 @@ class EngineService:
                 for task in tasks:
                     task.metrics.engine_get_req_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
+
+                    # cache_manager_v1 set block_hasher to request
+                    if hasattr(self, "_block_hasher"):
+                        task.set_block_hasher(self._block_hasher)
 
                 if self.cfg.scheduler_config.splitwise_role == "decode":
                     # TODO: refine scheduler to remove this limitation

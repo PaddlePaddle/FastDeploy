@@ -82,6 +82,7 @@ else:
 import zmq
 
 from fastdeploy import envs
+from fastdeploy.cache_manager.v1 import CacheController
 from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
@@ -258,6 +259,19 @@ class GPUModelRunner(ModelRunnerBase):
             suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
+
+        # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
+        # To rationalize the allocation of kvcache.
+        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
+        self.dsa_cache = envs.FD_ATTENTION_BACKEND == "DSA_ATTN"
+
+        self.enable_cache_manager_v1 = envs.ENABLE_V1_KVCACHE_MANAGER
+        if self.enable_cache_manager_v1:
+            self.cache_controller = CacheController(
+                fd_config,
+                self.local_rank,
+                self.device_id,
+            )
 
         # for overlap
         self._cached_model_output_data = None
@@ -733,6 +747,21 @@ class GPUModelRunner(ModelRunnerBase):
             logits_info = None
             prefill_tokens = []
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
+                if self.enable_cache_manager_v1:
+                    logger.info(f"prefill task, request id: {request.request_id}")
+                    if len(request.cache_swap_metadata) != 0:
+                        logger.info(f"cache_swap_metadata: {request.cache_swap_metadata}")
+                        self.cache_controller.load_host_to_device(request.cache_swap_metadata)
+                        for meta in request.cache_swap_metadata:
+                            result = meta.async_handler.get_result()
+                            logger.info(f"cache swap result: {result}")
+                    elif len(request.cache_evict_metadata) != 0:
+                        logger.info(f"cache_evict_metadata: {request.cache_evict_metadata}")
+                        self.cache_controller.evict_device_to_host(request.cache_evict_metadata)
+                        for meta in request.cache_evict_metadata:
+                            result = meta.async_handler.get_result()
+                            logger.info(f"cache swap result: {result}")
+
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 self.share_inputs["req_ids"][idx] = str(request.request_id)
                 # rope 3d
@@ -1343,19 +1372,20 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Initialize kv cache
         """
+        if self.enable_cache_manager_v1:
+            self.share_inputs["caches"] = self.cache_controller.initialize_kv_cache(
+                attn_backend=self.attn_backends[0],
+                num_gpu_blocks=self.num_gpu_blocks,
+            )
+            self.cache_kvs_map = self.cache_controller.get_kv_caches()
+            return
+
         # cache_kvs = {}
         max_block_num = self.num_gpu_blocks
 
         # Get kv cache dtype
         cache_type = self.model_config.dtype
         kv_cache_quant_type = None
-
-        # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
-        # To rationalize the allocation of kvcache.
-        from fastdeploy import envs
-
-        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
-        self.dsa_cache = envs.FD_ATTENTION_BACKEND == "DSA_ATTN"
 
         if (
             self.quant_config

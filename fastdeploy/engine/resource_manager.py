@@ -20,7 +20,7 @@ import time
 
 import numpy as np
 
-from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
+from fastdeploy import envs
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import llm_logger
 
@@ -53,7 +53,17 @@ class ResourceManager:
         self.max_num_seqs = max_num_seqs
         self.stop_flags = [True] * max_num_seqs  # flag set to true if the slot has not been taken
         self.enable_prefix_cache = config.cache_config.enable_prefix_caching
-        self.cache_manager = PrefixCacheManager(config, tensor_parallel_size, splitwise_role, local_data_parallel_id)
+        self.enable_cache_manager_v1 = envs.ENABLE_V1_KVCACHE_MANAGER
+        if self.enable_cache_manager_v1:
+            from fastdeploy.cache_manager.v1 import CacheManager
+
+            self.cache_manager = CacheManager(config)
+        else:
+            from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
+
+            self.cache_manager = PrefixCacheManager(
+                config, tensor_parallel_size, splitwise_role, local_data_parallel_id
+            )
         self.tasks_list = [None] * max_num_seqs  # task slots
         self.req_dict = dict()
         # current batch status of the engine

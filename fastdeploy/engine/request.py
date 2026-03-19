@@ -17,13 +17,19 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
-from typing import Any, Dict, Generic, Optional
+from typing import TYPE_CHECKING, Any, Dict, Generic, Optional
 from typing import TypeVar as TypingTypeVar
 from typing import Union
+
+if TYPE_CHECKING:
+    from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata, MatchResult
+
+logger = logging.getLogger("request_debug")
 
 import numpy as np
 from fastapi.responses import JSONResponse
@@ -129,6 +135,8 @@ class Request:
         top_logprobs: Optional[int] = None,
         # from PoolingRequest
         add_special_tokens: Optional[bool] = False,
+        # block hasher for dynamic hash computation
+        block_hasher: Optional[callable] = None,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -142,10 +150,17 @@ class Request:
         self.tools = tools
         # model specific token ids: end of sentence token ids
         self.eos_token_ids = eos_token_ids
-        self.num_cached_tokens = 0
-        self.num_cached_blocks = 0
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
+
+        # prefix caching related
+        self.num_cached_tokens = 0
+        self.num_cached_blocks = 0
+        self._prompt_hashes: list[str] = []
+        self._block_hasher = block_hasher
+        self._match_result: Optional[MatchResult] = None
+        self.cache_swap_metadata: list[CacheSwapMetadata] = []
+        self.cache_evict_metadata: list[CacheSwapMetadata] = []
 
         # speculative method in disaggregate-mode
         self.draft_token_ids = draft_token_ids
@@ -217,6 +232,34 @@ class Request:
         self.top_logprobs = top_logprobs
         # from PoolingRequest
         self.add_special_tokens = add_special_tokens
+
+    @property
+    def prompt_hashes(self) -> list[str]:
+        """
+        Dynamically get prompt_hashes, automatically computing new block hashes.
+
+        When accessing this property, it checks if there are new complete blocks
+        that need hash computation, and if so, computes and appends them.
+        """
+        logger.debug(
+            f"[DEBUG prompt_hashes] request_id={self.request_id}, "
+            f"has_block_hasher={self._block_hasher is not None}, "
+            f"existing_hashes_len={len(self._prompt_hashes)}, "
+            f"prompt_token_ids_len={len(self.prompt_token_ids) if self.prompt_token_ids else 0}"
+        )
+        if self._block_hasher is not None:
+            new_hashes = self._block_hasher(self)
+            if new_hashes:
+                self._prompt_hashes.extend(new_hashes)
+        return self._prompt_hashes
+
+    @property
+    def match_result(self) -> MatchResult:
+        return self._match_result
+
+    def set_block_hasher(self, block_hasher: callable):
+        """Set the block hasher for dynamic hash computation."""
+        self._block_hasher = block_hasher
 
     @classmethod
     def _process_guided_json(cls, r: T):
@@ -412,6 +455,9 @@ class Request:
             # Skip attributes that are known to contain unpicklable objects
             if key == "async_process_futures":
                 filtered_dict[key] = []
+            elif key == "_block_hasher":
+                # Skip _block_hasher (closure function, cannot be pickled)
+                continue
             else:
                 filtered_dict[key] = value
 
