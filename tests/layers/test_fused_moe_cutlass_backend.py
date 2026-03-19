@@ -394,7 +394,7 @@ class TestFusedMoeCutlassBackend:
 
     def test_apply_tp_with_dispatch_and_reduce(self, monkeypatch):
         def fake_get_moe_scores(
-            gate_out, n_group, topk_group, top_k, routed_scaling_factor, bias, renormalize, topk_reduce_func=None
+            gate_out, n_group, topk_group, top_k, routed_scaling_factor, bias, renormalize, **kwargs
         ):
             return gate_out, paddle.to_tensor([[0.6, 0.4]]), paddle.to_tensor([[0, 1]])
 
