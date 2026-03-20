@@ -548,6 +548,25 @@ void MTPStepPaddle(
     const int block_size,
     const int max_draft_tokens);
 
+void UnifiedUpdateModelStatus(const paddle::Tensor& seq_lens_encoder,
+                              const paddle::Tensor& seq_lens_decoder,
+                              const paddle::Tensor& has_running_seqs,
+                              const paddle::Tensor& step_input_ids,
+                              const paddle::Tensor& adaptive_step_input_len,
+                              const paddle::Tensor& step_output_ids,
+                              const paddle::Tensor& step_output_len,
+                              const paddle::Tensor& stop_flags,
+                              const paddle::Tensor& seq_lens_this_time,
+                              const paddle::Tensor& is_paused,
+                              const paddle::Tensor& mask_rollback,
+                              const paddle::Tensor& token_ids_all,
+                              const paddle::Tensor& prompt_lens,
+                              const paddle::Tensor& step_idx,
+                              const paddle::Tensor& end_tokens,
+                              const paddle::Tensor& max_dec_len,
+                              const bool is_naive_mode,
+                              const bool prefill_one_step_stop);
+
 void SpeculateStepPaddle(
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& seq_lens_this_time,
@@ -1009,6 +1028,28 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("enable_softmax_top_k_fused"),
         py::arg("redundant_ep_rank_num_plus_one"),
         "moe export RedundantTopKSelect function");
+
+  m.def("unified_update_model_status",
+        &UnifiedUpdateModelStatus,
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_decoder"),
+        py::arg("has_running_seqs"),
+        py::arg("step_input_ids"),
+        py::arg("adaptive_step_input_len"),
+        py::arg("step_output_ids"),
+        py::arg("step_output_len"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens_this_time"),
+        py::arg("is_paused"),
+        py::arg("mask_rollback"),
+        py::arg("token_ids_all"),
+        py::arg("prompt_lens"),
+        py::arg("step_idx"),
+        py::arg("end_tokens"),
+        py::arg("max_dec_len"),
+        py::arg("is_naive_mode"),
+        py::arg("max_draft_tokens"),
+        "Unified update model status");
 
   m.def("mtp_step_paddle",
         &MTPStepPaddle,
