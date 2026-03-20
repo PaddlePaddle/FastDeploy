@@ -43,14 +43,14 @@ In FastDeploy <= 2.5, the following simplified APIs are provided for compatibili
 
 In FastDeploy >= 2.6, the underlying control-signal communication path is optimized and V1 control APIs are introduced. Compared with the legacy APIs, the V1 APIs provide a more stable execution path, clearer semantics, and more flexible control:
 
-| API | Method | Request body | Semantics |
+| API | Method | Request params | Semantics |
 | --- | --- | --- | --- |
 | `/v1/pause` | `POST` | none | Pause request generation, abort running and inflight requests, reset scheduler state, and pause cache transfer if enabled. |
 | `/v1/resume` | `POST` | none | Resume request generation and cache transfer. |
 | `/v1/is_paused` | `GET` | none | Return `{"is_paused": bool}`. |
-| `/v1/sleep` | `POST` | `{"tags":"weight,kv_cache"}` | Offload selected GPU memory objects. Supported tags are `weight` and `kv_cache`. If omitted, both are used. |
-| `/v1/wakeup` | `POST` | `{"tags":"weight,kv_cache"}` | Reload previously offloaded weights and/or KV cache. On success, the engine resumes automatically. |
-| `/v1/update_weights` | `POST` | `{"version":"...", "rsync_config": {...}}` | Refresh weights in place through the worker control path. This API is intended for remote versioned updates, especially `load_strategy=rsync`. |
+| `/v1/sleep` | `POST` | `?tags=weight,kv_cache` | Offload selected GPU memory objects. Supported tags are `weight` and `kv_cache`. If omitted, both are used. |
+| `/v1/wakeup` | `POST` | `?tags=weight,kv_cache` | Reload previously offloaded weights and/or KV cache. On success, the engine resumes automatically. |
+| `/v1/update_weights` | `POST` | JSON `{"version":"...", "rsync_config": {...}}` | Refresh weights in place through the worker control path. This API is intended for remote versioned updates, especially `load_strategy=rsync`. |
 
 ### Compatibility Notes
 
@@ -85,10 +85,10 @@ Supported tags:
 - `weight`: clear model weights from device memory; if enabled, communication groups and DeepEP buffers may also be released.
 - `kv_cache`: clear KV cache; MTP cache is also cleared when speculative decoding uses MTP.
 
-If the request body is empty, FastDeploy defaults to:
+If the `tags` parameter is omitted, FastDeploy defaults to:
 
-```json
-{"tags": "weight,kv_cache"}
+```bash
+/v1/sleep?tags=weight,kv_cache
 ```
 
 In the current implementation, `sleep` automatically performs a `pause` first. New integrations should not rely on this implicit behavior.
@@ -133,27 +133,51 @@ If GPU memory also needs to be reclaimed between rollout rounds, the `sleep` / `
 
 ## Example Requests
 
+### Basic APIs
+
 Pause the engine:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/pause
 ```
 
-Offload both weights and KV cache:
+Resume the engine:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/v1/sleep \
-  -H "Content-Type: application/json" \
-  -d '{"tags":"weight,kv_cache"}'
+curl -X POST http://127.0.0.1:8000/v1/resume
 ```
 
-Reload only weights:
+### Sleep / Wakeup APIs
+
+**Offload weights and KV cache**
 
 ```bash
-curl -X POST http://127.0.0.1:8000/v1/wakeup \
-  -H "Content-Type: application/json" \
-  -d '{"tags":"weight"}'
+# Offload both weights and KV cache
+curl -X POST "http://127.0.0.1:8000/v1/sleep?tags=weight,kv_cache"
+
+# Offload only weights
+curl -X POST "http://127.0.0.1:8000/v1/sleep?tags=weight"
+
+# Omit parameter, defaults to both
+curl -X POST "http://127.0.0.1:8000/v1/sleep"
 ```
+
+**Restore weights and KV cache**
+
+```bash
+# Restore both weights and KV cache
+curl -X POST "http://127.0.0.1:8000/v1/wakeup?tags=weight,kv_cache"
+
+# Restore only weights
+curl -X POST "http://127.0.0.1:8000/v1/wakeup?tags=weight"
+
+# Omit parameter, defaults to both
+curl -X POST "http://127.0.0.1:8000/v1/wakeup"
+```
+
+**Note**: When `use_cudagraph=True`, KV cache must be restored before weights. This means `/v1/wakeup` with the `kv_cache` tag must be called before calling `/v1/wakeup` with the `weight` tag. If weights are restored without KV cache, an error will be raised. It is recommended to keep the `tags` parameter consistent between `/v1/sleep` and `/v1/wakeup`.
+
+### Update Weights API
 
 Refresh to a new remotely published version:
 
@@ -215,14 +239,10 @@ This workflow is suitable when the rollout service stays resident, but GPU memor
 curl -X POST http://127.0.0.1:8000/v1/pause
 
 # Offload both weights and KV cache
-curl -X POST http://127.0.0.1:8000/v1/sleep \
-  -H "Content-Type: application/json" \
-  -d '{"tags":"weight,kv_cache"}'
+curl -X POST "http://127.0.0.1:8000/v1/sleep?tags=weight,kv_cache"
 
 # Restore both weights and KV cache after training completes
-curl -X POST http://127.0.0.1:8000/v1/wakeup \
-  -H "Content-Type: application/json" \
-  -d '{"tags":"weight,kv_cache"}'
+curl -X POST "http://127.0.0.1:8000/v1/wakeup?tags=weight,kv_cache"
 
 # Optional: explicitly resume if required by the integration
 curl -X POST http://127.0.0.1:8000/v1/resume

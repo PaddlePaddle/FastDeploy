@@ -43,14 +43,14 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 在 FastDeploy >= 2.6 版本中，底层控制信号通信链路经过优化，并引入了 V1 控制接口。相较于旧版接口，V1 接口在通信与执行链路上更稳定，语义更清晰，同时提供了更灵活的控制方式，包括以下接口：
 
-| 接口 | 方法 | 请求体 | 语义 |
+| 接口 | 方法 | 请求参数 | 语义 |
 | --- | --- | --- | --- |
 | `/v1/pause` | `POST` | 无 | 暂停请求生成，中断 running/inflight 请求，重置调度器，并在开启 cache transfer 时暂停 cache transfer。 |
 | `/v1/resume` | `POST` | 无 | 恢复请求生成和 cache transfer。 |
 | `/v1/is_paused` | `GET` | 无 | 返回 `{"is_paused": bool}`。 |
-| `/v1/sleep` | `POST` | `{"tags":"weight,kv_cache"}` | 卸载指定 GPU 内存对象。支持 `weight` 与 `kv_cache`；不传时默认同时处理两者。 |
-| `/v1/wakeup` | `POST` | `{"tags":"weight,kv_cache"}` | 重新加载之前被卸载的权重和/或 KV Cache。成功后会自动 `resume`。 |
-| `/v1/update_weights` | `POST` | `{"version":"...", "rsync_config": {...}}` | 通过 worker 控制链路原地刷新模型权重。该接口主要面向 `load_strategy=rsync` 的远端版本更新。 |
+| `/v1/sleep` | `POST` | `?tags=weight,kv_cache` | 卸载指定 GPU 内存对象。支持 `weight` 与 `kv_cache`；不传时默认同时处理两者。 |
+| `/v1/wakeup` | `POST` | `?tags=weight,kv_cache` | 重新加载之前被卸载的权重和/或 KV Cache。成功后会自动 `resume`。 |
+| `/v1/update_weights` | `POST` | JSON `{"version":"...", "rsync_config": {...}}` | 通过 worker 控制链路原地刷新模型权重。该接口主要面向 `load_strategy=rsync` 的远端版本更新。 |
 
 ### 兼容性说明
 
@@ -84,10 +84,10 @@ python -m fastdeploy.entrypoints.openai.api_server \
 - `weight`：清除设备上的模型权重；如果开启了相关配置，还可能一并释放通信组和 DeepEP buffer。
 - `kv_cache`：清除 KV Cache；如果投机解码采用 MTP，还会同步清理 MTP cache。
 
-如果请求体为空，FastDeploy 默认等价于：
+如果不传 `tags` 参数，FastDeploy 默认等价于：
 
-```json
-{"tags": "weight,kv_cache"}
+```bash
+/v1/sleep?tags=weight,kv_cache
 ```
 
 当前实现中，`sleep` 会自动先执行一次 `pause`。但新的接入方不应长期依赖这一隐式行为。
@@ -132,27 +132,51 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 ## 请求示例
 
+### 基础接口
+
 暂停引擎：
 
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/pause
 ```
 
-同时卸载权重和 KV Cache：
+恢复引擎：
 
 ```bash
-curl -X POST http://127.0.0.1:8000/v1/sleep \
-  -H "Content-Type: application/json" \
-  -d '{"tags":"weight,kv_cache"}'
+curl -X POST http://127.0.0.1:8000/v1/resume
 ```
 
-只恢复权重：
+### Sleep / Wakeup 接口
+
+**卸载权重和 KV Cache**
 
 ```bash
-curl -X POST http://127.0.0.1:8000/v1/wakeup \
-  -H "Content-Type: application/json" \
-  -d '{"tags":"weight"}'
+# 同时卸载权重和 KV Cache
+curl -X POST "http://127.0.0.1:8000/v1/sleep?tags=weight,kv_cache"
+
+# 只卸载权重
+curl -X POST "http://127.0.0.1:8000/v1/sleep?tags=weight"
+
+# 不传参数，默认同时卸载两者
+curl -X POST "http://127.0.0.1:8000/v1/sleep"
 ```
+
+**恢复权重和 KV Cache**
+
+```bash
+# 恢复权重和 KV Cache
+curl -X POST "http://127.0.0.1:8000/v1/wakeup?tags=weight,kv_cache"
+
+# 只恢复权重
+curl -X POST "http://127.0.0.1:8000/v1/wakeup?tags=weight"
+
+# 不传参数，默认同时恢复两者
+curl -X POST "http://127.0.0.1:8000/v1/wakeup"
+```
+
+**注意**：当 `use_cudagraph=True` 时，必须先恢复 KV Cache 再恢复权重。这意味着调用 `/v1/wakeup` 时如果只包含 `weight` tag 而不包含 `kv_cache`，会报错。建议保持 sleep 和 wakeup 的 tags 参数一致。
+
+### Update Weights 接口
 
 切换到远端发布的新版本权重：
 
@@ -214,14 +238,10 @@ rollout_model = RolloutModel(rollout_config)
 curl -X POST http://127.0.0.1:8000/v1/pause
 
 # 卸载权重和 KV Cache
-curl -X POST http://127.0.0.1:8000/v1/sleep \
-  -H "Content-Type: application/json" \
-  -d '{"tags":"weight,kv_cache"}'
+curl -X POST "http://127.0.0.1:8000/v1/sleep?tags=weight,kv_cache"
 
 # 训练完成后恢复权重和 KV Cache
-curl -X POST http://127.0.0.1:8000/v1/wakeup \
-  -H "Content-Type: application/json" \
-  -d '{"tags":"weight,kv_cache"}'
+curl -X POST "http://127.0.0.1:8000/v1/wakeup?tags=weight,kv_cache"
 
 # 可选：如业务侧需要显式恢复，可手动调用
 curl -X POST http://127.0.0.1:8000/v1/resume

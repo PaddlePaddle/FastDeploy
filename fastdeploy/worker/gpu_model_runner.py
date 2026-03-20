@@ -54,6 +54,7 @@ from fastdeploy.model_executor.layers.sample.sampler import Sampler, Speculative
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.ops.gpu import get_stop, set_stop
 from fastdeploy.platforms import current_platform
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.utils import print_gpu_memory_use
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
 
@@ -2886,6 +2887,13 @@ class GPUModelRunner(ModelRunnerBase):
         if not self.is_sleeping:
             logger.info("GPU model runner is not sleeping, no need to wakeup!")
             return
+
+        if tags == "weight" and self.use_cudagraph and self.is_kvcache_sleeping:
+            raise RuntimeError(
+                "Waking up [weight] alone is not supported when CUDA Graph is enabled, "
+                "as recapturing the graph requires the KV cache to be rebuilt first. "
+                "Please wake up [kv_cache] first."
+            )
 
         logger.info(f">>> start reloading memory, tags: {tags}")
         start_time = time.perf_counter()

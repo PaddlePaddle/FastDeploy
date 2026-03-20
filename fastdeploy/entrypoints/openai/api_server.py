@@ -408,7 +408,12 @@ async def is_paused(request: Request) -> Response:
 @app.post("/v1/sleep")
 async def sleep(request: Request) -> Response:
     request_id = f"control-{uuid.uuid4()}"
-    request_data = await request.json() if await request.body() else {}
+    # Support both JSON body and query parameter
+    if await request.body():
+        request_data = await request.json()
+    else:
+        # Extract query params
+        request_data = dict(request.query_params)
 
     try:
         control_request = ControlRequest(request_id, "sleep", request_data)
@@ -422,7 +427,12 @@ async def sleep(request: Request) -> Response:
 @app.post("/v1/wakeup")
 async def wakeup(request: Request) -> Response:
     request_id = f"control-{uuid.uuid4()}"
-    request_data = await request.json() if await request.body() else {}
+    # Support both JSON body and query parameter
+    if await request.body():
+        request_data = await request.json()
+    else:
+        # Extract query params
+        request_data = dict(request.query_params)
 
     try:
         control_request = ControlRequest(request_id, "wakeup", request_data)

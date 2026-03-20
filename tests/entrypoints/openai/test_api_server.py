@@ -570,17 +570,59 @@ async def test_sleep_wakeup_and_v1_clear_load_weight_routes():
     assert wakeup_control_request.method == "wakeup"
     assert wakeup_control_request.args == {"tags": "weight,kv_cache"}
 
-    invalid_req = MagicMock()
-    invalid_req.body = AsyncMock(return_value=b'{"tags":["weight"]}')
-    invalid_req.json = AsyncMock(return_value={"tags": ["weight"]})
-    invalid_resp = await api_server.sleep(invalid_req)
-    assert invalid_resp.status_code == 400
+    passthrough_req = MagicMock()
+    passthrough_req.body = AsyncMock(return_value=b'{"tags":["weight"]}')
+    passthrough_req.json = AsyncMock(return_value={"tags": ["weight"]})
+    passthrough_resp = await api_server.sleep(passthrough_req)
+    assert passthrough_resp.status_code == 200
+    passthrough_control_request = api_server.app.state.engine_client.run_control_method.await_args_list[2].args[0]
+    assert passthrough_control_request.args == {"tags": ["weight"]}
 
     with patch.object(api_server.envs, "FD_ENABLE_V1_UPDATE_WEIGHTS", True):
         clear_resp = api_server.clear_load_weight(MagicMock())
     assert clear_resp.status_code == 200
     sync_control_request = api_server.app.state.engine_client.run_control_method_sync.call_args.args[0]
     assert sync_control_request.method == "sleep"
+
+    api_server.app.state.engine_client.run_control_method_sync.reset_mock()
+    with patch.object(api_server.envs, "FD_ENABLE_V1_UPDATE_WEIGHTS", True):
+        update_resp = api_server.update_model_weight(MagicMock())
+    assert update_resp.status_code == 200
+    sync_control_request = api_server.app.state.engine_client.run_control_method_sync.call_args.args[0]
+    assert sync_control_request.method == "wakeup"
+
+
+@pytest.mark.asyncio
+async def test_update_weights_route_validation():
+    args = _build_args(dynamic_load_weight=True)
+    api_server = _reload_api_server(args)
+    mock_control_response = MagicMock()
+    mock_control_response.to_api_json_response.return_value = api_server.JSONResponse(
+        content={"ok": True}, status_code=200
+    )
+    api_server.app.state.engine_client = MagicMock()
+    api_server.app.state.engine_client.run_control_method = AsyncMock(return_value=mock_control_response)
+
+    valid_req = MagicMock()
+    valid_req.body = AsyncMock(return_value=b'{"version":"v2","rsync_config":{"etcd_server":"127.0.0.1"}}')
+    valid_req.json = AsyncMock(return_value={"version": "v2", "rsync_config": {"etcd_server": "127.0.0.1"}})
+    valid_resp = await api_server.update_weights(valid_req)
+    assert valid_resp.status_code == 200
+    control_request = api_server.app.state.engine_client.run_control_method.await_args.args[0]
+    assert control_request.method == "update_weights"
+    assert control_request.args == {"version": "v2", "rsync_config": {"etcd_server": "127.0.0.1"}}
+
+    invalid_version_req = MagicMock()
+    invalid_version_req.body = AsyncMock(return_value=b'{"version":1}')
+    invalid_version_req.json = AsyncMock(return_value={"version": 1})
+    invalid_version_resp = await api_server.update_weights(invalid_version_req)
+    assert invalid_version_resp.status_code == 400
+
+    invalid_rsync_req = MagicMock()
+    invalid_rsync_req.body = AsyncMock(return_value=b'{"rsync_config":{"user":"u"}}')
+    invalid_rsync_req.json = AsyncMock(return_value={"rsync_config": {"user": "u"}})
+    invalid_rsync_resp = await api_server.update_weights(invalid_rsync_req)
+    assert invalid_rsync_resp.status_code == 400
 
 
 @pytest.mark.asyncio

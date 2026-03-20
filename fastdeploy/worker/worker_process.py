@@ -611,7 +611,6 @@ class PaddleDisWorkerProc:
             # Check if worker is paused (V1 update weights flow)
             if (
                 self.fd_config.load_config.dynamic_load_weight
-                and envs.FD_ENABLE_V1_UPDATE_WEIGHTS
                 and hasattr(self.worker.model_runner, "is_sleeping")
                 and self.worker.model_runner.is_sleeping
             ):
