@@ -619,14 +619,28 @@ class PrefixCacheManager:
         )
 
         normalized = []
+        invalid_cache_ids = []
         for item in cache_ids:
             if isinstance(item, list):
                 for cid in item:
-                    if cid is not None and cid >= 0:
+                    if cid is not None and 0 <= cid < self.total_cache_ids:
                         normalized.append(cid)
+                    elif cid is not None and cid >= 0:
+                        invalid_cache_ids.append(cid)
             else:
-                if item is not None and item >= 0:
+                if item is not None and 0 <= item < self.total_cache_ids:
                     normalized.append(item)
+                elif item is not None and item >= 0:
+                    invalid_cache_ids.append(item)
+
+        if invalid_cache_ids:
+            unique_invalid_ids = list(dict.fromkeys(invalid_cache_ids))
+            logger.error(
+                "req_id:%s detected out-of-range cache_ids in head-wise recycle path, total_cache_ids=%d, invalid_ids(sample)=%s",
+                req_id,
+                self.total_cache_ids,
+                unique_invalid_ids[:16],
+            )
 
         unique_normalized = list(dict.fromkeys(normalized))
         if len(unique_normalized) != len(normalized):
@@ -642,7 +656,12 @@ class PrefixCacheManager:
                 duplicate_ids[:16],
             )
         normalized = unique_normalized
-        logger.debug(f"req_id:{req_id} recycle head-wise cache_ids after normalization: {normalized}")
+        logger.debug(
+            "req_id:%s recycle head-wise cache_ids after normalization: total_ids=%d, sample=%s",
+            req_id,
+            len(normalized),
+            normalized[:16],
+        )
 
         if not normalized:
             logger.debug("No valid cache_ids received, skip recycling.")
