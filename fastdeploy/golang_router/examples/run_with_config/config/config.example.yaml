@@ -7,7 +7,7 @@ server:
 scheduler:
   policy: "power_of_two"
   prefill-policy: "cache_aware"
-  decode-policy: "fd_metrics_score"
+  decode-policy: "request_num"
   eviction-interval-secs: 60
   balance-abs-threshold: 1
   balance-rel-threshold: 0.2

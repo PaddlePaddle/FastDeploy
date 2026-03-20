@@ -1,4 +1,4 @@
-name: CI_XPU
+name: ILUVATAR-CI
 
 on:
   pull_request:
@@ -12,9 +12,9 @@ concurrency:
 
 jobs:
   cancel:
-    name: Cancel CI_XPU for ${{ github.event.pull_request.number }}
+    name: Cancel ILUVATAR-CI for ${{ github.event.pull_request.number }}
     runs-on: ubuntu-latest
     steps:
-      - name: Cancel CI_XPU
+      - name: Cancel ILUVATAR-CI
         run: |
           exit 0

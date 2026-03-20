@@ -17,7 +17,6 @@ Focused tests to increase coverage of base.py
 Tests actual code paths that were previously uncovered.
 """
 
-import inspect
 import json
 import os
 import shutil
@@ -960,6 +959,7 @@ class TestAttentionForwardEdgeCases:
         num_heads: int | None = None,
         num_kv_heads: int | None = None,
         expected_seq_len: int | None = None,
+        tp_size: int = 1,
     ):
         from fastdeploy.model_executor.models.paddleformers.base import (
             fastdeploy_append_attention_forward,
@@ -973,6 +973,9 @@ class TestAttentionForwardEdgeCases:
 
         mock_attention = SimpleNamespace(
             forward=Mock(side_effect=fake_forward),
+        )
+        mock_attention.fd_config = SimpleNamespace(
+            parallel_config=SimpleNamespace(tensor_parallel_size=tp_size),
         )
         if num_heads is not None:
             mock_attention.num_heads = num_heads
@@ -1070,7 +1073,7 @@ class TestAttentionForwardEdgeCases:
         key = paddle.to_tensor((np.arange(20, dtype=np.float32) + 100).reshape([1, 2, 5, 2]))
         value = paddle.to_tensor((np.arange(20, dtype=np.float32) + 200).reshape([1, 2, 5, 2]))
 
-        qkv = self._run_attention(query, key, value, num_heads=8, num_kv_heads=4, expected_seq_len=5)
+        qkv = self._run_attention(query, key, value, num_heads=8, num_kv_heads=4, expected_seq_len=5, tp_size=2)
         self._assert_qkv_concat_matches_known_layout(qkv, query, key, value)
 
     def test_gqa_shd_layout_detection(self):
@@ -1135,9 +1138,10 @@ class TestRecursiveReplaceAdvanced:
     """Test recursive_replace advanced cases to cover more lines."""
 
     def test_fused_qkv_replacement(self, mock_fd_config):
-        """Test that qkv_proj with fused QKV uses ColumnParallelLinear (lines 330-337)."""
+        """Test that qkv_proj with fused QKV uses PaddleFormersQKVParallelLinear."""
         from fastdeploy.model_executor.models.paddleformers.base import (
             PaddleFormersModelBase,
+            PaddleFormersQKVParallelLinear,
         )
 
         fd_config, _ = mock_fd_config
@@ -1172,8 +1176,8 @@ class TestRecursiveReplaceAdvanced:
 
             model.recursive_replace()
 
-            # qkv_proj should become ColumnParallelLinear
-            assert isinstance(model.model.qkv_proj, ColumnParallelLinear)
+            # qkv_proj should become PaddleFormersQKVParallelLinear
+            assert isinstance(model.model.qkv_proj, PaddleFormersQKVParallelLinear)
 
     def test_fused_ffn_replacement(self, mock_fd_config):
         """Test that up_gate_proj with fused FFN uses MergedColumnParallelLinear (lines 340-347)."""
@@ -1565,8 +1569,8 @@ class TestGetTPPlan:
 class TestFusionSettings:
     """Test __init__ fusion settings to cover lines 201-202, 206-207, 214-216."""
 
-    def test_tp_greater_than_1_disables_fused_qkv(self, mock_fd_config_tp2):
-        """Test that TP>1 disables fused QKV (lines 201-202)."""
+    def test_tp_greater_than_1_keeps_fused_qkv_for_qwen(self, mock_fd_config_tp2):
+        """Test that Qwen keeps fused QKV enabled under TP>1."""
         from fastdeploy.model_executor.models.paddleformers.base import (
             PaddleFormersModelBase,
         )
@@ -1612,8 +1616,9 @@ class TestFusionSettings:
 
             model = TestModel(fd_config)
 
-            # With TP=2, fused QKV should be disabled
-            assert model._use_fused_qkv is False
+            # With TP=2 and qwen model type, fused QKV stays enabled.
+            assert model._use_fused_qkv is True
+            assert mock_pf_config.fuse_attention_qkv is True
 
     def test_qwen3_tp1_enables_fused_qkv_and_ffn(self, mock_fd_config_qwen3):
         """Test that Qwen3 with TP=1 enables fused QKV and FFN (lines 206-207, 214-216)."""
@@ -1962,7 +1967,7 @@ class TestLoadWeights:
         self.process_weights_patcher.stop()
 
     def test_load_fused_qkv_weights(self, mock_fd_config):
-        """Test loading and fusing Q/K/V weights (lines 635-741)."""
+        """Test split q/k/v shards are routed to qkv_proj with shard ids."""
         from fastdeploy.model_executor.models.paddleformers.base import (
             PaddleFormersModelBase,
         )
@@ -2027,15 +2032,17 @@ class TestLoadWeights:
             # Run load_weights
             model.load_weights(weights)
 
-            # Verification
+            # Verification: split shards are forwarded via shard_id.
             assert qkv_param.weight_loader.called
-            call_args = qkv_param.weight_loader.call_args
-            assert call_args is not None
-            fused_weight = call_args[0][1]
-            assert sorted(fused_weight.shape) == [4096, 12288]
+            calls = qkv_param.weight_loader.call_args_list
+            assert len(calls) == 3
+            assert [c.args[2] for c in calls] == ["q", "k", "v"]
+            assert list(calls[0].args[1].shape) == [4096, 4096]
+            assert list(calls[1].args[1].shape) == [4096, 4096]
+            assert list(calls[2].args[1].shape) == [4096, 4096]
 
     def test_load_fused_qkv_weights_torch_writeback_shape(self, mock_fd_config):
-        """Torch model_format should write fused qkv weight in storage layout [out, in]."""
+        """Torch model_format should route split q/k/v shards without in-test fusion."""
         from fastdeploy.model_executor.models.paddleformers.base import (
             PaddleFormersModelBase,
         )
@@ -2086,11 +2093,15 @@ class TestLoadWeights:
             model.load_weights(weights)
 
             assert qkv_param.weight_loader.called
-            fused_weight_for_load = qkv_param.weight_loader.call_args[0][1]
-            assert list(fused_weight_for_load.shape) == [6144, 4096]
+            calls = qkv_param.weight_loader.call_args_list
+            assert len(calls) == 3
+            assert [c.args[2] for c in calls] == ["q", "k", "v"]
+            assert list(calls[0].args[1].shape) == [4096, 4096]
+            assert list(calls[1].args[1].shape) == [1024, 4096]
+            assert list(calls[2].args[1].shape) == [1024, 4096]
 
-    def test_load_fused_qkv_weights_strict_torch_mismatched_source_raises(self, mock_fd_config):
-        """Strict torch policy should raise when source tensors are in paddle layout."""
+    def test_load_fused_qkv_weights_torch_accepts_mismatched_source_shapes(self, mock_fd_config):
+        """Split q/k/v routing remains shape-agnostic at this unit-test layer."""
         from fastdeploy.model_executor.models.paddleformers.base import (
             PaddleFormersModelBase,
         )
@@ -2141,16 +2152,16 @@ class TestLoadWeights:
                 ("model.layers.0.self_attn.v_proj.weight", v_weight),
             ]
 
-            load_weights_src = inspect.getsource(PaddleFormersModelBase.load_weights)
-            if "requires torch layout" in load_weights_src:
-                with pytest.raises(ValueError, match="model_format=torch requires torch layout"):
-                    model.load_weights(weights)
-            else:
-                model.load_weights(weights)
-                assert qkv_param.weight_loader.called
+            model.load_weights(weights)
+            calls = qkv_param.weight_loader.call_args_list
+            assert len(calls) == 3
+            assert [c.args[2] for c in calls] == ["q", "k", "v"]
+            assert list(calls[0].args[1].shape) == [4096, 4096]
+            assert list(calls[1].args[1].shape) == [4096, 1024]
+            assert list(calls[2].args[1].shape) == [4096, 1024]
 
-    def test_load_fused_qkv_weights_unsupported_model_format_raises(self, mock_fd_config):
-        """Unsupported model_format should raise in fused QKV path."""
+    def test_load_fused_qkv_weights_split_path_ignores_model_format(self, mock_fd_config):
+        """Split q/k/v routing should not depend on model_format value."""
         from fastdeploy.model_executor.models.paddleformers.base import (
             PaddleFormersModelBase,
         )
@@ -2201,16 +2212,13 @@ class TestLoadWeights:
                 ("model.layers.0.self_attn.v_proj.weight", v_weight),
             ]
 
-            load_weights_src = inspect.getsource(PaddleFormersModelBase.load_weights)
-            if "Unsupported model_format" in load_weights_src:
-                with pytest.raises(ValueError, match="Unsupported model_format"):
-                    model.load_weights(weights)
-            else:
-                model.load_weights(weights)
-                assert qkv_param.weight_loader.called
+            model.load_weights(weights)
+            calls = qkv_param.weight_loader.call_args_list
+            assert len(calls) == 3
+            assert [c.args[2] for c in calls] == ["q", "k", "v"]
 
     def test_load_fused_qkv_biases(self, mock_fd_config):
-        """QKV bias fusion should load q/k/v biases into qkv_proj.bias."""
+        """QKV bias shards should be routed to qkv_proj.bias with shard ids."""
         from fastdeploy.model_executor.models.paddleformers.base import (
             PaddleFormersModelBase,
         )
@@ -2261,11 +2269,13 @@ class TestLoadWeights:
             ]
 
             model.load_weights(weights)
-            if qkv_bias_param.weight_loader.called:
-                fused_bias = qkv_bias_param.weight_loader.call_args[0][1]
-                assert list(fused_bias.shape) == [6144]
-            else:
-                pytest.skip("Current load_weights implementation does not fuse qkv bias in this branch")
+            assert qkv_bias_param.weight_loader.called
+            calls = qkv_bias_param.weight_loader.call_args_list
+            assert len(calls) == 3
+            assert [c.args[2] for c in calls] == ["q", "k", "v"]
+            assert list(calls[0].args[1].shape) == [4096]
+            assert list(calls[1].args[1].shape) == [1024]
+            assert list(calls[2].args[1].shape) == [1024]
 
     def test_load_fused_ffn_weights(self, mock_fd_config):
         """Test loading and fusing FFN weights (lines 619-624 + stacked mapping logic)."""
@@ -2370,6 +2380,96 @@ class TestLoadWeights:
             # Verify set_value called on lm_head
             assert model.lm_head.linear.weight.set_value.called
 
+    def test_load_weights_qkv_direct_is_skipped_when_split_exists(self, mock_fd_config):
+        """When split q/k/v exists, direct qkv_proj.* should be skipped for that layer."""
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
+
+        fd_config, _ = mock_fd_config
+
+        class TestModel(PaddleFormersModelBase):
+            pass
+
+        def mock_layer_init(self, *args, **kwargs):
+            self._sub_layers = {}
+            self._parameters = {}
+            self._buffers = {}
+            self._loaddict_holder = {}
+
+        with (
+            patch.object(nn.Layer, "__init__", mock_layer_init),
+            patch.object(TestModel, "create_attention_instances", return_value={}),
+        ):
+            model = TestModel(fd_config)
+            model._use_fused_qkv = True
+            model._use_fused_ffn = False
+
+            qkv_param = MagicMock(spec=paddle.Tensor)
+            qkv_param.weight_loader = Mock()
+            params_dict = {"model.layers.0.self_attn.qkv_proj.weight": qkv_param}
+            model.named_parameters = Mock(return_value=params_dict.items())
+            model.named_sublayers = Mock(return_value={}.items())
+
+            weights = [
+                ("model.layers.0.self_attn.q_proj.weight", paddle.randn([4096, 4096])),
+                ("model.layers.0.self_attn.k_proj.weight", paddle.randn([4096, 4096])),
+                ("model.layers.0.self_attn.v_proj.weight", paddle.randn([4096, 4096])),
+                ("model.layers.0.self_attn.qkv_proj.weight", paddle.randn([4096, 12288])),
+            ]
+            model.load_weights(weights)
+
+            # Only split q/k/v shards should be loaded for this layer.
+            assert qkv_param.weight_loader.call_count == 3
+            assert [c.args[2] for c in qkv_param.weight_loader.call_args_list] == ["q", "k", "v"]
+
+    def test_load_weights_direct_qkv_not_found_and_tie_warning(self, mock_fd_config):
+        """Cover direct qkv not-found warning and tie_word_embeddings warning path."""
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
+
+        fd_config, _ = mock_fd_config
+
+        class TestModel(PaddleFormersModelBase):
+            pass
+
+        def mock_layer_init(self, *args, **kwargs):
+            self._sub_layers = {}
+            self._parameters = {}
+            self._buffers = {}
+            self._loaddict_holder = {}
+
+        with (
+            patch.object(nn.Layer, "__init__", mock_layer_init),
+            patch.object(TestModel, "create_attention_instances", return_value={}),
+            patch("fastdeploy.model_executor.models.paddleformers.base.logger.warning") as mock_warning,
+        ):
+            model = TestModel(fd_config)
+            model._use_fused_qkv = True
+            model._use_fused_ffn = False
+            model.tie_word_embeddings = True
+            model.lm_head = MagicMock()
+            model.lm_head.linear.weight.set_value = Mock()
+
+            model.model = MagicMock()
+            # Missing embeddings.weight to hit warning branch.
+            model.model.get_input_embeddings.return_value = SimpleNamespace()
+
+            model.named_parameters = Mock(return_value=[].__iter__())
+            model.named_sublayers = Mock(return_value=[].__iter__())
+
+            weights = [
+                ("model.layers.0.self_attn.qkv_proj.weight", paddle.randn([4096, 12288])),
+            ]
+
+            model.load_weights(weights)
+
+            warning_texts = [str(c.args[0]) for c in mock_warning.call_args_list if c.args]
+            assert any("Direct fused qkv param not found" in msg for msg in warning_texts)
+            assert any("tie_word_embeddings=True" in msg for msg in warning_texts)
+            assert not model.lm_head.linear.weight.set_value.called
+
 
 class TestLinearNoWeight:
     """Test Linear layer replacement when weight is None (lines 321-322)."""
@@ -2425,6 +2525,112 @@ class TestLinearNoWeight:
             from fastdeploy.model_executor.layers.linear import ColumnParallelLinear
 
             assert isinstance(model.model.q_proj, ColumnParallelLinear)
+
+
+class TestPaddleFormersQKVParallelLinearUnit:
+    """Unit tests for PaddleFormersQKVParallelLinear helper methods."""
+
+    @staticmethod
+    def _build_layer(model_format: str = "paddle"):
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersQKVParallelLinear,
+        )
+
+        layer = object.__new__(PaddleFormersQKVParallelLinear)
+        layer._pending_local_shards = {}
+        layer._model_format = model_format
+        layer.tp_size = 1
+        layer.local_rank = 0
+        layer.num_heads = 4
+        layer.kv_num_heads = 2
+        layer.num_heads_per_rank = 4
+        layer.kv_num_heads_per_rank = 2
+        layer.num_kv_head_replicas = 1
+        layer.head_dim = 2
+        layer.fd_config = SimpleNamespace(load_config=SimpleNamespace(is_pre_sharded=False))
+        return layer
+
+    def test_extract_local_shard_with_transpose_and_tp_slice(self):
+        layer = self._build_layer()
+        layer.tp_size = 2
+        layer.local_rank = 1
+        layer.num_heads_per_rank = 2
+        layer.kv_num_heads_per_rank = 1
+        layer.head_dim = 2
+
+        param = SimpleNamespace(output_dim=True, shape=[4, 8], weight_need_transpose=True)
+        loaded = paddle.arange(32, dtype="float32").reshape([8, 4])  # [out, in], transpose -> [in, out]
+
+        q_local = layer._extract_local_shard(param, loaded, "q")
+        assert list(q_local.shape) == [4, 4]
+
+        expected = loaded.transpose([1, 0])[:, 4:8]
+        assert bool(paddle.allclose(q_local, expected))
+
+    def test_to_hidden_major_and_pack_paths(self):
+        layer = self._build_layer()
+        # q_out=8, kv_out=4 for current head setup.
+        q = paddle.randn([8, 3], dtype="float32")  # [out, hidden] -> should transpose
+        k = paddle.randn([4, 3], dtype="float32")
+        v = paddle.randn([4, 3], dtype="float32")
+
+        packed_out_major = layer._pack_pf_interleaved_local(q, k, v, output_dim=False)
+        assert list(packed_out_major.shape) == [16, 3]
+
+        with pytest.raises(ValueError, match="Expected 2D"):
+            layer._to_hidden_major(paddle.randn([2], dtype="float32"), 2, "q")
+        with pytest.raises(ValueError, match="Cannot normalize"):
+            layer._to_hidden_major(paddle.randn([3, 5], dtype="float32"), 4, "q")
+
+    def test_split_pf_fused_qkv_and_weight_loader_pending_finalize(self):
+        layer = self._build_layer(model_format="paddle")
+
+        class DummyParam:
+            def __init__(self, shape, output_dim=True):
+                self.shape = shape
+                self.output_dim = output_dim
+                self.weight_need_transpose = False
+                self.dtype = paddle.float32
+                self._initialized = False
+                self.saved = None
+
+            def _is_initialized(self):
+                return self._initialized
+
+            def initialize(self):
+                self._initialized = True
+
+            def set_value(self, value):
+                self.saved = value
+
+        # split fused weight path
+        fused_weight = paddle.randn([3, 16], dtype="float32")
+        q, k, v = layer._split_pf_fused_qkv(fused_weight, is_bias=False)
+        assert list(q.shape) == [3, 8]
+        assert list(k.shape) == [3, 4]
+        assert list(v.shape) == [3, 4]
+
+        fused_bias = paddle.randn([16], dtype="float32")
+        qb, kb, vb = layer._split_pf_fused_qkv(fused_bias, is_bias=True)
+        assert list(qb.shape) == [8]
+        assert list(kb.shape) == [4]
+        assert list(vb.shape) == [4]
+
+        # pending -> finalize path
+        param = DummyParam(shape=[3, 16], output_dim=True)
+        layer.weight_loader(param, q, "q")
+        assert bool(getattr(param, "_pf_qkv_pending", False))
+        layer.weight_loader(param, k, "k")
+        assert bool(getattr(param, "_pf_qkv_pending", False))
+        layer.weight_loader(param, v, "v")
+        assert not bool(getattr(param, "_pf_qkv_pending", False))
+        assert param.saved is not None
+        assert list(param.saved.shape) == [3, 16]
+
+        # direct fused qkv in non-paddle format should be rejected.
+        layer_torch = self._build_layer(model_format="torch")
+        with pytest.raises(ValueError, match="only supported for model_format='paddle'"):
+            layer_torch.weight_loader(param, fused_weight, None)
 
 
 if __name__ == "__main__":

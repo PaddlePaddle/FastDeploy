@@ -80,7 +80,6 @@ jobs:
       CI_DOCKER_IMAGE_NAME: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate-precheck
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
 
-
   build_sm8090:
     name: BUILD_SM8090
     needs: [clone, ci_image_build]
@@ -93,12 +92,25 @@ jobs:
       FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
       PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
       PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
-
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   unittest_coverage:
     name: Run FastDeploy Unit Tests and Coverage
     needs: [clone,build_sm8090,ci_image_build]
     uses: ./.github/workflows/_unit_test_coverage.yml
+    with:
+      DOCKER_IMAGE: ${{ needs.ci_image_build.outputs.docker_name_precheck }}
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  four_cards_test:
+    name: Run Four Cards Tests
+    needs: [clone,build_sm8090,ci_image_build]
+    uses: ./.github/workflows/_gpu_4cards_case_test.yml
     with:
       DOCKER_IMAGE: ${{ needs.ci_image_build.outputs.docker_name_precheck }}
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
@@ -116,6 +128,8 @@ jobs:
       PADDLETEST_ARCHIVE_URL: "https://xly-devops.bj.bcebos.com/PaddleTest/PaddleTest.tar.gz"
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   pre_ce_test:
     name: Extracted partial CE model tasks to run in CI.
@@ -126,6 +140,8 @@ jobs:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   base_test:
     name: Run Base Tests
@@ -136,6 +152,8 @@ jobs:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   stable_test:
     name: Run Stable Tests
@@ -146,10 +164,12 @@ jobs:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   publish_pre_check:
     name: Publish Docker Images Pre Check
-    needs: [ci_image_build,unittest_coverage,logprob_test,pre_ce_test,base_test,stable_test]
+    needs: [ci_image_build,unittest_coverage,four_cards_test,logprob_test,pre_ce_test,base_test,stable_test]
     runs-on: [self-hosted, Docker-Build]
     steps:
       - name: Images Uploading
