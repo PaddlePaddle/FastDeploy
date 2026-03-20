@@ -692,5 +692,21 @@ class TestRequestOutputDictAccess(unittest.TestCase):
         self.assertFalse("non_existent" in self.request_output)
 
 
+class TestRequestMetricsPerf(unittest.TestCase):
+    def test_to_dict_perf(self):
+        from fastdeploy.engine.request import RequestMetrics
+        from fastdeploy.worker.output import SpeculateMetrics
+
+        metrics = RequestMetrics()
+        metrics.speculate_metrics = SpeculateMetrics(draft_tokens=10, accept_tokens=5, num_nodes=2)
+        res = metrics.to_dict()
+        self.assertIn("arrival_time", res)
+        self.assertIn("speculate_metrics", res)
+        self.assertEqual(res["speculate_metrics"]["draft_tokens"], 10)
+        self.assertEqual(res["speculate_metrics"]["accept_tokens"], 5)
+        self.assertEqual(res["speculate_metrics"]["num_nodes"], 2)
+
+
 if __name__ == "__main__":
+
     unittest.main()

@@ -1,0 +1,3 @@
+## 2024-05-20 - Performance-critical dataclass serialization
+**Learning:** `dataclasses.asdict()` relies on recursive deepcopying which introduces massive overhead for frequent serialization operations, especially when dealing with complex nested classes or primitive data types, which causes bottlenecks in critical code paths like API server requests metrics conversion.
+**Action:** When working on performance optimizations for dataclass serialization (like `RequestMetrics.to_dict`), iterate over `__dataclass_fields__` directly. Use explicit checks for primitive types to map directly, and only fall back to recursive strategies or `asdict` specifically when nested instances are truly `dataclasses.is_dataclass(v)`.
