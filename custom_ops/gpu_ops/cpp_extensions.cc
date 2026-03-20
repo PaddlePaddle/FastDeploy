@@ -1206,7 +1206,9 @@ void RadixTopkRaggedTransform(
     paddle::Tensor& lengths,
     paddle::optional<paddle::Tensor>& seq_len_decoder,
     paddle::optional<paddle::Tensor>& batch_id_per_token,
+    paddle::optional<paddle::Tensor>& block_tables,
     paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
+    int max_block_num,
     int top_k,
     int q_num_heads = 0);
 

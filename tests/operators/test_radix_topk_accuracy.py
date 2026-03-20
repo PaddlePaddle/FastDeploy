@@ -36,26 +36,24 @@ class BaseTestRadixTopk(unittest.TestCase):
     def get_reference_topk(self, input_pd, lengths_pd, offsets_pd, top_k, q_num_heads):
         """
         使用 paddle.topk 生成参考结果
-        注意：算子输出的索引是相对于 offsets 的偏移量（0-based 相对索引）
+        注意：算子输出的索引是 0-based 相对索引（不包含 offset）
 
         Args:
             input_pd: (num_rows, max_len)
             lengths_pd: (batch_size,) - 每个batch的长度
-            offsets_pd: (num_rows,) - 每一行的偏移基点
+            offsets_pd: (num_rows,) - 每一行的偏移基点（未使用，仅保留参数兼容性）
             top_k: k值
             q_num_heads: query head数量
 
         Returns:
-            ref_indices: (num_rows, top_k) - 参考索引（相对于 offset 的偏移），长度不足的部分用-1填充
+            ref_indices: (num_rows, top_k) - 参考索引（0-based 相对索引），长度不足的部分用-1填充
         """
         num_rows = input_pd.shape[0]
         ref_indices = paddle.full([num_rows, top_k], -1, dtype="int32")
-        offsets = offsets_pd.numpy()
 
         for row_idx in range(num_rows):
             batch_idx = row_idx // q_num_heads
             length = lengths_pd[batch_idx].item()
-            offset = offsets[row_idx]
 
             if length == 0:
                 continue
@@ -63,13 +61,13 @@ class BaseTestRadixTopk(unittest.TestCase):
             row_data = input_pd[row_idx, :length]
 
             if length <= top_k:
-                # 长度不足top_k，按顺序返回所有索引（相对于 offset）
-                ref_indices[row_idx, :length] = paddle.arange(offset, offset + length, dtype="int32")
+                # 长度不足top_k，按顺序返回所有索引（0-based）
+                ref_indices[row_idx, :length] = paddle.arange(0, length, dtype="int32")
             else:
                 # 长度足够，使用 paddle.topk 获取最大的top_k个值的索引
                 topk_vals, topk_inds = paddle.topk(row_data, top_k)
-                # 加上 offset 作为基点
-                ref_indices[row_idx, :top_k] = topk_inds + offset
+                # 直接使用 topk 返回的索引（0-based）
+                ref_indices[row_idx, :top_k] = topk_inds
 
         return ref_indices
 
@@ -149,7 +147,7 @@ class TestPrefillMode(BaseTestRadixTopk):
         # 调用算子
         output_indices = paddle.full([num_rows, top_k], -1, dtype="int32")
         radix_topk_ragged_transform(
-            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, top_k, q_num_heads
+            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, None, 0, top_k, q_num_heads
         )
 
         # 获取参考结果
@@ -197,6 +195,8 @@ class TestDecodeMode(BaseTestRadixTopk):
             seq_len_decoder_pd,
             batch_id_per_token_pd,
             None,
+            None,
+            0,
             top_k,
             q_num_heads,
         )
@@ -234,7 +234,7 @@ class TestEdgeLengthZero(BaseTestRadixTopk):
 
         output_indices = paddle.full([num_rows, top_k], -1, dtype="int32")
         radix_topk_ragged_transform(
-            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, top_k, q_num_heads
+            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, None, 0, top_k, q_num_heads
         )
 
         # 预期结果：全是 -1
@@ -267,7 +267,7 @@ class TestEdgeLengthLessThanTopk(BaseTestRadixTopk):
 
         output_indices = paddle.full([num_rows, top_k], -1, dtype="int32")
         radix_topk_ragged_transform(
-            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, top_k, q_num_heads
+            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, None, 0, top_k, q_num_heads
         )
 
         # 获取参考结果
@@ -300,7 +300,7 @@ class TestEdgeLengthEqualTopk(BaseTestRadixTopk):
 
         output_indices = paddle.full([num_rows, top_k], -1, dtype="int32")
         radix_topk_ragged_transform(
-            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, top_k, q_num_heads
+            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, None, 0, top_k, q_num_heads
         )
 
         # 获取参考结果
@@ -338,7 +338,7 @@ class TestLargeScale(BaseTestRadixTopk):
 
         output_indices = paddle.full([num_rows, top_k], -1, dtype="int32")
         radix_topk_ragged_transform(
-            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, top_k, q_num_heads
+            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, None, 0, top_k, q_num_heads
         )
 
         # 获取参考结果
