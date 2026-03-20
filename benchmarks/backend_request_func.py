@@ -665,7 +665,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                             "content": output.generated_text,
                         }
                     )
-                    
+
                 prompt_no += 1
             elif message["role"] == "assistant":
                 continue
