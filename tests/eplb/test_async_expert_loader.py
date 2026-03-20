@@ -171,7 +171,7 @@ def test_save_single_and_multiple(tmp_path):
     fp.write_bytes(b"\x00" * 8192)
     t1 = paddle.ones([4], dtype="float32")
     t2 = paddle.zeros([8], dtype="float32")
-    infos = save_tensor_to_shm_mem([("w1", t1), ("w2", t2)], str(fp))
+    infos = save_tensor_to_shm_mem([("w1", t1), ("w2", t2)], str(fp), logger=_logger)
     assert infos[0][:3] == ("w1", 0, 16)
     assert infos[1][1] == 16  # offset
 
@@ -207,7 +207,7 @@ def test_load_special_dtypes():
     """load: bfloat16, float8_e4m3fn, and unsupported."""
     arr16 = np.array([0x3F80, 0x4000], dtype=np.uint16)
     result = load_tensor_from_shm_mem(
-        [("w", 0, len(arr16.tobytes()), [2], paddle.bfloat16)], _shm_buffer(arr16.tobytes())
+        [("w", 0, len(arr16.tobytes()), [2], paddle.bfloat16)], _shm_buffer(arr16.tobytes()), logger=_logger
     )
     assert list(result[0][1].shape) == [2]
     arr8 = np.array([0x38, 0x40], dtype=np.uint8)
@@ -329,7 +329,7 @@ def test_fp8_from_disk(tmp_path, monkeypatch):
 
 def test_create_mmap_errors():
     """create_mmap: mmap failure, cudart=None, cuda register failure."""
-    # mmap failure
+    # mmap failure (shmem_size_gb=0 → TOTAL_MODEL_SIZE path)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(_ael_mod, "cudart", _StubCudart())
         mp.setattr(_ael_mod, "libc", _StubLibc(mmap_ret=-1))
@@ -337,7 +337,7 @@ def test_create_mmap_errors():
         mp.setattr(os, "open", lambda *a: 5)
         mp.setattr(os, "ftruncate", lambda *a: None)
         with pytest.raises(OSError):
-            create_mmap(["m"], 0, 1, "u", _eplb_config())
+            create_mmap(["m"], 0, 1, "u", _eplb_config(redundant_expert_async_load_model_shmem_size_gb=0))
     # cudart=None
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(_ael_mod, "cudart", None)
@@ -380,7 +380,7 @@ def test_create_mmap_success():
 # -- load_model_weights_process --
 
 
-def _run_process(disk_ok=True):
+def _run_process(disk_ok=True, raise_exc=False):
     mg = _StubConn(
         [
             {
@@ -395,11 +395,18 @@ def _run_process(disk_ok=True):
         mp.setattr("faulthandler.enable", lambda *a: None)
         mp.setattr(paddle, "set_device", lambda *a: None)
         mp.setattr("fastdeploy.utils.get_logger", lambda *a, **kw: _logger)
-        mp.setattr(
-            AsyncEPLoader,
-            "load_experts_weight_from_disk",
-            lambda self: (disk_ok, "ok" if disk_ok else "fail"),
-        )
+        if raise_exc:
+
+            def _boom(self):
+                raise RuntimeError("load boom")
+
+            mp.setattr(AsyncEPLoader, "load_experts_weight_from_disk", _boom)
+        else:
+            mp.setattr(
+                AsyncEPLoader,
+                "load_experts_weight_from_disk",
+                lambda self: (disk_ok, "ok" if disk_ok else "fail"),
+            )
         if disk_ok:
             mp.setattr(
                 _ael_mod,
@@ -414,13 +421,17 @@ def _run_process(disk_ok=True):
 
 
 def test_load_model_weights_process():
-    """load_model_weights_process: success + failure paths."""
+    """load_model_weights_process: success, failure, and exception paths."""
     data = _run_process(disk_ok=True)
     assert len(data.sent) == 1
     assert data.sent[0]["result"] is True
     data2 = _run_process(disk_ok=False)
     assert len(data2.sent) == 1
     assert data2.sent[0]["result"] is False
+    data3 = _run_process(raise_exc=True)
+    assert len(data3.sent) == 1
+    assert data3.sent[0]["result"] is False
+    assert data3.sent[0]["weights"] == []
 
 
 if __name__ == "__main__":
