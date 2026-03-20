@@ -507,8 +507,8 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
 
     @property
     def load_up_proj_weight_first(self) -> bool:
-        # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
-        # 目前默认给True
+        # FlashInfer CUTLASS kernel assumes [Up, Gate] projection as W13.
+        # Default is currently set to False; update this property or configuration if the kernel behavior changes.
         return False
 
     def process_weights_after_loading(self, layer):
