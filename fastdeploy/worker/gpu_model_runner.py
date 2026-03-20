@@ -1477,10 +1477,10 @@ class GPUModelRunner(ModelRunnerBase):
     def _process_reorder(self) -> None:
         if self.attn_backends and getattr(self.attn_backends[0], "enable_ids_reorder", False):
             self.share_inputs.enable_pd_reorder = True
-            before_reorder = dict(self.share_inputs.index_to_batch_id)
+            before_reorder = tuple(sorted(self.share_inputs.index_to_batch_id.items()))
             self.share_inputs.condense()
             reorder_split_prefill_and_decode(input_batch=self.share_inputs)
-            after_reorder = self.share_inputs.index_to_batch_id
+            after_reorder = tuple(sorted(self.share_inputs.index_to_batch_id.items()))
             changed = before_reorder != after_reorder
             if changed:
                 self._sync_forward_batch_reqs_after_reorder()
@@ -1504,14 +1504,14 @@ class GPUModelRunner(ModelRunnerBase):
         list_cap = len(self.forward_batch_reqs_list)
         req_by_batch_id = {}
         old_slot_by_batch_id = {}
-        for slot_idx, req in enumerate(self.forward_batch_reqs_list):
+        for old_slot, req in enumerate(self.forward_batch_reqs_list):
             if req is None:
                 continue
             req_batch_id = getattr(req, "idx", None)
             if req_batch_id is None:
                 continue
             req_by_batch_id[req_batch_id] = req
-            old_slot_by_batch_id[req_batch_id] = slot_idx
+            old_slot_by_batch_id[req_batch_id] = old_slot
 
         aligned_reqs = [None for _ in range(list_cap)]
         for slot_idx, batch_id in index_to_batch_id.items():
