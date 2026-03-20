@@ -691,5 +691,131 @@ def test_run_worker_proc():
         assert len(_il_calls) == 1
 
 
+# -- kvcache lock + eplb elif + event_loop_normal ------------------------------
+
+
+class _BreakLoop(Exception):
+    """Break out of event_loop_normal's while-True."""
+
+
+class _FakeCtrlReq:
+    """Duck-typed ControlRequest for isinstance checks."""
+
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+
+def _loop_proc(pw, max_iter=1, **extra_cfg):
+    """PaddleDisWorkerProc wired for event_loop_normal."""
+    defaults = {
+        "eplb_config.enable_eplb": False,
+        "load_config.dynamic_load_weight": False,
+        "parallel_config.tensor_parallel_size": 1,
+        "parallel_config.use_ep": False,
+        "cache_config.kvcache_storage_backend": None,
+    }
+    defaults.update(extra_cfg)
+    p = _make(pw, **defaults)
+    p.worker_healthy_live_signal = types.SimpleNamespace(value=np.zeros([8], dtype=np.int32))
+    p.exist_task_signal = types.SimpleNamespace(value=np.array([0], dtype=np.int32))
+    p.exist_prefill_task_signal = types.SimpleNamespace(value=np.array([0], dtype=np.int32))
+    p.task_queue = types.SimpleNamespace(
+        exist_tasks=lambda: False,
+        get_tasks=lambda: ([], False),
+        read_finish_flag=types.SimpleNamespace(get=lambda: 0, set=lambda v: None),
+        num_tasks=lambda: 0,
+        clear_data=lambda: None,
+    )
+    p.worker.model_runner = types.SimpleNamespace(not_need_stop=lambda: True, current_launch_token_num=1)
+    p.worker.execute_model = lambda *a, **kw: None
+    p.worker.exist_prefill = lambda: False
+    p.worker.preprocess_new_task = lambda *a, **kw: None
+    _iter = [0]
+
+    def _counting_eplb(tp_rank):
+        _iter[0] += 1
+        if _iter[0] > max_iter:
+            raise _BreakLoop
+
+    p._run_eplb = _counting_eplb
+    return p
+
+
+def test_kvcache_lock(pw):
+    """_acquire/_release_kvcache_lock with lock enabled."""
+    with patch(f"{WP}.envs") as env:
+        env.FD_USE_KVCACHE_LOCK = True
+        p = _make(pw)
+        p.gpu_cache_lock = types.SimpleNamespace(acquire=lambda: None, release=lambda: None)
+        p._acquire_kvcache_lock(0)
+        p._release_kvcache_lock(0)
+
+
+def test_run_eplb_token_stats_none(pw):
+    """_run_eplb: elif branch when token stats value is None."""
+    p = _make(
+        pw,
+        **{
+            "eplb_config.enable_eplb": True,
+            "eplb_config.redundant_expert_dump_workload_interval": 10,
+        },
+    )
+    p.last_dump_expert_workload_ts = 0
+    p.local_experts_token_stats_array = types.SimpleNamespace(value=None)
+    p.signal_update_weight_from_tensor_array = types.SimpleNamespace(value=np.array([0], dtype=np.int32))
+    p.rearrange_experts_signal = types.SimpleNamespace(value=np.zeros([1], dtype=np.int32))
+    p.mmap_infos = {}
+    with patch(f"{WP}.time") as t, patch(f"{WP}.paddle") as pdl:
+        t.time.return_value = 100.0
+        pdl.to_tensor.return_value = np.array([0])
+        p._run_eplb(tp_rank=0)
+
+
+def test_event_loop_control_req(pw):
+    """event_loop_normal: ControlRequest processing + exist_prefill."""
+    p = _loop_proc(pw)
+    p.exist_task_signal.value[0] = 1  # ExistTaskStatus.EXIST
+    ctrl = _FakeCtrlReq(request_id="r1", method="noop", args={})
+    p.task_queue.get_tasks = lambda: ([([ctrl], 1)], True)
+    p.run_control_method = lambda req: None
+    with patch(f"{WP}.ControlRequest", _FakeCtrlReq), patch(f"{WP}.envs") as env:
+        env.ENABLE_V1_KVCACHE_SCHEDULER = False
+        env.FD_USE_KVCACHE_LOCK = False
+        with pytest.raises(_BreakLoop):
+            p.event_loop_normal()
+
+
+def test_event_loop_not_need_stop(pw):
+    """event_loop_normal: not_need_stop early continue path."""
+    p = _loop_proc(pw)
+    p.worker.model_runner.not_need_stop = lambda: False
+    with patch(f"{WP}.envs") as env:
+        env.ENABLE_V1_KVCACHE_SCHEDULER = True
+        env.FD_USE_KVCACHE_LOCK = False
+        with pytest.raises(_BreakLoop):
+            p.event_loop_normal()
+
+
+def test_event_loop_dynamic_weight(pw):
+    """event_loop_normal: dynamic_load_weight UPDATING path."""
+    p = _loop_proc(pw, **{"load_config.dynamic_load_weight": True})
+    p.model_weights_status = types.SimpleNamespace(value=np.array([1], dtype=np.int32))  # UPDATING
+    p.kv_cache_status = types.SimpleNamespace(value=np.array([0], dtype=np.int32))
+    mock_rl = types.ModuleType("fastdeploy.rl")
+    mock_dwm = types.ModuleType("fastdeploy.rl.dynamic_weight_manager")
+    mock_dwm.DynamicWeightManager = types.SimpleNamespace(check_model_weights_status=lambda *a, **kw: None)
+    with (
+        patch(f"{WP}.envs") as env,
+        patch.dict(
+            "sys.modules",
+            {"fastdeploy.rl": mock_rl, "fastdeploy.rl.dynamic_weight_manager": mock_dwm},
+        ),
+    ):
+        env.ENABLE_V1_KVCACHE_SCHEDULER = False
+        env.FD_USE_KVCACHE_LOCK = False
+        with pytest.raises(_BreakLoop):
+            p.event_loop_normal()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
