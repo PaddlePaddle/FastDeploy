@@ -26,7 +26,7 @@ segment. When the budget is reached, it terminates thinking by forcing `</think>
 ## Request Parameters
 
 - `thinking_budget` (int, required to enable): maximum number of decode-time tokens after `<think>` before forced
-  termination. 
+  termination.
 - `think_stop_sentence` (string, optional): a literal custom sentence that will be tokenized on the request side
   and enforced near the budget boundary.
 
