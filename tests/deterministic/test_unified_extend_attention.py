@@ -13,17 +13,20 @@ Test scenarios:
 2. Index building (build_kv_indices_from_block_tables / build_unified_kv_indices):
    single/multi/empty sequence, non-contiguous blocks, large batch stress (bs=32),
    ref-vs-triton cross-validation, edge cases (bs=0, all-zero extend)
-3. Kernel correctness (extend_attention_fwd_unified vs naive_attention):
+3. Deterministic dispatch (_deterministic_build_triton_indices):
+   prefill+decode mixed, all-decode, triton-vs-ref cross-validation
+4. Kernel correctness (extend_attention_fwd_unified vs naive_attention):
    MHA/GQA/MQA, head_dim=13/64/80/96/128/256, float16/bfloat16,
    causal/non-causal, with/without prefix, non-contiguous blocks,
    long sequence (4096), large values, custom sm_scale
-4. Split invariance (core feature):
+5. Split invariance (core feature):
    cache miss vs hit produce identical output, GQA variant,
    non-aligned prefix, multiple splits (6 different prefix lengths),
    bfloat16 dtype, Qwen2.5-7B real-world config (28q/4kv, 825 tokens)
-5. Determinism: 5-10 runs bitwise identical, with/without prefix, GQA large batch
-6. Production-scale correctness: bs=19 SGLang-scale, seq=4096, mixed lengths, prefix
-7. Cross-validation: naive vs sdpa reference, triton vs sdpa (triple validation)
+6. Determinism: 5-10 runs bitwise identical, with/without prefix, GQA large batch
+7. Production-scale correctness: bs=19 SGLang-scale, seq=4096, mixed lengths, prefix
+8. Cross-validation: naive vs sdpa reference, triton vs sdpa (triple validation)
+
 
 Usage:
     source /root/paddlejob/workspace/env_run/gongweibao/archfd/fdarchenv/bin/activate
@@ -34,6 +37,9 @@ import numpy as np
 import paddle
 import pytest
 
+from fastdeploy.model_executor.layers.attention.append_attn_backend import (
+    AppendAttentionBackend,
+)
 from fastdeploy.model_executor.layers.attention.triton_ops.unified_extend_attention import (
     build_kv_indices_from_block_tables,
     build_kv_indices_from_block_tables_ref,
@@ -641,7 +647,113 @@ class TestBuildKvIndices:
 
 
 # ===========================================================================
-# 3. Kernel correctness tests (parametrized)
+# 3. Deterministic dispatch index builder tests
+# ===========================================================================
+
+
+class TestDeterministicBuildTritonIndices:
+
+    def _make_mock_backend(self, block_size):
+        backend = object.__new__(AppendAttentionBackend)
+        backend.block_size = block_size
+        return backend
+
+    def _make_mock_forward_meta(self, seq_lens_this_time, prefix_lens, block_tables, precompute=False):
+        from types import SimpleNamespace
+
+        meta = SimpleNamespace()
+        meta.seq_lens_this_time = seq_lens_this_time
+        meta.prefix_lens = prefix_lens
+        meta.block_tables = block_tables
+        if precompute:
+            bs = int((seq_lens_this_time > 0).sum().item())
+            meta.deter_bs = bs
+            extend_lens = seq_lens_this_time[:bs]
+            meta.deter_total_extend_len = int(paddle.sum(extend_lens).item())
+            meta.deter_max_extend_len = int(paddle.max(extend_lens).item()) if bs > 0 else 0
+            meta.deter_total_prefix_len = int(paddle.sum(prefix_lens[:bs]).item())
+        return meta
+
+    @pytest.mark.parametrize(
+        "seq_lens,prefix_lens,expected_bs,expected_max_ext,expected_qo,expected_kv_indptr,expected_plens",
+        [
+            ([8, 1, 0, 0], [0, 5, 0, 0], 2, 8, [0, 8, 9], [0, 8, 14], [0, 5]),
+            ([1, 1, 1, 0], [10, 20, 5, 0], 3, 1, [0, 1, 2, 3], [0, 11, 32, 38], [10, 20, 5]),
+            ([16, 1, 0], [32, 24, 0], 2, 16, None, [0, 48, 73], None),
+        ],
+    )
+    def test_basic_scenarios(
+        self, seq_lens, prefix_lens, expected_bs, expected_max_ext, expected_qo, expected_kv_indptr, expected_plens
+    ):
+        block_size = 4 if expected_bs != 2 or expected_kv_indptr != [0, 48, 73] else 8
+        backend = self._make_mock_backend(block_size)
+        seq_lens_t = paddle.to_tensor(seq_lens, dtype="int32")
+        prefix_t = paddle.to_tensor(prefix_lens, dtype="int32")
+        n_seqs = len(seq_lens)
+        if block_size == 8:
+            num_blocks = 10
+            block_tables = paddle.zeros([n_seqs, num_blocks], dtype="int32")
+            for i in range(num_blocks):
+                block_tables[0, i] = i
+            for i in range(5):
+                block_tables[1, i] = num_blocks + i
+        else:
+            block_tables = paddle.to_tensor(
+                [[0, 1, 0, 0], [2, 3, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]][:n_seqs],
+                dtype="int32",
+            )
+            if seq_lens == [1, 1, 1, 0]:
+                block_tables = paddle.to_tensor(
+                    [[0, 1, 2, 0], [3, 4, 5, 6], [7, 8, 0, 0], [0, 0, 0, 0]][:n_seqs],
+                    dtype="int32",
+                )
+        meta = self._make_mock_forward_meta(seq_lens_t, prefix_t, block_tables, precompute=True)
+        qo_indptr, unified_kv_indptr, _, plens, bs, max_extend = backend._deterministic_build_triton_indices(meta)
+        assert bs == expected_bs
+        assert max_extend == expected_max_ext
+        if expected_qo is not None:
+            assert qo_indptr.tolist() == expected_qo
+        if expected_plens is not None:
+            assert plens.tolist() == expected_plens
+        assert unified_kv_indptr.tolist() == expected_kv_indptr
+
+    @pytest.mark.parametrize(
+        "seq_lens,prefix",
+        [
+            ([8, 1, 0, 0], [0, 5, 0, 0]),
+            ([1, 1, 1, 0], [10, 20, 5, 0]),
+            ([16, 1, 0], [32, 24, 0]),
+            ([4, 0], [0, 0]),
+            ([1, 1, 1, 1], [3, 7, 15, 0]),
+        ],
+    )
+    def test_triton_matches_ref(self, seq_lens, prefix):
+        block_size = 4
+        backend = self._make_mock_backend(block_size)
+        seq_lens_t = paddle.to_tensor(seq_lens, dtype="int32")
+        prefix_t = paddle.to_tensor(prefix, dtype="int32")
+        max_total = max(s + p for s, p in zip(seq_lens, prefix))
+        max_blocks = max((max_total + block_size - 1) // block_size, 1)
+        rng = np.random.RandomState(42)
+        block_tables = paddle.to_tensor(rng.randint(0, 20, size=(len(seq_lens), max_blocks)).astype(np.int32))
+        meta = self._make_mock_forward_meta(seq_lens_t, prefix_t, block_tables, precompute=True)
+        qo_triton, kv_indptr_triton, kv_indices_triton, plens_triton, bs_triton, max_ext_triton = (
+            backend._deterministic_build_triton_indices(meta)
+        )
+        qo_ref, kv_indptr_ref, kv_indices_ref, plens_ref, bs_ref, max_ext_ref = (
+            backend._deterministic_build_triton_indices_ref(meta)
+        )
+        assert bs_triton == bs_ref
+        assert max_ext_triton == max_ext_ref
+        assert qo_triton.tolist() == qo_ref.tolist()
+        assert kv_indptr_triton.tolist() == kv_indptr_ref.tolist()
+        total_kv = int(kv_indptr_ref[-1].item())
+        assert kv_indices_triton[:total_kv].tolist() == kv_indices_ref[:total_kv].tolist()
+        assert plens_triton.tolist() == plens_ref.tolist()
+
+
+# ===========================================================================
+# 4. Kernel correctness tests (parametrized)
 # ===========================================================================
 
 
@@ -766,7 +878,7 @@ class TestKernelCorrectness:
 
 
 # ===========================================================================
-# 4. Split invariance tests (core feature)
+# 5. Split invariance tests (core feature)
 # ===========================================================================
 
 
@@ -865,7 +977,7 @@ class TestSplitInvariance:
 
 
 # ===========================================================================
-# 5. Determinism tests (parametrized)
+# 6. Determinism tests (parametrized)
 # ===========================================================================
 
 
@@ -887,7 +999,7 @@ class TestDeterminism:
 
 
 # ===========================================================================
-# 6. Production-scale correctness
+# 7. Production-scale correctness
 # ===========================================================================
 
 
@@ -988,7 +1100,7 @@ class TestProductionScaleCorrectness:
 
 
 # ===========================================================================
-# 7. Cross-validation (reference implementations + triton vs sdpa)
+# 8. Cross-validation (reference implementations + triton vs sdpa)
 # ===========================================================================
 
 

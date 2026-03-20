@@ -7,6 +7,17 @@ import paddle
 from fastdeploy.model_executor.layers.batch_invariant_ops import (
     set_batch_invariant_mode,
 )
+from fastdeploy.model_executor.layers.batch_invariant_ops.batch_invariant_ops import (
+    matmul_persistent,
+)
+
+# Real-world shapes for M-invariance testing: (M_full, M_tail, K, N)
+QKV_SHAPES = [
+    (825, 57, 3584, 4608),  # Qwen2-7B real case
+    (1024, 128, 4096, 4096),  # power-of-2
+    (512, 1, 3584, 4608),  # single-token tail
+]
+N_SEEDS = 5
 
 
 class TestBatchInvariantForMM(unittest.TestCase):
@@ -54,6 +65,30 @@ class TestBatchInvariantForMM(unittest.TestCase):
         print("\nBatch-Invariant Mode:")
         with set_batch_invariant_mode(True):
             self.run_iters(ass=True)
+
+    @staticmethod
+    def _check_m_invariance(fn, M_full, M_tail, K, N, seed):
+        """Return max abs diff between fn(full)[-tail:] and fn(tail)."""
+        paddle.seed(seed)
+        W = paddle.randn([K, N], dtype="bfloat16")
+        full_input = paddle.randn([M_full, K], dtype="bfloat16")
+        tail_input = full_input[-M_tail:].clone()
+
+        full_out = fn(full_input, W)
+        tail_out = fn(tail_input, W)
+        diff = (full_out[-M_tail:].astype("float32") - tail_out.astype("float32")).abs()
+        return float(diff.max().item())
+
+    def test_triton_persistent_is_m_invariant(self):
+        """Triton persistent matmul must be bit-identical regardless of M."""
+        for M_full, M_tail, K, N in QKV_SHAPES:
+            for seed in range(N_SEEDS):
+                diff = self._check_m_invariance(matmul_persistent, M_full, M_tail, K, N, seed)
+                self.assertEqual(
+                    diff,
+                    0.0,
+                    f"matmul_persistent NOT M-invariant: shape=({M_full},{M_tail},{K},{N}) seed={seed} diff={diff}",
+                )
 
 
 if __name__ == "__main__":

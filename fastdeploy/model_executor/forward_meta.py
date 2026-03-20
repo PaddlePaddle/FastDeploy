@@ -140,6 +140,8 @@ class ForwardMeta:
 
     # Pre-cache length
     pre_caches_length: int = 0
+    # Prefix cache lens per sequence (for deterministic mode with prefix caching)
+    prefix_lens: Optional[paddle.Tensor] = None
     # Block tables
     block_tables: Optional[paddle.Tensor] = None
     # KV caches
@@ -148,6 +150,17 @@ class ForwardMeta:
     is_dummy_or_profile_run: bool = False
     # Routing Replay table buffer
     routing_replay_table: Optional[paddle.Tensor] = None
+
+    # Pre-computed CPU scalars for deterministic mode + CUDA Graph compatibility.
+    # Computed in gpu_model_runner.initialize_forward_meta() (outside graph capture region)
+    # so that _deterministic_build_triton_indices never calls .item() on GPU tensors.
+    deter_bs: int = 0  # = int((seq_lens_this_time > 0).sum())
+    deter_total_extend_len: int = 0  # = int(sum(seq_lens_this_time[:bs]))
+    deter_max_extend_len: int = 0  # = int(max(seq_lens_this_time[:bs]))
+    deter_total_prefix_len: int = 0  # = int(sum(prefix_lens[:bs]))
+    # Pre-computed CPU values for pre_cache_len_concat (replaces D2H copy in C++ op)
+    deter_kv_token_num: int = 0  # = sum(cache_len + q_len) per batch
+    deter_pre_cache_num_blocks: int = 0  # = sum(ceil(cache_len / block_size)) per batch
 
     # chunked MoE related
     moe_num_chunk: int = 1

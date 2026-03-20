@@ -175,6 +175,128 @@ class TestScatterExtendKvIndices:
             )
 
 
+# ---------------------------------------------------------------------------
+# Test: end-to-end _deterministic_build_triton_indices vs _ref
+# ---------------------------------------------------------------------------
+
+
+class TestDeterministicBuildTritonIndicesE2E:
+    """
+    End-to-end comparison of the full index building pipeline.
+    Uses a minimal mock to avoid needing a real AppendAttentionBackend instance.
+    """
+
+    @staticmethod
+    def _make_forward_meta(bs, prefix_list, extend_list, block_size):
+        """Create a minimal forward_meta-like object for testing."""
+        from dataclasses import dataclass
+
+        max_bs = len(prefix_list)
+        prefix_lens = paddle.to_tensor(prefix_list, dtype="int32")
+        extend_lens = paddle.to_tensor(extend_list, dtype="int32")
+
+        # seq_lens_this_time: extend_lens padded to max_bs
+        seq_lens_this_time = paddle.zeros([max_bs], dtype="int32")
+        seq_lens_this_time[:bs] = extend_lens[:bs]
+
+        # block_tables: need enough blocks for max(prefix + extend) per seq
+        total_per_seq = [p + e for p, e in zip(prefix_list, extend_list)]
+        max_blocks = max((t + block_size - 1) // block_size for t in total_per_seq) if total_per_seq else 1
+        max_blocks = max(max_blocks, 1)
+        total_blocks = max_bs * max_blocks
+        bt = np.random.permutation(total_blocks + 100)[:total_blocks].reshape(max_bs, max_blocks)
+        block_tables = paddle.to_tensor(bt, dtype="int32")
+
+        total_extend = sum(extend_list[:bs])
+        total_prefix = sum(prefix_list[:bs])
+        max_extend = max(extend_list[:bs]) if bs > 0 else 0
+
+        @dataclass
+        class FakeMeta:
+            seq_lens_this_time: paddle.Tensor = None
+            prefix_lens: paddle.Tensor = None
+            block_tables: paddle.Tensor = None
+            deter_bs: int = 0
+            deter_total_extend_len: int = 0
+            deter_max_extend_len: int = 0
+            deter_total_prefix_len: int = 0
+
+        return FakeMeta(
+            seq_lens_this_time=seq_lens_this_time,
+            prefix_lens=prefix_lens,
+            block_tables=block_tables,
+            deter_bs=bs,
+            deter_total_extend_len=total_extend,
+            deter_max_extend_len=max_extend,
+            deter_total_prefix_len=total_prefix,
+        )
+
+    @staticmethod
+    def _make_backend(block_size):
+        """Create a minimal mock backend with only block_size."""
+
+        class FakeBackend:
+            def __init__(self, block_size):
+                self.block_size = block_size
+
+        # Bind the methods from AppendAttentionBackend
+        from fastdeploy.model_executor.layers.attention.append_attn_backend import (
+            AppendAttentionBackend,
+        )
+
+        fb = FakeBackend(block_size)
+        # Bind the two methods
+        import types
+
+        fb._deterministic_build_triton_indices = types.MethodType(
+            AppendAttentionBackend._deterministic_build_triton_indices, fb
+        )
+        fb._deterministic_build_triton_indices_ref = types.MethodType(
+            AppendAttentionBackend._deterministic_build_triton_indices_ref, fb
+        )
+        return fb
+
+    @pytest.mark.parametrize("block_size", [16, 64])
+    @pytest.mark.parametrize(
+        "bs, prefix_list, extend_list",
+        [
+            (1, [10], [5]),
+            (3, [10, 20, 30], [5, 3, 8]),
+            (4, [0, 15, 0, 7], [3, 2, 4, 1]),
+            (2, [100, 200], [1, 1]),
+            (1, [0], [57]),
+        ],
+    )
+    def test_matches_ref(self, block_size, bs, prefix_list, extend_list):
+        """End-to-end: Triton path must produce identical results to reference path."""
+        forward_meta = self._make_forward_meta(bs, prefix_list, extend_list, block_size)
+        backend = self._make_backend(block_size)
+
+        qo_ref, kv_indptr_ref, kv_indices_ref, prefix_ref, bs_ref, max_ext_ref = (
+            backend._deterministic_build_triton_indices_ref(forward_meta)
+        )
+        qo_new, kv_indptr_new, kv_indices_new, prefix_new, bs_new, max_ext_new = (
+            backend._deterministic_build_triton_indices(forward_meta)
+        )
+
+        assert bs_new == bs_ref, f"bs mismatch: {bs_new} vs {bs_ref}"
+        assert max_ext_new == max_ext_ref, f"max_extend_len mismatch: {max_ext_new} vs {max_ext_ref}"
+
+        np.testing.assert_array_equal(qo_new.numpy(), qo_ref.numpy(), err_msg="qo_indptr mismatch")
+        np.testing.assert_array_equal(prefix_new.numpy(), prefix_ref.numpy(), err_msg="prefix_lens mismatch")
+        np.testing.assert_array_equal(
+            kv_indptr_new.numpy(), kv_indptr_ref.numpy(), err_msg="unified_kv_indptr mismatch"
+        )
+        # Compare kv_indices up to the total valid length
+        total_valid = int(kv_indptr_ref[-1].item())
+        if total_valid > 0:
+            np.testing.assert_array_equal(
+                kv_indices_new[:total_valid].numpy(),
+                kv_indices_ref[:total_valid].numpy(),
+                err_msg="unified_kv_indices mismatch",
+            )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-x"])
 

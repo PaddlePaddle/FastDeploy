@@ -39,7 +39,7 @@ import pytest
 pytestmark = pytest.mark.gpu
 
 DEFAULT_MODEL_DIR = "./models"
-MODEL_NAME = "Qwen2-7B-Instruct"
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen2-7B-Instruct")
 
 
 @contextmanager
@@ -99,7 +99,8 @@ def llm(model_path, _module_env):
         model=model_path,
         tensor_parallel_size=4,
         max_model_len=8192,
-        enable_prefix_caching=False,
+        enable_overlap_schedule=True,
+        enable_prefix_caching=True,
         graph_optimization_config={"use_cudagraph": os.getenv("USE_CUDAGRAPH", "0") == "1"},
     )
 
@@ -301,6 +302,93 @@ def test_deterministic_state_isolation(llm):
 
     assert a1 == a2, "Prompt A: output changed after interference"
     assert b1 == b2, "Prompt B: output changed after interference"
+
+
+# ===================== Prefix caching determinism tests =====================
+
+
+_SHARED_PREFIX = (
+    "Artificial intelligence has transformed various industries including "
+    "healthcare, finance, transportation, and education. "
+)
+
+
+def test_deterministic_prefix_cache_hit_vs_miss(llm):
+    """
+    Same prompt: 1st run = cache miss (full prefill),
+    2nd/3rd run = cache hit (partial prefill). Output must be identical.
+    """
+    sp = SamplingParams(temperature=0.7, top_p=0.95, max_tokens=50, seed=1300)
+    prompt = _SHARED_PREFIX + "Please summarize the impact of AI on healthcare."
+
+    results = [_generate_text(llm, prompt, sp) for _ in range(3)]
+    texts = [r[0] for r in results]
+    assert texts[0] == texts[1] == texts[2], "Prefix cache hit/miss produced different outputs"
+
+
+@pytest.mark.parametrize(
+    "suffix,seed",
+    [
+        ("Explain briefly.", 1400),
+        ("Give a detailed analysis with examples and case studies.", 1401),
+        ("One word answer:", 1402),
+    ],
+    ids=["short_suffix", "long_suffix", "minimal_suffix"],
+)
+def test_deterministic_shared_prefix_different_lengths(llm, suffix, seed):
+    """
+    Prompts share the same prefix but have different suffix lengths.
+    Each prompt's prefill/decode ratio differs, but determinism must hold.
+    """
+    sp = SamplingParams(temperature=0.7, top_p=0.95, max_tokens=50, seed=seed)
+    prompt = _SHARED_PREFIX + suffix
+    _assert_deterministic(llm, prompt, sp, runs=3)
+
+
+def test_deterministic_varying_prefill_decode_ratio(llm):
+    """
+    Prompts with increasing lengths exercise different prefill/decode ratios.
+    All must be individually deterministic.
+    """
+    sp = SamplingParams(temperature=0.7, top_p=0.95, max_tokens=60, seed=1500)
+    base = "Explain the concept of machine learning. "
+
+    for repeat in [1, 5, 20]:
+        prompt = base * repeat + "Summarize."
+        t1, ids1 = _generate_text(llm, prompt, sp)
+        t2, ids2 = _generate_text(llm, prompt, sp)
+        assert ids1 == ids2, f"Prompt length ~{repeat}x: token IDs differ between cache miss and hit"
+
+
+def test_deterministic_prefix_cache_batch_variation(llm):
+    """
+    Same target prompt in different batch compositions.
+    Varying companion count/length changes scheduling and prefix cache timing,
+    but target output must stay identical.
+    """
+    target = _SHARED_PREFIX + "What are the key challenges in modern AI research?"
+    sp = SamplingParams(temperature=0.7, top_p=0.95, max_tokens=50, seed=1600)
+
+    # Baseline: target alone
+    baseline_text, baseline_ids = _generate_text(llm, target, sp)
+
+    # Different batch compositions: vary companion count and length
+    short_filler = "Hi."
+    long_filler = "Explain quantum computing in detail. " * 10 + "Summarize."
+    batches = [
+        [target, short_filler],
+        [long_filler, target],
+        [short_filler, target, long_filler],
+        [short_filler, long_filler, short_filler, target],
+    ]
+
+    for i, batch in enumerate(batches):
+        outputs = llm.generate(batch, sp)
+        idx = batch.index(target)
+        result_ids = list(outputs[idx].outputs.token_ids)
+        assert (
+            result_ids == baseline_ids
+        ), f"Batch config {i} (pos {idx}): prefix cache + batch variation broke determinism"
 
 
 # ===================== Non-deterministic validation =====================

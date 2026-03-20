@@ -318,6 +318,7 @@ class VocabParallelEmbedding(nn.Layer):
         else:
             if envs.FD_DETERMINISTIC_MODE and self.world_size > 1:  # pragma: no cover
                 # Bypass Paddle's _mp_allreduce (NCCL) with Custom AR for determinism.
+                # Covered by tests/e2e/4cards_cases/vocab_parallel_embedding_deterministic.py
                 from paddle.distributed.fleet.layers.mpu import mp_ops
 
                 from fastdeploy.distributed.communication import (

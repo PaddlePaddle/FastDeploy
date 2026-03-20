@@ -308,12 +308,14 @@ class GPUModelRunner(ModelRunnerBase):
         - non-overlap mode doesn't support caching
         - prefill stage changes batch composition
         - invalid cached value
+        - FD_OVERLAP_DIAG=force_sync forces synchronization for debugging
         """
         if (
             is_dummy_or_profile_run
             or (not self.enable_overlap_schedule)
             or self.exist_prefill()
             or cached_token_num <= 0
+            or "force_sync" in envs.FD_OVERLAP_DIAG
         ):
             token_num_event.synchronize()
             return self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
@@ -1265,6 +1267,11 @@ class GPUModelRunner(ModelRunnerBase):
         routing_replay_table = None
         if self.routing_replay_manager is not None:
             routing_replay_table = self.routing_replay_manager.get_routing_table()
+
+        # Calculate prefix_lens from seq_lens_decoder
+        # In prefix caching mode, seq_lens_decoder represents cached prefix length for prefill requests
+        prefix_lens = self.share_inputs["seq_lens_decoder"].clone()
+
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
@@ -1292,6 +1299,7 @@ class GPUModelRunner(ModelRunnerBase):
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             routing_replay_table=routing_replay_table,
+            prefix_lens=prefix_lens,
         )
 
         dist_status = self.collect_distributed_status()
@@ -1330,6 +1338,35 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
         self.forward_meta.is_dummy_or_profile_run = is_dummy_or_profile_run
+
+        # Pre-compute CPU scalars for deterministic mode + CUDA Graph compatibility.
+        # These .item() calls are safe here because we are outside the graph capture region.
+        if envs.FD_DETERMINISTIC_MODE and "skip_deter_precompute" not in envs.FD_OVERLAP_DIAG:
+            slt_np = self.share_inputs["seq_lens_this_time"].numpy()
+            sld_np = self.share_inputs["seq_lens_decoder"].numpy()
+            plen_np = prefix_lens.numpy()
+            # Active slots may not be contiguous (e.g. slot 0 done, slot 1 still decoding)
+            active_idx = [i for i in range(len(slt_np)) if slt_np[i] > 0]
+            dbs = len(active_idx)
+            self.forward_meta.deter_bs = dbs
+            if dbs > 0:
+                extend_np = slt_np[active_idx]
+                self.forward_meta.deter_total_extend_len = int(extend_np.sum())
+                self.forward_meta.deter_max_extend_len = int(extend_np.max())
+                self.forward_meta.deter_total_prefix_len = int(plen_np[active_idx].sum())
+                # Pre-compute pre_cache_len_concat CPU outputs (replaces D2H copy in C++ op)
+                block_size = self.cache_config.block_size
+                kv_token_num = 0
+                num_blocks = 0
+                for bid in range(dbs):
+                    idx = active_idx[bid]
+                    # Mirror the seq_lens_encoder_for_rope fix: decode tokens (sle==0)
+                    # are faked as 1-token prefill, so cache_len = sld always.
+                    cache_len = int(sld_np[idx])
+                    kv_token_num += cache_len + int(slt_np[idx])
+                    num_blocks += (cache_len + block_size - 1) // block_size
+                self.forward_meta.deter_kv_token_num = kv_token_num
+                self.forward_meta.deter_pre_cache_num_blocks = num_blocks
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
