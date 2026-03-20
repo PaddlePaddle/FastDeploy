@@ -2716,6 +2716,13 @@ class GPUModelRunner(ModelRunnerBase):
             logger.info("GPU model runner is not sleeping, no need to wakeup!")
             return
 
+        if tags == "weight" and self.use_cudagraph and self.is_kvcache_sleeping:
+            raise RuntimeError(
+                "Waking up [weight] alone is not supported when CUDA Graph is enabled, "
+                "as recapturing the graph requires the KV cache to be rebuilt first. "
+                "Please wake up [kv_cache] first."
+            )
+
         logger.info(f">>> start reloading memory, tags: {tags}")
         start_time = time.perf_counter()
 
