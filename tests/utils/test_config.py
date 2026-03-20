@@ -19,8 +19,10 @@ import pytest
 
 from fastdeploy.config import (
     CacheConfig,
+    CommitConfig,
     DeviceConfig,
     EarlyStopConfig,
+    EPLBConfig,
     ErnieArchitectures,
     FDConfig,
     GraphOptimizationConfig,
@@ -30,6 +32,7 @@ from fastdeploy.config import (
     ParallelConfig,
     SchedulerConfig,
     SpeculativeConfig,
+    StructuredOutputsConfig,
     iter_architecture_defaults,
     try_match_architecture_defaults,
 )
@@ -410,6 +413,175 @@ class TestFDConfig:
         spf = _make_fdconfig(monkeypatch, speculative_config=sp, scheduler={"splitwise_role": "prefill"})
         assert spf.speculative_config.num_speculative_tokens == 1
         assert spf.speculative_config.num_model_steps == 1
+
+    def test_model_format_mxfp4_and_both_dtype_error(self, monkeypatch, tmp_path):
+        with pytest.raises(ValueError, match="Only one of"):
+            _make_model_config(
+                monkeypatch, tmp_path, config_json={**_BASE_PRETRAINED, "torch_dtype": "bf16", "dtype": "bf16"}
+            )
+        mxfp4_cfg = {**_BASE_PRETRAINED, "quantization_config": {"quant_method": "mxfp4"}}
+        assert _make_model_config(monkeypatch, tmp_path, config_json=mxfp4_cfg).model_format == "torch"
+        with pytest.raises(ValueError, match="Unknown model format"):
+            _make_model_config(monkeypatch, tmp_path, config_json={**_BASE_PRETRAINED})
+
+    def test_n_shared_experts_and_read_model_version(self, monkeypatch, tmp_path):
+        pre = {**_BASE_PRETRAINED, "n_shared_experts": 4, "moe_num_shared_experts": None}
+        cfg = _make_model_config(monkeypatch, tmp_path, pretrained=pre)
+        assert cfg.moe_num_shared_experts == 4
+        import yaml
+
+        (tmp_path / "version.yaml").write_text(yaml.dump({"version": "2.0"}))
+        cfg.read_model_version()
+        assert cfg.version == "2.0"
+
+    def test_cache_config_validation(self):
+        with pytest.raises(ValueError, match="less than 1.0"):
+            CacheConfig({"gpu_memory_utilization": 1.5, "model_cfg": _model_cfg()})
+        with pytest.raises(ValueError, match="less than 1.0"):
+            CacheConfig({"kv_cache_ratio": 1.5, "model_cfg": _model_cfg()})
+
+    def test_speculative_print_and_constraint_reject(self):
+        sp = SpeculativeConfig({"method": "mtp"})
+        sp.print()
+        with pytest.raises(ValueError, match="max_ngram_size >= min_ngram_size"):
+            SpeculativeConfig({"method": "ngram", "max_ngram_size": 1, "min_ngram_size": 5})
+
+    def test_speculative_user_args_none_and_env(self, monkeypatch):
+        sp = SpeculativeConfig({"method": "mtp"})
+        sp._apply_user_args(None)
+        monkeypatch.setenv("SPECULATE_VERIFY_USE_TOPK", "1")
+        sp2 = SpeculativeConfig({"method": "mtp"})
+        assert sp2.verify_strategy.value == 1  # GREEDY
+
+    def test_eplb_init_none_and_print(self):
+        ep = EPLBConfig(None)
+        assert ep.enable_eplb is False
+        ep.print()
+
+    def test_early_stop_conflict(self):
+        es = EarlyStopConfig({"enable_early_stop": False})
+        with pytest.raises(ValueError, match="Cannot set"):
+            es.update_enable_early_stop(True)
+
+    def test_commit_config_exception_and_print(self, tmp_path):
+        cc = CommitConfig()
+        cc._load_from_version_file(str(tmp_path / "nonexistent.txt"))
+        assert cc.fastdeploy_commit == ""
+        bad = tmp_path / "bad_version.txt"
+        bad.write_bytes(b"\xff\xfe" + bytes(range(128, 256)))
+        cc._load_from_version_file(str(bad))
+        cc.print()
+
+    def test_fdconfig_non_master_and_batched_tokens(self, monkeypatch):
+        fd = _make_fdconfig(
+            monkeypatch,
+            ips=["10.0.0.1", "127.0.0.1"],
+            parallel={"tensor_parallel_size": 16},
+        )
+        assert fd.is_master is False
+        assert fd.master_ip == "10.0.0.1"
+        fd2 = _make_fdconfig(
+            monkeypatch,
+            model_config=_fd_model(max_model_len=4096),
+            cache={"enable_chunked_prefill": True},
+        )
+        assert fd2.scheduler_config.max_num_batched_tokens == 2048
+
+    def test_guided_decoding_branches(self, monkeypatch):
+        import sys
+        import types
+
+        fake_llg = types.ModuleType("llguidance")
+        fake_llg.torch = types.ModuleType("llguidance.torch")
+        monkeypatch.setitem(sys.modules, "llguidance", fake_llg)
+        monkeypatch.setitem(sys.modules, "llguidance.torch", fake_llg.torch)
+        sp = SpeculativeConfig({})
+        so = StructuredOutputsConfig({"guided_decoding_backend": "guidance"})
+        _make_fdconfig(monkeypatch, structured_outputs_config=so, speculative_config=sp)
+        with pytest.raises(NotImplementedError, match="not implemented"):
+            so2 = StructuredOutputsConfig({"guided_decoding_backend": "badbackend"})
+            _make_fdconfig(monkeypatch, structured_outputs_config=so2, speculative_config=sp)
+
+    def test_check_assertions(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")
+        with pytest.raises(AssertionError):
+            _make_fdconfig(
+                monkeypatch,
+                model_config=_fd_model(max_model_len=512),
+                cache={"enable_chunked_prefill": False},
+                scheduler={"max_num_batched_tokens": 256},
+            ).check()
+        with pytest.raises(AssertionError, match="long_prefill_token_threshold"):
+            fd = _make_fdconfig(
+                monkeypatch,
+                model_config=_fd_model(max_model_len=512),
+                max_num_partial_prefills=2,
+                long_prefill_token_threshold=600,
+                cache={"enable_chunked_prefill": True},
+            )
+            fd.check()
+
+    def test_fdconfig_print_subconfigs(self, monkeypatch):
+        fd = _make_fdconfig(monkeypatch)
+        fd.commit_config = CommitConfig()
+        fd.model_config.print = lambda: None
+        fd.print()
+
+    def test_fdconfig_env_branches(self, monkeypatch):
+        monkeypatch.setenv("FD_FOR_TORCH_MODEL_FORMAT", "1")
+        fd = _make_fdconfig(monkeypatch)
+        assert fd.model_config.model_format == "torch"
+        monkeypatch.delenv("FD_FOR_TORCH_MODEL_FORMAT", raising=False)
+        monkeypatch.setenv("FD_ENABLE_MAX_PREFILL", "1")
+        fd2 = _make_fdconfig(monkeypatch, scheduler={"max_num_seqs": 42})
+        assert fd2.max_prefill_batch == 42
+
+    def test_get_max_chunk_tokens_decode(self, monkeypatch):
+        fd = _make_fdconfig(
+            monkeypatch, scheduler={"splitwise_role": "decode", "max_num_seqs": 20, "max_num_batched_tokens": 4096}
+        )
+        assert fd.get_max_chunk_tokens() == 20
+
+    def test_init_cache_info_splitwise_v1(self, monkeypatch):
+        fd = _make_fdconfig(
+            monkeypatch,
+            scheduler={"name": "local", "splitwise_role": "prefill"},
+            router_config=SimpleNamespace(router="http://r", api_server_port=8080, metrics_port=9090),
+        )
+        assert fd.splitwise_version == "v1"
+
+    def test_seq_parallel_moe_warning(self, monkeypatch):
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        fd = _make_fdconfig(
+            monkeypatch,
+            parallel={"tensor_parallel_size": 4, "use_sequence_parallel_moe": True},
+            scheduler={"max_num_seqs": 2},
+        )
+        assert fd.parallel_config.use_sequence_parallel_moe is False
+
+    def test_cudagraph_only_prefill(self, monkeypatch):
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        g = GraphOptimizationConfig({"use_cudagraph": True, "cudagraph_only_prefill": True})
+        fd = _make_fdconfig(monkeypatch, graph_opt_config=g, scheduler={"splitwise_role": "prefill"})
+        assert fd.graph_opt_config.use_cudagraph is True
 
 
 if __name__ == "__main__":
