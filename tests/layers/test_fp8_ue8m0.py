@@ -103,10 +103,33 @@ class TestFP8FusedMoeWithUe8m0Scale(unittest.TestCase):
         self.quant_config.deepgemm_scale_ue8m0 = True  # set deepgemm_scale_ue8m0 to True
 
     def test_create_layer_with_ue8m0_scale(self):
-        def fake_per_block_cast_to_fp8(x, use_ue8m0=True):
-            out_w = x.astype(paddle.float8_e4m3fn)
-            out_s = paddle.ones([(x.shape[0] // 128), (x.shape[1] // 128)], dtype=paddle.float32)
+        # This test covers the quant_weight_ue8m0 branch in BlockWiseFP8MoEMethod.process_weights_after_loading
+        # The branch is entered when:
+        # - deepgemm_scale_ue8m0=True
+        # - FD_USE_PHI_FP8_QUANT=False (so we don't use fused_stack_transpose_quant)
+        # - is_checkpoint_bf16=True
+
+        def fake_quant_weight_ue8m0(weight_dequant, weight_block_size):
+            # Mock quant_weight_ue8m0 behavior
+            n, k = weight_dequant.shape[-2], weight_dequant.shape[-1]
+            out_w = weight_dequant.astype(paddle.float8_e4m3fn)
+            # Scale shape: [ceil_div(n, 128), ceil_div(k, 128)]
+            out_s = paddle.ones([(n + 127) // 128, (k + 127) // 128], dtype="float32")
             return out_w, out_s
+
+        def fake_transform_scale_ue8m0(sf, mn, weight_block_size=None):
+            # Mock transform_scale_ue8m0 behavior
+            # For input [mn, k] where k is small (e.g., 2):
+            # After index_select: sf becomes [mn, k]
+            # After TMA align and pack: result is [mn, align(k, 4)//4]
+            # For k=2, align(2,4)=4, so result is [mn, 1]
+            if weight_block_size:
+                indices = paddle.arange(mn) // 128
+                sf = paddle.index_select(sf, -2, indices)
+            # Final shape: [mn, align(k,4)//4]
+            aligned_k = ((sf.shape[-1] + 3) // 4) * 4 if sf.shape[-1] < 4 else ((sf.shape[-1] + 4 - 1) // 4) * 4
+            result_shape = [sf.shape[0], aligned_k // 4]
+            return paddle.zeros(result_shape, dtype=paddle.int32)
 
         fd_config = mock.MagicMock()
         fd_config.load_config.load_choices.return_value = "default_v1"
@@ -115,27 +138,23 @@ class TestFP8FusedMoeWithUe8m0Scale(unittest.TestCase):
         )
         method = BlockWiseFP8MoEMethod(quant_config=self.quant_config)
 
-        method.up_gate_proj_weight_shape = [1, 512, 256]
-        method.down_proj_weight_shape = [1, 256, 256]
-        method.up_gate_proj_scale_shape = [1, 512, 1]
+        # Call create_weights to initialize method attributes and layer parameters
+        method.create_weights(layer, model_format="torch")
+
+        # Override the down_proj scale shape to match expected [1, 256, 1]
         method.down_proj_scale_shape = [1, 256, 1]
 
-        if "fastdeploy.model_executor.ops.gpu.deep_gemm.utils" in sys.modules:
-            # This is for sm90, which DeepGEMM does not support ue8m0 scale
-            fake = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm")
-            fake2 = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm.utils.math")
-            fake2.per_block_cast_to_fp8 = fake_per_block_cast_to_fp8
-            fake3 = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm.utils")
-            fake3.align = lambda x, y: (x + y - 1) // y * y
-            fake3.get_tma_aligned_size = lambda x, y: (x + 16 // y - 1) // (16 // y) * (16 // y)
+        # Mock quant_weight_ue8m0 and transform_scale_ue8m0 for the else branch
+        # Patch them after create_weights is called
+        with mock.patch.object(moe_backend_module, "quant_weight_ue8m0", fake_quant_weight_ue8m0):
+            with mock.patch.object(moe_backend_module, "transform_scale_ue8m0", fake_transform_scale_ue8m0):
+                with mock.patch.object(moe_backend_module, "free_tensor", lambda tensor: None):
+                    import fastdeploy.envs as _fd_envs
 
-            fake.utils = fake3
-            fake3.math = fake2
-
-            sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm"].utils = fake3
-
-        method.model_format = "torch"
-        method.process_weights_after_loading(layer)
+                    # Set FD_USE_PHI_FP8_QUANT=False to enter the quant_weight_ue8m0 branch
+                    with mock.patch.object(_fd_envs, "FD_USE_PHI_FP8_QUANT", False):
+                        method.model_format = "torch"
+                        method.process_weights_after_loading(layer)
 
         self.assertTrue(layer.down_proj_weight_scale_inv.dtype == paddle.int32)
         self.assertEqual(layer.down_proj_weight_scale_inv.shape, method.down_proj_scale_shape)
