@@ -707,7 +707,7 @@ class Indexer(nn.Layer):
                 logits.contiguous(),
                 indexer_top_k,
                 ks_topk,  # self.offsets,
-                ke - ks,  # mask.contiguous(),#self.lengths,
+                ke - ks + 1,  # mask.contiguous(),#self.lengths,
                 None,  # forward_meta.seq_lens_decoder,
                 None,  # forward_meta.batch_id_per_token,
                 None,
@@ -785,6 +785,9 @@ class DeepseekV32DSAAttention(nn.Layer):
 
         self.attn_softmax_scale = self.qk_head_dim**-0.5
         self.rope_theta = fd_config.model_config.rope_theta
+        if fd_config.model_config.model_type == "glm_moe_dsa":
+            self.rope_theta = fd_config.model_config.rope_parameters["rope_theta"]
+
         self.rms_norm_eps = fd_config.model_config.rms_norm_eps
 
         assert self.q_lora_rank is not None, "self.q_lora_rank is None, Please Check your config."
