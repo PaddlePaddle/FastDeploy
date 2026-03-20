@@ -79,17 +79,17 @@ __global__ void draft_model_update_kernel(const int64_t* inter_next_tokens,
 
       // multi_end
       // TODO(liuzichang): Don't check eos in future
-      if (is_in_end(token_this_time, end_ids, end_ids_len) ||
-          prefill_one_step_stop) {
-        stop_flags[tid] = true;
-        stop_flag_now_int = 1;
-        // max_dec_len
-      } else if (step_idx[tid] >= max_dec_len[tid]) {
-        stop_flags[tid] = true;
-        draft_token_now[seq_len_this_time - 1] = end_ids[0];
-        base_model_draft_tokens_now[substep + 1] = end_ids[0];
-        stop_flag_now_int = 1;
-      }
+      // if (is_in_end(token_this_time, end_ids, end_ids_len) ||
+      //     prefill_one_step_stop) {
+      //   stop_flags[tid] = true;
+      //   stop_flag_now_int = 1;
+      //   // max_dec_len
+      // } else if (step_idx[tid] >= max_dec_len[tid]) {
+      //   stop_flags[tid] = true;
+      //   draft_token_now[seq_len_this_time - 1] = end_ids[0];
+      //   base_model_draft_tokens_now[substep + 1] = end_ids[0];
+      //   stop_flag_now_int = 1;
+      // }
 
     } else {
       draft_token_now[0] = -1;

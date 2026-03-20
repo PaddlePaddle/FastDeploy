@@ -704,8 +704,26 @@ class MTPProposer(Proposer):
     def _prepare_inputs(self, full_hidden_states):
         """
         Prepare MTP inputs
+
+        MTP state (seq_lens_decoder, step_idx) is "shadow state":
+        - Initialized from target model state each round
+        - Used for MTP forward, but not committed until verify
+        - No rollback needed since it's always re-initialized
         """
-        use_v1_cache_scheduler = bool(envs.ENABLE_V1_KVCACHE_SCHEDULER)
+        # logger.info("==================Input draft_model_preprocess==================")
+        # logger.info(f"D role: {self.role}")
+        # logger.info(f'T seq_lens_this_time: {self.target_model_inputs["seq_lens_this_time"]}')
+        # logger.info(f'T seq_lens_encoder: {self.target_model_inputs["seq_lens_encoder"]}')
+        # logger.info(f'T seq_lens_decoder: {self.target_model_inputs["seq_lens_decoder"]}')
+        # logger.info(f'T step_idx: {self.target_model_inputs["step_idx"]}')
+        # logger.info(f'T stop_flags: {self.target_model_inputs["stop_flags"]}')
+        # logger.info(f'D seq_lens_this_time: {self.model_inputs["seq_lens_this_time"]}')
+        # logger.info(f'D seq_lens_encoder: {self.model_inputs["seq_lens_encoder"]}')
+        # logger.info(f'D seq_lens_decoder: {self.model_inputs["seq_lens_decoder"]}')
+        # logger.info(f'D step_idx: {self.model_inputs["step_idx"]}')
+        # logger.info(f'D stop_flags: {self.model_inputs["stop_flags"]}')
+        # # logger.info(f'D input_ids: {self.model_inputs["input_ids"].numpy().tolist()}')
+        # logger.info(f'==============Fin=====================')
         draft_model_preprocess(
             self.model_inputs["draft_tokens"],
             self.model_inputs["input_ids"],
@@ -715,24 +733,17 @@ class MTPProposer(Proposer):
             self.model_inputs["seq_lens_decoder"],
             self.model_inputs["step_idx"],
             self.model_inputs["not_need_stop"],
-            self.model_inputs["batch_drop"],
-            self.model_inputs["is_block_step"],
             self.model_inputs["pre_ids"],
-            self.model_inputs["mask_rollback"],
-            self.model_inputs["recompute_token_num"],
             self.target_model_inputs["accept_tokens"],
             self.target_model_inputs["accept_num"],
-            self.target_model_inputs["seq_lens_this_time"],
             self.target_model_inputs["seq_lens_encoder"],
             self.target_model_inputs["seq_lens_decoder"],
             self.target_model_inputs["step_idx"],
             self.target_model_inputs["stop_flags"],
-            self.target_model_inputs["is_block_step"],
+            self.model_inputs["max_dec_len"],
             self.target_model_inputs["draft_tokens"],
             self.num_model_steps,
-            True,
-            self.role == "prefill",
-            use_v1_cache_scheduler,
+            self.role == "prefill",  # is_splitwise_prefill
         )
 
         target_hidden_states = eagle_get_hidden_states(
@@ -746,6 +757,16 @@ class MTPProposer(Proposer):
             self.target_model_inputs["seq_lens_encoder"],
             self.num_model_steps,
         )
+
+        # logger.info("======MTP Input =====")
+        # logger.info(f'D seq_lens_this_time: {self.model_inputs["seq_lens_this_time"]}')
+        # logger.info(f'D seq_lens_encoder: {self.model_inputs["seq_lens_encoder"]}')
+        # logger.info(f'D seq_lens_decoder: {self.model_inputs["seq_lens_decoder"]}')
+        # logger.info(f'D step_idx: {self.model_inputs["step_idx"]}')
+        # logger.info(f'D stop_flags: {self.model_inputs["stop_flags"]}')
+        # # logger.info(f'D input_ids: {self.model_inputs["input_ids"].numpy().tolist()}')
+        # logger.info(f'D draft_tokens: {self.model_inputs["draft_tokens"]}')
+        # logger.info(f'==============Fin=====================')
 
         self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
