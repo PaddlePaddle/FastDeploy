@@ -1071,7 +1071,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         )
         self.assertNotIn("think_stop_sentence", processed.sampling_params.logits_processors_args)
 
-    def test_ernie_process_request_prepares_thinking_budget_args(self):
+    def test_ernie_process_request_dict_prepares_thinking_budget_args(self):
         processor = ErnieTextDataProcessor.__new__(ErnieTextDataProcessor)
         processor._apply_default_parameters = lambda request: request
         processor.eos_token_ids = [1]
@@ -1081,28 +1081,28 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         processor.tokenizer = DummyTokenizerForTextProcessor()
         processor.reasoning_parser = None
 
-        request = DummyRequestV1(
-            request_id="req_ernie_text",
-            eos_token_ids=[1],
-            prompt_token_ids=[1, THINKING_START_TOKEN_ID, 2],
-            prompt=None,
-            messages=None,
-            logits_processors_args={"thinking_budget": 20, "think_stop_sentence": "done"},
-            bad_words=None,
-            bad_words_token_ids=None,
-            max_tokens=1,
-            temperature=1.0,
-            top_p=0.9,
-            response_max_tokens=None,
-            enable_thinking=True,
-        )
+        request = {
+            "request_id": "req_ernie_text",
+            "eos_token_ids": [1],
+            "prompt_token_ids": [1, THINKING_START_TOKEN_ID, 2],
+            "prompt": None,
+            "messages": None,
+            "logits_processors_args": {"thinking_budget": 20, "think_stop_sentence": "done"},
+            "bad_words": None,
+            "bad_words_token_ids": None,
+            "max_tokens": 1,
+            "temperature": 1.0,
+            "top_p": 0.9,
+            "response_max_tokens": None,
+            "enable_thinking": True,
+        }
         with patch("fastdeploy.input.ernie4_5_processor.process_stop_token_ids", lambda *args, **kwargs: None):
-            processed = processor.process_request(request, max_model_len=16)
+            processed = processor.process_request_dict(request, max_model_len=16)
 
-        self.assertEqual(processed.logits_processors_args["think_stop_sentence_token_ids"], [501, 502])
-        self.assertTrue(processed.logits_processors_args["think_prompt_started"])
-        self.assertFalse(processed.logits_processors_args["think_prompt_ended"])
-        self.assertEqual(processed.logits_processors_args["think_prompt_tokens_after_start"], 0)
+        self.assertEqual(processed["logits_processors_args"]["think_stop_sentence_token_ids"], [501, 502])
+        self.assertTrue(processed["logits_processors_args"]["think_prompt_started"])
+        self.assertFalse(processed["logits_processors_args"]["think_prompt_ended"])
+        self.assertEqual(processed["logits_processors_args"]["think_prompt_tokens_after_start"], 0)
 
     def test_v1_ernie_process_request_dict_prepares_thinking_budget_args(self):
         processor = V1ErnieTextDataProcessor.__new__(V1ErnieTextDataProcessor)
