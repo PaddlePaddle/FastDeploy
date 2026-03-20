@@ -416,6 +416,13 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 eng.running = False
                 return error, payload
 
+            def receive_pyobj_once(self, block):
+                eng.running = False
+                return error, payload
+
+            def close(self):
+                pass
+
         return DummyRecv()
 
     @staticmethod
@@ -692,9 +699,20 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng = self._make_mixed_engine()
         eng.send_response_server = Mock()
 
-        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
+        ):
             eng._send_error_response("rid0", "boom", error_code=400)
             eng.send_response_server.send_response.assert_called_with("rid0", [ANY])
+
+        eng.send_response_server.reset_mock()
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", True),
+        ):
+            eng._send_error_response("rid2", "boom", error_code=400)
+            eng.send_response_server.send_response.assert_called_with(None, [ANY], worker_pid=None)
 
         eng.send_response_server.reset_mock()
         with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True):
@@ -1191,6 +1209,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         with (
             patch("fastdeploy.engine.common_engine.main_process_metrics", DummyMetrics()),
             patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
             eng._insert_zmq_task_to_scheduler()
@@ -1564,6 +1583,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch("fastdeploy.engine.common_engine.ZmqIpcServer", self._make_zmq_server_cls()),
             patch("fastdeploy.engine.common_engine.threading.Thread", self._make_zmq_thread_cls(created)),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
@@ -1624,6 +1644,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
             eng._insert_zmq_task_to_scheduler()
@@ -1652,7 +1673,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             },
         )
 
-        with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
             eng._insert_zmq_task_to_scheduler()
 
         eng._send_error_response.assert_called_once()
@@ -1764,6 +1788,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
             eng._zmq_send_generated_tokens()
@@ -1779,7 +1804,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         self._make_scheduler_with_output(eng, [1], 0, True, include_raw=True)
 
-        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
+        ):
             eng._zmq_send_generated_tokens()
 
         eng.send_response_server.send_response.assert_called_once()
@@ -1887,6 +1915,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
             eng._zmq_send_generated_tokens()
@@ -2502,7 +2531,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                     mock_request.metrics.scheduler_recv_req_time = 0
                     MockRequest.from_dict.return_value = mock_request
 
-                    with patch("fastdeploy.engine.common_engine.trace_print"):
+                    with (
+                        patch("fastdeploy.engine.common_engine.trace_print"),
+                        patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
+                    ):
                         eng._insert_zmq_task_to_scheduler()
 
                         # Verify trace_set_proc_propagate_context was called with correct args (lines 1165-1167)
@@ -2528,7 +2560,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                     mock_request.metrics.scheduler_recv_req_time = 0
                     MockRequest.from_dict.return_value = mock_request
 
-                    with patch("fastdeploy.engine.common_engine.trace_print"):
+                    with (
+                        patch("fastdeploy.engine.common_engine.trace_print"),
+                        patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
+                    ):
                         eng._insert_zmq_task_to_scheduler()
 
                         # Verify trace_set_proc_propagate_context was NOT called when no trace_carrier
@@ -2539,3 +2574,821 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 eng._finalizer.detach()
             except Exception:
                 pass
+
+    def test_start_zmq_service_internal_adapter(self):
+        """Cover lines 1107, 1110: start_zmq_service with FD_ENABLE_INTERNAL_ADAPTER=1."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        # Mock the necessary components
+        eng.api_server_pid = 12345
+
+        mock_tcp_server = Mock()
+        mock_tcp_server.recv_result_handle = Mock()
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", 1),
+            patch("fastdeploy.engine.common_engine.envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT", "6666"),
+            patch("fastdeploy.engine.common_engine.envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT", "6667"),
+            patch("fastdeploy.engine.common_engine.ZmqTcpServer", return_value=mock_tcp_server),
+            patch("fastdeploy.engine.common_engine.InternalAdapter"),
+            patch("fastdeploy.engine.common_engine.threading.Thread") as mock_thread,
+            patch("fastdeploy.engine.common_engine.time.sleep"),
+        ):
+            eng.start_zmq_service(12345)
+
+            # Verify thread was created for recv_result_handle (lines 1107-1110)
+            self.assertTrue(mock_thread.called)
+            # Check that thread was started
+            for call in mock_thread.call_args_list:
+                if "target" in call[1]:
+                    thread_instance = mock_thread.return_value
+                    thread_instance.start.assert_called()
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_start_zmq_service_batch_mode(self):
+        """Cover line 1115: start_zmq_service with ZMQ_SEND_BATCH_DATA=1."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        eng.api_server_pid = 12345
+
+        mock_ipc_server = Mock()
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", 1),
+            patch("fastdeploy.engine.common_engine.ZmqIpcServer", return_value=mock_ipc_server) as mock_server,
+            patch("fastdeploy.engine.common_engine.time.sleep"),
+        ):
+            eng.start_zmq_service(12345)
+
+            # Verify ZmqIpcServer was called with PUSH mode (line 1115)
+            import zmq
+
+            calls = mock_server.call_args_list
+            push_mode_found = False
+            for call in calls:
+                # call[0] is positional args, call[1] is keyword args
+                # The actual code uses: ZmqIpcServer(name=api_server_pid, mode=zmq.PUSH)
+                # So mode is passed as a keyword argument
+                if call[1].get("mode") == zmq.PUSH:
+                    push_mode_found = True
+                    break
+            self.assertTrue(push_mode_found, "PUSH mode should be used when ZMQ_SEND_BATCH_DATA=1")
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_insert_zmq_abort_request_paused(self):
+        """Cover abort request handling: abort bypasses is_paused check and routes to add_abort_req_ids (v1)."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+        eng.running = True
+        eng.is_paused = True  # Engine is paused, but abort requests bypass this check
+
+        abort_data = {
+            "request_id": "abort_test_req",
+            "status": 5,  # RequestStatus.ABORT.value
+        }
+
+        class DummyRecv:
+            def __init__(self):
+                self.call_count = 0
+
+            def receive_json_once(self, block):
+                self.call_count += 1
+                if self.call_count == 1:
+                    return None, abort_data
+                else:
+                    eng.running = False
+                    return None, None
+
+            def receive_pyobj_once(self, block):
+                return self.receive_json_once(block)
+
+            def close(self):
+                pass
+
+        eng.recv_request_server = DummyRecv()
+
+        # Setup resource_manager with abort_req_ids_set
+        eng.resource_manager.abort_req_ids_set = set()
+        eng.resource_manager.add_abort_req_ids = Mock()
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
+            patch.object(eng, "llm_logger") as mock_logger,
+            patch("fastdeploy.engine.common_engine.RequestStatus") as mock_status,
+        ):
+            mock_status.ABORT.value = 5
+            eng._insert_zmq_task_to_scheduler()
+
+            # Verify abort request was logged
+            info_calls = [str(call) for call in mock_logger.info.call_args_list]
+            abort_logged = any("abort" in call.lower() for call in info_calls)
+            self.assertTrue(abort_logged, "Should log 'Receive abort request'")
+
+            # Verify add_abort_req_ids was called (v1 scheduler path)
+            eng.resource_manager.add_abort_req_ids.assert_called_once_with("abort_test_req")
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_insert_zmq_abort_request_in_requests(self):
+        """Cover abort request handling: when ENABLE_V1_KVCACHE_SCHEDULER=1, add_abort_req_ids is called."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+        eng.running = True
+        eng.is_paused = False
+
+        abort_data = {
+            "request_id": "abort_in_requests",
+            "status": 5,  # RequestStatus.ABORT.value
+        }
+
+        class DummyRecv:
+            def __init__(self):
+                self.call_count = 0
+
+            def receive_json_once(self, block):
+                self.call_count += 1
+                if self.call_count == 1:
+                    return None, abort_data
+                else:
+                    eng.running = False
+                    return None, None
+
+            def receive_pyobj_once(self, block):
+                return self.receive_json_once(block)
+
+            def close(self):
+                pass
+
+        eng.recv_request_server = DummyRecv()
+        eng.resource_manager.abort_req_ids_set = set()
+
+        # Mock add_abort_req_ids on resource_manager
+        eng.resource_manager.add_abort_req_ids = Mock()
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1),
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
+            patch.object(eng, "llm_logger"),
+            patch("fastdeploy.engine.common_engine.RequestStatus") as mock_status,
+        ):
+            mock_status.ABORT.value = 5
+            eng._insert_zmq_task_to_scheduler()
+
+            # Verify add_abort_req_ids was called with the correct req_id (v1 scheduler path)
+            eng.resource_manager.add_abort_req_ids.assert_called_once_with("abort_in_requests")
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_run_control_method_with_batch_data(self):
+        """Cover lines 1283, 1284, 1290, 1291, 1297, 1298: run_control_method with ZMQ_SEND_BATCH_DATA=1."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        # Mock send_response_server
+        eng.send_response_server = Mock()
+        eng.send_response_server.send_response = Mock()
+
+        control_req = Mock()
+        control_req.get_method.return_value = "is_paused"  # Use existing method
+        control_req.request_id = "control_test_123"
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", 1),
+            patch.object(eng, "llm_logger"),
+            patch.object(eng, "_control_is_paused") as mock_handler,
+        ):
+            mock_handler.return_value = {"is_paused": False}
+            eng.run_control_method(control_req)
+
+            # Verify send_response was called with 2D array (line 1291)
+            eng.send_response_server.send_response.assert_called_once()
+            call_args = eng.send_response_server.send_response.call_args
+            data = call_args[0][1]
+            # Should be [[response]] format for batch mode
+            self.assertIsInstance(data, list)
+            self.assertIsInstance(data[0], list)
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_run_control_method_unknown_with_batch_data(self):
+        """Cover lines 1283-1284: unknown control method with ZMQ_SEND_BATCH_DATA=1."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        eng.send_response_server = Mock()
+        eng.send_response_server.send_response = Mock()
+
+        control_req = Mock()
+        control_req.get_method.return_value = "unknown_method"
+        control_req.request_id = "control_unknown"
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", 1),
+            patch.object(eng, "llm_logger"),
+        ):
+            eng.run_control_method(control_req)
+
+            # Verify send_response was called with error response (lines 1283-1284)
+            eng.send_response_server.send_response.assert_called_once()
+            call_args = eng.send_response_server.send_response.call_args
+            data = call_args[0][1]
+            # Should be [[error_response]] format
+            self.assertIsInstance(data, list)
+            self.assertIsInstance(data[0], list)
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_send_error_response_with_batch_data(self):
+        """Cover lines 1467, 1468: _send_error_response with ZMQ_SEND_BATCH_DATA=1."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        eng.send_response_server = Mock()
+        eng.send_response_server.send_response = Mock()
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", 1),
+            patch.object(eng, "llm_logger"),
+        ):
+            eng._send_error_response("test_req_id", "Test error message", 500)
+
+            # Verify send_response was called with 2D array format (lines 1467-1468)
+            eng.send_response_server.send_response.assert_called_once()
+            call_args = eng.send_response_server.send_response.call_args
+            data = call_args[0][1]
+            # Should be [[error_result]] format
+            self.assertIsInstance(data, list)
+            self.assertIsInstance(data[0], list)
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_zmq_send_generated_tokens_batch_mode(self):
+        """Cover lines 1530, 1557-1563: _zmq_send_generated_tokens with ZMQ_SEND_BATCH_DATA=1."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+
+        # Initialize request_worker_map for batch mode routing
+        import threading as _threading
+
+        eng.request_worker_map = {}
+        eng.request_worker_map_lock = _threading.Lock()
+
+        # Setup scheduler to return results
+        mock_output = Mock()
+        mock_output.outputs = Mock()
+        mock_output.outputs.token_ids = [1, 2, 3]
+        mock_output.outputs.decode_type = 1  # Not decode_type 0
+        mock_output.finished = False
+        mock_output.request_id = "test_req"
+
+        eng.scheduler = Mock()
+        eng.scheduler.get_results.return_value = {"test_req": [mock_output]}
+
+        eng.send_response_server = Mock()
+        eng.send_response_server.send_response = Mock()
+
+        # Make the loop run only once
+        call_count = [0]
+
+        def get_results_side_effect():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return {"test_req": [mock_output]}
+            else:
+                eng.running = False
+                return {}
+
+        eng.scheduler.get_results.side_effect = get_results_side_effect
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", 1),
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", 0),
+            patch.object(eng, "llm_logger"),
+        ):
+            eng.running = True
+            eng._zmq_send_generated_tokens()
+
+            # Verify send_response was called with batch_data (lines 1557-1563)
+            eng.send_response_server.send_response.assert_called_once()
+            call_args = eng.send_response_server.send_response.call_args
+            # First arg should be None, second should be batch_data (list of lists)
+            self.assertIsNone(call_args[0][0])
+            batch_data = call_args[0][1]
+            self.assertIsInstance(batch_data, list)
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_run_control_method_exception_with_batch_data(self):
+        """Cover lines 1297-1298: run_control_method exception handling with ZMQ_SEND_BATCH_DATA=1."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        eng.send_response_server = Mock()
+        eng.send_response_server.send_response = Mock()
+
+        control_req = Mock()
+        control_req.get_method.return_value = "is_paused"  # Use existing method
+        control_req.request_id = "control_exception"
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", 1),
+            patch.object(eng, "llm_logger"),
+            patch.object(eng, "_control_is_paused", side_effect=RuntimeError("Test exception")),
+        ):
+            eng.run_control_method(control_req)
+
+            # Verify send_response was called with error response (lines 1297-1298)
+            eng.send_response_server.send_response.assert_called_once()
+            call_args = eng.send_response_server.send_response.call_args
+            data = call_args[0][1]
+            # Should be [[error_response]] format
+            self.assertIsInstance(data, list)
+            self.assertIsInstance(data[0], list)
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    # -----------------------------------------------------------------------
+    # New tests targeting uncovered violation lines
+    # -----------------------------------------------------------------------
+
+    def test_insert_zmq_task_control_request_with_worker_pid(self):
+        """Lines 1183-1189: control request when ZMQ_SEND_BATCH_DATA=True maps worker_pid and calls run_control_method."""
+        eng = self._make_mixed_engine()
+        eng.running = True
+        eng.is_paused = False
+        eng.guided_decoding_checker = None
+        eng.resource_manager = Mock(abort_req_ids_set=set(), requests={})
+        eng.scheduler = Mock()
+        eng.engine_worker_queue = Mock()
+        eng.run_control_method = Mock()
+
+        import threading as _threading
+
+        eng.request_worker_map = {}
+        eng.request_worker_map_lock = _threading.Lock()
+
+        ctrl_data = {
+            "request_id": "ctrl-batch",
+            "method": "is_paused",
+            "args": {},
+            "zmq_worker_pid": 9999,
+        }
+
+        class DummyRecv:
+            def __init__(self):
+                self.calls = 0
+
+            def receive_json_once(self, block):
+                self.calls += 1
+                if self.calls == 1:
+                    return None, ctrl_data
+                eng.running = False
+                return None, None
+
+            def receive_pyobj_once(self, block):
+                return self.receive_json_once(block)
+
+            def close(self):
+                pass
+
+        eng.recv_request_server = DummyRecv()
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", True),
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._insert_zmq_task_to_scheduler()
+
+        # worker_pid should be stored in request_worker_map for the control request
+        self.assertIn("ctrl-batch", eng.request_worker_map)
+        self.assertEqual(eng.request_worker_map["ctrl-batch"], 9999)
+        eng.run_control_method.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_insert_zmq_task_control_request_exception_with_worker_pid(self):
+        """Lines 1188-1189: exception during control request processing is caught and logged."""
+        eng = self._make_mixed_engine()
+        eng.running = True
+        eng.is_paused = False
+        eng.guided_decoding_checker = None
+        eng.resource_manager = Mock(abort_req_ids_set=set(), requests={})
+        eng.scheduler = Mock()
+        eng.engine_worker_queue = Mock()
+        eng.run_control_method = Mock(side_effect=RuntimeError("ctrl boom"))
+
+        import threading as _threading
+
+        eng.request_worker_map = {}
+        eng.request_worker_map_lock = _threading.Lock()
+
+        ctrl_data = {
+            "request_id": "ctrl-err",
+            "method": "is_paused",
+            "args": {},
+            "zmq_worker_pid": 1111,
+        }
+
+        class DummyRecv:
+            def __init__(self):
+                self.calls = 0
+
+            def receive_json_once(self, block):
+                self.calls += 1
+                if self.calls == 1:
+                    return None, ctrl_data
+                eng.running = False
+                return None, None
+
+            def receive_pyobj_once(self, block):
+                return self.receive_json_once(block)
+
+            def close(self):
+                pass
+
+        eng.recv_request_server = DummyRecv()
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", True),
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch.object(eng, "llm_logger") as mock_logger,
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._insert_zmq_task_to_scheduler()
+
+        mock_logger.error.assert_called()
+        self._detach_finalizer(eng)
+
+    def test_insert_zmq_task_normal_request_with_worker_pid(self):
+        """Lines 1204-1207: normal request stores worker_pid in request_worker_map; abort request handled."""
+        eng = self._make_mixed_engine()
+        eng.running = True
+        eng.is_paused = False
+        eng.guided_decoding_checker = None
+        eng.resource_manager = Mock(abort_req_ids_set=set(), requests={})
+        eng.scheduler = Mock()
+        eng.engine_worker_queue = Mock()
+
+        import threading as _threading
+
+        eng.request_worker_map = {}
+        eng.request_worker_map_lock = _threading.Lock()
+
+        normal_data = {
+            "request_id": "normal-batch",
+            "prompt_token_ids": [1, 2],
+            "prompt_token_ids_len": 2,
+            "temperature": 1.0,
+            "zmq_worker_pid": 7777,
+        }
+
+        class DummyRecv:
+            def __init__(self):
+                self.calls = 0
+
+            def receive_json_once(self, block):
+                self.calls += 1
+                if self.calls == 1:
+                    return None, normal_data
+                eng.running = False
+                return None, None
+
+            def receive_pyobj_once(self, block):
+                return self.receive_json_once(block)
+
+            def close(self):
+                pass
+
+        eng.recv_request_server = DummyRecv()
+        eng.scheduler.put_requests.return_value = [("normal-batch", None)]
+
+        class DummyMetrics:
+            def __init__(self):
+                self.requests_number = Mock(inc=Mock())
+                self.num_requests_waiting = Mock(inc=Mock())
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", True),
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False),
+            patch("fastdeploy.engine.common_engine.main_process_metrics", DummyMetrics()),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._insert_zmq_task_to_scheduler()
+
+        # worker_pid for normal request should be stored
+        self.assertIn("normal-batch", eng.request_worker_map)
+        self.assertEqual(eng.request_worker_map["normal-batch"], 7777)
+        self._detach_finalizer(eng)
+
+    def test_insert_zmq_task_abort_request_with_worker_pid(self):
+        """Lines 1206-1207: abort request with worker_pid stores mapping then continues."""
+        eng = self._make_mixed_engine()
+        eng.running = True
+        eng.is_paused = False
+        eng.guided_decoding_checker = None
+
+        import threading as _threading
+
+        eng.request_worker_map = {}
+        eng.request_worker_map_lock = _threading.Lock()
+
+        eng.resource_manager = Mock(abort_req_ids_set=set(), requests={})
+        eng.resource_manager.add_abort_req_ids = Mock()
+        eng.scheduler = Mock()
+        eng.engine_worker_queue = Mock()
+
+        abort_data = {
+            "request_id": "abort-worker",
+            "status": RequestStatus.ABORT.value,
+            "zmq_worker_pid": 4444,
+        }
+
+        class DummyRecv:
+            def __init__(self):
+                self.calls = 0
+
+            def receive_json_once(self, block):
+                self.calls += 1
+                if self.calls == 1:
+                    return None, abort_data
+                eng.running = False
+                return None, None
+
+            def receive_pyobj_once(self, block):
+                return self.receive_json_once(block)
+
+            def close(self):
+                pass
+
+        eng.recv_request_server = DummyRecv()
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", True),
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._insert_zmq_task_to_scheduler()
+
+        # worker_pid stored for abort request
+        self.assertIn("abort-worker", eng.request_worker_map)
+        self.assertEqual(eng.request_worker_map["abort-worker"], 4444)
+        eng.resource_manager.add_abort_req_ids.assert_called_once_with("abort-worker")
+        self._detach_finalizer(eng)
+
+    def test_run_control_method_logging_with_request_worker_map(self):
+        """Lines 1299-1300: run_control_method logs start when ZMQ_SEND_BATCH_DATA=True with request_worker_map."""
+        eng = self._make_mixed_engine()
+        eng.send_response_server = Mock()
+        eng._pause_cond = threading.Condition()
+
+        import threading as _threading
+
+        eng.request_worker_map = {"ctrl-log": 5555}
+        eng.request_worker_map_lock = _threading.Lock()
+
+        ctrl_req = ControlRequest(request_id="ctrl-log", method="is_paused")
+        eng.is_paused = False
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", True),
+            patch.object(eng, "llm_logger") as mock_logger,
+        ):
+            eng.run_control_method(ctrl_req)
+
+        # Lines 1299-1300: try block start + info logging
+        info_msgs = [str(c) for c in mock_logger.info.call_args_list]
+        self.assertTrue(any("START run control method" in m for m in info_msgs))
+        # worker_pid should be popped from the map
+        self.assertNotIn("ctrl-log", eng.request_worker_map)
+        self._detach_finalizer(eng)
+
+    def test_decode_token_return_text_non_empty_delta_is_end_deletes_status(self):
+        """Lines 1510-1511: _decode_token with non-empty delta and is_end=True deletes decode_status entry."""
+        eng = self._make_mixed_engine()
+
+        class DummyProcessor:
+            def __init__(self):
+                self.decode_status = {"tok-req": (1, 3)}
+
+            def ids2tokens(self, token_ids, req_id):
+                return "hello", [10, 20, 30], None
+
+        eng.data_processor = DummyProcessor()
+
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True):
+            delta, ids = eng._decode_token([10, 20, 30], "tok-req", is_end=True)
+
+        self.assertEqual(delta, "hello")
+        # decode_status key should be deleted (line 1511)
+        self.assertNotIn("tok-req", eng.data_processor.decode_status)
+        self._detach_finalizer(eng)
+
+    def test_decode_process_splitwise_requests_empty_queue_returns_early(self):
+        """Lines 1613-1614: _fetch_requests returns early when disaggregate_queue_empty() is True."""
+        cfg = self._make_cfg(
+            splitwise_role="decode",
+            num_gpu_blocks_override=4,
+            router="0.0.0.0:30000",
+        )
+        eng = self._make_engine(cfg)
+        eng.running = True
+        eng.enable_decode_cache_task = False
+        eng.cfg.splitwise_version = "v1"
+        eng.scheduler = Mock(has_request=Mock(return_value=True), put_results=Mock())
+        eng._insert_prefilled_requests = Mock()
+        eng.insert_tasks = Mock()
+
+        class DummyRM:
+            def is_resource_sufficient(self, prompt_len):
+                return True
+
+        eng.resource_manager = DummyRM()
+
+        empty_queue_call_count = [0]
+
+        class DummyQueueAlwaysEmpty:
+            def disaggregate_queue_empty(self):
+                empty_queue_call_count[0] += 1
+                # Return empty on first call then stop the engine
+                eng.running = False
+                return True
+
+            def get_disaggregated_tasks(self):
+                return []
+
+        eng.engine_worker_queue = DummyQueueAlwaysEmpty()
+
+        class DummyThread:
+            def __init__(self, target=None, daemon=None):
+                self.target = target
+
+            def start(self):
+                try:
+                    self.target()
+                finally:
+                    eng.running = False
+
+        with (
+            patch("fastdeploy.engine.common_engine.threading.Thread", DummyThread),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", False),
+        ):
+            eng._decode_process_splitwise_requests()
+
+        # Queue was seen as empty so get_disaggregated_tasks should not be called
+        self.assertEqual(empty_queue_call_count[0], 1)
+        eng.insert_tasks.assert_not_called()
+        self._detach_finalizer(eng)
+
+    def test_register_to_router_inner_function_runs(self):
+        """_register inner function body executes (timeout and sleep_seconds set)."""
+        from fastdeploy.engine.register_manager import RegisterManager
+
+        eng = self._make_mixed_engine()
+        eng.cfg.router_config.router = "http://fake-router"
+        eng.cfg.router_config.api_server_host = "127.0.0.1"
+        eng.cfg.router_config.api_server_port = 19999
+        eng.cfg.register_info = {"name": "test-server"}
+
+        reg_mgr = RegisterManager(
+            cfg=eng.cfg,
+            engine_worker_queue=MagicMock(),
+            get_is_paused=lambda: False,
+        )
+
+        captured_target = [None]
+
+        class _CapturingThread:
+            def __init__(self, target=None, daemon=None):
+                captured_target[0] = target
+                self.target = target
+                self.daemon = daemon
+
+            def start(self):
+                pass  # don't auto-start
+
+        with patch("fastdeploy.engine.register_manager.threading.Thread", _CapturingThread):
+            reg_mgr._register_to_router()
+
+        # Verify the inner _register function was captured
+        self.assertIsNotNone(captured_target[0])
+
+        # Now invoke the inner _register function directly.
+        # Mock out check_service_health to return False so it doesn't hang,
+        # and time.sleep to raise StopIteration to break the while True loop.
+        call_count = [0]
+
+        def _fake_sleep(s):
+            call_count[0] += 1
+            if call_count[0] >= 2:
+                raise StopIteration("stop")
+
+        with (
+            patch("fastdeploy.engine.register_manager.check_service_health", return_value=False),
+            patch("fastdeploy.engine.register_manager.time.sleep", _fake_sleep),
+        ):
+            try:
+                captured_target[0]()
+            except StopIteration:
+                pass
+
+        # At least one sleep call was made, confirming the inner function executed
+        self.assertGreaterEqual(call_count[0], 1)
+        self._detach_finalizer(eng)

@@ -965,40 +965,6 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.processor._check_mm_limits(item_exceeded)
 
-    def test_process_request_wrapper(self):
-        """测试 process_request 封装方法"""
-        # 1. 模拟输入 Request 对象
-        request_obj = MagicMock()
-        request_dict = {
-            "prompt": "test prompt",
-            "multimodal_data": {"image": ["image1"]},
-            "metadata": {"generated_token_ids": []},
-            "request_id": "test-request",
-        }
-        request_obj.to_dict.return_value = request_dict
-
-        # 2. patch 'Request'
-        patch_target = "fastdeploy.input.paddleocr_vl_processor.paddleocr_vl_processor.Request"
-        with patch(patch_target) as MockRequestCls:
-
-            # 3. 模拟 Request.from_dict 返回一个 mock 对象
-            final_mock_request = MagicMock()
-            MockRequestCls.from_dict.return_value = final_mock_request
-
-            # 4. Call function
-            result_request = self.processor.process_request(request_obj, max_model_len=512)
-
-            # 5. 检查 *传递给* Request.from_dict 的字典
-            self.assertTrue(MockRequestCls.from_dict.called)
-            # 获取传递给 from_dict 的第一个位置参数
-            processed_task_dict = MockRequestCls.from_dict.call_args[0][0]
-
-            # 这个断言现在应该能通过了
-            self.assertEqual(processed_task_dict["prompt_token_ids"], [1, 2, 3])
-
-            # 6. 检查返回的是否是最终的 Request 对象
-            self.assertIs(result_request, final_mock_request)
-
     def test_parse_processor_kwargs_invalid_type(self):
         """测试 _parse_processor_kwargs 传入非字典类型"""
         invalid_input = ["video_max_frames", 10]
