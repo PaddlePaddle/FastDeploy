@@ -28,9 +28,7 @@ from typing import Any, Dict
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.ops.xpu import static_op_verify_draft_tokens
-
-verify_draft_tokens = static_op_verify_draft_tokens
+from fastdeploy.model_executor.ops.xpu import verify_draft_tokens
 from fastdeploy.spec_decode import VerifyStrategy
 
 CPU_PLACE = paddle.CPUPlace()
@@ -621,6 +619,54 @@ TEST_CONFIGS = [
         "seed": 42,
         "accept_all": True,
     },
+    {
+        "name": "reject_all_topp",
+        "real_bsz": 8,
+        "max_draft_tokens": 5,
+        "max_seq_len": 100,
+        "max_candidate_len": 5,
+        "verify_window": 2,
+        "end_length": 3,
+        "verify_strategy": VerifyStrategy.TOPP.value,
+        "seed": 42,
+        "reject_all": True,
+    },
+    {
+        "name": "reject_all_target_match",
+        "real_bsz": 8,
+        "max_draft_tokens": 5,
+        "max_seq_len": 100,
+        "max_candidate_len": 5,
+        "verify_window": 2,
+        "end_length": 3,
+        "verify_strategy": VerifyStrategy.TARGET_MATCH.value,
+        "seed": 42,
+        "reject_all": True,
+    },
+    {
+        "name": "accept_all_greedy",
+        "real_bsz": 8,
+        "max_draft_tokens": 5,
+        "max_seq_len": 100,
+        "max_candidate_len": 5,
+        "verify_window": 2,
+        "end_length": 3,
+        "verify_strategy": VerifyStrategy.GREEDY.value,
+        "seed": 42,
+        "accept_all": True,
+    },
+    {
+        "name": "accept_all_target_match",
+        "real_bsz": 8,
+        "max_draft_tokens": 5,
+        "max_seq_len": 100,
+        "max_candidate_len": 5,
+        "verify_window": 2,
+        "end_length": 3,
+        "verify_strategy": VerifyStrategy.TARGET_MATCH.value,
+        "seed": 42,
+        "accept_all": True,
+    },
     # --- edge cases ---
     {
         "name": "empty_batch",
@@ -765,6 +811,228 @@ class TestVerifyDraftTokens(unittest.TestCase):
         inputs["seq_lens_this_time"][0] = 5
 
         self._run_and_compare(inputs, label="verify_window_no_fallback")
+
+    def test_stop_flags_skip(self):
+        """Test that sequences with stop_flags=True are skipped (output_len=0)."""
+        inputs = gen_verify_draft_tokens_inputs(
+            real_bsz=4, max_draft_tokens=5, verify_strategy=VerifyStrategy.GREEDY.value, seed=42, match_ratio=1.0
+        )
+        inputs["is_block_step"][:] = False
+        inputs["stop_flags"][:] = [True, False, True, False]
+        self._run_and_compare(inputs, label="stop_flags_skip")
+        # Double-check stopped sequences produce output_len=0
+        paddle_inputs = to_paddle_inputs(inputs)
+        run_kernel(paddle_inputs, inputs)
+        gpu_len = paddle_inputs["step_output_len"].numpy()
+        self.assertEqual(gpu_len[0], 0, "stopped seq bid=0 should have output_len=0")
+        self.assertEqual(gpu_len[2], 0, "stopped seq bid=2 should have output_len=0")
+
+    def test_prefill_skip(self):
+        """Test that prefill requests (seq_lens_encoder != 0) skip Phase 1, only output 1 token."""
+        inputs = gen_verify_draft_tokens_inputs(
+            real_bsz=4, max_draft_tokens=6, verify_strategy=VerifyStrategy.GREEDY.value, seed=42, match_ratio=1.0
+        )
+        inputs["is_block_step"][:] = False
+        inputs["stop_flags"][:] = False
+        # Set bid 0 and 2 as prefill requests
+        inputs["seq_lens_encoder"][0] = 10
+        inputs["seq_lens_encoder"][2] = 5
+        self._run_and_compare(inputs, label="prefill_skip")
+
+    def test_reasoning_status_skip(self):
+        """Test that reasoning_status=1 skips Phase 1, only outputs 1 token."""
+        inputs = gen_verify_draft_tokens_inputs(
+            real_bsz=4, max_draft_tokens=6, verify_strategy=VerifyStrategy.GREEDY.value, seed=42, match_ratio=1.0
+        )
+        inputs["is_block_step"][:] = False
+        inputs["stop_flags"][:] = False
+        # Set bid 1 and 3 as reasoning mode
+        inputs["reasoning_status"][1] = 1
+        inputs["reasoning_status"][3] = 1
+        self._run_and_compare(inputs, label="reasoning_status_skip")
+
+    def test_reject_all_and_accept_all_priority(self):
+        """Test that reject_all takes priority over accept_all when both are True."""
+        inputs = gen_verify_draft_tokens_inputs(
+            real_bsz=4,
+            max_draft_tokens=5,
+            verify_strategy=VerifyStrategy.GREEDY.value,
+            seed=42,
+            match_ratio=1.0,
+            reject_all=True,
+            accept_all=True,
+        )
+        inputs["is_block_step"][:] = False
+        inputs["stop_flags"][:] = False
+        self._run_and_compare(inputs, label="reject_all_and_accept_all")
+        # All sequences should produce exactly 1 token (Phase 2 only)
+        paddle_inputs = to_paddle_inputs(inputs)
+        run_kernel(paddle_inputs, inputs)
+        gpu_len = paddle_inputs["step_output_len"].numpy()
+        for bid in range(4):
+            self.assertEqual(gpu_len[bid], 1, f"reject_all should produce exactly 1 token at bid={bid}")
+
+    def test_mixed_batch_heterogeneous(self):
+        """Test a batch with mixed states: normal, stopped, prefill, reasoning, block_step."""
+        inputs = gen_verify_draft_tokens_inputs(
+            real_bsz=6, max_draft_tokens=6, verify_strategy=VerifyStrategy.GREEDY.value, seed=42, match_ratio=0.8
+        )
+        # bid 0: normal decode
+        inputs["is_block_step"][0] = False
+        inputs["stop_flags"][0] = False
+        inputs["seq_lens_encoder"][0] = 0
+        inputs["reasoning_status"][0] = 0
+        # bid 1: stopped
+        inputs["is_block_step"][1] = False
+        inputs["stop_flags"][1] = True
+        inputs["seq_lens_encoder"][1] = 0
+        inputs["reasoning_status"][1] = 0
+        # bid 2: prefill
+        inputs["is_block_step"][2] = False
+        inputs["stop_flags"][2] = False
+        inputs["seq_lens_encoder"][2] = 8
+        inputs["reasoning_status"][2] = 0
+        # bid 3: reasoning mode
+        inputs["is_block_step"][3] = False
+        inputs["stop_flags"][3] = False
+        inputs["seq_lens_encoder"][3] = 0
+        inputs["reasoning_status"][3] = 1
+        # bid 4: block step
+        inputs["is_block_step"][4] = True
+        inputs["stop_flags"][4] = False
+        inputs["seq_lens_encoder"][4] = 0
+        inputs["reasoning_status"][4] = 0
+        # bid 5: normal decode
+        inputs["is_block_step"][5] = False
+        inputs["stop_flags"][5] = False
+        inputs["seq_lens_encoder"][5] = 0
+        inputs["reasoning_status"][5] = 0
+        self._run_and_compare(inputs, label="mixed_batch_heterogeneous")
+
+    def test_single_token_sequence(self):
+        """Test seq_lens_this_time=1: Phase 1 is skipped entirely, only Phase 2 outputs 1 token."""
+        for strategy in [VerifyStrategy.GREEDY.value, VerifyStrategy.TOPP.value, VerifyStrategy.TARGET_MATCH.value]:
+            with self.subTest(strategy=strategy):
+                inputs = gen_verify_draft_tokens_inputs(
+                    real_bsz=4, max_draft_tokens=8, verify_strategy=strategy, seed=42
+                )
+                inputs["seq_lens_this_time"][:] = 1
+                # Recompute cu_seqlens_q_output for all-1 seq_lens
+                inputs["cu_seqlens_q_output"] = np.array([0, 1, 2, 3], dtype=np.int32)
+                # Regenerate target/candidate arrays for new sum_seq=4
+                sum_seq = 4
+                rng = np.random.default_rng(42)
+                if strategy in (1, 2):
+                    inputs["target_tokens"] = rng.integers(0, 1000, size=(sum_seq,), dtype=np.int64)
+                else:
+                    max_candidate_len = 8
+                    inputs["candidate_ids"] = rng.integers(0, 1000, size=(sum_seq, max_candidate_len), dtype=np.int64)
+                    inputs["candidate_scores"] = rng.random(size=(sum_seq, max_candidate_len)).astype(np.float32)
+                    inputs["candidate_scores"] /= inputs["candidate_scores"].sum(axis=1, keepdims=True)
+                    inputs["candidate_lens"] = rng.integers(1, max_candidate_len + 1, size=sum_seq, dtype=np.int32)
+                inputs["is_block_step"][:] = False
+                inputs["stop_flags"][:] = False
+                self._run_and_compare(inputs, label=f"single_token_strategy_{strategy}")
+
+    def test_max_dec_len_exact_boundary(self):
+        """Test step_idx == max_dec_len - 1: first emit triggers max_len_hit immediately."""
+        inputs = gen_verify_draft_tokens_inputs(
+            real_bsz=4, max_draft_tokens=6, verify_strategy=VerifyStrategy.GREEDY.value, seed=42, match_ratio=1.0
+        )
+        inputs["is_block_step"][:] = False
+        inputs["stop_flags"][:] = False
+        # Set step_idx = max_dec_len - 1, so first emit_token increments past max_dec_len
+        inputs["max_dec_len"][:] = 50
+        inputs["step_idx"][:] = 49
+        # Ensure no accidental EOS in draft tokens
+        for bid in range(4):
+            for j in range(6):
+                while inputs["step_input_ids"][bid, j] in inputs["end_tokens"]:
+                    inputs["step_input_ids"][bid, j] = (inputs["step_input_ids"][bid, j] + 1) % 1000
+        self._run_and_compare(inputs, label="max_dec_len_exact_boundary")
+        # All sequences should produce exactly 1 token (first emit triggers stop)
+        paddle_inputs = to_paddle_inputs(inputs)
+        run_kernel(paddle_inputs, inputs)
+        gpu_len = paddle_inputs["step_output_len"].numpy()
+        for bid in range(4):
+            self.assertEqual(gpu_len[bid], 1, f"max_dec_len boundary should produce 1 token at bid={bid}")
+
+    def test_eos_during_verify_window_bulk_accept(self):
+        """Test EOS token in the middle of verify_window bulk-accept range stops correctly."""
+        real_bsz, max_draft_tokens, max_candidate_len, verify_window = 1, 10, 4, 2
+        inputs = gen_verify_draft_tokens_inputs(
+            real_bsz=real_bsz,
+            max_draft_tokens=max_draft_tokens,
+            verify_strategy=VerifyStrategy.TOPP.value,
+            max_candidate_len=max_candidate_len,
+            verify_window=verify_window,
+            seed=42,
+        )
+
+        new_slt = max_draft_tokens
+        inputs["seq_lens_this_time"] = np.array([new_slt], dtype=np.int32)
+        inputs["cu_seqlens_q_output"] = np.array([0], dtype=np.int32)
+
+        rng = np.random.default_rng(42)
+        sum_seq = new_slt
+        inputs["candidate_ids"] = rng.integers(0, 1000, size=(sum_seq, max_candidate_len), dtype=np.int64)
+        inputs["candidate_scores"] = rng.random(size=(sum_seq, max_candidate_len)).astype(np.float32)
+        inputs["candidate_scores"] /= inputs["candidate_scores"].sum(axis=1, keepdims=True)
+        inputs["candidate_lens"] = np.full(sum_seq, max_candidate_len, dtype=np.int32)
+        inputs["is_block_step"] = np.zeros(real_bsz, dtype=bool)
+        inputs["stop_flags"] = np.zeros(real_bsz, dtype=bool)
+        inputs["max_dec_len"][:] = 200
+
+        eos_token = int(inputs["end_tokens"][0])
+        # Draft tokens: 100, 200, EOS, 400, 500, ...
+        draft_tokens = [100, 200, eos_token, 400, 500, 600, 700, 800, 900]
+        for i, token in enumerate(draft_tokens):
+            inputs["step_input_ids"][0, i + 1] = token
+
+        # Position 0: draft NOT in top-1, but top-2 matches draft -> verify_window triggers
+        inputs["candidate_ids"][0] = [999, 100, 998, 997]
+        # Position 1: top-1 matches next draft
+        inputs["candidate_ids"][1] = [200, 888, 777, 666]
+        # Position 2: top-1 matches next draft (which is EOS)
+        inputs["candidate_ids"][2] = [eos_token, 555, 444, 333]
+        # Position 3 onwards: top-1 matches (shouldn't be reached due to EOS)
+        inputs["candidate_ids"][3] = [400, 222, 111, 100]
+
+        self._run_and_compare(inputs, label="eos_during_verify_window")
+
+    def test_topp_max_candidate_len_1(self):
+        """Test TOPP with max_candidate_len=1: verify_window fallback cannot trigger."""
+        inputs = gen_verify_draft_tokens_inputs(
+            real_bsz=4,
+            max_draft_tokens=6,
+            verify_strategy=VerifyStrategy.TOPP.value,
+            max_candidate_len=1,
+            verify_window=2,
+            seed=42,
+            match_ratio=0.5,
+        )
+        inputs["is_block_step"][:] = False
+        inputs["stop_flags"][:] = False
+        self._run_and_compare(inputs, label="topp_max_candidate_len_1")
+
+    def test_phase2_eos_token(self):
+        """Test Phase 2 target token is an EOS token."""
+        inputs = gen_verify_draft_tokens_inputs(
+            real_bsz=4, max_draft_tokens=5, verify_strategy=VerifyStrategy.GREEDY.value, seed=42
+        )
+        inputs["is_block_step"][:] = False
+        inputs["stop_flags"][:] = False
+        # Make all draft tokens NOT match target (all reject at position 0)
+        inputs["step_input_ids"][:, 1:] = 999
+        if inputs["target_tokens"] is not None:
+            inputs["target_tokens"][:] = 888
+        # Now set the Phase 2 token (target_tokens at position 0 for each bid) to EOS
+        eos_token = int(inputs["end_tokens"][0])
+        offset = 0
+        for bid in range(4):
+            inputs["target_tokens"][offset] = eos_token
+            offset += int(inputs["seq_lens_this_time"][bid])
+        self._run_and_compare(inputs, label="phase2_eos_token")
 
 
 if __name__ == "__main__":
