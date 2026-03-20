@@ -658,7 +658,6 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                     else:
                         print(f"Warning exceed max_loop={max_loop}, force stop tool loop")
 
-                    prompt_no += 1
                 else:
                     # 无tools
                     history.append(
@@ -667,6 +666,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                             "content": output.generated_text,
                         }
                     )
+                prompt_no += 1
             elif message["role"] == "assistant":
                 continue
             else:
