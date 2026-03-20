@@ -41,6 +41,7 @@ jobs:
   unittest_coverage:
     name: Run FastDeploy Unit Tests and Coverage
     needs: [clone,build]
+    if: ${{ needs.build.outputs.wheel_path != '' }}
     uses: ./.github/workflows/_unit_test_coverage.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
@@ -53,6 +54,7 @@ jobs:
   four_cards_test:
     name: Run Four Cards Tests
     needs: [clone,build]
+    if: ${{ needs.build.outputs.wheel_path != '' }}
     uses: ./.github/workflows/_gpu_4cards_case_test.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
@@ -65,6 +67,7 @@ jobs:
   logprob_test:
     name: Run FastDeploy LogProb Tests
     needs: [build]
+    if: ${{ needs.build.outputs.wheel_path != '' }}
     uses: ./.github/workflows/_logprob_test_linux.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
@@ -77,6 +80,7 @@ jobs:
   pre_ce_test:
     name: Extracted partial CE model tasks to run in CI.
     needs: [clone,build]
+    if: ${{ needs.build.outputs.wheel_path != '' }}
     uses: ./.github/workflows/_pre_ce_test.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
@@ -89,6 +93,7 @@ jobs:
   base_test:
     name: Run Base Tests
     needs: [clone,build]
+    if: ${{ needs.build.outputs.wheel_path != '' }}
     uses: ./.github/workflows/_base_test.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
@@ -101,6 +106,7 @@ jobs:
   stable_test:
     name: Run Stable Tests
     needs: [clone,build]
+    if: ${{ needs.build.outputs.wheel_path != '' }}
     uses: ./.github/workflows/_stable_test.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
