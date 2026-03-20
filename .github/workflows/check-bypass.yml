@@ -33,7 +33,7 @@ jobs:
 
       - id: check-bypass
         name: Check Bypass
-        uses: PFCCLab/ci-bypass@v1
+        uses: PFCCLab/ci-bypass@v2
         with:
           github-token: ${{ secrets.github-token }}
           non-pull-request-event-strategy: 'never-skipped'
