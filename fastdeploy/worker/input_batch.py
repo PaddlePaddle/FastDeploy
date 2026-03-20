@@ -440,6 +440,15 @@ class InputBatch:
         # # Swap block tables
         swap_data(self.block_tables, i1, i2)
 
+        # Swap blocks for head-wise
+        if self.enable_head_wise_kv_cache and self.block_tables_3d is not None:
+            h = self.kv_num_heads
+            s1, e1 = i1 * h, (i1 + 1) * h
+            s2, e2 = i2 * h, (i2 + 1) * h
+            tmp = self.block_tables_3d[s1:e1].clone()
+            self.block_tables_3d[s1:e1] = self.block_tables_3d[s2:e2].clone()
+            self.block_tables_3d[s2:e2] = tmp
+
         # # Swap stop sequences
         swap_data(self.stop_seqs_len, i1, i2)
         swap_data(self.stop_seqs, i1, i2)

@@ -1477,12 +1477,18 @@ class GPUModelRunner(ModelRunnerBase):
     def _process_reorder(self) -> None:
         if self.attn_backends and getattr(self.attn_backends[0], "enable_ids_reorder", False):
             self.share_inputs.enable_pd_reorder = True
+            before_reorder = dict(self.share_inputs.index_to_batch_id)
             self.share_inputs.condense()
             reorder_split_prefill_and_decode(input_batch=self.share_inputs)
-            self._sync_forward_batch_reqs_after_reorder()
-            if self.speculative_decoding:
-                if self.spec_method == SpecMethod.MTP:
-                    self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
+            after_reorder = self.share_inputs.index_to_batch_id
+            changed = before_reorder != after_reorder
+            if changed:
+                self._sync_forward_batch_reqs_after_reorder()
+                if self.speculative_decoding:
+                    if self.spec_method == SpecMethod.MTP:
+                        self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
+            else:
+                return
 
     def _sync_forward_batch_reqs_after_reorder(self) -> None:
         """
@@ -1497,13 +1503,15 @@ class GPUModelRunner(ModelRunnerBase):
 
         list_cap = len(self.forward_batch_reqs_list)
         req_by_batch_id = {}
-        for req in self.forward_batch_reqs_list:
+        old_slot_by_batch_id = {}
+        for slot_idx, req in enumerate(self.forward_batch_reqs_list):
             if req is None:
                 continue
             req_batch_id = getattr(req, "idx", None)
             if req_batch_id is None:
                 continue
             req_by_batch_id[req_batch_id] = req
+            old_slot_by_batch_id[req_batch_id] = slot_idx
 
         aligned_reqs = [None for _ in range(list_cap)]
         for slot_idx, batch_id in index_to_batch_id.items():
@@ -1512,25 +1520,28 @@ class GPUModelRunner(ModelRunnerBase):
             aligned_reqs[slot_idx] = req_by_batch_id.get(batch_id)
 
         self.forward_batch_reqs_list = aligned_reqs
-        if self.enable_head_wise_kv_cache:
-            # InputBatch.swap_states/condense currently only reorders block_tables (2D).
-            # Rebuild block_tables_3d explicitly to keep cache-id rows aligned with reordered slots.
-            self._reset_head_wise_block_tables_state()
-            for slot_idx, req in enumerate(aligned_reqs):
-                if req is None:
-                    continue
-                cache_ids_2d = getattr(req, "block_tables_3d", None)
-                if cache_ids_2d is None and req.block_tables and isinstance(req.block_tables[0], list):
-                    cache_ids_2d = req.block_tables
-                cache_ids_2d = self._normalize_head_wise_cache_ids_2d(cache_ids_2d)
-                if cache_ids_2d is not None:
-                    req.block_tables_3d = cache_ids_2d
-                req_id = getattr(req, "request_id", None)
-                self._update_block_tables_3d_slot(
-                    slot_idx,
-                    cache_ids_2d,
-                    str(req_id) if req_id is not None else None,
-                )
+
+        if not self.enable_head_wise_kv_cache:
+            return
+
+        old_slot_req_ids = list(self._head_wise_slot_req_ids)
+        old_slot_active_rows = [list(rows) for rows in self._head_wise_slot_active_rows]
+        slot_cap = len(old_slot_req_ids)
+
+        new_slot_req_ids = [None for _ in range(slot_cap)]
+        new_slot_active_rows = [[0 for _ in range(self.kv_num_heads)] for _ in range(slot_cap)]
+
+        for new_slot, batch_id in index_to_batch_id.items():
+            if new_slot < 0 or new_slot >= slot_cap:
+                continue
+            old_slot = old_slot_by_batch_id.get(batch_id)
+            if old_slot is None or old_slot < 0 or old_slot >= slot_cap:
+                continue
+            new_slot_req_ids[new_slot] = old_slot_req_ids[old_slot]
+            new_slot_active_rows[new_slot] = list(old_slot_active_rows[old_slot])
+
+        self._head_wise_slot_req_ids = new_slot_req_ids
+        self._head_wise_slot_active_rows = new_slot_active_rows
 
     def load_model(self) -> None:
         """load or download model"""
