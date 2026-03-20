@@ -560,6 +560,7 @@ class TestFDConfig:
 
     def test_commit_config_exception_and_print(self, tmp_path):
         cc = CommitConfig()
+        cc.fastdeploy_commit = ""  # reset: __init__ may have read the real git hash
         cc._load_from_version_file(str(tmp_path / "nonexistent.txt"))
         assert cc.fastdeploy_commit == ""
         bad = tmp_path / "bad_version.txt"
@@ -939,7 +940,9 @@ class TestFDConfig:
         import sys
 
         monkeypatch.setenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")
-        monkeypatch.delitem(sys.modules, "cuda", raising=False)
+        # Block the import entirely (delitem only removes cache; setitem(None) prevents reimport)
+        monkeypatch.setitem(sys.modules, "cuda", None)
+        monkeypatch.setitem(sys.modules, "cuda.cuda", None)
         fd = _make_fdconfig(monkeypatch, ips="0.0.0.0", eplb_config=EPLBConfig({"enable_eplb": True}))
         with pytest.raises(ImportError, match="cuda-python"):
             fd.check()
