@@ -30,6 +30,7 @@ from tqdm import tqdm
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionToolsParam
@@ -565,7 +566,11 @@ class LLM:
                         continue
 
                     result = self.req_output.pop(req_id)
-                    result = self.llm_engine.data_processor.process_response(result)
+                    result_dict = result.to_dict()
+                    result_dict = self.llm_engine.data_processor.process_response_dict(
+                        result_dict, stream=False, include_stop_str_in_output=False, direct_decode=True
+                    )
+                    result = RequestOutput.from_dict(result_dict)
 
                     # filter logprobs
                     if result.outputs.top_logprobs is not None and topk_logprobs is not None:

@@ -20,7 +20,7 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.layers.attention import IluvatarAttnBackend
+from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
 
 
@@ -90,7 +90,8 @@ class IluvatarModelRunner(GPUModelRunner):
             1,
             int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
         )
-        attn_backend = IluvatarAttnBackend(
+        attn_cls = get_attention_backend()
+        attn_backend = attn_cls(
             self.fd_config,
             kv_num_heads=self.model_config.kv_num_heads,
             num_heads=num_heads,

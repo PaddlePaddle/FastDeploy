@@ -165,7 +165,6 @@ class ModelOptNvFp4Config(QuantConfigBase):
                 raise ValueError(
                     f"NVFP4 quantization requires the following fields in " f"hf_quant_config.json: {missing_fields}"
                 )
-
         return cls(
             is_checkpoint_nvfp4_serialized=is_checkpoint_nvfp4_serialized,
             kv_cache_quant_algo=kv_cache_quant_algo,
@@ -524,14 +523,16 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         set_weight_attrs(layer.up_gate_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
         set_weight_attrs(layer.down_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
 
-    @property
-    def load_up_proj_weight_first(self) -> bool:
-        # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
-        # 目前默认给True
-        return False
-
     def process_weights_after_loading(self, layer):
         """ """
+
+        # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
+
+        # [a, b] = layer.up_gate_proj_weight.split(2, axis=1)
+        # layer.up_gate_proj_weight.set_value(paddle.concat([b, a], axis=1))
+        # [a, b] = layer.up_gate_proj_weight_scale.split(2, axis=1)
+        # layer.up_gate_proj_weight_scale.set_value(paddle.concat([b, a], axis=1))
+
         up_gate_proj_weight_scale_2 = layer.up_gate_proj_weight_scale_2[:, 0]
         free_tensor(layer.up_gate_proj_weight_scale_2)
         create_parameter_and_copy(layer, name="up_gate_proj_weight_scale_2", weight=up_gate_proj_weight_scale_2)
