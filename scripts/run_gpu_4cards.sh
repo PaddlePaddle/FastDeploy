@@ -20,14 +20,22 @@ fi
 
 for test_file in "${test_files[@]}"; do
     echo "------------------------------------------------------------"
-    echo "Running pytest: ${test_file}"
+    echo "Running pytest on ${test_file}"
     echo "------------------------------------------------------------"
     # Clean up previous logs
     rm -rf "${REPO_ROOT}"/log* || true
     rm -rf "${REPO_ROOT}"/*.log || true
 
-    if ! python -m pytest -sv --tb=short "${test_file}"; then
-        echo "Pytest failed for: ${test_file}"
+    timeout 600 python -m pytest -sv --tb=short "${test_file}"
+    exit_code=$?
+
+    if [ $exit_code -ne 0 ]; then
+        if [ $exit_code -eq 124 ]; then
+            echo "Pytest timeout (10 min) for: ${test_file}"
+        else
+            echo "Pytest failed for: ${test_file}"
+        fi
+
         echo "${test_file}" >> "${FAILED_CASE_FILE}"
         FAILED_COUNT=$((FAILED_COUNT + 1))
 

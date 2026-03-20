@@ -245,7 +245,9 @@ class ModelRegistry:
             architectures = [architectures]
 
         if not architectures:
-            raise ValueError("No model architectures are specified")
+            raise ValueError(
+                "No model architectures are specified. " "Please set 'architectures' in the model's config.json."
+            )
 
         # First, check if PaddleFormers is explicitly requested
         if model_config is not None and architectures:

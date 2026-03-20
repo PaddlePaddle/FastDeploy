@@ -24,6 +24,7 @@ from typing import Any, Dict, Literal, Optional, Union
 
 import paddle
 import paddle.distributed as dist
+import yaml
 from packaging.version import parse as parse_version
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from typing_extensions import assert_never
@@ -227,6 +228,7 @@ class ModelConfig:
         self.kv_cache_quant_scale_path = ""
         self.enable_entropy = False
         self.model_impl: ModelImpl = "auto"
+        self.version: str = "init"  # will override by the version.yaml in model dir
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
@@ -261,6 +263,15 @@ class ModelConfig:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         # Align external multimodal rope_3d configuration
+        if hasattr(self, "mrope_section"):
+            if (
+                hasattr(self, "rope_scaling")
+                and isinstance(self.rope_scaling, dict)
+                and "mrope_section" not in self.rope_scaling
+            ):
+                self.rope_scaling["mrope_section"] = self.mrope_section
+            elif not hasattr(self, "rope_scaling"):
+                setattr(self, "rope_scaling", {"mrope_section": self.mrope_section})
         if (
             hasattr(self, "rope_scaling")
             and isinstance(self.rope_scaling, dict)
@@ -430,6 +441,17 @@ class ModelConfig:
                     "either 'torch_dtype' (for Hugging Face models) or 'dtype' (for Paddle models) field. "
                     f"Config file path: {config_path}"
                 )
+
+    def read_model_version(self):
+        """
+        Read the version information from a YAML file located at 'version.yaml' within the model directory.
+        If the file exists, it extracts the 'version' field using yaml.safe_load.
+        Raises an assertion error if the file is not found at the specified path.
+        """
+        version_path = os.path.join(self.model, "version.yaml")
+        assert os.path.exists(version_path), f"version.yaml not exist at {version_path}"
+        with open(version_path, "r", encoding="utf-8") as f:
+            self.version = yaml.safe_load(f)["version"]
 
     def _get_default_runner_type(
         self,
@@ -1930,7 +1952,7 @@ class FDConfig:
 
         num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        if num_ranks > self.max_chips_per_node and self.load_config.load_strategy != "meta":
+        if num_ranks > self.max_chips_per_node and self.load_config and self.load_config.load_strategy != "meta":
             self.worker_num_per_node = self.max_chips_per_node
             nnode = ceil_div(num_ranks, self.worker_num_per_node)
             assert nnode == self.nnode, f"nnode: {nnode}, but got {self.nnode}"
@@ -1943,6 +1965,16 @@ class FDConfig:
             self.parallel_config.device_ids = os.getenv("XPU_VISIBLE_DEVICES", self.parallel_config.device_ids)
         if current_platform.is_intel_hpu():
             self.parallel_config.device_ids = os.getenv("HPU_VISIBLE_DEVICES", self.parallel_config.device_ids)
+
+        if (
+            self.load_config
+            and self.load_config.dynamic_load_weight
+            and self.router_config
+            and self.router_config.router
+        ):
+            # For RL scenario: version.yaml will be required for models in future releases.
+            # Temporarily enforce use router to be enabled.
+            self.model_config.read_model_version()
 
         self.read_from_config()
         self.postprocess()
@@ -1993,9 +2025,6 @@ class FDConfig:
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
         self.cache_config.postprocess(self.get_max_chunk_tokens(), self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            self.cache_config.enable_prefix_caching = False
-        if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
-            # TODO(gongshaotian): R3 support prefix caching
             self.cache_config.enable_prefix_caching = False
         if (
             self.structured_outputs_config is not None
@@ -2287,6 +2316,9 @@ class FDConfig:
             "device_ids": self.local_device_ids,
             "transfer_protocol": transfer_protocol,
             "tp_size": self.parallel_config.tensor_parallel_size,
+            "is_paused": False,
+            "version": self.model_config.version,
+            "connected_decodes": [],
         }
         logger.info(f"register_info: {self.register_info}")
 

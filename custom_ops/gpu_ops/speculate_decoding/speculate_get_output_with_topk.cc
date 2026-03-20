@@ -18,6 +18,7 @@
 #include <sys/msg.h>
 #include <sys/types.h>
 #include "paddle/extension.h"
+#include "../custom_ftok.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
@@ -59,7 +60,7 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
 #endif
     msg_queue_id = inference_msg_queue_id_from_env;
   }
-  static key_t key = ftok("/dev/shm", msg_queue_id);
+  static key_t key = custom_ftok("/dev/shm", msg_queue_id);
 
   static int msgid = msgget(key, IPC_CREAT | 0666);
 #ifdef SPECULATE_GET_WITH_OUTPUT_DEBUG

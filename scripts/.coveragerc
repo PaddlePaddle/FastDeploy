@@ -33,7 +33,6 @@ omit =
     */fastdeploy/model_executor/ops/gpu/fastdeploy_ops.py
     */fastdeploy/model_executor/ops/gpu/fastdeploy_ops/__init__.py
     */fastdeploy/model_executor/ops/gpu/deep_gemm/utils.py
-    */fastdeploy/model_executor/layers/attention/iluvatar_attn_backend.py
     */fastdeploy/model_executor/xpu_pre_and_post_process.py
     */fastdeploy/**/dcu/*
     */fastdeploy/worker/dcu*.py

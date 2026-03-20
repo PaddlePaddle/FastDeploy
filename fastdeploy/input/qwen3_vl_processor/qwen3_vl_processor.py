@@ -16,7 +16,6 @@
 
 import numpy as np
 
-from fastdeploy.engine.request import Request
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
 
@@ -73,25 +72,6 @@ class Qwen3VLProcessor(TextProcessor):
         )
         self.image_patch_id = self.processor.image_token_id
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
-
-    def process_request(self, request, max_model_len=None, **kwargs):
-        """
-        Process incoming request and generate model inputs.
-
-        Args:
-            request: Input request object
-            max_model_len (int, optional): Maximum context length
-            **kwargs: Additional processing parameters
-
-        Returns:
-            Request: Processed request with model inputs
-        """
-        task = request.to_dict()
-        task["enable_thinking"] = kwargs.get("enable_thinking", False)
-        self.process_request_dict(task, max_model_len)
-        request = Request.from_dict(task)
-        request = self._apply_default_parameters(request)
-        return request
 
     def _parse_processor_kwargs(self, kwargs):
         """

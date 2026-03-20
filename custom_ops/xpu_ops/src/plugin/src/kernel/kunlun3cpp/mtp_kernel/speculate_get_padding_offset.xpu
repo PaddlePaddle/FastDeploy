@@ -21,8 +21,7 @@
 #include "xpu/kernel/cluster_simd.h"
 #include "xpu/kernel/xtdk.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 template <typename T>
 __global__ void speculate_remove_padding(T* output_data,
@@ -118,5 +117,4 @@ _XPU_DEF_SPECULATE_KERNELS_(float16);
 _XPU_DEF_SPECULATE_KERNELS_(bfloat16);
 _XPU_DEF_SPECULATE_KERNELS_(int64_t);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

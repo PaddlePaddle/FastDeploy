@@ -15,8 +15,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 __attribute__((global)) void draft_model_update(
     const int64_t* inter_next_tokens,
     int64_t* draft_tokens,
@@ -39,12 +38,9 @@ __attribute__((global)) void draft_model_update(
     const int max_seq_len,
     const int substep,
     const bool prefill_one_step_stop);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 bool is_in_end(int64_t token, const int64_t* end_ids, int end_ids_len) {
@@ -56,7 +52,7 @@ bool is_in_end(int64_t token, const int64_t* end_ids, int end_ids_len) {
   return false;
 }
 
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        const int64_t* inter_next_tokens,
                        int64_t* draft_tokens,
                        int64_t* pre_ids,
@@ -151,62 +147,61 @@ static int cpu_wrapper(Context* ctx,
 
   // 等价于CUDA中的BlockReduce求和
   not_need_stop[0] = stop_sum < bsz;
-  return SUCCESS;
+  return api::SUCCESS;
 }
 
-static int xpu2or3_wrapper(Context* ctx,
-                           const int64_t* inter_next_tokens,
-                           int64_t* draft_tokens,
-                           int64_t* pre_ids,
-                           int* seq_lens_this_time,
-                           int* seq_lens_encoder,
-                           int* seq_lens_decoder,
-                           int64_t* step_idx,
-                           const int* output_cum_offsets,
-                           bool* stop_flags,
-                           bool* not_need_stop,
-                           const int64_t* max_dec_len,
-                           const int64_t* end_ids,
-                           int64_t* base_model_draft_tokens,
-                           const int bsz,
-                           const int max_draft_token,
-                           const int pre_id_length,
-                           const int max_base_model_draft_token,
-                           const int end_ids_len,
-                           const int max_seq_len,
-                           const int substep,
-                           const bool prefill_one_step_stop) {
-  ctx_guard RAII_GUARD(ctx);
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  int32_t ret_xre =
-      xpu3::plugin::draft_model_update<<<1, 64, ctx->xpu_stream>>>(
-          reinterpret_cast<const XPU_INT64*>(inter_next_tokens),
-          reinterpret_cast<XPU_INT64*>(draft_tokens),
-          reinterpret_cast<XPU_INT64*>(pre_ids),
-          seq_lens_this_time,
-          seq_lens_encoder,
-          seq_lens_decoder,
-          reinterpret_cast<XPU_INT64*>(step_idx),
-          output_cum_offsets,
-          stop_flags,
-          not_need_stop,
-          reinterpret_cast<const XPU_INT64*>(max_dec_len),
-          reinterpret_cast<const XPU_INT64*>(end_ids),
-          reinterpret_cast<XPU_INT64*>(base_model_draft_tokens),
-          bsz,
-          max_draft_token,
-          pre_id_length,
-          max_base_model_draft_token,
-          end_ids_len,
-          max_seq_len,
-          substep,
-          prefill_one_step_stop);
+static int xpu3_wrapper(api::Context* ctx,
+                        const int64_t* inter_next_tokens,
+                        int64_t* draft_tokens,
+                        int64_t* pre_ids,
+                        int* seq_lens_this_time,
+                        int* seq_lens_encoder,
+                        int* seq_lens_decoder,
+                        int64_t* step_idx,
+                        const int* output_cum_offsets,
+                        bool* stop_flags,
+                        bool* not_need_stop,
+                        const int64_t* max_dec_len,
+                        const int64_t* end_ids,
+                        int64_t* base_model_draft_tokens,
+                        const int bsz,
+                        const int max_draft_token,
+                        const int pre_id_length,
+                        const int max_base_model_draft_token,
+                        const int end_ids_len,
+                        const int max_seq_len,
+                        const int substep,
+                        const bool prefill_one_step_stop) {
+  api::ctx_guard RAII_GUARD(ctx);
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  int32_t ret_xre = fd_xpu3::draft_model_update<<<1, 64, ctx->xpu_stream>>>(
+      reinterpret_cast<const XPU_INT64*>(inter_next_tokens),
+      reinterpret_cast<XPU_INT64*>(draft_tokens),
+      reinterpret_cast<XPU_INT64*>(pre_ids),
+      seq_lens_this_time,
+      seq_lens_encoder,
+      seq_lens_decoder,
+      reinterpret_cast<XPU_INT64*>(step_idx),
+      output_cum_offsets,
+      stop_flags,
+      not_need_stop,
+      reinterpret_cast<const XPU_INT64*>(max_dec_len),
+      reinterpret_cast<const XPU_INT64*>(end_ids),
+      reinterpret_cast<XPU_INT64*>(base_model_draft_tokens),
+      bsz,
+      max_draft_token,
+      pre_id_length,
+      max_base_model_draft_token,
+      end_ids_len,
+      max_seq_len,
+      substep,
+      prefill_one_step_stop);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
 
   return api::SUCCESS;
 }
 
-int draft_model_update(Context* ctx,
+int draft_model_update(api::Context* ctx,
                        const int64_t* inter_next_tokens,
                        int64_t* draft_tokens,
                        int64_t* pre_ids,
@@ -293,34 +288,32 @@ int draft_model_update(Context* ctx,
                        prefill_one_step_stop);
   }
   if (ctx->dev().type() == api::kXPU3) {
-    return xpu2or3_wrapper(ctx,
-                           inter_next_tokens,
-                           draft_tokens,
-                           pre_ids,
-                           seq_lens_this_time,
-                           seq_lens_encoder,
-                           seq_lens_decoder,
-                           step_idx,
-                           output_cum_offsets,
-                           stop_flags,
-                           not_need_stop,
-                           max_dec_len,
-                           end_ids,
-                           base_model_draft_tokens,
-                           bsz,
-                           max_draft_token,
-                           pre_id_length,
-                           max_base_model_draft_token,
-                           end_ids_len,
-                           max_seq_len,
-                           substep,
-                           prefill_one_step_stop);
+    return xpu3_wrapper(ctx,
+                        inter_next_tokens,
+                        draft_tokens,
+                        pre_ids,
+                        seq_lens_this_time,
+                        seq_lens_encoder,
+                        seq_lens_decoder,
+                        step_idx,
+                        output_cum_offsets,
+                        stop_flags,
+                        not_need_stop,
+                        max_dec_len,
+                        end_ids,
+                        base_model_draft_tokens,
+                        bsz,
+                        max_draft_token,
+                        pre_id_length,
+                        max_base_model_draft_token,
+                        end_ids_len,
+                        max_seq_len,
+                        substep,
+                        prefill_one_step_stop);
   }
 
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+from typing import Dict
+
 import paddle
 from paddle import nn
 
@@ -68,9 +70,10 @@ class Qwen2RewardBaseModel(nn.Layer):
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
+        inputs: Dict,
         forward_meta: ForwardMeta,
     ):
+        ids_remove_padding = inputs["ids_remove_padding"]
         hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         hidden_states = hidden_states.to(self.head_dtype)
         logits = self.score(hidden_states)

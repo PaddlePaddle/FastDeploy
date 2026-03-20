@@ -20,8 +20,7 @@
 #include "xpu/kernel/cluster_primitive.h"
 #include "xpu/kernel/cluster_primitive_template.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 static __device__ void do_calc(const _shared_ptr_ int* lm_x,
                                int* lm_y1,
@@ -110,5 +109,4 @@ __global__ void text_image_index_out_kernel(const int* token_type_ids,  // x
     buffer_ptr_y2.gm_store(image_index + i, read_size);
   }
 }
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

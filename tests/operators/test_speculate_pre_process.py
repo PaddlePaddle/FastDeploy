@@ -249,6 +249,16 @@ class TestSpeculatePreProcess(unittest.TestCase):
             0, t_input_ids, t_seq_lens, t_draft_tokens, t_seq_lens_encoder, t_seq_lens_decoder
         )
         self.assertEqual(len(gpu_outs), 7)
+        self.assertIsNotNone(gpu_outs[-3])
+        self.assertIsNotNone(gpu_outs[-2])
+        self.assertIsNotNone(gpu_outs[-1])
+        # test copy
+        fake_cu_seqlens_q_output = paddle.empty([real_bsz + 1], dtype="int32")
+        fake_batch_id_per_token_output = paddle.empty([real_bsz], dtype="int32")
+        fake_cu_seqlens_q_output.copy_(gpu_outs[-3])
+        fake_batch_id_per_token_output.copy_(gpu_outs[-2])
+        # test slice
+        fake_batch_id_per_token_output[: gpu_outs[-1].item()]
 
     # ----------------------------------------------------------------
     # Test 3: exact token values — manually verify ids_remove_padding

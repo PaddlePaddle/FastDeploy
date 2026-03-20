@@ -772,6 +772,15 @@ std::vector<paddle::Tensor> SpeculatePreProcess(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder);
 
+std::vector<paddle::Tensor> BuildSamplingParams(
+    const paddle::Tensor& top_p,
+    const paddle::Tensor& top_k,
+    paddle::Tensor& infer_seed,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& cu_seqlens_q_output,
+    const int64_t token_num_output_cpu,
+    const int64_t increment_value);
+
 void SpecTokenPenaltyMultiScores(
     const paddle::Tensor& token_ids_all,
     const paddle::Tensor& prompt_lens,
@@ -1206,16 +1215,8 @@ std::vector<paddle::Tensor> DSMLAWriteCacheKernel(
     const paddle::Tensor& kv_pe,
     const paddle::Tensor& kv_cache,
     const paddle::Tensor& slot_mapping,
-    const paddle::Tensor& seq_lens,
-    const paddle::Tensor& seq_lens_decoder,
-    const paddle::Tensor& batch_id_per_token,
-    const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& block_tables,
-    const paddle::optional<paddle::Tensor>& kv_signal_data,
     const paddle::optional<paddle::Tensor>& scale,
-    const std::string& cache_quant_type_str,
-    const int max_seq_len,
-    const bool is_prefill);
+    const std::string& cache_quant_type_str);
 
 std::vector<paddle::Tensor> IndexerKQuantAndCacheKernel(
     const paddle::Tensor& k,
@@ -1230,6 +1231,15 @@ std::vector<paddle::Tensor> CpGatherIndexerKQuantCacheKernel(
     paddle::Tensor& dst_scale,
     const paddle::Tensor& block_table,
     const paddle::Tensor& cu_seq_lens);
+
+void PerTokenGroupQuantFp8(const paddle::Tensor& input,
+                           paddle::Tensor& output_q,
+                           paddle::Tensor& output_s,
+                           int64_t group_size,
+                           double eps,
+                           double fp8_min,
+                           double fp8_max,
+                           bool scale_ue8m0);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
@@ -1727,6 +1737,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SpeculatePreProcess,
         "speculate_pre_process function");
 
+  m.def("build_sampling_params",
+        &BuildSamplingParams,
+        "build_sampling_params function");
+
   m.def("speculate_get_token_penalty_multi_scores",
         &SpecTokenPenaltyMultiScores,
         "speculate_get_token_penalty_multi_scores function");
@@ -1873,4 +1887,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("cp_gather_indexer_k_quant_cache",
         &CpGatherIndexerKQuantCacheKernel,
         "cp_gather_indexer_k_quant_cache");
+
+  m.def("per_token_group_fp8_quant",
+        &PerTokenGroupQuantFp8,
+        "per_token_group_quant_fp8");
 }

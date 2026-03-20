@@ -155,7 +155,7 @@ jobs:
       - name: Images Uploading
         env:
           images_name: ${{ needs.ci_image_build.outputs.docker_name_precheck }}
-          ci_image_name: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate"
+          ci_image_name: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev"
         run: |
           echo "images_name=${images_name}"
           docker images ${ci_image_name}

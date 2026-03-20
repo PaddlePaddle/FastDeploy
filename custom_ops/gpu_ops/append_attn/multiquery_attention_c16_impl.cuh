@@ -13,7 +13,7 @@
 // limitations under the License.
 #pragma once
 
-#include "helper.h"  // For getEnvDeterministicMode, getEnvDeterministicDebug
+#include "helper.h"  // For getBoolEnv
 #include "multiquery_attention_c16_kernel.h"
 
 template <typename T,
@@ -33,7 +33,7 @@ __global__ void multi_query_append_attention_kernel(
     const T *__restrict__ q,  // [token_num, (num_heads + 2* kv_num_head) *
                               // head_dim]
     const T *__restrict__ cache_k,  // [max_block_num, num_heads, block_size,
-                                    // head_dim]
+    // head_dim]
     const T *__restrict__ cache_v,
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
@@ -54,9 +54,9 @@ __global__ void multi_query_append_attention_kernel(
     const uint32_t chunk_size,
     const int num_blocks_x_cpu,
     T *__restrict__ tmp_workspace,  // split kv [token_num, num_chunks,
-                                    // num_heads, head_dim]
-    float *__restrict__ tmp_m,      // [token_num, num_chunks, num_heads]
-    float *__restrict__ tmp_d,      // [token_num, num_chunks, num_heads]
+    // num_heads, head_dim]
+    float *__restrict__ tmp_m,  // [token_num, num_chunks, num_heads]
+    float *__restrict__ tmp_d,  // [token_num, num_chunks, num_heads]
     OutT *__restrict__ out,
     const int speculate_max_draft_token_num = 5,
     const int sliding_window = 0,
