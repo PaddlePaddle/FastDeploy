@@ -244,6 +244,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
     # Whether to use batch send data in zmq
     "ZMQ_SEND_BATCH_DATA": lambda: int(os.getenv("ZMQ_SEND_BATCH_DATA", "1")),
+    # Enable CUDA Graph for embedding when a multimodal model runs in text-only mode.
+    "FD_ENABLE_EMBEDDING_CUDAGRAPH_WHEN_TEXT_ONLY": lambda: bool(
+        int(os.getenv("FD_ENABLE_EMBEDDING_CUDAGRAPH_WHEN_TEXT_ONLY", "0"))
+    ),
 }
 
 
