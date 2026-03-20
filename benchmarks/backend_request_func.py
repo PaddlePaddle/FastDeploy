@@ -252,9 +252,6 @@ async def async_request_eb_openai_chat_completions(
     if request_func_input.ignore_eos:
         payload["ignore_eos"] = request_func_input.ignore_eos
 
-    if request_func_input.debug:
-        print(f"payload:{json.dumps(payload, ensure_ascii=False)}")
-
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}",
@@ -263,6 +260,9 @@ async def async_request_eb_openai_chat_completions(
     output = RequestFuncOutput()
     output.prompt_len = 0
     output.no = request_func_input.no
+    payload["no"] = request_func_input.no
+    if request_func_input.debug:
+        print(f"payload:{json.dumps(payload, ensure_ascii=False)}")
     metrics_list = []
     request_id = "None"
 
@@ -560,7 +560,6 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                             print(f"[SESSION FAIL] tool call failed: {tool_name}")
 
                             output.success = False
-                            outputs.append(output)
 
                             session_end = time.perf_counter()
                             session_e2e_time = session_end - session_start
@@ -644,7 +643,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                         output_tokens += output.output_tokens
                         # 若session输入长度超过max_prompt_len，则停止session
                         if max_prompt_len and input_tokens >= max_prompt_len:
-                            print(f"[SESSION STOP] reach max_prompt_len={max_prompt_len}, stop session")
+                            print(f"[SESSION STOP] {prompt_no} reach max_prompt_len={max_prompt_len}, stop session")
                             session_end = time.perf_counter()
                             metrics = SessionMetrics(
                                 session_no=request_func_input.no,
@@ -656,7 +655,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                             )
                             return outputs, metrics
                     else:
-                        print(f"Warning exceed max_loop={max_loop}, force stop tool loop")
+                        print(f"Warning {prompt_no} exceed max_loop={max_loop}, force stop tool loop")
 
                 else:
                     # 无tools
@@ -666,6 +665,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                             "content": output.generated_text,
                         }
                     )
+
                 prompt_no += 1
             elif message["role"] == "assistant":
                 continue
