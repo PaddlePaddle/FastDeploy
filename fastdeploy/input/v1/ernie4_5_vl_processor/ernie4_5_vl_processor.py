@@ -71,7 +71,10 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             self.generation_config = None
 
         # self.eos_token_ids = [self.tokenizer.eos_token_id]
-        from paddleformers.trl.llm_utils import get_eos_token_id
+        try:
+            from paddleformers.trl.llm_utils import get_eos_token_id
+        except Exception:
+            from paddleformers.cli.utils.llm_utils import get_eos_token_id
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
         self.eos_token_id_len = len(self.eos_token_ids)
@@ -289,6 +292,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request.enable_thinking = model_status == "think_start"
         if request.sampling_params.top_p is not None and request.sampling_params.top_p < _SAMPLING_EPS:
             request.sampling_params.top_p = _SAMPLING_EPS
+            request.sampling_params.top_k = 1
         if request.sampling_params.response_max_tokens is not None and request.enable_thinking is False:
             request.sampling_params.max_tokens = min(
                 request.sampling_params.response_max_tokens, request.sampling_params.max_tokens

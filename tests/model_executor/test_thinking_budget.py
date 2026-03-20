@@ -897,37 +897,6 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         # 命中 _get_think_token_ids 的缓存分支
         self.assertEqual(processor._get_think_token_ids(), (THINKING_START_TOKEN_ID, THINKING_END_TOKEN_ID))
 
-    def test_text_process_request_think_stop_sentence(self):
-        processor = TextDataProcessor.__new__(TextDataProcessor)
-        processor._apply_default_parameters = lambda request: request
-        processor.eos_token_ids = [1]
-        processor.update_stop_seq = lambda *args, **kwargs: None
-        processor.update_bad_words = lambda bad_words, bad_words_token_ids: bad_words_token_ids
-        processor.encode_with_cache = lambda text, *args, **kwargs: [23] if text == "\n" else [101, 102]
-        processor._update_thinking_prompt_state = lambda prompt_token_ids, args: args
-        processor.reasoning_parser = None
-
-        request = DummyRequestV1(
-            request_id="req_text",
-            eos_token_ids=[1],
-            prompt_token_ids=[8],
-            prompt=None,
-            messages=None,
-            logits_processors_args={"thinking_budget": 20, "think_stop_sentence": "done"},
-            bad_words=None,
-            bad_words_token_ids=None,
-            max_tokens=1,
-            temperature=1.0,
-            top_p=0.9,
-        )
-        with patch("fastdeploy.input.text_processor.process_stop_token_ids", lambda *args, **kwargs: None):
-            processed = processor.process_request(request, max_model_len=16)
-        self.assertEqual(
-            processed.logits_processors_args.get("think_stop_sentence_token_ids"),
-            [23, 101, 102],
-        )
-        self.assertNotIn("think_stop_sentence", processed.logits_processors_args)
-
     def test_text_process_request_dict_think_stop_sentence(self):
         processor = TextDataProcessor.__new__(TextDataProcessor)
         processor._apply_default_parameters = lambda request: request

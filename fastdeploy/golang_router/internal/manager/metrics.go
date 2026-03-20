@@ -98,8 +98,14 @@ func GetMetricsByURL(ctx context.Context, rawURL string) (int, int, int, error) 
 	return int(runningCnt), int(waitingCnt), int(availableGpuBlockNum), nil
 }
 
-// GetMetrics retrieves running metrics of the worker for the specified URL
+// GetMetrics retrieves running metrics of the worker for the specified URL (in-memory counting)
 func (m *Manager) GetMetrics(ctx context.Context, rawURL string) (int, int, int) {
+	runningCnt := redrictCounter(ctx, rawURL)
+	return runningCnt, 0, 0
+}
+
+// GetRemoteMetrics retrieves real metrics from the worker's /metrics endpoint, falls back to in-memory counting on error
+func (m *Manager) GetRemoteMetrics(ctx context.Context, rawURL string) (int, int, int) {
 	runningCnt, waitingCnt, availableGpuBlockNum, err := GetMetricsByURL(ctx, rawURL)
 	if err != nil {
 		runningNewCnt := redrictCounter(ctx, rawURL)

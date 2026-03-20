@@ -62,3 +62,10 @@ if current_platform.is_intel_hpu():
     if hasattr(intel_hpu, "__all__"):
         globals().update({name: getattr(intel_hpu, name) for name in intel_hpu.__all__})
         __all__.extend(intel_hpu.__all__)
+
+if current_platform.is_iluvatar():
+    from . import iluvatar
+
+    if hasattr(iluvatar, "__all__"):
+        globals().update({name: getattr(iluvatar, name) for name in iluvatar.__all__})
+        __all__.extend(iluvatar.__all__)

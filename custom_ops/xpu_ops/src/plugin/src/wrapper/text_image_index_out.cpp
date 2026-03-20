@@ -15,22 +15,18 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 __attribute__((global)) void text_image_index_out_kernel(
     const int* token_type_ids,  // x
     int* text_index,            // y1
     int* image_index,           // y2
     const int64_t token_num);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        const int* token_type_ids,  // x
                        int* text_index,            // y1
                        int* image_index,           // y2
@@ -50,19 +46,19 @@ static int cpu_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         const int* token_type_ids,  // x
                         int* text_index,            // y1
                         int* image_index,           // y2
                         const int64_t token_num) {
   int32_t ret_xre =
-      xpu3::plugin::text_image_index_out_kernel<<<1, 1, ctx->xpu_stream>>>(
+      fd_xpu3::text_image_index_out_kernel<<<1, 1, ctx->xpu_stream>>>(
           token_type_ids, text_index, image_index, token_num);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
-int text_image_index_out(Context* ctx,
+int text_image_index_out(api::Context* ctx,
                          const int* token_type_ids,  // x
                          int* text_index,            // y1
                          int* image_index,           // y2
@@ -86,6 +82,4 @@ int text_image_index_out(Context* ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

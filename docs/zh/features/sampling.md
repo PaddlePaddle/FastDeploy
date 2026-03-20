@@ -21,17 +21,60 @@
 
 在部署时，可以通过设置环境变量 `FD_SAMPLING_CLASS` 来选择采样算法。可选择的值有 `base`, `base_non_truncated`, `air`或 `rejection`。
 
-**仅支持 Top-p Sampling 的算法**
-
 * `base`(default)：直接使用 `top_p` 的值进行归一化，倾向于采样概率更大的token。
 * `base_non_truncated`：严格按照 Top-p 采样的逻辑执行，首先选择使累积概率达到 `top_p` 的最小集合，然后对这些选择的元素进行归一化。
 * `air`：该算法参考 [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)的实现，支持 Top-p 采样。
-
-**支持 Top-p 和 Top-k_top-p 采样的算法**
-
 * `rejection`：该算法参考 [flashinfer](https://github.com/flashinfer-ai/flashinfer) 的实现，支持灵活设置 `top_k` 和 `top_p` 参数进行 Top-p 或 Top-k_top-p 采样。
 
 ## 配置方式
+
+### Greedy 采样
+
+1. 在部署时，设置环境变量以选择采样算法，默认为base：
+
+```bash
+export FD_SAMPLING_CLASS=rejection  # base, base_non_truncated, or air
+```
+
+2. 在发送请求时，指定top_p参数：
+
+* 使用 curl 命令发送用户请求示例如下：
+
+```bash
+
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How old are you"}
+  ],
+  "top_k": 1
+}'
+# 或 "top_p": 0.0
+```
+
+* 使用 python 脚本发送用户请求示例如下：
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8170"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+        {"role": "user", "content": "把李白的静夜思改写为现代诗"},
+    ],
+    stream=True,
+    top_k=1   # 或 "top_p": 0.0
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
+```
 
 ### Top-p 采样
 

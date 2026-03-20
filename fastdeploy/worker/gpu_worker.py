@@ -36,7 +36,8 @@ logger = get_logger("gpu_worker", "gpu_worker.log")
 
 try:
     ModelRunner = load_model_runner_plugins()
-except:
+except Exception as e:
+    logger.info(f"Plugin ModelRunner not available ({e}), using default GPUModelRunner")
     from fastdeploy.worker.gpu_model_runner import GPUModelRunner as ModelRunner
 
 
@@ -186,6 +187,10 @@ class GpuWorker(WorkerBase):
         """Initizlize the KV Cache with accurate num_gpu_blocks"""
         # accurate cache size
         self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
+
+        # Initialize routing replay manager
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.model_runner.initialize_routing_replay_manager()
 
     def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
         """update weights in place"""

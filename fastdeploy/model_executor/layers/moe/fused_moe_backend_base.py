@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 from abc import abstractmethod
 from typing import Callable
 
@@ -92,6 +93,18 @@ class MoEMethodBase(QuantMethodBase):
         splitwise_role = config.scheduler_config.splitwise_role
         load_strategy = config.load_config.load_strategy
 
+        if config.parallel_config.ep_prefill_use_worst_num_tokens:
+            token_split_factor = 2 if int(os.getenv("USE_TBO", "0")) == 1 else 1
+            prefill_num_worst_tokens = (
+                config.scheduler_config.max_num_batched_tokens
+                // config.parallel_config.tensor_parallel_size
+                * layer.ep_size
+                * layer.top_k
+                // token_split_factor
+            )
+        else:
+            prefill_num_worst_tokens = 0
+
         # For "mixed" splitwise role: conditionally initialize both or none
         if splitwise_role == "mixed":
             if load_strategy == "meta":
@@ -102,6 +115,7 @@ class MoEMethodBase(QuantMethodBase):
                     self.ep_prefill_runner = self.EPPrefillRunner(
                         **common_args,
                         use_internode_ll_two_stage=layer.fd_config.parallel_config.use_internode_ll_two_stage,
+                        prefill_num_worst_tokens=prefill_num_worst_tokens,
                     )
                     self.ep_decoder_runner = self.EPDecoderRunner(
                         **common_args,
@@ -119,6 +133,7 @@ class MoEMethodBase(QuantMethodBase):
                 self.ep_prefill_runner = self.EPPrefillRunner(
                     **common_args,
                     use_internode_ll_two_stage=layer.fd_config.parallel_config.use_internode_ll_two_stage,
+                    prefill_num_worst_tokens=prefill_num_worst_tokens,
                 )
             else:
                 self.ep_decoder_runner = self.EPDecoderRunner(
@@ -202,6 +217,7 @@ class MoEMethodBase(QuantMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -211,11 +227,15 @@ class MoEMethodBase(QuantMethodBase):
             if layer.fd_config.model_config.moe_phase.phase == "prefill":
                 if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
                     self.ep_prefill_runner.clean_low_latency_buffer()
-                return self.apply_ep_prefill(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
+                return self.apply_ep_prefill(
+                    layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
+                )
             else:
                 if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
                     self.ep_decoder_runner.clean_low_latency_buffer()
-                return self.apply_ep_decode(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
+                return self.apply_ep_decode(
+                    layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
+                )
         else:
             return self.apply_tp(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
 

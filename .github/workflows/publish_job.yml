@@ -204,6 +204,20 @@ jobs:
       PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
       FD_UNIFY_BUILD: "true"
 
+  build_cu130:
+    name: BUILD_cu130
+    needs: [ clone, publish_pre_check ]
+    uses: ./.github/workflows/_build_linux_cu130.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda130-manylinux
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "86,89,80,90"
+      WITH_NIGHTLY_BUILD: ${{ needs.publish_pre_check.outputs.with_nightly_build }}
+      FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
+      PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
+      PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
+      FD_UNIFY_BUILD: "true"
+
   build_fd_router:
     name: BUILD_FD_ROUTER
     needs: [clone, publish_pre_check]
@@ -328,6 +342,38 @@ jobs:
             target_path=paddle-whl/nightly/cu129/fastdeploy-gpu
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             target_path=paddle-whl/stable/cu129/fastdeploy-gpu
+          else
+            echo "Not develop or tag, do nothing"
+          fi
+          wget -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          push_file=$(realpath bos_tools.py)
+          python -m pip install bce-python-sdk==0.9.29
+          ls
+          python ${push_file} ${filename} ${target_path}
+
+  paddle_pypi_upload_cu130:
+    environment: PaddleSourceUpload
+    name: PADDLE_PYPI_UPLOAD_cu130
+    needs: build_cu130
+    runs-on: ubuntu-latest
+    env:
+      AK: ${{ secrets.BOS_AK }}
+      SK: ${{ secrets.BOS_SK }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu130.outputs.wheel_path_cu130 }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Wheel Info Show and Upload
+        if: github.ref_name == 'develop' || github.ref_type == 'tag'
+        run: |
+          echo "The wheel is located at: ${FASTDEPLOY_WHEEL_URL}"
+          wget -q --no-check-certificate ${FASTDEPLOY_WHEEL_URL}
+          filename=$(basename ${FASTDEPLOY_WHEEL_URL})
+          if [[ "${{ github.ref_name }}" == "develop" ]];then
+            target_path=paddle-whl/nightly/cu130/fastdeploy-gpu
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            target_path=paddle-whl/stable/cu130/fastdeploy-gpu
           else
             echo "Not develop or tag, do nothing"
           fi

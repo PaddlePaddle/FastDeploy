@@ -16,7 +16,6 @@
 
 import numpy as np
 
-from fastdeploy.engine.request import Request
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
 
@@ -73,25 +72,6 @@ class Qwen3VLProcessor(TextProcessor):
         )
         self.image_patch_id = self.processor.image_token_id
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
-
-    def process_request(self, request, max_model_len=None, **kwargs):
-        """
-        Process incoming request and generate model inputs.
-
-        Args:
-            request: Input request object
-            max_model_len (int, optional): Maximum context length
-            **kwargs: Additional processing parameters
-
-        Returns:
-            Request: Processed request with model inputs
-        """
-        task = request.to_dict()
-        task["enable_thinking"] = kwargs.get("enable_thinking", False)
-        self.process_request_dict(task, max_model_len)
-        request = Request.from_dict(task)
-        request = self._apply_default_parameters(request)
-        return request
 
     def _parse_processor_kwargs(self, kwargs):
         """
@@ -221,7 +201,14 @@ class Qwen3VLProcessor(TextProcessor):
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
             request["bad_words_token_ids"] = bad_words_token_ids
 
-        if request.get("prompt"):
+        if request.get("prompt_token_ids"):
+            messages = request.get("messages")
+            if messages:
+                self._check_mm_limits(messages)
+            request.setdefault("enable_thinking", False)
+            outputs = self.processor.prompt_token_ids2outputs(request)
+
+        elif request.get("prompt"):
             multimodal_data = request.get("multimodal_data")
             if multimodal_data is None:
                 multimodal_data = {}
@@ -256,7 +243,9 @@ class Qwen3VLProcessor(TextProcessor):
 
         outputs = self.pack_outputs(outputs)
 
-        request["prompt_token_ids"] = outputs["input_ids"].tolist()
+        request["prompt_token_ids"] = (
+            outputs["input_ids"].tolist() if not request.get("prompt_token_ids") else request["prompt_token_ids"]
+        )
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
         request["multimodal_inputs"] = outputs
 

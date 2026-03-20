@@ -204,7 +204,10 @@ class DataProcessor(BaseDataProcessor):
                                 eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
         )
 
-        from paddleformers.trl.llm_utils import get_eos_token_id
+        try:
+            from paddleformers.trl.llm_utils import get_eos_token_id
+        except Exception:
+            from paddleformers.cli.utils.llm_utils import get_eos_token_id
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
         data_processor_logger.info(
@@ -360,10 +363,12 @@ class DataProcessor(BaseDataProcessor):
         else:
             request.set("max_tokens", min(max_tokens, request.get("max_tokens")))
         if request.get("temperature") < _SAMPLING_EPS:
-            # zero temperature is equivalent to greedy sampling
+            # zero temperature means greedy decoding: set top_k=1 to force argmax
             request.set("temperature", 1)
+            request.set("top_k", 1)
         if request.get("top_p") < _SAMPLING_EPS:
             request.set("top_p", _SAMPLING_EPS)
+            request.set("top_k", 1)
         if self.reasoning_parser:
             model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
             parts = request.request_id.split("_")
@@ -466,10 +471,12 @@ class DataProcessor(BaseDataProcessor):
             request.sampling_params.max_tokens = min(max_tokens, request.sampling_params.max_tokens)
 
         if request.sampling_params.temperature < _SAMPLING_EPS:
-            # zero temperature is equivalent to greedy sampling
+            # zero temperature means greedy decoding: set top_k=1 to force argmax
             request.sampling_params.temperature = 1
+            request.sampling_params.top_k = 1
         if request.sampling_params.top_p < _SAMPLING_EPS:
             request.sampling_params.top_p = _SAMPLING_EPS
+            request.sampling_params.top_k = 1
         if self.reasoning_parser:
             model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
             parts = request.request_id.split("_")
@@ -538,6 +545,7 @@ class DataProcessor(BaseDataProcessor):
         token_ids = output.token_ids
         is_end = response_obj.finished
         req_id = response_obj.request_id
+        request = kwargs.get("request", None)
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] in self.eos_token_ids:
                 token_ids = token_ids[:-1]
@@ -547,10 +555,9 @@ class DataProcessor(BaseDataProcessor):
             response_obj.outputs.completion_tokens = full_text
             response_obj.outputs.text = full_text
             if self.reasoning_parser:
-                response_obj.outputs.enable_parser = True
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
                     full_text,
-                    response_obj,
+                    request,
                     self.model_status_dict[req_id],
                 )
                 response_obj.outputs.text = text
@@ -558,9 +565,8 @@ class DataProcessor(BaseDataProcessor):
                 reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
                 response_obj.outputs.reasoning_token_num = len(reasoning_tokens)
             if self.tool_parser_obj:
-                response_obj.outputs.enable_parser = True
                 tool_parser = self.tool_parser_obj(self.tokenizer)
-                tool_call_info = tool_parser.extract_tool_calls(full_text, response_obj)
+                tool_call_info = tool_parser.extract_tool_calls(full_text, request)
                 if tool_call_info.tools_called:
                     response_obj.outputs.tool_calls = tool_call_info.tool_calls
                     response_obj.outputs.text = tool_call_info.content
@@ -584,6 +590,7 @@ class DataProcessor(BaseDataProcessor):
         token_ids = output.token_ids
         is_end = response_obj.finished
         req_id = response_obj.request_id
+        request = kwargs.get("request", None)
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] in self.eos_token_ids:
@@ -591,7 +598,6 @@ class DataProcessor(BaseDataProcessor):
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
         response_obj.outputs.completion_tokens = delta_text
         if self.reasoning_parser:
-            response_obj.outputs.enable_parser = True
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
                 previous_texts + delta_text,
@@ -606,7 +612,6 @@ class DataProcessor(BaseDataProcessor):
             reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
             response_obj.outputs.reasoning_token_num = len(reasoning_tokens)
         if self.tool_parser_obj:
-            response_obj.outputs.enable_parser = True
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
             tool_parser = self.tool_parser_dict[req_id]
@@ -617,7 +622,7 @@ class DataProcessor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
-                response_obj,
+                request,
             )
             if tool_call is None or tool_call.tool_calls:
                 response_obj.outputs.delta_message = tool_call
