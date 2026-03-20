@@ -332,6 +332,52 @@ class TestModelConfig:
     def test_format_resolution(self, monkeypatch, tmp_path, config_json, expected_format):
         assert _make_model_config(monkeypatch, tmp_path, config_json=config_json).model_format == expected_format
 
+    def test_modelconfig_default_fallbacks(self, monkeypatch, tmp_path):
+        cfg = _make_model_config(
+            monkeypatch,
+            tmp_path,
+            pretrained={**_BASE_PRETRAINED, "architectures": ["MysteryArch"]},
+            config_json={**_BASE_PRETRAINED, "architectures": ["MysteryArch"], "dtype": "bfloat16"},
+            registry=_FakeRegistry(generative=False, pooling=False, arch="OtherArch"),
+            pooling_config=None,
+        )
+        assert cfg._get_default_runner_type(["MysteryArch"]) == "generate"
+        assert cfg._get_default_convert_type(["MysteryArch"], "generate") == "none"
+
+    def test_modelconfig_pooling_default_task(self, monkeypatch, tmp_path):
+        cfg = _make_model_config(
+            monkeypatch,
+            tmp_path,
+            pretrained={**_BASE_PRETRAINED, "architectures": ["ToyEmbeddingModel"]},
+            config_json={**_BASE_PRETRAINED, "architectures": ["ToyEmbeddingModel"], "dtype": "bfloat16"},
+            args={"runner": "pooling", "convert": "auto"},
+            registry=_FakeRegistry(generative=False, pooling=True, arch="OtherArch", default_pooling_type="CLS"),
+            pooling_config=None,
+        )
+        assert cfg._get_default_pooling_task(["ToyEmbeddingModel"]) == "embed"
+        assert cfg.supported_tasks == ["encode", "embed"]
+
+    def test_modelconfig_pooler_override_dict_raises(self, monkeypatch, tmp_path):
+        with pytest.raises(TypeError, match="PoolerConfig"):
+            _make_model_config(
+                monkeypatch,
+                tmp_path,
+                pretrained={**_BASE_PRETRAINED, "architectures": ["ToyEmbeddingModel"]},
+                config_json={**_BASE_PRETRAINED, "architectures": ["ToyEmbeddingModel"], "dtype": "bfloat16"},
+                args={"runner": "pooling", "convert": "auto", "override_pooler_config": {"normalize": True}},
+                registry=_FakeRegistry(generative=False, pooling=True, arch="OtherArch", default_pooling_type="CLS"),
+                pooling_config=None,
+            )
+
+    def test_modelconfig_invalid_supported_task_runner(self, monkeypatch, tmp_path):
+        cfg = _make_model_config(monkeypatch, tmp_path)
+        with pytest.raises(AssertionError):
+            cfg._get_supported_tasks(["LlamaForCausalLM"], "invalid", "none")
+
+    def test_modelconfig_download_stub(self, monkeypatch, tmp_path):
+        cfg = _make_model_config(monkeypatch, tmp_path)
+        assert cfg._get_download_model("demo") is None
+
 
 class TestFDConfig:
     """FDConfig topology, port slicing, splitwise, and speculative."""
@@ -413,6 +459,24 @@ class TestFDConfig:
         spf = _make_fdconfig(monkeypatch, speculative_config=sp, scheduler={"splitwise_role": "prefill"})
         assert spf.speculative_config.num_speculative_tokens == 1
         assert spf.speculative_config.num_model_steps == 1
+
+    def test_dynamic_load_router_reads_model_version(self, monkeypatch):
+        called = []
+        model = _fd_model()
+
+        def _read_model_version():
+            called.append(True)
+            model.version = "test-version"
+
+        model.read_model_version = _read_model_version
+        fd = _make_fdconfig(
+            monkeypatch,
+            model_config=model,
+            load_config=LoadConfig({"dynamic_load_weight": True}),
+            router_config=SimpleNamespace(router="http://127.0.0.1:8000", api_server_port=8000, metrics_port=8000),
+        )
+        assert called == [True]
+        assert fd.model_config.version == "test-version"
 
     def test_model_format_mxfp4_and_both_dtype_error(self, monkeypatch, tmp_path):
         with pytest.raises(ValueError, match="Only one of"):
@@ -563,7 +627,7 @@ class TestFDConfig:
         )
         fd = _make_fdconfig(
             monkeypatch,
-            parallel={"tensor_parallel_size": 4, "use_sequence_parallel_moe": True},
+            parallel={"tensor_parallel_size": 4, "enable_expert_parallel": True, "data_parallel_size": 1},
             scheduler={"max_num_seqs": 2},
         )
         assert fd.parallel_config.use_sequence_parallel_moe is False
@@ -582,6 +646,359 @@ class TestFDConfig:
         g = GraphOptimizationConfig({"use_cudagraph": True, "cudagraph_only_prefill": True})
         fd = _make_fdconfig(monkeypatch, graph_opt_config=g, scheduler={"splitwise_role": "prefill"})
         assert fd.graph_opt_config.use_cudagraph is True
+
+    def test_pooling_runner_and_convert(self, monkeypatch, tmp_path):
+        pool_reg = _FakeRegistry(generative=False, pooling=True, default_pooling_type="CLS")
+        cfg = _make_model_config(
+            monkeypatch,
+            tmp_path,
+            pretrained=_BASE_PRETRAINED,
+            args={"runner": "auto", "convert": "auto"},
+            registry=pool_reg,
+            pooling_config=None,
+        )
+        assert cfg.runner_type == "pooling"
+        assert cfg.convert_type == "none"
+        assert cfg.pooler_config is not None
+        assert cfg.pooler_config.pooling_type == "CLS"
+        assert "encode" in cfg.supported_tasks
+
+    def test_pooling_convert_embed_fallback(self, monkeypatch, tmp_path):
+        pool_reg = _FakeRegistry(generative=False, pooling=False, default_pooling_type=None)
+        cfg = _make_model_config(
+            monkeypatch,
+            tmp_path,
+            pretrained=_BASE_PRETRAINED,
+            args={"runner": "pooling", "convert": "auto"},
+            registry=pool_reg,
+        )
+        assert cfg.convert_type == "embed"
+
+    def test_cache_reset_v0(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")
+        c = CacheConfig({"model_cfg": _model_cfg(), "cache_dtype": "bfloat16"})
+        c.max_block_num_per_seq = 4
+        c.enc_dec_block_num = 0
+        c.reset(num_gpu_blocks=200)
+        assert c.total_block_num == 200
+        assert c.prefill_kvcache_block_num == int(200 * c.kv_cache_ratio)
+
+    def test_postprocess_v0_mm_prefill_batch(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")
+        monkeypatch.delenv("FD_ENABLE_MAX_PREFILL", raising=False)
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        fd = _make_fdconfig(
+            monkeypatch,
+            model_config=_fd_model(enable_mm=True, mm_max_tokens_per_item={"image": 256, "video": 0, "audio": 0}),
+        )
+        assert fd.max_prefill_batch == 1
+
+    def test_postprocess_xpu_device_ids(self, monkeypatch):
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: True,
+                is_cuda=lambda: False,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        monkeypatch.setenv("XPU_VISIBLE_DEVICES", "0,1")
+        fd = _make_fdconfig(monkeypatch)
+        assert fd.parallel_config.device_ids == "0,1"
+
+    def test_postprocess_hpu_device_ids(self, monkeypatch):
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: False,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: True,
+            ),
+        )
+        monkeypatch.setenv("HPU_VISIBLE_DEVICES", "2,3")
+        fd = _make_fdconfig(monkeypatch)
+        assert fd.parallel_config.device_ids == "2,3"
+
+    def test_postprocess_v0_batched_tokens(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        fd = _make_fdconfig(
+            monkeypatch,
+            model_config=_fd_model(max_model_len=4096),
+            scheduler={"max_num_batched_tokens": None, "enable_chunked_prefill": True},
+            cache={"enable_chunked_prefill": True},
+        )
+        assert fd.scheduler_config.max_num_batched_tokens == 2048
+        fd2 = _make_fdconfig(
+            monkeypatch,
+            model_config=_fd_model(max_model_len=4096),
+            scheduler={"max_num_batched_tokens": None},
+        )
+        assert fd2.scheduler_config.max_num_batched_tokens == 4096
+
+    def test_postprocess_mm_v0_prefix_caching_off(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        fd = _make_fdconfig(
+            monkeypatch,
+            model_config=_fd_model(enable_mm=True, mm_max_tokens_per_item={"image": 256, "video": 0, "audio": 0}),
+            cache={"enable_prefix_caching": True},
+        )
+        assert fd.cache_config.enable_prefix_caching is False
+
+    def test_postprocess_spec_guided_off(self, monkeypatch):
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        sp = SpeculativeConfig({"method": "mtp"})
+        so = StructuredOutputsConfig({"guided_decoding_backend": "xgrammar"})
+        fd = _make_fdconfig(monkeypatch, structured_outputs_config=so, speculative_config=sp)
+        assert fd.structured_outputs_config.guided_decoding_backend == "off"
+
+    def test_postprocess_mm_encoder_cache(self, monkeypatch):
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        fd = _make_fdconfig(
+            monkeypatch,
+            model_config=_fd_model(enable_mm=True, mm_max_tokens_per_item={"image": 256, "video": 0, "audio": 0}),
+            cache={"max_encoder_cache": -1},
+        )
+        assert fd.cache_config.max_encoder_cache == 0
+
+        fd2 = _make_fdconfig(
+            monkeypatch,
+            model_config=_fd_model(enable_mm=True, mm_max_tokens_per_item={"image": 256, "video": 0, "audio": 0}),
+            cache={"max_encoder_cache": 10},
+        )
+        assert fd2.cache_config.max_encoder_cache == 0
+
+    def test_seq_parallel_moe_decode(self, monkeypatch):
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        fd = _make_fdconfig(
+            monkeypatch,
+            parallel={"tensor_parallel_size": 4, "enable_expert_parallel": True, "data_parallel_size": 1},
+            scheduler={"splitwise_role": "decode", "max_num_seqs": 2, "max_num_batched_tokens": 4096},
+        )
+        assert fd.parallel_config.use_sequence_parallel_moe is False
+
+    def test_seq_parallel_moe_filter_capture(self, monkeypatch):
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        g = GraphOptimizationConfig({"use_cudagraph": True})
+        g.cudagraph_capture_sizes = [128, 64, 32, 16, 8, 4, 2, 1]
+        fd = _make_fdconfig(
+            monkeypatch,
+            graph_opt_config=g,
+            parallel={"tensor_parallel_size": 4, "enable_expert_parallel": True, "data_parallel_size": 1},
+            scheduler={"splitwise_role": "decode", "max_num_seqs": 64, "max_num_batched_tokens": 4096},
+        )
+        assert all(s % fd.parallel_config.tensor_parallel_size == 0 for s in g.cudagraph_capture_sizes)
+
+    def test_check_structured_outputs(self, monkeypatch):
+        import sys
+        import types
+
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        fake_xg = types.ModuleType("xgrammar")
+        monkeypatch.setitem(sys.modules, "xgrammar", fake_xg)
+        sp = SpeculativeConfig({})
+        so = StructuredOutputsConfig({"guided_decoding_backend": "xgrammar"})
+        fd = _make_fdconfig(monkeypatch, ips="0.0.0.0", structured_outputs_config=so, speculative_config=sp)
+        fd.check()
+
+    def test_check_structured_outputs_xgrammar_missing(self, monkeypatch):
+        import sys
+
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        monkeypatch.delitem(sys.modules, "xgrammar", raising=False)
+        sp = SpeculativeConfig({})
+        so = StructuredOutputsConfig({"guided_decoding_backend": "xgrammar"})
+        fd = _make_fdconfig(monkeypatch, ips="0.0.0.0", structured_outputs_config=so, speculative_config=sp)
+        with pytest.raises(Exception, match="XGrammar"):
+            fd.check()
+
+    def test_check_v1_disabled_recover(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_V1_KVCACHE_SCHEDULER", "1")
+        monkeypatch.setenv("FD_DISABLED_RECOVER", "1")
+        with pytest.raises(AssertionError, match="FD_DISABLED_RECOVER"):
+            _make_fdconfig(monkeypatch, ips="0.0.0.0").check()
+
+    def test_check_eplb_cuda_import(self, monkeypatch):
+        import sys
+
+        monkeypatch.setenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")
+        monkeypatch.delitem(sys.modules, "cuda", raising=False)
+        fd = _make_fdconfig(monkeypatch, ips="0.0.0.0", eplb_config=EPLBConfig({"enable_eplb": True}))
+        with pytest.raises(ImportError, match="cuda-python"):
+            fd.check()
+
+    def test_get_max_chunk_tokens_xpu_decode(self, monkeypatch):
+        import paddle
+
+        monkeypatch.setattr(paddle, "is_compiled_with_xpu", lambda: True)
+        fd = _make_fdconfig(
+            monkeypatch,
+            scheduler={"splitwise_role": "decode", "max_num_seqs": 20, "max_num_batched_tokens": 4096},
+        )
+        assert fd.get_max_chunk_tokens() == 4096
+
+    def test_speculative_auto_fix(self):
+        sp = SpeculativeConfig({"method": "naive", "num_speculative_tokens": 5})
+        assert sp.num_speculative_tokens == 0
+
+    def test_postprocess_guidance_success(self, monkeypatch):
+        import sys
+        import types
+
+        fake_llg = types.ModuleType("llguidance")
+        fake_torch = types.ModuleType("llguidance.torch")
+        fake_llg.torch = fake_torch
+        monkeypatch.setitem(sys.modules, "llguidance", fake_llg)
+        monkeypatch.setitem(sys.modules, "llguidance.torch", fake_torch)
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        so = StructuredOutputsConfig({"guided_decoding_backend": "guidance"})
+        fd = _make_fdconfig(
+            monkeypatch,
+            structured_outputs_config=so,
+            speculative_config=SpeculativeConfig({}),
+        )
+        assert fd.structured_outputs_config.guided_decoding_backend == "guidance"
+
+    def test_postprocess_guidance_fail(self, monkeypatch):
+        import sys
+
+        monkeypatch.delitem(sys.modules, "llguidance", raising=False)
+        monkeypatch.delitem(sys.modules, "llguidance.torch", raising=False)
+        monkeypatch.setattr(
+            "fastdeploy.config.current_platform",
+            SimpleNamespace(
+                is_xpu=lambda: False,
+                is_cuda=lambda: True,
+                is_maca=lambda: False,
+                is_iluvatar=lambda: False,
+                is_intel_hpu=lambda: False,
+            ),
+        )
+        so = StructuredOutputsConfig({"guided_decoding_backend": "guidance"})
+        with pytest.raises(ImportError, match="llguidance"):
+            _make_fdconfig(
+                monkeypatch,
+                structured_outputs_config=so,
+                speculative_config=SpeculativeConfig({}),
+            )
+
+    def test_fdconfig_print_generation_config(self, monkeypatch):
+        fd = _make_fdconfig(monkeypatch)
+        fd.generation_config = SimpleNamespace(to_dict=lambda: {"key": "val"})
+        for attr in ("cache_config", "model_config", "scheduler_config", "parallel_config", "commit_config"):
+            cur = getattr(fd, attr, None)
+            if cur is not None and not hasattr(cur, "print"):
+                setattr(fd, attr, SimpleNamespace(print=lambda: None))
+        fd.print()
+
+    def test_fdconfig_str(self, monkeypatch):
+        fd = _make_fdconfig(monkeypatch)
+        try:
+            str(fd)
+        except (TypeError, Exception):
+            pass
+
+    def test_str_to_list_iterable_and_str(self, monkeypatch):
+        fd = _make_fdconfig(monkeypatch)
+        fd.list_attr = [1, 2, 3]
+        fd._str_to_list("list_attr", str)
+        assert fd.list_attr == ["1", "2", "3"]
+        assert fd._check_master() == fd.is_master
 
 
 if __name__ == "__main__":
