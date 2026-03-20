@@ -58,12 +58,7 @@ __device__ inline bool is_in(__global_ptr__ const int64_t *candidates,
   }
   return false;
 }
-// static __device__ inline unsigned int xorwow(unsigned int& state) {
-//     state ^= state >> 7;
-//     state ^= state << 9;
-//     state ^= state >> 13;
-//     return state;
-// }
+
 static __device__ inline unsigned int xorwow(unsigned int &state) {
   state ^= state >> 7;
   state ^= state << 9;
