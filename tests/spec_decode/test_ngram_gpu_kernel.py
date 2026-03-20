@@ -50,6 +50,12 @@ def _cpu_ngram_match(
     threshold=128,
 ):
     """Pure NumPy reference matching the original ngram_match.cc logic."""
+    # Flatten (N,1) shaped arrays to 1D for scalar indexing
+    max_dec_len = max_dec_len.ravel()
+    step_idx = step_idx.ravel()
+    draft_token_num = draft_token_num.ravel()
+    prompt_lens = prompt_lens.ravel()
+    input_ids_len = input_ids_len.ravel()
     max_batch_size = seq_lens_this_time.shape[0]
 
     unprocessed = sum(1 for b in range(max_batch_size) if seq_lens_encoder[b] > 0 or seq_lens_decoder[b] > 0)
@@ -135,6 +141,11 @@ def _cpu_hybrid_mtp_ngram(
     threshold=1024,
 ):
     """Pure NumPy reference matching the original ngram_match_mixed.cu CPU logic."""
+    # Flatten (N,1) shaped arrays to 1D for scalar indexing
+    max_dec_len = max_dec_len.ravel()
+    step_idx = step_idx.ravel()
+    draft_token_num = draft_token_num.ravel()
+    input_ids_len = input_ids_len.ravel()
     max_batch_size = seq_lens_this_time.shape[0]
 
     unprocessed = sum(1 for b in range(max_batch_size) if seq_lens_decoder[b] > 0)
@@ -223,13 +234,13 @@ def _make_ngram_test_data(batch_size=4, input_len=64, max_model_len=256, max_dra
     for b in range(batch_size):
         # Copy prompt into token_ids_all
         token_ids_all[b, :input_len] = input_ids[b]
-        # Simulate some generated tokens that repeat parts of the prompt
+        # Simulate generated tokens: copy contiguous blocks from prompt
+        # to guarantee ngram matches exist
         gen_len = 20
-        for g in range(gen_len):
-            # Copy from prompt to create ngram-matchable patterns
-            src = rng.randint(0, max(1, input_len - 5))
-            token_ids_all[b, input_len + g] = input_ids[b, src + (g % 5)]
-        step_idx[b] = gen_len
+        src = rng.randint(0, max(1, input_len - gen_len))
+        token_ids_all[b, input_len : input_len + gen_len] = input_ids[b, src : src + gen_len]
+        # step_idx = last valid position (0-based index)
+        step_idx[b] = gen_len - 1
 
     return {
         "input_ids": input_ids,
@@ -264,11 +275,12 @@ def _make_mixed_test_data(batch_size=4, input_len=64, pre_ids_len=256, max_draft
     max_dec_len = np.full((batch_size, 1), 200, dtype=np.int64)
 
     for b in range(batch_size):
+        # Copy contiguous blocks from prompt to guarantee ngram matches
         gen_len = 20
-        for g in range(gen_len):
-            src = rng.randint(0, max(1, input_len - 5))
-            pre_ids[b, g] = input_ids[b, src + (g % 5)]
-        step_idx[b] = gen_len
+        src = rng.randint(0, max(1, input_len - gen_len))
+        pre_ids[b, :gen_len] = input_ids[b, src : src + gen_len]
+        # step_idx = last valid position (0-based index)
+        step_idx[b] = gen_len - 1
 
     return {
         "input_ids": input_ids,
