@@ -1524,6 +1524,24 @@ class GPUModelRunner(ModelRunnerBase):
         if not self.enable_head_wise_kv_cache:
             return
 
+        # Reorder block_tables_3d once after PD permutation instead of per-swap updates.
+        block_tables_3d = self.share_inputs.get("block_tables_3d", None)
+        if block_tables_3d is not None:
+            old_block_tables_3d = block_tables_3d.clone()
+            block_tables_3d[:] = -1
+            slot_cap_by_tensor = block_tables_3d.shape[0] // self.kv_num_heads
+            for new_slot, batch_id in index_to_batch_id.items():
+                if new_slot < 0 or new_slot >= slot_cap_by_tensor:
+                    continue
+                old_slot = old_slot_by_batch_id.get(batch_id)
+                if old_slot is None or old_slot < 0 or old_slot >= slot_cap_by_tensor:
+                    continue
+                new_start = new_slot * self.kv_num_heads
+                old_start = old_slot * self.kv_num_heads
+                block_tables_3d[new_start : new_start + self.kv_num_heads, :] = old_block_tables_3d[
+                    old_start : old_start + self.kv_num_heads, :
+                ]
+
         old_slot_req_ids = list(self._head_wise_slot_req_ids)
         old_slot_active_rows = [list(rows) for rows in self._head_wise_slot_active_rows]
         slot_cap = len(old_slot_req_ids)
