@@ -5,7 +5,12 @@ import (
 	"math"
 )
 
-func FDRemoteMetricsScoreSelectWorker(ctx context.Context, workers []string, message string) (string, error) {
+func computeScore(ctx context.Context, runningCnt int, waitingCnt int) float64 {
+	score := float64(runningCnt) + float64(waitingCnt)*waitingWeight
+	return score
+}
+
+func FDMetricsScoreSelectWorker(ctx context.Context, workers []string, message string) (string, error) {
 	if len(workers) == 0 {
 		return "", nil
 	}
@@ -16,7 +21,7 @@ func FDRemoteMetricsScoreSelectWorker(ctx context.Context, workers []string, mes
 	)
 
 	for _, w := range workers {
-		runningCnt, waitingCnt, _ := DefaultScheduler.managerAPI.GetRemoteMetrics(ctx, w)
+		runningCnt, waitingCnt, _ := DefaultScheduler.managerAPI.GetMetrics(ctx, w)
 		score := computeScore(ctx, runningCnt, waitingCnt)
 		if score < minScore {
 			minScore = score
