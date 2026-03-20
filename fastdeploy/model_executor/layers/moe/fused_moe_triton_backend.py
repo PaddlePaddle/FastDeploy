@@ -271,6 +271,9 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
 
         is_bf16_checkpoint = self.quant_config is None or self.quant_config.is_checkpoint_bf16
         if is_bf16_checkpoint:
+            # idempotency guard: skip if already quantized to int8
+            if layer.up_gate_proj_weight.dtype == paddle.int8:
+                return
             weight_id_map = {"gate_up": 0, "down": 1}
             if self.quant_config is None:
                 # unquantized bf16: process both weights at once in process_final_after_loading
@@ -336,11 +339,24 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
                 False,
             )
 
+        # 融合 shared experts：in-place 写 routed slots，shared slots 已在预分配缓冲区中填好。
+        # 不做 concat/paddle.ones，对 CUDA graph 友好。
+        n_shared = getattr(layer, "n_shared_experts", 0)
+        if n_shared > 0:
+            # _topk_ids_buf / _topk_weights_buf shape: [max_tokens, total_top_k]
+            # shared 列已在权重加载时预填（常量），只需写入 routed 列
+            layer._topk_ids_buf[:token_num, :top_k].copy_(topk_ids, False)
+            layer._topk_weights_buf[:token_num, :top_k].copy_(topk_weights, False)
+            topk_ids = layer._topk_ids_buf[:token_num]  # 切片，无内存拷贝
+            topk_weights = layer._topk_weights_buf[:token_num]
+
+        total_top_k = topk_ids.shape[1]  # top_k + n_shared（或原始 top_k）
+
         if topk_ids_hookfunc is not None:
-            topk_ids_hookfunc(topk_ids=topk_ids)
+            topk_ids_hookfunc(topk_ids=topk_ids[:, :top_k])
 
         up_gate_proj_out = paddle.empty(
-            [token_num * top_k, moe_intermediate_size * 2],
+            [token_num * total_top_k, moe_intermediate_size * 2],
             dtype=x.dtype,
         )
 
@@ -370,7 +386,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             expert_ids,
             num_tokens_post_padded,
             max_possible_num_post_padded,
-            token_num * top_k,
+            token_num * total_top_k,
             N=moe_intermediate_size * 2,
             K=hidden_size,
             stride_am=x.strides[0],
@@ -394,7 +410,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             BLOCK_SIZE_K=config["BLOCK_SIZE_K"],
             GROUP_SIZE_M=config["GROUP_SIZE_M"],
             MUL_ROUTED_WEIGHT=False,
-            top_k=top_k,
+            top_k=total_top_k,
             compute_type_enum=1,
             use_fp8_w8a8=False,
             use_int8_w8a16=True,
@@ -405,7 +421,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         down_proj_input = paddle.incubate.nn.functional.swiglu(up_gate_proj_out)
 
         down_proj_out = paddle.empty(
-            (token_num * top_k, hidden_size),
+            (token_num * total_top_k, hidden_size),
             dtype=x.dtype,
         )
 
@@ -424,7 +440,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             expert_ids,
             num_tokens_post_padded,
             max_possible_num_post_padded,
-            token_num * top_k,
+            token_num * total_top_k,
             N=hidden_size,
             K=moe_intermediate_size,
             stride_am=down_proj_input.strides[0],
@@ -455,7 +471,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             even_Ks=moe_intermediate_size % config["BLOCK_SIZE_K"] == 0,
         )
 
-        down_proj_out.reshape_([token_num, top_k, hidden_size])
+        down_proj_out.reshape_([token_num, total_top_k, hidden_size])
         out = down_proj_out.sum(axis=1)
 
         return out

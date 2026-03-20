@@ -169,6 +169,8 @@ std::vector<paddle::Tensor> tritonmoe_preprocess_kernel(
     run_align_kernel(64);
   } else if (num_experts == 128) {
     run_align_kernel(128);
+  } else if (num_experts == 129) {
+    run_align_kernel(129);
   } else if (num_experts == 160) {
     run_align_kernel(160);
   } else if (num_experts == 32) {

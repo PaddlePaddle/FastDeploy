@@ -153,6 +153,7 @@ class FusedMoE(nn.Layer):
         with_bias: bool = False,
         activation="swiglu",
         model_format: Optional[str] = None,
+        n_shared_experts: int = 0,
     ):
         """
         Initialize the Moe layer with given parameters.
@@ -186,6 +187,9 @@ class FusedMoE(nn.Layer):
 
         self.hidden_size = fd_config.model_config.hidden_size
         self.num_experts = num_experts
+        self.n_shared_experts = n_shared_experts
+        # n_routed_experts: 真正参与路由的专家数（不含 shared）
+        self.n_routed_experts = num_experts - n_shared_experts
 
         self.num_local_experts = self.num_experts // self.ep_size
 
@@ -464,6 +468,84 @@ class FusedMoE(nn.Layer):
             self._load_down_weight(param, expert_id, loaded_weight, shard_id, shard_dim)
         elif shard_id in ["gate", "up"]:
             self._load_gate_up_weight(param, expert_id, loaded_weight, shard_id, shard_dim)
+
+    def merge_shared_expert_weights(self, shared_experts_layer) -> None:
+        """
+        将 shared_experts 的权重（MergedColumnParallelLinear + RowParallelLinear）
+        量化后复制进 up_gate_proj_weight / down_proj_weight 的尾部 n_shared_experts 个槽位。
+
+        调用时机：所有路由专家权重已量化完毕（process_final_after_loading）后，
+        由 Glm4Moe.process_weights_after_loading 触发。
+
+        量化方式与 TritonWeightOnlyMoEMethod._process_quantize 完全一致：
+          wint8, per-channel (axis=1), max_bound=127
+        """
+        if self.n_shared_experts <= 0:
+            return
+
+        n_shared = self.n_shared_experts
+        n_routed = self.n_routed_experts
+        max_bound = 127
+
+        # --- up_gate_proj ---
+        # nn.Linear stores weight as [out_features, in_features], so:
+        #   up_gate_proj.weight shape: [n_shared * ffn*2, hidden]
+        # after split+stack+transpose → [n_shared, hidden, ffn*2]
+        shared_ug = shared_experts_layer.up_gate_proj.weight  # bf16 [n_shared*ffn*2, hidden]
+        chunks_ug = paddle.split(shared_ug, num_or_sections=n_shared, axis=0)
+        # each chunk: [ffn*2, hidden]; stack → [n_shared, ffn*2, hidden]
+        shared_ug_stacked = paddle.stack(chunks_ug, axis=0)  # [n_shared, ffn*2, hidden]
+        shared_ug_stacked = shared_ug_stacked.transpose([0, 2, 1])  # [n_shared, hidden, ffn*2]
+
+        # --- down_proj ---
+        # down_proj.weight shape: [hidden, n_shared * ffn / tp] (RowParallelLinear convention)
+        # after split+stack+transpose → [n_shared, ffn, hidden]
+        shared_d = shared_experts_layer.down_proj.weight  # bf16 [hidden, n_shared*ffn/tp]
+        chunks_d = paddle.split(shared_d, num_or_sections=n_shared, axis=-1)
+        # each chunk: [hidden, ffn/tp]; stack → [n_shared, hidden, ffn/tp]
+        shared_d_stacked = paddle.stack(chunks_d, axis=0)  # [n_shared, hidden, ffn/tp]
+        shared_d_stacked = shared_d_stacked.transpose([0, 2, 1])  # [n_shared, ffn/tp, hidden]
+
+        for w, weight_name, scale_name in [
+            (shared_ug_stacked, "up_gate_proj_weight", "up_gate_proj_weight_scale"),
+            (shared_d_stacked, "down_proj_weight", "down_proj_weight_scale"),
+        ]:
+            # per-channel int8 量化，axis=1（与 _process_quantize 一致）
+            # up_gate: [n_shared, hidden, ffn*2] → scale [n_shared, ffn*2]
+            # down:    [n_shared, ffn, hidden]   → scale [n_shared, hidden]
+            w_scale = w.abs().max(axis=1)  # [n_shared, out_dim]
+            w_int8 = paddle.round(w / w_scale.unsqueeze(1) * max_bound).astype("int8")
+            w_scale = w_scale / max_bound
+
+            fused_w = getattr(self, weight_name)  # int8 [num_experts, ...]
+            fused_s = getattr(self, scale_name)  # float [num_experts, ...]
+
+            # 写入尾部 n_shared 个槽位
+            fused_w[n_routed:].set_value(w_int8)
+            fused_s[n_routed:].set_value(w_scale)
+
+        # 预分配 topk 联合缓冲区，shared slots 常量只填一次，apply 时 in-place 写 routed 部分，
+        # 完全避免 concat/paddle.ones 的运行时新分配，对 CUDA graph 友好。
+        # max_tokens：单次推理最大 token 数（prefill + decode 上界）
+        max_tokens = self.fd_config.get_max_chunk_tokens()
+        total_top_k = self.top_k + n_shared
+
+        # topk_ids 缓冲区：shared 列填入固定专家 id，routed 列每步 in-place 写入
+        self._topk_ids_buf = paddle.zeros([max_tokens, total_top_k], dtype=paddle.int64)
+        self._topk_ids_buf[:, self.top_k :] = paddle.arange(n_routed, n_routed + n_shared, dtype=paddle.int64).reshape(
+            [1, n_shared]
+        )  # broadcast: 每行相同
+
+        # topk_weights 缓冲区：shared 列填 1.0，routed 列每步 in-place 写入
+        # topk_weights 在 apply 中由 gate 输出后 cast("float32")，因此固定用 float32
+        self._topk_weights_buf = paddle.zeros([max_tokens, total_top_k], dtype="float32")
+        self._topk_weights_buf[:, self.top_k :] = 1.0
+
+        logger.info(
+            f"FusedMoE: merged {n_shared} shared expert(s) into fused weight tensors "
+            f"(slots [{n_routed}, {n_routed + n_shared})), "
+            f"pre-allocated topk buffer [{max_tokens}, {total_top_k}]."
+        )
 
     @classmethod
     def make_expert_params_mapping(

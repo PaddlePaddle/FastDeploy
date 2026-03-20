@@ -169,7 +169,7 @@ class Glm4Moe(nn.Layer):
             fd_config,
             renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
-            num_experts=fd_config.model_config.n_routed_experts,
+            num_experts=fd_config.model_config.n_routed_experts + self.n_shared_experts,
             top_k=fd_config.model_config.num_experts_per_tok,
             topk_method="noaux_tc",
             topk_group=fd_config.model_config.topk_group,
@@ -178,6 +178,7 @@ class Glm4Moe(nn.Layer):
             layer_idx=layer_id,
             gate_correction_bias=self.gate.e_score_correction_bias,
             weight_key_map=weight_key_map,
+            n_shared_experts=self.n_shared_experts,
         )
 
         if self.n_shared_experts > 0:
@@ -189,15 +190,29 @@ class Glm4Moe(nn.Layer):
                 prefix=f"{prefix}.shared_experts",
             )
 
+    def process_weights_after_loading(self):
+        """
+        权重全部加载完毕后：把 shared_experts 权重融合进 self.experts 的尾部，
+        然后释放 shared_experts 以节省显存。
+        """
+        if self.n_shared_experts > 0 and hasattr(self, "shared_experts"):
+            # 先确保 FusedMoE 的量化（scale 张量）已完成，
+            # 因为 process_final_after_loading 是父层先于子层，
+            # 此时 TritonWeightOnlyMoEMethod.process_weights_after_loading
+            # 可能还没有被 utils.py 调用到。
+            qm = getattr(self.experts, "quant_method", None)
+            if qm is not None and hasattr(qm, "process_weights_after_loading"):
+                qm.process_weights_after_loading(self.experts)
+            self.experts.merge_shared_expert_weights(self.shared_experts)
+            # 释放 shared_experts 参数，节省显存
+            del self.shared_experts
+
     def forward(self, x, forward_meta: ForwardMeta = None):
         paddle.cuda.nvtx.range_push("Glm4Moe/fused_experts")
+        # shared experts 已融合进 self.experts（权重排在 [n_routed:] 位置），
+        # routing 在 backend apply 中自动为每个 token 追加 n_shared_experts 条目。
         out = self.experts(x, self.gate, forward_meta)
         paddle.cuda.nvtx.range_pop()
-        if self.n_shared_experts > 0:
-            paddle.cuda.nvtx.range_push("Glm4Moe/shared_experts")
-            shared_experts_out = self.shared_experts(x)
-            paddle.cuda.nvtx.range_pop()
-            out = out + shared_experts_out
         return out
 
 
