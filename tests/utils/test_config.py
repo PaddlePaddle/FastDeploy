@@ -247,6 +247,37 @@ class TestConfigTypes:
         monkeypatch.setenv("FLAGS_use_pd_disaggregation", "1")
         assert ParallelConfig({}).pd_disaggregation_mode == "per_query"
 
+    def test_parallel_set_communicate_group_expert_parallel(self, monkeypatch):
+        from fastdeploy import envs
+
+        gid_calls = []
+        group_calls = []
+
+        monkeypatch.setattr("fastdeploy.config.dist.collective._set_custom_gid", gid_calls.append)
+
+        def _fake_new_group(ranks):
+            ranks = list(ranks)
+            group_calls.append(ranks)
+            return tuple(ranks)
+
+        monkeypatch.setattr("fastdeploy.config.dist.new_group", _fake_new_group)
+
+        parallel = ParallelConfig(
+            {
+                "data_parallel_rank": 1,
+                "data_parallel_size": 2,
+                "tensor_parallel_size": 4,
+                "enable_expert_parallel": True,
+            }
+        )
+
+        parallel.set_communicate_group()
+
+        assert gid_calls == [1 + envs.FD_TP_GROUP_GID_OFFSET, None, 2 + envs.FD_TP_GROUP_GID_OFFSET, None]
+        assert group_calls == [[4, 5, 6, 7], list(range(8))]
+        assert parallel.tp_group == (4, 5, 6, 7)
+        assert parallel.ep_group == tuple(range(8))
+
 
 class TestModelConfig:
     """ModelConfig construction flows and validation."""
