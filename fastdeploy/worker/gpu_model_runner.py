@@ -202,7 +202,7 @@ class GPUModelRunner(ModelRunnerBase):
             4 if not self.speculative_decoding else (self.speculative_config.num_speculative_tokens + 1) * 4
         )
         self.infer_seed_increment = paddle.full(
-            shape=[self.scheduler_config.max_num_seqs, 1], fill_value=self.increment_value, dtype="int64", device="cpu"
+            shape=[self.scheduler_config.max_num_seqs, 1], fill_value=self.increment_value, dtype="int64"
         )
 
         self.restore_chunked_prefill_request = dict()
