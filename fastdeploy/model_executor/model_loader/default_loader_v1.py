@@ -16,6 +16,7 @@
 
 import paddle
 from paddle import nn
+from paddleformers.utils.log import logger
 from typing_extensions import assert_never
 
 from fastdeploy.config import FDConfig, LoadConfig, ModelConfig
@@ -63,10 +64,10 @@ class DefaultModelLoaderV1(BaseModelLoader):
         else:
             model.load_weights(weights_iterator)
         # Execute post-processing after weight loading
-        # params_dict = dict(model.named_parameters())
-        # for key,value in params_dict.items():
-        #     logger.info(f"key:{key}")
-        #     logger.info(f"value:{value}")
+        params_dict = dict(model.named_parameters())
+        for key, value in params_dict.items():
+            logger.info(f"key:{key}")
+            logger.info(f"value:{value}")
         process_final_after_loading(model, fd_config)
 
         self.clean_memory_fragments()
