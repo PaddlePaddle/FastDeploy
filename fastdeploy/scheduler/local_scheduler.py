@@ -266,32 +266,16 @@ class LocalScheduler:
             )
 
             requests: List[Request] = []
-            required_total_blocks = 0
-            current_prefill_tokens = 0
-            long_partial_requests, short_partial_requests = 0, 0
             for request_id in batch_ids:
                 request = self.requests[request_id]
-                required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
-                current_prefill_tokens += request.prompt_tokens_ids_len
-                required_total_blocks += required_input_blocks + reserved_output_blocks
-                if required_total_blocks > available_blocks:
-                    break
-
+                # No block accumulation check here - resource_manager_v1 handles
+                # actual scheduling with chunked prefill and proper admission control
                 if not envs.FD_ENABLE_MAX_PREFILL:
                     if self.enable_chunked_prefill:
                         if request.prompt_tokens_ids_len > self.long_prefill_token_threshold:
-                            # 长请求
-                            long_partial_requests += 1
-                            if long_partial_requests > self.max_long_partial_prefills:
-                                break
-                        else:
-                            short_partial_requests += 1
-
-                        if short_partial_requests + long_partial_requests > self.max_num_partial_prefills:
-                            break
+                            pass  # long request tracking removed - handled by resource_manager
                     else:
-                        if current_prefill_tokens > max_num_batched_tokens and len(requests) > 0:
-                            break
+                        pass  # non-chunked limit removed - handled by resource_manager
                 requests.append(request.raw)
 
             self.ids_read_cursor += len(requests)
