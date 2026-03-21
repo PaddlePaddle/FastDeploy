@@ -249,7 +249,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
     # Whether to use batch send data in zmq
     "ZMQ_SEND_BATCH_DATA": lambda: int(os.getenv("ZMQ_SEND_BATCH_DATA", "1")),
-    # Whether to enable v1 weight updating, which utilizes ZMQ/EngineWorkerQueue/EngineCacheQueue/FMQs 
+    # Whether to enable v1 weight updating, which utilizes ZMQ/EngineWorkerQueue/EngineCacheQueue/FMQs
     # to pass control requests and responses.
     # When v1 is enabled, the legacy /clear_load_weight and /update_model_weight
     # will adopt this new communication pattern.
