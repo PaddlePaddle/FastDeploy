@@ -315,7 +315,7 @@ class TestNgramMatchKernel(unittest.TestCase):
         try:
             from fastdeploy.model_executor.ops.gpu import ngram_match
 
-            cls.ngram_match = ngram_match
+            cls.ngram_match = staticmethod(ngram_match)
         except Exception as e:
             raise unittest.SkipTest(f"Cannot import ngram_match op: {e}")
 
@@ -492,7 +492,7 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         try:
             from fastdeploy.model_executor.ops.gpu import hybrid_mtp_ngram
 
-            cls.hybrid_mtp_ngram = hybrid_mtp_ngram
+            cls.hybrid_mtp_ngram = staticmethod(hybrid_mtp_ngram)
         except Exception as e:
             raise unittest.SkipTest(f"Cannot import hybrid_mtp_ngram op: {e}")
 
