@@ -1,57 +1,31 @@
-# MooncakeStore for FastDeploy
+# Global Cache Pooling Examples
 
-This document describes how to use MooncakeStore as the backend of FastDeploy.
+This directory contains example scripts for Global Cache Pooling with MooncakeStore.
 
-## Preparation
+## Documentation
 
-### Install FastDeploy
+- [English Documentation](../../docs/features/global_cache_pooling.md)
+- [中文文档](../../docs/zh/features/global_cache_pooling.md)
 
-Refer to [NVIDIA CUDA GPU Installation](https://paddlepaddle.github.io/FastDeploy/get_started/installation/nvidia_gpu/) for Fastdeploy installation.
-
-### Install MooncakeStore
+## Quick Start
 
 ```bash
-pip install mooncake-transfer-engine
-```
-
-## Run Examples
-
-The example script is provided in `run.sh`. You can run it directly:
-```
+# Multi-instance scenario
 bash run.sh
+
+# PD disaggregation scenario
+bash run_03b_pd_storage.sh
 ```
 
-In the example script, we will start a Mooncake master server and two FastDeploy server.
+## Scripts
 
-Launch Mooncake master server:
-```bash
-mooncake_master \
-    --port=15001 \
-    --enable_http_metadata_server=true  \
-    --http_metadata_server_host=0.0.0.0 \
-    --http_metadata_server_port=15002 \
-    --metrics_port=15003 \
-```
+| Script | Scenario | Description |
+|--------|----------|-------------|
+| `run.sh` | Multi-Instance | Two standalone instances sharing cache |
+| `run_03b_pd_storage.sh` | PD Disaggregation | P+D instances with global cache pooling |
 
-More parameter can be found in the [official guide](https://github.com/kvcache-ai/Mooncake/blob/main/docs/source/python-api-reference/transfer-engine.md).
+## Files
 
-Launch the Fastdeploy with Mooncake enabled.
-
-```bash
-export MOONCAKE_CONFIG_PATH="./mooncake_config.json"
-
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model ${MODEL_NAME} \
-       --port ${PORT} \
-       --metrics-port $((PORT + 1)) \
-       --engine-worker-queue-port $((PORT + 2)) \
-       --cache-queue-port $((PORT + 3)) \
-       --max-model-len 32768 \
-       --max-num-seqs 32 \
-       --kvcache-storage-backend mooncake
-```
-
-## Troubleshooting
-
-For more details, please refer to:
-https://github.com/kvcache-ai/Mooncake/blob/main/docs/source/troubleshooting/troubleshooting.md
+- `mooncake_config.json` - Mooncake configuration file
+- `utils.sh` - Utility functions for scripts
+- `stop.sh` - Stop all running services

@@ -126,6 +126,18 @@ int update_inputs(api::Context *ctx,
   WRAPPER_DUMP_PARAM3(ctx, stop_flags, is_block_step, next_tokens);
   WRAPPER_DUMP_PARAM3(ctx, bsz, max_bsz, input_ids_stride);
   WRAPPER_DUMP(ctx);
+  WRAPPER_ASSERT_GT(ctx, bsz, 0);
+  WRAPPER_ASSERT_GT(ctx, max_bsz, 0);
+  WRAPPER_ASSERT_GE(ctx, max_bsz, bsz);
+  WRAPPER_ASSERT_GT(ctx, input_ids_stride, 0);
+  WRAPPER_CHECK_PTR(ctx, bool, 1, not_need_stop);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_this_time);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_encoder);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_decoder);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bsz * input_ids_stride, input_ids);
+  WRAPPER_CHECK_PTR(ctx, bool, bsz, stop_flags);
+  WRAPPER_CHECK_PTR(ctx, bool, bsz, is_block_step);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bsz, next_tokens);
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper(ctx,
                        not_need_stop,

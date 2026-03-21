@@ -124,8 +124,20 @@ int update_inputs_v1(api::Context* ctx,
   WRAPPER_DUMP_PARAM4(
       ctx, bsz, input_ids_stride, block_num_per_seq, block_size);
   WRAPPER_DUMP(ctx);
+  WRAPPER_ASSERT_GT(ctx, bsz, 0);
+  WRAPPER_ASSERT_GT(ctx, max_bsz, 0);
+  WRAPPER_ASSERT_GE(ctx, max_bsz, bsz);
+  WRAPPER_ASSERT_GT(ctx, input_ids_stride, 0);
+  WRAPPER_ASSERT_GT(ctx, block_num_per_seq, 0);
+  WRAPPER_ASSERT_GT(ctx, block_size, 0);
+  WRAPPER_CHECK_PTR(ctx, bool, 1, not_need_stop);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_this_time);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_encoder);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_decoder);
+  // TODO(mayang02): more check ptrs
   if (ctx->dev().type() == api::kCPU) {
-    assert(false);
+    // TODO(mayang02): support cpu
+    WRAPPER_UNIMPLEMENTED(ctx);
   }
   if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper(ctx,

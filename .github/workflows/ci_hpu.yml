@@ -12,8 +12,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  check_bypass:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      workflow-name: ci_hpu
+
   CI_HPU:
     runs-on: [self-hosted, HPU-8Card]
+    needs: check_bypass
+    if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
     steps:
       - name: Print current runner name
         run: |

@@ -190,18 +190,21 @@ server:
   splitwise: true # true代表开启pd分离模式,false代表开启非pd分离模式
 
 scheduler:
-  policy: "power_of_two" # 调度策略(可选): random, power_of_two, round_robin, process_tokens, request_num, cache_aware, fd_metrics_score; 默认: request_num
+  policy: "power_of_two" # 调度策略(可选): random, power_of_two, round_robin, process_tokens, request_num, cache_aware, remote_cache_aware, fd_metrics_score, fd_remote_metrics_score; 默认: request_num
   prefill-policy: "cache_aware" # pd分离模式下prefill节点调度策略; 默认: process_tokens
-  decode-policy: "fd_metrics_score" # pd分离模式下decode节点调度策略; 默认: request_num
+  decode-policy: "request_num" # pd分离模式下decode节点调度策略; 默认: request_num
   eviction-interval-secs: 60 # cache-aware策略清理过期cache的间隔时间
   balance-abs-threshold: 1 # cache-aware策略绝对阈值
   balance-rel-threshold: 0.2 # cache-aware策略相对阈值
   hit-ratio-weight: 1.0 # cache-aware策略命中率权重
   load-balance-weight: 0.05 # cache-aware策略负载均衡权重
   cache-block-size: 4 # cache-aware策略cache block大小
-  tokenizer-url: "http://0.0.0.0:8098" # tokenizer服务地址(可选)
-  tokenizer-timeout-secs: 2 # tokenizer服务超时时间
+  # tokenizer-url: "http://0.0.0.0:8098" # tokenizer服务地址(可选), 不配置时cache_aware策略自动使用字符级分词。
+  #                                         注意：配置此项会在每次调度时同步调用远程tokenizer服务，引入额外网络时延，
+  #                                         仅在需要精确token级分词以提升cache命中率时再考虑启用。
+  # tokenizer-timeout-secs: 2 # tokenizer服务超时时间; 默认: 2
   waiting-weight: 10 # cache-aware策略等待权重
+  stats-interval-secs: 5 # 日志统计信息打印间隔时间(秒), 包含负载和缓存命中率等统计数据; 默认: 5
 
 manager:
   health-failure-threshold: 3 # 健康检查失败次数,超过次数后认为节点不健康
@@ -265,10 +268,12 @@ Router 支持以下调度策略，可通过配置文件中的 `policy`（mixed �
 | `random` | 通用 | 从所有可用实例中随机选择一个，无状态感知，适合轻量场景。 |
 | `round_robin` | 通用 | 使用原子计数器对实例列表循环取模，按顺序均匀分发请求。 |
 | `power_of_two` | 通用 | 随机选取两个实例，比较其当前并发请求数，选择负载较低的一个。 |
-| `process_tokens` | **prefill（默认）** | 遍历所有实例，选择当前正在处理的 token 数最少的实例，适合 prefill 阶段的长请求负载均衡。 |
-| `request_num` | **mixed / decode（默认）** | 遍历所有实例，选择当前并发请求数最少的实例，适合 decode 及 mixed 场景的请求均衡。 |
-| `fd_metrics_score` | mixed / decode | 实时从各实例的 metrics 接口获取 running/waiting 请求数，按 `running + waiting × waitingWeight` 打分，选择得分最低的实例。 |
-| `cache_aware` | prefill | 基于 Radix Tree 维护各实例的 KV Cache 前缀命中情况，综合命中率与负载打分选择实例；负载严重不均衡时自动回退至 `process_tokens`。 |
+| `process_tokens` | **prefill（默认）** | 遍历所有实例，选择当前正在处理的 token 数最少的实例（内存计数），适合 prefill 阶段的长请求负载均衡。 |
+| `request_num` | **mixed / decode（默认）** | 遍历所有实例，选择当前并发请求数最少的实例（内存计数），适合 decode 及 mixed 场景的请求均衡。 |
+| `fd_metrics_score` | mixed / decode | 基于内存计数获取 running/waiting 请求数，按 `running + waiting × waitingWeight` 打分，选择得分最低的实例。 |
+| `fd_remote_metrics_score` | mixed / decode | 实时从各实例的远程 `/metrics` 接口获取 running/waiting 请求数，按 `running + waiting × waitingWeight` 打分，选择得分最低的实例。需要实例注册时提供 `metrics_port`。**注意：每次调度时会同步发起远程 HTTP 请求，在实例数量较多或网络条件较差时会显著增加调度时延，请结合实际情况评估后再启用。** |
+| `cache_aware` | prefill | 基于 Radix Tree 维护各实例的 KV Cache 前缀命中情况，综合命中率与负载打分（内存计数）选择实例；负载严重不均衡时自动回退至 `process_tokens`。 |
+| `remote_cache_aware` | prefill | 与 `cache_aware` 相同的缓存感知策略，但使用远程 `/metrics` 接口获取实例负载数据。需要实例注册时提供 `metrics_port`。**注意：每次调度时会同步发起远程 HTTP 请求，在实例数量较多或网络条件较差时会显著增加调度时延，请结合实际情况评估后再启用。** |
 
 ## 常见问题排查
 

@@ -32,8 +32,17 @@ on:
         required: true
 
 jobs:
+  check_bypass:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+    with:
+      workflow-name: gpu_4cards_test
+
   run_4_cards_tests:
     runs-on: [self-hosted, GPU-h20-4Cards]
+    needs: check_bypass
+    if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
     timeout-minutes: 30
     steps:
       - name: Code Prepare

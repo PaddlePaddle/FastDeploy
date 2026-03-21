@@ -11,6 +11,9 @@ on:
       can-skip:
         description: "Whether the workflow can be skipped."
         value: ${{ jobs.check-bypass.outputs.can-skip }}
+      can-skip-docs:
+        description: "Whether the workflow can be skipped due to docs-only change."
+        value: ${{ jobs.check-bypass.outputs.can-skip-docs }}
 
 jobs:
   check-bypass:
@@ -21,7 +24,8 @@ jobs:
     env:
       CI_TEAM_MEMBERS: '["yuanlehome","YuanRisheng","Jiang-Jia-Jun","DDDivano","XieYunshen","EmmonsCurse","CSWYF3634076"]'
     outputs:
-      can-skip: ${{ steps.check-bypass.outputs.can-skip }}
+      can-skip: ${{ steps.final-output.outputs.can-skip }}
+      can-skip-docs: ${{ steps.final-output.outputs.can-skip-docs }}
     steps:
       - name: Cleanup
         run: |
@@ -29,7 +33,7 @@ jobs:
 
       - id: check-bypass
         name: Check Bypass
-        uses: PFCCLab/ci-bypass@v1
+        uses: PFCCLab/ci-bypass@v2
         with:
           github-token: ${{ secrets.github-token }}
           non-pull-request-event-strategy: 'never-skipped'
@@ -49,3 +53,51 @@ jobs:
                 }
               ]
             }
+
+      - id: check-only-docs
+        name: Check if only Docs files changed
+        env:
+          GITHUB_TOKEN: ${{ secrets.github-token }}
+        run: |
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "can-skip-docs=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          files=$(gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json files --jq '.files[].path')
+          echo "$files"
+
+          can_skip_docs=true
+          for f in $files; do
+            if [[ ! "$f" =~ \.(md|txt|yaml|go)$ ]]; then
+              can_skip_docs=false
+              break
+            fi
+          done
+
+          echo "can-skip-docs=$can_skip_docs" >> "$GITHUB_OUTPUT"
+
+      - id: final-output
+        name: Final can-skip result
+        run: |
+          if [[ "${{ steps.check-only-docs.outputs['can-skip-docs'] }}" == "true" ]]; then
+            echo "can-skip=true" >> "$GITHUB_OUTPUT"
+            echo "can-skip-docs=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${{ steps.check-bypass.outputs['can-skip'] }}" == "true" ]]; then
+            echo "can-skip=true" >> "$GITHUB_OUTPUT"
+            echo "can-skip-docs=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "can-skip=false" >> "$GITHUB_OUTPUT"
+          echo "can-skip-docs=false" >> "$GITHUB_OUTPUT"
+
+      - id: print-final-output
+        name: Print final result
+        run: |
+          echo "===== Final can-skip result ====="
+          echo "can-skip=${{ steps.final-output.outputs['can-skip'] }}"
+          echo "can-skip-docs=${{ steps.final-output.outputs['can-skip-docs'] }}"

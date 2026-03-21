@@ -198,8 +198,10 @@ def get_compile_parallelism():
         max_jobs = min(cpu_count, 32)
         os.environ["MAX_JOBS"] = str(max_jobs)
 
-    # Limit nvcc internal threads to avoid multiplying memory pressure.
-    nvcc_threads = min(max_jobs, 8)
+    # Limit nvcc internal threads to avoid resource exhaustion when Paddle's
+    # ThreadPoolExecutor also launches many parallel compilations.
+    # Total threads ~= (number of parallel compile jobs) * nvcc_threads.
+    nvcc_threads = min(max_jobs, 4)
     return max_jobs, nvcc_threads
 
 
