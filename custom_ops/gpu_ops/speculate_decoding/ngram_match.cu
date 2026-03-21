@@ -12,13 +12,153 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include "paddle/extension.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
+
+// ============================================================
+// CPU path — preserved from original ngram_match.cc for
+// backward compatibility with CPU-only callers and tests.
+// ============================================================
+static int sum_cpu(const int *value, int num) {
+  int sum_value = 0;
+  for (int i = 0; i <= num; i++) {
+    sum_value += value[i];
+  }
+  return sum_value;
+}
+
+static void find_candidate_pred_tokens(const int64_t *input_ids,
+                                       const int64_t *input_ids_len,
+                                       const int64_t *token_ids_all,
+                                       const int64_t *prompt_lens,
+                                       const int64_t *step_idx,
+                                       const int *draft_token_num,
+                                       int64_t *draft_tokens,
+                                       int32_t *seq_lens_this_time,
+                                       int32_t *seq_lens_encoder,
+                                       int32_t *seq_lens_decoder,
+                                       int64_t *max_dec_len,
+                                       int64_t input_ids_stride,
+                                       int64_t max_model_len,
+                                       int64_t draft_tokens_stride,
+                                       int64_t max_batch_size,
+                                       int max_ngram_size = 3,
+                                       int max_draft_tokens = 10) {
+  int threshold = 128;
+  char *env_var = getenv("INFER_WITH_REFERENCE_TOKENUM_THRESHOLD");
+  if (env_var) {
+    threshold = std::stoi(env_var);
+  }
+  int unprocessed_batch_size = 0;
+  for (int batch_idx = 0; batch_idx < max_batch_size; batch_idx++) {
+    if (seq_lens_encoder[batch_idx] > 0 || seq_lens_decoder[batch_idx] > 0) {
+      unprocessed_batch_size++;
+    }
+  }
+  for (int batch_idx = 0; batch_idx < max_batch_size; batch_idx++) {
+    max_draft_tokens =
+        std::min(static_cast<int64_t>(draft_token_num[batch_idx]),
+                 max_dec_len[batch_idx] - step_idx[batch_idx] - 1);
+    if (seq_lens_encoder[batch_idx] > 0) {
+      continue;
+    } else if (seq_lens_decoder[batch_idx] == 0) {
+      seq_lens_this_time[batch_idx] = 0;
+      continue;
+    }
+
+    const int64_t *cur_input_ids = input_ids + batch_idx * input_ids_stride;
+    int64_t *cur_draft_tokens = draft_tokens + batch_idx * draft_tokens_stride;
+    const int64_t *cur_pre_ids =
+        token_ids_all + batch_idx * max_model_len + prompt_lens[batch_idx];
+    const int64_t cur_step_idx = step_idx[batch_idx];
+    const int64_t cur_input_ids_len = input_ids_len[batch_idx];
+    seq_lens_this_time[batch_idx] = 1;
+    unprocessed_batch_size--;
+
+    auto sum_token_num = sum_cpu(seq_lens_this_time, batch_idx);
+    int left_min_token_num = unprocessed_batch_size;
+
+    if (sum_token_num + max_draft_tokens + left_min_token_num > threshold) {
+      int tmp_max_draft_tokens = threshold - sum_token_num - left_min_token_num;
+      max_draft_tokens = tmp_max_draft_tokens < max_draft_tokens
+                             ? tmp_max_draft_tokens
+                             : max_draft_tokens;
+    }
+
+    if (sum_token_num + left_min_token_num >= threshold - 1) {
+      continue;
+    }
+
+    for (int ngram_size = max_ngram_size; ngram_size > 0; --ngram_size) {
+      if (cur_step_idx < ngram_size) {
+        continue;
+      }
+      const int64_t *ngram = cur_pre_ids + (cur_step_idx + 1 - ngram_size);
+
+      bool match_input = false;
+      for (int64_t i = 0; i <= cur_input_ids_len - ngram_size; ++i) {
+        bool match = true;
+        for (int j = 0; j < ngram_size; j++) {
+          if (ngram[j] != cur_input_ids[i + j]) {
+            match = false;
+            break;
+          }
+        }
+        if (match) {
+          int64_t start_idx = i + ngram_size;
+          int64_t end_idx =
+              std::min(start_idx + max_draft_tokens, cur_input_ids_len);
+          if (start_idx >= end_idx) continue;
+
+          int64_t cur_draft_token_num = end_idx - start_idx;
+          seq_lens_this_time[batch_idx] = cur_draft_token_num + 1;
+          memcpy(cur_draft_tokens + 1,
+                 cur_input_ids + start_idx,
+                 sizeof(int64_t) * cur_draft_token_num);
+          ngram_size = 0;
+          match_input = true;
+          break;
+        }
+      }
+      if (!match_input) {
+        for (int64_t i = 0; i <= cur_step_idx - ngram_size; ++i) {
+          bool match = true;
+          for (int j = 0; j < ngram_size; j++) {
+            if (ngram[j] != cur_pre_ids[i + j]) {
+              match = false;
+              break;
+            }
+          }
+          if (match) {
+            int64_t start_idx = i + ngram_size;
+            int64_t end_idx =
+                std::min(start_idx + max_draft_tokens, cur_step_idx);
+            int64_t cur_draft_token_num = end_idx - start_idx;
+            if (start_idx >= end_idx) continue;
+
+            seq_lens_this_time[batch_idx] = cur_draft_token_num + 1;
+            memcpy(cur_draft_tokens + 1,
+                   cur_pre_ids + start_idx,
+                   sizeof(int64_t) * cur_draft_token_num);
+            ngram_size = 0;
+            break;
+          }
+        }
+      }
+    }
+  }
+}
+
+// ============================================================
+// GPU path — CUDA kernel for zero-copy ngram matching.
+// ============================================================
 
 // GPU kernel for ngram matching — eliminates CPU↔GPU data copies.
 // Uses single-thread execution to preserve sequential threshold semantics
@@ -183,25 +323,46 @@ void NgramMatch(const paddle::Tensor &input_ids,
     threshold = std::stoi(env_var);
   }
 
-  ngram_match_kernel<<<1, 1, 0, input_ids.stream()>>>(
-      input_ids.data<int64_t>(),
-      input_ids_len.data<int64_t>(),
-      token_ids_all.data<int64_t>(),
-      prompt_lens.data<int64_t>(),
-      step_idx.data<int64_t>(),
-      draft_token_num.data<int>(),
-      const_cast<int64_t *>(draft_tokens.data<int64_t>()),
-      const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
-      seq_lens_encoder.data<int32_t>(),
-      seq_lens_decoder.data<int32_t>(),
-      max_dec_len.data<int64_t>(),
-      input_ids_stride,
-      max_model_len,
-      draft_tokens_stride,
-      max_batch_size,
-      max_ngram_size,
-      max_draft_tokens,
-      threshold);
+  if (input_ids.is_gpu()) {
+    ngram_match_kernel<<<1, 1, 0, input_ids.stream()>>>(
+        input_ids.data<int64_t>(),
+        input_ids_len.data<int64_t>(),
+        token_ids_all.data<int64_t>(),
+        prompt_lens.data<int64_t>(),
+        step_idx.data<int64_t>(),
+        draft_token_num.data<int>(),
+        const_cast<int64_t *>(draft_tokens.data<int64_t>()),
+        const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
+        seq_lens_encoder.data<int32_t>(),
+        seq_lens_decoder.data<int32_t>(),
+        max_dec_len.data<int64_t>(),
+        input_ids_stride,
+        max_model_len,
+        draft_tokens_stride,
+        max_batch_size,
+        max_ngram_size,
+        max_draft_tokens,
+        threshold);
+  } else {
+    find_candidate_pred_tokens(
+        input_ids.data<int64_t>(),
+        input_ids_len.data<int64_t>(),
+        token_ids_all.data<int64_t>(),
+        prompt_lens.data<int64_t>(),
+        step_idx.data<int64_t>(),
+        draft_token_num.data<int>(),
+        const_cast<int64_t *>(draft_tokens.data<int64_t>()),
+        const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
+        const_cast<int32_t *>(seq_lens_encoder.data<int32_t>()),
+        const_cast<int32_t *>(seq_lens_decoder.data<int32_t>()),
+        const_cast<int64_t *>(max_dec_len.data<int64_t>()),
+        input_ids_stride,
+        max_model_len,
+        draft_tokens_stride,
+        max_batch_size,
+        max_ngram_size,
+        max_draft_tokens);
+  }
 }
 
 PD_BUILD_STATIC_OP(ngram_match)
