@@ -215,6 +215,8 @@ def _make_ngram_test_data(batch_size=4, input_len=64, max_model_len=256, max_dra
     """Create realistic test tensors for ngram_match op."""
     rng = np.random.RandomState(seed)
     vocab_size = 1000
+    # Ensure max_model_len can hold prompt + generated tokens
+    max_model_len = max(max_model_len, input_len + 64)
 
     # Create prompt tokens with repeating patterns to ensure ngram matches
     input_ids = rng.randint(0, vocab_size, (batch_size, input_len)).astype(np.int64)
