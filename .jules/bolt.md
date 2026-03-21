@@ -1,0 +1,3 @@
+## 2026-03-21 - [Optimized dataclass serialization]
+**Learning:** `dataclasses.asdict()` relies heavily on `deepcopy` under the hood, which creates massive serialization overhead for frequently created and serialized objects like `RequestMetrics`. The overhead scales linearly with the number of fields and the complexity of nested structures.
+**Action:** When serializing hot-path dataclasses, replace `asdict()` with a custom `to_dict()` that iterates over `__dataclass_fields__`, manually checks and assigns primitives (int, float, str, bool, type(None)), and shallowly processes lists/dicts or falls back to `.to_dict()`/`asdict()` for nested dataclasses. This approach provides a significant latency reduction.
