@@ -901,6 +901,11 @@ class ResourceManagerV1(ResourceManager):
             # rem_input_tokens: total input budget (SGLang's max_prefill_tokens - mixed_with_decode_tokens)
             rem_input_tokens = envs.FD_REM_INPUT_TOKENS - running_decode_count
 
+            # Compute running decode reservation once per schedule() call (shared by RUNNING & WAITING loops)
+            cached_running_decode_reserved = self._calculate_decode_reserved_tokens_by_ratio()
+            # Track decode reservations accumulated within this cycle (RUNNING + WAITING)
+            scheduled_new_decode_reserved_tokens: float = 0.0
+
             # First, schedule the RUNNING requests.
             req_index = 0
             num_decoding_req_nums = 0
@@ -1029,8 +1034,15 @@ class ResourceManagerV1(ResourceManager):
                         continue
                     num_new_tokens = self._get_num_new_tokens(request, rem_chunk_tokens, rem_input_tokens)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
+                    # Threshold check (same as WAITING loop): ensure enough free blocks for
+                    # current chunk + decode reservations
+                    can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
+                        request, num_new_block,
+                        scheduled_new_decode_reserved_tokens,
+                        cached_running_decode_reserved,
+                    )
                     # Allocate blocks to prefill
-                    if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
+                    if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
                         request.block_tables.extend(
                             self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
                         )
@@ -1048,6 +1060,14 @@ class ResourceManagerV1(ResourceManager):
                     has_scheduled_prefill = True
                     rem_input_tokens -= num_new_tokens
                     rem_chunk_tokens -= num_new_tokens
+
+                    # Track decode reservation for last-chunk requests in RUNNING loop
+                    remaining_to_prefill = request.need_prefill_tokens - request.num_computed_tokens
+                    is_last_chunk = remaining_to_prefill <= num_new_tokens
+                    if is_last_chunk:
+                        max_new = getattr(request, 'max_new_tokens', self.clip_max_new_tokens_estimation)
+                        scheduled_new_decode_reserved_tokens += min(max_new, self.clip_max_new_tokens_estimation)
+
                     request.num_computed_tokens += num_new_tokens
                     if self.config.cache_config.enable_prefix_caching:
                         self.cache_manager.update_cache_blocks(
@@ -1057,11 +1077,6 @@ class ResourceManagerV1(ResourceManager):
 
             # Second, schedule the WAITING requests.
             if not preempted_reqs:
-                # Compute running decode reservation once per schedule() call
-                cached_running_decode_reserved = self._calculate_decode_reserved_tokens_by_ratio()
-                # Track decode reservations accumulated within this cycle's waiting loop
-                scheduled_new_decode_reserved_tokens: float = 0.0
-
                 skip_requests: list[Request] = []
                 while self.waiting and rem_input_tokens > 0 and rem_chunk_tokens > 0:
                     if len(self.running) == self.max_num_seqs:
