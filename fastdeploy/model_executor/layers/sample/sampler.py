@@ -51,7 +51,10 @@ from fastdeploy.spec_decode import SpecMethod, VerifyStrategy
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import build_sampling_params
+    from fastdeploy.model_executor.ops.gpu import (
+        build_sampling_params,
+        naive_update_model_status,
+    )
 
 
 def top_p_normalize_probs_paddle(
@@ -892,7 +895,8 @@ class SpeculativeSampler(nn.Layer):
         Normal sampling without draft token verification.
 
         Used by NAIVE mode: directly samples from target model output
-        and writes results to share_inputs["accept_tokens"]/["accept_num"].
+        and writes results to share_inputs["accept_tokens"]/["accept_num"]
+        via naive_update_model_status (scatter by cu_seqlens_q_output).
 
         Args:
             probs: Target model softmax output
@@ -915,8 +919,15 @@ class SpeculativeSampler(nn.Layer):
             topp_seed=sampling_metadata.seed,
         )
 
-        # For NAIVE mode: write directly to accept_tokens/accept_num
-        share_inputs["accept_tokens"][: next_tokens.shape[0], 0] = next_tokens.squeeze(-1)
+        # Scatter sampled tokens into accept_tokens using cu_seqlens_q_output to
+        # correctly handle mixed prefill+decode batches where token index != batch index.
+        naive_update_model_status(
+            share_inputs["accept_tokens"],
+            share_inputs["accept_num"],
+            share_inputs["seq_lens_this_time"],
+            next_tokens.squeeze(-1),
+            share_inputs["cu_seqlens_q_output"],
+        )
 
         return SamplerOutput(
             sampled_token_ids=share_inputs["accept_tokens"],

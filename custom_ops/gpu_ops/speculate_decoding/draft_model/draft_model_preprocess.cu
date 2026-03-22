@@ -85,7 +85,8 @@ __global__ void draft_model_preprocess_kernel(
     }
 
     // Near end of max_dec_len in no prefill node
-    if ((not is_splitwise_prefill && target_step + num_model_step >= max_dec_len[tid])) {
+    if ((not is_splitwise_prefill &&
+         target_step + num_model_step >= max_dec_len[tid])) {
       should_skip = true;
     }
 
@@ -95,6 +96,9 @@ __global__ void draft_model_preprocess_kernel(
     if (should_skip) {
       stop_flags[tid] = true;
       seq_lens_this_time[tid] = 0;
+      seq_lens_decoder[tid] = 0;
+      seq_lens_encoder[tid] = 0;
+      step_idx[tid] = 0;
       not_stop_flag = 0;
     } else {
       not_stop_flag = 1;
@@ -115,13 +119,15 @@ __global__ void draft_model_preprocess_kernel(
         // Shadow state is initialized from target model state each round
         // This is the key simplification: no rollback needed
         int32_t need_compute_token = accept_num_now;
-        seq_lens_decoder[tid] = target_model_seq_lens_decoder[tid] - need_compute_token;
+        seq_lens_decoder[tid] =
+            target_model_seq_lens_decoder[tid] - need_compute_token;
         step_idx[tid] = target_model_step_idx[tid] - need_compute_token;
 
         // Prepare draft input tokens from accepted tokens
         for (int i = 0; i < accept_num_now; i++) {
           draft_tokens_now[i] = accept_tokens_now[i];
-          const int pre_id_pos = target_model_step_idx[tid] - (accept_num_now - i);
+          const int pre_id_pos =
+              target_model_step_idx[tid] - (accept_num_now - i);
           pre_ids_now[pre_id_pos] = accept_tokens_now[i];
         }
         seq_lens_this_time[tid] = accept_num_now;
@@ -170,40 +176,36 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
   int pre_ids_len = pre_ids.shape()[1];
   auto cu_stream = seq_lens_this_time.stream();
   constexpr int BlockSize = 512;
-  int base_model_draft_tokens_len = base_model_draft_tokens.shape()[1];
+  int target_model_draft_tokens_len = target_model_draft_tokens.shape()[1];
   auto not_need_stop_gpu =
       not_need_stop.copy_to(seq_lens_this_time.place(), false);
 
-
-  int target_model_draft_tokens_len = target_model_draft_tokens.shape()[1];
-
-  draft_model_preprocess_kernel<kBlockSize>
-      <<<1, kBlockSize, 0, cu_stream>>>(
-          const_cast<int64_t*>(draft_tokens.data<int64_t>()),
-          const_cast<int64_t*>(input_ids.data<int64_t>()),
-          const_cast<bool*>(stop_flags.data<bool>()),
-          const_cast<int*>(seq_lens_this_time.data<int>()),
-          const_cast<int*>(seq_lens_encoder.data<int>()),
-          const_cast<int*>(seq_lens_decoder.data<int>()),
-          const_cast<int64_t*>(step_idx.data<int64_t>()),
-          const_cast<bool*>(not_need_stop_gpu.data<bool>()),
-          const_cast<int64_t*>(pre_ids.data<int64_t>()),
-          accept_tokens.data<int64_t>(),
-          accept_num.data<int>(),
-          target_model_seq_lens_encoder.data<int>(),
-          target_model_seq_lens_decoder.data<int>(),
-          target_model_step_idx.data<int64_t>(),
-          target_model_stop_flags.data<bool>(),
-          max_dec_len.data<int64_t>(),
-          const_cast<int64_t*>(target_model_draft_tokens.data<int64_t>()),
-          real_bsz,
-          num_model_step,
-          accept_tokens_len,
-          draft_tokens_len,
-          input_ids_len,
-          target_model_draft_tokens_len,
-          pre_ids_len,
-          is_splitwise_prefill);
+  draft_model_preprocess_kernel<kBlockSize><<<1, kBlockSize, 0, cu_stream>>>(
+      const_cast<int64_t*>(draft_tokens.data<int64_t>()),
+      const_cast<int64_t*>(input_ids.data<int64_t>()),
+      const_cast<bool*>(stop_flags.data<bool>()),
+      const_cast<int*>(seq_lens_this_time.data<int>()),
+      const_cast<int*>(seq_lens_encoder.data<int>()),
+      const_cast<int*>(seq_lens_decoder.data<int>()),
+      const_cast<int64_t*>(step_idx.data<int64_t>()),
+      const_cast<bool*>(not_need_stop_gpu.data<bool>()),
+      const_cast<int64_t*>(pre_ids.data<int64_t>()),
+      accept_tokens.data<int64_t>(),
+      accept_num.data<int>(),
+      target_model_seq_lens_encoder.data<int>(),
+      target_model_seq_lens_decoder.data<int>(),
+      target_model_step_idx.data<int64_t>(),
+      target_model_stop_flags.data<bool>(),
+      max_dec_len.data<int64_t>(),
+      const_cast<int64_t*>(target_model_draft_tokens.data<int64_t>()),
+      real_bsz,
+      num_model_step,
+      accept_tokens_len,
+      draft_tokens_len,
+      input_ids_len,
+      target_model_draft_tokens_len,
+      pre_ids_len,
+      is_splitwise_prefill);
   auto not_need_stop_cpu =
       not_need_stop_gpu.copy_to(not_need_stop.place(), false);
   bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());
@@ -237,8 +239,7 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
               "step_idx_out",
               "not_need_stop_out",
               "pre_ids_out"})
-    .Attrs({"num_model_step: int",
-            "is_splitwise_prefill: bool"})
+    .Attrs({"num_model_step: int", "is_splitwise_prefill: bool"})
     .SetInplaceMap({{"draft_tokens", "draft_tokens_out"},
                     {"input_ids", "input_ids_out"},
                     {"stop_flags", "stop_flags_out"},

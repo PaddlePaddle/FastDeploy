@@ -71,14 +71,12 @@ def draft_model_preprocess_ref(
         # ----------------------------------------------------------------
         should_skip = False
 
-        # Splitwise prefill node: only prefill requests (seq_lens_encoder > 0) run MTP
-        if is_splitwise_prefill and seq_len_encoder == 0:
+        # Target model stopped
+        if bool(target_model_stop_flags[tid]):
             should_skip = True
 
-        # Target model stopped, or near end of max_dec_len
-        if not should_skip and (
-            bool(target_model_stop_flags[tid]) or target_step + num_model_step >= int(max_dec_len[tid])
-        ):
+        # Near end of max_dec_len in no splitwise_prefill mode
+        if not should_skip and not is_splitwise_prefill and target_step + num_model_step >= int(max_dec_len[tid]):
             should_skip = True
 
         # ----------------------------------------------------------------
@@ -136,18 +134,17 @@ class TestDraftModelPreprocess(unittest.TestCase):
         seq_lens_encoder = paddle.randint(0, input_ids_len, [bsz], dtype="int32")
         seq_lens_decoder = paddle.randint(0, input_ids_len, [bsz], dtype="int32")
         step_idx = paddle.randint(0, 100, [bsz], dtype="int64")
-        not_need_stop = paddle.zeros([1], dtype="bool").cpu()
-         pre_ids = input_ids.clone()
+        not_need_stop = paddle.zeros([1], dtype="bool")  # GPU tensor, kernel handles CPU copy internally
+        pre_ids = input_ids.clone()
 
         accept_tokens = paddle.randint(0, 100, [bsz, 100], dtype="int64")
-        accept_num = paddle.randint(1, max_draft_token + 1, [bsz], dtype="int32")
+        # accept_num should not exceed draft_tokens_len to avoid out-of-bounds
+        accept_num = paddle.randint(1, draft_tokens_len + 1, [bsz], dtype="int32")
         target_model_seq_lens_encoder = seq_lens_encoder.clone()
-        target_model_seq_lens_decoder = paddle.randint(
-            max_draft_token + 1, 100, [bsz], dtype="int32"
-        )
+        target_model_seq_lens_decoder = paddle.randint(max_draft_token + 1, 100, [bsz], dtype="int32")
         target_model_step_idx = paddle.randint(max_draft_token + 1, 100, [bsz], dtype="int64")
         target_model_stop_flags = paddle.zeros([bsz], dtype="bool")
-        max_dec_len = paddle.full([bsz], 200, dtype="int32")
+        max_dec_len = paddle.full([bsz], 200, dtype="int64")  # int64 to match CUDA kernel
         target_model_draft_tokens = paddle.zeros([bsz, max_draft_token], dtype="int64")
 
         num_model_step = max_draft_token
@@ -234,14 +231,13 @@ class TestDraftModelPreprocess(unittest.TestCase):
         pre_ids = input_ids.clone()
 
         accept_tokens = paddle.randint(0, 100, [bsz, 100], dtype="int64")
-        accept_num = paddle.randint(1, max_draft_token + 1, [bsz], dtype="int32")
+        # accept_num should not exceed draft_tokens_len to avoid out-of-bounds
+        accept_num = paddle.randint(1, draft_tokens_len + 1, [bsz], dtype="int32")
         target_model_seq_lens_encoder = paddle.zeros([bsz], dtype="int32")
-        target_model_seq_lens_decoder = paddle.randint(
-            max_draft_token + 1, 100, [bsz], dtype="int32"
-        )
+        target_model_seq_lens_decoder = paddle.randint(max_draft_token + 1, 100, [bsz], dtype="int32")
         target_model_step_idx = paddle.randint(max_draft_token + 1, 100, [bsz], dtype="int64")
         target_model_stop_flags = paddle.zeros([bsz], dtype="bool")
-        max_dec_len = paddle.full([bsz], 200, dtype="int32")
+        max_dec_len = paddle.full([bsz], 200, dtype="int64")  # int64 to match CUDA kernel
         target_model_draft_tokens = paddle.zeros([bsz, max_draft_token], dtype="int64")
 
         num_model_step = max_draft_token
