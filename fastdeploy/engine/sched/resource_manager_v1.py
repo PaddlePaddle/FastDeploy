@@ -1295,13 +1295,19 @@ class ResourceManagerV1(ResourceManager):
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
 
-            # SGLang-aligned: decay new_token_ratio only when no prefill was actually scheduled
-            # this round and there are decode requests running.
+            # SGLang-aligned: decay new_token_ratio only when:
+            # - There are decode requests running
+            # - No running chunked prefill (has_running_prefill = False)
+            # - No waiting queue (bool(self.waiting) = False)
+            # - No prefill was scheduled this round (has_scheduled_prefill = False)
+            # - No preemption occurred this round (not preempted_reqs)
+            # This matches SGLang's is_extend_mode = has_running_prefill or bool(self.waiting)
             if (
-                scheduled_reqs
+                has_decode_requests
+                and not has_running_prefill
+                and not self.waiting
                 and not has_scheduled_prefill
                 and not preempted_reqs
-                and has_decode_requests
                 and self.current_new_token_ratio > self.min_new_token_ratio
             ):
                 self.current_new_token_ratio = max(
