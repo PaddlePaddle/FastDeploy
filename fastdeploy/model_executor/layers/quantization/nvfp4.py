@@ -24,6 +24,7 @@ from paddleformers.utils.log import logger
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.moe import FusedMoE
+from fastdeploy.model_executor.layers.moe.ep import deep_ep
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
 from fastdeploy.model_executor.ops.gpu import (
     depermute_prefill_combine,
@@ -38,6 +39,20 @@ from fastdeploy.model_executor.utils import (
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 paddle.compat.enable_torch_proxy(scope={"flashinfer"})
+
+
+try:
+    # flashinfer cutedsl blockscaled gemm takes long time to complie, it may not be imported in function.
+    # we will add flashinfer.cutedsl.blockscaled_gemm into setup.py by AOT.
+    from flashinfer import (
+        scaled_fp4_grouped_quantize,
+        silu_and_mul_scaled_nvfp4_experts_quantize,
+    )
+    from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
+
+    _FLASHINFER_CUTEDSL_AVAILABLE = True
+except ImportError:
+    _FLASHINFER_CUTEDSL_AVAILABLE = False
 
 
 def call_prefill_permute_to_masked_gemm(
@@ -647,11 +662,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         if self.backend != "flashinfer-cutedsl":
             raise NotImplementedError("NVFP4 EP backend only supports CuteDSL implementation.")
 
-        from flashinfer import (
-            scaled_fp4_grouped_quantize,
-            silu_and_mul_scaled_nvfp4_experts_quantize,
-        )
-        from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
+        if not _FLASHINFER_CUTEDSL_AVAILABLE:
+            raise ImportError("install flashinfer cutedsl blockscaled gemm")
 
         masked_m = masked_m.cast(paddle.int32)
         num_experts = int(layer.num_local_experts)
@@ -747,8 +759,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
-
-        from fastdeploy.model_executor.layers.moe.ep import deep_ep
 
         event = deep_ep.Buffer.capture()
 
