@@ -36,7 +36,7 @@ class NgramProposer(Proposer):
     def __init__(self, fd_config: "FDConfig"):
         super().__init__(fd_config)
         self.max_ngram_size = self.speculative_config.max_ngram_size
-        self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64")
+        self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()
 
     def update(self, bid: int, seq_len: int):
         """
@@ -50,7 +50,7 @@ class NgramProposer(Proposer):
         """
         ngram_match(
             share_inputs["input_ids_cpu"].cuda(),
-            self.input_ids_len,
+            self.input_ids_len.cuda(),
             share_inputs["token_ids_all"],
             share_inputs["prompt_lens"],
             share_inputs["step_idx"],
