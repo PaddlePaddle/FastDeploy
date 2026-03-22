@@ -42,7 +42,7 @@ jobs:
   base_tests:
     runs-on: [self-hosted, GPU-h20-1Cards]
     needs: check_bypass
-    if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
+    if: ${{ inputs.FASTDEPLOY_WHEEL_URL != '' && needs.check_bypass.outputs.can-skip != 'true' }}
     timeout-minutes: 60
     steps:
       - name: Code Prepare

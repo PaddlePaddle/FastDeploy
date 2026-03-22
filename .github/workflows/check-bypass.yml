@@ -22,7 +22,7 @@ jobs:
     permissions:
       contents: read
     env:
-      CI_TEAM_MEMBERS: '["yuanlehome","YuanRisheng","Jiang-Jia-Jun","DDDivano","XieYunshen","EmmonsCurse","CSWYF3634076"]'
+      CI_TEAM_MEMBERS: '["yuanlehome","YuanRisheng","Jiang-Jia-Jun","DDDivano","XieYunshen","EmmonsCurse","CSWYF3634076","plusNew001"]'
     outputs:
       can-skip: ${{ steps.final-output.outputs.can-skip }}
       can-skip-docs: ${{ steps.final-output.outputs.can-skip-docs }}
