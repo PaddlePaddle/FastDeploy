@@ -901,11 +901,6 @@ class ResourceManagerV1(ResourceManager):
             # rem_input_tokens: total input budget (SGLang's max_prefill_tokens - mixed_with_decode_tokens)
             rem_input_tokens = envs.FD_REM_INPUT_TOKENS - running_decode_count
 
-            # Compute running decode reservation once per schedule() call (shared by RUNNING & WAITING loops)
-            cached_running_decode_reserved = self._calculate_decode_reserved_tokens_by_ratio()
-            # Track decode reservations accumulated within this cycle (RUNNING + WAITING)
-            scheduled_new_decode_reserved_tokens: float = 0.0
-
             # First, schedule the RUNNING requests.
             req_index = 0
             num_decoding_req_nums = 0
@@ -1034,15 +1029,8 @@ class ResourceManagerV1(ResourceManager):
                         continue
                     num_new_tokens = self._get_num_new_tokens(request, rem_chunk_tokens, rem_input_tokens)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
-                    # Threshold check (same as WAITING loop): ensure enough free blocks for
-                    # current chunk + decode reservations
-                    can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
-                        request, num_new_block,
-                        scheduled_new_decode_reserved_tokens,
-                        cached_running_decode_reserved,
-                    )
                     # Allocate blocks to prefill
-                    if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
+                    if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
                         request.block_tables.extend(
                             self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
                         )
@@ -1057,27 +1045,31 @@ class ResourceManagerV1(ResourceManager):
                         )
                         # Prepare prefill task
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
+                    # SGLang-aligned: only continue ONE chunked prefill per step, then break.
+                    # Multiple running prefills share rem_chunk_tokens → fragmented slow progress.
+                    # SGLang: single chunked_req per step gets the full budget.
                     has_scheduled_prefill = True
-                    rem_input_tokens -= num_new_tokens
                     rem_chunk_tokens -= num_new_tokens
-
-                    # Track decode reservation for last-chunk requests in RUNNING loop
-                    remaining_to_prefill = request.need_prefill_tokens - request.num_computed_tokens
-                    is_last_chunk = remaining_to_prefill <= num_new_tokens
-                    if is_last_chunk:
-                        max_new = getattr(request, 'max_new_tokens', self.clip_max_new_tokens_estimation)
-                        scheduled_new_decode_reserved_tokens += min(max_new, self.clip_max_new_tokens_estimation)
-
                     request.num_computed_tokens += num_new_tokens
                     if self.config.cache_config.enable_prefix_caching:
                         self.cache_manager.update_cache_blocks(
                             request, self.config.cache_config.block_size, request.num_computed_tokens
                         )
+                    break  # ← only 1 running chunked prefill per step
+
                 req_index += 1
 
             # Second, schedule the WAITING requests.
             if not preempted_reqs:
+                # Compute running decode reservation once per schedule() call
+                cached_running_decode_reserved = self._calculate_decode_reserved_tokens_by_ratio()
+                # Track decode reservations accumulated within this cycle's waiting loop
+                scheduled_new_decode_reserved_tokens: float = 0.0
+
                 skip_requests: list[Request] = []
+                # SGLang-aligned: only admit ONE chunked (long) request per step.
+                # Short requests continue to be admitted without consuming rem_chunk_tokens.
+                chunked_request_admitted_this_step = False
                 while self.waiting and rem_input_tokens > 0 and rem_chunk_tokens > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
@@ -1140,15 +1132,20 @@ class ResourceManagerV1(ResourceManager):
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             has_scheduled_prefill = True
-                            rem_input_tokens -= num_new_tokens
-                            rem_chunk_tokens -= num_new_tokens
-
                             # Track decode reservation for last-chunk requests
                             remaining_to_prefill = request.need_prefill_tokens - request.num_computed_tokens
                             is_last_chunk = remaining_to_prefill <= num_new_tokens
+
+                            # SGLang-aligned: chunked requests consume rem_chunk_tokens;
+                            # non-chunked (last) requests consume rem_input_tokens (NOT rem_chunk_tokens).
                             if is_last_chunk:
+                                rem_input_tokens -= num_new_tokens
                                 max_new = getattr(request, 'max_new_tokens', self.clip_max_new_tokens_estimation)
                                 scheduled_new_decode_reserved_tokens += min(max_new, self.clip_max_new_tokens_estimation)
+                            else:
+                                rem_chunk_tokens -= num_new_tokens
+                                # SGLang: after admitting one chunked waiting request, break.
+                                chunked_request_admitted_this_step = True
 
                             request.num_computed_tokens += num_new_tokens
                             if self.config.cache_config.enable_prefix_caching:
@@ -1163,6 +1160,10 @@ class ResourceManagerV1(ResourceManager):
                                 self.stop_flags[allocated_position] = False
                                 self.req_dict[request.request_id] = allocated_position
                                 llm_logger.debug(f"req_id:{request.request_id} allocate pos end")
+                            # SGLang-aligned: after admitting one chunked waiting request, break.
+                            # Short (non-chunked) requests continue to be admitted.
+                            if chunked_request_admitted_this_step:
+                                break
                         else:
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
@@ -1205,15 +1206,19 @@ class ResourceManagerV1(ResourceManager):
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             has_scheduled_prefill = True
-                            rem_input_tokens -= num_new_tokens
-                            rem_chunk_tokens -= num_new_tokens
-
                             # Track decode reservation for last-chunk requests
                             remaining_to_prefill = request.need_prefill_tokens - request.num_computed_tokens
                             is_last_chunk = remaining_to_prefill <= num_new_tokens
+
+                            # SGLang-aligned: chunked requests consume rem_chunk_tokens;
+                            # non-chunked (last) requests consume rem_input_tokens (NOT rem_chunk_tokens).
                             if is_last_chunk:
+                                rem_input_tokens -= num_new_tokens
                                 max_new = getattr(request, 'max_new_tokens', self.clip_max_new_tokens_estimation)
                                 scheduled_new_decode_reserved_tokens += min(max_new, self.clip_max_new_tokens_estimation)
+                            else:
+                                rem_chunk_tokens -= num_new_tokens
+                                chunked_request_admitted_this_step = True
 
                             request.num_computed_tokens += num_new_tokens
                             if self.config.cache_config.enable_prefix_caching:
@@ -1221,6 +1226,9 @@ class ResourceManagerV1(ResourceManager):
                                     request, self.config.cache_config.block_size, request.num_computed_tokens
                                 )
                             request.status = RequestStatus.RUNNING
+                            # SGLang-aligned: after admitting one chunked waiting request, break.
+                            if chunked_request_admitted_this_step:
+                                break
                         else:
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
