@@ -24,7 +24,6 @@ from paddleformers.utils.log import logger
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.moe import FusedMoE
-from fastdeploy.model_executor.layers.moe.ep import deep_ep
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
 from fastdeploy.model_executor.ops.gpu import (
     depermute_prefill_combine,
@@ -39,12 +38,6 @@ from fastdeploy.model_executor.utils import (
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 paddle.compat.enable_torch_proxy(scope={"flashinfer"})
-
-from flashinfer import (
-    scaled_fp4_grouped_quantize,
-    silu_and_mul_scaled_nvfp4_experts_quantize,
-)
-from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
 
 
 def call_prefill_permute_to_masked_gemm(
@@ -589,10 +582,11 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
 
-        # [a, b] = layer.up_gate_proj_weight.split(2, axis=1)
-        # layer.up_gate_proj_weight.set_value(paddle.concat([b, a], axis=1))
-        # [a, b] = layer.up_gate_proj_weight_scale.split(2, axis=1)
-        # layer.up_gate_proj_weight_scale.set_value(paddle.concat([b, a], axis=1))
+        if self.backend != "flashinfer-cutedsl":
+            [a, b] = layer.up_gate_proj_weight.split(2, axis=1)
+            layer.up_gate_proj_weight.set_value(paddle.concat([b, a], axis=1))
+            [a, b] = layer.up_gate_proj_weight_scale.split(2, axis=1)
+            layer.up_gate_proj_weight_scale.set_value(paddle.concat([b, a], axis=1))
 
         up_gate_proj_weight_scale_2 = layer.up_gate_proj_weight_scale_2[:, 0]
         free_tensor(layer.up_gate_proj_weight_scale_2)
@@ -621,21 +615,43 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                 weight_scale.dtype == paddle.float8_e4m3fn
             ), f"{name} Weight Blockscale must be represented as FP8-E4M3"
 
-        up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
-        create_parameter_and_copy(
-            layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
-        )
-        free_tensor(layer.up_gate_proj_weight_scale)
-        layer.up_gate_proj_weight_scale = None
-        down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
-        create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
-        free_tensor(layer.down_proj_weight_scale)
-        layer.down_proj_weight_scale = None
+        if self.backend == "flashinfer-cutedsl":
+            up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
+            create_parameter_and_copy(
+                layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
+            )
+            free_tensor(layer.up_gate_proj_weight_scale)
+            layer.up_gate_proj_weight_scale = None
+            down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
+            create_parameter_and_copy(
+                layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled
+            )
+            free_tensor(layer.down_proj_weight_scale)
+            layer.down_proj_weight_scale = None
+        else:
+            up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
+            free_tensor(layer.up_gate_proj_weight_scale)
+            layer.up_gate_proj_weight_scale = None
+            create_parameter_and_copy(
+                layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
+            )
+            down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
+            free_tensor(layer.down_proj_weight_scale)
+            layer.down_proj_weight_scale = None
+            create_parameter_and_copy(
+                layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled
+            )
 
     def _run_cutedsl_grouped_masked(self, layer, hidden_states_3d, masked_m):
 
         if self.backend != "flashinfer-cutedsl":
             raise NotImplementedError("NVFP4 EP backend only supports CuteDSL implementation.")
+
+        from flashinfer import (
+            scaled_fp4_grouped_quantize,
+            silu_and_mul_scaled_nvfp4_experts_quantize,
+        )
+        from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
 
         masked_m = masked_m.cast(paddle.int32)
         num_experts = int(layer.num_local_experts)
@@ -732,6 +748,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
 
+        from fastdeploy.model_executor.layers.moe.ep import deep_ep
+
         event = deep_ep.Buffer.capture()
 
         # 2. ep dispatch
@@ -775,7 +793,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
                 if recv_x_scale is None:
                     recv_x_scale = paddle.zeros([recv_x_value.shape[0], 1], dtype=paddle.int32)
-                # premute_scale 没有被使用的原因是 _run_cutedsl_grouped_masked 会在内部量化
+
                 permute_input, permute_scale, permuted_indice_map, token_nums_per_expert = (
                     call_prefill_permute_to_masked_gemm(
                         x=recv_x_value,
@@ -796,8 +814,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                     num_worst_tokens=recv_x_value.shape[0],
                 )
             else:
-                # eb-45的top-k=6，但是call_prefill_permute_to_masked_gemm只支持topk=4 or 8
-                # 因此让 ai 用 python 实现支持topk=6的情况， 用于验证是否接入正确。端到端出字正常。
                 expert_token_lists = [[] for _ in range(num_local_experts)]
                 recv_n = recv_x_value.shape[0]
                 recv_topk_idx_numpy = recv_topk_idx.numpy()  # [N_recv, top_k]
@@ -963,7 +979,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
             return output
 
-        elif self.backend == "flashinfer-cutedsl":
+        elif self.backend == "flashinfer-cutedsl" and layer.ep_size > 1:
             if layer.fd_config.model_config.moe_phase.phase == "prefill":
                 return self.apply_ep_prefill(
                     layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts

@@ -444,9 +444,9 @@ class FuseMoEWrapper(paddle.nn.Layer):
     def __init__(
         self,
         model_config: ModelConfig,
-        tp_size: int = 8,
+        tp_size: int = 1,
         tp_rank: int = 0,
-        ep_size: int = 8,
+        ep_size: int = 1,
         ep_rank: int = 0,
         prefix: str = "layer0",
         nnodes: int = 1,
@@ -530,7 +530,6 @@ class FuseMoEWrapper(paddle.nn.Layer):
         )
         moe_layer = self.fused_moe
 
-        # 为 NVFP4 直接构造量化权重和尺度，避免依赖离线 checkpoint 结构。
         up_gate_proj_weight = getattr(moe_layer, "up_gate_proj_weight")
         down_proj_weight = getattr(moe_layer, "down_proj_weight")
         up_gate_proj_weight.set_value(
@@ -565,24 +564,29 @@ class FuseMoEWrapper(paddle.nn.Layer):
 
 class TestFusedMoE(unittest.TestCase):
     def setUp(self) -> None:
-        self.architectures = ["Ernie5_MoeForCausalLM"]
-        self.hidden_size = 7168
-        self.moe_intermediate_size = 3584
-        self.moe_num_experts = 160
+
+        if not paddle.is_compiled_with_cuda():
+            raise unittest.SkipTest("CUDA not available")
+
+        capability = paddle.device.cuda.get_device_capability()
+        major_cap = capability[0]
+
+        if major_cap < 10:
+            raise unittest.SkipTest(
+                f"NVFP4 MoE requires Blackwell GPU (Compute Capability 10.0), "
+                f"but found {capability[0]}.{capability[1]}"
+            )
+
+        self.architectures = ["Ernie45_MoeForCausalLM"]
+        self.hidden_size = 4096
+        self.moe_intermediate_size = 2048
+        self.moe_num_experts = 64
         self.moe_k = 8
         self.num_layers = 2
         self.num_attention_heads = -1
         self.model_config = self.build_model_config()
-        # num_max_dispatch_tokens_per_rank=1024 keeps the PFCC DeepEP RDMA buffer
-        # under the 32 GB C++ INT_MAX limit while covering the largest token count
-        # used in any test case (1024 in test_fused_moe).
+
         self.model_config.num_max_dispatch_tokens_per_rank = 128
-        # The PFCC DeepEP low-latency buffer checks:
-        #   nvshmem_qp_depth >= (num_max_dispatch_tokens_per_rank + 1) * 2
-        # With T=1024 this requires depth >= 2050.  The default NVSHMEM_QP_DEPTH
-        # is 1024, which is too small.  Set it before any FuseMoEWrapper (and
-        # therefore any DeepEPEngine singleton) is constructed.
-        # os.environ.setdefault("NVSHMEM_QP_DEPTH", "4096")
 
     def build_model_config(self) -> ModelConfig:
         model_name_or_path = self.build_config_json()
@@ -629,7 +633,7 @@ class TestFusedMoE(unittest.TestCase):
 
         nnodes = (ep_size + 7) // 8
 
-        # 这行代码必须保留，否则影响均匀性！
+        # must reserve seed to promise reproducibility
         paddle.seed(ep_rank + 100)
 
         # Compute the token list first so we can size the DeepEP low-latency buffer
