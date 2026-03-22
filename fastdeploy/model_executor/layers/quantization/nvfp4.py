@@ -597,7 +597,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
 
-        if self.backend != "flashinfer-cutedsl":
+        if self.backend == "flashinfer-cutlass":
             [a, b] = layer.up_gate_proj_weight.split(2, axis=1)
             layer.up_gate_proj_weight.set_value(paddle.concat([b, a], axis=1))
             [a, b] = layer.up_gate_proj_weight_scale.split(2, axis=1)
