@@ -14,27 +14,26 @@
 # limitations under the License.
 """
 
+import os
 from typing import Callable, Optional
 
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
-import os
 import fastdeploy
-from fastdeploy.model_executor.layers.moe.ep import deep_ep
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.moe import FusedMoE
+from fastdeploy.model_executor.layers.moe.ep import deep_ep
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
+from fastdeploy.model_executor.ops.gpu import (
+    depermute_prefill_combine,
+    prefill_permute_to_masked_gemm,
+)
 from fastdeploy.model_executor.utils import (
     create_parameter_and_copy,
     free_tensor,
     set_weight_attrs,
-)
-
-from fastdeploy.model_executor.ops.gpu import (
-    depermute_prefill_combine,
-    prefill_permute_to_masked_gemm,
 )
 
 from .quant_base import QuantConfigBase, QuantMethodBase
@@ -116,7 +115,6 @@ def _get_cute_dtype(input_tensor) -> str:
     if s == "float32":
         return "float32"
     raise ValueError(f"Unsupported cute dtype {input_tensor.dtype}")
-
 
 
 def next_power_of_2(n: int):
@@ -633,7 +631,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
         free_tensor(layer.down_proj_weight_scale)
         layer.down_proj_weight_scale = None
-    
+
     def _run_cutedsl_grouped_masked(self, layer, hidden_states_3d, masked_m):
 
         if self.backend != "flashinfer-cutedsl":
@@ -658,7 +656,9 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         w1_alpha = _to_expert_scale_vec(layer.g1_alphas, "g1_alphas")
         w2_alpha = _to_expert_scale_vec(layer.g2_alphas, "g2_alphas")
-        input_global_scale = _to_expert_scale_vec(layer.up_gate_proj_input_scale_quant, "up_gate_proj_input_scale_quant")
+        input_global_scale = _to_expert_scale_vec(
+            layer.up_gate_proj_input_scale_quant, "up_gate_proj_input_scale_quant"
+        )
         a2_global_scale = _to_expert_scale_vec(layer.down_proj_input_scale_quant, "down_proj_input_scale_quant")
 
         n = layer.down_proj_weight.shape[-1] * 2
@@ -720,9 +720,9 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
-        shared_experts: nn.Layer = None
+        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
-        
+
         # 1. top experts and weights
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
@@ -731,7 +731,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
-        
+
         event = deep_ep.Buffer.capture()
 
         # 2. ep dispatch
@@ -774,9 +774,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                 )
 
                 if recv_x_scale is None:
-                    recv_x_scale = paddle.zeros(
-                        [recv_x_value.shape[0], 1], dtype=paddle.int32
-                    )
+                    recv_x_scale = paddle.zeros([recv_x_value.shape[0], 1], dtype=paddle.int32)
                 # premute_scale 没有被使用的原因是 _run_cutedsl_grouped_masked 会在内部量化
                 permute_input, permute_scale, permuted_indice_map, token_nums_per_expert = (
                     call_prefill_permute_to_masked_gemm(
@@ -789,9 +787,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                 )
 
                 # token_nums_per_expert: [num_local_experts, 1] -> [num_local_experts]
-                ffn_out = self._run_cutedsl_grouped_masked(
-                    layer, permute_input, token_nums_per_expert.reshape([-1])
-                )
+                ffn_out = self._run_cutedsl_grouped_masked(layer, permute_input, token_nums_per_expert.reshape([-1]))
 
                 tmp_ffn_out = call_depermute_prefill_combine(
                     x=ffn_out,
@@ -823,20 +819,14 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                     )
                     for ei, indices in enumerate(expert_token_lists):
                         if indices:
-                            blocked[ei, : len(indices)] = recv_x_value[
-                                paddle.to_tensor(indices, dtype=paddle.int64)
-                            ]
+                            blocked[ei, : len(indices)] = recv_x_value[paddle.to_tensor(indices, dtype=paddle.int64)]
                     masked_m = paddle.to_tensor(token_counts, dtype=paddle.int32)
-                    ffn_out_blocked = self._run_cutedsl_grouped_masked(
-                        layer, blocked, masked_m
-                    )
+                    ffn_out_blocked = self._run_cutedsl_grouped_masked(layer, blocked, masked_m)
                     # ffn_out_blocked: [num_local_experts, max_expert_tokens, H]
 
                     # De-permute: accumulate weighted expert outputs back to
                     # [N_recv, H] in-place.
-                    tmp_ffn_out = paddle.zeros(
-                        [recv_n, H], dtype=paddle.float32
-                    )
+                    tmp_ffn_out = paddle.zeros([recv_n, H], dtype=paddle.float32)
                     recv_topk_weights_np = recv_topk_weights.cast(paddle.float32).numpy()
                     ffn_out_f32 = ffn_out_blocked.cast(paddle.float32)
                     for ti in range(recv_n):
@@ -897,7 +887,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         if shared_experts is not None:
             s_x = shared_experts(x)
-        
+
         out = self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
 
         if shared_experts is not None:
@@ -972,12 +962,16 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             )
 
             return output
-        
+
         elif self.backend == "flashinfer-cutedsl":
             if layer.fd_config.model_config.moe_phase.phase == "prefill":
-                return self.apply_ep_prefill(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts)
+                return self.apply_ep_prefill(
+                    layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
+                )
             else:
-                return self.apply_ep_decode(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts)
-        
+                return self.apply_ep_decode(
+                    layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
+                )
+
         # flashinfer-trtllm
         return paddle.empty_like(x)

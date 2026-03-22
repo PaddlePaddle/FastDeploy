@@ -36,9 +36,7 @@ from fastdeploy.config import (
 )
 from fastdeploy.model_executor.layers.linear import ReplicatedLinear
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
-from fastdeploy.model_executor.layers.quantization.nvfp4 import (
-    ModelOptNvFp4Config,
-)
+from fastdeploy.model_executor.layers.quantization.nvfp4 import ModelOptNvFp4Config
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.worker_process import init_distributed_environment
 
@@ -472,7 +470,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
                     "ep_prefill_use_worst_num_tokens": True,
                 }
             ),
-            #quant_config=BlockWiseFP8Config(weight_block_size=[128, 128]),
+            # quant_config=BlockWiseFP8Config(weight_block_size=[128, 128]),
             quant_config=ModelOptNvFp4Config(
                 is_checkpoint_nvfp4_serialized=True,
                 kv_cache_quant_algo=None,
@@ -494,8 +492,8 @@ class FuseMoEWrapper(paddle.nn.Layer):
         self.fd_config.parallel_config.expert_parallel_size = self.ep_size
         if self.ep_size > 1:
             self.fd_config.parallel_config.ep_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
-            #self.fd_config.scheduler_config.splitwise_role = "decode"
-            #self.fd_config.model_config.moe_phase.phase = "decode"
+            # self.fd_config.scheduler_config.splitwise_role = "decode"
+            # self.fd_config.model_config.moe_phase.phase = "decode"
             self.fd_config.scheduler_config.splitwise_role = "mixed"
             self.fd_config.model_config.moe_phase.phase = "prefill"
 
@@ -550,10 +548,18 @@ class FuseMoEWrapper(paddle.nn.Layer):
         down_proj_weight_scale.set_value(
             paddle.ones(down_proj_weight_scale.shape, dtype=paddle.float32).cast(down_proj_weight_scale.dtype)
         )
-        moe_layer.up_gate_proj_weight_scale_2.set_value(paddle.ones(moe_layer.up_gate_proj_weight_scale_2.shape, dtype=paddle.float32))
-        moe_layer.down_proj_weight_scale_2.set_value(paddle.ones(moe_layer.down_proj_weight_scale_2.shape, dtype=paddle.float32))
-        moe_layer.up_gate_proj_input_scale.set_value(paddle.ones(moe_layer.up_gate_proj_input_scale.shape, dtype=paddle.float32))
-        moe_layer.down_proj_input_scale.set_value(paddle.ones(moe_layer.down_proj_input_scale.shape, dtype=paddle.float32))
+        moe_layer.up_gate_proj_weight_scale_2.set_value(
+            paddle.ones(moe_layer.up_gate_proj_weight_scale_2.shape, dtype=paddle.float32)
+        )
+        moe_layer.down_proj_weight_scale_2.set_value(
+            paddle.ones(moe_layer.down_proj_weight_scale_2.shape, dtype=paddle.float32)
+        )
+        moe_layer.up_gate_proj_input_scale.set_value(
+            paddle.ones(moe_layer.up_gate_proj_input_scale.shape, dtype=paddle.float32)
+        )
+        moe_layer.down_proj_input_scale.set_value(
+            paddle.ones(moe_layer.down_proj_input_scale.shape, dtype=paddle.float32)
+        )
         moe_layer.quant_method.process_weights_after_loading(moe_layer)
 
 
@@ -754,19 +760,15 @@ class TestFusedMoE(unittest.TestCase):
             print("test_decode_correctness requires ep_size > 1, skipping.")
             return
 
-        num_tokens = 128          # small batch – fast but non-trivial
-        num_local_experts = self.moe_num_experts // ep_size   # 8
-        H = self.hidden_size          # 7168
-        I = self.moe_intermediate_size  # 3584
-        G = 16                          # NVFP4 group_size
+        num_tokens = 128  # small batch – fast but non-trivial
+        num_local_experts = self.moe_num_experts // ep_size  # 8
+        H = self.hidden_size  # 7168
 
         # DeepEP low-latency buffer must hold at least num_tokens tokens per rank.
         self.model_config.num_max_dispatch_tokens_per_rank = max(num_tokens, 128)
 
         # ── Build EP model ────────────────────────────────────────────────────
-        ep_moe = FuseMoEWrapper(
-            self.model_config, 1, 0, ep_size, ep_rank, nnodes=1
-        )
+        ep_moe = FuseMoEWrapper(self.model_config, 1, 0, ep_size, ep_rank, nnodes=1)
         ep_moe.fd_config.model_config.moe_phase.phase = "decode"
         ep_moe.fd_config.scheduler_config.splitwise_role = "decode"
         moe_layer = ep_moe.fused_moe
@@ -777,22 +779,20 @@ class TestFusedMoE(unittest.TestCase):
 
         # ── Same gate weights everywhere ─────────────────────────────────────
         paddle.seed(4444)
-        ep_moe.gating.weight.set_value(
-            paddle.rand(ep_moe.gating.weight.shape, dtype=paddle.float32)
-        )
+        ep_moe.gating.weight.set_value(paddle.rand(ep_moe.gating.weight.shape, dtype=paddle.float32))
 
         # ── Deterministic per-expert quantized weights (global expert id seed) ─
         # FuseMoEWrapper.__init__ already called process_weights_after_loading with
         # all-one scales, so g1_alphas / g2_alphas / blockscale_swizzled are correct.
         # We only need to swap the raw packed-uint8 weight tensors.
         up_gate_w = np.zeros(moe_layer.up_gate_proj_weight.shape, dtype=np.uint8)
-        down_w    = np.zeros(moe_layer.down_proj_weight.shape,    dtype=np.uint8)
+        down_w = np.zeros(moe_layer.down_proj_weight.shape, dtype=np.uint8)
 
         for li in range(num_local_experts):
-            ge  = ep_rank * num_local_experts + li
+            ge = ep_rank * num_local_experts + li
             rng = np.random.default_rng(ge + 1_000_000)
             up_gate_w[li] = rng.integers(0, 256, up_gate_w[li].shape, dtype=np.uint8)
-            down_w[li]    = rng.integers(0, 256, down_w[li].shape,    dtype=np.uint8)
+            down_w[li] = rng.integers(0, 256, down_w[li].shape, dtype=np.uint8)
 
         moe_layer.up_gate_proj_weight.set_value(paddle.to_tensor(up_gate_w))
         moe_layer.down_proj_weight.set_value(paddle.to_tensor(down_w))
@@ -805,9 +805,9 @@ class TestFusedMoE(unittest.TestCase):
         # ── Diagnostic: all ranks must produce the same output (same x, same routing) ─
         # If this fails, dispatch/combine has a routing bug.
         ep_list = [paddle.zeros_like(ep_output) for _ in range(ep_size)]
-        #print(ep_list)
+        # print(ep_list)
         paddle.distributed.all_gather(ep_list, ep_output)
-        #print(ep_list)
+        # print(ep_list)
         if ep_rank == 0:
             for r in range(1, ep_size):
                 d = (ep_list[0].cast(paddle.float32) - ep_list[r].cast(paddle.float32)).abs()
@@ -815,16 +815,16 @@ class TestFusedMoE(unittest.TestCase):
 
         # ── Step 2: Recover routing (deterministic for same x & gate weights) ─
         gate_out = ep_moe.gating(x.cast("float32"))
-        topk_idx, topk_weights = moe_layer.quant_method.ep_decoder_runner.moe_select(
-            moe_layer, gate_out
-        )
+        topk_idx, topk_weights = moe_layer.quant_method.ep_decoder_runner.moe_select(moe_layer, gate_out)
         # topk_idx:     [num_tokens, top_k]  – global expert indices 0..63
         # topk_weights: [num_tokens, top_k]  – softmax weights
 
         if ep_rank == 0:
-            print(f"[test_decode_correctness] topk_idx range [{int(topk_idx.min().numpy())}, "
-                  f"{int(topk_idx.max().numpy())}], "
-                  f"topk_idx[0]={topk_idx.numpy()[0].tolist()}")
+            print(
+                f"[test_decode_correctness] topk_idx range [{int(topk_idx.min().numpy())}, "
+                f"{int(topk_idx.max().numpy())}], "
+                f"topk_idx[0]={topk_idx.numpy()[0].tolist()}"
+            )
 
         # ── Step 3: Direct GEMM reference for each local expert on all tokens ─
         # Feed every token to every local expert independently.
@@ -832,9 +832,7 @@ class TestFusedMoE(unittest.TestCase):
         # hidden_3d: [E_local, num_tokens, H]
         masked_m_ref = paddle.full([num_local_experts], num_tokens, dtype=paddle.int32)
 
-        local_ref = moe_layer.quant_method._run_cutedsl_grouped_masked(
-            moe_layer, hidden_3d, masked_m_ref
-        )
+        local_ref = moe_layer.quant_method._run_cutedsl_grouped_masked(moe_layer, hidden_3d, masked_m_ref)
         # local_ref: [E_local, num_tokens, H]
 
         # ── Step 4: All-gather reference outputs across all ranks ─────────────
@@ -847,25 +845,27 @@ class TestFusedMoE(unittest.TestCase):
         # ── Step 5: Manual weighted sum (reference output) ───────────────────
         top_k = self.moe_k
         ref_output = paddle.zeros([num_tokens, H], dtype=paddle.float32)
-        topk_idx_cpu    = topk_idx.numpy()
+        topk_idx_cpu = topk_idx.numpy()
         topk_weights_f32 = topk_weights.cast(paddle.float32)
-        all_ref_f32      = all_ref.cast(paddle.float32)
+        all_ref_f32 = all_ref.cast(paddle.float32)
 
         for i in range(num_tokens):
             for k in range(top_k):
                 ge = int(topk_idx_cpu[i, k])
-                w  = float(topk_weights_f32[i, k].numpy())
+                w = float(topk_weights_f32[i, k].numpy())
                 ref_output[i] += w * all_ref_f32[ge, i]
 
         if ep_rank == 0:
             # Sanity: pick the first assigned expert for token 0
             ge0 = int(topk_idx_cpu[0, 0])
-            print(f"[test_decode_correctness] token0 k=0 expert ge={ge0}, "
-                  f"all_ref[ge0,0,:3]={all_ref_f32[ge0, 0, :3].numpy().tolist()}")
+            print(
+                f"[test_decode_correctness] token0 k=0 expert ge={ge0}, "
+                f"all_ref[ge0,0,:3]={all_ref_f32[ge0, 0, :3].numpy().tolist()}"
+            )
 
         # ── Step 6: Compare ───────────────────────────────────────────────────
-        ep_f32   = ep_output.cast(paddle.float32)
-        diff     = (ep_f32 - ref_output).abs()
+        ep_f32 = ep_output.cast(paddle.float32)
+        diff = (ep_f32 - ref_output).abs()
         max_diff = float(diff.max().numpy())
         mean_diff = float(diff.mean().numpy())
 
