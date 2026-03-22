@@ -51,7 +51,7 @@ try:
     from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
 
     _FLASHINFER_CUTEDSL_AVAILABLE = True
-except ImportError:
+except:
     _FLASHINFER_CUTEDSL_AVAILABLE = False
 
 
