@@ -167,6 +167,9 @@ class ResourceManagerV1(ResourceManager):
         # Priority queues for requests.
         self.waiting: deque[Request] = deque()
         self.running: list[Request] = []
+        # SGLang-aligned chunked_req: keep at most one unfinished chunked prefill
+        # outside self.running until its final chunk completes.
+        self.active_chunked_prefill_req: Request | None = None
         self.preallocated_reqs: dict[str, Request] = {}
         self.enable_max_prefill = envs.FD_ENABLE_MAX_PREFILL
         self.finish_execution_pool = ThreadPoolExecutor(max_workers=1)
@@ -248,6 +251,27 @@ class ResourceManagerV1(ResourceManager):
 
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
+
+    def _ensure_request_slot_allocated(self, request: Request):
+        if self.config.scheduler_config.splitwise_role != "mixed":
+            return
+        if (
+            request.idx is not None
+            and 0 <= request.idx < len(self.tasks_list)
+            and self.tasks_list[request.idx] is request
+            and not self.stop_flags[request.idx]
+        ):
+            self.req_dict[request.request_id] = request.idx
+            return
+
+        allocated_position = self.get_available_position()
+        request.idx = allocated_position
+        self.tasks_list[allocated_position] = request
+        self.stop_flags[allocated_position] = False
+        self.req_dict[request.request_id] = allocated_position
+
+    def _num_active_running_requests(self) -> int:
+        return len(self.running) + (1 if self.active_chunked_prefill_req is not None else 0)
 
     def reschedule_preempt_task(self, request_id, process_func=None):
         with self.lock:
@@ -877,18 +901,23 @@ class ResourceManagerV1(ResourceManager):
             preempted_reqs: list[Request] = []
             error_reqs: list[tuple[str, str]] = []
 
-            # Single-pass over self.running: compute running_decode_count, has_running_prefill,
-            # has_decode_requests
+            # Keep the single unfinished chunked prefill outside self.running, like
+            # SGLang's chunked_req. If older code left one in self.running, migrate the
+            # first unfinished request out.
+            if self.active_chunked_prefill_req is None:
+                for i, req in enumerate(self.running):
+                    if req.num_computed_tokens < req.need_prefill_tokens:
+                        self.active_chunked_prefill_req = self.running.pop(i)
+                        break
+
+            # Single-pass over self.running: compute running decode state only.
             _block_size = self.config.cache_config.block_size
             running_decode_count = 0
-            has_running_prefill = False
             has_decode_requests = False
             for _r in self.running:
                 if _r.num_computed_tokens >= _r.need_prefill_tokens:
                     running_decode_count += 1
                     has_decode_requests = True
-                else:
-                    has_running_prefill = True
 
             # Track whether any prefill was actually scheduled this round (for decay condition)
             has_scheduled_prefill = False
@@ -900,103 +929,98 @@ class ResourceManagerV1(ResourceManager):
             rem_chunk_tokens = chunked_prefill_size
             # rem_input_tokens: total input budget (SGLang's max_prefill_tokens - mixed_with_decode_tokens)
             rem_input_tokens = envs.FD_REM_INPUT_TOKENS - running_decode_count
+            # Compute running decode reservation once per schedule() call and accumulate
+            # last-chunk requests admitted within this cycle on top of it.
+            cached_running_decode_reserved = self._calculate_decode_reserved_tokens_by_ratio()
+            scheduled_new_decode_reserved_tokens: float = 0.0
 
-            # First, schedule the RUNNING requests.
-            # Priority: move any in-progress chunked prefill request to the front so it is
-            # processed before decode requests and gets priority access to available KV blocks.
-            # A partially-prefilled request already holds KV cache for computed chunks and must
-            # be allowed to complete its prefill without starvation.
-            if has_running_prefill:
-                for i in range(1, len(self.running)):
-                    if self.running[i].num_computed_tokens < self.running[i].need_prefill_tokens:
-                        self.running.insert(0, self.running.pop(i))
-                        break
-            req_index = 0
+            def _get_request_max_new_tokens(request: Request) -> int:
+                if request.sampling_params and request.sampling_params.max_tokens is not None:
+                    return request.sampling_params.max_tokens
+                return self.config.model_config.max_model_len - request.need_prefill_tokens
+
+            # First, schedule the single active chunked prefill request (if any).
             num_decoding_req_nums = 0
-            has_scheduled_running_prefill = False  # guard: only schedule ONE in-flight prefill per step
-            while req_index < len(self.running):
-                request = self.running[req_index]
+            has_scheduled_running_prefill = False
+            active_chunked_prefill_req = self.active_chunked_prefill_req
+            if active_chunked_prefill_req is not None:
+                request = active_chunked_prefill_req
                 need_block_num = self.need_block_num_signal.value[request.idx]
                 if need_block_num != 0:
                     self.need_block_num_map[request.request_id] = SignalConsumer(need_block_num, 1)
                     self.need_block_num_signal.value[request.idx] = 0
 
-                if request.num_computed_tokens >= request.need_prefill_tokens:  # to be decoding
-                    if (
-                        self.config.scheduler_config.splitwise_role == "prefill"
-                    ):  # do not need to schedule for decoding
-                        req_index += 1
-                        continue
-                    if request.num_total_tokens > request.need_prefill_tokens:  # has generated tokens
-                        request.num_computed_tokens = request.num_total_tokens - 1
-                    # SGLang-aligned: dynamically calculate how many blocks are needed for next decode
-                    # Similar to SGLang's new_page_count_next_decode:
-                    # If (num_total_tokens - 1) % block_size == 0, need 1 more block
-                    block_size = self.config.cache_config.block_size
-                    num_new_blocks_needed = 1 if (request.num_total_tokens - 1) % block_size == 0 else 0
-
-                    # SGLang-aligned: schedule decode task without threshold check
-                    # The pre-allocation is decoupled from scheduling
-                    if num_new_blocks_needed > 0:
-                        # Need to allocate new blocks, check if we can allocate
-                        if self.cache_manager.can_allocate_gpu_blocks(num_new_blocks_needed):
-                            llm_logger.debug(
-                                f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
-                            )
+                if not (
+                    current_platform.is_intel_hpu()
+                    and request.need_prefill_tokens - request.num_computed_tokens
+                    >= self.config.cache_config.block_size
+                    and rem_input_tokens < self.config.cache_config.block_size
+                ) and not get_enough_request(request, scheduled_reqs) and rem_chunk_tokens > 0:
+                    num_new_tokens = self._get_num_new_tokens(request, rem_chunk_tokens, rem_input_tokens)
+                    if num_new_tokens > 0:
+                        num_new_block = self.get_new_block_nums(request, num_new_tokens)
+                        can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
+                            request,
+                            num_new_block,
+                            scheduled_new_decode_reserved_tokens,
+                            cached_running_decode_reserved,
+                        )
+                        if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
                             request.block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(
-                                    num_new_blocks_needed, request.request_id
-                                )
+                                self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
                             )
-                            # Prepare decoding task
-                            scheduled_reqs.append(self._prepare_decode_task(request))
-                        else:
-                            # Not enough blocks, trigger preemption
-                            # SGLang-aligned: first try to evict decode KV cache
-                            self._evict_decode_kv_cache(len(self.running))
+                            scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
+                            has_scheduled_prefill = True
+                            has_scheduled_running_prefill = True
+                            rem_input_tokens -= num_new_tokens
+                            rem_chunk_tokens -= num_new_tokens
+                            remaining_to_prefill = request.need_prefill_tokens - request.num_computed_tokens
+                            if remaining_to_prefill <= num_new_tokens:
+                                max_new = min(
+                                    _get_request_max_new_tokens(request), self.clip_max_new_tokens_estimation
+                                )
+                                scheduled_new_decode_reserved_tokens += max_new
+                            request.num_computed_tokens += num_new_tokens
+                            if self.config.cache_config.enable_prefix_caching:
+                                self.cache_manager.update_cache_blocks(
+                                    request, self.config.cache_config.block_size, request.num_computed_tokens
+                                )
+                            if request.num_computed_tokens >= request.need_prefill_tokens:
+                                self.active_chunked_prefill_req = None
+                                self.running.append(request)
 
-                            # Check again after eviction
+            # Second, schedule decode requests in self.running.
+            if not has_scheduled_running_prefill:
+                req_index = 0
+                while req_index < len(self.running):
+                    request = self.running[req_index]
+                    need_block_num = self.need_block_num_signal.value[request.idx]
+                    if need_block_num != 0:
+                        self.need_block_num_map[request.request_id] = SignalConsumer(need_block_num, 1)
+                        self.need_block_num_signal.value[request.idx] = 0
+
+                    if request.num_computed_tokens >= request.need_prefill_tokens:  # to be decoding
+                        if (
+                            self.config.scheduler_config.splitwise_role == "prefill"
+                        ):  # do not need to schedule for decoding
+                            req_index += 1
+                            continue
+                        if request.num_total_tokens > request.need_prefill_tokens:  # has generated tokens
+                            request.num_computed_tokens = request.num_total_tokens - 1
+                        # SGLang-aligned: dynamically calculate how many blocks are needed for next decode
+                        # Similar to SGLang's new_page_count_next_decode:
+                        # If (num_total_tokens - 1) % block_size == 0, need 1 more block
+                        block_size = self.config.cache_config.block_size
+                        num_new_blocks_needed = 1 if (request.num_total_tokens - 1) % block_size == 0 else 0
+
+                        # SGLang-aligned: schedule decode task without threshold check
+                        # The pre-allocation is decoupled from scheduling
+                        if num_new_blocks_needed > 0:
+                            # Need to allocate new blocks, check if we can allocate
                             if self.cache_manager.can_allocate_gpu_blocks(num_new_blocks_needed):
-                                request.block_tables.extend(
-                                    self.cache_manager.allocate_gpu_blocks(
-                                        num_new_blocks_needed, request.request_id
-                                    )
+                                llm_logger.debug(
+                                    f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                                 )
-                                scheduled_reqs.append(self._prepare_decode_task(request))
-                            else:
-                                # Cannot allocate even after preemption, use SGLang-aligned behavior
-                                # Try to preempt other requests
-                                can_schedule = self._trigger_preempt(
-                                    request, num_new_blocks_needed, preempted_reqs, scheduled_reqs
-                                )
-                                if not can_schedule:
-                                    # Cannot preempt any other request to free space for this decode request.
-                                    # This happens when only 1 decode request remains.
-                                    # The only safe action is to preempt THIS request itself:
-                                    # remove it from running, free its KV blocks, and put it back in
-                                    # waiting so it can re-prefill later when memory is available.
-                                    # - Using `break` here causes a livelock: the request stays at
-                                    #   running[0] and blocks all subsequent decode/prefill every cycle.
-                                    # - Using `continue` (old bug) left it as a zombie that never gets
-                                    #   a decode step and never produces EOS.
-                                    llm_logger.warning(
-                                        f"Cannot allocate {num_new_blocks_needed} blocks "
-                                        f"for decode request {request.request_id} (idx={request.idx}) "
-                                        f"even after preemption attempt. Self-preempting this request."
-                                    )
-                                    self.running.remove(request)
-                                    request.status = RequestStatus.PREEMPTED
-                                    request.num_computed_tokens = 0
-                                    self._free_blocks(request)
-                                    request.num_cached_blocks = 0
-                                    self.to_be_rescheduled_request_id_set.add(request.request_id)
-                                    preempted_reqs.append(request)
-                                    scheduled_reqs.append(self._prepare_preempt_task(request))
-                                    # Do NOT increment req_index: after remove(), the next request
-                                    # has shifted to the current index position.
-                                    continue
-
-                                # Allocation for next decoding blocks after preemption
                                 request.block_tables.extend(
                                     self.cache_manager.allocate_gpu_blocks(
                                         num_new_blocks_needed, request.request_id
@@ -1004,144 +1028,123 @@ class ResourceManagerV1(ResourceManager):
                                 )
                                 # Prepare decoding task
                                 scheduled_reqs.append(self._prepare_decode_task(request))
+                            else:
+                                # Not enough blocks, trigger preemption
+                                # SGLang-aligned: first try to evict decode KV cache
+                                self._evict_decode_kv_cache(len(self.running))
 
-                    # No new blocks needed (num_new_blocks_needed == 0), but still schedule decode task
-                    # SGLang-aligned: decode does NOT consume token_budget, only checks memory
-                    else:
-                        scheduled_reqs.append(self._prepare_decode_task(request))
+                                # Check again after eviction
+                                if self.cache_manager.can_allocate_gpu_blocks(num_new_blocks_needed):
+                                    request.block_tables.extend(
+                                        self.cache_manager.allocate_gpu_blocks(
+                                            num_new_blocks_needed, request.request_id
+                                        )
+                                    )
+                                    scheduled_reqs.append(self._prepare_decode_task(request))
+                                else:
+                                    # Cannot allocate even after preemption, use SGLang-aligned behavior
+                                    # Try to preempt other requests
+                                    can_schedule = self._trigger_preempt(
+                                        request, num_new_blocks_needed, preempted_reqs, scheduled_reqs
+                                    )
+                                    if not can_schedule:
+                                        llm_logger.warning(
+                                            f"Cannot allocate {num_new_blocks_needed} blocks "
+                                            f"for decode request {request.request_id} (idx={request.idx}) "
+                                            f"even after preemption attempt. Self-preempting this request."
+                                        )
+                                        self.running.remove(request)
+                                        request.status = RequestStatus.PREEMPTED
+                                        request.num_computed_tokens = 0
+                                        self._free_blocks(request)
+                                        request.num_cached_blocks = 0
+                                        self.to_be_rescheduled_request_id_set.add(request.request_id)
+                                        preempted_reqs.append(request)
+                                        scheduled_reqs.append(self._prepare_preempt_task(request))
+                                        continue
 
-                    num_decoding_req_nums += 1
-                    if (
-                        request.use_extend_tables
-                        and request.request_id not in self.using_extend_tables_req_id
-                        and self.need_block_num_map[request.request_id].watch() > 0
-                    ):
+                                    request.block_tables.extend(
+                                        self.cache_manager.allocate_gpu_blocks(
+                                            num_new_blocks_needed, request.request_id
+                                        )
+                                    )
+                                    scheduled_reqs.append(self._prepare_decode_task(request))
 
-                        def _allocate_decode_and_extend():
-                            allocate_block_num = self.need_block_num_map[request.request_id].consume()
-                            # Prepare decoding task
-                            request.block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(allocate_block_num, request.request_id)
-                            )
+                        else:
                             scheduled_reqs.append(self._prepare_decode_task(request))
 
-                            # Prepare extend task
-                            reuse_block_num = request.num_total_tokens // self.config.cache_config.block_size
-                            llm_logger.info(
-                                f"req {request.request_id} at batch id {request.idx} with reuse_block_num {reuse_block_num} is going to enable extend tables,"
-                                f"need_block_num {allocate_block_num}"
-                            )
-                            self.using_extend_tables_req_id.add(request.request_id)
-                            self.reuse_block_num_map[request.request_id] = reuse_block_num
-
-                            request.extend_block_tables = request.block_tables[:reuse_block_num]  # copy prompt cache
-                            request.extend_block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(allocate_block_num, request.request_id)
-                            )
-                            scheduled_reqs.append(
-                                ScheduledExtendBlocksTask(
-                                    idx=request.idx,
-                                    request_id=request.request_id,
-                                    extend_block_tables=request.extend_block_tables,
-                                )
-                            )
-                            llm_logger.debug(f"extend blocks is {request.extend_block_tables}")
-
-                        if self.cache_manager.can_allocate_gpu_blocks(
-                            2 * self.need_block_num_map[request.request_id].watch()
+                        num_decoding_req_nums += 1
+                        if (
+                            request.use_extend_tables
+                            and request.request_id not in self.using_extend_tables_req_id
+                            and self.need_block_num_map[request.request_id].watch() > 0
                         ):
-                            _allocate_decode_and_extend()
-                        else:
-                            llm_logger.info(
-                                f"{request.idx} using extend block need {2 * self.need_block_num_map[request.request_id].watch()} blocks but got not enough blocks, ready to preempt"
-                            )
-                            can_schedule = self._trigger_preempt(
-                                request,
-                                2 * self.need_block_num_map[request.request_id].watch(),
-                                preempted_reqs,
-                                scheduled_reqs,
-                            )
 
-                            if can_schedule:
+                            def _allocate_decode_and_extend():
+                                allocate_block_num = self.need_block_num_map[request.request_id].consume()
+                                # Prepare decoding task
+                                request.block_tables.extend(
+                                    self.cache_manager.allocate_gpu_blocks(allocate_block_num, request.request_id)
+                                )
+                                scheduled_reqs.append(self._prepare_decode_task(request))
+
+                                # Prepare extend task
+                                reuse_block_num = request.num_total_tokens // self.config.cache_config.block_size
+                                llm_logger.info(
+                                    f"req {request.request_id} at batch id {request.idx} with reuse_block_num {reuse_block_num} is going to enable extend tables,"
+                                    f"need_block_num {allocate_block_num}"
+                                )
+                                self.using_extend_tables_req_id.add(request.request_id)
+                                self.reuse_block_num_map[request.request_id] = reuse_block_num
+
+                                request.extend_block_tables = request.block_tables[:reuse_block_num]
+                                request.extend_block_tables.extend(
+                                    self.cache_manager.allocate_gpu_blocks(allocate_block_num, request.request_id)
+                                )
+                                scheduled_reqs.append(
+                                    ScheduledExtendBlocksTask(
+                                        idx=request.idx,
+                                        request_id=request.request_id,
+                                        extend_block_tables=request.extend_block_tables,
+                                    )
+                                )
+                                llm_logger.debug(f"extend blocks is {request.extend_block_tables}")
+
+                            if self.cache_manager.can_allocate_gpu_blocks(
+                                2 * self.need_block_num_map[request.request_id].watch()
+                            ):
                                 _allocate_decode_and_extend()
                             else:
-                                break
-                else:  # need to prefill
-                    # Only ONE in-flight prefill is scheduled per step.
-                    # The priority reorder above moved it to running[0]; all other
-                    # in-flight prefill requests at later indices must wait until the
-                    # next schedule() call (they remain in self.running).
-                    if has_scheduled_running_prefill:
-                        req_index += 1
-                        continue
-                    llm_logger.debug(
-                        f"scheduler prefill task in running queue: {request.request_id}, "
-                        f"request.need_prefill_tokens {request.need_prefill_tokens},"
-                        f"request.num_computed_tokens {request.num_computed_tokens}"
-                    )
-                    if (
-                        current_platform.is_intel_hpu()
-                        and request.need_prefill_tokens - request.num_computed_tokens
-                        >= self.config.cache_config.block_size
-                        and rem_input_tokens < self.config.cache_config.block_size
-                    ):
-                        req_index += 1
-                        continue
-                    if get_enough_request(request, scheduled_reqs):
-                        req_index += 1
-                        continue
-                    # Apply rem_chunk_tokens batch-level constraint for running prefills too
-                    if rem_chunk_tokens <= 0:
-                        req_index += 1
-                        continue
-                    num_new_tokens = self._get_num_new_tokens(request, rem_chunk_tokens, rem_input_tokens)
-                    num_new_block = self.get_new_block_nums(request, num_new_tokens)
-                    # Allocate blocks to prefill
-                    if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
-                        request.block_tables.extend(
-                            self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
-                        )
-                        # Prepare prefill task
-                        scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
-                    else:
-                        # In-progress chunked prefill is already at the front of the RUNNING queue
-                        # (moved there by the priority reorder above). If it still can't get blocks,
-                        # memory is genuinely exhausted this step — stop the RUNNING loop entirely.
-                        # Do NOT skip-and-continue: that would leave the request stuck indefinitely.
-                        llm_logger.debug(
-                            f"Running prefill cannot get enough blocks for {request.request_id}, "
-                            f"stopping RUNNING loop this cycle."
-                        )
-                        break
-                    # Priority: in-flight prefill > prefill > decode.
-                    # After scheduling this prefill chunk, continue the RUNNING loop
-                    # so that decode requests still get scheduled this step.
-                    # The priority reorder above ensures at most one in-flight prefill is at
-                    # index 0; req_index += 1 will move on to decode requests after it.
-                    has_scheduled_prefill = True
-                    has_scheduled_running_prefill = True  # block subsequent in-flight prefills this step
-                    rem_chunk_tokens -= num_new_tokens
-                    request.num_computed_tokens += num_new_tokens
-                    if self.config.cache_config.enable_prefix_caching:
-                        self.cache_manager.update_cache_blocks(
-                            request, self.config.cache_config.block_size, request.num_computed_tokens
-                        )
-                    req_index += 1  # continue to decode requests, do NOT break
-                    continue  # skip the shared req_index += 1 below
+                                llm_logger.info(
+                                    f"{request.idx} using extend block need {2 * self.need_block_num_map[request.request_id].watch()} blocks but got not enough blocks, ready to preempt"
+                                )
+                                can_schedule = self._trigger_preempt(
+                                    request,
+                                    2 * self.need_block_num_map[request.request_id].watch(),
+                                    preempted_reqs,
+                                    scheduled_reqs,
+                                )
 
-                req_index += 1
+                                if can_schedule:
+                                    _allocate_decode_and_extend()
+                                else:
+                                    break
+                    else:  # Legacy unfinished prefill should not stay in self.running.
+                        if self.active_chunked_prefill_req is None:
+                            self.active_chunked_prefill_req = request
+                            self.running.pop(req_index)
+                            continue
+                        req_index += 1
+                        continue
+
+                    req_index += 1
 
             # Second, schedule the WAITING requests.
             # Priority: in-flight prefill (RUNNING) > new prefill (WAITING) > decode.
             # Only ONE prefill is scheduled per step total. If RUNNING already scheduled
             # an in-flight prefill chunk (has_scheduled_running_prefill=True), skip WAITING
             # entirely this step. Otherwise admit at most one new request from WAITING.
-            if not preempted_reqs and not has_scheduled_running_prefill:
-                # Compute running decode reservation once per schedule() call
-                cached_running_decode_reserved = self._calculate_decode_reserved_tokens_by_ratio()
-                # Track decode reservations accumulated within this cycle's waiting loop
-                scheduled_new_decode_reserved_tokens: float = 0.0
-
+            if not preempted_reqs and not has_scheduled_running_prefill and self.active_chunked_prefill_req is None:
                 skip_requests: list[Request] = []
                 # SGLang-aligned: only admit ONE chunked (long) request per step.
                 # Short requests continue to be admitted without consuming rem_chunk_tokens.
@@ -1154,7 +1157,7 @@ class ResourceManagerV1(ResourceManager):
                 # starve new requests from ever entering the waiting loop.
                 rem_chunk_tokens_waiting = chunked_prefill_size
                 while self.waiting and rem_input_tokens > 0 and rem_chunk_tokens_waiting > 0:
-                    if len(self.running) == self.max_num_seqs:
+                    if self.available_batch() == 0:
                         break
 
                     request = self.waiting[0]
@@ -1198,9 +1201,12 @@ class ResourceManagerV1(ResourceManager):
                             continue
                         # Allocate blocks for the tokens that does not hit cache
                         num_new_tokens = self._get_num_new_tokens(request, rem_chunk_tokens_waiting, rem_input_tokens)
+                        if num_new_tokens <= 0:
+                            break
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
-                            request, num_new_block,
+                            request,
+                            num_new_block,
                             scheduled_new_decode_reserved_tokens,
                             cached_running_decode_reserved,
                         )
@@ -1212,18 +1218,18 @@ class ResourceManagerV1(ResourceManager):
                                 )
                                 request.block_tables.extend(extra_gpu_block_ids)
                             self.waiting.popleft()
-                            self.running.append(request)
+                            self._ensure_request_slot_allocated(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             has_scheduled_prefill = True
                             # Track decode reservation for last-chunk requests
                             remaining_to_prefill = request.need_prefill_tokens - request.num_computed_tokens
                             is_last_chunk = remaining_to_prefill <= num_new_tokens
 
-                            # SGLang-aligned: chunked requests consume rem_chunk_tokens_waiting;
-                            # non-chunked (last) requests consume rem_input_tokens (NOT rem_chunk_tokens_waiting).
+                            # Every prefill chunk consumes total input budget. Chunked requests also
+                            # consume the per-step chunk budget.
+                            rem_input_tokens -= num_new_tokens
                             if is_last_chunk:
-                                rem_input_tokens -= num_new_tokens
-                                max_new = getattr(request, 'max_new_tokens', self.clip_max_new_tokens_estimation)
+                                max_new = min(_get_request_max_new_tokens(request), self.clip_max_new_tokens_estimation)
                                 scheduled_new_decode_reserved_tokens += min(max_new, self.clip_max_new_tokens_estimation)
                             else:
                                 rem_chunk_tokens_waiting -= num_new_tokens
@@ -1236,13 +1242,10 @@ class ResourceManagerV1(ResourceManager):
                                     request, self.config.cache_config.block_size, request.num_computed_tokens
                                 )
                             request.status = RequestStatus.RUNNING
-                            if self.config.scheduler_config.splitwise_role == "mixed":
-                                allocated_position = self.get_available_position()
-                                request.idx = allocated_position
-                                self.tasks_list[allocated_position] = request
-                                self.stop_flags[allocated_position] = False
-                                self.req_dict[request.request_id] = allocated_position
-                                llm_logger.debug(f"req_id:{request.request_id} allocate pos end")
+                            if is_last_chunk:
+                                self.running.append(request)
+                            else:
+                                self.active_chunked_prefill_req = request
                             # SGLang-aligned: after admitting one chunked waiting request, break.
                             # Short (non-chunked) requests continue to be admitted.
                             if chunked_request_admitted_this_step:
@@ -1272,9 +1275,12 @@ class ResourceManagerV1(ResourceManager):
 
                         # Allocate blocks for the tokens that does not hit cache
                         num_new_tokens = self._get_num_new_tokens(request, rem_chunk_tokens_waiting, rem_input_tokens)
+                        if num_new_tokens <= 0:
+                            break
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
-                            request, num_new_block,
+                            request,
+                            num_new_block,
                             scheduled_new_decode_reserved_tokens,
                             cached_running_decode_reserved,
                         )
@@ -1286,18 +1292,18 @@ class ResourceManagerV1(ResourceManager):
                                 )
                                 request.block_tables.extend(extra_gpu_block_ids)
                             self.waiting.popleft()
-                            self.running.append(request)
+                            self._ensure_request_slot_allocated(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             has_scheduled_prefill = True
                             # Track decode reservation for last-chunk requests
                             remaining_to_prefill = request.need_prefill_tokens - request.num_computed_tokens
                             is_last_chunk = remaining_to_prefill <= num_new_tokens
 
-                            # SGLang-aligned: chunked requests consume rem_chunk_tokens_waiting;
-                            # non-chunked (last) requests consume rem_input_tokens (NOT rem_chunk_tokens_waiting).
+                            # Every prefill chunk consumes total input budget. Chunked requests also
+                            # consume the per-step chunk budget.
+                            rem_input_tokens -= num_new_tokens
                             if is_last_chunk:
-                                rem_input_tokens -= num_new_tokens
-                                max_new = getattr(request, 'max_new_tokens', self.clip_max_new_tokens_estimation)
+                                max_new = min(_get_request_max_new_tokens(request), self.clip_max_new_tokens_estimation)
                                 scheduled_new_decode_reserved_tokens += min(max_new, self.clip_max_new_tokens_estimation)
                             else:
                                 rem_chunk_tokens_waiting -= num_new_tokens
@@ -1309,6 +1315,10 @@ class ResourceManagerV1(ResourceManager):
                                     request, self.config.cache_config.block_size, request.num_computed_tokens
                                 )
                             request.status = RequestStatus.RUNNING
+                            if is_last_chunk:
+                                self.running.append(request)
+                            else:
+                                self.active_chunked_prefill_req = request
                             # SGLang-aligned: after admitting one chunked waiting request, break.
                             if chunked_request_admitted_this_step:
                                 break
@@ -1328,7 +1338,6 @@ class ResourceManagerV1(ResourceManager):
 
             # Decay new_token_ratio when:
             # - There are decode requests running
-            # - No running chunked prefill (has_running_prefill = False)
             # - No prefill was scheduled this round (has_scheduled_prefill = False)
             # - No preemption occurred this round (not preempted_reqs)
             # NOTE: do NOT gate on "not self.waiting". When self.waiting is large,
@@ -1336,7 +1345,6 @@ class ResourceManagerV1(ResourceManager):
             # no waiting request can ever be admitted → queue never drains (屯土地).
             if (
                 has_decode_requests
-                and not has_running_prefill
                 and not has_scheduled_prefill
                 and not preempted_reqs
                 and self.current_new_token_ratio > self.min_new_token_ratio
@@ -1355,9 +1363,9 @@ class ResourceManagerV1(ResourceManager):
                 total_blocks = self.total_block_number()
                 free_blocks = self.available_block_num()
                 used_blocks = max(total_blocks - free_blocks, 0)
+                tokens_used = used_blocks * self.config.cache_config.block_size
                 token_usage = used_blocks / total_blocks if total_blocks > 0 else 0.0
-                running_cnt = len(self.running)
-                running_prefill_count = running_cnt - running_decode_count
+                running_cnt = self._num_active_running_requests()
                 queue_cnt = len(self.waiting)
 
                 prefill_reqs = [
@@ -1367,9 +1375,9 @@ class ResourceManagerV1(ResourceManager):
 
                 self.scheduler_metrics_logger.log_prefill_batch(
                     prefill_reqs=prefill_reqs,
-                    running_decode_cnt=running_decode_count,
-                    running_prefill_cnt=running_prefill_count,
+                    running_cnt=running_cnt,
                     queue_cnt=queue_cnt,
+                    tokens_used=tokens_used,
                     token_usage=token_usage,
                 )
                 if has_decode:
@@ -1391,9 +1399,9 @@ class ResourceManagerV1(ResourceManager):
                         )
                     )
                     self.scheduler_metrics_logger.log_decode_batch(
-                        running_decode_cnt=running_decode_count,
-                        running_prefill_cnt=running_prefill_count,
+                        running_cnt=running_cnt,
                         queue_cnt=queue_cnt,
+                        tokens_used=tokens_used,
                         token_usage=token_usage,
                         use_cudagraph=use_decode_cudagraph,
                     )
@@ -1602,6 +1610,8 @@ class ResourceManagerV1(ResourceManager):
             if request_id not in self.requests:
                 return
             req = self.requests[request_id]
+            if req is self.active_chunked_prefill_req:
+                self.active_chunked_prefill_req = None
             self.tasks_list[req.idx] = None
             self.stop_flags[req.idx] = True
             self._free_blocks(req)
@@ -1795,6 +1805,11 @@ class ResourceManagerV1(ResourceManager):
                         self.running.remove(request)
                         request.status = RequestStatus.FINISHED
                         need_postprocess_reqs.append(request)
+                    elif request is self.active_chunked_prefill_req:
+                        llm_logger.info(f"finish active chunked prefill request: {req_id}")
+                        self.active_chunked_prefill_req = None
+                        request.status = RequestStatus.FINISHED
+                        need_postprocess_reqs.append(request)
                     if request.request_id in self.to_be_rescheduled_request_id_set:
                         # finished after preempted, blocks have been recycled.
                         llm_logger.info(f"finish preempeted request: {req_id}")
@@ -1824,12 +1839,14 @@ class ResourceManagerV1(ResourceManager):
 
     def clear_data(self):
         self.waiting: deque[Request] = deque()
+        self.active_chunked_prefill_req = None
         self.to_be_rescheduled_request_id_set = set()
         self.update_metrics(verbose=True)
 
     def update_metrics(self, verbose=False):
         # Update metrics
         num_tasks = sum([1 if task else 0 for task in self.tasks_list])
+        active_running_reqs = self._num_active_running_requests()
         blocks_used_by_tasks = set()
         for task in self.tasks_list:
             if task is not None:
@@ -1837,16 +1854,17 @@ class ResourceManagerV1(ResourceManager):
         main_process_metrics.available_gpu_block_num.set(self.total_block_number() - len(blocks_used_by_tasks))
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
-        main_process_metrics.num_requests_running.set(len(self.running))
-        main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
+        main_process_metrics.num_requests_running.set(active_running_reqs)
+        main_process_metrics.num_requests_waiting.set(num_tasks - active_running_reqs)
         if verbose:
-            llm_logger.info(f"update metrics: running={len(self.running)}, waiting={num_tasks - len(self.running)}")
+            llm_logger.info(f"update metrics: running={active_running_reqs}, waiting={num_tasks - active_running_reqs}")
 
     def log_status(self):
         llm_logger.info(
             f"ResourceManagerV1( "
             f"waiting={len(self.waiting)}, "
             f"running={len(self.running)}, "
+            f"active_chunked_prefill_req={getattr(self.active_chunked_prefill_req, 'request_id', None)}, "
             f"preempted={len(self.to_be_rescheduled_request_id_set)}, "
             f"tasks_list={self.tasks_list}, "
             f"stop_flags={self.stop_flags}, "

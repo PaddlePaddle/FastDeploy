@@ -27,7 +27,7 @@ class SchedulerMetricsLogger:
     Lightweight console logger for scheduler-level prefill/decode metrics.
     """
 
-    DEFAULT_DECODE_LOG_INTERVAL = 5
+    DEFAULT_DECODE_LOG_INTERVAL = 1
 
     def __init__(self, enabled: bool = True, dp_rank: int = 0) -> None:
         self.enabled = enabled
@@ -37,7 +37,6 @@ class SchedulerMetricsLogger:
             decode_log_interval = self.DEFAULT_DECODE_LOG_INTERVAL
         self._lock = threading.Lock()
         self._decode_log_interval = decode_log_interval
-        self._decode_batch_count = 0
         self._last_decode_tic = time.perf_counter()
         self._decode_tokens_since_last = 0
         self._logger = self._get_logger()
@@ -111,11 +110,10 @@ class SchedulerMetricsLogger:
         if not self.enabled:
             return
         with self._lock:
-            self._decode_batch_count += 1
-            if self._decode_batch_count % self._decode_log_interval != 0:
-                return
             now = time.perf_counter()
             elapsed = now - self._last_decode_tic
+            if elapsed < self._decode_log_interval:
+                return
             if elapsed > 0:
                 throughput = self._decode_tokens_since_last / elapsed
             else:
