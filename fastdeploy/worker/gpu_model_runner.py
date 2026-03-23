@@ -2039,7 +2039,7 @@ class GPUModelRunner(ModelRunnerBase):
     ) -> None:
         model_inputs, p_done_idxs, _ = self._preprocess(model_forward_batch, num_running_requests)
         model_output = self._execute(model_inputs)
-        if model_output is None:
+        if model_output is None or self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item() <= 0:
             return
         model_output_data, sampler_output, post_process_event = self._postprocess(
             model_output, p_done_idxs, model_forward_batch, num_running_requests
