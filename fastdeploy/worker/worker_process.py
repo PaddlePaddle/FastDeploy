@@ -940,6 +940,11 @@ def parse_args():
         help="Enable output of token-level log probabilities.",
     )
     parser.add_argument(
+        "--compute_logits_stats",
+        action="store_true",
+        help="Enable per-token logits statistics (min/max/mean/std) output.",
+    )
+    parser.add_argument(
         "--max_logprobs",
         type=int,
         default=20,

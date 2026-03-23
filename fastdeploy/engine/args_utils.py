@@ -459,6 +459,12 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    compute_logits_stats: bool = False
+    """
+    Flag to enable per-token logits statistics (min/max/mean/std) output.
+    Only effective when enable_logprob is True.
+    """
+
     max_logprobs: int = 20
     """
     Maximum number of log probabilities to return when `enable_logprob` is True. The default value comes the default for the
@@ -886,6 +892,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
+        )
+        model_group.add_argument(
+            "--compute-logits-stats",
+            action="store_true",
+            default=EngineArgs.compute_logits_stats,
+            help="Enable per-token logits statistics (min/max/mean/std) output.",
         )
         model_group.add_argument(
             "--max-logprobs",

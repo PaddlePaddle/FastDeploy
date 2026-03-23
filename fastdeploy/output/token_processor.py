@@ -83,6 +83,7 @@ class TokenProcessor:
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
         self.use_logprobs = self.cfg.model_config.enable_logprob
+        self.compute_logits_stats = self.cfg.model_config.compute_logits_stats
         self.enable_draft_logprob = self.cfg.speculative_config.enable_draft_logprob
 
         if self.speculative_decoding:
@@ -350,6 +351,26 @@ class TokenProcessor:
                             logprobs_list: LogprobsLists = stream_data.logprobs.tolists()
                             result.outputs.logprob = float(logprobs_list.logprobs[0][0])
                             result.outputs.top_logprobs = logprobs_list
+                            # Extract logits statistics if available
+                            if self.compute_logits_stats:
+                                assert (
+                                    logprobs_list.logits_min is not None
+                                ), "logits_min is None when compute_logits_stats is enabled"
+                                assert (
+                                    logprobs_list.logits_max is not None
+                                ), "logits_max is None when compute_logits_stats is enabled"
+                                assert (
+                                    logprobs_list.logits_mean is not None
+                                ), "logits_mean is None when compute_logits_stats is enabled"
+                                assert (
+                                    logprobs_list.logits_std is not None
+                                ), "logits_std is None when compute_logits_stats is enabled"
+                                result.outputs.logits_stats = {
+                                    "min": float(logprobs_list.logits_min[0]),
+                                    "max": float(logprobs_list.logits_max[0]),
+                                    "mean": float(logprobs_list.logits_mean[0]),
+                                    "std": float(logprobs_list.logits_std[0]),
+                                }
                         except Exception as e:
                             llm_logger.warning(f"Failed to parse logprobs from StreamTransferData: {e}")
                     if getattr(stream_data, "prompt_logprobs", None) is not None:

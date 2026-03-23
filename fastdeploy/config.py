@@ -209,6 +209,7 @@ class ModelConfig:
         self.max_model_len = 0
         self.dtype = "bfloat16"
         self.enable_logprob = False
+        self.compute_logits_stats = False
         self.max_logprobs = 20
         self.logprobs_mode = "raw_logprobs"
         self.redundant_experts_num = 0

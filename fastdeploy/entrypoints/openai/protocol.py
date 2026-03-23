@@ -294,6 +294,7 @@ class LogProbEntry(BaseModel):
     logprob: float
     bytes: Optional[List[int]] = None
     top_logprobs: Optional[List[LogProbEntry]] = None
+    logits_stats: Optional[Dict[str, float]] = None
 
 
 class LogProbs(BaseModel):

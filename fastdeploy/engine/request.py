@@ -727,6 +727,7 @@ class CompletionOutput:
     delta_message: Optional[DeltaMessage] = None
     multipart: Optional[list[Any]] = None
     num_image_tokens: Optional[int] = None
+    logits_stats: Optional[dict[str, float]] = None
 
     def to_dict(self):
         """
