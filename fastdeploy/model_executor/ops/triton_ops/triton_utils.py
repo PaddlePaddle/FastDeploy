@@ -34,7 +34,7 @@ python_path = sys.executable
 def swap_torch_guard(fn):
     # A lightweight wrapper to enable compatibility for triton kernel
     def wrapped_fn(*args, **kwargs):
-        torch_already_imported = "torch" not in sys.modules
+        torch_already_imported = "torch" in sys.modules
         if torch_already_imported:
             torch_module = sys.modules["torch"]
         sys.modules["torch"] = paddle
@@ -60,7 +60,7 @@ def enable_compat_on_triton_kernel(triton_kernel):
         def __getitem__(self, index):
             return swap_torch_guard(self.kernel[index])
 
-    return WrappedTritonKernel(triton_kernel)
+    return swap_torch_guard(WrappedTritonKernel)(triton_kernel)
 
 
 def SubstituteTemplate(template, values):
