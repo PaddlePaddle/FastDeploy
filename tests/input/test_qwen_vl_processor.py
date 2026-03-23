@@ -20,7 +20,6 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 from PIL import Image
 
-from fastdeploy.engine.request import Request
 from fastdeploy.input.qwen_vl_processor import QwenVLProcessor
 from fastdeploy.input.qwen_vl_processor.process_video import sample_frames
 
@@ -129,9 +128,9 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.patcher_parse_image.stop()
         self.patcher_parse_video.stop()
 
-    def test_process_request(self):
+    def test_process_request_dict_with_multimodal(self):
         """
-        Test processing of Request object with multimodal input
+        Test processing of request dict with multimodal input
 
         Validates:
         1. Token ID lengths match position_ids and token_type_ids shapes
@@ -153,17 +152,16 @@ class TestQwenVLProcessor(unittest.TestCase):
             ],
         }
 
-        request = Request.from_dict(message)
-        result = self.processor.process_request(request, 1024 * 100)
+        result = self.processor.process_request_dict(message, 1024 * 100)
 
-        self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["position_ids"].shape[0])
-        self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["token_type_ids"].shape[0])
+        self.assertEqual(len(result["prompt_token_ids"]), result["multimodal_inputs"]["position_ids"].shape[0])
+        self.assertEqual(len(result["prompt_token_ids"]), result["multimodal_inputs"]["token_type_ids"].shape[0])
         self.assertEqual(
-            result.multimodal_inputs["images"].shape[0],
-            sum(map(lambda x: x.prod(), result.multimodal_inputs["grid_thw"])),
+            result["multimodal_inputs"]["images"].shape[0],
+            sum(map(lambda x: x.prod(), result["multimodal_inputs"]["grid_thw"])),
         )
         self.assertEqual(
-            result.multimodal_inputs["image_type_ids"].shape[0], result.multimodal_inputs["grid_thw"][:, 0].sum()
+            result["multimodal_inputs"]["image_type_ids"].shape[0], result["multimodal_inputs"]["grid_thw"][:, 0].sum()
         )
 
     def test_process_request_dict(self):
@@ -246,17 +244,16 @@ class TestQwenVLProcessor(unittest.TestCase):
             },
         }
 
-        request = Request.from_dict(prompt)
-        result = self.processor.process_request(request, 1024 * 100)
+        result = self.processor.process_request_dict(prompt, 1024 * 100)
 
-        self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["position_ids"].shape[0])
-        self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["token_type_ids"].shape[0])
+        self.assertEqual(len(result["prompt_token_ids"]), result["multimodal_inputs"]["position_ids"].shape[0])
+        self.assertEqual(len(result["prompt_token_ids"]), result["multimodal_inputs"]["token_type_ids"].shape[0])
         self.assertEqual(
-            result.multimodal_inputs["images"].shape[0],
-            sum(map(lambda x: x.prod(), result.multimodal_inputs["grid_thw"])),
+            result["multimodal_inputs"]["images"].shape[0],
+            sum(map(lambda x: x.prod(), result["multimodal_inputs"]["grid_thw"])),
         )
         self.assertEqual(
-            result.multimodal_inputs["image_type_ids"].shape[0], result.multimodal_inputs["grid_thw"][:, 0].sum()
+            result["multimodal_inputs"]["image_type_ids"].shape[0], result["multimodal_inputs"]["grid_thw"][:, 0].sum()
         )
 
     def test_message_and_prompt(self):
@@ -298,14 +295,15 @@ class TestQwenVLProcessor(unittest.TestCase):
                 "video": [{"video": b"123"}],
             },
         }
-        request2 = Request.from_dict(prompt)
-        result2 = self.processor.process_request(request2, 1024 * 100)
+        result2 = self.processor.process_request_dict(prompt, 1024 * 100)
 
         # Verify both processing methods produce identical results
-        self.assertEqual(result["prompt_token_ids"], result2.prompt_token_ids)
-        self.assertTrue(np.equal(result["multimodal_inputs"]["grid_thw"], result2.multimodal_inputs["grid_thw"]).all())
+        self.assertEqual(result["prompt_token_ids"], result2["prompt_token_ids"])
         self.assertTrue(
-            np.equal(result["multimodal_inputs"]["position_ids"], result2.multimodal_inputs["position_ids"]).all()
+            np.equal(result["multimodal_inputs"]["grid_thw"], result2["multimodal_inputs"]["grid_thw"]).all()
+        )
+        self.assertTrue(
+            np.equal(result["multimodal_inputs"]["position_ids"], result2["multimodal_inputs"]["position_ids"]).all()
         )
 
     def test_apply_chat_template(self):

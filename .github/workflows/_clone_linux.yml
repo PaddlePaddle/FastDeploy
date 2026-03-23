@@ -12,10 +12,23 @@ on:
       repo_archive_url:
         description: "Compressed source code archive."
         value: ${{ jobs.code-clone.outputs.repo_archive_url }}
+    secrets:
+      github-token:
+        required: true
+
 jobs:
+  check_bypass:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+    with:
+      workflow-name: code_clone
+
   code-clone:
     runs-on:
       group: HK-Clone
+    needs: check_bypass
+    if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
     outputs:
       repo_archive_url: ${{ steps.set_output.outputs.repo_archive_url }}
     steps:

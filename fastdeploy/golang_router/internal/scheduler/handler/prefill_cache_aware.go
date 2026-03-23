@@ -8,9 +8,11 @@ import (
 	"math"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/PaddlePaddle/FastDeploy/router/pkg/logger"
+	"github.com/PaddlePaddle/FastDeploy/router/pkg/metrics"
 )
 
 type prefillCacheStrategy struct {
@@ -20,6 +22,12 @@ type prefillCacheStrategy struct {
 	loadBalanceWeight float64
 	cache             *radixPrefixCache
 	tokenizer         TokenizerClient
+
+	// session-based cache hit tracking
+	sessionWorkerMap map[string]string // session_id -> last selected prefill worker URL
+	sessionMu        sync.RWMutex
+	cacheHitCount    atomic.Int64 // periodic counter (reset each stats interval)
+	cacheTotalCount  atomic.Int64 // periodic counter (reset each stats interval)
 }
 
 type schedulerConfigSnapshot struct {
@@ -41,23 +49,40 @@ func newPrefillCacheStrategy(cfg *schedulerConfigSnapshot) *prefillCacheStrategy
 		loadBalanceWeight: cfg.loadBalanceWeight,
 		cache:             newRadixPrefixCache(cfg.cacheBlockSize),
 		tokenizer:         NewHTTPTokenizer(cfg.tokenizerURL, cfg.tokenizerTimeout),
+		sessionWorkerMap:  make(map[string]string),
 	}
 }
 
 // CacheAwarePrefillSelectWorker fallbacks to min tokens on extreme imbalance; otherwise scores by hit rate and load
 func CacheAwarePrefillSelectWorker(ctx context.Context, workers []string, message string) (string, error) {
+	return cacheAwareSelectWorkerImpl(ctx, workers, message, false)
+}
+
+// RemoteCacheAwarePrefillSelectWorker uses remote metrics for load balancing decisions
+func RemoteCacheAwarePrefillSelectWorker(ctx context.Context, workers []string, message string) (string, error) {
+	return cacheAwareSelectWorkerImpl(ctx, workers, message, true)
+}
+
+func cacheAwareSelectWorkerImpl(ctx context.Context, workers []string, message string, useRemoteMetrics bool) (string, error) {
 	if len(workers) == 0 {
 		return "", nil
 	}
 	if DefaultScheduler == nil || DefaultScheduler.prefillCache == nil {
+		logger.Info(ctx, "cache-aware prefill: final strategy: process_tokens, reason: strategy not initialized")
 		return ProcessTokensSelectWorker(ctx, workers, message)
 	}
 
 	strategy := DefaultScheduler.prefillCache
 
 	// 1) Fetch node load; fallback to min tokens on extreme imbalance
-	loads := strategy.getRunningRequests(ctx, workers)
+	var loads map[string]uint64
+	if useRemoteMetrics {
+		loads = strategy.getRemoteRunningRequests(ctx, workers)
+	} else {
+		loads = strategy.getRunningRequests(ctx, workers)
+	}
 	if strategy.isLoadImbalanced(loads) {
+		logger.Info(ctx, "cache-aware prefill: final strategy: process_tokens, reason: load imbalanced, loads=%v. ts_ms=%s", loads, time.Now().Format("2006-01-02 15:04:05.000"))
 		return ProcessTokensSelectWorker(ctx, workers, message)
 	}
 
@@ -65,7 +90,7 @@ func CacheAwarePrefillSelectWorker(ctx context.Context, workers []string, messag
 	tokens, err := strategy.tokenize(ctx, message)
 	if err != nil || len(tokens) == 0 {
 		if err != nil {
-			logger.Warn(ctx, "cache-aware prefill: tokenizer failed, fallback to process_tokens: %v", err)
+			logger.Info(ctx, "cache-aware prefill: final strategy: process_tokens, reason: tokenize failed: %v. ts_ms=%s", err, time.Now().Format("2006-01-02 15:04:05.000"))
 		}
 		return ProcessTokensSelectWorker(ctx, workers, message)
 	}
@@ -79,7 +104,12 @@ func CacheAwarePrefillSelectWorker(ctx context.Context, workers []string, messag
 
 	// 5) Record prefix
 	strategy.cache.Record(tokens, selected)
-	logger.Debug(ctx, "cache-aware prefill: selected=%s", selected)
+
+	// 6) Track session-based cache hit rate
+	strategy.trackSessionCacheHit(ctx, selected)
+
+	logger.Info(ctx, "cache-aware prefill: final strategy: cache_aware_scoring, selected=%s, loads=%v, hitRatios=%v. ts_ms=%s",
+		selected, loads, hitRatios, time.Now().Format("2006-01-02 15:04:05.000"))
 	return selected, nil
 }
 
@@ -174,7 +204,7 @@ func (p *prefillCacheStrategy) chooseByScore(ctx context.Context, workers []stri
 	return selected
 }
 
-// getRunningRequests retrieves running request metrics
+// getRunningRequests retrieves running request metrics (in-memory counting)
 func (p *prefillCacheStrategy) getRunningRequests(ctx context.Context, workers []string) map[string]uint64 {
 	result := make(map[string]uint64, len(workers))
 	if DefaultScheduler == nil || DefaultScheduler.managerAPI == nil {
@@ -186,6 +216,64 @@ func (p *prefillCacheStrategy) getRunningRequests(ctx context.Context, workers [
 		result[w] = uint64(running)
 	}
 	return result
+}
+
+// getRemoteRunningRequests retrieves running request metrics from remote /metrics endpoint
+func (p *prefillCacheStrategy) getRemoteRunningRequests(ctx context.Context, workers []string) map[string]uint64 {
+	result := make(map[string]uint64, len(workers))
+	if DefaultScheduler == nil || DefaultScheduler.managerAPI == nil {
+		return result
+	}
+
+	for _, w := range workers {
+		running, _, _ := DefaultScheduler.managerAPI.GetRemoteMetrics(ctx, w)
+		result[w] = uint64(running)
+	}
+	return result
+}
+
+// trackSessionCacheHit checks if the same session_id was routed to the same prefill worker
+func (p *prefillCacheStrategy) trackSessionCacheHit(ctx context.Context, selectedWorker string) {
+	sessionID, _ := ctx.Value(logger.SessionIDKey).(string)
+	if sessionID == "" {
+		return
+	}
+
+	prevWorker, exists := p.getSessionWorker(sessionID)
+
+	p.cacheTotalCount.Add(1)
+	metrics.RouterCacheRequestTotal.Inc()
+
+	if exists && prevWorker == selectedWorker {
+		p.cacheHitCount.Add(1)
+		metrics.RouterCacheHitTotal.Inc()
+	}
+
+	p.setSessionWorker(sessionID, selectedWorker)
+}
+
+func (p *prefillCacheStrategy) getSessionWorker(sessionID string) (string, bool) {
+	p.sessionMu.RLock()
+	defer p.sessionMu.RUnlock()
+	prevWorker, exists := p.sessionWorkerMap[sessionID]
+	return prevWorker, exists
+}
+
+func (p *prefillCacheStrategy) setSessionWorker(sessionID, worker string) {
+	p.sessionMu.Lock()
+	defer p.sessionMu.Unlock()
+	p.sessionWorkerMap[sessionID] = worker
+}
+
+// GetAndResetCacheHitStats returns periodic cache hit stats and resets counters
+func GetAndResetCacheHitStats() (hits int64, total int64) {
+	if DefaultScheduler == nil || DefaultScheduler.prefillCache == nil {
+		return 0, 0
+	}
+	strategy := DefaultScheduler.prefillCache
+	hits = strategy.cacheHitCount.Swap(0)
+	total = strategy.cacheTotalCount.Swap(0)
+	return hits, total
 }
 
 // Track prefix hits using a radix tree keyed by block hash
@@ -533,6 +621,7 @@ func charsToTokens(message string) []int {
 	for _, r := range message {
 		tokens = append(tokens, int(r))
 	}
+	// rune
 	return tokens
 }
 

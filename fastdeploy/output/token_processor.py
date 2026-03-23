@@ -284,23 +284,13 @@ class TokenProcessor:
             task_id = task.request_id
             token_ids = stream_data.tokens  # numpy.array
             if token_ids is not None and token_ids[-1] < 0:
-                if task_id in self.resource_manager.abort_req_ids_set:
-                    if (
-                        envs.ENABLE_V1_KVCACHE_SCHEDULER and token_ids[-1] == PREEMPTED_TOKEN_ID
-                    ) or not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                        llm_logger.info(f"Aborted task {task_id} received negative token. Recycling.")
-                        self.resource_manager.abort_req_ids_set.remove(task_id)
-                        self._recycle_resources(task_id, i, task)
-                        llm_logger.info(f"{task_id} received negative token. Recycle end.")
-                        abort_res = RequestOutput(
-                            request_id=task_id,
-                            finished=True,
-                            error_code=499,
-                            error_msg=f"Your request with request_id:{task_id} is aborted.",
-                        )
-                        batch_result.append(abort_res)
-                        continue
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if (
+                        task_id in self.resource_manager.to_be_aborted_req_id_set
+                        and token_ids[-1] == PREEMPTED_TOKEN_ID
+                    ):
+                        llm_logger.info(f"start to recycle abort request_id {task_id}")
+                        self.resource_manager.recycle_abort_task(task_id)
                     if (
                         task_id in self.resource_manager.to_be_rescheduled_request_id_set
                         and token_ids[-1] == PREEMPTED_TOKEN_ID
@@ -308,6 +298,13 @@ class TokenProcessor:
                         llm_logger.info(f"sync preemption for request_id {task_id} done.")
                         self.resource_manager.reschedule_preempt_task(task_id)
                 continue
+            if self.cfg.scheduler_config.splitwise_role == "decode":
+                # In D instance, if preempted, error has been reported and resource recycled, tokens generated async not need to be handled
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if task_id in self.resource_manager.to_be_aborted_req_id_set:
+                        continue
+                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        continue
 
             current_time = time.time()
             if self.tokens_counter[task_id] == 0:
@@ -760,19 +757,8 @@ class TokenProcessor:
                 if accept_num[i] == PREEMPTED_TOKEN_ID:  # in MTP, means preemption has happened in worker
                     llm_logger.info(f"sync preemption for request_id {task_id} done.")
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                        if task_id in self.resource_manager.abort_req_ids_set:
-                            llm_logger.info(f"Aborted task {task_id} received negative token. Recycling.")
-                            self.resource_manager.abort_req_ids_set.remove(task_id)
-                            self._recycle_resources(task_id, i, task)
-                            llm_logger.info(f"{task_id} received negative token. Recycle end.")
-                            abort_res = RequestOutput(
-                                request_id=task_id,
-                                finished=True,
-                                error_code=499,
-                                error_msg=f"Your request with request_id:{task_id} is aborted.",
-                            )
-                            batch_result.append(abort_res)
-                            continue
+                        if task_id in self.resource_manager.to_be_aborted_req_id_set:
+                            self.resource_manager.recycle_abort_task(task_id)
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
@@ -801,23 +787,13 @@ class TokenProcessor:
                 if recovery_stop:
                     llm_logger.info(f"recovery stop signal found at task {task_id}")
                 if not recovery_stop and token_id < 0:
-                    if task_id in self.resource_manager.abort_req_ids_set:
-                        if (
-                            envs.ENABLE_V1_KVCACHE_SCHEDULER and token_id == PREEMPTED_TOKEN_ID
-                        ) or not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                            llm_logger.info(f"Aborted task {task_id} received negative token. Recycling.")
-                            self.resource_manager.abort_req_ids_set.remove(task_id)
-                            self._recycle_resources(task_id, i, task)
-                            llm_logger.info(f"{task_id} received negative token. Recycle end.")
-                            abort_res = RequestOutput(
-                                request_id=task_id,
-                                finished=True,
-                                error_code=499,
-                                error_msg=f"Your request with request_id:{task_id} is aborted.",
-                            )
-                            batch_result.append(abort_res)
-                            continue
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                        if (
+                            task_id in self.resource_manager.to_be_aborted_req_id_set
+                            and token_id == PREEMPTED_TOKEN_ID
+                        ):
+                            self.resource_manager.recycle_abort_task(task_id)
+                            llm_logger.info(f"sync abortion for request_id {task_id} done.")
                         if (
                             task_id in self.resource_manager.to_be_rescheduled_request_id_set
                             and token_id == PREEMPTED_TOKEN_ID
@@ -825,6 +801,13 @@ class TokenProcessor:
                             llm_logger.info(f"sync preemption for request_id {task_id} done.")
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
+            if self.cfg.scheduler_config.splitwise_role == "decode":
+                # In D instance, if preempted, error has been reported and resource recycled, tokens generated async not need to be handled
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        continue
+                    if task_id in self.resource_manager.to_be_aborted_req_id_set:
+                        continue
 
             if self.scheduler_metrics_logger and self._is_decode_stage(task):
                 self.scheduler_metrics_logger.on_decode_tokens(len(token_ids))

@@ -772,7 +772,7 @@ def control_scheduler(request: ControlSchedulerRequest):
     Control the scheduler behavior with the given parameters.
     """
 
-    content = ErrorResponse(error=ErrorInfo(message="Scheduler updated successfully", code=0))
+    content = ErrorResponse(error=ErrorInfo(message="Scheduler updated successfully", code="0"))
 
     global llm_engine
     if llm_engine is None:
