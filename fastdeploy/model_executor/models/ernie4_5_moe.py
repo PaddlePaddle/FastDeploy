@@ -217,6 +217,7 @@ class Ernie4_5_MoE(nn.Layer):
             gate_correction_bias=None,
             redundant_table_manger=redundant_table_manger,
             weight_key_map=weight_key_map,
+            prefix=f"{prefix}.experts",
         )
 
         if fd_config.model_config.moe_use_aux_free:

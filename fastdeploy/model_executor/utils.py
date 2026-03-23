@@ -14,19 +14,22 @@
 # limitations under the License.
 """
 
+import fnmatch
 import os
 import re
 from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from functools import cache
+from functools import cache, lru_cache
 from typing import Any, List, Optional, Union
 
 import paddle
+from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.quantization import get_quantization_config
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.platforms import current_platform
 
@@ -155,6 +158,72 @@ def process_weight_transpose(layer, weight_name):
     setattr(layer, weight_name, weight_tmp)
 
 
+def _get_weight_only_method_cls_list():
+    # 根据平台类型和层类型选择对应的量化方法
+    weight_only_cls_list = []
+    if current_platform.is_xpu():
+        from fastdeploy.model_executor.layers.backends import (
+            XPUWeightOnlyLinearMethod,
+            XPUWeightOnlyMoEMethod,
+        )
+
+        weight_only_cls_list = [XPUWeightOnlyMoEMethod, XPUWeightOnlyLinearMethod]
+
+    elif current_platform.is_gcu():
+        from fastdeploy.model_executor.layers.backends import (
+            GCUWeightOnlyLinearMethod,
+            GCUWeightOnlyMoEMethod,
+        )
+
+        weight_only_cls_list = [GCUWeightOnlyMoEMethod, GCUWeightOnlyLinearMethod]
+    elif current_platform.is_dcu():
+        from fastdeploy.model_executor.layers.backends import (
+            DCUTritonWeightOnlyMoEMethod,
+            DCUWeightOnlyLinearMethod,
+        )
+
+        weight_only_cls_list = [DCUTritonWeightOnlyMoEMethod, DCUWeightOnlyLinearMethod]
+
+    elif current_platform.is_maca():
+        from fastdeploy.model_executor.layers.backends import (
+            MetaxCutlassWeightOnlyMoEMethod,
+            MetaxTritonWeightOnlyMoEMethod,
+        )
+        from fastdeploy.model_executor.layers.quantization.weight_only import (
+            GPUWeightOnlyLinearMethod,
+        )
+
+        weight_only_cls_list = [
+            MetaxCutlassWeightOnlyMoEMethod,
+            MetaxTritonWeightOnlyMoEMethod,
+            GPUWeightOnlyLinearMethod,
+        ]
+    else:
+        # GPU默认平台：MoE层支持cutlass/triton/marlin三种后端
+        from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
+            CutlassWeightOnlyMoEMethod,
+        )
+        from fastdeploy.model_executor.layers.moe.fused_moe_marlin_backend import (
+            MarlinWeightOnlyMoEMethod,
+        )
+        from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
+            TritonWeightOnlyMoEMethod,
+        )
+        from fastdeploy.model_executor.layers.quantization.weight_only import (
+            GPUWeightOnlyLinearMethod,
+            GPUWeightOnlyMoEMethod,
+        )
+
+        weight_only_cls_list = [
+            CutlassWeightOnlyMoEMethod,
+            TritonWeightOnlyMoEMethod,
+            MarlinWeightOnlyMoEMethod,
+            GPUWeightOnlyLinearMethod,
+            GPUWeightOnlyMoEMethod,
+        ]
+    return weight_only_cls_list
+
+
 def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
     """
     process_weights_after_loading:
@@ -172,9 +241,9 @@ def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
         model_sublayer = sublayers_dict[model_sublayer_name]
         if isinstance(model_sublayer, KVBatchLinear):
             model_sublayer.process_weights_after_loading()
-        if fd_config.quant_config and not fd_config.quant_config.is_checkpoint_bf16:
-            # skip for offline quantization
-            return
+        # if fd_config.quant_config and not fd_config.quant_config.is_checkpoint_bf16:
+        #     # skip for offline quantization
+        #     return
         if hasattr(model_sublayer, "quant_method"):
             quant_method = getattr(model_sublayer, "quant_method", None)
             unquant_moe_layer = get_moe_method()
@@ -185,6 +254,12 @@ def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
             if type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls:
                 # skip unquantized linear
                 return
+
+            if type(quant_method) not in _get_weight_only_method_cls_list():
+                if fd_config.quant_config and not fd_config.quant_config.is_checkpoint_bf16:
+                    # Skip offline quantization if quant_method is not "weight_only".
+                    return
+
             if not hasattr(quant_method, "process_weights_after_loading"):
                 return
             if param is not None and hasattr(param, "tensor_track") and param.tensor_track is None:
@@ -250,7 +325,7 @@ def process_final_after_loading(model, fd_config: FDConfig):
     )
     from fastdeploy.model_executor.layers.moe.moe import get_moe_method
 
-    for name, sublayer in model.named_sublayers():
+    for _, sublayer in model.named_sublayers():
         if isinstance(sublayer, KVBatchLinear):
             continue
         quant_method = getattr(sublayer, "quant_method", None)
@@ -262,7 +337,9 @@ def process_final_after_loading(model, fd_config: FDConfig):
                 unquant_moe_cls = type(unquant_moe_layer)
             is_unquant_cls = type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls
             is_offline_quantized_ckpt = not (fd_config.quant_config and fd_config.quant_config.is_checkpoint_bf16)
-            if is_unquant_cls or is_offline_quantized_ckpt:
+            if (is_unquant_cls or is_offline_quantized_ckpt) and type(
+                quant_method
+            ) not in _get_weight_only_method_cls_list():
                 if hasattr(quant_method, "process_weights_after_loading"):
                     quant_method.process_weights_after_loading(sublayer)
                 continue
@@ -623,3 +700,44 @@ def need_memory_reconstruction(fd_config):
         return True
     else:
         return False
+
+
+@lru_cache(None)
+def parse_layer_range(r: str) -> list[tuple[int, int]]:
+
+    return [(int(a), int(b)) for a, b in (part.split("-") for part in r.split(","))]
+
+
+def layer_in_range(layer_idx: int, layer_range: str) -> bool:
+    for lo, hi in parse_layer_range(layer_range):
+        if lo <= layer_idx <= hi:
+            return True
+    return False
+
+
+def resolve_quant_type(layer_idx: int, prefix: str, modules_to_quant: dict) -> str | None:
+    rules = modules_to_quant
+
+    for quant_type, rule in rules.items():
+        if not prefix_match(prefix, rule["prefix_module"]):
+            continue
+
+        if layer_in_range(layer_idx, rule["layer_range"]):
+            return quant_type
+
+    return None
+
+
+def prefix_match(prefix: str, patterns: list[str]) -> bool:
+    return any(fnmatch.fnmatch(prefix, p) or fnmatch.fnmatch(prefix, p + ".*") for p in patterns)
+
+
+def get_special_quant_config(layer: nn.Layer, modules_to_quant: dict, ori_quant_type: str):
+    """
+    only Moe and offline quant Now
+    """
+    qtype = resolve_quant_type(layer.layer_idx, layer.prefix, modules_to_quant)
+    if qtype is None:
+        return get_quantization_config(ori_quant_type)
+    else:
+        return get_quantization_config(qtype)

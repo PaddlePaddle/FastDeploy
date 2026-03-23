@@ -1,0 +1,48 @@
+{
+  "architectures": [
+    "Ernie4_5_MoeForCausalLM"
+  ],
+  "bos_token_id": 1,
+  "eos_token_id": 2,
+  "hidden_act": "silu",
+  "hidden_size": 2560,
+  "intermediate_size": 12288,
+  "max_position_embeddings": 131072,
+  "model_type": "ernie4_5_moe",
+  "num_attention_heads": 20,
+  "num_key_value_heads": 4,
+  "num_hidden_layers": 28,
+  "pad_token_id": 0,
+  "rms_norm_eps": 1e-05,
+  "use_cache": false,
+  "vocab_size": 103424,
+  "rope_theta": 500000,
+  "use_rmsnorm": true,
+  "tie_word_embeddings": true,
+  "use_bias": false,
+  "moe_num_experts": 64,
+  "moe_num_shared_experts": 2,
+  "moe_layer_start_index": 1,
+  "moe_intermediate_size": 1536,
+  "moe_capacity": [64,64,64],
+  "moe_gate": "topk",
+  "moe_k": 6,
+  "moe_layer_interval": 1,
+  "moe_use_aux_free": true,
+  "dtype": "bfloat16",
+  "num_nextn_predict_layers": 1,
+  "multi_token_pred_lambda": 0.3,
+  "quantization_config":{
+    "dense_quant_type": "wint8",
+    "moe_quant_type": "w4a8",
+    "quantization": "mix_quant",
+    "kv_cache_quant_type": "int8",
+    "modules_to_quant":{
+      "wint8":{
+            "layer_range":"3-7,10-15,20-24",
+            "prefix_module":[
+              "ernie.layers.*.mlp.experts*"
+            ]}
+    }
+  }
+}

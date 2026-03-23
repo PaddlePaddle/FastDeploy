@@ -106,6 +106,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
             topk_group=4,
             n_group=8,
             gate_correction_bias=paddle.zeros([self.fd_config.model_config.moe_num_experts], paddle.float32),
+            prefix=f"{prefix}.experts",
             # gate_correction_bias = gate_correction_bias_real_data
         )
         self.pack_num = 1

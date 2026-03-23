@@ -70,7 +70,6 @@ class WeightOnlyConfig(QuantConfigBase):
     def __init__(
         self,
         algo: str,
-        is_checkpoint_bf16: bool = False,
     ) -> None:
         super().__init__()
         self.algo = algo
@@ -82,7 +81,7 @@ class WeightOnlyConfig(QuantConfigBase):
         self.quant_max_bound = 0
         self.quant_min_bound = 0
         self.quant_round_type = 0
-        self.is_checkpoint_bf16 = is_checkpoint_bf16
+        self.is_checkpoint_bf16 = True  # weight only linear support dynamic quantization only
         self.group_size = -1
 
     def name(self) -> str:
@@ -91,11 +90,12 @@ class WeightOnlyConfig(QuantConfigBase):
     @classmethod
     def from_config(cls, config: dict) -> "WeightOnlyConfig":
         algo = config["algo"]
-        is_checkpoint_bf16 = not config.get("is_quantized", False)
-        return cls(algo, is_checkpoint_bf16)
+        return cls(algo)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
+        # 根据平台类型和层类型选择对应的量化方法
         if current_platform.is_xpu():
+            # XPU平台：区分MoE层和普通Linear层
             if isinstance(layer, FusedMoE):
                 from fastdeploy.model_executor.layers.backends import (
                     XPUWeightOnlyMoEMethod,
@@ -109,6 +109,7 @@ class WeightOnlyConfig(QuantConfigBase):
 
                 return XPUWeightOnlyLinearMethod(self)
         elif current_platform.is_gcu():
+            # GCU平台：区分MoE层和普通Linear层
             from fastdeploy.model_executor.layers.backends import (
                 GCUWeightOnlyLinearMethod,
                 GCUWeightOnlyMoEMethod,
@@ -119,6 +120,7 @@ class WeightOnlyConfig(QuantConfigBase):
             else:
                 return GCUWeightOnlyLinearMethod(self)
         elif current_platform.is_dcu():
+            # DCU平台：区分MoE层和普通Linear层
             if isinstance(layer, FusedMoE):
                 from fastdeploy.model_executor.layers.backends import (
                     DCUTritonWeightOnlyMoEMethod,
@@ -132,6 +134,7 @@ class WeightOnlyConfig(QuantConfigBase):
 
                 return DCUWeightOnlyLinearMethod(self)
         elif current_platform.is_maca():
+            # MACA平台：MoE层支持cutlass和triton两种后端
             if isinstance(layer, FusedMoE):
                 from fastdeploy.model_executor.layers.backends import (
                     MetaxCutlassWeightOnlyMoEMethod,
@@ -166,6 +169,7 @@ class WeightOnlyConfig(QuantConfigBase):
 
                 return IluvatarWeightOnlyLinearMethod(self)
         else:
+            # GPU默认平台：MoE层支持cutlass/triton/marlin三种后端
             if isinstance(layer, FusedMoE):
                 if layer.use_method == "cutlass":
                     from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
@@ -188,6 +192,7 @@ class WeightOnlyConfig(QuantConfigBase):
                 else:
                     raise ValueError(f"Unsupported MOE backend {layer.use_method}")
             else:
+                # 普通Linear层：满足条件时使用Machete优化内核，否则使用默认GPU方法
                 if (
                     _ENABLE_MACHETE
                     and envs.FD_USE_MACHETE == "1"
@@ -206,13 +211,12 @@ class WINT8Config(WeightOnlyConfig):
     weight only int8 config
     """
 
-    def __init__(self, is_checkpoint_bf16: bool = False) -> None:
-        super().__init__("weight_only_int8", is_checkpoint_bf16)
+    def __init__(self) -> None:
+        super().__init__("weight_only_int8")
 
     @classmethod
     def from_config(cls, config: dict) -> "WINT8Config":
-        is_checkpoint_bf16 = not config.get("is_quantized", False)
-        return cls(is_checkpoint_bf16)
+        return cls()
 
     def name(self) -> str:
         return "wint8"
@@ -225,14 +229,12 @@ class WINT4Config(WeightOnlyConfig):
 
     def __init__(
         self,
-        is_checkpoint_bf16: bool = False,
     ) -> None:
-        super().__init__("weight_only_int4", is_checkpoint_bf16)
+        super().__init__("weight_only_int4")
 
     @classmethod
     def from_config(cls, config: dict) -> "WINT4Config":
-        is_checkpoint_bf16 = not config.get("is_quantized", False)
-        return cls(is_checkpoint_bf16)
+        return cls()
 
     def name(self) -> str:
         return "wint4"
@@ -253,7 +255,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
     def create_weights(self, layer, **extra_weight_attrs):
         # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
         self.model_format = extra_weight_attrs.get("model_format")
-        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
+        if layer.fd_config.load_config.load_choices == "default_v1":
             weight_shape = layer.weight_shape[::-1] if self.model_format == "torch" else layer.weight_shape
             layer.weight = layer.create_parameter(
                 shape=weight_shape,
@@ -363,12 +365,9 @@ class WeightOnlyLinearMethod(QuantMethodBase):
             layer.weight.copy_(quanted_weight_tensor, False)
             layer.weight_scale.copy_(weight_scale_tensor, False)
 
-        if self.quant_config.is_checkpoint_bf16:
-            if self.model_format == "torch":
-                process_weight_transpose(layer, "weight")
-            _process_quantize()
-        else:
-            return
+        if self.model_format == "torch":
+            process_weight_transpose(layer, "weight")
+        _process_quantize()
 
     @abstractmethod
     def process_loaded_weights(self, layer, weights) -> None:
