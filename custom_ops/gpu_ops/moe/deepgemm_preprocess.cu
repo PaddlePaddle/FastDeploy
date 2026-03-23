@@ -78,5 +78,6 @@ std::vector<paddle::Tensor> count_tokens_per_expert_func(const paddle::Tensor &t
   cudaMemcpyAsync(h_token_nums_this_rank_padded, token_nums_this_rank_padded.data<int>(), sizeof(int), cudaMemcpyDeviceToHost, stream);
   cudaStreamSynchronize(stream);
   auto out = paddle::full({1}, *h_token_nums_this_rank_padded, paddle::DataType::INT32, paddle::CPUPlace());
+  cudaFreeHost(h_token_nums_this_rank_padded);
   return {token_nums_per_expert, out};
 }
