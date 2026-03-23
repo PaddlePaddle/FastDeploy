@@ -1,4 +1,4 @@
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,9 +50,17 @@ def setup_and_run_server(api_url):
 
     ports_to_add = [
         FD_API_PORT + 1,
+        FD_API_PORT + 2,
+        FD_API_PORT + 3,
         FD_METRICS_PORT + 1,
+        FD_METRICS_PORT + 2,
+        FD_METRICS_PORT + 3,
         FD_CACHE_QUEUE_PORT + 1,
+        FD_CACHE_QUEUE_PORT + 2,
+        FD_CACHE_QUEUE_PORT + 3,
         FD_ENGINE_QUEUE_PORT + 1,
+        FD_ENGINE_QUEUE_PORT + 2,
+        FD_ENGINE_QUEUE_PORT + 3,
     ]
 
     for port in ports_to_add:
@@ -79,22 +87,22 @@ def setup_and_run_server(api_url):
         "-m",
         "fastdeploy.entrypoints.openai.multi_api_server",
         "--num-servers",
-        "2",
+        "4",
         "--ports",
-        f"{FD_API_PORT},{FD_API_PORT + 1}",
+        f"{FD_API_PORT},{FD_API_PORT + 1},{FD_API_PORT + 2},{FD_API_PORT + 3}",
         "--metrics-ports",
-        f"{FD_METRICS_PORT},{FD_METRICS_PORT + 1}",
+        f"{FD_METRICS_PORT},{FD_METRICS_PORT + 1},{FD_METRICS_PORT + 2},{FD_METRICS_PORT + 3}",
         "--args",
         "--model",
         model_path,
         "--engine-worker-queue-port",
-        f"{FD_ENGINE_QUEUE_PORT},{FD_ENGINE_QUEUE_PORT + 1}",
+        f"{FD_ENGINE_QUEUE_PORT},{FD_ENGINE_QUEUE_PORT + 1},{FD_ENGINE_QUEUE_PORT + 2},{FD_ENGINE_QUEUE_PORT + 3}",
         "--cache-queue-port",
-        f"{FD_CACHE_QUEUE_PORT},{FD_CACHE_QUEUE_PORT + 1}",
+        f"{FD_CACHE_QUEUE_PORT},{FD_CACHE_QUEUE_PORT + 1},{FD_CACHE_QUEUE_PORT + 2},{FD_CACHE_QUEUE_PORT + 3}",
         "--tensor-parallel-size",
-        "2",
+        "1",
         "--data-parallel-size",
-        "2",
+        "4",
         "--max-model-len",
         "65536",
         "--max-num-seqs",
@@ -337,12 +345,16 @@ def test_text_diff(api_url):
     base_path = os.getenv("MODEL_PATH")
 
     if base_path:
-        base_file = os.path.join(base_path, "21b_ep4_mtp_text_baseline_dev_0311.txt")
+        base_file = os.path.join(base_path, "21b_tp1_dp4_mtp_text_baseline.txt")
     else:
-        base_file = "21b_ep4_mtp_text_baseline_dev_0311.txt"
+        base_file = "21b_tp1_dp4_mtp_text_baseline.txt"
 
     with open(base_file, "r", encoding="utf-8") as f:
         baseline = f.read()
+
+    if result != baseline:
+        with open("21b_tp1_dp4_mtp_text_tmp.txt", "w", encoding="utf-8") as f:
+            f.write(result)
 
     assert result == baseline, f"Text mismatch with baseline\nresult: {result}\nbaseline: {baseline}"
 
@@ -504,12 +516,16 @@ def test_non_stream_with_logprobs(api_url):
     base_path = os.getenv("MODEL_PATH")
 
     if base_path:
-        base_file = os.path.join(base_path, "21b_ep4_mtp_logprobs_non_stream_static_baseline_dev_0311.txt")
+        base_file = os.path.join(base_path, "21b_tp1_dp4_mtp_logprobs_non_stream_static_baseline.txt")
     else:
-        base_file = "21b_ep4_mtp_logprobs_non_stream_static_baseline_dev_0311.txt"
+        base_file = "21b_tp1_dp4_mtp_logprobs_non_stream_static_baseline.txt"
 
     with open(base_file, "r", encoding="utf-8") as f:
         baseline = json.load(f)
+
+    if logprobs != baseline:
+        with open("21b_tp1_dp4_mtp_logprobs_non_stream_static_tmp.txt", "w", encoding="utf-8") as f:
+            f.write(json.dumps(logprobs, ensure_ascii=False, indent=2))
 
     assert logprobs == baseline
 
@@ -539,11 +555,15 @@ def test_stream_with_logprobs(api_url):
     base_path = os.getenv("MODEL_PATH")
 
     if base_path:
-        base_file = os.path.join(base_path, "21b_ep4_mtp_logprobs_stream_static_baseline_dev_0311.txt")
+        base_file = os.path.join(base_path, "21b_tp1_dp4_mtp_logprobs_stream_static_baseline.txt")
     else:
-        base_file = "21b_ep4_mtp_logprobs_stream_static_baseline_dev_0311.txt"
+        base_file = "21b_tp1_dp4_mtp_logprobs_stream_static_baseline.txt"
 
     with open(base_file, "r", encoding="utf-8") as f:
         baseline = json.load(f)
+
+    if logprobs != baseline:
+        with open("21b_tp1_dp4_mtp_logprobs_stream_static_tmp.txt", "w", encoding="utf-8") as f:
+            f.write(json.dumps(logprobs, ensure_ascii=False, indent=2))
 
     assert logprobs == baseline

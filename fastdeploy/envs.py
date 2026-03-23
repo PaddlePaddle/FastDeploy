@@ -224,6 +224,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
     # Whether to use Fleet's FP8 quantization kernel for weight quantization.
     "FD_USE_FLEET_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_FLEET_FP8_QUANT", "0"))),
+    # Suspend rollouting routing replay
+    "FD_SUSPEND_ROUTING_REPLAY": lambda: bool(int(os.getenv("FD_SUSPEND_ROUTING_REPLAY", "0"))),
 }
 
 
