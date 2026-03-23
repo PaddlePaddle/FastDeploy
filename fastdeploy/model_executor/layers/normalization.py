@@ -29,7 +29,7 @@ else:
     from paddle.incubate.nn.functional import fused_layer_norm, fused_rms_norm
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused
+from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused, rmsnorm_gated
 
 from .batch_invariant_ops import (
     is_batch_invariant_mode_enabled,
@@ -532,3 +532,163 @@ class LayerNorm(nn.Layer):
             return norm_out[0], norm_out[1]
         else:
             return norm_out[0]
+
+
+class RMSNormGated(nn.Layer):
+    """
+    RMS Normalization layer with gate activation.
+    Adapted from SGLang's RMSNormGated implementation.
+
+    This layer performs RMSNorm with an optional gate activation:
+        output = RMSNorm(x) * activation(g)
+
+    The gate is applied after normalization (norm_before_gate=True).
+    Supports swish/silu and sigmoid activations.
+    """
+
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        hidden_size: int,
+        eps: float = 1e-5,
+        prefix: str = "",
+        bias: paddle.Tensor = None,
+        dtype: str = None,
+        activation: str = "swish",
+    ) -> None:
+        """
+        Initializes the RMSNormGated layer.
+
+        Args:
+            fd_config (FDConfig): Arguments related to inference.
+            hidden_size (int): Size of hidden state.
+            eps (float): Small value added to the variance to avoid division by zero.
+            prefix (str): The name of current layer.
+            bias (paddle.Tensor): Initial bias value (not used in RMSNorm, kept for API consistency).
+            dtype (str): Data type for weight tensor.
+            activation (str): Activation function type ("swish", "silu", or "sigmoid").
+        """
+        super().__init__()
+        self.fd_config = fd_config
+        self.prefix: str = prefix
+        self.hidden_size: int = hidden_size
+        if len(prefix) == 0:
+            self.weight_key: Optional[str] = None
+        else:
+            self.weight_key: Optional[str] = f"{prefix}.weight"
+        self.with_weight: bool = self.weight_key is not None
+        self.eps: float = eps
+        self.activation: str = activation.lower()
+        assert self.activation in ["swish", "silu", "sigmoid"], f"Unsupported activation: {activation}"
+        self.bias: Optional[paddle.Tensor] = bias
+
+        self._norm_weight_dtype = dtype
+        if self._norm_weight_dtype is None:
+            self._norm_weight_dtype = self._helper.get_default_dtype()
+        else:
+            assert dtype in [
+                "float32",
+                "bfloat16",
+                "float16",
+            ], f"Unsupported dtype: {dtype}. Must be one of: float32, bfloat16, float16"
+
+        # Check if Triton fused kernel is available
+        self.use_triton_kernel = (
+            current_platform.is_cuda()
+            and _TRITON_AVAILABLE
+        )
+
+        self.init_weight()
+
+    def init_weight(self):
+        """
+        Initialize the weights and biases.
+        """
+        self.weight = None
+        if self.with_weight:
+            self.weight = self.create_parameter(
+                shape=[self.hidden_size],
+                default_initializer=nn.initializer.Constant(value=1.0),
+                dtype=self._norm_weight_dtype,
+            )
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        loaded_weight = get_tensor(loaded_weight).astype(self._norm_weight_dtype)
+        param.copy_(loaded_weight, False)
+
+    def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
+        """
+        Load the checkpoint state dictionary into the layer.
+
+        Args:
+            state_dict (dict): A dictionary containing the checkpoint weights and biases.
+        """
+        # weight
+        weight_tensor = get_tensor(state_dict.pop(self.weight_key))
+        self.weight.set_value(weight_tensor.astype(self._norm_weight_dtype))
+
+    def forward(
+        self,
+        x,
+        z: Optional[paddle.Tensor] = None
+    ) -> paddle.Tensor:
+        """
+        Defines the forward computation of the layer.
+
+        Args:
+            x (paddle.Tensor): Input tensor to be normalized.
+            z (paddle.Tensor, optional): Gate tensor for activation. If provided,
+                the output will be RMSNorm(x) * activation(z).
+
+        Returns:
+            paddle.Tensor:
+                - If `z` is None, returns the normalized output tensor.
+                - If `z` is provided, returns RMSNorm(x) * activation(z).
+        """
+        x_dtype = x.dtype
+
+        # Use Triton fused kernel if available and gate is provided
+        if self.use_triton_kernel and z is not None:
+            # Reshape to 2D if needed
+            x_shape_og = x.shape
+            x_2d = x.reshape([-1, x.shape[-1]])
+
+            z_2d = z.reshape([-1, z.shape[-1]])
+
+            norm_out = rmsnorm_gated(
+                x=x_2d,
+                weight=self.weight,
+                bias=None,
+                eps=self.eps,
+                z=z_2d,
+                activation=self.activation,
+            )
+
+            out = norm_out.reshape(x_shape_og).astype(x_dtype)
+        else:
+            x = x.astype(self.weight.dtype)
+            # Fallback to standard RMSNorm
+            if current_platform.is_gcu():
+                norm_out = rms_norm(x, self.weight, self.eps)
+            else:
+                norm_out = fused_rms_norm(
+                    x,
+                    norm_weight=self.weight,
+                    norm_bias=None,
+                    epsilon=self.eps,
+                    begin_norm_axis=1,
+                    bias=self.bias
+                )
+            out = norm_out[0]
+
+            # Apply gate activation if provided
+            if z is not None:
+                z = z.astype("float32")
+                if self.activation == "swish" or self.activation == "silu":
+                    out = out * z * nn.functional.sigmoid(z)
+                elif self.activation == "sigmoid":
+                    out = out * nn.functional.sigmoid(z)
+            out = out.astype(x_dtype)
+
+        return out
+
