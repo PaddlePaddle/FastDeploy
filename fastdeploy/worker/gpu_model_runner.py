@@ -1091,7 +1091,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
             self.exist_prefill_flag = True
             self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
-            self.share_inputs["prompt_lens"][idx : idx + 1] = 0
+            self.share_inputs["prompt_lens"][idx : idx + 1] = input_length
             self.share_inputs["step_idx"][idx : idx + 1] = 0
             self.share_inputs["max_dec_len"][idx : idx + 1] = max_dec_len
             self.share_inputs["min_dec_len"][idx : idx + 1] = max_dec_len
@@ -1748,8 +1748,6 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=self.model_config.think_end_id,
             splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
             enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
-            is_naive_mode=(self.speculative_decoding and self.proposer is None),
-            prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
         )
         self.exist_prefill_flag = False
         if self.speculative_decoding:
@@ -1883,7 +1881,7 @@ class GPUModelRunner(ModelRunnerBase):
             elif self.speculative_decoding and self.spec_method == SpecMethod.MTP:
                 # Capture Target Model without bsz 1
                 for capture_size in sorted(capture_sizes, reverse=True):
-                    expected_decode_len = self.speculative_config.num_speculative_tokens * 2 + 1
+                    expected_decode_len = (self.speculative_config.num_speculative_tokens + 1) * 2
                     self._dummy_run(
                         num_tokens=self.fd_config.get_max_chunk_tokens(),
                         batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
@@ -2363,8 +2361,6 @@ class GPUModelRunner(ModelRunnerBase):
                 think_end_id=self.model_config.think_end_id,
                 splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
-                is_naive_mode=(self.speculative_decoding and self.proposer is None),
-                prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
                 routing_replay_manager=self.routing_replay_manager,
             )
 

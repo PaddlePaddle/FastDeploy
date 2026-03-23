@@ -710,20 +710,7 @@ class MTPProposer(Proposer):
         - Used for MTP forward, but not committed until verify
         - No rollback needed since it's always re-initialized
         """
-        # logger.info("==================Input draft_model_preprocess==================")
-        # logger.info(f"D role: {self.role}")
-        # logger.info(f'T seq_lens_this_time: {self.target_model_inputs["seq_lens_this_time"]}')
-        # logger.info(f'T seq_lens_encoder: {self.target_model_inputs["seq_lens_encoder"]}')
-        # logger.info(f'T seq_lens_decoder: {self.target_model_inputs["seq_lens_decoder"]}')
-        # logger.info(f'T step_idx: {self.target_model_inputs["step_idx"]}')
-        # logger.info(f'T stop_flags: {self.target_model_inputs["stop_flags"]}')
-        # logger.info(f'D seq_lens_this_time: {self.model_inputs["seq_lens_this_time"]}')
-        # logger.info(f'D seq_lens_encoder: {self.model_inputs["seq_lens_encoder"]}')
-        # logger.info(f'D seq_lens_decoder: {self.model_inputs["seq_lens_decoder"]}')
-        # logger.info(f'D step_idx: {self.model_inputs["step_idx"]}')
-        # logger.info(f'D stop_flags: {self.model_inputs["stop_flags"]}')
-        # # logger.info(f'D input_ids: {self.model_inputs["input_ids"].numpy().tolist()}')
-        # logger.info(f'==============Fin=====================')
+
         draft_model_preprocess(
             self.model_inputs["draft_tokens"],
             self.model_inputs["input_ids"],
@@ -757,16 +744,6 @@ class MTPProposer(Proposer):
             self.target_model_inputs["seq_lens_encoder"],
             self.num_model_steps,
         )
-
-        # logger.info("======MTP Input =====")
-        # logger.info(f'D seq_lens_this_time: {self.model_inputs["seq_lens_this_time"]}')
-        # logger.info(f'D seq_lens_encoder: {self.model_inputs["seq_lens_encoder"]}')
-        # logger.info(f'D seq_lens_decoder: {self.model_inputs["seq_lens_decoder"]}')
-        # logger.info(f'D step_idx: {self.model_inputs["step_idx"]}')
-        # logger.info(f'D stop_flags: {self.model_inputs["stop_flags"]}')
-        # # logger.info(f'D input_ids: {self.model_inputs["input_ids"].numpy().tolist()}')
-        # logger.info(f'D draft_tokens: {self.model_inputs["draft_tokens"]}')
-        # logger.info(f'==============Fin=====================')
 
         self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
