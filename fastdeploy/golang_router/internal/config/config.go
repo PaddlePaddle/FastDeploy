@@ -44,6 +44,7 @@ type SchedulerConfig struct {
 	HitRatioWeight       float64 `yaml:"hit-ratio-weight"`
 	LoadBalanceWeight    float64 `yaml:"load-balance-weight"`
 	WaitingWeight        float64 `yaml:"waiting-weight"`
+	StatsIntervalSecs    float64 `yaml:"stats-interval-secs"`
 }
 
 type LogConfig struct {
@@ -126,6 +127,9 @@ func Load(configPath, listenPort string, isSplitwise bool) (*Config, error) {
 	}
 	if cfg.Scheduler.DecodePolicy == "" {
 		cfg.Scheduler.DecodePolicy = "request_num"
+	}
+	if cfg.Scheduler.StatsIntervalSecs == 0 {
+		cfg.Scheduler.StatsIntervalSecs = 5
 	}
 	return &cfg, nil
 }

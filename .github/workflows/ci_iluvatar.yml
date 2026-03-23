@@ -13,6 +13,8 @@ jobs:
   clone:
     name: FD-Clone-Linux-ILUVATAR
     uses: ./.github/workflows/_clone_linux.yml
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   iluvatar_test:
     name: Run iluvatar Tests
@@ -21,3 +23,5 @@ jobs:
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0-20260312
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}

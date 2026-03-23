@@ -31,6 +31,10 @@ else:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused
 
+from .batch_invariant_ops import (
+    is_batch_invariant_mode_enabled,
+    rms_norm_batch_invariant,
+)
 from .utils import get_tensor, modules_to_convert
 
 
@@ -237,19 +241,25 @@ class RMSNorm(nn.Layer):
                     return norm_out.astype(x_dtype), residual_out
                 norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
             else:
-                norm_out = self.norm_func(
-                    x,
-                    norm_weight=self.weight,
-                    norm_bias=None,
-                    epsilon=self.eps,
-                    begin_norm_axis=self.begin_norm_axis,
-                    bias=self.bias,
-                    residual=residual_input,
-                    quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
-                    quant_round_type=self.quant_round_type,
-                    quant_max_bound=self.quant_max_bound,
-                    quant_min_bound=self.quant_min_bound,
-                )
+                if is_batch_invariant_mode_enabled():
+                    # M-invariant path: per-row Triton kernel, no cross-row reduction
+                    if residual_input is not None:
+                        x = x + residual_input
+                    norm_out = rms_norm_batch_invariant(x, self.weight, self.eps), x
+                else:
+                    norm_out = self.norm_func(
+                        x,
+                        norm_weight=self.weight,
+                        norm_bias=None,
+                        epsilon=self.eps,
+                        begin_norm_axis=self.begin_norm_axis,
+                        bias=self.bias,
+                        residual=residual_input,
+                        quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
+                        quant_round_type=self.quant_round_type,
+                        quant_max_bound=self.quant_max_bound,
+                        quant_min_bound=self.quant_min_bound,
+                    )
         else:
             if residual_input is not None:
                 x = x + residual_input
@@ -329,8 +339,9 @@ class QKRMSNorm(nn.Layer):
         self,
         qkv_out,
         forward_meta,
+        proxy_rmsnorm=None,
     ) -> paddle.Tensor:
-        if self.qk_norm_fused and forward_meta.step_use_cudagraph:
+        if proxy_rmsnorm is None and self.qk_norm_fused and forward_meta.step_use_cudagraph:
             qkv_out = qk_rmsnorm_fused(
                 qkv_out,
                 self.q_norm.weight,
@@ -344,11 +355,11 @@ class QKRMSNorm(nn.Layer):
             q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
 
             q_by_head = q.reshape([*q.shape[:-1], q.shape[-1] // self.head_dim, self.head_dim])
-            q_by_head = self.q_norm(q_by_head)[0]
+            q_by_head = self.q_norm(q_by_head, proxy_rmsnorm=proxy_rmsnorm)[0]
             q = q_by_head.reshape(q.shape)
 
             k_by_head = k.reshape([*k.shape[:-1], k.shape[-1] // self.head_dim, self.head_dim])
-            k_by_head = self.k_norm(k_by_head)[0]
+            k_by_head = self.k_norm(k_by_head, proxy_rmsnorm=proxy_rmsnorm)[0]
             k = k_by_head.reshape(k.shape)
 
             qkv_out = paddle.concat([q, k, v], axis=-1)

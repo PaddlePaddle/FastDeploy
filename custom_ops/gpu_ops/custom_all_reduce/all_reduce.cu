@@ -63,8 +63,8 @@ void decode_alltoall_transpose(paddle::Tensor& inp,
   auto hidden_size = inp.shape()[1];
   auto reg_buffer = reinterpret_cast<void*>(_reg_buffer);
   if (reg_buffer) {
-    cudaMemcpyAsync(
-        reg_buffer, inp.data(), input_size, cudaMemcpyDeviceToDevice, stream);
+    CUDACHECK(cudaMemcpyAsync(
+        reg_buffer, inp.data(), input_size, cudaMemcpyDeviceToDevice, stream));
   } else {
     reg_buffer = inp.data();
   }
@@ -124,8 +124,8 @@ void all_reduce(paddle::Tensor& inp,
   auto input_size = inp.numel() * phi::SizeOf(inp.dtype());
   auto reg_buffer = reinterpret_cast<void*>(_reg_buffer);
   if (reg_buffer) {
-    cudaMemcpyAsync(
-        reg_buffer, inp.data(), input_size, cudaMemcpyDeviceToDevice, stream);
+    CUDACHECK(cudaMemcpyAsync(
+        reg_buffer, inp.data(), input_size, cudaMemcpyDeviceToDevice, stream));
   } else {
     reg_buffer = inp.data();
   }

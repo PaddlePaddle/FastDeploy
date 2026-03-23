@@ -1,0 +1,20 @@
+name: CI_XPU
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [develop, release/**]
+permissions: read-all
+
+concurrency:
+  group: ${{ github.event.pull_request.number }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  cancel:
+    name: Cancel CI_XPU for ${{ github.event.pull_request.number }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel CI_XPU
+        run: |
+          exit 0

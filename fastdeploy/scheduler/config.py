@@ -229,7 +229,7 @@ class GlobalSchedulerConfig:
         try:
             response = r.ping()
             if not response:
-                raise Exception("connect to redis failed")
+                raise ConnectionError(f"Failed to connect to Redis at {self.host}:{self.port}")
         finally:
             r.close()
 

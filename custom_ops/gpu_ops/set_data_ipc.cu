@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cstring>
 #include "cuda_multiprocess.h"
 #include "helper.h"
 
@@ -85,9 +86,10 @@ void set_data_ipc(const paddle::Tensor& tmp_input,
   sharedMemoryInfo info;
   volatile shmStruct* shm = NULL;
   if (sharedMemoryCreate(shm_name.c_str(), sizeof(*shm), &info) != 0) {
-    printf("Failed to create shared memory slab\n");
-    printf("Func sharedMemoryCreate. Shm_name: %s\n", shm_name.c_str());
-    exit(EXIT_FAILURE);
+    throw std::runtime_error(
+        "Failed to create shared memory slab in sharedMemoryCreate, "
+        "shm_name: " +
+        shm_name + ", errno: " + std::string(strerror(errno)));
   }
   shm = (volatile shmStruct*)info.addr;
   memset((void*)shm, 0, sizeof(*shm));

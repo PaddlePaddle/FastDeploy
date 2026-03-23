@@ -259,7 +259,7 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
         else:
             self.lm_head.load_state_dict(state_dict)
 
-    def compute_logits(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None) -> paddle.Tensor:
         logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
@@ -356,10 +356,11 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
-        image_features: Optional[paddle.Tensor],
+        inputs: Dict,
         forward_meta: ForwardMeta,
-    ) -> paddle.Tensor:
+    ):
+        ids_remove_padding = inputs["ids_remove_padding"]
+        image_features = inputs["image_features"]
         input_embeddings = self.get_input_embeddings(ids_remove_padding, image_features)
         deepstack_inputs = None
         if self.use_deepstack:
