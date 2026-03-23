@@ -15,7 +15,6 @@
 """
 
 import copy
-import os
 import threading
 import time
 import traceback
@@ -235,8 +234,6 @@ class ResourceManagerV1(ResourceManager):
 
         # SWA recycle
         self.request_head_recycle_upto = {}
-        self.head_wise_hole_log = bool(int(os.getenv("FD_HEAD_WISE_HOLE_LOG", "0")))
-        self._head_wise_hole_log_count = 0
         self.swa_window_size = getattr(self.config.model_config, "window_size", 0)
         try:
             self.swa_sink_size = int(getattr(self.config.model_config, "sink_size", 0) or 0)
@@ -799,53 +796,6 @@ class ResourceManagerV1(ResourceManager):
 
         return max(0, (total_tokens - window_size) // block_size)
 
-    @staticmethod
-    def _head_wise_row_layout_stats(row):
-        if row is None:
-            return 0, 0, 0
-        row_len = len(row)
-        last_valid_idx = -1
-        for idx, cid in enumerate(row):
-            if cid is not None and cid >= 0:
-                last_valid_idx = idx
-        if last_valid_idx < 0:
-            return row_len, 0, 0
-
-        contiguous_len = last_valid_idx + 1
-        hole_before_last_valid = 0
-        for cid in row[:contiguous_len]:
-            if cid is None or cid < 0:
-                hole_before_last_valid += 1
-        return row_len, contiguous_len, hole_before_last_valid
-
-    def _maybe_log_swa_recycle_hole_diag(
-        self,
-        request_id: str,
-        head_idx: int,
-        row,
-        start_block_idx: int,
-        end_block_idx: int,
-        recycled_count: int,
-    ) -> None:
-        if not self.head_wise_hole_log:
-            return
-
-        row_len, contiguous_len, hole_before_last_valid = self._head_wise_row_layout_stats(row)
-        if hole_before_last_valid <= 0:
-            return
-
-        should_log = self._head_wise_hole_log_count < 100 or self._head_wise_hole_log_count % 100 == 0
-        self._head_wise_hole_log_count += 1
-        if not should_log:
-            return
-
-        llm_logger.warning(
-            f"[swa_recycle_hole_diag] request_id={request_id} head={head_idx} "
-            f"recycle_range=[{start_block_idx},{end_block_idx}) recycled={recycled_count} "
-            f"row_len={row_len} contiguous_len={contiguous_len} hole_before_last_valid={hole_before_last_valid} "
-            f"row_prefix={row[: min(24, row_len)] if row is not None else []}"
-        )
-
     def _recycle_request_swa_head_cache_helper(
         self,
         request,
@@ -875,14 +825,6 @@ class ResourceManagerV1(ResourceManager):
 
         if cache_ids_to_recycle:
             self.cache_manager.recycle_gpu_blocks(cache_ids_to_recycle, request.request_id)
-        self._maybe_log_swa_recycle_hole_diag(
-            request_id=request.request_id,
-            head_idx=head_idx,
-            row=row,
-            start_block_idx=start_block_idx,
-            end_block_idx=end_block_idx,
-            recycled_count=len(cache_ids_to_recycle),
-        )
         return end_block_idx, len(cache_ids_to_recycle)
 
     def recycle_request_swa_head_cache(self, request):
