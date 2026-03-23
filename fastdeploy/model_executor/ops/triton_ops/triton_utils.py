@@ -18,29 +18,38 @@ import inspect
 import os
 import re
 import sys
-from importlib.metadata import PackageNotFoundError, distribution
 
 import paddle
 import triton
 from paddle.base.framework import OpProtoHolder
 
 from fastdeploy import envs
+from fastdeploy.utils import _is_package_installed
 
 compile_file = triton.__path__[0] + "/tools/compile.py"
 link_file = triton.__path__[0] + "/tools/link.py"
 python_path = sys.executable
 
 
-def _is_package_installed(dist_name: str) -> bool:
-    try:
-        distribution(dist_name)
-        return True
-    except PackageNotFoundError:
-        return False
+def swap_torch_guard(fn):
+    # A lightweight wrapper to enable compatibility for triton kernel
+    def wrapped_fn(*args, **kwargs):
+        torch_already_imported = "torch" not in sys.modules
+        if torch_already_imported:
+            torch_module = sys.modules["torch"]
+        sys.modules["torch"] = paddle
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            if torch_already_imported:
+                sys.modules["torch"] = torch_module
+
+    return wrapped_fn
 
 
 def enable_compat_on_triton_kernel(triton_kernel):
     # When torch is not installed, this decorator does not do anything, just return the original triton kernel.
+    # Because the `paddle.enable_compat(scope={"triton"})` already enabled in `__init__.py`, it will take zero runtime overhead.
     if not _is_package_installed("torch"):
         return triton_kernel
 
@@ -49,9 +58,7 @@ def enable_compat_on_triton_kernel(triton_kernel):
             self.kernel = kernel
 
         def __getitem__(self, index):
-            if paddle.cuda.is_current_stream_capturing():
-                return paddle.use_compat_guard(enable=True, silent=True)(self.kernel[index])
-            return self.kernel[index]
+            return swap_torch_guard(self.kernel[index])
 
     return WrappedTritonKernel(triton_kernel)
 

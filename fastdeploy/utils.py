@@ -1310,6 +1310,14 @@ def do_nothing(*args, **kwargs):
     return decorator
 
 
+def _is_package_installed(dist_name: str) -> bool:
+    try:
+        distribution(dist_name)
+        return True
+    except PackageNotFoundError:
+        return False
+
+
 if hasattr(paddle.static, "register_op"):
     from paddle.static import register_op
 else:

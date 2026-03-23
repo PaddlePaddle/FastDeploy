@@ -64,7 +64,7 @@ def _configure_logger(name=None):
     return logger
 
 
-from fastdeploy.utils import envs
+from fastdeploy.utils import _is_package_installed, envs
 
 # Configure root logger
 _configure_logger()
@@ -110,6 +110,12 @@ if hasattr(pf_logger, "logger") and isinstance(pf_logger.logger, logging.Logger)
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.utils import console_logger, current_package_version, get_version_info
+
+# We can use enable_compat only when torch is not installed, otherwise it will
+# cause some unexpected issues in triton kernels. We use enable_compat_on_triton_kernel
+# for these cases.
+if not _is_package_installed("torch"):
+    paddle.enable_compat(scope={"triton"})
 
 if envs.FD_DEBUG != 1:
     # Log level has been configured above
