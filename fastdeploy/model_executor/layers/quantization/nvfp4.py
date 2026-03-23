@@ -24,12 +24,7 @@ from paddleformers.utils.log import logger
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.moe import FusedMoE
-from fastdeploy.model_executor.layers.moe.ep import deep_ep
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
-from fastdeploy.model_executor.ops.gpu import (
-    depermute_prefill_combine,
-    prefill_permute_to_masked_gemm,
-)
 from fastdeploy.model_executor.utils import (
     create_parameter_and_copy,
     free_tensor,
@@ -49,6 +44,12 @@ try:
         silu_and_mul_scaled_nvfp4_experts_quantize,
     )
     from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
+
+    from fastdeploy.model_executor.layers.moe.ep import deep_ep
+    from fastdeploy.model_executor.ops.gpu import (
+        depermute_prefill_combine,
+        prefill_permute_to_masked_gemm,
+    )
 
     _FLASHINFER_CUTEDSL_AVAILABLE = True
 except:
