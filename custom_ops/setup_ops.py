@@ -179,32 +179,6 @@ def get_gencode_flags(archs):
     return flags
 
 
-def get_compile_parallelism():
-    """
-    Decide safe compile parallelism for both build workers and nvcc threads.
-    """
-    cpu_count = os.cpu_count() or 1
-
-    max_jobs_env = os.getenv("MAX_JOBS")
-    if max_jobs_env is not None:
-        try:
-            max_jobs = int(max_jobs_env)
-            if max_jobs < 1:
-                raise ValueError
-        except ValueError as exc:
-            raise ValueError(f"Invalid MAX_JOBS={max_jobs_env!r}, expected a positive integer.") from exc
-    else:
-        # Cap default build workers to avoid OOM in high-core CI runners.
-        max_jobs = min(cpu_count, 32)
-        os.environ["MAX_JOBS"] = str(max_jobs)
-
-    # Limit nvcc internal threads to avoid resource exhaustion when Paddle's
-    # ThreadPoolExecutor also launches many parallel compilations.
-    # Total threads ~= (number of parallel compile jobs) * nvcc_threads.
-    nvcc_threads = min(max_jobs, 4)
-    return max_jobs, nvcc_threads
-
-
 def find_end_files(directory, end_str):
     """
     Find files with end str in directory.
@@ -339,8 +313,8 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/reasoning_phase_token_constraint.cu",
         "gpu_ops/get_attn_mask_q.cu",
     ]
+
     sm_versions = get_sm_version(archs)
-    # Some kernels in this file require SM75+ instructions. Exclude them when building SM70 (V100).
     disable_gelu_tanh = 70 in sm_versions
     if disable_gelu_tanh:
         sources = [s for s in sources if s != "gpu_ops/gelu_tanh.cu"]
@@ -397,8 +371,10 @@ elif paddle.is_compiled_with_cuda():
         "-Igpu_ops",
         "-Ithird_party/nlohmann_json/include",
     ]
-    max_jobs, nvcc_threads = get_compile_parallelism()
-    print(f"MAX_JOBS = {max_jobs}, nvcc -t = {nvcc_threads}")
+    # Limit nvcc internal threads to avoid resource exhaustion when Paddle's
+    # ThreadPoolExecutor also launches many parallel compilations.
+    # Total threads ≈ (number of parallel compile jobs) × nvcc_threads, so cap nvcc_threads at 4.
+    nvcc_threads = min(os.cpu_count() or 1, 4)
     nvcc_compile_args += ["-t", str(nvcc_threads)]
 
     nvcc_version = get_nvcc_version()
@@ -428,14 +404,12 @@ elif paddle.is_compiled_with_cuda():
             "gpu_ops/cutlass_kernels/w8a8/scaled_mm_entry.cu",
             "gpu_ops/cutlass_kernels/w8a8/scaled_mm_c2x.cu",
             "gpu_ops/quantization/common.cu",
-            # cpp_extensions.cc always registers these two ops; include their kernels on SM75 as well.
+            # deepgemm permute/depermute can compile on SM75 (no BF16 dependency).
             "gpu_ops/moe/moe_deepgemm_permute.cu",
             "gpu_ops/moe/moe_deepgemm_depermute.cu",
         ]
 
     if cc >= 80:
-        cc_compile_args += ["-DENABLE_SM80_EXT_OPS"]
-        nvcc_compile_args += ["-DENABLE_SM80_EXT_OPS"]
         # append_attention
         os.system(
             "python utils/auto_gen_template_instantiation.py --config gpu_ops/append_attn/template_config.json --output gpu_ops/append_attn/template_instantiation/autogen"
@@ -451,7 +425,9 @@ elif paddle.is_compiled_with_cuda():
         # speculate_decoding
         sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
         sources += find_end_files("gpu_ops/speculate_decoding", ".cc")
+        cc_compile_args += ["-DENABLE_SM80_EXT_OPS"]
         nvcc_compile_args += ["-DENABLE_BF16"]
+        nvcc_compile_args += ["-DENABLE_SM80_EXT_OPS"]
         # moe
         os.system("python gpu_ops/moe/moe_wna16_marlin_utils/generate_kernels.py")
         os.system(
@@ -558,8 +534,7 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/machete", ".cu")
         cc_compile_args += ["-DENABLE_MACHETE"]
 
-    # Deduplicate translation units while preserving order. Some files are
-    # appended explicitly for SM75 and also discovered by later directory globs.
+    # Deduplicate translation units while preserving order.
     sources = list(dict.fromkeys(sources))
 
     setup(
