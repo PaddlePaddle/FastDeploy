@@ -1208,22 +1208,24 @@ class GPUModelRunner(ModelRunnerBase):
                 block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(flat_block_tables[b][start:end], dtype="int32")
 
     def _normalize_head_wise_cache_ids_2d(self, cache_ids_2d):
-        """Compact per-head rows to valid cache_ids only, preserving order."""
+        """Normalize per-head cache rows while preserving block index layout."""
         if cache_ids_2d is None:
             return None
+
         normalized_cache_ids_2d = []
         for head_tables in cache_ids_2d:
             if head_tables is None:
                 normalized_cache_ids_2d.append([])
                 continue
-            compacted_row = []
-            for cid in head_tables:
-                if cid is None:
-                    continue
-                cid = int(cid)
-                if cid >= 0:
-                    compacted_row.append(cid)
-            normalized_cache_ids_2d.append(compacted_row)
+
+            # Keep row indices stable: None -> -1, keep negative holes in-place.
+            normalized_row = [(-1 if cid is None else int(cid)) for cid in head_tables]
+
+            # Trim only trailing invalid entries to keep row compact.
+            while normalized_row and normalized_row[-1] < 0:
+                normalized_row.pop()
+
+            normalized_cache_ids_2d.append(normalized_row)
         return normalized_cache_ids_2d
 
     @staticmethod
