@@ -30,7 +30,7 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
     save_routing_to_buffer,
 )
-from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.layers.utils import get_tensor, modules_to_convert
 from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
@@ -182,6 +182,7 @@ class FusedMoE(nn.Layer):
         with_bias: bool = False,
         activation="swiglu",
         model_format: Optional[str] = None,
+        prefix: str = "",
         topk_reduce_func: Callable = lambda x: x.sum(axis=-1, keepdim=True)
         + 1e-20,  # only used when FD_USE_PHI_MOE_TOPK=1, default is same as noaux_tc kernel
     ):
@@ -207,7 +208,7 @@ class FusedMoE(nn.Layer):
         if self.ep_size > 1:
             self.tp_size = 1
             self.tp_rank = 0
-
+        self.prefix = prefix
         self.attn_tp_size = fd_config.parallel_config.tensor_parallel_size
         self.attn_tp_rank = fd_config.parallel_config.tensor_parallel_rank
 
@@ -259,7 +260,7 @@ class FusedMoE(nn.Layer):
         moe_quant_config = fd_config.quant_config
         self.moe_quant_config = moe_quant_config
         self.moe_quant_type = None
-        if moe_quant_config and moe_quant_config.get_quant_method(self):
+        if moe_quant_config and moe_quant_config.get_quant_method(self) and modules_to_convert(prefix, self.fd_config):
             self.quant_method = moe_quant_config.get_quant_method(self)
             self.moe_quant_type = moe_quant_config.name()
         else:
