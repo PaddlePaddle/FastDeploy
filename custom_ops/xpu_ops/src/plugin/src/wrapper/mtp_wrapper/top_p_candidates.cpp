@@ -15,8 +15,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 template <typename T, int MaxLength, int TopPBeamTopK>
 __attribute__((global)) void top_p_candidates(const T* src,
                                               const T* top_ps,
@@ -28,16 +27,13 @@ __attribute__((global)) void top_p_candidates(const T* src,
                                               int token_num,
                                               int max_candidate_len,
                                               int max_seq_len);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 template <typename T, int MaxLength, int TopPBeamTopK>
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        const T* src,
                        const T* top_ps,
                        const int* output_padding_offset,
@@ -98,7 +94,7 @@ static int cpu_wrapper(Context* ctx,
 }
 
 template <typename T, int MaxLength, int TopPBeamTopK>
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         const T* src,
                         const T* top_ps,
                         const int* output_padding_offset,
@@ -109,8 +105,8 @@ static int xpu3_wrapper(Context* ctx,
                         int token_num,
                         int candidate_len,
                         int max_seq_len) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  int32_t ret_xre = xpu3::plugin::top_p_candidates<T, MaxLength, TopPBeamTopK>
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  int32_t ret_xre = fd_xpu3::top_p_candidates<T, MaxLength, TopPBeamTopK>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           src,
           top_ps,
@@ -127,7 +123,7 @@ static int xpu3_wrapper(Context* ctx,
 }
 
 template <typename T, int MaxLength, int TopPBeamTopK>
-int top_p_candidates(Context* ctx,
+int top_p_candidates(api::Context* ctx,
                      const T* src,
                      const T* top_ps,
                      const int* output_padding_offset,
@@ -189,72 +185,72 @@ int top_p_candidates(Context* ctx,
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
-#define _XPU_DEF_TOP_P_CANDIDATES_WRAPPER(T, MaxLength)       \
-  template int top_p_candidates<T, MaxLength, 2>(Context*,    \
-                                                 const T*,    \
-                                                 const T*,    \
-                                                 const int*,  \
-                                                 int64_t*,    \
-                                                 T*,          \
-                                                 int*,        \
-                                                 int,         \
-                                                 int,         \
-                                                 int,         \
-                                                 int);        \
-  template int top_p_candidates<T, MaxLength, 3>(Context*,    \
-                                                 const T*,    \
-                                                 const T*,    \
-                                                 const int*,  \
-                                                 int64_t*,    \
-                                                 T*,          \
-                                                 int*,        \
-                                                 int,         \
-                                                 int,         \
-                                                 int,         \
-                                                 int);        \
-  template int top_p_candidates<T, MaxLength, 4>(Context*,    \
-                                                 const T*,    \
-                                                 const T*,    \
-                                                 const int*,  \
-                                                 int64_t*,    \
-                                                 T*,          \
-                                                 int*,        \
-                                                 int,         \
-                                                 int,         \
-                                                 int,         \
-                                                 int);        \
-  template int top_p_candidates<T, MaxLength, 5>(Context*,    \
-                                                 const T*,    \
-                                                 const T*,    \
-                                                 const int*,  \
-                                                 int64_t*,    \
-                                                 T*,          \
-                                                 int*,        \
-                                                 int,         \
-                                                 int,         \
-                                                 int,         \
-                                                 int);        \
-  template int top_p_candidates<T, MaxLength, 8>(Context*,    \
-                                                 const T*,    \
-                                                 const T*,    \
-                                                 const int*,  \
-                                                 int64_t*,    \
-                                                 T*,          \
-                                                 int*,        \
-                                                 int,         \
-                                                 int,         \
-                                                 int,         \
-                                                 int);        \
-  template int top_p_candidates<T, MaxLength, 10>(Context*,   \
-                                                  const T*,   \
-                                                  const T*,   \
-                                                  const int*, \
-                                                  int64_t*,   \
-                                                  T*,         \
-                                                  int*,       \
-                                                  int,        \
-                                                  int,        \
-                                                  int,        \
+#define _XPU_DEF_TOP_P_CANDIDATES_WRAPPER(T, MaxLength)          \
+  template int top_p_candidates<T, MaxLength, 2>(api::Context*,  \
+                                                 const T*,       \
+                                                 const T*,       \
+                                                 const int*,     \
+                                                 int64_t*,       \
+                                                 T*,             \
+                                                 int*,           \
+                                                 int,            \
+                                                 int,            \
+                                                 int,            \
+                                                 int);           \
+  template int top_p_candidates<T, MaxLength, 3>(api::Context*,  \
+                                                 const T*,       \
+                                                 const T*,       \
+                                                 const int*,     \
+                                                 int64_t*,       \
+                                                 T*,             \
+                                                 int*,           \
+                                                 int,            \
+                                                 int,            \
+                                                 int,            \
+                                                 int);           \
+  template int top_p_candidates<T, MaxLength, 4>(api::Context*,  \
+                                                 const T*,       \
+                                                 const T*,       \
+                                                 const int*,     \
+                                                 int64_t*,       \
+                                                 T*,             \
+                                                 int*,           \
+                                                 int,            \
+                                                 int,            \
+                                                 int,            \
+                                                 int);           \
+  template int top_p_candidates<T, MaxLength, 5>(api::Context*,  \
+                                                 const T*,       \
+                                                 const T*,       \
+                                                 const int*,     \
+                                                 int64_t*,       \
+                                                 T*,             \
+                                                 int*,           \
+                                                 int,            \
+                                                 int,            \
+                                                 int,            \
+                                                 int);           \
+  template int top_p_candidates<T, MaxLength, 8>(api::Context*,  \
+                                                 const T*,       \
+                                                 const T*,       \
+                                                 const int*,     \
+                                                 int64_t*,       \
+                                                 T*,             \
+                                                 int*,           \
+                                                 int,            \
+                                                 int,            \
+                                                 int,            \
+                                                 int);           \
+  template int top_p_candidates<T, MaxLength, 10>(api::Context*, \
+                                                  const T*,      \
+                                                  const T*,      \
+                                                  const int*,    \
+                                                  int64_t*,      \
+                                                  T*,            \
+                                                  int*,          \
+                                                  int,           \
+                                                  int,           \
+                                                  int,           \
                                                   int);
 
 _XPU_DEF_TOP_P_CANDIDATES_WRAPPER(bfloat16, 2);
@@ -262,6 +258,4 @@ _XPU_DEF_TOP_P_CANDIDATES_WRAPPER(float, 2);
 _XPU_DEF_TOP_P_CANDIDATES_WRAPPER(float16, 2);
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

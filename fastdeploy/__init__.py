@@ -17,6 +17,7 @@
 # Configure root logger first to unify log formats
 # This must be done before importing any modules that may use the logger
 import logging
+import os
 from contextlib import contextmanager
 
 # Create standard format (without color)
@@ -53,7 +54,7 @@ def _configure_logger(name=None):
     """
     # Use original getLogger to avoid recursion when interceptor is active
     logger = _original_getLogger(name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG if envs.FD_DEBUG else logging.INFO)
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
     handler = logging.StreamHandler()
@@ -63,10 +64,11 @@ def _configure_logger(name=None):
     return logger
 
 
+from fastdeploy.utils import envs
+
 # Configure root logger
 _configure_logger()
 
-import os
 import uuid
 
 # suppress warning log from paddlepaddle
@@ -107,12 +109,7 @@ if hasattr(pf_logger, "logger") and isinstance(pf_logger.logger, logging.Logger)
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
-from fastdeploy.utils import (
-    console_logger,
-    current_package_version,
-    envs,
-    get_version_info,
-)
+from fastdeploy.utils import console_logger, current_package_version, get_version_info
 
 paddle.compat.enable_torch_proxy(scope={"triton"})
 # paddle.compat.enable_torch_proxy(scope={"triton"}) enables the torch proxy

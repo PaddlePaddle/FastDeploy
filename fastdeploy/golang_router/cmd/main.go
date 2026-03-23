@@ -57,6 +57,8 @@ func main() {
 	go manager.MonitorInstanceHealth(context.Background(), intervalSecs)
 	intervalCleanupSecs := cfg.Scheduler.EvictionIntervalSecs
 	go scheduler_handler.StartBackupCleanupTask(context.Background(), intervalCleanupSecs)
+	statsIntervalSecs := cfg.Scheduler.StatsIntervalSecs
+	go scheduler_handler.StartStatsReporter(context.Background(), statsIntervalSecs)
 
 	// Start server
 	addr := ":" + cfg.Server.Port

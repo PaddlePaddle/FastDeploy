@@ -4,8 +4,7 @@
 #include "xpu/kernel/cluster_primitive.h"
 #include "xpu/kernel/cluster_simd.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 __global__ void draft_model_preprocess(int64_t* draft_tokens,
                                        int64_t* input_ids,
                                        bool* stop_flags,
@@ -235,5 +234,4 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
   }
 }
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

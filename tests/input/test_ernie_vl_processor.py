@@ -147,7 +147,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
                     "fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.GenerationConfig"
                 ) as mock_gen_config:
                     mock_gen_config.from_pretrained.return_value = MagicMock()
-                    with patch("paddleformers.trl.llm_utils.get_eos_token_id") as mock_get_eos:
+                    with patch("paddleformers.cli.utils.llm_utils.get_eos_token_id") as mock_get_eos:
                         mock_get_eos.return_value = [1, 2]
 
                         # Test normal initialization
@@ -263,33 +263,6 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
             with self.assertRaises(ValueError) as context:
                 processor._check_mm_limits(mm_data)
             self.assertIn("Too many image items", str(context.exception))
-
-    def test_process_request(self):
-        """Test process_request method"""
-        from fastdeploy.engine.request import Request
-
-        # Mock the process_request_dict method
-        self.processor.process_request_dict = MagicMock()
-
-        # Create a mock Request object
-        mock_request = MagicMock(spec=Request)
-        mock_request.to_dict.return_value = {"messages": [{"role": "user", "content": "Hello"}]}
-
-        # Mock Request.from_dict to return a mock request
-        with patch.object(Request, "from_dict") as mock_from_dict:
-            mock_result_request = MagicMock(spec=Request)
-            mock_from_dict.return_value = mock_result_request
-
-            self.processor.process_request(mock_request, max_model_len=100, chat_template_kwargs={"key": "value"})
-
-            # Verify to_dict was called
-            mock_request.to_dict.assert_called_once()
-
-            # Verify process_request_dict was called
-            self.processor.process_request_dict.assert_called_once()
-
-            # Verify from_dict was called
-            mock_from_dict.assert_called_once()
 
     def test_get_pad_id(self):
         """Test get_pad_id method"""

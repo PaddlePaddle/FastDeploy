@@ -15,24 +15,20 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 template <typename T>
 __attribute__((global)) void rebuildHiddenStatesKernel(const T* input,
                                                        const int* position_map,
                                                        T* output,
                                                        int dim_embed,
                                                        int elem_cnt);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 template <typename T>
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        const T* input,
                        const int* position_map,
                        T* output,
@@ -51,13 +47,13 @@ static int cpu_wrapper(Context* ctx,
 }
 
 template <typename T>
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         const T* input,
                         const int* position_map,
                         T* output,
                         int dim_embed,
                         int elem_cnt) {
-  int32_t ret_xre = xpu3::plugin::rebuildHiddenStatesKernel<T>
+  int32_t ret_xre = fd_xpu3::rebuildHiddenStatesKernel<T>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           input, position_map, output, dim_embed, elem_cnt);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
@@ -65,7 +61,7 @@ static int xpu3_wrapper(Context* ctx,
 }
 
 template <typename T>
-int rebuild_hidden_states(Context* ctx,
+int rebuild_hidden_states(api::Context* ctx,
                           const T* input,
                           const int* position_map,
                           T* output,
@@ -99,12 +95,10 @@ int rebuild_hidden_states(Context* ctx,
 }
 
 template int rebuild_hidden_states(
-    Context*, const bfloat16*, const int*, bfloat16*, int, int, int);
+    api::Context*, const bfloat16*, const int*, bfloat16*, int, int, int);
 template int rebuild_hidden_states(
-    Context*, const float*, const int*, float*, int, int, int);
+    api::Context*, const float*, const int*, float*, int, int, int);
 template int rebuild_hidden_states(
-    Context*, const float16*, const int*, float16*, int, int, int);
+    api::Context*, const float16*, const int*, float16*, int, int, int);
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

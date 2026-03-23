@@ -53,7 +53,7 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
                                         paddle::DataType::INT32,
                                         ids_remove_padding.place());
 
-  baidu::xpu::api::plugin::update_attn_mask_offsets(
+  int r = fastdeploy::plugin::update_attn_mask_offsets(
       ctx,
       attn_mask_offsets.data<int>(),
       seq_lens_this_time.data<int>(),
@@ -68,6 +68,7 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
       real_bsz,
       max_model_len,
       decode_states_len);
+  PADDLE_ENFORCE_XDNN_SUCCESS(r, "update_attn_mask_offsets");
 
   if (ids_remove_padding.is_cpu()) {
     delete ctx;

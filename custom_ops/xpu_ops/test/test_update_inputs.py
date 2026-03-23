@@ -36,7 +36,6 @@ for i in range(bs):
         seq_lens_decoder[i] = i
         seq_lens_this_time[i] = 1
 input_ids_np = np.random.randint(1, 10, [max_bs, max_input_length], "int64")
-stop_nums = np.array([max_bs], "int64")
 next_tokens = np.random.randint(1, 10, [max_bs], "int64")
 is_block_step = np.random.randint(0, 2, [max_bs]).astype("bool")
 
@@ -46,7 +45,6 @@ seq_lens_this_time = paddle.to_tensor(seq_lens_this_time)
 seq_lens_encoder = paddle.to_tensor(seq_lens_encoder)
 seq_lens_decoder = paddle.to_tensor(seq_lens_decoder)
 input_ids = paddle.to_tensor(input_ids_np)
-stop_nums = paddle.to_tensor(stop_nums)
 next_tokens = paddle.to_tensor(next_tokens)
 is_block_step = paddle.to_tensor(is_block_step)
 
@@ -56,7 +54,6 @@ print("seq_lens_this_time:\n", seq_lens_this_time)
 print("seq_lens_encoder:\n", seq_lens_encoder)
 print("seq_lens_decoder:\n", seq_lens_decoder)
 print("input_ids:\n", input_ids)
-print("stop_nums:\n", stop_nums)
 print("next_tokens:\n", next_tokens)
 print("is_block_step:\n", is_block_step)
 
@@ -67,7 +64,6 @@ update_inputs(
     seq_lens_encoder,
     seq_lens_decoder,
     input_ids,
-    stop_nums,
     next_tokens,
     is_block_step,
 )
@@ -79,7 +75,6 @@ print("seq_lens_this_time:\n", seq_lens_this_time)
 print("seq_lens_encoder:\n", seq_lens_encoder)
 print("seq_lens_decoder:\n", seq_lens_decoder)
 print("input_ids:\n", input_ids)
-print("stop_nums:\n", stop_nums)
 print("next_tokens:\n", next_tokens)
 
 ref_not_need_stop_out = np.array([True])

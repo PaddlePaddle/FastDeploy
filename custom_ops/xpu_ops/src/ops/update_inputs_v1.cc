@@ -17,6 +17,10 @@
 #include "paddle/phi/core/enforce.h"
 #include "xpu/plugin.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 void UpdateInputsV1(const paddle::Tensor& stop_flags,
                     const paddle::Tensor& not_need_stop,  // only on cpu
                     const paddle::Tensor& seq_lens_this_time,
@@ -27,7 +31,6 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
                     const paddle::Tensor& topk_ids,
                     const paddle::Tensor& input_ids,
                     const paddle::Tensor& block_tables,
-                    const paddle::Tensor& stop_nums,
                     const paddle::Tensor& next_tokens,
                     const paddle::Tensor& is_block_step,
                     const int block_size) {
@@ -41,7 +44,7 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
   const int input_ids_stride = input_ids.shape()[1];
   const int block_num_per_seq = block_tables.shape()[1];
   auto not_need_stop_gpu = not_need_stop.copy_to(stop_flags.place(), false);
-  int r = baidu::xpu::api::plugin::update_inputs_v1(
+  int r = fastdeploy::plugin::update_inputs_v1(
       xpu_ctx->x_context(),
       const_cast<bool*>(not_need_stop_gpu.data<bool>()),
       const_cast<int*>(seq_lens_this_time.data<int>()),
@@ -52,7 +55,6 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
       const_cast<int64_t*>(topk_ids.data<int64_t>()),
       const_cast<int64_t*>(input_ids.data<int64_t>()),
       const_cast<int*>(block_tables.data<int>()),
-      stop_nums.data<int64_t>(),
       const_cast<bool*>(stop_flags.data<bool>()),
       const_cast<bool*>(is_block_step.data<bool>()),
       next_tokens.data<int64_t>(),
@@ -61,14 +63,14 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
       input_ids_stride,
       block_num_per_seq,
       block_size);
-  PD_CHECK(r == 0, "baidu::xpu::api::plugin::update_inputs_kernel_v1 failed.");
+  PD_CHECK(r == 0, "fastdeploy::plugin::update_inputs_kernel_v1 failed.");
   auto not_need_stop_cpu =
       not_need_stop_gpu.copy_to(not_need_stop.place(), false);
   bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());
   not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
 
-PD_BUILD_OP(update_inputs_v1)
+PD_BUILD_STATIC_OP(update_inputs_v1)
     .Inputs({"stop_flags",
              "not_need_stop",
              "seq_lens_this_time",
@@ -79,7 +81,6 @@ PD_BUILD_OP(update_inputs_v1)
              "topk_ids",
              "input_ids",
              "block_tables",
-             "stop_nums",
              "next_tokens",
              "is_block_step"})
     .Attrs({"block_size: int"})

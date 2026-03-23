@@ -64,7 +64,7 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
   auto not_need_stop_gpu =
       not_need_stop.copy_to(seq_lens_this_time.place(), false);
 
-  int r = baidu::xpu::api::plugin::draft_model_preprocess(
+  int r = fastdeploy::plugin::draft_model_preprocess(
       ctx,
       const_cast<int64_t*>(draft_tokens.data<int64_t>()),
       const_cast<int64_t*>(input_ids.data<int64_t>()),
@@ -97,7 +97,7 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
       splitwise_prefill,
       kvcache_scheduler_v1);
 
-  PD_CHECK(r == 0, "xpu::plugin::draft_model_preprocess failed.");
+  PD_CHECK(r == 0, "fastdeploy::plugin::draft_model_preprocess failed.");
   auto not_need_stop_cpu =
       not_need_stop_gpu.copy_to(not_need_stop.place(), false);
   bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());

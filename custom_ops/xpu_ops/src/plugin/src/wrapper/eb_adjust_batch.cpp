@@ -17,8 +17,7 @@
 #include "xpu/refactor/impl_public/wrapper_check.h"
 #include "xpu/xdnn.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 template <typename TX, typename TY>
 __attribute__((global)) void eb_adjust_batch(TX *src,
                                              TY *dst,
@@ -29,12 +28,9 @@ __attribute__((global)) void eb_adjust_batch(TX *src,
                                              int en_batch,
                                              int de_batch,
                                              int64_t copy_size);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 template <typename TX, typename TY>
@@ -93,10 +89,10 @@ static int xpu3_wrapper(api::Context *ctx,
                         int en_batch,
                         int de_batch,
                         int64_t hidden_dim) {
-  using XPU_INDEX_TYPE_TX = typename XPUIndexType<TX>::type;
-  using XPU_INDEX_TYPE_TY = typename XPUIndexType<TY>::type;
+  using XPU_INDEX_TYPE_TX = typename api::XPUIndexType<TX>::type;
+  using XPU_INDEX_TYPE_TY = typename api::XPUIndexType<TY>::type;
   auto eb_adjust_batch_kernel =
-      xpu3::plugin::eb_adjust_batch<XPU_INDEX_TYPE_TX, XPU_INDEX_TYPE_TY>;
+      fd_xpu3::eb_adjust_batch<XPU_INDEX_TYPE_TX, XPU_INDEX_TYPE_TY>;
   // NOTE: Don't change 16 to 64, because kernel use gsm
   int32_t ret_xre =
       eb_adjust_batch_kernel<<<ctx->ncluster(), 16, ctx->xpu_stream>>>(
@@ -226,6 +222,4 @@ INSTANTIATION_EB_ADJUST_BATCH(float, bfloat16);
 INSTANTIATION_EB_ADJUST_BATCH(int32_t, int32_t);
 INSTANTIATION_EB_ADJUST_BATCH(int64_t, int64_t);
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy
