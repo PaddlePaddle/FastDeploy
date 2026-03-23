@@ -24,6 +24,7 @@ from paddle import nn
 from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -47,6 +48,23 @@ from fastdeploy.model_executor.models.model_base import (
     ModelForCasualLM,
     ModelRegistry,
 )
+
+
+class NVTX_MINE:
+    def __init__(self, real=False):
+        self.real = real
+
+    def range_push(self, message):
+        if self.real:
+            paddle.cuda.nvtx.range_push(message)
+
+    def range_pop(self):
+        if self.real:
+            paddle.cuda.nvtx.range_pop()
+        pass
+
+
+nvtx_mine = NVTX_MINE()
 
 
 class Glm4MoeMLP(nn.Layer):
@@ -108,15 +126,15 @@ class Glm4MoeMLP(nn.Layer):
 
     def forward(self, x, forward_meta=None):
         """ """
-        paddle.cuda.nvtx.range_push("Glm4MoeMLP/up_gate_proj")
+        nvtx_mine.range_push("Glm4MoeMLP/up_gate_proj")
         gate_up_out = self.up_gate_proj(x)
-        paddle.cuda.nvtx.range_pop()
-        paddle.cuda.nvtx.range_push("Glm4MoeMLP/act_fn")
+        nvtx_mine.range_pop()
+        nvtx_mine.range_push("Glm4MoeMLP/act_fn")
         act_out = self.act_fn(gate_up_out)
-        paddle.cuda.nvtx.range_pop()
-        paddle.cuda.nvtx.range_push("Glm4MoeMLP/down_proj")
+        nvtx_mine.range_pop()
+        nvtx_mine.range_push("Glm4MoeMLP/down_proj")
         down_out = self.down_proj(act_out)
-        paddle.cuda.nvtx.range_pop()
+        nvtx_mine.range_pop()
         return down_out
 
 
@@ -165,11 +183,14 @@ class Glm4Moe(nn.Layer):
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
+        # triton path：shared experts 权重融合进路由专家槽位，FusedMoE 需多分配 n_shared 个槽
+        # 非 triton path：cutlass kernel 只支持路由专家，保持原始 num_experts
+        _use_triton_fused = self.n_shared_experts > 0 and envs.FD_MOE_BACKEND.lower() == "triton"
         self.experts = FusedMoE(
             fd_config,
             renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
-            num_experts=fd_config.model_config.n_routed_experts + self.n_shared_experts,
+            num_experts=fd_config.model_config.n_routed_experts + (self.n_shared_experts if _use_triton_fused else 0),
             top_k=fd_config.model_config.num_experts_per_tok,
             topk_method="noaux_tc",
             topk_group=fd_config.model_config.topk_group,
@@ -178,7 +199,7 @@ class Glm4Moe(nn.Layer):
             layer_idx=layer_id,
             gate_correction_bias=self.gate.e_score_correction_bias,
             weight_key_map=weight_key_map,
-            n_shared_experts=self.n_shared_experts,
+            n_shared_experts=self.n_shared_experts if _use_triton_fused else 0,
         )
 
         if self.n_shared_experts > 0:
@@ -192,27 +213,27 @@ class Glm4Moe(nn.Layer):
 
     def process_weights_after_loading(self):
         """
-        权重全部加载完毕后：把 shared_experts 权重融合进 self.experts 的尾部，
-        然后释放 shared_experts 以节省显存。
+        权重全部加载完毕后：若使用 triton backend，把 shared_experts 权重融合进
+        self.experts 的尾部并释放；否则保留 shared_experts，forward 时单独跑。
         """
         if self.n_shared_experts > 0 and hasattr(self, "shared_experts"):
-            # 先确保 FusedMoE 的量化（scale 张量）已完成，
-            # 因为 process_final_after_loading 是父层先于子层，
-            # 此时 TritonWeightOnlyMoEMethod.process_weights_after_loading
-            # 可能还没有被 utils.py 调用到。
-            qm = getattr(self.experts, "quant_method", None)
-            if qm is not None and hasattr(qm, "process_weights_after_loading"):
-                qm.process_weights_after_loading(self.experts)
-            self.experts.merge_shared_expert_weights(self.shared_experts)
-            # 释放 shared_experts 参数，节省显存
-            del self.shared_experts
+            if envs.FD_MOE_BACKEND.lower() == "triton":
+                # triton path：融合共享专家权重进路由专家槽位
+                qm = getattr(self.experts, "quant_method", None)
+                if qm is not None and hasattr(qm, "process_weights_after_loading"):
+                    qm.process_weights_after_loading(self.experts)
+                self.experts.merge_shared_expert_weights(self.shared_experts)
+                # 释放 shared_experts 参数，节省显存
+                del self.shared_experts
 
     def forward(self, x, forward_meta: ForwardMeta = None):
-        paddle.cuda.nvtx.range_push("Glm4Moe/fused_experts")
-        # shared experts 已融合进 self.experts（权重排在 [n_routed:] 位置），
-        # routing 在 backend apply 中自动为每个 token 追加 n_shared_experts 条目。
+        nvtx_mine.range_push("Glm4Moe/fused_experts")
         out = self.experts(x, self.gate, forward_meta)
-        paddle.cuda.nvtx.range_pop()
+        nvtx_mine.range_pop()
+        # triton path：shared experts 已融合进 self.experts，此处 shared_experts 已被删除
+        # 非 triton path：shared_experts 仍存在，单独 forward 后相加
+        if self.n_shared_experts > 0 and hasattr(self, "shared_experts"):
+            out = out + self.shared_experts(x)
         return out
 
 
@@ -266,22 +287,22 @@ class Glm4MoeAttention(nn.Layer):
         hidden_states: paddle.Tensor,
     ):
         """ """
-        paddle.cuda.nvtx.range_push("Glm4MoeAttn/qkv_proj")
+        nvtx_mine.range_push("Glm4MoeAttn/qkv_proj")
         qkv_out = self.qkv_proj(hidden_states)
-        paddle.cuda.nvtx.range_pop()
+        nvtx_mine.range_pop()
         if self.use_qk_norm:
-            paddle.cuda.nvtx.range_push("Glm4MoeAttn/qk_norm")
+            nvtx_mine.range_push("Glm4MoeAttn/qk_norm")
             qkv_out = self.qk_norm(qkv_out)
-            paddle.cuda.nvtx.range_pop()
-        paddle.cuda.nvtx.range_push("Glm4MoeAttn/attn_kernel")
+            nvtx_mine.range_pop()
+        nvtx_mine.range_push("Glm4MoeAttn/attn_kernel")
         atten_out = self.attn(
             qkv=qkv_out,
             forward_meta=forward_meta,
         )
-        paddle.cuda.nvtx.range_pop()
-        paddle.cuda.nvtx.range_push("Glm4MoeAttn/o_proj")
+        nvtx_mine.range_pop()
+        nvtx_mine.range_push("Glm4MoeAttn/o_proj")
         output = self.o_proj(atten_out)
-        paddle.cuda.nvtx.range_pop()
+        nvtx_mine.range_pop()
         return output
 
 
@@ -340,26 +361,26 @@ class Glm4MoeDecoderLayer(nn.Layer):
     ):
         """ """
         lid = self.layer_id
-        paddle.cuda.nvtx.range_push(f"layer{lid}/input_layernorm")
+        nvtx_mine.range_push(f"layer{lid}/input_layernorm")
         hidden_states, residual = self.input_layernorm(
             hidden_states, residual_input=residual, forward_meta=forward_meta
         )
-        paddle.cuda.nvtx.range_pop()
+        nvtx_mine.range_pop()
 
-        paddle.cuda.nvtx.range_push(f"layer{lid}/self_attn")
+        nvtx_mine.range_push(f"layer{lid}/self_attn")
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
-        paddle.cuda.nvtx.range_pop()
+        nvtx_mine.range_pop()
 
-        paddle.cuda.nvtx.range_push(f"layer{lid}/post_attn_layernorm")
+        nvtx_mine.range_push(f"layer{lid}/post_attn_layernorm")
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
-        paddle.cuda.nvtx.range_pop()
+        nvtx_mine.range_pop()
 
-        paddle.cuda.nvtx.range_push(f"layer{lid}/mlp")
+        nvtx_mine.range_push(f"layer{lid}/mlp")
         hidden_states = self.mlp(hidden_states, forward_meta)
-        paddle.cuda.nvtx.range_pop()
+        nvtx_mine.range_pop()
 
         return hidden_states, residual
 
@@ -413,25 +434,25 @@ class Glm4MoeModel(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        paddle.cuda.nvtx.range_push("Glm4MoeModel/embed_tokens")
+        nvtx_mine.range_push("Glm4MoeModel/embed_tokens")
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
-        paddle.cuda.nvtx.range_pop()
+        nvtx_mine.range_pop()
 
         residual = None
 
         for i in range(self.num_layers):
-            paddle.cuda.nvtx.range_push(f"Glm4MoeModel/layer{i}")
+            nvtx_mine.range_push(f"Glm4MoeModel/layer{i}")
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
-            paddle.cuda.nvtx.range_pop()
+            nvtx_mine.range_pop()
 
-        paddle.cuda.nvtx.range_push("Glm4MoeModel/final_norm")
+        nvtx_mine.range_push("Glm4MoeModel/final_norm")
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
-        paddle.cuda.nvtx.range_pop()
+        nvtx_mine.range_pop()
 
         if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
-            paddle.cuda.nvtx.range_push("Glm4MoeModel/norm_allgather")
+            nvtx_mine.range_push("Glm4MoeModel/norm_allgather")
             out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
-            paddle.cuda.nvtx.range_pop()
+            nvtx_mine.range_pop()
 
         return out
 
@@ -582,9 +603,9 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        paddle.cuda.nvtx.range_push("Glm4MoeForCausalLM/forward")
+        nvtx_mine.range_push("Glm4MoeForCausalLM/forward")
         hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
-        paddle.cuda.nvtx.range_pop()
+        nvtx_mine.range_pop()
         return hidden_states
 
     def clear_grpah_opt_backend(self):
