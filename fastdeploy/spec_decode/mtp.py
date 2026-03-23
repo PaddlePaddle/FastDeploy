@@ -1009,7 +1009,7 @@ class MTPProposer(Proposer):
 
         self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
-    def _post_process(self, sampled_token_ids):
+    def _post_process(self, sampled_token_ids, is_dummy_run=False):
         """
         PostProcess for generation
         """
@@ -1031,6 +1031,7 @@ class MTPProposer(Proposer):
             self.model_inputs["prompt_lens"],
             self.max_model_len,
             self.model_inputs["substep"],
+            is_dummy_run,
         )
         if self.role == "prefill" and self.parallel_config.tensor_parallel_rank == 0:
             skip_save = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
@@ -1213,7 +1214,7 @@ class MTPProposer(Proposer):
                         group=self.parallel_config.tp_group,
                     )
 
-                self._post_process(sampled_token_ids)
+                self._post_process(sampled_token_ids, is_dummy_run)
                 if substep != self.num_model_steps - 1:
                     self._get_self_hidden_states(hidden_states)
             else:
@@ -1303,7 +1304,7 @@ class MTPProposer(Proposer):
                         group=self.parallel_config.tp_group,
                     )
 
-                self._post_process(sampled_token_ids)
+                self._post_process(sampled_token_ids, is_dummy_run)
                 if substep != self.num_model_steps - 1:
                     self._get_self_hidden_states(hidden_states)
             else:

@@ -934,7 +934,8 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& base_model_draft_tokens,
                       const paddle::Tensor& prompt_lens,
                       const int max_seq_len,
-                      const int substep);
+                      const int substep,
+                      const bool is_dummy_run);
 
 std::vector<paddle::Tensor> EagleGetHiddenStates(
     const paddle::Tensor& input,

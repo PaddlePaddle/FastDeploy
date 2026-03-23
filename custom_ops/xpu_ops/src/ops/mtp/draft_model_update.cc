@@ -37,7 +37,8 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& base_model_draft_tokens,
                       const paddle::Tensor& prompt_lens,
                       const int max_seq_len,
-                      const int substep) {
+                      const int substep,
+                      const bool is_dummy_run) {
   // printf("enter clear \n");
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
@@ -108,7 +109,7 @@ PD_BUILD_STATIC_OP(draft_model_update)
              "end_ids",
              "base_model_draft_tokens",
              "prompt_lens"})
-    .Attrs({"max_seq_len: int", "substep: int"})
+    .Attrs({"max_seq_len: int", "substep: int", "is_dummy_run: bool"})
     .Outputs({"draft_tokens_out",
               "pre_ids_out",
               "seq_lens_this_time_out",

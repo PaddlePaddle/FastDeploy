@@ -199,7 +199,8 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& base_model_draft_tokens,
                       const paddle::Tensor& prompt_lens,
                       const int max_seq_len,
-                      const int substep);
+                      const int substep,
+                      const bool is_dummy_run);
 
 void SpeculateUpdateV3(const paddle::Tensor& seq_lens_encoder,
                        const paddle::Tensor& seq_lens_decoder,
@@ -712,7 +713,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("base_model_draft_tokens"),  // 基础模型草稿token张量
         py::arg("prompt_lens"),              // prompt 长度张量
         py::arg("max_seq_len"),              // 最大序列长度（int）
-        py::arg("substep")                   // 子步骤编号（int）
+        py::arg("substep"),                  // 子步骤编号（int）
+        py::arg("is_dummy_run")              // 是否为 dummy_run 阶段
   );
 
   m.def("eagle_get_hidden_states",

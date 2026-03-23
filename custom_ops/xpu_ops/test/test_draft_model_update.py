@@ -36,6 +36,7 @@ def run_paddle_test(device="cpu"):
     max_seq_len = 100
     max_base_model_draft_token = 4
     substep = 2
+    is_dummy_run = False
 
     # 创建随机张量
     inter_next_tokens = paddle.randint(1, 100, shape=(max_bsz, max_seq_len), dtype="int64")
@@ -90,6 +91,7 @@ def run_paddle_test(device="cpu"):
         prompt_lens,
         max_seq_len,
         substep,
+        is_dummy_run,
     )
     # print("draft_tokens after update:", draft_tokens)
     # print("pre_ids after update:", pre_ids)

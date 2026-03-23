@@ -38,7 +38,8 @@ __global__ void draft_model_update_kernel(const int64_t* inter_next_tokens,
                                           const int end_ids_len,
                                           const int max_seq_len,
                                           const int substep,
-                                          const bool prefill_one_step_stop) {
+                                          const bool prefill_one_step_stop,
+                                          const bool is_dummy_run) {
   typedef cub::BlockReduce<int64_t, THREADBLOCK_SIZE> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
   int64_t stop_flag_now_int = 0;
@@ -89,12 +90,18 @@ __global__ void draft_model_update_kernel(const int64_t* inter_next_tokens,
       }
 
       // multi_end
+      int64_t expect_max_dec_len;
+      if (is_dummy_run) {
+        expect_max_dec_len = max_dec_len[tid];
+      } else {
+        expect_max_dec_len = max_dec_len[tid] - 2;
+      }
       if (is_in_end(token_this_time, end_ids, end_ids_len) ||
           prefill_one_step_stop) {
         stop_flags[tid] = true;
         stop_flag_now_int = 1;
         // max_dec_len
-      } else if (step_idx[tid] >= max_dec_len[tid] - 2) {
+      } else if (step_idx[tid] >= expect_max_dec_len) {
         stop_flags[tid] = true;
         batch_drop[tid] = true;
         if (seq_len_decoder > 0 && seq_len_encoder <= 0) {
@@ -141,7 +148,8 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& base_model_draft_tokens,
                       const paddle::Tensor& prompt_lens,
                       const int max_seq_len,
-                      const int substep) {
+                      const int substep,
+                      const bool is_dummy_run) {
   auto seq_lens_this_time_shape = seq_lens_this_time.shape();
   auto cu_stream = seq_lens_this_time.stream();
   const int real_bsz = seq_lens_this_time_shape[0];
@@ -184,7 +192,8 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
       end_ids_len,
       max_seq_len,
       substep,
-      prefill_one_step_stop);
+      prefill_one_step_stop,
+      is_dummy_run);
 
   auto not_need_stop_cpu =
       not_need_stop_gpu.copy_to(not_need_stop.place(), false);
@@ -208,7 +217,7 @@ PD_BUILD_STATIC_OP(draft_model_update)
              "end_ids",
              "base_model_draft_tokens",
              "prompt_lens"})
-    .Attrs({"max_seq_len: int", "substep: int"})
+    .Attrs({"max_seq_len: int", "substep: int", "is_dummy_run: bool"})
     .Outputs({"draft_tokens_out",
               "pre_ids_out",
               "seq_lens_this_time_out",

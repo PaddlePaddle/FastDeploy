@@ -59,6 +59,7 @@ def draft_model_update_kernel(
     max_seq_len,
     substep,
     prefill_one_step_stop,
+    is_dummy_run,
 ):
     stop_sum = 0
     for tid in range(bsz):
@@ -105,11 +106,15 @@ def draft_model_update_kernel(
                     stop_flag_now_int = 1
 
             # multi_end
+            if is_dummy_run:
+                expect_max_dec_len = max_dec_len[tid]
+            else:
+                expect_max_dec_len = max_dec_len[tid] - 2
             if is_in_end(token_this_time, end_ids, end_ids_len) or prefill_one_step_stop:
                 stop_flags[tid] = True
                 stop_flag_now_int = 1
                 # max_dec_len
-            elif step_idx[tid] >= max_dec_len[tid] - 2:
+            elif step_idx[tid] >= expect_max_dec_len:
                 stop_flags[tid] = True
                 drop_batch[tid] = True
                 if seq_len_decoder > 0 and seq_len_encoder <= 0:
@@ -150,6 +155,7 @@ def draft_model_update_ref(
     prompt_lens,
     max_seq_len,
     substep,
+    is_dummy_run,
 ):
     seq_lens_this_time_shape = seq_lens_this_time.shape
     real_bsz = seq_lens_this_time_shape[0]
@@ -189,6 +195,7 @@ def draft_model_update_ref(
         max_seq_len,
         substep,
         prefill_one_step_stop,
+        is_dummy_run,
     )
 
 
@@ -223,6 +230,7 @@ class TestDraftModelUpdate(unittest.TestCase):
         end_ids = paddle.to_tensor([2], dtype="int64")
         base_model_draft_tokens = paddle.randint(1, 10, shape=(max_bsz, max_base_model_draft_token), dtype="int64")
         prompt_lens = paddle.randint(1, 10, shape=(max_bsz,), dtype="int64")
+        is_dummy_run = False
 
         inputs = (
             inter_next_tokens,
@@ -242,6 +250,7 @@ class TestDraftModelUpdate(unittest.TestCase):
             prompt_lens,
             max_seq_len,
             substep,
+            is_dummy_run,
         )
         # inplace modify, need to clone inputs
         inputs_clone = [x.clone() if isinstance(x, paddle.Tensor) else x for x in inputs]
