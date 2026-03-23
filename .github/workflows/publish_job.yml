@@ -132,7 +132,7 @@ jobs:
           fetch-depth: 1000
 
       - name: Python Setup
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
       - name: Code Info Show and Upload
@@ -241,7 +241,7 @@ jobs:
       SK: ${{ secrets.BOS_SK }}
       FD_ROUTER_URL: ${{ needs.build_fd_router.outputs.fd_router_path }}
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
       - name: Fd-Router Info Show and Upload
@@ -297,7 +297,7 @@ jobs:
       SK: ${{ secrets.BOS_SK }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu126.outputs.wheel_path }}
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
       - name: Wheel Info Show and Upload
@@ -329,7 +329,7 @@ jobs:
       SK: ${{ secrets.BOS_SK }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu129.outputs.wheel_path_cu129 }}
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
       - name: Wheel Info Show and Upload
@@ -361,7 +361,7 @@ jobs:
       SK: ${{ secrets.BOS_SK }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu130.outputs.wheel_path_cu130 }}
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
       - name: Wheel Info Show and Upload
