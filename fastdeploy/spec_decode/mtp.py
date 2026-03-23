@@ -968,6 +968,7 @@ class MTPProposer(Proposer):
                 # paddle.clone would raise error 700 in cudaGraph mode
                 if self.num_model_steps > 1:
                     self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
+                    self.model_inputs.last_seq_lens_encoder.copy_(self.model_inputs["seq_lens_encoder"], False)
 
                 self._mtp_input_token_num_event.synchronize()
                 real_num = int(self._mtp_input_token_num_host)
@@ -1193,7 +1194,7 @@ class MTPProposer(Proposer):
             hidden_states,
             self.model_inputs.last_seq_lens_this_time,
             self.model_inputs["seq_lens_this_time"],
-            self.model_inputs["step_idx"],
+            self.model_inputs.last_seq_lens_encoder,
         )
         self._mtp_input_token_num_host.copy_(output_token_num, False)
         self._mtp_input_token_num_event.record()
