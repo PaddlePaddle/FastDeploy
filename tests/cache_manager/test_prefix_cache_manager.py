@@ -1294,7 +1294,12 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
         manager = _create_manager(num_gpu_blocks=6)
         manager.kvcache_storage_backend = "memory"
         manager.prefix_tree_status_signal = SimpleNamespace(value=np.array([PrefixTreeStatus.NORMAL]))
-        task = SimpleNamespace(prompt_token_ids=[1, 2, 3, 4, 5, 6], output_token_ids=[], request_id="storage-req")
+        task = SimpleNamespace(
+            prompt_token_ids=[1, 2, 3, 4, 5, 6],
+            output_token_ids=[],
+            request_id="storage-req",
+            multimodal_inputs=None,
+        )
 
         with (
             patch.object(manager, "mm_match_block", return_value=([], [], [], manager.radix_tree_root, 0, 0)),

@@ -90,12 +90,6 @@ def append_attention(
     append_attention
     """
     if current_platform.is_cuda():
-        bsz = seq_lens_encoder.shape[0]
-        assert seq_lens_encoder.shape == [bsz]
-        assert seq_lens_decoder.shape == [bsz]
-        assert seq_lens_this_time.shape == [bsz]
-        assert cu_seqlens_q.shape == [bsz + 1]
-        assert block_tables.shape[0] == bsz
 
         if sliding_window > 0 and head_wise_full_hidden > 0:
             out_swa = append_attention_gpu(
