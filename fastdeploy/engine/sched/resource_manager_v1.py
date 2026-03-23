@@ -1207,7 +1207,7 @@ class ResourceManagerV1(ResourceManager):
                             rem_input_tokens -= num_new_tokens
                             if is_last_chunk:
                                 max_new = min(_get_request_max_new_tokens(request), self.clip_max_new_tokens_estimation)
-                                scheduled_new_decode_reserved_tokens += min(max_new, self.clip_max_new_tokens_estimation)
+                                scheduled_new_decode_reserved_tokens += max_new
                             else:
                                 rem_chunk_tokens -= num_new_tokens
                                 # SGLang: after admitting one chunked waiting request, break.
@@ -1281,7 +1281,7 @@ class ResourceManagerV1(ResourceManager):
                             rem_input_tokens -= num_new_tokens
                             if is_last_chunk:
                                 max_new = min(_get_request_max_new_tokens(request), self.clip_max_new_tokens_estimation)
-                                scheduled_new_decode_reserved_tokens += min(max_new, self.clip_max_new_tokens_estimation)
+                                scheduled_new_decode_reserved_tokens += max_new
                             else:
                                 rem_chunk_tokens -= num_new_tokens
                                 chunked_request_admitted_this_step = True
