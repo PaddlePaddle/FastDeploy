@@ -19,12 +19,11 @@ import unittest
 import paddle
 import paddle.nn.functional as F
 
-from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.normalization import RMSNormGated
 from fastdeploy.model_executor.ops.triton_ops.rmsnorm_gated_kernel import (
+    MAX_ROWS_PER_BLOCK,
     calc_rows_per_block,
     rmsnorm_gated,
-    MAX_ROWS_PER_BLOCK,
 )
 
 
@@ -47,7 +46,7 @@ class TestRMSNormGated(unittest.TestCase):
         self.batch_size = 4
         self.seq_len = 32
         paddle.seed(1024)
-    
+
     def test_init(self):
         """Test layer initialization."""
         layer = RMSNormGated(
@@ -61,18 +60,18 @@ class TestRMSNormGated(unittest.TestCase):
         self.assertEqual(layer.weight.shape[0], self.hidden_size)
         self.assertEqual(layer.eps, 1e-5)
         self.assertEqual(layer.activation, "swish")
-    
+
     def naive_rmsnorm_gated(self, x, gate, weight, eps=1e-5, activation="swish"):
         """naive RMSNormGated for comparison."""
         input_dtype = x.dtype
-        x = x.cast('float32')
-        weight = weight.cast('float32')
+        x = x.cast("float32")
+        weight = weight.cast("float32")
         variance = paddle.mean(x**2, axis=-1, keepdim=True)
         # Norm before gate
         x = x * paddle.rsqrt(variance + eps)
         x = weight * x
         if gate is not None:
-            gate = gate.cast('float32')
+            gate = gate.cast("float32")
             if activation == "swish":
                 x = x * F.swish(gate)
             elif activation == "silu":
@@ -90,15 +89,14 @@ class TestRMSNormGated(unittest.TestCase):
             prefix="test_layer",
             activation="swish",
         )
-        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype='float16')
+        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float16")
         output_triton = layer(x)
         self.assertEqual(output_triton.shape, x.shape)
         self.assertEqual(output_triton.dtype, x.dtype)
 
         output_naive = self.naive_rmsnorm_gated(x, None, layer.weight, 1e-5, "swish")
-        
-        assert (output_triton - output_naive).abs().max() < 1e-3
 
+        assert (output_triton - output_naive).abs().max() < 1e-3
 
     def test_forward_with_gate_swish(self):
         """Test forward pass with swish gate."""
@@ -110,14 +108,14 @@ class TestRMSNormGated(unittest.TestCase):
             activation="swish",
         )
 
-        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype='float16')
-        z = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype='float16')
+        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float16")
+        z = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float16")
 
         output_triton = layer(x, z=z)
 
         self.assertEqual(output_triton.shape, x.shape)
         self.assertEqual(output_triton.dtype, x.dtype)
-        
+
         output_naive = self.naive_rmsnorm_gated(x, z, layer.weight, 1e-5, "swish")
 
         assert (output_triton - output_naive).abs().max() < 1e-3
@@ -132,16 +130,16 @@ class TestRMSNormGated(unittest.TestCase):
             activation="silu",
         )
 
-        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype='float16')
-        z = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype='float16')
+        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float16")
+        z = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float16")
 
         output_triton = layer(x, z=z)
 
         self.assertEqual(output_triton.shape, x.shape)
         self.assertEqual(output_triton.dtype, x.dtype)
-        
+
         output_naive = self.naive_rmsnorm_gated(x, z, layer.weight, 1e-5, "silu")
-        
+
         assert (output_triton - output_naive).abs().max() < 1e-3
 
     def test_forward_with_gate_sigmoid(self):
@@ -153,16 +151,16 @@ class TestRMSNormGated(unittest.TestCase):
             activation="sigmoid",
         )
 
-        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype='float16')
-        z = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype='float16')
+        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float16")
+        z = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float16")
 
         output_triton = layer(x, z=z)
 
         self.assertEqual(output_triton.shape, x.shape)
         self.assertEqual(output_triton.dtype, x.dtype)
-        
+
         output_naive = self.naive_rmsnorm_gated(x, z, layer.weight, 1e-5, "sigmoid")
-        
+
         assert (output_triton - output_naive).abs().max() < 1e-3
 
     def test_init_no_prefix(self):
@@ -186,8 +184,8 @@ class TestRMSNormGated(unittest.TestCase):
             prefix="test_layer",
             activation="swish",
         )
-        x = paddle.randn([self.batch_size, self.seq_len, self.hidden_size], dtype='float16')
-        z = paddle.randn([self.batch_size, self.seq_len, self.hidden_size], dtype='float16')
+        x = paddle.randn([self.batch_size, self.seq_len, self.hidden_size], dtype="float16")
+        z = paddle.randn([self.batch_size, self.seq_len, self.hidden_size], dtype="float16")
 
         output = layer(x, z=z)
 
@@ -212,8 +210,8 @@ class TestRMSNormGated(unittest.TestCase):
             prefix="test_layer",
             activation="swish",
         )
-        x = paddle.randn([1, self.hidden_size], dtype='float16')
-        z = paddle.randn([1, self.hidden_size], dtype='float16')
+        x = paddle.randn([1, self.hidden_size], dtype="float16")
+        z = paddle.randn([1, self.hidden_size], dtype="float16")
 
         output = layer(x, z=z)
 
@@ -232,8 +230,8 @@ class TestRMSNormGated(unittest.TestCase):
             prefix="test_layer",
             activation="swish",
         )
-        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype='float32')
-        z = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype='float32')
+        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float32")
+        z = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float32")
 
         output = layer(x, z=z)
 
@@ -247,10 +245,10 @@ class TestRMSNormGated(unittest.TestCase):
         """Test that rmsnorm_gated writes into a pre-allocated output tensor."""
         hidden_size = self.hidden_size
         M = self.batch_size * self.seq_len
-        x = paddle.randn([M, hidden_size], dtype='float16')
-        z = paddle.randn([M, hidden_size], dtype='float16')
-        weight = paddle.ones([hidden_size], dtype='float16')
-        pre_alloc = paddle.empty([M, hidden_size], dtype='float16')
+        x = paddle.randn([M, hidden_size], dtype="float16")
+        z = paddle.randn([M, hidden_size], dtype="float16")
+        weight = paddle.ones([hidden_size], dtype="float16")
+        pre_alloc = paddle.empty([M, hidden_size], dtype="float16")
 
         out = rmsnorm_gated(x=x, weight=weight, bias=None, eps=1e-5, z=z, out=pre_alloc)
 
@@ -292,9 +290,10 @@ class TestCalcRowsPerBlock(unittest.TestCase):
         for BLOCK_N in [32, 64, 128, 256, 512]:
             for num_warps in [1, 2, 4, 8]:
                 rows = calc_rows_per_block(M=64, BLOCK_N=BLOCK_N, num_warps=num_warps)
-                self.assertTrue(rows > 0 and (rows & (rows - 1)) == 0,
-                                f"rows={rows} is not a power of 2 "
-                                f"(BLOCK_N={BLOCK_N}, num_warps={num_warps})")
+                self.assertTrue(
+                    rows > 0 and (rows & (rows - 1)) == 0,
+                    f"rows={rows} is not a power of 2 " f"(BLOCK_N={BLOCK_N}, num_warps={num_warps})",
+                )
 
     def test_minimum_is_one(self):
         """Result must be at least 1."""

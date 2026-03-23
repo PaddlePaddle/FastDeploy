@@ -29,7 +29,11 @@ else:
     from paddle.incubate.nn.functional import fused_layer_norm, fused_rms_norm
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused, rmsnorm_gated
+from fastdeploy.model_executor.ops.triton_ops import (
+    _TRITON_AVAILABLE,
+    qk_rmsnorm_fused,
+    rmsnorm_gated,
+)
 
 from .batch_invariant_ops import (
     is_batch_invariant_mode_enabled,
@@ -593,10 +597,7 @@ class RMSNormGated(nn.Layer):
             ], f"Unsupported dtype: {dtype}. Must be one of: float32, bfloat16, float16"
 
         # Check if Triton fused kernel is available
-        self.use_triton_kernel = (
-            current_platform.is_cuda()
-            and _TRITON_AVAILABLE
-        )
+        self.use_triton_kernel = current_platform.is_cuda() and _TRITON_AVAILABLE
 
         self.init_weight()
 
@@ -627,11 +628,7 @@ class RMSNormGated(nn.Layer):
         weight_tensor = get_tensor(state_dict.pop(self.weight_key))
         self.weight.set_value(weight_tensor.astype(self._norm_weight_dtype))
 
-    def forward(
-        self,
-        x,
-        z: Optional[paddle.Tensor] = None
-    ) -> paddle.Tensor:
+    def forward(self, x, z: Optional[paddle.Tensor] = None) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
 
@@ -672,13 +669,9 @@ class RMSNormGated(nn.Layer):
                 norm_out = rms_norm(x, self.weight, self.eps)
             else:
                 norm_out = fused_rms_norm(
-                    x,
-                    norm_weight=self.weight,
-                    norm_bias=None,
-                    epsilon=self.eps,
-                    begin_norm_axis=1,
-                    bias=self.bias
+                    x, norm_weight=self.weight, norm_bias=None, epsilon=self.eps, begin_norm_axis=1, bias=self.bias
                 )
+
             out = norm_out[0]
 
             # Apply gate activation if provided
@@ -691,4 +684,3 @@ class RMSNormGated(nn.Layer):
             out = out.astype(x_dtype)
 
         return out
-

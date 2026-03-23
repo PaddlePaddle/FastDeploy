@@ -26,12 +26,13 @@ from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
 )
 from fastdeploy.utils import ceil_div
 
-
 # Maximum rows per Triton block for layernorm gated kernel
 MAX_ROWS_PER_BLOCK = 4
 
+
 def next_power_of_2(n: int):
     return 1 << (n - 1).bit_length() if n > 0 else 1
+
 
 def calc_rows_per_block(M: int, BLOCK_N: int, num_warps: int) -> int:
     """Calculate optimal rows per block based on input size and warp count.
