@@ -38,13 +38,15 @@ if _is_package_installed("torch"):
 
 
 def swap_driver_guard(fn):
+    from triton.runtime.driver import driver
+
     # A lightweight wrapper to enable compatibility for triton kernel
     def wrapped_fn(*args, **kwargs):
-        triton.runtime.driver.driver.set_active(paddle_driver)
+        driver.set_active(paddle_driver)
         try:
             return fn(*args, **kwargs)
         finally:
-            triton.runtime.driver.driver.reset_active()
+            driver.reset_active()
 
     return wrapped_fn
 
