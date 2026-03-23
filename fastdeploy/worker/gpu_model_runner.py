@@ -143,6 +143,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.device_id = device_id
         self.enable_head_wise_kv_cache = envs.FD_HEAD_WISE_KV_CACHE == 1
         self.head_wise_debug_log = bool(int(os.getenv("FD_HEAD_WISE_KV_LOG", "0")))
+        self.head_wise_hole_log = bool(int(os.getenv("FD_HEAD_WISE_HOLE_LOG", "0")))
+        self._head_wise_hole_log_count: int = 0
         self.kv_num_heads = max(
             1,
             int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
@@ -870,11 +872,28 @@ class GPUModelRunner(ModelRunnerBase):
                     if cache_ids_2d is None and request.block_tables and isinstance(request.block_tables[0], list):
                         cache_ids_2d = request.block_tables
                     cache_ids_2d = self._normalize_head_wise_cache_ids_2d(cache_ids_2d)
+                    self._maybe_log_head_wise_hole_diag(cache_ids_2d, str(request.request_id), "prefill")
                     if cache_ids_2d is not None:
                         request.block_tables_3d = cache_ids_2d
                     self._update_block_tables_3d_slot(idx, cache_ids_2d, str(request.request_id))
                     if cache_ids_2d:
-                        encoder_block_num = len(cache_ids_2d[0])
+                        head0_row = cache_ids_2d[0] if cache_ids_2d[0] is not None else []
+                        encoder_block_num, head0_contiguous_len, head0_holes = self._head_wise_row_layout_stats(
+                            head0_row
+                        )
+                        if self.head_wise_hole_log and head0_holes > 0:
+                            should_log = (
+                                self._head_wise_hole_log_count < 100
+                                or self._head_wise_hole_log_count % 100 == 0
+                            )
+                            self._head_wise_hole_log_count += 1
+                            if should_log:
+                                logger.warning(
+                                    f"[headwise_encoder_len_diag] stage=prefill req_id={request.request_id} "
+                                    f"len_based={encoder_block_num} contiguous_len={head0_contiguous_len} "
+                                    f"hole_before_last_valid={head0_holes} "
+                                    f"head0_prefix={head0_row[: min(24, len(head0_row))]}"
+                                )
                     else:
                         encoder_block_num = 0
                 else:
@@ -940,6 +959,7 @@ class GPUModelRunner(ModelRunnerBase):
                     if cache_ids_2d is None and request.block_tables and isinstance(request.block_tables[0], list):
                         cache_ids_2d = request.block_tables
                     cache_ids_2d = self._normalize_head_wise_cache_ids_2d(cache_ids_2d)
+                    self._maybe_log_head_wise_hole_diag(cache_ids_2d, str(request.request_id), "decode")
                     if cache_ids_2d is not None:
                         request.block_tables_3d = cache_ids_2d
                     self._update_block_tables_3d_slot(idx, cache_ids_2d, str(request.request_id))
@@ -953,7 +973,23 @@ class GPUModelRunner(ModelRunnerBase):
                         # Keep metadata for requests that enter decode path directly.
                         self.forward_batch_reqs_list[idx] = request
                     if cache_ids_2d:
-                        encoder_block_num = len(cache_ids_2d[0])
+                        head0_row = cache_ids_2d[0] if cache_ids_2d[0] is not None else []
+                        encoder_block_num, head0_contiguous_len, head0_holes = self._head_wise_row_layout_stats(
+                            head0_row
+                        )
+                        if self.head_wise_hole_log and head0_holes > 0:
+                            should_log = (
+                                self._head_wise_hole_log_count < 100
+                                or self._head_wise_hole_log_count % 100 == 0
+                            )
+                            self._head_wise_hole_log_count += 1
+                            if should_log:
+                                logger.warning(
+                                    f"[headwise_encoder_len_diag] stage=decode req_id={request.request_id} "
+                                    f"len_based={encoder_block_num} contiguous_len={head0_contiguous_len} "
+                                    f"hole_before_last_valid={head0_holes} "
+                                    f"head0_prefix={head0_row[: min(24, len(head0_row))]}"
+                                )
                     else:
                         encoder_block_num = 0
                 else:
@@ -1184,6 +1220,57 @@ class GPUModelRunner(ModelRunnerBase):
                 continue
             normalized_cache_ids_2d.append([(-1 if cid is None else int(cid)) for cid in head_tables])
         return normalized_cache_ids_2d
+
+    @staticmethod
+    def _head_wise_row_layout_stats(row):
+        """Return (len_based, contiguous_len, hole_before_last_valid) for diagnostics."""
+        if row is None:
+            return 0, 0, 0
+
+        row_len = len(row)
+        last_valid_idx = -1
+        for idx, cid in enumerate(row):
+            if cid is not None and cid >= 0:
+                last_valid_idx = idx
+
+        if last_valid_idx < 0:
+            return row_len, 0, 0
+
+        contiguous_len = last_valid_idx + 1
+        hole_before_last_valid = 0
+        for cid in row[:contiguous_len]:
+            if cid is None or cid < 0:
+                hole_before_last_valid += 1
+        return row_len, contiguous_len, hole_before_last_valid
+
+    def _maybe_log_head_wise_hole_diag(self, cache_ids_2d, req_id: str, stage: str) -> None:
+        if not self.head_wise_hole_log or not cache_ids_2d:
+            return
+
+        suspicious = []
+        for head_idx, row in enumerate(cache_ids_2d):
+            row_len, contiguous_len, hole_before_last_valid = self._head_wise_row_layout_stats(row)
+            if hole_before_last_valid <= 0:
+                continue
+            suspicious.append((head_idx, row_len, contiguous_len, hole_before_last_valid))
+
+        if not suspicious:
+            return
+
+        should_log = self._head_wise_hole_log_count < 100 or self._head_wise_hole_log_count % 100 == 0
+        self._head_wise_hole_log_count += 1
+        if not should_log:
+            return
+
+        sample = suspicious[:4]
+        sample_str = ", ".join(
+            f"h{head_idx}:len={row_len},contiguous={contiguous_len},holes={hole_count}"
+            for head_idx, row_len, contiguous_len, hole_count in sample
+        )
+        logger.warning(
+            f"[headwise_hole_diag] stage={stage} req_id={req_id} "
+            f"heads_with_holes={len(suspicious)}/{len(cache_ids_2d)} sample=[{sample_str}]"
+        )
 
     def _flatten_head_wise_cache_ids_2d(self, cache_ids_2d):
         """
