@@ -107,6 +107,11 @@ class Ernie4_5Processor(BaseDataProcessor):
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
             request["bad_words_token_ids"] = bad_words_token_ids
 
+        logits_processors_args = self._prepare_think_stop_sentence(
+            request.get("logits_processors_args") or {}, max_model_len
+        )
+        request["logits_processors_args"] = logits_processors_args
+
         # processing prompt_token_ids
         if not request.get("prompt_token_ids"):
             if request.get("prompt"):
@@ -143,6 +148,10 @@ class Ernie4_5Processor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+        logits_processors_args = self._update_thinking_prompt_state(
+            request["prompt_token_ids"], request.get("logits_processors_args") or {}
+        )
+        request["logits_processors_args"] = logits_processors_args
         max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_tokens)
