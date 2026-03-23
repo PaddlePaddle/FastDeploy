@@ -89,5 +89,6 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 - [全局Cache池化](./docs/zh/features/global_cache_pooling.md)
 
 ## 致谢
+Test commit
 
 FastDeploy 依据 [Apache-2.0 开源许可证](./LICENSE). 进行授权。在开发过程中，我们参考并借鉴了 [vLLM](https://github.com/vllm-project/vllm) 的部分代码，以保持接口兼容性，在此表示衷心感谢。
