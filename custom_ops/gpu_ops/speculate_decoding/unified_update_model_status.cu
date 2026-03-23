@@ -95,18 +95,20 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
 
     if (is_running) {
       // 3. Update state and write back
-      if (cur_stop_flag) {
-        // It should clear seq_lens_decoder in next step for save_output
-        stop_flag_int = 1;
-        stop_flags[batch_id] = true;
-        mask_rollback[batch_id] = 0;
-      } else if (cur_seq_len_encoder > 0) {
+      if (cur_seq_len_encoder > 0) {
         cur_seq_len_decoder += cur_seq_len_encoder;
         cur_seq_len_encoder = 0;
       } else if (cur_seq_len_decoder > 0) {
         cur_seq_len_decoder += output_len;
         mask_rollback[batch_id] = seq_lens_this_time[batch_id] - output_len;
       } else {
+        mask_rollback[batch_id] = 0;
+      }
+
+      if (cur_stop_flag) {
+        // It should clear seq_lens_decoder in next step for save_output
+        stop_flag_int = 1;
+        stop_flags[batch_id] = true;
         mask_rollback[batch_id] = 0;
       }
 

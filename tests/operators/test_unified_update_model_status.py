@@ -20,9 +20,19 @@ Kernel semantics (from unified_update_model_status.cu):
   - real_bsz = seq_lens_this_time.shape[0], max_bsz = stop_flags.shape[0].
   - has_running_seqs is a CPU tensor (copied to GPU, kernel writes, copied back).
   - Padding slots (batch_id >= real_bsz): only counted as stopped, NO state modified.
-  - Stopped/paused real slots: set stop_flags=true, seq_lens_decoder=0,
-    seq_lens_this_time=0, step_output_len=0.
-  - Running slots: EOS detection → state update → token_ids_all write → next input setup.
+  - Stopped/paused real slots: set stop_flags=true, clear seq_lens_encoder/decoder,
+    seq_lens_this_time, step_output_len.
+  - Running slots (is_running = !stop_flags && !is_paused):
+      1. EOS detection: scan step_output_ids[0..output_len), truncate at EOS/max_dec_len,
+         replace non-EOS end token with end_tokens[0], set cur_stop_flag=true.
+      2. seq_lens update (always executed, even when EOS is hit):
+           encoder > 0  → decoder += encoder, encoder = 0
+           decoder > 0  → decoder += output_len, mask_rollback = seq_lens_this_time - output_len
+           else         → mask_rollback = 0
+      3. If cur_stop_flag (EOS hit): stop_flags=true, mask_rollback=0.
+      4. Write back: seq_lens_encoder, seq_lens_decoder, step_output_len, step_idx.
+      5. Write history to token_ids_all at [prompt_len + base + i] (forward loop).
+      6. Set step_input_ids[0] = last output token.
   - is_naive_mode has been removed: naive mode is handled by naive_update_model_status.
 """
 
@@ -238,19 +248,21 @@ def reference_impl(inputs: Dict[str, Any]) -> Dict[str, Any]:
                     cur_stop_flag = True
                     break
 
-        # --- line 107-161: Update state and write back ---
+        # --- line 99-120: Update state and write back (mirrors kernel order) ---
         if is_running:
-            if cur_stop_flag:
-                stop_count += 1
-                stop_flags[batch_id] = True
-                mask_rollback[batch_id] = 0
-            elif cur_seq_len_encoder > 0:
+            # seq_lens update happens regardless of EOS (kernel always updates before stop check).
+            if cur_seq_len_encoder > 0:
                 cur_seq_len_decoder += cur_seq_len_encoder
                 cur_seq_len_encoder = 0
             elif cur_seq_len_decoder > 0:
                 cur_seq_len_decoder += output_len
                 mask_rollback[batch_id] = int(seq_lens_this_time[batch_id]) - output_len
             else:
+                mask_rollback[batch_id] = 0
+
+            if cur_stop_flag:
+                stop_count += 1
+                stop_flags[batch_id] = True
                 mask_rollback[batch_id] = 0
 
             # Write back scalar state
