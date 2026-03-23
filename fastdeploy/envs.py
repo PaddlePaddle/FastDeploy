@@ -179,6 +179,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_CONFIG_ROOT": lambda: os.path.expanduser(
         os.getenv("FD_CONFIG_ROOT", os.path.join(os.path.expanduser("~"), ".config", "fastdeploy"))
     ),
+    # Suspend rollouting routing replay
+    "FD_SUSPEND_ROUTING_REPLAY": lambda: bool(int(os.getenv("FD_SUSPEND_ROUTING_REPLAY", "0"))),
 }
 
 

@@ -124,6 +124,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
+        self.enable_keep_sampling_mask = fd_config.model_config.enable_keep_sampling_mask
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
         self.ori_vocab_size = self.fd_config.model_config.ori_vocab_size
@@ -221,11 +222,23 @@ class GPUModelRunner(ModelRunnerBase):
         # Rollout routing replay config
         self.routing_replay_manager = None
 
+        # ZMQ side-channel for sampling_mask in non-FD_USE_GET_SAVE_OUTPUT_V1 path
+        self.sampling_mask_zmq_client = None
+        if not envs.FD_USE_GET_SAVE_OUTPUT_V1 and self.enable_keep_sampling_mask:
+            rank_id = self.parallel_config.local_data_parallel_id
+            port = self.parallel_config.engine_worker_queue_port
+            self.sampling_mask_zmq_client = ZmqIpcClient(
+                name=f"sampling_mask_output_rank_{rank_id}_{port}", mode=zmq.PUSH
+            )
+            self.sampling_mask_zmq_client.connect()
+            logger.info(f"create send zmq sampling_mask_output_rank_{rank_id}_{port}")
+
         self.zmq_client = None
         self.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            logger.info(f"zmq client get_save_output_rank{local_rank}")
-            self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
+            port = self.fd_config.parallel_config.engine_worker_queue_port
+            logger.info(f"zmq client get_save_output_rank{local_rank}_{port}")
+            self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}_{port}", mode=zmq.PUSH)
             self.zmq_client.connect()
             self.zmq_client.socket.SNDTIMEO = 3000
             self.async_output_queue: queue.Queue = queue.Queue()
@@ -1736,6 +1749,7 @@ class GPUModelRunner(ModelRunnerBase):
             top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
             logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
+            keep_sampling_mask=self.enable_keep_sampling_mask,
         )
 
     def load_model(self) -> None:
@@ -2582,6 +2596,7 @@ class GPUModelRunner(ModelRunnerBase):
                 async_output_queue=self.async_output_queue,
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
                 routing_replay_manager=self.routing_replay_manager,
+                sampling_mask_zmq_client=self.sampling_mask_zmq_client,
             )
 
             return None
@@ -2712,6 +2727,7 @@ class GPUModelRunner(ModelRunnerBase):
                 splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
                 routing_replay_manager=self.routing_replay_manager,
+                sampling_mask_zmq_client=self.sampling_mask_zmq_client,
             )
             if self.guided_backend is not None and sampler_output is not None:
                 self.sampler.post_process(sampler_output.sampled_token_ids)
@@ -2973,8 +2989,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.update_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
-
-        # reset share inputs
+        # Reset share inputs
         self.reset_share_inputs()
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
@@ -2982,9 +2997,13 @@ class GPUModelRunner(ModelRunnerBase):
         # Recapture CUDAGraph
         if self.use_cudagraph:
             self.capture_model()
+        # Rollout Routing Replay
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            # TODO(gongshaotian): Delete suspend func
+            self.routing_replay_manager.update_suspend_routing_replay()
+
         # Send single
         self.dynamic_weight_manager.finalize_update(pid)
-
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
     def padding_cudagraph_inputs(self) -> None:

@@ -36,6 +36,7 @@ class MockConfig:
         local_data_parallel_id = 0
         enable_expert_parallel = False
         data_parallel_size = 1
+        engine_worker_queue_port = 1200
 
     class SpeculativeConfig:
         method = None
@@ -120,8 +121,9 @@ class TestGetSaveOutputV1(unittest.TestCase):
         model_runner.zmq_client = None
         model_runner.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            port = cfg.parallel_config.engine_worker_queue_port
             model_runner.zmq_client = ZmqIpcClient(
-                name=f"get_save_output_rank{cfg.parallel_config.local_data_parallel_id}", mode=zmq.PUSH
+                name=f"get_save_output_rank{cfg.parallel_config.local_data_parallel_id}_{port}", mode=zmq.PUSH
             )
             model_runner.zmq_client.connect()
             model_runner.zmq_client.socket.SNDTIMEO = 3000

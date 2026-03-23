@@ -62,3 +62,4 @@ class SamplingMetadata:
     # Add for HPU post-processing
     seq_lens_encoder: Optional[paddle.Tensor] = None
     seq_lens_decoder: Optional[paddle.Tensor] = None
+    keep_sampling_mask: bool = False

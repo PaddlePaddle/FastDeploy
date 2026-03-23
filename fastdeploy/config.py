@@ -196,6 +196,7 @@ class ModelConfig:
         self.enable_logprob = False
         self.max_logprobs = 20
         self.logprobs_mode = "raw_logprobs"
+        self.enable_keep_sampling_mask = False
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
@@ -1433,6 +1434,9 @@ class RouterConfig:
         self.api_server_host = get_host_ip()
         self.api_server_port = args["port"]
 
+    def __str__(self):
+        return json.dumps({key: value for key, value in self.__dict__.items()})
+
 
 class CommitConfig:
     """
@@ -1545,6 +1549,9 @@ class RoutingReplayConfig:
         Convert routing replay config to json string.
         """
         return json.dumps({key: value for key, value in self.__dict__.items()})
+
+    def __str__(self):
+        return self.to_json_string()
 
 
 class FDConfig:
