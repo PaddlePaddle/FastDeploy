@@ -29,7 +29,7 @@ __global__ void rebuildSelfHiddenStatesKernel(
     const T* input,
     const int* last_seq_lens_this_time,
     const int* seq_lens_this_time,
-    const int64_t* step_idx,
+    const int* seq_lens_encoder,
     int* position_map,
     int* output_token_num,
     T* out,
@@ -52,7 +52,7 @@ __global__ void rebuildSelfHiddenStatesKernel(
       int cur_seq_lens_this_time = seq_lens_this_time[t];
       int cur_last_seq_lens_this_time = last_seq_lens_this_time[t];
       // 1. encoder
-      if (step_idx[t] == 1 && cur_seq_lens_this_time > 0) {
+      if (seq_lens_encoder[t] > 0 && cur_seq_lens_this_time > 0) {
         in_count[t] = 1;
         out_count[t] = 1;
         // 2. decoder
@@ -61,7 +61,7 @@ __global__ void rebuildSelfHiddenStatesKernel(
         out_count[t] = 1;
         // 3. stop
       } else {
-        if (step_idx[t] == 1) {
+        if (seq_lens_encoder[t] > 0) {
           in_count[t] = cur_last_seq_lens_this_time > 0 ? 1 : 0;
         } else {
           in_count[t] = cur_last_seq_lens_this_time;
@@ -91,7 +91,7 @@ __global__ void rebuildSelfHiddenStatesKernel(
       int cur_seq_lens_this_time = seq_lens_this_time[t];
       int cur_last_seq_lens_this_time = last_seq_lens_this_time[t];
       // 1. encoder
-      if (step_idx[t] == 1 && cur_seq_lens_this_time > 0) {
+      if (seq_lens_encoder[t] > 0 && cur_seq_lens_this_time > 0) {
         position_map[in_off] = out_off;
         // 2. decoder
       } else if (cur_seq_lens_this_time > 0) {
@@ -127,7 +127,7 @@ std::vector<paddle::Tensor> DispatchDtype(
     const paddle::Tensor& input,
     const paddle::Tensor& last_seq_lens_this_time,
     const paddle::Tensor& seq_lens_this_time,
-    const paddle::Tensor& step_idx) {
+    const paddle::Tensor& seq_lens_encoder) {
   typedef PDTraits<D> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
@@ -186,7 +186,7 @@ std::vector<paddle::Tensor> DispatchDtype(
       reinterpret_cast<const DataType_*>(input.data<data_t>());
   const int* last_seq_lens_this_time_ptr = last_seq_lens_this_time.data<int>();
   const int* seq_lens_this_time_ptr = seq_lens_this_time.data<int>();
-  const int64_t* step_idx_ptr = step_idx.data<int64_t>();
+  const int* seq_lens_encoder_ptr = seq_lens_encoder.data<int>();
   int* position_map_ptr = position_map.data<int>();
   int* output_token_num_ptr = output_token_num.data<int>();
   DataType_* out_ptr = reinterpret_cast<DataType_*>(out.data<data_t>());
@@ -196,7 +196,7 @@ std::vector<paddle::Tensor> DispatchDtype(
   void* kernel_args[] = {&input_ptr,
                          &last_seq_lens_this_time_ptr,
                          &seq_lens_this_time_ptr,
-                         &step_idx_ptr,
+                         &seq_lens_encoder_ptr,
                          &position_map_ptr,
                          &output_token_num_ptr,
                          &out_ptr,
@@ -219,21 +219,23 @@ std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& input,
     const paddle::Tensor& last_seq_lens_this_time,
     const paddle::Tensor& seq_lens_this_time,
-    const paddle::Tensor& step_idx) {
+    const paddle::Tensor& seq_lens_encoder) {
   switch (input.dtype()) {
     case paddle::DataType::BFLOAT16:
       return DispatchDtype<paddle::DataType::BFLOAT16>(
-          input, last_seq_lens_this_time, seq_lens_this_time, step_idx);
+          input, last_seq_lens_this_time, seq_lens_this_time, seq_lens_encoder);
     case paddle::DataType::FLOAT16:
       return DispatchDtype<paddle::DataType::FLOAT16>(
-          input, last_seq_lens_this_time, seq_lens_this_time, step_idx);
+          input, last_seq_lens_this_time, seq_lens_this_time, seq_lens_encoder);
     default:
       PD_THROW("Not support this data type");
   }
 }
 
 PD_BUILD_STATIC_OP(eagle_get_self_hidden_states)
-    .Inputs(
-        {"input", "last_seq_lens_this_time", "seq_lens_this_time", "step_idx"})
+    .Inputs({"input",
+             "last_seq_lens_this_time",
+             "seq_lens_this_time",
+             "seq_lens_encoder"})
     .Outputs({"out", "output_token_num"})
     .SetKernelFn(PD_KERNEL(EagleGetSelfHiddenStates));
