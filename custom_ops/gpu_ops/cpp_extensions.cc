@@ -961,7 +961,9 @@ void HybridMtpNgram(const paddle::Tensor& input_ids,
 void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_this_time,
                            const paddle::Tensor& base_model_seq_lens_encoder,
-                           const paddle::Tensor& base_model_stop_flags);
+                           const paddle::Tensor& base_model_stop_flags,
+                           const paddle::Tensor& batch_drop,
+                           bool is_dummy_run);
 
 void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& input_ids,
@@ -999,10 +1001,12 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& step_idx,
                       const paddle::Tensor& cu_seqlens_q_output,
                       const paddle::Tensor& stop_flags,
+                      const paddle::Tensor& batch_drop,
                       const paddle::Tensor& not_need_stop,
                       const paddle::Tensor& max_dec_len,
                       const paddle::Tensor& end_ids,
                       const paddle::Tensor& base_model_draft_tokens,
+                      const paddle::Tensor& prompt_lens,
                       const int max_seq_len,
                       const int substep);
 
@@ -1019,6 +1023,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
 
 std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& input,
+    const paddle::Tensor& last_seq_lens_encoder,
     const paddle::Tensor& last_seq_lens_this_time,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& step_idx);

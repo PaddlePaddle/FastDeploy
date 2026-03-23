@@ -48,10 +48,12 @@ def run_paddle_test(device="cpu"):
     output_cum_offsets = paddle.randint(0, 2, shape=(max_bsz,), dtype="int32")
     output_cum_offsets[0] = 0  # 确保第一个偏移量为0
     stop_flags = paddle.zeros([max_bsz], dtype="bool")
+    drop_batch = paddle.zeros([max_bsz], dtype="bool")
     not_need_stop = paddle.zeros([1], dtype="bool")
     max_dec_len = paddle.randint(100, 102, shape=(max_bsz,), dtype="int64")
     end_ids = paddle.to_tensor([2], dtype="int64")
     base_model_draft_tokens = paddle.randint(1, 10, shape=(max_bsz, max_base_model_draft_token), dtype="int64")
+    prompt_lens = paddle.randint(1, 10, shape=(max_bsz,), dtype="int64")
 
     # 打印张量信息
     # print("inter_next_tokens shape:", inter_next_tokens.shape)
@@ -80,10 +82,12 @@ def run_paddle_test(device="cpu"):
         step_idx,
         output_cum_offsets,
         stop_flags,
+        drop_batch,
         not_need_stop,
         max_dec_len,
         end_ids,
         base_model_draft_tokens,
+        prompt_lens,
         max_seq_len,
         substep,
     )
