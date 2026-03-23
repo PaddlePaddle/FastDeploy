@@ -1,39 +1,48 @@
 """
-# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""
+CacheManager - Scheduler-side cache management.
 
-from __future__ import annotations
+Responsible for:
+- Managing DeviceBlockPool and HostBlockPool
+- Block allocation and release
+- RadixTree for prefix matching
+- Storage operations coordination
+- Three-level cache matching (Device → Host → Storage)
+"""
 
 import threading
 import traceback
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from fastdeploy.engine.request import Request
 from fastdeploy.utils import get_logger
 
 if TYPE_CHECKING:
-    from fastdeploy.engine.request import Request
     from fastdeploy.config import FDConfig
     from fastdeploy.cache_manager.v1.storage import StorageScheduler
 
 from .base import KVCacheBase
 from .block_pool import DeviceBlockPool, HostBlockPool
-from .metadata import BlockNode, CacheLevel, CacheStatus, CacheSwapMetadata, MatchResult
+from .metadata import BlockNode, CacheStatus, CacheSwapMetadata, MatchResult
 from .radix_tree import RadixTree
 from .storage import create_storage_scheduler
 
 logger = get_logger("prefix_cache_manager", "cache_manager.log")
+
+
+def _debug_log_radix_tree_state(request_id: str, operation: str, radix_tree, device_pool=None, host_pool=None):
+    """DEBUG: 打印 radix tree 和 pool 的状态"""
+    if radix_tree is None:
+        return
+    stats = radix_tree.get_stats()
+    device_available = device_pool.available_blocks() if device_pool else 0
+    host_available = host_pool.available_blocks() if host_pool else 0
+    logger.debug(
+        f"[DEBUG] {operation} request_id={request_id} "
+        f"radix_tree: node_count={stats.node_count}, "
+        f"evictable_device={stats.evictable_device_count}, "
+        f"evictable_host={stats.evictable_host_count} | "
+        f"pools: device_available={device_available}, host_available={host_available}"
+    )
 
 
 class CacheManager(KVCacheBase):
@@ -67,19 +76,12 @@ class CacheManager(KVCacheBase):
         super().__init__(config)
 
         # Extract configuration from FDConfig
+        self.cache_config = config.cache_config
         self.num_gpu_blocks = self.cache_config.total_block_num
         self.num_cpu_blocks = self.cache_config.num_cpu_blocks
         self.block_size = self.cache_config.block_size
         self.enable_host_cache = self.num_cpu_blocks > 0
         self.enable_prefix_caching = self.cache_config.enable_prefix_caching
-
-        # Write policy for backup (write_through, write_through_selective, write_back)
-        # Normalize write_policy: "write_through" is a special case of "write_through_selective" with threshold=1
-        self._write_policy = self.cache_config.write_policy
-        self._write_through_threshold = self.cache_config.write_through_threshold
-        if self._write_policy == "write_through":
-            self._write_through_threshold = 1
-            self._write_policy = "write_through_selective"
 
         # Thread safety
         self._lock = threading.RLock()
@@ -97,14 +99,7 @@ class CacheManager(KVCacheBase):
         # Initialize radix tree for prefix matching
         self._radix_tree = None
         if self.enable_prefix_caching:
-            self._radix_tree = RadixTree(
-                enable_host_cache=self.enable_host_cache,
-                write_policy=self._write_policy,
-            )
-
-        # Pending backup list: nodes waiting to be backed up, to be issued via request's cache_evict_metadata
-        self._pending_backup: List[Tuple[List[BlockNode], List[int]]] = []
-        self._pending_block_ids: List[int] = []
+            self._radix_tree = RadixTree(enable_host_cache=self.enable_host_cache)
 
         # Storage scheduler (create using factory method if backend is configured)
         self._storage_scheduler = create_storage_scheduler(self.cache_config)
@@ -118,9 +113,7 @@ class CacheManager(KVCacheBase):
             f"CacheManager initialized, num_gpu_blocks: {self.num_gpu_blocks}, "
             f"num_cpu_blocks: {self.num_cpu_blocks}, block_size: {self.block_size}, "
             f"enable_prefix_caching: {self.enable_prefix_caching}, "
-            f"enable_host_cache: {self.enable_host_cache}, "
-            f"write_policy: {self._write_policy}, "
-            f"write_through_threshold: {self._write_through_threshold}"
+            f"enable_host_cache: {self.enable_host_cache}"
         )
 
     # ============ Properties ============
@@ -221,19 +214,20 @@ class CacheManager(KVCacheBase):
             with self._lock:
                 match_result = request.match_result
 
-                need_block_num = num_blocks
+                need_block_num = match_result.matched_host_nums + num_blocks
 
                 if not self.can_allocate_device_blocks(need_block_num):
                     return []
 
                 if need_block_num > self._device_pool.available_blocks():
-                    evicted_result = self._evict_blocks(need_block_num - self._device_pool.available_blocks())
-                    if evicted_result is None:
+                    evicted_blocks, host_block_ids = self._evict_blocks(
+                        need_block_num - self._device_pool.available_blocks()
+                    )
+                    if evicted_blocks is None:
                         logger.error(f"evict_device_blocks failed, request_id: {request.request_id}")
                         return []
 
-                    if self.enable_host_cache and self._write_policy == "write_back":
-                        evicted_blocks, host_block_ids = evicted_result
+                    if self.enable_host_cache:
                         if len(evicted_blocks) != len(host_block_ids):
                             logger.error(
                                 f"evict_blocks to host failed, request_id: {request.request_id}, "
@@ -244,8 +238,8 @@ class CacheManager(KVCacheBase):
                             CacheSwapMetadata(
                                 src_block_ids=evicted_blocks,
                                 dst_block_ids=host_block_ids,
-                                src_type=CacheLevel.DEVICE,
-                                dst_type=CacheLevel.HOST,
+                                src_type="device",
+                                dst_type="host",
                             )
                         )
 
@@ -256,31 +250,53 @@ class CacheManager(KVCacheBase):
                     )
                     return []
 
+                # DEBUG LOG: 分配的 blocks
+                logger.debug(
+                    f"[DEBUG] allocate_device_blocks request_id={request.request_id} "
+                    f"allocated_blocks={allocated}, need_block_num={need_block_num}, "
+                    f"new_blocks_num={num_blocks}, matched_host_nums={match_result.matched_host_nums}"
+                )
+
                 if self.enable_host_cache and match_result.matched_host_nums > 0:
                     device_blocks = allocated[: match_result.matched_host_nums]
 
-                    free_host_block_ids = self._radix_tree.swap_to_device(match_result.host_nodes, device_blocks)
+                    # DEBUG LOG: swap host to device
                     logger.debug(
-                        f"[allocate_device_blocks] request_id={request.request_id} "
-                        f"swap host->device: host_block_ids={free_host_block_ids} -> device_block_ids={device_blocks}"
+                        f"[DEBUG] swap_host_to_device request_id={request.request_id} "
+                        f"host_nodes={[n.block_id for n in match_result.host_nodes]}, "
+                        f"target_device_blocks={device_blocks}"
                     )
+
+                    free_host_block_ids = self._radix_tree.swap_to_device(match_result.host_nodes, device_blocks)
 
                     request.cache_swap_metadata.append(
                         CacheSwapMetadata(
                             src_block_ids=free_host_block_ids,
                             dst_block_ids=device_blocks,
-                            src_type=CacheLevel.HOST,
-                            dst_type=CacheLevel.DEVICE,
+                            src_type="host",
+                            dst_type="device",
                         )
                     )
 
-                    if self._write_policy == "write_through_selective":
-                        self._radix_tree.backup_blocks(match_result.host_nodes, free_host_block_ids)
-                    else:
-                        self.free_host_blocks(free_host_block_ids)
+                    # DEBUG LOG: swap 完成后释放的 host blocks
+                    logger.debug(
+                        f"[DEBUG] swap_host_to_device done request_id={request.request_id} "
+                        f"freed_host_blocks={free_host_block_ids}"
+                    )
+
+                    self.free_host_blocks(free_host_block_ids)
 
                     match_result.device_nodes.extend(match_result.host_nodes)
                     match_result.host_nodes = []
+
+                    # DEBUG LOG: radix tree 状态
+                    _debug_log_radix_tree_state(
+                        request.request_id,
+                        "allocate_device_after_swap",
+                        self._radix_tree,
+                        self._device_pool,
+                        self._host_pool,
+                    )
 
                 if self.enable_prefix_caching:
                     block_hashes = request.prompt_hashes[match_result.matched_device_nums :]
@@ -288,25 +304,59 @@ class CacheManager(KVCacheBase):
                     uncached_device_blocks = all_device_blocks[match_result.matched_device_nums :]
                     num_block_lens = min(len(uncached_device_blocks), len(block_hashes))
 
+                    # DEBUG LOG: insert 参数
+                    logger.debug(
+                        f"[DEBUG] allocate_device_blocks insert_params request_id={request.request_id} "
+                        f"num_blocks={num_blocks}, num_block_lens={num_block_lens}, "
+                        f"block_hashes_len={len(block_hashes)}, "
+                        f"uncached_device_blocks={uncached_device_blocks}"
+                    )
+
                     if num_block_lens > 0:
                         blocks = list(zip(block_hashes[:num_block_lens], uncached_device_blocks[:num_block_lens]))
                         start_node = match_result.device_nodes[-1] if match_result.device_nodes else None
 
+                        # DEBUG LOG: insert 前状态
+                        logger.debug(
+                            f"[DEBUG] allocate_device_blocks before_insert request_id={request.request_id} "
+                            f"blocks_len={len(blocks)}, blocks={blocks}, "
+                            f"start_node_block_id={start_node.block_id if start_node else None}"
+                        )
+
                         device_nodes, wasted_block_ids = self._radix_tree.insert(blocks=blocks, start_node=start_node)
                         match_result.device_nodes.extend(device_nodes)
 
-                        inserted_block_ids = [n.block_id for n in device_nodes]
+                        for node in device_nodes:
+                            logger.debug(
+                                f"[DEBUG] allocate_device_blocks, ref_count: {node.ref_count}, "
+                                f"evictable: {node.node_id in self._radix_tree._evictable_set}, block_id: {node.block_id}"
+                            )
+
+                        # DEBUG LOG: insert 结果
                         logger.debug(
-                            f"[allocate_device_blocks] request_id={request.request_id} "
-                            f"newly allocated={allocated} "
-                            f"inserted_into_path_block_ids={inserted_block_ids} "
-                            f"wasted_block_ids(not_in_path)={wasted_block_ids}"
+                            f"[DEBUG] allocate_device_blocks after_insert request_id={request.request_id} "
+                            f"wasted_block_ids={wasted_block_ids}"
                         )
 
                         # Release any blocks that were wasted due to node reuse
                         # and update allocated with actual block_ids
                         if wasted_block_ids:
                             match_result.uncached_block_ids.extend(wasted_block_ids)
+
+                        # DEBUG LOG: 最终 uncached_device_blocks
+                        logger.debug(
+                            f"[DEBUG] allocate_device_blocks final_blocks request_id={request.request_id} "
+                            f"allocated={allocated}"
+                        )
+
+                        # DEBUG LOG: radix tree 状态
+                        _debug_log_radix_tree_state(
+                            request.request_id,
+                            "allocate_device_after_insert",
+                            self._radix_tree,
+                            self._device_pool,
+                            self._host_pool,
+                        )
 
                 return allocated
         except Exception as e:
@@ -328,6 +378,10 @@ class CacheManager(KVCacheBase):
                 evict_blocks = self._radix_tree.evict_host_nodes(num - self._host_pool.available_blocks())
                 if evict_blocks is not None:
                     self._host_pool.release(evict_blocks)
+                    logger.debug(
+                        f"evict_host_nodes: {evict_blocks}, free host blocks: {self._host_pool.available_blocks()}"
+                    )
+
             return self._host_pool.allocate(num) or []
         except Exception as e:
             logger.error(f"allocate_host_blocks error: {e}, {str(traceback.format_exc())}")
@@ -344,6 +398,8 @@ class CacheManager(KVCacheBase):
             return
 
         with self._lock:
+            # DEBUG LOG: 释放 device blocks
+            logger.debug(f"[DEBUG] free_device_blocks block_ids={block_ids}")
             self._device_pool.release(block_ids)
 
     def free_host_blocks(self, block_ids: List[int]) -> None:
@@ -355,6 +411,8 @@ class CacheManager(KVCacheBase):
         """
         if not block_ids:
             return
+        # DEBUG LOG: 释放 host blocks
+        logger.debug(f"[DEBUG] free_host_blocks block_ids={block_ids}")
         self._host_pool.release(block_ids)
 
     def free_all_device_blocks(self) -> int:
@@ -426,7 +484,7 @@ class CacheManager(KVCacheBase):
         with PrefixCacheManager.gpu_free_block_list.
         """
         # Return list representation of available blocks
-        return list(self._device_pool._free_blocks)
+        return list(range(self._device_pool.available_blocks()))
 
     @property
     def available_gpu_resource(self) -> float:
@@ -481,7 +539,7 @@ class CacheManager(KVCacheBase):
     def match_prefix(
         self,
         request: Request,
-        skip_storage: bool = True,
+        skip_storage: bool = False,
     ) -> None:
         """
         Execute three-level cache matching (Device -> Host -> Storage).
@@ -498,7 +556,6 @@ class CacheManager(KVCacheBase):
             None. Match result is stored in request._match_result.
         """
         if not self.enable_prefix_caching or self._radix_tree is None:
-            request._match_result = MatchResult()
             return
 
         with self._lock:
@@ -532,18 +589,23 @@ class CacheManager(KVCacheBase):
                 if not (self._storage_scheduler and skip_storage):
                     self._radix_tree.increment_ref_nodes(matched_nodes)
 
+                # DEBUG LOG: 匹配结果详情
+                for node in matched_nodes:
+                    logger.debug(f"[DEBUG] matched node: block_id={node.block_id}, ref_count={node.ref_count}, on_device: {node.is_on_device()}")
+
+                # DEBUG LOG: radix tree 状态
+                _debug_log_radix_tree_state(
+                    request.request_id,
+                    "match_prefix_after_match",
+                    self._radix_tree,
+                    self._device_pool,
+                    self._host_pool,
+                )
+
                 logger.info(
                     f"match_prefix for request_id: {request.request_id} total_hashes: {len(block_hashes)}, "
                     f"total_matched: {result.total_matched_blocks} (device_blocks={result.matched_device_nums}, "
                     f"host_blocks={result.matched_host_nums}, storage_hashes={result.matched_storage_nums})"
-                )
-
-                matched_device_ids = [n.block_id for n in result.device_nodes]
-                matched_host_ids = [n.block_id for n in result.host_nodes]
-                logger.debug(
-                    f"[match_prefix] request_id={request.request_id} "
-                    f"matched_device_block_ids={matched_device_ids} "
-                    f"matched_host_block_ids={matched_host_ids}"
                 )
                 request._match_result = result
             except Exception as e:
@@ -577,12 +639,7 @@ class CacheManager(KVCacheBase):
         """
         Evict device blocks to free device memory.
 
-        In write_through_selective policy:
-        - Blocks with backup (backuped=True): Update metadata only, no actual data transfer needed
-        - Blocks without backup but hit_count >= threshold: Trigger emergency backup, then evict
-        - Blocks without backup and hit_count < threshold: Release directly
-
-        Eviction flow (for other policies):
+        Eviction flow:
         1. Try to allocate host block ids for device->host eviction
         2. If not enough host blocks, evict host nodes first to free host blocks
         3. Evict device blocks to host using RadixTree.evict_device_to_host()
@@ -599,11 +656,14 @@ class CacheManager(KVCacheBase):
             return None
 
         if num_blocks <= 0:
-            return [], []
+            return []
 
         try:
             with self._lock:
-                host_block_ids = []
+                # DEBUG LOG: radix tree 状态 - 驱逐前
+                _debug_log_radix_tree_state(
+                    "", "evict_blocks_before", self._radix_tree, self._device_pool, self._host_pool
+                )
 
                 # Step 1: Check if we have enough evictable device blocks
                 stats = self._radix_tree.get_stats()
@@ -614,38 +674,30 @@ class CacheManager(KVCacheBase):
                     )
                     return None
 
-                # Step 2: Handle eviction based on write policy
+                # Step 2: Try to allocate host blocks for eviction target
+                host_block_ids = []
                 if self.enable_host_cache:
-                    if self._write_policy == "write_through_selective":
-                        # write_through_selective policy: optimize eviction based on backup status
-                        released_device_ids = self._radix_tree.evict_nodes_selective(num_blocks=num_blocks)
-                    elif self._write_policy == "write_back":
-                        # write_back policy:: allocate host blocks and evict to host
-                        host_block_ids = self.allocate_host_blocks(num_blocks)
-                        if host_block_ids is None or len(host_block_ids) < num_blocks:
-                            logger.warning("_evict_blocks: failed to allocate host blocks")
-                            return None
+                    host_block_ids = self.allocate_host_blocks(num_blocks)
+                    if host_block_ids is None or len(host_block_ids) < num_blocks:
+                        logger.warning("_evict_blocks: failed to allocate host blocks")
+                        return None
 
-                        released_device_ids = self._radix_tree.evict_device_to_host(
-                            num_blocks=num_blocks,
-                            host_block_ids=host_block_ids,
-                        )
+                    released_device_ids = self._radix_tree.evict_device_to_host(
+                        num_blocks=num_blocks,
+                        host_block_ids=host_block_ids,
+                    )
                 else:
                     # No host cache, evict device nodes directly
                     released_device_ids = self._radix_tree.evict_device_nodes(num_blocks)
 
-                if released_device_ids is None:
-                    return None
-
                 # Step 3: Free the evicted device blocks
                 self._device_pool.release(released_device_ids)
 
-                logger.debug(
-                    f"[_evict_blocks] evicted_device_block_ids={released_device_ids} "
-                    f"host_block_ids={host_block_ids} "
-                    f"write_policy={self._write_policy} "
-                    f"free_device_after={self._device_pool.available_blocks()}"
+                # DEBUG LOG: radix tree 状态 - 驱逐后
+                _debug_log_radix_tree_state(
+                    "", f"evict_blocks_after(num={num_blocks})", self._radix_tree, self._device_pool, self._host_pool
                 )
+                logger.debug(f"[DEBUG] _evict_blocks done released_device_ids={released_device_ids}")
 
                 return released_device_ids, host_block_ids
         except Exception as e:
@@ -678,6 +730,12 @@ class CacheManager(KVCacheBase):
         """
         with self._lock:
             try:
+                # DEBUG LOG: 请求结束时的 block_tables
+                logger.debug(
+                    f"[DEBUG] request_finish start request_id={request.request_id} "
+                    f"block_tables={request.block_tables}"
+                )
+
                 if self.enable_prefix_caching and self._radix_tree is not None:
                     match_result = request.match_result
 
@@ -685,31 +743,75 @@ class CacheManager(KVCacheBase):
                     device_blocks = request.block_tables[match_result.matched_device_nums :]
                     num_block_lens = min(len(device_blocks), len(block_hashes))
 
+                    # DEBUG LOG: insert 参数
+                    logger.debug(
+                        f"[DEBUG] request_finish insert_params request_id={request.request_id} "
+                        f"device_blocks_len={len(device_blocks)}, num_block_lens={num_block_lens}, "
+                        f"block_hashes_len={len(block_hashes)}, device_blocks={device_blocks}"
+                    )
+
                     if num_block_lens > 0:
                         blocks = list(zip(block_hashes[:num_block_lens], device_blocks[:num_block_lens]))
                         start_node = match_result.device_nodes[-1] if match_result.device_nodes else None
 
+                        # DEBUG LOG: insert 前状态
+                        logger.debug(
+                            f"[DEBUG] request_finish before_insert request_id={request.request_id} "
+                            f"blocks_len={len(blocks)}, blocks={blocks}, "
+                            f"start_node_block_id={start_node.block_id if start_node else None}"
+                        )
+
                         device_nodes, wasted_block_ids = self._radix_tree.insert(blocks=blocks, start_node=start_node)
                         match_result.device_nodes.extend(device_nodes)
 
+                        # DEBUG LOG: insert 结果
+                        logger.debug(
+                            f"[DEBUG] request_finish after_insert request_id={request.request_id} "
+                            f"device_nodes_len={len(device_nodes)}, "
+                            f"device_nodes_block_ids={[n.block_id for n in device_nodes]}, "
+                            f"wasted_block_ids={wasted_block_ids}"
+                        )
+
                         # Release blocks that were wasted due to node reuse
                         if wasted_block_ids:
+                            # DEBUG LOG: 浪费的 blocks
+                            logger.debug(
+                                f"[DEBUG] request_finish wasted_blocks request_id={request.request_id} "
+                                f"wasted_block_ids={wasted_block_ids}"
+                            )
                             match_result.uncached_block_ids.extend(wasted_block_ids)
 
-                    # Release uncached blocks
+                        # DEBUG LOG: radix tree 状态 - insert 后
+                        _debug_log_radix_tree_state(
+                            request.request_id,
+                            "request_finish_after_insert",
+                            self._radix_tree,
+                            self._device_pool,
+                            self._host_pool,
+                        )
+
+                    # DEBUG LOG: 释放 uncached blocks
                     uncached_blocks = match_result.uncached_block_ids
                     uncached_blocks.extend(request.block_tables[match_result.matched_device_nums :])
+
+                    logger.debug(
+                        f"[DEBUG] request_finish release_uncached_blocks request_id={request.request_id} "
+                        f"uncached_blocks={uncached_blocks}"
+                    )
 
                     # Decrement ref count - blocks become evictable if ref_count reaches 0
                     self._radix_tree.decrement_ref_nodes(match_result.device_nodes)
                     self._device_pool.release(uncached_blocks)
 
-                    cached_block_ids = [n.block_id for n in match_result.device_nodes]
-                    logger.debug(
-                        f"[request_finish] request_id={request.request_id} "
-                        f"cached_block_ids(in_radix_tree)={cached_block_ids} "
-                        f"released_uncached_block_ids={uncached_blocks}"
+                    # DEBUG LOG: radix tree 状态 - 最终
+                    _debug_log_radix_tree_state(
+                        request.request_id,
+                        "request_finish_final",
+                        self._radix_tree,
+                        self._device_pool,
+                        self._host_pool,
                     )
+
                     logger.info(
                         f"request {request.request_id} finished, cached blocks: {match_result.matched_device_nums}, "
                         f"uncached blocks freed: {len(uncached_blocks)}, "
@@ -718,160 +820,12 @@ class CacheManager(KVCacheBase):
                 else:
                     self._device_pool.release(request.block_tables)
 
-                    logger.debug(
-                        f"[request_finish] request_id={request.request_id} "
-                        f"prefix_caching=disabled released_block_ids={request.block_tables}"
-                    )
                     logger.info(
                         f"request {request.request_id} finished, release blocks: {len(request.block_tables)}, "
                         f"total_free: {self._device_pool.available_blocks()}"
                     )
             except Exception as e:
                 logger.error(f"request_finish error: {e}, {str(traceback.format_exc())}")
-
-    # ============ Write-through Selective Backup Methods ============
-
-    def get_pending_backup_count(self) -> int:
-        """
-        Get the number of pending backup tasks.
-
-        Returns:
-            Number of pending backup tasks in the queue.
-        """
-        return len(self._pending_backup)
-
-    def issue_pending_backup_to_batch_request(
-        self,
-    ) -> Optional[CacheSwapMetadata]:
-        """
-        Issue pending backup tasks and return a CacheSwapMetadata for BatchRequest.
-
-        This method is called during scheduling to prepare pending backup tasks
-        to be attached to a BatchRequest. The BatchRequest will pass this metadata
-        to the worker, which will execute the backup (Device->Host transfer).
-
-        Returns:
-            CacheSwapMetadata containing backup tasks, or None if no pending backup.
-        """
-        if not self._pending_backup:
-            return None
-
-        if not self.enable_host_cache or not self._radix_tree:
-            # No host cache, clear pending backup
-            self._pending_backup.clear()
-            return None
-
-        try:
-            with self._lock:
-                if not self._pending_backup:
-                    return None
-
-                all_device_block_ids = []
-                all_host_block_ids = []
-                freed_host_ids = []
-
-                for nodes, host_block_ids in self._pending_backup:
-                    # Filter out nodes that are no longer valid (already evicted, etc.)
-                    valid_nodes = []
-                    valid_host_ids = []
-
-                    for node, host_block_id in zip(nodes, host_block_ids):
-                        # Check if node is still in evictable_device and not already backed up
-                        if (
-                            node.node_id in self._radix_tree._evictable_device
-                            and not node.backuped
-                            and node.cache_status == CacheStatus.DEVICE
-                        ):
-                            valid_nodes.append(node)
-                            valid_host_ids.append(host_block_id)
-                        else:
-                            # Node no longer valid, release the allocated host block
-                            freed_host_ids.append(host_block_id)
-
-                    if valid_nodes:
-                        # Mark nodes as backed up
-                        self._radix_tree.backup_blocks(valid_nodes, valid_host_ids)
-
-                        # Collect device block IDs
-                        all_device_block_ids.extend([node.block_id for node in valid_nodes])
-                        all_host_block_ids.extend(valid_host_ids)
-
-                # Release invalid host block allocations
-                if freed_host_ids:
-                    self._host_pool.release(freed_host_ids)
-
-                # Clear pending backup
-                self._pending_backup.clear()
-                self._pending_block_ids.clear()
-
-                # Create and return CacheSwapMetadata
-                if all_device_block_ids:
-                    evict_metadata = CacheSwapMetadata(
-                        src_block_ids=all_device_block_ids,
-                        dst_block_ids=all_host_block_ids,
-                        src_type=CacheLevel.DEVICE,
-                        dst_type=CacheLevel.HOST,
-                    )
-                    return evict_metadata
-
-                return None
-
-        except Exception as e:
-            logger.error(f"issue_pending_backup_to_batch_request error: {e}, {str(traceback.format_exc())}")
-            # Clear pending backup on error to avoid infinite accumulation
-            self._pending_backup.clear()
-            self._pending_block_ids.clear()
-            return None
-
-    def check_and_add_pending_backup(
-        self,
-    ) -> None:
-        """
-        Check for nodes that meet backup criteria and add them to pending backup queue.
-
-        This method is called after request_finish to check if any nodes
-        in the radix tree meet the write_through_selective backup criteria.
-
-        For write_through_selective policy:
-        - Nodes with hit_count >= threshold that are not yet backed up
-        - are added to the pending backup queue
-
-        The pending backup will be issued to the next scheduled request.
-        """
-        if not self.enable_host_cache or not self._radix_tree:
-            return
-
-        if self._write_policy != "write_through_selective":
-            return
-
-        try:
-            with self._lock:
-                # Get candidates from radix tree
-                candidates = self._radix_tree.get_candidates_for_backup(
-                    self._write_through_threshold,
-                    self._pending_block_ids,
-                )
-
-                if not candidates:
-                    return
-
-                # Allocate host blocks for backup
-                host_block_ids = self.allocate_host_blocks(len(candidates))
-                if host_block_ids is None or len(host_block_ids) < len(candidates):
-                    logger.warning(
-                        f"check_and_add_pending_backup: failed to allocate host blocks, "
-                        f"needed={len(candidates)}, got={len(host_block_ids) if host_block_ids else 0}"
-                    )
-                    if host_block_ids:
-                        self._host_pool.release(host_block_ids)
-                    return
-
-                # Add to pending backup queue
-                self._pending_backup.append((candidates, host_block_ids))
-                self._pending_block_ids.extend([node.block_id for node in candidates])
-
-        except Exception as e:
-            logger.error(f"check_and_add_pending_backup error: {e}, {str(traceback.format_exc())}")
 
     # ============ Host/Device Transfer Coordination ============
 

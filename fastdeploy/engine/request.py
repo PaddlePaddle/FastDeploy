@@ -17,16 +17,19 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Generic, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, Generic, Optional
 from typing import TypeVar as TypingTypeVar
 from typing import Union
 
 if TYPE_CHECKING:
-    from fastdeploy.cache_manager.v1.metadata import MatchResult
+    from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata, MatchResult
+
+logger = logging.getLogger("request_debug")
 
 import numpy as np
 from fastapi.responses import JSONResponse
@@ -34,7 +37,6 @@ from pydantic import BaseModel
 from typing_extensions import TypeVar
 
 from fastdeploy import envs
-from fastdeploy.cache_manager.v1.metadata import CacheLevel, CacheSwapMetadata
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import (
@@ -43,11 +45,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     StructuralTagResponseFormat,
     ToolCall,
 )
-from fastdeploy.logger.request_logger import (
-    RequestLogLevel,
-    log_request,
-    log_request_error,
-)
+from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import (
     LogprobsLists,
     PromptLogprobs,
@@ -247,6 +245,12 @@ class Request:
         When accessing this property, it checks if there are new complete blocks
         that need hash computation, and if so, computes and appends them.
         """
+        logger.debug(
+            f"[DEBUG prompt_hashes] request_id={self.request_id}, "
+            f"has_block_hasher={self._block_hasher is not None}, "
+            f"existing_hashes_len={len(self._prompt_hashes)}, "
+            f"prompt_token_ids_len={len(self.prompt_token_ids) if self.prompt_token_ids else 0}"
+        )
         if self._block_hasher is not None:
             new_hashes = self._block_hasher(self)
             if new_hashes:
@@ -254,22 +258,12 @@ class Request:
         return self._prompt_hashes
 
     @property
-    def match_result(self) -> Optional[MatchResult]:
+    def match_result(self) -> MatchResult:
         return self._match_result
 
     def set_block_hasher(self, block_hasher: callable):
         """Set the block hasher for dynamic hash computation."""
         self._block_hasher = block_hasher
-
-    def pop_cache_swap_metadata(self) -> list[CacheSwapMetadata]:
-        result = self.cache_swap_metadata
-        self.cache_swap_metadata = []
-        return result
-
-    def pop_cache_evict_metadata(self) -> list[CacheSwapMetadata]:
-        result = self.cache_evict_metadata
-        self.cache_evict_metadata = []
-        return result
 
     @classmethod
     def _process_guided_json(cls, r: T):
@@ -364,13 +358,15 @@ class Request:
             ), "The parameter `raw_request` is not supported now, please use completion api instead."
             for key, value in req.metadata.items():
                 setattr(request, key, value)
-            log_request(RequestLogLevel.STAGES, message="The parameter metadata is obsolete.")
+            from fastdeploy.utils import api_server_logger
+
+            api_server_logger.warning("The parameter metadata is obsolete.")
 
         return request
 
     @classmethod
     def from_dict(cls, d: dict):
-        log_request(RequestLogLevel.FULL, message="{request}", request=d)
+        data_processor_logger.debug(f"{d}")
         sampling_params: SamplingParams = None
         pooling_params: PoolingParams = None
         metrics: RequestMetrics = None
@@ -401,11 +397,8 @@ class Request:
                         ImagePosition(**mm_pos) if not isinstance(mm_pos, ImagePosition) else mm_pos
                     )
             except Exception as e:
-                log_request_error(
-                    message="request[{request_id}] Convert mm_positions to ImagePosition error: {error}, {traceback}",
-                    request_id=d.get("request_id"),
-                    error=str(e),
-                    traceback=traceback.format_exc(),
+                data_processor_logger.error(
+                    f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
                 )
         return cls(
             request_id=d["request_id"],
@@ -460,29 +453,19 @@ class Request:
         Custom getstate method for pickle support.
         Handles unpicklable attributes by filtering them from __dict__.
         """
-        # Attributes that cannot or need not be pickled for cross-process transfer.
-        # _block_hasher: closure/callable, not picklable.
-        # _match_result: contains BlockNode tree with parent<->children circular
-        #   references, which causes RecursionError during pickling.
-        # async_process_futures: asyncio futures, not picklable.
-        _SKIP_KEYS = {"_block_hasher", "_match_result"}
+        # Create a filtered dictionary without problematic attributes
         filtered_dict = {}
         for key, value in self.__dict__.items():
-            if key in _SKIP_KEYS:
-                continue
-            elif key == "async_process_futures":
+            # Skip attributes that are known to contain unpicklable objects
+            if key == "async_process_futures":
                 filtered_dict[key] = []
+            elif key == "_block_hasher":
+                # Skip _block_hasher (closure function, cannot be pickled)
+                continue
             else:
                 filtered_dict[key] = value
-        return filtered_dict
 
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        # Restore fields that were excluded from pickling with safe defaults.
-        if "_block_hasher" not in self.__dict__:
-            self._block_hasher = None
-        if "_match_result" not in self.__dict__:
-            self._match_result = None
+        return filtered_dict
 
     def __eq__(self, other):
         """
@@ -622,10 +605,10 @@ class BatchRequest:
 
     def add_request(self, request):
         if hasattr(request, "cache_swap_metadata") and request.cache_swap_metadata:
-            self.append_swap_metadata(request.pop_cache_swap_metadata())
+            self.append_swap_metadata(request.cache_swap_metadata)
             request.cache_swap_metadata = []
         if hasattr(request, "cache_evict_metadata") and request.cache_evict_metadata:
-            self.append_evict_metadata(request.pop_cache_evict_metadata())
+            self.append_evict_metadata(request.cache_evict_metadata)
             request.cache_evict_metadata = []
 
         self.requests.append(request)
@@ -633,15 +616,15 @@ class BatchRequest:
     def append_swap_metadata(self, metadata: List[CacheSwapMetadata]):
         for meta in metadata:
             if self.cache_swap_metadata:
-                self.cache_swap_metadata.src_block_ids.extend(meta.src_block_ids)
-                self.cache_swap_metadata.dst_block_ids.extend(meta.dst_block_ids)
-                self.cache_swap_metadata.hash_values.extend(meta.hash_values)
+                self.cache_evict_metadata.src_block_ids.extend(meta.src_block_ids)
+                self.cache_evict_metadata.dst_block_ids.extend(meta.dst_block_ids)
+                self.cache_evict_metadata.hash_values.extend(meta.hash_values)
             else:
                 self.cache_swap_metadata = CacheSwapMetadata(
                     src_block_ids=meta.src_block_ids,
                     dst_block_ids=meta.dst_block_ids,
-                    src_type=CacheLevel.HOST,
-                    dst_type=CacheLevel.DEVICE,
+                    src_type="host",
+                    dst_type="device",
                     hash_values=meta.hash_values,
                 )
 
@@ -655,18 +638,21 @@ class BatchRequest:
                 self.cache_evict_metadata = CacheSwapMetadata(
                     src_block_ids=meta.src_block_ids,
                     dst_block_ids=meta.dst_block_ids,
-                    src_type=CacheLevel.DEVICE,
-                    dst_type=CacheLevel.HOST,
+                    src_type="device",
+                    dst_type="host",
                     hash_values=meta.hash_values,
                 )
-
+    
     def __repr__(self):
         requests_repr = repr(self.requests)
         return f"BatchRequest(requests={requests_repr}, swap_metadata={self.cache_swap_metadata}, evict_metadata={self.cache_evict_metadata})"
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state["requests"] = [req.__getstate__() if hasattr(req, "__getstate__") else req for req in state["requests"]]
+        state["requests"] = [
+            req.__getstate__() if hasattr(req, "__getstate__") else req
+            for req in state["requests"]
+        ]
         return state
 
     def __setstate__(self, state):
@@ -701,37 +687,6 @@ class BatchRequest:
     def extend(self, batch_requests: list["BatchRequest"]):
         for br in batch_requests:
             self.append(br)
-
-    @classmethod
-    def from_tasks(cls, tasks: list) -> tuple["BatchRequest", list, int]:
-        """Classify tasks from the engine worker queue into inference requests and control requests.
-
-        Args:
-            tasks: List of (payload, real_bsz) tuples from task_queue.get_tasks().
-                   payload is one of: BatchRequest, List[Request], or [ControlRequest].
-
-        Returns:
-            (batch_request, control_reqs, max_occupied_batch_index)
-              - batch_request: merged BatchRequest containing all inference requests
-              - control_reqs: list of ControlRequest objects
-              - max_occupied_batch_index: real_bsz of the last inference task batch
-        """
-        batch_request = cls()
-        control_reqs = []
-        max_occupied_batch_index = 0
-
-        for payload, bsz in tasks:
-            if len(payload) > 0 and isinstance(payload[0], ControlRequest):
-                control_reqs.append(payload[0])
-            else:
-                max_occupied_batch_index = int(bsz)
-                if isinstance(payload, cls):
-                    batch_request.append(payload)
-                else:
-                    for req in payload:
-                        batch_request.add_request(req)
-
-        return batch_request, control_reqs, max_occupied_batch_index
 
 
 class ControlRequest:

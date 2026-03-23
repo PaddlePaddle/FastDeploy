@@ -21,7 +21,7 @@ import traceback
 from collections import deque
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Union
 
 import numpy as np
@@ -34,12 +34,12 @@ from fastdeploy.cache_manager.multimodal_cache_manager import (
 )
 from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
 from fastdeploy.engine.request import (
-    BatchRequest,
     ImagePosition,
     Request,
     RequestOutput,
     RequestStatus,
     RequestType,
+    BatchRequest,
 )
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.input.utils import IDS_TYPE_FLAG
@@ -54,61 +54,46 @@ from fastdeploy.utils import download_from_bos, init_bos_client, llm_logger
 
 
 @dataclass
-class ScheduledTaskBase:
-    """
-    Task for Scheduled.
-    """
-
-    idx: int
-    request_id: str
-    task_type: RequestType = RequestType.DECODE
-
-    cache_swap_metadata: list[CacheSwapMetadata] = field(default_factory=list)
-    cache_evict_metadata: list[CacheSwapMetadata] = field(default_factory=list)
-
-    def pop_cache_swap_metadata(self) -> list[CacheSwapMetadata]:
-        result = self.cache_swap_metadata
-        self.cache_swap_metadata = []
-        return result
-
-    def pop_cache_evict_metadata(self) -> list[CacheSwapMetadata]:
-        result = self.cache_evict_metadata
-        self.cache_evict_metadata = []
-        return result
-
-
-@dataclass
-class ScheduledDecodeTask(ScheduledTaskBase):
+class ScheduledDecodeTask:
     """
     Task for allocating new blocks to decode.
     """
 
-    block_tables: list[int] = field(default_factory=list)
+    idx: int
+    request_id: str
+    block_tables: list[int]
+    task_type: RequestType = RequestType.DECODE
 
 
 @dataclass
-class ScheduledPreemptTask(ScheduledTaskBase):
+class ScheduledPreemptTask:
     """
     Task for terminating inference to recycle resource.
     """
 
+    idx: int
+    request_id: str
     task_type: RequestType = RequestType.PREEMPTED
 
 
 @dataclass
-class ScheduledExtendBlocksTask(ScheduledTaskBase):
+class ScheduledExtendBlocksTask:
     """
     Task for allocating new blocks to extend.
     """
 
+    idx: int
+    request_id: str
+    extend_block_tables: list[int]
     task_type: RequestType = RequestType.EXTEND
-    extend_block_tables: list[int] = field(default_factory=list)
 
 
 @dataclass
-class ScheduledAbortTask(ScheduledTaskBase):
+class ScheduledAbortTask:
     """Task for allocating new blocks to skip."""
 
+    idx: int
+    request_id: str
     task_type: RequestType = RequestType.ABORT
 
 
@@ -221,11 +206,11 @@ class ResourceManagerV1(ResourceManager):
         self.need_block_num_map = dict()
 
         self.encoder_cache = None
-        if config.enable_mm_runtime and config.cache_config.max_encoder_cache > 0:
+        if config.model_config.enable_mm and config.cache_config.max_encoder_cache > 0:
             self.encoder_cache = EncoderCacheManager(config.cache_config.max_encoder_cache)
 
         self.processor_cache = None
-        if config.enable_mm_runtime and config.cache_config.max_processor_cache > 0:
+        if config.model_config.enable_mm and config.cache_config.max_processor_cache > 0:
             max_processor_cache_in_bytes = int(config.cache_config.max_processor_cache * 1024 * 1024 * 1024)
             self.processor_cache = ProcessorCacheManager(max_processor_cache_in_bytes)
 
@@ -265,6 +250,9 @@ class ResourceManagerV1(ResourceManager):
         else:
             block_num = min(block_num, self.config.cache_config.max_block_num_per_seq)
 
+        if self.enable_cache_manager_v1:
+            block_num += request.match_result.matched_host_nums
+
         return block_num
 
     def _is_decoding(self, request) -> bool:
@@ -278,29 +266,13 @@ class ResourceManagerV1(ResourceManager):
         return request
 
     def _prepare_decode_task(self, request):
-        return ScheduledDecodeTask(
-            idx=request.idx,
-            request_id=request.request_id,
-            block_tables=request.block_tables,
-            cache_swap_metadata=request.pop_cache_swap_metadata(),
-            cache_evict_metadata=request.pop_cache_evict_metadata(),
-        )
+        return ScheduledDecodeTask(idx=request.idx, request_id=request.request_id, block_tables=request.block_tables)
 
     def _prepare_preempt_task(self, request):
-        return ScheduledPreemptTask(
-            idx=request.idx,
-            request_id=request.request_id,
-            cache_swap_metadata=request.pop_cache_swap_metadata(),
-            cache_evict_metadata=request.pop_cache_evict_metadata(),
-        )
+        return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
 
     def _prepare_abort_task(self, request):
-        return ScheduledAbortTask(
-            idx=request.idx,
-            request_id=request.request_id,
-            cache_swap_metadata=request.pop_cache_swap_metadata(),
-            cache_evict_metadata=request.pop_cache_evict_metadata(),
-        )
+        return ScheduledAbortTask(idx=request.idx, request_id=request.request_id)
 
     def reschedule_preempt_task(self, request_id, process_func=None):
         with self.lock:
@@ -666,7 +638,7 @@ class ResourceManagerV1(ResourceManager):
             num_new_tokens = token_budget // self.config.cache_config.block_size * self.config.cache_config.block_size
         request.with_image = False
 
-        if not self.config.enable_mm_runtime:
+        if not self.config.model_config.enable_mm:
             return num_new_tokens
 
         inputs = request.multimodal_inputs
@@ -965,8 +937,6 @@ class ResourceManagerV1(ResourceManager):
                                     idx=request.idx,
                                     request_id=request.request_id,
                                     extend_block_tables=request.extend_block_tables,
-                                    cache_swap_metadata=request.pop_cache_swap_metadata(),
-                                    cache_evict_metadata=request.pop_cache_evict_metadata(),
                                 )
                             )
                             llm_logger.debug(f"extend blocks is {request.extend_block_tables}")
@@ -1023,7 +993,6 @@ class ResourceManagerV1(ResourceManager):
                     if (
                         self.config.cache_config.enable_prefix_caching
                         and self.config.scheduler_config.splitwise_role != "decode"
-                        and self.config.scheduler_config.splitwise_role != "prefill"
                         and not self.enable_cache_manager_v1
                     ):
                         self.cache_manager.update_cache_blocks(
@@ -1099,10 +1068,6 @@ class ResourceManagerV1(ResourceManager):
                             self.waiting.popleft()
                             continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
-
-                        llm_logger.debug(
-                            f"request.request_id {request.request_id} num_new_block {num_new_block}, request.need_prefill_tokens {request.need_prefill_tokens}, request.num_computed_tokens {request.num_computed_tokens}, token_budget {token_budget}"
-                        )
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             num_new_block
                         )
@@ -1225,17 +1190,6 @@ class ResourceManagerV1(ResourceManager):
             self._log_console_scheduler_metrics(batch_request)
 
             self.update_metrics()
-
-            # Issue pending backup tasks to batch_request
-            # This handles write_through_selective policy by attaching backup tasks
-            # to the batch request, which will be processed by the worker
-            if self.enable_cache_manager_v1 and len(batch_request) > 0:
-                evict_metadata = self.cache_manager.issue_pending_backup_to_batch_request()
-                if evict_metadata:
-                    batch_request.append_evict_metadata([evict_metadata])
-
-            if self.enable_cache_manager_v1:
-                self.cache_manager.check_and_add_pending_backup()
 
             return batch_request, error_reqs
 
@@ -1364,7 +1318,6 @@ class ResourceManagerV1(ResourceManager):
         return self.real_bsz
 
     def _allocate_gpu_blocks(self, request: Request, num_blocks: int) -> List[int]:
-        llm_logger.debug(f"[allocate_gpu_blocks] request_id={request.request_id}, num_blocks={num_blocks}")
         if self.enable_cache_manager_v1:
             return self.cache_manager.allocate_gpu_blocks(request, num_blocks)
         else:
@@ -1413,8 +1366,6 @@ class ResourceManagerV1(ResourceManager):
             )
 
             request.cache_info = [matched_block_num, no_cache_block_num]
-
-            return (common_block_ids, matched_token_num, metrics)
 
     def get_prefix_cached_blocks(self, request: Request):
         """
@@ -1541,11 +1492,6 @@ class ResourceManagerV1(ResourceManager):
                     self.stop_flags[request.idx] = False
                     self.requests[request.request_id] = request
                     self.req_dict[request.request_id] = allocated_position
-
-                    self.cache_manager.update_cache_blocks(
-                        request, self.config.cache_config.block_size, request.need_prefill_tokens
-                    )
-
                     return True
                 else:
                     self._free_blocks(request)
@@ -1650,7 +1596,13 @@ class ResourceManagerV1(ResourceManager):
                 request.block_tables[request.num_cached_blocks :], request.request_id
             )
         else:
-            self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
+            if self.config.cache_config.enable_prefix_caching:
+                self.cache_manager.release_block_ids(request)
+                self.cache_manager.recycle_gpu_blocks(
+                    request.block_tables[request.num_cached_blocks :], request.request_id
+                )
+            else:
+                self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
         request.block_tables = []
 
         if request.request_id in self.using_extend_tables_req_id:
