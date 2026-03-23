@@ -982,7 +982,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
         if self.spec_method == SpecMethod.MTP:
-            self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
+            self.proposer.insert_tasks_v1(req_dicts, num_running_requests, self.share_inputs.index_to_batch_id)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         raise NotImplementedError("GPUs only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")
@@ -1226,7 +1226,7 @@ class GPUModelRunner(ModelRunnerBase):
             reorder_split_prefill_and_decode(input_batch=self.share_inputs)
             if self.speculative_decoding:
                 if self.spec_method == SpecMethod.MTP:
-                    self.proposer.reorder_inputs()
+                    self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
 
     def load_model(self) -> None:
         """load or download model"""
