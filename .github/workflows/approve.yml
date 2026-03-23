@@ -19,7 +19,7 @@ jobs:
       BRANCH: ${{ github.event.pull_request.base.ref }}
     steps:
       - name: Checkout base repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 1000

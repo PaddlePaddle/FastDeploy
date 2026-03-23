@@ -384,7 +384,7 @@ jobs:
       all_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.all_cov_file_url }}
     steps:
       - name: Clone FastDeploy
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - uses: actions/setup-python@v5

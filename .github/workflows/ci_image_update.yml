@@ -21,7 +21,7 @@ jobs:
       repo_archive_url: ${{ steps.set_output.outputs.repo_archive_url }}
     steps:
       - name: Clone FastDeploy
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.ref_name }}
           submodules: 'recursive'
@@ -37,8 +37,6 @@ jobs:
           AK: ${{ secrets.BOS_AK }}
           SK: ${{ secrets.BOS_SK }}
         run: |
-          git config --unset http.https://github.com/.extraheader
-          git submodule foreach --recursive sh -c "git config --local --unset-all 'http.https://github.com/.extraheader'"
           git submodule foreach --recursive sh -c "git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
           echo "Current HEAD Log:"
           git log --oneline -n 5
