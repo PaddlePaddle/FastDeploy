@@ -899,7 +899,10 @@ __global__ void append_cache_kv_c4(const CacheT *__restrict__ cache_k,
 
   const int *cur_block_table = block_tables + batch_id * max_blocks_per_seq;
   uint32_t block_id = cur_block_table[start_kv_idx / BLOCK_SIZE];
-  if (block_id < 0) block_id = 0;
+  if (block_id < 0) {
+    // Invalid cache block should not fallback to block0. Skip this tile.
+    return;
+  }
 
   constexpr uint32_t HEAD_DIM_HALF = HEAD_DIM / 2;
   constexpr uint32_t BLOCK_SIZE_HALF = BLOCK_SIZE / 2;

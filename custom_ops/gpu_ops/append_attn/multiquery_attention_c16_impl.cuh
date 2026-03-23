@@ -212,29 +212,46 @@ __global__ void multi_query_append_attention_kernel(
 
   uint32_t kv_idx_base = chunk_start;
   int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
-  if (block_id < 0) {
-    block_id = 0;
-  }
+  bool valid_block = block_id >= 0;
+  int safe_block_id = valid_block ? block_id : 0;
   const uint32_t const_offset =
       (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
       (wid * 4 + tid / 8) * kv_b_stride + tid % 8 * num_elems_per_128b<T>();
-  const T *cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
-  const T *cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
+  const T *cache_k_now = cache_k + safe_block_id * kv_n_stride + const_offset;
+  const T *cache_v_now = cache_v + safe_block_id * kv_n_stride + const_offset;
+  uint32_t chunk_end_for_load = valid_block ? chunk_end : 0;
 
-  produce_kv_blockwise<SharedMemFillMode::kNoFill,
-                       NUM_WARPS,
-                       BLOCK_SIZE,
-                       num_frags_y,
-                       num_frags_z,
-                       NUM_WARP_Q>(k_smem,
-                                   &kv_smem_offset_w,
-                                   &cache_k_now,
-                                   kv_head_idx,
-                                   kv_n_stride,
-                                   kv_h_stride,
-                                   kv_b_stride,
-                                   kv_idx_base,
-                                   chunk_end);
+  if (valid_block) {
+    produce_kv_blockwise<SharedMemFillMode::kNoFill,
+                         NUM_WARPS,
+                         BLOCK_SIZE,
+                         num_frags_y,
+                         num_frags_z,
+                         NUM_WARP_Q>(k_smem,
+                                     &kv_smem_offset_w,
+                                     &cache_k_now,
+                                     kv_head_idx,
+                                     kv_n_stride,
+                                     kv_h_stride,
+                                     kv_b_stride,
+                                     kv_idx_base,
+                                     chunk_end_for_load);
+  } else {
+    produce_kv_blockwise<SharedMemFillMode::kFillZero,
+                         NUM_WARPS,
+                         BLOCK_SIZE,
+                         num_frags_y,
+                         num_frags_z,
+                         NUM_WARP_Q>(k_smem,
+                                     &kv_smem_offset_w,
+                                     &cache_k_now,
+                                     kv_head_idx,
+                                     kv_n_stride,
+                                     kv_h_stride,
+                                     kv_b_stride,
+                                     kv_idx_base,
+                                     chunk_end_for_load);
+  }
   commit_group();
   produce_kv_blockwise<SharedMemFillMode::kFillZero,
                        NUM_WARPS,
@@ -249,7 +266,7 @@ __global__ void multi_query_append_attention_kernel(
                                    kv_h_stride,
                                    kv_b_stride,
                                    kv_idx_base,
-                                   chunk_end);
+                                   chunk_end_for_load);
   commit_group();
 #pragma unroll 1
   for (uint32_t iter = 0; iter < num_iterations; ++iter) {
@@ -288,24 +305,41 @@ __global__ void multi_query_append_attention_kernel(
 
     kv_idx_base += num_frags_z * 16;
     block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
-    if (block_id < 0) {
-      block_id = 0;
+    valid_block = block_id >= 0;
+    safe_block_id = valid_block ? block_id : 0;
+    chunk_end_for_load = valid_block ? chunk_end : 0;
+    cache_k_now = cache_k + safe_block_id * kv_n_stride + const_offset;
+    if (valid_block) {
+      produce_kv_blockwise<SharedMemFillMode::kNoFill,
+                           NUM_WARPS,
+                           BLOCK_SIZE,
+                           num_frags_y,
+                           num_frags_z,
+                           NUM_WARP_Q>(k_smem,
+                                       &kv_smem_offset_w,
+                                       &cache_k_now,
+                                       kv_head_idx,
+                                       kv_n_stride,
+                                       kv_h_stride,
+                                       kv_b_stride,
+                                       kv_idx_base,
+                                       chunk_end_for_load);
+    } else {
+      produce_kv_blockwise<SharedMemFillMode::kFillZero,
+                           NUM_WARPS,
+                           BLOCK_SIZE,
+                           num_frags_y,
+                           num_frags_z,
+                           NUM_WARP_Q>(k_smem,
+                                       &kv_smem_offset_w,
+                                       &cache_k_now,
+                                       kv_head_idx,
+                                       kv_n_stride,
+                                       kv_h_stride,
+                                       kv_b_stride,
+                                       kv_idx_base,
+                                       chunk_end_for_load);
     }
-    cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
-    produce_kv_blockwise<SharedMemFillMode::kNoFill,
-                         NUM_WARPS,
-                         BLOCK_SIZE,
-                         num_frags_y,
-                         num_frags_z,
-                         NUM_WARP_Q>(k_smem,
-                                     &kv_smem_offset_w,
-                                     &cache_k_now,
-                                     kv_head_idx,
-                                     kv_n_stride,
-                                     kv_h_stride,
-                                     kv_b_stride,
-                                     kv_idx_base,
-                                     chunk_end);
     commit_group();
     wait_group<1>();
     __syncthreads();
@@ -315,7 +349,7 @@ __global__ void multi_query_append_attention_kernel(
         &v_smem, &v_smem_offset_r, s_frag, o_frag, d_frag);
 
     __syncthreads();
-    cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
+    cache_v_now = cache_v + safe_block_id * kv_n_stride + const_offset;
     produce_kv_blockwise<SharedMemFillMode::kFillZero,
                          NUM_WARPS,
                          BLOCK_SIZE,
@@ -329,7 +363,7 @@ __global__ void multi_query_append_attention_kernel(
                                      kv_h_stride,
                                      kv_b_stride,
                                      kv_idx_base,
-                                     chunk_end);
+                                     chunk_end_for_load);
     commit_group();
   }
   wait_group<0>();
@@ -609,29 +643,46 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
 
   uint32_t kv_idx_base = chunk_start;
   int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
-  if (block_id < 0) {
-    block_id = 0;
-  }
+  bool valid_block = block_id >= 0;
+  int safe_block_id = valid_block ? block_id : 0;
   const uint32_t const_offset =
       (use_head_wise ? 0 : kv_head_idx * kv_h_stride) +
       (wid * 4 + tid / 8) * kv_b_stride + tid % 8 * num_elems_per_128b<T>();
-  T *cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
-  T *cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
+  T *cache_k_now = cache_k + safe_block_id * kv_n_stride + const_offset;
+  T *cache_v_now = cache_v + safe_block_id * kv_n_stride + const_offset;
+  uint32_t chunk_end_for_load = valid_block ? chunk_end : 0;
 
-  produce_kv_blockwise<SharedMemFillMode::kNoFill,
-                       NUM_WARPS,
-                       BLOCK_SIZE,
-                       num_frags_y,
-                       num_frags_z,
-                       NUM_WARP_Q>(k_smem,
-                                   &kv_smem_offset_w,
-                                   &cache_k_now,
-                                   kv_head_idx,
-                                   kv_n_stride,
-                                   kv_h_stride,
-                                   kv_b_stride,
-                                   kv_idx_base,
-                                   chunk_end);
+  if (valid_block) {
+    produce_kv_blockwise<SharedMemFillMode::kNoFill,
+                         NUM_WARPS,
+                         BLOCK_SIZE,
+                         num_frags_y,
+                         num_frags_z,
+                         NUM_WARP_Q>(k_smem,
+                                     &kv_smem_offset_w,
+                                     &cache_k_now,
+                                     kv_head_idx,
+                                     kv_n_stride,
+                                     kv_h_stride,
+                                     kv_b_stride,
+                                     kv_idx_base,
+                                     chunk_end_for_load);
+  } else {
+    produce_kv_blockwise<SharedMemFillMode::kFillZero,
+                         NUM_WARPS,
+                         BLOCK_SIZE,
+                         num_frags_y,
+                         num_frags_z,
+                         NUM_WARP_Q>(k_smem,
+                                     &kv_smem_offset_w,
+                                     &cache_k_now,
+                                     kv_head_idx,
+                                     kv_n_stride,
+                                     kv_h_stride,
+                                     kv_b_stride,
+                                     kv_idx_base,
+                                     chunk_end_for_load);
+  }
   commit_group();
 
   produce_kv_blockwise<SharedMemFillMode::kFillZero,
@@ -647,7 +698,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                                    kv_h_stride,
                                    kv_b_stride,
                                    kv_idx_base,
-                                   chunk_end);
+                                   chunk_end_for_load);
   commit_group();
 
 #pragma unroll 1
@@ -689,24 +740,41 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
 
     kv_idx_base += BLOCK_SIZE;
     block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
-    if (block_id < 0) {
-      block_id = 0;
+    valid_block = block_id >= 0;
+    safe_block_id = valid_block ? block_id : 0;
+    chunk_end_for_load = valid_block ? chunk_end : 0;
+    cache_k_now = cache_k + safe_block_id * kv_n_stride + const_offset;
+    if (valid_block) {
+      produce_kv_blockwise<SharedMemFillMode::kNoFill,
+                           NUM_WARPS,
+                           BLOCK_SIZE,
+                           num_frags_y,
+                           num_frags_z,
+                           NUM_WARP_Q>(k_smem,
+                                       &kv_smem_offset_w,
+                                       &cache_k_now,
+                                       kv_head_idx,
+                                       kv_n_stride,
+                                       kv_h_stride,
+                                       kv_b_stride,
+                                       kv_idx_base,
+                                       chunk_end_for_load);
+    } else {
+      produce_kv_blockwise<SharedMemFillMode::kFillZero,
+                           NUM_WARPS,
+                           BLOCK_SIZE,
+                           num_frags_y,
+                           num_frags_z,
+                           NUM_WARP_Q>(k_smem,
+                                       &kv_smem_offset_w,
+                                       &cache_k_now,
+                                       kv_head_idx,
+                                       kv_n_stride,
+                                       kv_h_stride,
+                                       kv_b_stride,
+                                       kv_idx_base,
+                                       chunk_end_for_load);
     }
-    cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
-    produce_kv_blockwise<SharedMemFillMode::kNoFill,
-                         NUM_WARPS,
-                         BLOCK_SIZE,
-                         num_frags_y,
-                         num_frags_z,
-                         NUM_WARP_Q>(k_smem,
-                                     &kv_smem_offset_w,
-                                     &cache_k_now,
-                                     kv_head_idx,
-                                     kv_n_stride,
-                                     kv_h_stride,
-                                     kv_b_stride,
-                                     kv_idx_base,
-                                     chunk_end);
     commit_group();
     wait_group<1>();
     __syncthreads();
@@ -716,7 +784,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
         &v_smem, &v_smem_offset_r, s_frag, o_frag, d_frag);
     __syncthreads();
 
-    cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
+    cache_v_now = cache_v + safe_block_id * kv_n_stride + const_offset;
     produce_kv_blockwise<SharedMemFillMode::kFillZero,
                          NUM_WARPS,
                          BLOCK_SIZE,
@@ -730,7 +798,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                                      kv_h_stride,
                                      kv_b_stride,
                                      kv_idx_base,
-                                     chunk_end);
+                                     chunk_end_for_load);
     commit_group();
   }
   wait_group<0>();
