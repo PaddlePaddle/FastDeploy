@@ -122,6 +122,7 @@ class GptOssMoe(nn.Layer):
             with_bias=True,
             activation="swigluoai",
             model_format="",
+            prefix=f"{prefix}.experts",
         )
 
     def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):

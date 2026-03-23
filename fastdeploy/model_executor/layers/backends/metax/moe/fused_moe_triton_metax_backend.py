@@ -69,8 +69,7 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
             layer.hidden_size,
         ]
         # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
-        is_checkpoint_bf16 = self.quant_config.is_checkpoint_bf16 if self.quant_config is not None else True
-        if is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
+        if layer.fd_config.load_config.load_choices == "default_v1":
             layer.up_gate_proj_weight = layer.create_parameter(
                 shape=self.up_gate_proj_weight_shape,
                 dtype=layer.weight_dtype,
@@ -184,10 +183,6 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
     @paddle.no_grad()
     def process_weights_after_loading(self, layer):
         """ """
-        is_checkpoint_bf16 = self.quant_config.is_checkpoint_bf16 if self.quant_config is not None else True
-        if not is_checkpoint_bf16:
-            return
-
         if self.quant_config is not None:
             algo = layer.quant_method.quant_config.name()
             assert algo == "wint8"
