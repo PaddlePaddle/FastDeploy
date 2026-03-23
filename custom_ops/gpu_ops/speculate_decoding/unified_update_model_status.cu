@@ -241,7 +241,6 @@ PD_BUILD_STATIC_OP(unified_update_model_status)
              "step_idx",
              "end_tokens",
              "max_dec_len"})
-    .Attrs({})
     .Outputs({"seq_lens_encoder_out",
               "seq_lens_decoder_out",
               "has_running_seqs_out",

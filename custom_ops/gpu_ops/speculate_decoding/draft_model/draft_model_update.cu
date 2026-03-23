@@ -56,10 +56,8 @@ __global__ void draft_model_update_kernel(const int64_t* inter_next_tokens,
     // 1. update step_idx && seq_lens_dec
     if (!stop_flags[tid]) {
       int64_t token_this_time = -1;
-      // decoder step
       if (seq_len_encoder > 0) {
         token_this_time = next_tokens_start[0];
-        // seq_lens_decoder[tid] = seq_lens_encoder[tid];
         seq_lens_decoder[tid] = seq_len_encoder + seq_len_decoder;
         seq_lens_encoder[tid] = 0;
         pre_ids_now[1] = token_this_time;
@@ -81,14 +79,6 @@ __global__ void draft_model_update_kernel(const int64_t* inter_next_tokens,
           pre_ids_now[step_idx[tid]] = token_this_time;
         }
       }
-
-      // multi-end
-      // if (step_idx[tid] >= max_dec_len[tid] - 1) {
-      //   stop_flags[tid] = true;
-      //   draft_token_now[seq_len_this_time - 1] = end_ids[0];
-      //   base_model_draft_tokens_now[substep + 1] = end_ids[0];
-      //   stop_flag_now_int = 1;
-      // }
     } else {
       draft_token_now[0] = -1;
       base_model_draft_tokens_now[substep + 1] = -1;

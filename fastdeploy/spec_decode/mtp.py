@@ -861,285 +861,184 @@ class MTPProposer(Proposer):
         for substep in range(self.num_model_steps):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
-                self._preprocess_inputs_cuda(substep)
-                self._initialize_forward_meta_cuda(step_use_cudagraph, is_dummy_run, substep)
-                self.sampling_metadata = self._create_sampling_metadata()
-                model_output = self._execute_model_forward_cuda()
-                hidden_states = self._rebuild_model_output(model_output, substep)
-                logits = self._compute_logits(hidden_states)
+                # Remove padding
+                token_num_cpu = self.model_inputs["seq_lens_this_time"].numpy().sum().item()
+                (
+                    ids_remove_padding,
+                    batch_id_per_token,
+                    cu_seqlens_q,
+                    cu_seqlens_k,
+                    cu_seqlens_q_output,
+                    batch_id_per_token_output,
+                    real_output_token_num,
+                ) = pre_process(
+                    token_num_cpu,
+                    self.model_inputs["input_ids"],
+                    self.model_inputs["seq_lens_this_time"],
+                    True,
+                    self.model_inputs["draft_tokens"],
+                    self.model_inputs["seq_lens_encoder"],
+                    self.model_inputs["seq_lens_decoder"],
+                )
+
+                if self.enable_mm:
+                    attn_mask_offsets = update_attn_mask_offsets(
+                        ids_remove_padding,
+                        getattr(
+                            self.model_inputs, "seq_lens_this_time", self.model_inputs["seq_lens_this_time_buffer"]
+                        ),
+                        self.model_inputs["seq_lens_encoder"],
+                        self.model_inputs["seq_lens_decoder"],
+                        cu_seqlens_q,
+                        self.model_inputs["attn_mask_offsets_full"],
+                        self.model_inputs["attn_mask_offsets_decoder"],
+                        self.model_inputs["is_block_step"],
+                        self.model_inputs["decode_states"],
+                        self.model_inputs["mask_rollback"],
+                    )
+                    self.model_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
+
+                # Initialize forward meta data
+                self.model_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
+                self.model_inputs["batch_id_per_token"][:] = -1
+                self.model_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
+                self.model_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
+
+                # For speculative decoding
+                self.model_inputs["cu_seqlens_q_output"].copy_(cu_seqlens_q_output, False)
+                self.model_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
+                self._real_output_token_num_host.copy_(real_output_token_num, False)
+                self.output_token_num_event.record()
+
+                # Initialize forward meta data
+                self._initialize_forward_meta(
+                    step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run, substep=substep
+                )
+                self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
+
+                # Padding inputs for cuda graph
+                self.padding_cudagraph_inputs()
+
+                # Get sampling metadata
+                self.sampling_metadata = SamplingMetadata(
+                    temperature=self.model_inputs["temperature"],
+                    top_p=self.model_inputs["top_p"],
+                    top_k=self.model_inputs["top_k"],
+                    seed=self.model_inputs["infer_seed"],
+                    step_idx=self.model_inputs["step_idx"],
+                    token_ids_all=self.model_inputs["token_ids_all"],
+                    pre_token_ids=self.model_inputs["pre_ids"],
+                    prompt_lens=self.model_inputs["prompt_lens"],
+                    fake_prompt_lens=self.model_inputs["fake_prompt_lens"],
+                    frequency_penalties=self.model_inputs["frequency_score"],
+                    presence_penalties=self.model_inputs["presence_score"],
+                    repetition_penalties=self.model_inputs["penalty_score"],
+                    min_dec_lens=self.model_inputs["min_dec_len"],
+                    bad_words_token_ids=self.model_inputs["bad_tokens"],
+                    bad_words_token_len=self.model_inputs["bad_tokens_len"],
+                    eos_token_ids=self.model_inputs["eos_token_id"],
+                    max_num_logprobs=20 if self.enable_logprob else None,
+                    temp_scaled_logprobs=self.model_inputs["temp_scaled_logprobs"],
+                    top_p_normalized_logprobs=self.model_inputs["top_p_normalized_logprobs"],
+                    share_inputs=self.model_inputs,
+                )
+                # Note(liuzichang):
+                # paddle.clone would raise error 700 in cudaGraph mode
+                if self.num_model_steps > 1:
+                    self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
+
+                model_output = self.model(
+                    ids_remove_padding=self.model_inputs["ids_remove_padding"],
+                    previous_hidden_states=self.model_inputs["target_hidden_states"],
+                    forward_meta=self.forward_meta,
+                )
+                if self.forward_meta.step_use_cudagraph:
+                    model_output = model_output[: self.real_token_num]
+
+                self.output_token_num_event.synchronize()
+                real_num = int(self._real_output_token_num_host)
+                real_batch_id_per_token_output = self.model_inputs["batch_id_per_token_output"][:real_num]
+                hidden_states = rebuild_padding(
+                    model_output,
+                    self.model_inputs["cu_seqlens_q"],
+                    self.model_inputs["seq_lens_this_time"],
+                    self.model_inputs["seq_lens_decoder"],
+                    self.model_inputs["seq_lens_encoder"],
+                    real_batch_id_per_token_output,
+                    self.model_inputs["cu_seqlens_q_output"],
+                    self.model_inputs["first_token_hidden_states"],
+                    self.enable_logprob if substep == 0 else False,
+                )
+
+                # 4. Compute logits, Sample
+                logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
                 if self.enable_logprob and self.enable_draft_logprob and substep == 0:
-                    self._handle_draft_logits(logits, substep)
-                sampled_token_ids, sampler_output = self._sample_tokens(logits)
-                self._handle_speculative_output(sampler_output, is_dummy_run, substep)
-                self._broadcast_and_postprocess(sampled_token_ids)
+                    first_token_logits = self.model.compute_logits(
+                        self.model_inputs["first_token_hidden_states"], forward_meta=self.forward_meta
+                    )
+
+                    speculate_get_logits(
+                        self.model_inputs["draft_logits"],
+                        self.model_inputs["next_token_num"],
+                        self.model_inputs["batch_token_num"],
+                        self.model_inputs["cu_next_token_offset"],
+                        self.model_inputs["cu_batch_token_offset"],
+                        logits,
+                        first_token_logits,
+                        self.model_inputs["seq_lens_this_time"],
+                        self.model_inputs["seq_lens_encoder"],
+                    )
+
+                sampled_token_ids, sampler_output = self.sampler(
+                    logits,
+                    self.sampling_metadata,
+                    self.max_model_len,
+                    self.model_inputs,
+                )
+
+                if (
+                    not is_dummy_run
+                    and self.parallel_config.tensor_parallel_rank == 0
+                    and substep == 0
+                    and sampler_output.logprobs_tensors is not None
+                ):
+                    real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
+                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
+                    recover_model_output_map = recover_batch_index_for_output(
+                        self.model_inputs,
+                        self.model_inputs.index_to_batch_id,
+                        self.model_inputs.enable_pd_reorder[
+                            "batch_token_num", "cu_batch_token_offset", "seq_lens_decoder", "prompt_lens"
+                        ],
+                    )
+                    speculate_save_output_topk(
+                        sampler_output.sampled_token_ids,
+                        sampler_output.logprobs_tensors.logprob_token_ids,
+                        sampler_output.logprobs_tensors.logprobs,
+                        sampler_output.logprobs_tensors.selected_token_ranks,
+                        recover_model_output_map["batch_token_num"][:real_bsz],
+                        recover_model_output_map["cu_batch_token_offset"][:real_bsz],
+                        self.model_inputs["not_need_stop"],
+                        recover_model_output_map["seq_lens_decoder"],
+                        recover_model_output_map["prompt_lens"],
+                        4,  # mtype
+                        self.local_rank,
+                        self.parallel_config.use_ep,
+                    )
+
+                if self.parallel_config.tensor_parallel_size > 1:
+                    paddle.distributed.broadcast(
+                        sampled_token_ids,
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+
+                self._post_process(sampled_token_ids)
                 if substep != self.num_model_steps - 1:
                     self._get_self_hidden_states(hidden_states)
             else:
                 if hasattr(self.model, "empty_input_forward") and not is_dummy_run:
                     self.model.empty_input_forward(forward_meta=self.forward_meta)
-
-    def _preprocess_inputs_cuda(self, substep: int):
-        """
-        预处理输入数据，执行脱padding操作和多模态注意力掩码更新。
-
-        Args:
-            substep: int
-                当前子步骤索引。
-        """
-        token_num_cpu = self.model_inputs["seq_lens_this_time"].numpy().sum().item()
-        (
-            ids_remove_padding,
-            batch_id_per_token,
-            cu_seqlens_q,
-            cu_seqlens_k,
-            cu_seqlens_q_output,
-            batch_id_per_token_output,
-            real_output_token_num,
-        ) = pre_process(
-            token_num_cpu,
-            self.model_inputs["input_ids"],
-            self.model_inputs["seq_lens_this_time"],
-            True,
-            self.model_inputs["draft_tokens"],
-            self.model_inputs["seq_lens_encoder"],
-            self.model_inputs["seq_lens_decoder"],
-        )
-        if self.enable_mm:
-            attn_mask_offsets = update_attn_mask_offsets(
-                ids_remove_padding,
-                getattr(self.model_inputs, "seq_lens_this_time", self.model_inputs["seq_lens_this_time_buffer"]),
-                self.model_inputs["seq_lens_encoder"],
-                self.model_inputs["seq_lens_decoder"],
-                cu_seqlens_q,
-                self.model_inputs["attn_mask_offsets_full"],
-                self.model_inputs["attn_mask_offsets_decoder"],
-                self.model_inputs["is_block_step"],
-                self.model_inputs["decode_states"],
-                self.model_inputs["mask_rollback"],
-            )
-            self.model_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
-        self.model_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-        self.model_inputs["batch_id_per_token"][:] = -1
-        self.model_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
-        self.model_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
-        self.model_inputs["cu_seqlens_q_output"].copy_(cu_seqlens_q_output, False)
-        self.model_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
-        self._real_output_token_num_host.copy_(real_output_token_num, False)
-        self.output_token_num_event.record()
-        logger.info(f"substep: {substep}. mtp token_num_cpu: {token_num_cpu}")
-        logger.info(f"step_idx: {self.model_inputs['step_idx']}")
-        logger.info(f"seq_lens_decoder: {self.model_inputs['seq_lens_decoder']}")
-
-    def _initialize_forward_meta_cuda(self, step_use_cudagraph: bool, is_dummy_run: bool, substep: int):
-        """
-        初始化前向元数据，包括cuda graph输入填充和batch_id_per_token复制。
-
-        Args:
-            step_use_cudagraph: bool
-                是否使用cuda graph。
-            is_dummy_run: bool
-                是否是虚拟运行。
-            substep: int
-                当前子步骤索引。
-        """
-        self._initialize_forward_meta(
-            step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run, substep=substep
-        )
-        self.forward_meta.batch_id_per_token.copy_(self.model_inputs["batch_id_per_token"], False)
-        self.padding_cudagraph_inputs()
-        if self.num_model_steps > 1:
-            self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
-
-    def _create_sampling_metadata(self):
-        """
-        创建采样元数据对象，包含采样所需的所有参数。
-
-        Returns:
-            SamplingMetadata: 采样元数据对象。
-        """
-        return SamplingMetadata(
-            temperature=self.model_inputs["temperature"],
-            top_p=self.model_inputs["top_p"],
-            top_k=self.model_inputs["top_k"],
-            seed=self.model_inputs["infer_seed"],
-            step_idx=self.model_inputs["step_idx"],
-            token_ids_all=self.model_inputs["token_ids_all"],
-            pre_token_ids=self.model_inputs["pre_ids"],
-            prompt_lens=self.model_inputs["prompt_lens"],
-            fake_prompt_lens=self.model_inputs["fake_prompt_lens"],
-            frequency_penalties=self.model_inputs["frequency_score"],
-            presence_penalties=self.model_inputs["presence_score"],
-            repetition_penalties=self.model_inputs["penalty_score"],
-            min_dec_lens=self.model_inputs["min_dec_len"],
-            bad_words_token_ids=self.model_inputs["bad_tokens"],
-            bad_words_token_len=self.model_inputs["bad_tokens_len"],
-            eos_token_ids=self.model_inputs["eos_token_id"],
-            max_num_logprobs=20 if self.enable_logprob else None,
-            temp_scaled_logprobs=self.model_inputs["temp_scaled_logprobs"],
-            top_p_normalized_logprobs=self.model_inputs["top_p_normalized_logprobs"],
-            share_inputs=self.model_inputs,
-        )
-
-    def _execute_model_forward_cuda(self):
-        """
-        执行模型前向传播。
-
-        Returns:
-            Tensor: 模型输出。
-        """
-        model_output = self.model(
-            ids_remove_padding=self.model_inputs["ids_remove_padding"],
-            previous_hidden_states=self.model_inputs["target_hidden_states"],
-            forward_meta=self.forward_meta,
-        )
-        if self.forward_meta.step_use_cudagraph:
-            model_output = model_output[: self.real_token_num]
-        return model_output
-
-    def _rebuild_model_output(self, model_output, substep: int):
-        """
-        重建模型输出的padding，将模型输出转换为隐藏状态。
-
-        Args:
-            model_output: Tensor
-                模型输出。
-            substep: int
-                当前子步骤索引。
-
-        Returns:
-            Tensor: 重建后的隐藏状态。
-        """
-        self.output_token_num_event.synchronize()
-        real_num = int(self._real_output_token_num_host)
-        real_batch_id_per_token_output = self.model_inputs["batch_id_per_token_output"][:real_num]
-        hidden_states = rebuild_padding(
-            model_output,
-            self.model_inputs["cu_seqlens_q"],
-            self.model_inputs["seq_lens_this_time"],
-            self.model_inputs["seq_lens_decoder"],
-            self.model_inputs["seq_lens_encoder"],
-            real_batch_id_per_token_output,
-            self.model_inputs["cu_seqlens_q_output"],
-            self.model_inputs["first_token_hidden_states"],
-            self.enable_logprob if substep == 0 else False,
-        )
-        return hidden_states
-
-    def _compute_logits(self, hidden_states):
-        """
-        计算logits。
-
-        Args:
-            hidden_states: Tensor
-                隐藏状态。
-
-        Returns:
-            Tensor: logits。
-        """
-        logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
-        return logits
-
-    def _handle_draft_logits(self, logits, substep: int):
-        """
-        处理推测解码的draft logits。
-
-        Args:
-            logits: Tensor
-                当前logits。
-            substep: int
-                当前子步骤索引。
-        """
-        first_token_logits = self.model.compute_logits(
-            self.model_inputs["first_token_hidden_states"], forward_meta=self.forward_meta
-        )
-        speculate_get_logits(
-            self.model_inputs["draft_logits"],
-            self.model_inputs["next_token_num"],
-            self.model_inputs["batch_token_num"],
-            self.model_inputs["cu_next_token_offset"],
-            self.model_inputs["cu_batch_token_offset"],
-            logits,
-            first_token_logits,
-            self.model_inputs["seq_lens_this_time"],
-            self.model_inputs["seq_lens_encoder"],
-        )
-
-    def _sample_tokens(self, logits):
-        """
-        执行采样操作。
-
-        Args:
-            logits: Tensor
-                logits。
-
-        Returns:
-            Tuple[Tensor, SamplerOutput]: 采样token IDs和采样器输出。
-        """
-        sampled_token_ids, sampler_output = self.sampler(
-            logits,
-            self.sampling_metadata,
-            self.max_model_len,
-            self.model_inputs,
-        )
-        return sampled_token_ids, sampler_output
-
-    def _handle_speculative_output(self, sampler_output, is_dummy_run: bool, substep: int):
-        """
-        处理推测解码输出，保存topk结果。
-
-        Args:
-            sampler_output: SamplerOutput
-                采样器输出。
-            is_dummy_run: bool
-                是否是虚拟运行。
-            substep: int
-                当前子步骤索引。
-        """
-        if (
-            not is_dummy_run
-            and self.parallel_config.tensor_parallel_rank == 0
-            and substep == 0
-            and sampler_output.logprobs_tensors is not None
-        ):
-            real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
-            recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
-            recover_model_output_map = recover_batch_index_for_output(
-                self.model_inputs,
-                self.model_inputs.index_to_batch_id,
-                self.model_inputs.enable_pd_reorder[
-                    "batch_token_num", "cu_batch_token_offset", "seq_lens_decoder", "prompt_lens"
-                ],
-            )
-            speculate_save_output_topk(
-                sampler_output.sampled_token_ids,
-                sampler_output.logprobs_tensors.logprob_token_ids,
-                sampler_output.logprobs_tensors.logprobs,
-                sampler_output.logprobs_tensors.selected_token_ranks,
-                recover_model_output_map["batch_token_num"][:real_bsz],
-                recover_model_output_map["cu_batch_token_offset"][:real_bsz],
-                self.model_inputs["not_need_stop"],
-                recover_model_output_map["seq_lens_decoder"],
-                recover_model_output_map["prompt_lens"],
-                4,  # mtype
-                self.local_rank,
-                self.parallel_config.use_ep,
-            )
-
-    def _broadcast_and_postprocess(self, sampled_token_ids):
-        """
-        执行分布式广播采样token并完成后处理。
-
-        Args:
-            sampled_token_ids: Tensor
-                采样得到的token IDs。
-        """
-        if self.parallel_config.tensor_parallel_size > 1:
-            paddle.distributed.broadcast(
-                sampled_token_ids,
-                self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
-                group=self.parallel_config.tp_group,
-            )
-        self._post_process(sampled_token_ids)
 
     def _propose_xpu(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
         """

@@ -500,9 +500,10 @@ def post_process_specualate(
         )
 
     # Unified state update: merges speculate_update + speculate_set_value_by_flags_and_idx
-    # into a single kernel launch. For MTP/ngram paths, verify_draft_tokens has already
-    # handled EOS/max_dec_len detection (replacing tokens + updating step_idx), so
-    # unified_update_model_status acts as a no-op for those checks.
+    # into a single kernel launch. Handles EOS detection, max_dec_len truncation, step_idx
+    # advancement, token_ids_all history write, and stop_flags/not_need_stop update for all
+    # paths (MTP, ngram, naive). Note: verify_draft_tokens intentionally does NOT write back
+    # step_idx (it is read-only in that kernel); step_idx is always updated here.
 
     unified_update_model_status(
         model_output.seq_lens_encoder,  # seq_lens_encoder
