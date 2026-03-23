@@ -30,19 +30,21 @@ compile_file = triton.__path__[0] + "/tools/compile.py"
 link_file = triton.__path__[0] + "/tools/link.py"
 python_path = sys.executable
 
+if _is_package_installed("torch"):
+    with paddle.use_compat_guard(enable=True, silent=True):
+        from triton.runtime.driver import _create_driver
 
-def swap_torch_guard(fn):
+        paddle_driver = _create_driver()
+
+
+def swap_driver_guard(fn):
     # A lightweight wrapper to enable compatibility for triton kernel
     def wrapped_fn(*args, **kwargs):
-        torch_already_imported = "torch" in sys.modules
-        if torch_already_imported:
-            torch_module = sys.modules["torch"]
-        sys.modules["torch"] = paddle
+        triton.runtime.driver.driver.set_active(paddle_driver)
         try:
             return fn(*args, **kwargs)
         finally:
-            if torch_already_imported:
-                sys.modules["torch"] = torch_module
+            triton.runtime.driver.driver.reset_active()
 
     return wrapped_fn
 
@@ -58,9 +60,9 @@ def enable_compat_on_triton_kernel(triton_kernel):
             self.kernel = kernel
 
         def __getitem__(self, index):
-            return swap_torch_guard(self.kernel[index])
+            return swap_driver_guard(self.kernel[index])
 
-    return swap_torch_guard(WrappedTritonKernel)(triton_kernel)
+    return WrappedTritonKernel(triton_kernel)
 
 
 def SubstituteTemplate(template, values):
