@@ -727,6 +727,7 @@ class CompletionOutput:
     multipart: Optional[list[Any]] = None
     num_image_tokens: Optional[int] = None
     enable_parser: bool = False
+    logits_stats: Optional[dict[str, float]] = None
 
     def to_dict(self):
         """

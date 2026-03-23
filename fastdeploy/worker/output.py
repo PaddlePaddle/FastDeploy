@@ -44,6 +44,11 @@ class LogprobsLists(NamedTuple):
     logprobs: list[list[float]]
     # [num_reqs]
     sampled_token_ranks: list[int]
+    # Logits statistics for each sequence (optional)
+    logits_min: Optional[list[float]] = None  # [num_reqs]
+    logits_max: Optional[list[float]] = None  # [num_reqs]
+    logits_mean: Optional[list[float]] = None  # [num_reqs]
+    logits_std: Optional[list[float]] = None  # [num_reqs]
 
     def slice_columns(self, start: int, end: int):
         """
@@ -54,6 +59,14 @@ class LogprobsLists(NamedTuple):
             [row[start:end] for row in self.logprob_token_ids],
             [row[start:end] for row in self.logprobs],
             self.sampled_token_ranks,  # unchanged
+            # [row[start:end] for row in self.logits_min],
+            # [row[start:end] for row in self.logits_max],
+            # [row[start:end] for row in self.logits_mean],
+            # [row[start:end] for row in self.logits_std],
+            self.logits_min,  # unchanged
+            self.logits_max,  # unchanged
+            self.logits_mean,  # unchanged
+            self.logits_std,  # unchanged
         )
 
     def slice_rows(self, start: int, end: int):
@@ -65,6 +78,10 @@ class LogprobsLists(NamedTuple):
             self.logprob_token_ids[start:end],
             self.logprobs[start:end],
             self.sampled_token_ranks[start:end],
+            self.logits_min[start:end] if self.logits_min is not None else None,
+            self.logits_max[start:end] if self.logits_max is not None else None,
+            self.logits_mean[start:end] if self.logits_mean is not None else None,
+            self.logits_std[start:end] if self.logits_std is not None else None,
         )
 
 
@@ -77,6 +94,11 @@ class LogprobsTensors(NamedTuple):
     logprobs: paddle.Tensor
     # [num_reqs]
     selected_token_ranks: paddle.Tensor
+    # Logits statistics for each sequence (optional)
+    logits_min: Optional[paddle.Tensor] = None  # [num_reqs]
+    logits_max: Optional[paddle.Tensor] = None  # [num_reqs]
+    logits_mean: Optional[paddle.Tensor] = None  # [num_reqs]
+    logits_std: Optional[paddle.Tensor] = None
 
     def tolists(self):
         """Convert to lists."""
@@ -84,6 +106,10 @@ class LogprobsTensors(NamedTuple):
             self.logprob_token_ids.tolist(),
             self.logprobs.tolist(),
             self.selected_token_ranks.tolist(),
+            self.logits_min.tolist() if self.logits_min is not None else None,
+            self.logits_max.tolist() if self.logits_max is not None else None,
+            self.logits_mean.tolist() if self.logits_mean is not None else None,
+            self.logits_std.tolist() if self.logits_std is not None else None,
         )
 
     @staticmethod
@@ -97,6 +123,10 @@ class LogprobsTensors(NamedTuple):
             logprob_token_ids=logprob_token_ids,
             logprobs=logprobs,
             selected_token_ranks=selected_token_ranks,
+            logits_min=None,
+            logits_max=None,
+            logits_mean=None,
+            logits_std=None,
         )
 
     @staticmethod
@@ -110,6 +140,10 @@ class LogprobsTensors(NamedTuple):
             logprob_token_ids=logprob_token_ids,
             logprobs=logprobs,
             selected_token_ranks=selected_token_ranks,
+            logits_min=None,
+            logits_max=None,
+            logits_mean=None,
+            logits_std=None,
         )
 
     def slice_rows(self, start: int, end: int):
@@ -122,6 +156,26 @@ class LogprobsTensors(NamedTuple):
                 paddle.to_tensor(self.logprob_token_ids.cpu()[start:end], place="cpu"),
                 paddle.to_tensor(self.logprobs.cpu()[start:end], place="cpu"),
                 paddle.to_tensor(self.selected_token_ranks.cpu()[start:end], place="cpu"),
+                (
+                    paddle.to_tensor(self.logits_min.cpu()[start:end], place="cpu")
+                    if self.logits_min is not None
+                    else None
+                ),
+                (
+                    paddle.to_tensor(self.logits_max.cpu()[start:end], place="cpu")
+                    if self.logits_max is not None
+                    else None
+                ),
+                (
+                    paddle.to_tensor(self.logits_mean.cpu()[start:end], place="cpu")
+                    if self.logits_mean is not None
+                    else None
+                ),
+                (
+                    paddle.to_tensor(self.logits_std.cpu()[start:end], place="cpu")
+                    if self.logits_std is not None
+                    else None
+                ),
             )
 
 

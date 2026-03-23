@@ -811,22 +811,49 @@ class OpenAIServingChat:
         request_decode_flag: Optional[bool] = True,
     ) -> Optional[LogProbs]:
         """Create OpenAI-style logprobs for chat completions."""
-        if output_top_logprobs is None or len(output_top_logprobs) < 3 or any(not lst for lst in output_top_logprobs):
+        if (
+            output_top_logprobs is None
+            or len(output_top_logprobs) < 3
+            or any(not lst for lst in output_top_logprobs[:3])
+        ):  # check top 3 because logits_stats maybe None
             return None
         logprobs_res: Optional[LogProbs] = None
-        for logprob_token_ids, logprobs, sampled_token_ranks in zip(
-            output_top_logprobs[0], output_top_logprobs[1], output_top_logprobs[2]
-        ):
-            top_logprobs = LogprobsLists(
-                logprob_token_ids=[logprob_token_ids],
-                logprobs=[logprobs],
-                sampled_token_ranks=[sampled_token_ranks],
-            )
+
+        # Extract logits stats from LogprobsLists if available
+        has_logits_stats = False if output_top_logprobs.logits_min is None else True
+
+        # Iterate by index over mandatory fields; optionally include logits stats
+        num_tokens = len(output_top_logprobs.logprobs)
+        for idx in range(num_tokens):
+            logits_stats = None
+            if has_logits_stats:
+                top_logprobs = LogprobsLists(
+                    logprob_token_ids=[output_top_logprobs.logprob_token_ids[idx]],
+                    logprobs=[output_top_logprobs.logprobs[idx]],
+                    sampled_token_ranks=[output_top_logprobs.sampled_token_ranks[idx]],
+                    logits_min=[output_top_logprobs.logits_min[idx]],
+                    logits_max=[output_top_logprobs.logits_max[idx]],
+                    logits_mean=[output_top_logprobs.logits_mean[idx]],
+                    logits_std=[output_top_logprobs.logits_std[idx]],
+                )
+                logits_stats = {
+                    "min": float(output_top_logprobs.logits_min[idx]),
+                    "max": float(output_top_logprobs.logits_max[idx]),
+                    "mean": float(output_top_logprobs.logits_mean[idx]),
+                    "std": float(output_top_logprobs.logits_std[idx]),
+                }
+            else:
+                top_logprobs = LogprobsLists(
+                    logprob_token_ids=[output_top_logprobs.logprob_token_ids[idx]],
+                    logprobs=[output_top_logprobs.logprobs[idx]],
+                    sampled_token_ranks=[output_top_logprobs.sampled_token_ranks[idx]],
+                )
             step_logprobs_res = self._build_logprobs_response(
                 request_logprobs=request_logprobs,
                 response_logprobs=top_logprobs,
                 request_top_logprobs=request_top_logprobs,
                 request_decode_flag=request_decode_flag,
+                logits_stats=logits_stats,
             )
             if logprobs_res is None:
                 logprobs_res = step_logprobs_res
@@ -840,6 +867,7 @@ class OpenAIServingChat:
         response_logprobs: Optional[LogprobsLists],
         request_top_logprobs: int,
         request_decode_flag: bool,
+        logits_stats: Optional[dict[str, float]] = None,
     ) -> Optional[LogProbs]:
         """
         Construct a logprobs response object in line with the OpenAI style.
@@ -887,6 +915,7 @@ class OpenAIServingChat:
                 logprob=top_logprob_entries[0].logprob,
                 bytes=top_logprob_entries[0].bytes,
                 top_logprobs=top_logprob_entries[1:],  # Here are the complete topk candidates
+                logits_stats=logits_stats,
             )
 
             return LogProbs(content=[sampled_entry])
