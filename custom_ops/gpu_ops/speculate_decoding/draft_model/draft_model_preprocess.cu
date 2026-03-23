@@ -175,7 +175,6 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
   int draft_tokens_len = draft_tokens.shape()[1];
   int pre_ids_len = pre_ids.shape()[1];
   auto cu_stream = seq_lens_this_time.stream();
-  constexpr int BlockSize = 512;
   int target_model_draft_tokens_len = target_model_draft_tokens.shape()[1];
   auto not_need_stop_gpu =
       not_need_stop.copy_to(seq_lens_this_time.place(), false);
