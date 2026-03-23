@@ -146,10 +146,9 @@ __device__ __forceinline__ void produce_kv(CacheT* smem,
       pred_load<128,
                 PrefetchMode::kPrefetch,
                 SharedMemFillMode::kFillZero,
-                CacheT>(
-          smem + smem_offset_base + vid * CACHE_VEC_SIZE,
-          kv_base_gptr + k_offset_base + vid * CACHE_VEC_SIZE,
-          false);
+                CacheT>(smem + smem_offset_base + vid * CACHE_VEC_SIZE,
+                        kv_base_gptr + k_offset_base + vid * CACHE_VEC_SIZE,
+                        false);
     }
   }
 }

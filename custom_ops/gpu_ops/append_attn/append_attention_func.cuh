@@ -101,8 +101,8 @@ __device__ __forceinline__ void load_128b_async_zero_on_invalid(
     if (predicate) {
       smem.load_128b_async<fill_mode>(offset, gmem_ptr, true);
     } else {
-      smem.load_128b_async<SharedMemFillMode::kFillZero>(offset, gmem_ptr,
-                                                         false);
+      smem.load_128b_async<SharedMemFillMode::kFillZero>(
+          offset, gmem_ptr, false);
     }
   }
 }
@@ -346,7 +346,8 @@ __device__ __forceinline__ void produce_v_blockwise_c8(
   if constexpr (NUM_WARP_Q == 4) {
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
     const bool valid_block = block_id >= 0;
-    // Keep address valid for cp.async; data path is still zero-filled when !valid_block.
+    // Keep address valid for cp.async; data path is still zero-filled when
+    // !valid_block.
     const int safe_block_id = valid_block ? block_id : 0;
     CacheT* cache_v_now =
         cache_v + safe_block_id * kv_n_stride + const_v_offset;
@@ -374,7 +375,8 @@ __device__ __forceinline__ void produce_v_blockwise_c8(
     for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV / 2; ++kv_i) {
       int block_id = __ldg(&block_table_now[kv_idx / block_size]);
       const bool valid_block = block_id >= 0;
-      // Keep address valid for cp.async; data path is still zero-filled when !valid_block.
+      // Keep address valid for cp.async; data path is still zero-filled when
+      // !valid_block.
       const int safe_block_id = valid_block ? block_id : 0;
       CacheT* cache_v_now =
           cache_v + safe_block_id * kv_n_stride + const_v_offset;
@@ -426,7 +428,8 @@ __device__ __forceinline__ void produce_kv_dynamic_scale_gmem2smem_async(
     // 4 warps shared block_size
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
     const bool valid_block = block_id >= 0;
-    // Keep address valid for cp.async; data path is still zero-filled when !valid_block.
+    // Keep address valid for cp.async; data path is still zero-filled when
+    // !valid_block.
     const int safe_block_id = valid_block ? block_id : 0;
     if (tid < block_size / 8) {
       const T* cache_k_scale_now =
@@ -445,7 +448,8 @@ __device__ __forceinline__ void produce_kv_dynamic_scale_gmem2smem_async(
       const uint32_t kv_idx_now = kv_idx + block_size * tid / 8;
       int block_id = __ldg(&block_table_now[kv_idx_now / block_size]);
       const bool valid_block = block_id >= 0;
-      // Keep address valid for cp.async; data path is still zero-filled when !valid_block.
+      // Keep address valid for cp.async; data path is still zero-filled when
+      // !valid_block.
       const int safe_block_id = valid_block ? block_id : 0;
       const int kv_idx_this_thread = kv_idx + tid * 8;
       const T* cache_k_scale_now =
@@ -545,7 +549,8 @@ __device__ __forceinline__ void produce_k_blockwise_c8(
   if constexpr (NUM_WARP_Q == 4) {
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
     const bool valid_block = block_id >= 0;
-    // Keep address valid for cp.async; data path is still zero-filled when !valid_block.
+    // Keep address valid for cp.async; data path is still zero-filled when
+    // !valid_block.
     const int safe_block_id = valid_block ? block_id : 0;
     CacheT* cache_k_now =
         cache_k + safe_block_id * kv_n_stride + const_k_offset;
@@ -577,7 +582,8 @@ __device__ __forceinline__ void produce_k_blockwise_c8(
     for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV / 2; ++kv_i) {
       int block_id = __ldg(&block_table_now[kv_idx / block_size]);
       const bool valid_block = block_id >= 0;
-      // Keep address valid for cp.async; data path is still zero-filled when !valid_block.
+      // Keep address valid for cp.async; data path is still zero-filled when
+      // !valid_block.
       const int safe_block_id = valid_block ? block_id : 0;
       CacheT* cache_k_now =
           cache_k + safe_block_id * kv_n_stride + const_k_offset;
@@ -635,7 +641,8 @@ __device__ __forceinline__ void produce_v_blockwise_c4(
   for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV; ++kv_i) {
     int block_id = __ldg(&block_table_now[(kv_idx) / block_size]);
     const bool valid_block = block_id >= 0;
-    // Keep address valid for cp.async; data path is still zero-filled when !valid_block.
+    // Keep address valid for cp.async; data path is still zero-filled when
+    // !valid_block.
     const int safe_block_id = valid_block ? block_id : 0;
     CacheT* cache_v_now =
         cache_v + safe_block_id * kv_n_stride + const_v_offset;
@@ -693,7 +700,8 @@ __device__ __forceinline__ void produce_k_blockwise_c4(
   for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV; ++kv_i) {
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
     const bool valid_block = block_id >= 0;
-    // Keep address valid for cp.async; data path is still zero-filled when !valid_block.
+    // Keep address valid for cp.async; data path is still zero-filled when
+    // !valid_block.
     const int safe_block_id = valid_block ? block_id : 0;
     CacheT* cache_k_now =
         cache_k + safe_block_id * kv_n_stride + const_k_offset;
