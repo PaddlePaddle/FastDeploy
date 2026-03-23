@@ -878,9 +878,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self._update_block_tables_3d_slot(idx, cache_ids_2d, str(request.request_id))
                     if cache_ids_2d:
                         head0_row = cache_ids_2d[0] if cache_ids_2d[0] is not None else []
-                        encoder_block_num, head0_contiguous_len, head0_holes = self._head_wise_row_layout_stats(
-                            head0_row
-                        )
+                        encoder_block_num = sum(1 for cid in head0_row if cid is not None and cid >= 0)
+                        _, head0_contiguous_len, head0_holes = self._head_wise_row_layout_stats(head0_row)
                         if self.head_wise_hole_log and head0_holes > 0:
                             should_log = (
                                 self._head_wise_hole_log_count < 100
@@ -974,9 +973,8 @@ class GPUModelRunner(ModelRunnerBase):
                         self.forward_batch_reqs_list[idx] = request
                     if cache_ids_2d:
                         head0_row = cache_ids_2d[0] if cache_ids_2d[0] is not None else []
-                        encoder_block_num, head0_contiguous_len, head0_holes = self._head_wise_row_layout_stats(
-                            head0_row
-                        )
+                        encoder_block_num = sum(1 for cid in head0_row if cid is not None and cid >= 0)
+                        _, head0_contiguous_len, head0_holes = self._head_wise_row_layout_stats(head0_row)
                         if self.head_wise_hole_log and head0_holes > 0:
                             should_log = (
                                 self._head_wise_hole_log_count < 100
@@ -1210,7 +1208,7 @@ class GPUModelRunner(ModelRunnerBase):
                 block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(flat_block_tables[b][start:end], dtype="int32")
 
     def _normalize_head_wise_cache_ids_2d(self, cache_ids_2d):
-        """Keep sparse per-head rows while normalizing None entries to -1."""
+        """Compact per-head rows to valid cache_ids only, preserving order."""
         if cache_ids_2d is None:
             return None
         normalized_cache_ids_2d = []
@@ -1218,7 +1216,14 @@ class GPUModelRunner(ModelRunnerBase):
             if head_tables is None:
                 normalized_cache_ids_2d.append([])
                 continue
-            normalized_cache_ids_2d.append([(-1 if cid is None else int(cid)) for cid in head_tables])
+            compacted_row = []
+            for cid in head_tables:
+                if cid is None:
+                    continue
+                cid = int(cid)
+                if cid >= 0:
+                    compacted_row.append(cid)
+            normalized_cache_ids_2d.append(compacted_row)
         return normalized_cache_ids_2d
 
     @staticmethod
