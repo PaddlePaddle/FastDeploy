@@ -516,7 +516,20 @@ std::vector<paddle::Tensor> AppendAttention(
   meta_data.max_blocks_per_seq = block_tables.dims()[1];
   meta_data.max_blocks_per_head = meta_data.max_blocks_per_seq;
   if (meta_data.use_head_wise) {
-    meta_data.kv_num_heads = block_tables.dims()[0] / meta_data.batch_size;
+    if (meta_data.batch_size <= 0) {
+      PD_THROW(
+          "Invalid batch_size %d in head-wise mode. batch_size must be > 0.",
+          meta_data.batch_size);
+    }
+    const auto block_tables_dim0 = block_tables.dims()[0];
+    if (block_tables_dim0 % meta_data.batch_size != 0) {
+      PD_THROW(
+          "Inconsistent dimensions in head-wise mode: block_tables.dims()[0] "
+          "(%lld) must be divisible by batch_size (%d).",
+          static_cast<long long>(block_tables_dim0),
+          meta_data.batch_size);
+    }
+    meta_data.kv_num_heads = block_tables_dim0 / meta_data.batch_size;
     meta_data.block_size = key_cache_dims[1];
     meta_data.head_dims = key_cache_dims[2];
   } else {
@@ -735,7 +748,20 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
   meta_data.max_blocks_per_seq = block_tables.dims()[1];
   meta_data.max_blocks_per_head = meta_data.max_blocks_per_seq;
   if (meta_data.use_head_wise) {
-    meta_data.kv_num_heads = block_tables.dims()[0] / meta_data.batch_size;
+    if (meta_data.batch_size <= 0) {
+      PD_THROW(
+          "Invalid batch_size %d in head-wise mode. batch_size must be > 0.",
+          meta_data.batch_size);
+    }
+    const auto block_tables_dim0 = block_tables.dims()[0];
+    if (block_tables_dim0 % meta_data.batch_size != 0) {
+      PD_THROW(
+          "Inconsistent dimensions in head-wise mode: block_tables.dims()[0] "
+          "(%lld) must be divisible by batch_size (%d).",
+          static_cast<long long>(block_tables_dim0),
+          meta_data.batch_size);
+    }
+    meta_data.kv_num_heads = block_tables_dim0 / meta_data.batch_size;
     meta_data.block_size = key_cache_dims[1];
     meta_data.head_dims = key_cache_dims[2];
   } else {
