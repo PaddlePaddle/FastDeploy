@@ -288,11 +288,17 @@ class ResourceManagerV1(ResourceManager):
         return request
 
     def _prepare_decode_task(self, request):
+        block_tables_3d = getattr(request, "block_tables_3d", None)
+        if block_tables_3d is not None:
+            block_tables_3d = [
+                list(head_blocks) if head_blocks is not None else []
+                for head_blocks in block_tables_3d
+            ]
         return ScheduledDecodeTask(
             idx=request.idx,
             request_id=request.request_id,
             block_tables=list(request.block_tables),
-            block_tables_3d=copy.deepcopy(getattr(request, "block_tables_3d", None)),
+            block_tables_3d=block_tables_3d,
         )
 
     def _extend_head_wise_block_tables(self, request: Request, new_blocks):
