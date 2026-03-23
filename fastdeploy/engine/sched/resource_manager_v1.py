@@ -234,6 +234,9 @@ class ResourceManagerV1(ResourceManager):
 
         # SWA recycle
         self.request_head_recycle_upto = {}
+        # request_id -> num_total_tokens captured at last decode dispatch.
+        # Used as a lightweight overlap safety gate for SWA timely recycle.
+        self.request_last_decode_dispatch_tokens = {}
         self.swa_window_size = getattr(self.config.model_config, "window_size", 0)
         try:
             self.swa_sink_size = int(getattr(self.config.model_config, "sink_size", 0) or 0)
@@ -294,6 +297,27 @@ class ResourceManagerV1(ResourceManager):
             block_tables=list(request.block_tables),
             block_tables_3d=block_tables_3d,
         )
+
+    def _mark_decode_dispatched(self, request: Request) -> None:
+        if not self.config.scheduler_config.enable_overlap_schedule:
+            return
+        self.request_last_decode_dispatch_tokens[request.request_id] = request.num_total_tokens
+
+    def _should_skip_swa_recycle_for_overlap(self, request: Request) -> bool:
+        """
+        In overlap scheduling, delay SWA recycle until request token count advances
+        beyond the last decode-dispatched snapshot.
+        """
+        if not self.config.scheduler_config.enable_overlap_schedule:
+            return False
+        last_dispatched_tokens = self.request_last_decode_dispatch_tokens.get(request.request_id)
+        if last_dispatched_tokens is None:
+            return True
+        return request.num_total_tokens <= last_dispatched_tokens
+
+    def _append_decode_task(self, scheduled_reqs, request: Request) -> None:
+        scheduled_reqs.append(self._prepare_decode_task(request))
+        self._mark_decode_dispatched(request)
 
     def _extend_head_wise_block_tables(self, request: Request, new_blocks):
         """Append newly allocated blocks/cache_ids to request block tables."""
@@ -959,7 +983,14 @@ class ResourceManagerV1(ResourceManager):
                         and self.swa_kv_head_indices
                         and not self.config.cache_config.enable_prefix_caching
                     ):  # recycle for swa
-                        self.recycle_request_swa_head_cache(request)
+                        if self._should_skip_swa_recycle_for_overlap(request):
+                            llm_logger.debug(
+                                f"[SWA_RECYCLE] skip by overlap gate, request_id={request.request_id}, "
+                                f"num_total_tokens={request.num_total_tokens}, "
+                                f"last_dispatched_tokens={self.request_last_decode_dispatch_tokens.get(request.request_id)}"
+                            )
+                        else:
+                            self.recycle_request_swa_head_cache(request)
 
                     if (
                         self.allocated_slots(request) - request.num_total_tokens
@@ -975,7 +1006,7 @@ class ResourceManagerV1(ResourceManager):
                             )
                             self._extend_head_wise_block_tables(request, decode_extend_blocks)
                             # Prepare decoding task
-                            scheduled_reqs.append(self._prepare_decode_task(request))
+                            self._append_decode_task(scheduled_reqs, request)
                         else:
                             # Not enough blocks to allocate, trigger preemption
                             can_schedule = self._trigger_preempt(
@@ -989,7 +1020,7 @@ class ResourceManagerV1(ResourceManager):
                             )
                             self._extend_head_wise_block_tables(request, decode_extend_blocks)
                             # Prepare decoding task
-                            scheduled_reqs.append(self._prepare_decode_task(request))
+                            self._append_decode_task(scheduled_reqs, request)
                         num_decoding_req_nums += 1
                     token_budget -= 1
                     if (
@@ -1006,7 +1037,7 @@ class ResourceManagerV1(ResourceManager):
                                 allocate_block_num, request.request_id
                             )
                             self._extend_head_wise_block_tables(request, decode_blocks)
-                            scheduled_reqs.append(self._prepare_decode_task(request))
+                            self._append_decode_task(scheduled_reqs, request)
 
                             # Prepare extend task
                             reuse_block_num = request.num_total_tokens // self.config.cache_config.block_size
@@ -1697,6 +1728,7 @@ class ResourceManagerV1(ResourceManager):
             del self.reuse_block_num_map[request.request_id]
             del self.need_block_num_map[request.request_id]
         self.request_head_recycle_upto.pop(request.request_id, None)
+        self.request_last_decode_dispatch_tokens.pop(request.request_id, None)
 
     def finish_requests_async(self, request_ids: Union[str, Iterable[str]]):
         return self.finish_execution_pool.submit(self.finish_requests, request_ids)
@@ -1761,6 +1793,7 @@ class ResourceManagerV1(ResourceManager):
     def clear_data(self):
         self.waiting: deque[Request] = deque()
         self.to_be_rescheduled_request_id_set = set()
+        self.request_last_decode_dispatch_tokens = {}
         self.update_metrics(verbose=True)
 
     def update_metrics(self, verbose=False):
