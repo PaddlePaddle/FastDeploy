@@ -873,12 +873,6 @@ class TestFusedMoE(unittest.TestCase):
         max_diff = float(diff.max().numpy())
         mean_diff = float(diff.mean().numpy())
 
-        # Tolerance: the EP combine accumulates in BF16 while our reference uses
-        # float32.  One BF16 rounding step introduces at most eps_bf16 ≈ 2^-7
-        # error relative to the current partial sum.  With top_k steps the
-        # worst-case absolute error is:
-        #   output_scale × top_k × 2^-7
-        # We give 2× headroom and floor at 100.0 to handle near-zero outputs.
         output_scale = float(ref_output.abs().max().numpy())
         tol = max(100.0, output_scale * top_k * 2 ** (-6))
 

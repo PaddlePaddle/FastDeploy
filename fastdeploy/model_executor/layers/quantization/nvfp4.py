@@ -35,6 +35,13 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 
 paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
+try:
+    from fastdeploy.model_executor.ops.gpu import (
+        depermute_prefill_combine,
+        prefill_permute_to_masked_gemm,
+    )
+except ImportError:
+    pass
 
 try:
     # flashinfer cutedsl blockscaled gemm takes long time to complie, it may not be imported in function.
@@ -44,16 +51,8 @@ try:
         silu_and_mul_scaled_nvfp4_experts_quantize,
     )
     from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
-
-    from fastdeploy.model_executor.layers.moe.ep import deep_ep
-    from fastdeploy.model_executor.ops.gpu import (
-        depermute_prefill_combine,
-        prefill_permute_to_masked_gemm,
-    )
-
-    _FLASHINFER_CUTEDSL_AVAILABLE = True
-except:
-    _FLASHINFER_CUTEDSL_AVAILABLE = False
+except ImportError:
+    pass
 
 
 def call_prefill_permute_to_masked_gemm(
@@ -663,9 +662,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         if self.backend != "flashinfer-cutedsl":
             raise NotImplementedError("NVFP4 EP backend only supports CuteDSL implementation.")
 
-        if not _FLASHINFER_CUTEDSL_AVAILABLE:
-            raise ImportError("install flashinfer cutedsl blockscaled gemm")
-
         masked_m = masked_m.cast(paddle.int32)
         num_experts = int(layer.num_local_experts)
 
@@ -760,6 +756,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
+
+        from fastdeploy.model_executor.layers.moe.ep import deep_ep
 
         event = deep_ep.Buffer.capture()
 
