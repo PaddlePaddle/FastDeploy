@@ -591,7 +591,7 @@ class CacheManager(KVCacheBase):
 
                 # DEBUG LOG: 匹配结果详情
                 for node in matched_nodes:
-                    logger.debug(f"[DEBUG] matched node: block_id={node.block_id}, ref_count={node.ref_count}")
+                    logger.debug(f"[DEBUG] matched node: block_id={node.block_id}, ref_count={node.ref_count}, on_device: {node.is_on_device()}")
 
                 # DEBUG LOG: radix tree 状态
                 _debug_log_radix_tree_state(

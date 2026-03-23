@@ -278,6 +278,10 @@ class GPUModelRunner(ModelRunnerBase):
                 self.local_rank,
                 self.device_id,
             )
+            # Pending async handlers for cache transfer operations.
+            # Swap-in handlers are reset each batch; evict handlers accumulate across batches.
+            self._pending_swap_in_handlers = []
+            self._pending_evict_handlers = []
 
         # for overlap
         self._cached_model_output_data = None
@@ -749,6 +753,39 @@ class GPUModelRunner(ModelRunnerBase):
             "position_ids_offset": [0],
             "max_tokens_lst": [],
         }
+        if self.enable_cache_manager_v1:
+            # Wait for all pending evictions (may accumulate across batches)
+            evict_wait_start = time.time()
+            evict_length = len(self._pending_evict_handlers)
+            for handler in self._pending_evict_handlers:
+                if not handler.is_completed:
+                    result = handler.get_result()
+                else:
+                    result = handler.result
+                logger.info(f"cache evict result: {result}")
+            self._pending_evict_handlers.clear()
+            evict_wait_ms = (time.time() - evict_wait_start) * 1000
+            if evict_wait_ms > 0.01:
+                logger.info(
+                    f"cache evict wait time: {evict_wait_ms:.2f}ms, "
+                    f"{evict_length} pending evictions"
+                )
+            
+            logger.info(f"type is : {type(req_dicts[0])}")
+    
+            if len(req_dicts.cache_swap_metadata):
+                logger.info(f"cache_swap_metadata: {req_dicts.cache_swap_metadata}")
+                self.cache_controller.load_host_to_device(req_dicts.cache_swap_metadata)
+                self._pending_swap_in_handlers.extend(
+                    m.async_handler for m in req_dicts.cache_swap_metadata
+                )
+            elif len(req_dicts.cache_evict_metadata) != 0:
+                logger.info(f"cache_evict_metadata: {req_dicts.cache_evict_metadata}")
+                self.cache_controller.evict_device_to_host(req_dicts.cache_evict_metadata)
+                self._pending_evict_handlers.extend(
+                    m.async_handler for m in req_dicts.cache_evict_metadata
+                )
+
         for i in range(req_len):
             request = req_dicts[i]
             idx = self.share_inputs.get_index_by_batch_id(request.idx)
@@ -760,21 +797,6 @@ class GPUModelRunner(ModelRunnerBase):
             logits_info = None
             prefill_tokens = []
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
-                if self.enable_cache_manager_v1:
-                    logger.info(f"prefill task, request id: {request.request_id}")
-                    if len(request.cache_swap_metadata) != 0:
-                        logger.info(f"cache_swap_metadata: {request.cache_swap_metadata}")
-                        self.cache_controller.load_host_to_device(request.cache_swap_metadata)
-                        for meta in request.cache_swap_metadata:
-                            result = meta.async_handler.get_result()
-                            logger.info(f"cache swap result: {result}")
-                    elif len(request.cache_evict_metadata) != 0:
-                        logger.info(f"cache_evict_metadata: {request.cache_evict_metadata}")
-                        self.cache_controller.evict_device_to_host(request.cache_evict_metadata)
-                        for meta in request.cache_evict_metadata:
-                            result = meta.async_handler.get_result()
-                            logger.info(f"cache swap result: {result}")
-
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 self.share_inputs["req_ids"][idx] = str(request.request_id)
                 # rope 3d
@@ -2237,6 +2259,24 @@ class GPUModelRunner(ModelRunnerBase):
         return model_inputs, p_done_idxs, token_num_event
 
     def _execute(self, model_inputs: Dict[str, paddle.Tensor]) -> None:
+        if self.enable_cache_manager_v1:
+            # Wait for swap-in of current batch
+            swap_in_wait_start = time.time()
+            for handler in self._pending_swap_in_handlers:
+                if not handler.is_completed:
+                    result = handler.get_result()
+                else:
+                    result = handler.result
+                logger.info(f"cache swap in result: {result}")
+            swap_in_handler_count = len(self._pending_swap_in_handlers)
+            self._pending_swap_in_handlers.clear()
+            swap_in_wait_ms = (time.time() - swap_in_wait_start) * 1000
+            if swap_in_wait_ms > 0.01:
+                logger.info(
+                    f"cache swap in wait time: {swap_in_wait_ms:.2f}ms, "
+                    f"handler count: {swap_in_handler_count}"
+                )
+
         if model_inputs is not None and len(model_inputs) > 0:
             model_output = self.model(
                 model_inputs,

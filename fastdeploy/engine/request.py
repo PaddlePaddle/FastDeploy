@@ -594,6 +594,99 @@ class Request:
         return hasattr(self, key)
 
 
+class BatchRequest:
+    def __init__(self):
+        self.requests: list[Request] = []
+
+        self.cache_swap_metadata: Optional[CacheSwapMetadata] = None
+        self.cache_evict_metadata: Optional[CacheSwapMetadata] = None
+
+    def add_request(self, request):
+        if hasattr(request, "cache_swap_metadata") and request.cache_swap_metadata:
+            self.append_swap_metadata(request.cache_swap_metadata)
+            request.cache_swap_metadata = []
+        if hasattr(request, "cache_evict_metadata") and request.cache_evict_metadata:
+            self.append_evict_metadata(request.cache_evict_metadata)
+            request.cache_evict_metadata = []
+
+        self.requests.append(request)
+
+    def append_swap_metadata(self, metadata: List[CacheSwapMetadata]):
+        for meta in metadata:
+            if self.cache_swap_metadata:
+                self.cache_evict_metadata.src_block_ids.extend(meta.src_block_ids)
+                self.cache_evict_metadata.dst_block_ids.extend(meta.dst_block_ids)
+                self.cache_evict_metadata.hash_values.extend(meta.hash_values)
+            else:
+                self.cache_swap_metadata = CacheSwapMetadata(
+                    src_block_ids=meta.src_block_ids,
+                    dst_block_ids=meta.dst_block_ids,
+                    src_type="host",
+                    dst_type="device",
+                    hash_values=meta.hash_values,
+                )
+
+    def append_evict_metadata(self, metadata: List[CacheSwapMetadata]):
+        for meta in metadata:
+            if self.cache_evict_metadata:
+                self.cache_evict_metadata.src_block_ids.extend(meta.src_block_ids)
+                self.cache_evict_metadata.dst_block_ids.extend(meta.dst_block_ids)
+                self.cache_evict_metadata.hash_values.extend(meta.hash_values)
+            else:
+                self.cache_evict_metadata = CacheSwapMetadata(
+                    src_block_ids=meta.src_block_ids,
+                    dst_block_ids=meta.dst_block_ids,
+                    src_type="device",
+                    dst_type="host",
+                    hash_values=meta.hash_values,
+                )
+    
+    def __repr__(self):
+        requests_repr = repr(self.requests)
+        return f"BatchRequest(requests={requests_repr}, swap_metadata={self.cache_swap_metadata}, evict_metadata={self.cache_evict_metadata})"
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["requests"] = [
+            req.__getstate__() if hasattr(req, "__getstate__") else req
+            for req in state["requests"]
+        ]
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        restored_requests = []
+        for req_data in self.requests:
+            if isinstance(req_data, dict):
+                req = Request.__new__(Request)
+                req.__dict__.update(req_data)
+                restored_requests.append(req)
+            else:
+                restored_requests.append(req_data)
+        self.requests = restored_requests
+
+    def __iter__(self):
+        for req in self.requests:
+            yield req
+
+    def __getitem__(self, index):
+        return self.requests[index]
+
+    def __len__(self):
+        return len(self.requests)
+
+    def append(self, batch_request: "BatchRequest"):
+        self.requests.extend(batch_request.requests)
+        if batch_request.cache_swap_metadata:
+            self.append_swap_metadata([batch_request.cache_swap_metadata])
+        if batch_request.cache_evict_metadata:
+            self.append_evict_metadata([batch_request.cache_evict_metadata])
+
+    def extend(self, batch_requests: list["BatchRequest"]):
+        for br in batch_requests:
+            self.append(br)
+
+
 class ControlRequest:
     """A generic control request that supports method and args for control operations.
 

@@ -27,6 +27,7 @@ Run with:
 
 import time
 
+from fastdeploy.cache_manager.v1.metadata import CacheStatus
 from fastdeploy.cache_manager.v1.radix_tree import RadixTree
 
 
@@ -62,21 +63,21 @@ class TestRadixTreeInsert:
     def test_insert_single_block(self):
         """Test inserting a single block."""
         tree = RadixTree()
-        result = tree.insert([("hash1", 1)])
+        result, _ = tree.insert([("hash1", 1)])
         assert len(result) == 1  # Returns list of nodes
         assert tree.node_count() == 2  # root + 1 node
 
     def test_insert_multiple_blocks(self):
         """Test inserting multiple blocks in sequence."""
         tree = RadixTree()
-        result = tree.insert([("hash1", 1), ("hash2", 2), ("hash3", 3)])
+        result, _ = tree.insert([("hash1", 1), ("hash2", 2), ("hash3", 3)])
         assert len(result) == 3
         assert tree.node_count() == 4  # root + 3 nodes
 
     def test_insert_empty_list(self):
         """Test inserting empty list returns empty list."""
         tree = RadixTree()
-        result = tree.insert([])
+        result, _ = tree.insert([])
         assert result == []
         assert tree.node_count() == 1
 
@@ -147,7 +148,7 @@ class TestRadixTreeRefCount:
     def test_increment_ref_nodes(self):
         """Test incrementing reference count for nodes."""
         tree = RadixTree()
-        nodes = tree.insert([("hash1", 1), ("hash2", 2)])
+        nodes, _ = tree.insert([("hash1", 1), ("hash2", 2)])
 
         # Release nodes first
         tree.decrement_ref_nodes(nodes)
@@ -160,7 +161,7 @@ class TestRadixTreeRefCount:
     def test_decrement_ref_nodes(self):
         """Test decrementing reference count for nodes."""
         tree = RadixTree()
-        nodes = tree.insert([("hash1", 1), ("hash2", 2)])
+        nodes, _ = tree.insert([("hash1", 1), ("hash2", 2)])
 
         assert len(tree._evictable_set) == 0
 
@@ -171,8 +172,8 @@ class TestRadixTreeRefCount:
     def test_decrement_ref_nodes_shared_prefix(self):
         """Test decrementing with shared prefix."""
         tree = RadixTree()
-        nodes1 = tree.insert([("hash1", 1), ("hash2", 2)])
-        nodes2 = tree.insert([("hash1", 1), ("hash3", 3)])
+        nodes1, _ = tree.insert([("hash1", 1), ("hash2", 2)])
+        nodes2, _ = tree.insert([("hash1", 1), ("hash3", 3)])
 
         # Release first sequence
         tree.decrement_ref_nodes(nodes1)
@@ -185,13 +186,190 @@ class TestRadixTreeRefCount:
         assert len(tree._evictable_set) == 3
 
 
+class TestEvictDeviceToHost:
+    """Tests for evict_device_to_host method."""
+
+    def test_basic_evict_to_host(self):
+        """Test basic device-to-host eviction."""
+        tree = RadixTree(enable_host_cache=True)
+        nodes, _ = tree.insert([("h1", 10), ("h2", 20), ("h3", 30)])
+        tree.decrement_ref_nodes(nodes)
+
+        result = tree.evict_device_to_host(3, [100, 101, 102])
+        assert sorted(result) == [10, 20, 30]
+
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 0
+        assert stats.evictable_host_count == 3
+
+        # Verify nodes now have HOST status and new block_ids
+        for node in nodes:
+            assert node.cache_status == CacheStatus.HOST
+            assert node.block_id in [100, 101, 102]
+
+    def test_evict_partial(self):
+        """Test evicting only part of the evictable nodes."""
+        tree = RadixTree(enable_host_cache=True)
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])
+        tree.decrement_ref_nodes(nodes)
+
+        # Evict only 1 out of 3
+        result = tree.evict_device_to_host(1, [100])
+        assert result == [1]
+
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 2
+        assert stats.evictable_host_count == 1
+
+    def test_evict_with_shared_prefix_non_evictable(self):
+        """Test eviction skips non-evictable nodes (ref_count > 0)."""
+        tree = RadixTree(enable_host_cache=True)
+
+        # Insert two sequences sharing prefix: h1->h2
+        nodes_a, _ = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])
+        tree.insert([("h1", 1), ("h2", 2), ("h4", 4)])
+
+        # Release only sequence A: h3 evictable, h1 and h2 still ref=2
+        tree.decrement_ref_nodes(nodes_a)
+
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 1  # only h3
+
+        # Evict h3 to host
+        result = tree.evict_device_to_host(1, [100])
+        assert result == [3]
+
+        # h3 should now be on host
+        for node in nodes_a:
+            if node.hash_value == "h3":
+                assert node.cache_status == CacheStatus.HOST
+                assert node.block_id == 100
+
+    def test_evict_skips_host_nodes_in_heap(self):
+        """Test that HOST nodes already in heap are skipped."""
+        tree = RadixTree(enable_host_cache=True)
+
+        # Insert and release sequence A
+        nodes_a, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes_a)
+
+        # Evict A to host
+        tree.evict_device_to_host(2, [100, 101])
+
+        # Insert and release sequence B
+        nodes_b, _ = tree.insert([("h3", 3), ("h4", 4)])
+        tree.decrement_ref_nodes(nodes_b)
+
+        # Now heap has: host(h1), host(h2), device(h3), device(h4)
+        # Try to evict 2 device blocks - should skip host nodes
+        result = tree.evict_device_to_host(2, [200, 201])
+        assert sorted(result) == [3, 4]
+
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 0
+        assert stats.evictable_host_count == 4
+
+    def test_evict_to_host_then_reuse_in_find_prefix(self):
+        """Test that evicted HOST nodes can still be found by find_prefix."""
+        tree = RadixTree(enable_host_cache=True)
+
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes)
+
+        # Evict to host
+        tree.evict_device_to_host(2, [100, 101])
+
+        # find_prefix should still match (HOST nodes are not skipped)
+        matched = tree.find_prefix(["h1", "h2"])
+        assert len(matched) == 2
+        block_ids = [n.block_id for n in matched]
+        assert block_ids == [100, 101]
+
+    def test_evict_to_host_then_swap_back_to_device(self):
+        """Test full cycle: insert -> evict to host -> swap back to device."""
+        tree = RadixTree(enable_host_cache=True)
+
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes)
+
+        # Evict to host
+        tree.evict_device_to_host(2, [100, 101])
+        for node in nodes:
+            assert node.cache_status == CacheStatus.HOST
+
+        # Swap back to device
+        original_host_ids = tree.swap_to_device(nodes, [1, 2])
+        assert sorted(original_host_ids) == [100, 101]
+        for node in nodes:
+            assert node.cache_status == CacheStatus.SWAP_TO_DEVICE
+
+        # Complete swap
+        tree.complete_swap_to_device(nodes)
+        for node in nodes:
+            assert node.cache_status == CacheStatus.DEVICE
+
+    def test_evict_precheck_insufficient_evictable(self):
+        """Test pre-check returns None when not enough evictable DEVICE nodes."""
+        tree = RadixTree(enable_host_cache=True)
+
+        # Insert but do NOT decrement (ref_count=1, not evictable)
+        tree.insert([("h1", 1)])
+
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 0
+
+        result = tree.evict_device_to_host(1, [100])
+        assert result is None
+
+    def test_evict_to_host_preserves_tree_structure(self):
+        """Test that eviction preserves tree parent-child relationships."""
+        tree = RadixTree(enable_host_cache=True)
+
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])
+        tree.decrement_ref_nodes(nodes)
+
+        # Evict all to host
+        tree.evict_device_to_host(3, [100, 101, 102])
+
+        # Verify tree structure is intact
+        assert tree.node_count() == 4  # root + 3 nodes
+
+        root = tree._root
+        assert "h1" in root.children
+        assert "h2" in root.children["h1"].children
+        assert "h3" in root.children["h1"].children["h2"].children
+
+    def test_evict_to_host_multiple_times(self):
+        """Test evicting in multiple rounds."""
+        tree = RadixTree(enable_host_cache=True)
+
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2), ("h3", 3), ("h4", 4)])
+        tree.decrement_ref_nodes(nodes)
+
+        # Round 1: evict 2 blocks
+        result1 = tree.evict_device_to_host(2, [100, 101])
+        assert sorted(result1) == [1, 2]
+
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 2
+        assert stats.evictable_host_count == 2
+
+        # Round 2: evict remaining 2 blocks
+        result2 = tree.evict_device_to_host(2, [102, 103])
+        assert sorted(result2) == [3, 4]
+
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 0
+        assert stats.evictable_host_count == 4
+
+
 class TestRadixTreeEviction:
     """Tests for eviction operations."""
 
     def test_evict_host_nodes(self):
         """Test evicting HOST nodes."""
         tree = RadixTree(enable_host_cache=True)
-        nodes = tree.insert([("hash1", 1), ("hash2", 2)])
+        nodes, _ = tree.insert([("hash1", 1), ("hash2", 2)])
         tree.decrement_ref_nodes(nodes)
 
         # First, evict device to host
@@ -206,7 +384,7 @@ class TestRadixTreeEviction:
     def test_evict_device_to_host(self):
         """Test evicting DEVICE nodes to host."""
         tree = RadixTree(enable_host_cache=True)
-        nodes = tree.insert([("hash1", 1), ("hash2", 2)])
+        nodes, _ = tree.insert([("hash1", 1), ("hash2", 2)])
         tree.decrement_ref_nodes(nodes)
 
         device_ids = tree.evict_device_to_host(2, [101, 102])
@@ -220,7 +398,7 @@ class TestRadixTreeEviction:
     def test_evict_device_to_host_not_enough_blocks(self):
         """Test eviction when not enough evictable blocks."""
         tree = RadixTree(enable_host_cache=True)
-        nodes = tree.insert([("hash1", 1)])
+        nodes, _ = tree.insert([("hash1", 1)])
         tree.decrement_ref_nodes(nodes)
 
         # Try to evict more than available
@@ -230,7 +408,7 @@ class TestRadixTreeEviction:
     def test_evict_device_to_host_mismatched_host_ids(self):
         """Test eviction with insufficient host_block_ids."""
         tree = RadixTree(enable_host_cache=True)
-        nodes = tree.insert([("hash1", 1), ("hash2", 2)])
+        nodes, _ = tree.insert([("hash1", 1), ("hash2", 2)])
         tree.decrement_ref_nodes(nodes)
 
         # Not enough host block ids
@@ -261,14 +439,15 @@ class TestRadixTreeReset:
     def test_reset_clears_all(self):
         """Test reset clears all data."""
         tree = RadixTree()
-        nodes = tree.insert([("hash1", 1), ("hash2", 2)])
+        nodes, _ = tree.insert([("hash1", 1), ("hash2", 2)])
         tree.decrement_ref_nodes(nodes)
 
         tree.reset()
 
         assert tree.node_count() == 1
         assert len(tree._evictable_set) == 0
-        assert len(tree._evictable_heap) == 0
+        assert len(tree._evictable_device_heap) == 0
+        assert len(tree._evictable_host_heap) == 0
         assert len(tree._node_id_to_node) == 0
 
 
@@ -280,7 +459,7 @@ class TestRadixTreeFullWorkflow:
         tree = RadixTree(enable_host_cache=True)
 
         # Insert two sequences sharing a prefix
-        nodes_a = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])  # Sequence A
+        nodes_a, _ = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])  # Sequence A
         _ = tree.insert([("h1", 1), ("h2", 2), ("h4", 4)])  # Sequence B
 
         # Release sequence A
@@ -300,7 +479,7 @@ class TestRadixTreeFullWorkflow:
         tree = RadixTree(enable_host_cache=True)
 
         # Insert and release
-        nodes = tree.insert([("h1", 1), ("h2", 2)])
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
         tree.decrement_ref_nodes(nodes)
 
         # Evict device to host
@@ -323,7 +502,7 @@ class TestRadixTreeEdgeCases:
     def test_evict_not_enough_blocks(self):
         """Test eviction when not enough evictable blocks."""
         tree = RadixTree(enable_host_cache=True)
-        nodes = tree.insert([("h1", 1)])
+        nodes, _ = tree.insert([("h1", 1)])
         tree.decrement_ref_nodes(nodes)
 
         # Try to evict more than available
@@ -350,7 +529,7 @@ class TestRadixTreeEdgeCases:
         tree = RadixTree(enable_host_cache=True)
 
         # Insert multiple blocks
-        nodes = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])
         tree.decrement_ref_nodes(nodes)
 
         # Wait a bit and access h2

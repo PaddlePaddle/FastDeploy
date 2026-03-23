@@ -277,7 +277,11 @@ class EngineService:
         self.launch_components()
 
         # If block number is specified and model is deployed in splitwise mode, start cache manager first
-        if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
+        if (
+            not self.do_profile 
+            and self.cfg.scheduler_config.splitwise_role != "mixed" 
+            and not envs.ENABLE_V1_KVCACHE_MANAGER
+        ):
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
 
@@ -309,7 +313,11 @@ class EngineService:
         # and then start the cache manager
         if self.do_profile:
             self._stop_profile()
-        elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
+        elif (
+            self.cfg.scheduler_config.splitwise_role == "mixed" 
+            and self.cfg.cache_config.enable_prefix_caching
+            and not envs.ENABLE_V1_KVCACHE_MANAGER
+        ):
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
 
@@ -1074,12 +1082,12 @@ class EngineService:
                 if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
                     self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
                 # 2. Schedule requests
-                tasks, error_tasks = self.resource_manager.schedule()
+                batch_request, error_tasks = self.resource_manager.schedule()
 
                 # 3. Send to engine
-                if tasks:
+                if len(batch_request) > 0:
                     if self.cfg.scheduler_config.splitwise_role == "decode":
-                        for task in tasks:
+                        for task in batch_request:
                             if task.task_type == RequestType.PREEMPTED:
                                 msg = f"{task.request_id} decode not enough blocks, need to be rescheduled."
                                 self.llm_logger.error(msg)
@@ -1094,7 +1102,7 @@ class EngineService:
                                     ]
                                 )
                     self.resource_manager.get_real_bsz()
-                    for task in tasks:
+                    for task in batch_request:
                         if task.task_type == RequestType.PREFILL:
                             rid = task.request_id.split("_")[0]
                             if isinstance(task, Request) and task.has_been_preempted_before:
@@ -1129,13 +1137,13 @@ class EngineService:
                                 task.metrics.decode_inference_start_time = time.time()
                             elif not task.has_been_preempted_before:
                                 task.metrics.inference_start_time = time.time()
-                    self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
+                    self.engine_worker_queue.put_tasks((batch_request, self.resource_manager.real_bsz))
                 else:
                     # When there are no actual tasks to schedule, send an empty task batch to EP workers.
                     # This helps EP workers barrier for syncing tasks not hang.
                     if self.cfg.parallel_config.enable_expert_parallel:
                         self.engine_worker_queue.put_tasks(
-                            ([], self.resource_manager.real_bsz)
+                            (batch_request, self.resource_manager.real_bsz)
                         )  # Empty (as idle tasks for ep)
 
                 # 4. Response error tasks
@@ -1146,7 +1154,7 @@ class EngineService:
                             continue
                         self._send_error_response(request_id, failed)
 
-                if not tasks and not error_tasks:
+                if len(batch_request) <= 0 and not error_tasks:
                     time.sleep(0.005)
 
             except RuntimeError as e:
@@ -2552,6 +2560,8 @@ class EngineService:
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+            if envs.ENABLE_V1_KVCACHE_MANAGER:
+                return
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
 

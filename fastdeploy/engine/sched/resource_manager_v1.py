@@ -39,6 +39,7 @@ from fastdeploy.engine.request import (
     RequestOutput,
     RequestStatus,
     RequestType,
+    BatchRequest,
 )
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.input.utils import IDS_TYPE_FLAG
@@ -288,14 +289,14 @@ class ResourceManagerV1(ResourceManager):
                 self.to_be_aborted_req_id_set.remove(request_id)
         self.update_metrics()
 
-    def _trigger_abort(self, request_id, scheduled_reqs):
+    def _trigger_abort(self, request_id, batch_request):
         if request_id in self.requests:
             abort_request = self.requests[request_id]
             abort_request.status = RequestStatus.PREEMPTED
             abort_request.num_computed_tokens = 0
             self._free_blocks(abort_request)  # 释放KV cache blocks
             abort_request.cached_block_num = 0
-            scheduled_reqs.append(self._prepare_abort_task(abort_request))
+            batch_request.add_request(self._prepare_abort_task(abort_request))
             self.to_be_aborted_req_id_set.add(request_id)
             self.waiting_abort_req_id_set.remove(request_id)
 
@@ -351,7 +352,7 @@ class ResourceManagerV1(ResourceManager):
                 f"still {len(self.to_be_rescheduled_request_id_set)} requests running"
             )
 
-    def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
+    def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, batch_request):
         """
         If the request cannot be scheduled, preempt the running request one by one until it can be scheduled. Last in, first out.
         """
@@ -388,7 +389,7 @@ class ResourceManagerV1(ResourceManager):
                     )
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 preempted_reqs.append(preempted_req)
-                scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
+                batch_request.add_request(self._prepare_preempt_task(preempted_req))
 
                 llm_logger.debug(
                     f"preempt {preempted_req.request_id} in idx {preempted_req.idx} with generated ids {preempted_req.output_token_ids}"
@@ -727,15 +728,9 @@ class ResourceManagerV1(ResourceManager):
         # Compatible with scenarios without images and videos.
         return num_new_tokens
 
-    def exist_mm_prefill(self, scheduled_reqs):
-        for request in scheduled_reqs:
+    def exist_mm_prefill(self, batch_request):
+        for request in batch_request:
             if request.task_type == RequestType.PREFILL and self._is_mm_request(request):
-                return True
-        return False
-
-    def exist_prefill(self, scheduled_reqs):
-        for request in scheduled_reqs:
-            if request.task_type == RequestType.PREFILL:
                 return True
         return False
 
@@ -761,19 +756,19 @@ class ResourceManagerV1(ResourceManager):
         Try to pull a batch of requests from the waiting queue and schedule them.
         """
 
-        def get_enough_request(request, scheduled_reqs):
+        def get_enough_request(request, batch_request):
             return (
                 ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
                 and self._is_mm_request(request)
-                and self.exist_mm_prefill(scheduled_reqs)
+                and self.exist_mm_prefill(batch_request)
             )
 
         with self.lock:
-            scheduled_reqs: list[Request] = []
             preempted_reqs: list[Request] = []
             error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.scheduler_config.max_num_batched_tokens
             need_abort_requests = []  # users trigger abortion
+            batch_request = BatchRequest()
 
             # First, schedule the RUNNING requests.
             req_index = 0
@@ -795,7 +790,7 @@ class ResourceManagerV1(ResourceManager):
                         request.num_computed_tokens = request.num_total_tokens - 1
 
                     if request.request_id in self.waiting_abort_req_id_set:
-                        self._trigger_abort(request.request_id, scheduled_reqs)
+                        self._trigger_abort(request.request_id, batch_request)
                         req_index += 1
                         need_abort_requests.append(request)
                         continue
@@ -813,11 +808,11 @@ class ResourceManagerV1(ResourceManager):
                                 self._allocate_gpu_blocks(request, self.config.cache_config.enc_dec_block_num)
                             )
                             # Prepare decoding task
-                            scheduled_reqs.append(self._prepare_decode_task(request))
+                            batch_request.add_request(self._prepare_decode_task(request))
                         else:
                             # Not enough blocks to allocate, trigger preemption
                             can_schedule = self._trigger_preempt(
-                                request, self.config.cache_config.enc_dec_block_num, preempted_reqs, scheduled_reqs
+                                request, self.config.cache_config.enc_dec_block_num, preempted_reqs, batch_request
                             )
                             if not can_schedule:
                                 break
@@ -826,7 +821,7 @@ class ResourceManagerV1(ResourceManager):
                                 self._allocate_gpu_blocks(request, self.config.cache_config.enc_dec_block_num)
                             )
                             # Prepare decoding task
-                            scheduled_reqs.append(self._prepare_decode_task(request))
+                            batch_request.add_request(self._prepare_decode_task(request))
                         num_decoding_req_nums += 1
                     token_budget -= 1
                     if (
@@ -839,7 +834,7 @@ class ResourceManagerV1(ResourceManager):
                             allocate_block_num = self.need_block_num_map[request.request_id].consume()
                             # Prepare decoding task
                             request.block_tables.extend(self._allocate_gpu_blocks(request, allocate_block_num))
-                            scheduled_reqs.append(self._prepare_decode_task(request))
+                            batch_request.add_request(self._prepare_decode_task(request))
 
                             # Prepare extend task
                             reuse_block_num = request.num_total_tokens // self.config.cache_config.block_size
@@ -852,7 +847,7 @@ class ResourceManagerV1(ResourceManager):
 
                             request.extend_block_tables = request.block_tables[:reuse_block_num]  # copy prompt cache
                             request.extend_block_tables.extend(self._allocate_gpu_blocks(request, allocate_block_num))
-                            scheduled_reqs.append(
+                            batch_request.add_request(
                                 ScheduledExtendBlocksTask(
                                     idx=request.idx,
                                     request_id=request.request_id,
@@ -873,7 +868,7 @@ class ResourceManagerV1(ResourceManager):
                                 request,
                                 2 * self.need_block_num_map[request.request_id].watch(),
                                 preempted_reqs,
-                                scheduled_reqs,
+                                batch_request,
                             )
 
                             if can_schedule:
@@ -894,7 +889,7 @@ class ResourceManagerV1(ResourceManager):
                     ):
                         req_index += 1
                         continue
-                    if get_enough_request(request, scheduled_reqs):
+                    if get_enough_request(request, batch_request):
                         req_index += 1
                         continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
@@ -906,14 +901,14 @@ class ResourceManagerV1(ResourceManager):
                     if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
                         request.block_tables.extend(self._allocate_gpu_blocks(request, num_new_block))
                         # Prepare prefill task
-                        scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
+                        batch_request.add_request(self._prepare_prefill_task(request, num_new_tokens))
                     else:  # Not enough blocks to allocate, trigger preemption
-                        can_schedule = self._trigger_preempt(request, num_new_block, preempted_reqs, scheduled_reqs)
+                        can_schedule = self._trigger_preempt(request, num_new_block, preempted_reqs, batch_request)
                         if not can_schedule:
                             break
                         request.block_tables.extend(self._allocate_gpu_blocks(request, num_new_block))
                         # Prepare prefill task
-                        scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
+                        batch_request.add_request(self._prepare_prefill_task(request, num_new_tokens))
                     token_budget -= num_new_tokens
                     request.num_computed_tokens += num_new_tokens
                     if (
@@ -945,7 +940,7 @@ class ResourceManagerV1(ResourceManager):
                         break
 
                     request = self.waiting[0]
-                    if get_enough_request(request, scheduled_reqs):
+                    if get_enough_request(request, batch_request):
                         break
                     if request.status == RequestStatus.WAITING:
                         result = self.waiting_async_process(request)
@@ -1007,7 +1002,7 @@ class ResourceManagerV1(ResourceManager):
                                 request.block_tables.extend(extra_gpu_block_ids)
                             self.waiting.popleft()
                             self.running.append(request)
-                            scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
+                            batch_request.add_request(self._prepare_prefill_task(request, num_new_tokens))
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             if (
@@ -1076,7 +1071,7 @@ class ResourceManagerV1(ResourceManager):
                                 request.block_tables.extend(extra_gpu_block_ids)
                             self.waiting.popleft()
                             self.running.append(request)
-                            scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
+                            batch_request.add_request(self._prepare_prefill_task(request, num_new_tokens))
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             if (
@@ -1099,8 +1094,8 @@ class ResourceManagerV1(ResourceManager):
                     # move waiting request to end of the deque
                     self.waiting.append(req)
 
-            if scheduled_reqs:
-                llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
+            if len(batch_request) > 0:
+                llm_logger.debug(f"schedued_reqs: {batch_request}")
                 self.current_reserve_output_block_num_float -= self.decay_output_block_num
                 self.current_reserve_output_block_num = max(
                     int(self.current_reserve_output_block_num_float),
@@ -1110,11 +1105,11 @@ class ResourceManagerV1(ResourceManager):
                 if self.current_reserve_output_block_num == 0:
                     self.can_relax_prefill_strategy = True
 
-            self._log_console_scheduler_metrics(scheduled_reqs)
+            self._log_console_scheduler_metrics(batch_request)
 
             self.update_metrics()
 
-            return scheduled_reqs, error_reqs
+            return batch_request, error_reqs
 
     def waiting_async_process(self, request: Request) -> None:
         """
@@ -1630,7 +1625,7 @@ class ResourceManagerV1(ResourceManager):
             f")"
         )
 
-    def _log_console_scheduler_metrics(self, scheduled_reqs: list[Request | ScheduledDecodeTask]) -> None:
+    def _log_console_scheduler_metrics(self, batch_request: BatchRequest) -> None:
         if not (
             hasattr(self, "scheduler_metrics_logger")
             and self.scheduler_metrics_logger is not None
@@ -1647,8 +1642,8 @@ class ResourceManagerV1(ResourceManager):
         scheduler_queue_cnt = max(int(getattr(self, "scheduler_unhandled_request_num", 0) or 0), 0)
         queue_cnt = len(self.waiting) + scheduler_queue_cnt
 
-        prefill_reqs = [r for r in scheduled_reqs if isinstance(r, Request) and r.task_type == RequestType.PREFILL]
-        has_decode = any(getattr(r, "task_type", None) == RequestType.DECODE for r in scheduled_reqs)
+        prefill_reqs = [r for r in batch_request if isinstance(r, Request) and r.task_type == RequestType.PREFILL]
+        has_decode = any(getattr(r, "task_type", None) == RequestType.DECODE for r in batch_request)
 
         self.scheduler_metrics_logger.log_prefill_batch(
             prefill_reqs=prefill_reqs,
