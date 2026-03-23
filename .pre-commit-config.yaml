@@ -1,6 +1,7 @@
 exclude: |
   (?x)^(
-    dockerfiles/.+
+    dockerfiles/.+|
+    fastdeploy/model_executor/layers/attention/cute/.*
   )$
 default_install_hook_types:
   - pre-commit

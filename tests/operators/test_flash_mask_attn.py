@@ -145,6 +145,7 @@ class TestFlashMaskAttention(unittest.TestCase):
             num_heads=self.num_head,
             kv_num_heads=self.num_kv_head,
             head_dim=self.head_dim,
+            causal=False,
             version=4,
         )[0].reshape([self.q_len, self.num_head * self.head_dim])
 
@@ -188,6 +189,7 @@ class TestFlashMaskAttention(unittest.TestCase):
             num_heads=self.num_head,
             kv_num_heads=self.num_kv_head,
             head_dim=self.head_dim,
+            causal=False,
             version=3,
         )[0].reshape([self.q_len, self.num_head * self.head_dim])
 
@@ -229,6 +231,7 @@ class TestFlashMaskAttention(unittest.TestCase):
             num_heads=self.num_head,
             kv_num_heads=self.num_kv_head,
             head_dim=self.head_dim,
+            causal=False,
             version=2,
         )[0].reshape([self.q_len, self.num_head * self.head_dim])
 
