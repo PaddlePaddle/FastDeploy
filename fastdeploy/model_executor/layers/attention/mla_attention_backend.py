@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import paddle
+import triton
+import triton.language as tl
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
 
 try:
@@ -54,6 +56,144 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
+
+
+@enable_compat_on_triton_kernel
+@triton.jit()
+def extract_kernel(
+    q,
+    cu_seqlens_q,
+    seq_lens_encoder,
+    seq_lens_decoder,
+    output,
+    cache_seqlens,
+    HIDDEN_DIM: tl.constexpr,
+    BLOCK_SIZE: tl.constexpr,
+):
+
+    batch_id = tl.program_id(axis=0)
+    cache_kv_len = tl.load(seq_lens_decoder + batch_id)
+
+    # 这个batch不是decoder，所以不需要动弹
+    if cache_kv_len <= 0:
+        return
+
+    cu_len_this_batch = tl.load(cu_seqlens_q + batch_id)
+
+    read_offsets = tl.arange(0, BLOCK_SIZE)
+    q += cu_len_this_batch * HIDDEN_DIM
+
+    row_data = tl.load(q + read_offsets, mask=read_offsets < HIDDEN_DIM)
+
+    output += batch_id * HIDDEN_DIM
+
+    tl.store(output + read_offsets, row_data, mask=read_offsets < HIDDEN_DIM)
+
+    tl.store(cache_seqlens + batch_id, cache_kv_len + 1)
+
+
+def extract_decoder_token_from_q(
+    q: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
+    seq_lens_encoder: paddle.Tensor,
+    seq_lens_decoder: paddle.Tensor,
+):
+    assert len(q.shape) == 2
+    assert len(cu_seqlens_q.shape) == 1
+    assert len(seq_lens_encoder.shape) == 1
+    assert len(seq_lens_decoder.shape) == 1
+
+    max_bsz = seq_lens_decoder.shape[0]
+
+    hidden_dim = q.shape[-1]
+    out = paddle.empty([max_bsz, hidden_dim], dtype=q.dtype)
+
+    cache_seqlens = paddle.zeros_like(seq_lens_decoder)
+
+    BLOCK_SIZE = triton.next_power_of_2(hidden_dim)
+
+    grid = (max_bsz,)
+
+    extract_kernel[grid](
+        q,
+        cu_seqlens_q,
+        seq_lens_encoder,
+        seq_lens_decoder,
+        out,
+        cache_seqlens,
+        hidden_dim,
+        BLOCK_SIZE,
+    )
+
+    return out, cache_seqlens
+
+
+@enable_compat_on_triton_kernel
+@triton.jit()
+def insert_kernel(
+    decoder_res,
+    cu_seqlens_q,
+    seq_lens_encoder,
+    seq_lens_decoder,
+    output,
+    HIDDEN_DIM: tl.constexpr,
+    BLOCK_SIZE: tl.constexpr,
+):
+
+    batch_id = tl.program_id(axis=0)
+    cache_kv_len = tl.load(seq_lens_decoder + batch_id)
+
+    # 这个batch不是decoder，所以不需要动弹
+    if cache_kv_len <= 0:
+        return
+
+    cu_len_this_batch = tl.load(cu_seqlens_q + batch_id)
+
+    read_offsets = tl.arange(0, BLOCK_SIZE)
+
+    decoder_res += batch_id * HIDDEN_DIM
+
+    row_data = tl.load(decoder_res + read_offsets, mask=read_offsets < HIDDEN_DIM)
+
+    output += cu_len_this_batch * HIDDEN_DIM
+
+    tl.store(output + read_offsets, row_data, mask=read_offsets < HIDDEN_DIM)
+
+
+def insert_decoder_result_back(
+    decoder_result: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
+    seq_lens_encoder: paddle.Tensor,
+    seq_lens_decoder: paddle.Tensor,
+    mixed_token_num,
+):
+    assert len(decoder_result.shape) == 4
+    assert len(cu_seqlens_q.shape) == 1
+    assert len(seq_lens_encoder.shape) == 1
+
+    max_bsz = seq_lens_encoder.shape[0]
+
+    hidden_dim = decoder_result.shape[-2] * decoder_result.shape[-1]
+    out = paddle.zeros([mixed_token_num, hidden_dim], dtype=decoder_result.dtype)
+
+    BLOCK_SIZE = triton.next_power_of_2(hidden_dim)
+
+    grid = (max_bsz,)
+
+    insert_kernel[grid](
+        decoder_result,
+        cu_seqlens_q,
+        seq_lens_encoder,
+        seq_lens_decoder,
+        out,
+        hidden_dim,
+        BLOCK_SIZE,
+    )
+
+    return out
 
 
 def yarn_get_mscale(scale=1, mscale=1):
