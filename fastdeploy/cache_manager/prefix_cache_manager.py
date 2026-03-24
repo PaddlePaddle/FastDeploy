@@ -1813,7 +1813,7 @@ class PrefixCacheManager:
                 match_token_num += block_size
                 last_node = child
 
-        logger.info(f"match_block: req_id {request.request_id}, match_token_num {match_token_num}")
+        logger.info(f"pre_match_block_on_gpu: req_id {request.request_id}, match_token_num {match_token_num}")
         return (
             match_token_num,
             last_node,
