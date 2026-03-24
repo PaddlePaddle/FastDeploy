@@ -584,8 +584,6 @@ async def async_request_eb_openai_chat_completions_multi_turn(
     ) as session:
         for i, message in enumerate(ori_history):
             if message["role"] == "user" or message["role"] == "tool":
-                if i == 15:
-                    break
                 history.append(message)
                 round_input = copy.deepcopy(request_func_input)
                 round_input.history_QA = history
