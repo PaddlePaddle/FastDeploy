@@ -16,15 +16,14 @@
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
 namespace fd_xpu3 {
-__attribute__((global)) void draft_model_update(
-    const int64_t* inter_next_tokens,
+__attribute__((global)) void draft_model_update(const int64_t* inter_next_tokens,
     int64_t* draft_tokens,
     int64_t* pre_ids,
     int* seq_lens_this_time,
     int* seq_lens_encoder,
     int* seq_lens_decoder,
     int64_t* step_idx,
-    const int* output_cum_offsets,
+    const int* cu_seqlens_q_output,
     bool* stop_flags,
     bool* not_need_stop,
     const int64_t* max_dec_len,
@@ -60,7 +59,7 @@ static int cpu_wrapper(api::Context* ctx,
                        int* seq_lens_encoder,
                        int* seq_lens_decoder,
                        int64_t* step_idx,
-                       const int* output_cum_offsets,
+                       const int* cu_seqlens_q_output,
                        bool* stop_flags,
                        bool* not_need_stop,
                        const int64_t* max_dec_len,
@@ -82,8 +81,7 @@ static int cpu_wrapper(api::Context* ctx,
     auto* pre_ids_now = pre_ids + tid * pre_id_length;
     auto* base_model_draft_tokens_now =
         base_model_draft_tokens + tid * max_base_model_draft_token;
-    const int next_tokens_start_id =
-        tid * max_seq_len - output_cum_offsets[tid];
+    const int next_tokens_start_id = cu_seqlens_q_output[tid];
     auto* next_tokens_start = inter_next_tokens + next_tokens_start_id;
     auto seq_len_this_time = seq_lens_this_time[tid];
     auto seq_len_encoder = seq_lens_encoder[tid];
@@ -158,7 +156,7 @@ static int xpu3_wrapper(api::Context* ctx,
                         int* seq_lens_encoder,
                         int* seq_lens_decoder,
                         int64_t* step_idx,
-                        const int* output_cum_offsets,
+                        const int* cu_seqlens_q_output,
                         bool* stop_flags,
                         bool* not_need_stop,
                         const int64_t* max_dec_len,
@@ -182,7 +180,7 @@ static int xpu3_wrapper(api::Context* ctx,
       seq_lens_encoder,
       seq_lens_decoder,
       reinterpret_cast<XPU_INT64*>(step_idx),
-      output_cum_offsets,
+      cu_seqlens_q_output,
       stop_flags,
       not_need_stop,
       reinterpret_cast<const XPU_INT64*>(max_dec_len),
@@ -209,7 +207,7 @@ int draft_model_update(api::Context* ctx,
                        int* seq_lens_encoder,
                        int* seq_lens_decoder,
                        int64_t* step_idx,
-                       const int* output_cum_offsets,
+                       const int* cu_seqlens_q_output,
                        bool* stop_flags,
                        bool* not_need_stop,
                        const int64_t* max_dec_len,
@@ -234,7 +232,7 @@ int draft_model_update(api::Context* ctx,
                       seq_lens_decoder);
   WRAPPER_DUMP_PARAM6(ctx,
                       step_idx,
-                      output_cum_offsets,
+                      cu_seqlens_q_output,
                       stop_flags,
                       not_need_stop,
                       max_dec_len,
@@ -255,7 +253,7 @@ int draft_model_update(api::Context* ctx,
   WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_encoder);
   WRAPPER_CHECK_PTR(ctx, int, bsz, seq_lens_decoder);
   WRAPPER_CHECK_PTR(ctx, int64_t, bsz, step_idx);
-  WRAPPER_CHECK_PTR(ctx, int, bsz, output_cum_offsets);
+  WRAPPER_CHECK_PTR(ctx, int, bsz, cu_seqlens_q_output);
   WRAPPER_CHECK_PTR(ctx, bool, bsz, stop_flags);
   WRAPPER_CHECK_PTR(ctx, bool, 1, not_need_stop);
   WRAPPER_CHECK_PTR(ctx, int64_t, bsz, max_dec_len);
@@ -272,7 +270,7 @@ int draft_model_update(api::Context* ctx,
                        seq_lens_encoder,
                        seq_lens_decoder,
                        step_idx,
-                       output_cum_offsets,
+                       cu_seqlens_q_output,
                        stop_flags,
                        not_need_stop,
                        max_dec_len,
@@ -296,7 +294,7 @@ int draft_model_update(api::Context* ctx,
                         seq_lens_encoder,
                         seq_lens_decoder,
                         step_idx,
-                        output_cum_offsets,
+                        cu_seqlens_q_output,
                         stop_flags,
                         not_need_stop,
                         max_dec_len,

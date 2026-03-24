@@ -23,25 +23,25 @@ typedef uint32_t curandStatePhilox4_32_10_t;
 
 template <bool ENABLE_TOPP, bool USE_TOPK>
 __attribute__((global)) void speculate_verify(
-    const int64_t* sampled_token_ids,
-    int64_t* accept_tokens,
-    int* accept_num,
-    int64_t* step_idx,
-    bool* stop_flags,
-    const int* seq_lens_encoder,
-    const int* seq_lens_decoder,
-    const int64_t* draft_tokens,
-    const int* actual_draft_token_nums,
-    const float* dev_curand_states,
-    const float* topp,
-    const int* seq_lens_this_time,
-    const int64_t* verify_tokens,
-    const float* verify_scores,
-    const int64_t* max_dec_len,
-    const int64_t* end_tokens,
-    const bool* is_block_step,
-    const int* output_cum_offsets,
-    const int* actual_candidate_len,
+    const int64_t *sampled_token_ids,
+    int64_t *accept_tokens,
+    int *accept_num,
+    int64_t *step_idx,
+    bool *stop_flags,
+    const int *seq_lens_encoder,
+    const int *seq_lens_decoder,
+    const int64_t *draft_tokens,
+    const int *actual_draft_token_nums,
+    const float *dev_curand_states,
+    const float *topp,
+    const int *seq_lens_this_time,
+    const int64_t *verify_tokens,
+    const float *verify_scores,
+    const int64_t *max_dec_len,
+    const int64_t *end_tokens,
+    const bool *is_block_step,
+    const int *cu_seqlens_q_output,
+    const int *actual_candidate_len,
     const int real_bsz,
     const int max_draft_tokens,
     const int end_length,
@@ -111,26 +111,26 @@ static int64_t topp_sampling_kernel(const int64_t* candidate_ids,
 }
 
 template <bool ENABLE_TOPP, bool USE_TOPK>
-static int cpu_wrapper(api::Context* ctx,
-                       const int64_t* sampled_token_ids,
-                       int64_t* accept_tokens,
-                       int* accept_num,
-                       int64_t* step_idx,
-                       bool* stop_flags,
-                       const int* seq_lens_encoder,
-                       const int* seq_lens_decoder,
-                       const int64_t* draft_tokens,
-                       const int* actual_draft_token_nums,
-                       const float* dev_curand_states,
-                       const float* topp,
-                       const int* seq_lens_this_time,
-                       const int64_t* verify_tokens,
-                       const float* verify_scores,
-                       const int64_t* max_dec_len,
-                       const int64_t* end_tokens,
-                       const bool* is_block_step,
-                       const int* output_cum_offsets,
-                       const int* actual_candidate_len,
+static int cpu_wrapper(api::Context *ctx,
+                       const int64_t *sampled_token_ids,
+                       int64_t *accept_tokens,
+                       int *accept_num,
+                       int64_t *step_idx,
+                       bool *stop_flags,
+                       const int *seq_lens_encoder,
+                       const int *seq_lens_decoder,
+                       const int64_t *draft_tokens,
+                       const int *actual_draft_token_nums,
+                       const float *dev_curand_states,
+                       const float *topp,
+                       const int *seq_lens_this_time,
+                       const int64_t *verify_tokens,
+                       const float *verify_scores,
+                       const int64_t *max_dec_len,
+                       const int64_t *end_tokens,
+                       const bool *is_block_step,
+                       const int *cu_seqlens_q_output,
+                       const int *actual_candidate_len,
                        const int real_bsz,
                        const int max_draft_tokens,
                        const int end_length,
@@ -147,7 +147,7 @@ static int cpu_wrapper(api::Context* ctx,
     int stop_flag_now_int = 0;
 
     if (!(is_block_step[bid] || bid >= real_bsz)) {
-      const int start_token_id = bid * max_seq_len - output_cum_offsets[bid];
+      const int start_token_id = cu_seqlens_q_output[bid];
       // printf("debug cpu bid:%d,start_token_id:%d\n",bid, start_token_id);
       // printf("bid %d\n", bid);
 
@@ -347,26 +347,26 @@ static int cpu_wrapper(api::Context* ctx,
 }
 
 template <bool ENABLE_TOPP, bool USE_TOPK>
-static int xpu3_wrapper(api::Context* ctx,
-                        const int64_t* sampled_token_ids,
-                        int64_t* accept_tokens,
-                        int* accept_num,
-                        int64_t* step_idx,
-                        bool* stop_flags,
-                        const int* seq_lens_encoder,
-                        const int* seq_lens_decoder,
-                        const int64_t* draft_tokens,
-                        const int* actual_draft_token_nums,
-                        const float* dev_curand_states,
-                        const float* topp,
-                        const int* seq_lens_this_time,
-                        const int64_t* verify_tokens,
-                        const float* verify_scores,
-                        const int64_t* max_dec_len,
-                        const int64_t* end_tokens,
-                        const bool* is_block_step,
-                        const int* output_cum_offsets,
-                        const int* actual_candidate_len,
+static int xpu3_wrapper(api::Context *ctx,
+                        const int64_t *sampled_token_ids,
+                        int64_t *accept_tokens,
+                        int *accept_num,
+                        int64_t *step_idx,
+                        bool *stop_flags,
+                        const int *seq_lens_encoder,
+                        const int *seq_lens_decoder,
+                        const int64_t *draft_tokens,
+                        const int *actual_draft_token_nums,
+                        const float *dev_curand_states,
+                        const float *topp,
+                        const int *seq_lens_this_time,
+                        const int64_t *verify_tokens,
+                        const float *verify_scores,
+                        const int64_t *max_dec_len,
+                        const int64_t *end_tokens,
+                        const bool *is_block_step,
+                        const int *cu_seqlens_q_output,
+                        const int *actual_candidate_len,
                         const int real_bsz,
                         const int max_draft_tokens,
                         const int end_length,
@@ -397,7 +397,7 @@ static int xpu3_wrapper(api::Context* ctx,
           reinterpret_cast<const XPU_INT64*>(max_dec_len),
           reinterpret_cast<const XPU_INT64*>(end_tokens),
           is_block_step,
-          output_cum_offsets,
+          cu_seqlens_q_output,
           actual_candidate_len,
           real_bsz,
           max_draft_tokens,
@@ -413,26 +413,26 @@ static int xpu3_wrapper(api::Context* ctx,
   return api::SUCCESS;
 }
 template <bool ENABLE_TOPP, bool USE_TOPK>
-int speculate_verify(api::Context* ctx,
-                     const int64_t* sampled_token_ids,
-                     int64_t* accept_tokens,
-                     int* accept_num,
-                     int64_t* step_idx,
-                     bool* stop_flags,
-                     const int* seq_lens_encoder,
-                     const int* seq_lens_decoder,
-                     const int64_t* draft_tokens,
-                     const int* actual_draft_token_nums,
-                     const float* dev_curand_states,
-                     const float* topp,
-                     const int* seq_lens_this_time,
-                     const int64_t* verify_tokens,
-                     const float* verify_scores,
-                     const int64_t* max_dec_len,
-                     const int64_t* end_tokens,
-                     const bool* is_block_step,
-                     const int* output_cum_offsets,
-                     const int* actual_candidate_len,
+int speculate_verify(api::Context *ctx,
+                     const int64_t *sampled_token_ids,
+                     int64_t *accept_tokens,
+                     int *accept_num,
+                     int64_t *step_idx,
+                     bool *stop_flags,
+                     const int *seq_lens_encoder,
+                     const int *seq_lens_decoder,
+                     const int64_t *draft_tokens,
+                     const int *actual_draft_token_nums,
+                     const float *dev_curand_states,
+                     const float *topp,
+                     const int *seq_lens_this_time,
+                     const int64_t *verify_tokens,
+                     const float *verify_scores,
+                     const int64_t *max_dec_len,
+                     const int64_t *end_tokens,
+                     const bool *is_block_step,
+                     const int *cu_seqlens_q_output,
+                     const int *actual_candidate_len,
                      const int real_bsz,
                      const int max_draft_tokens,
                      const int end_length,
@@ -462,7 +462,7 @@ int speculate_verify(api::Context* ctx,
                       end_tokens);
   WRAPPER_DUMP_PARAM5(ctx,
                       is_block_step,
-                      output_cum_offsets,
+                      cu_seqlens_q_output,
                       actual_candidate_len,
                       real_bsz,
                       max_draft_tokens);
@@ -492,7 +492,7 @@ int speculate_verify(api::Context* ctx,
   WRAPPER_CHECK_PTR(ctx, int64_t, real_bsz, max_dec_len);
   WRAPPER_CHECK_PTR(ctx, int64_t, end_length, end_tokens);
   WRAPPER_CHECK_PTR(ctx, bool, real_bsz, is_block_step);
-  WRAPPER_CHECK_PTR(ctx, int, real_bsz, output_cum_offsets);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, cu_seqlens_q_output);
   // WRAPPER_CHECK_PTR(ctx, int, real_bsz, actual_candidate_len);
 
   // param check sm size limit
@@ -525,7 +525,7 @@ int speculate_verify(api::Context* ctx,
                                               max_dec_len,
                                               end_tokens,
                                               is_block_step,
-                                              output_cum_offsets,
+                                              cu_seqlens_q_output,
                                               actual_candidate_len,
                                               real_bsz,
                                               max_draft_tokens,
@@ -557,7 +557,7 @@ int speculate_verify(api::Context* ctx,
                                                max_dec_len,
                                                end_tokens,
                                                is_block_step,
-                                               output_cum_offsets,
+                                               cu_seqlens_q_output,
                                                actual_candidate_len,
                                                real_bsz,
                                                max_draft_tokens,
@@ -575,36 +575,36 @@ int speculate_verify(api::Context* ctx,
 
 #define INSTANTIATE_SPECULATE_VERIFY(ENABLE_TOPP, USE_TOPK)                 \
   template int fastdeploy::plugin::speculate_verify<ENABLE_TOPP, USE_TOPK>( \
-      fastdeploy::plugin::api::Context*, /* xpu_ctx */                      \
-      const int64_t*,                    /* sampled_token_ids */            \
-      int64_t*,                          /* accept_tokens */                \
-      int*,                              /* accept_num */                   \
-      int64_t*,                          /* step_idx */                     \
-      bool*,                             /* stop_flags */                   \
-      const int*,                        /* seq_lens_encoder */             \
-      const int*,                        /* seq_lens_decoder */             \
-      const int64_t*,                    /* draft_tokens */                 \
-      const int*,                        /* actual_draft_token_nums */      \
-      const float*,                      /* dev_curand_states or topp */    \
-      const float*,                      /* topp or nullptr */              \
-      const int*,                        /* seq_lens_this_time */           \
-      const int64_t*,                    /* verify_tokens */                \
-      const float*,                      /* verify_scores */                \
-      const int64_t*,                    /* max_dec_len */                  \
-      const int64_t*,                    /* end_tokens */                   \
-      const bool*,                       /* is_block_step */                \
-      const int*,                        /* output_cum_offsets */           \
-      const int*,                        /* actual_candidate_len */         \
-      int,                               /* real_bsz */                     \
-      int,                               /* max_draft_tokens */             \
-      int,                               /* end_length */                   \
-      int,                               /* max_seq_len */                  \
-      int,                               /* max_candidate_len */            \
-      int,                               /* verify_window */                \
-      bool,                              /* prefill_one_step_stop */        \
-      bool,                              /* benchmark_mode */               \
-      bool,                              /* accept_all_drafts */            \
-      bool                               /* use_target_sampling */          \
+      fastdeploy::plugin::api::Context *, /* xpu_ctx */                     \
+      const int64_t *,                    /* sampled_token_ids */           \
+      int64_t *,                          /* accept_tokens */               \
+      int *,                              /* accept_num */                  \
+      int64_t *,                          /* step_idx */                    \
+      bool *,                             /* stop_flags */                  \
+      const int *,                        /* seq_lens_encoder */            \
+      const int *,                        /* seq_lens_decoder */            \
+      const int64_t *,                    /* draft_tokens */                \
+      const int *,                        /* actual_draft_token_nums */     \
+      const float *,                      /* dev_curand_states or topp */   \
+      const float *,                      /* topp or nullptr */             \
+      const int *,                        /* seq_lens_this_time */          \
+      const int64_t *,                    /* verify_tokens */               \
+      const float *,                      /* verify_scores */               \
+      const int64_t *,                    /* max_dec_len */                 \
+      const int64_t *,                    /* end_tokens */                  \
+      const bool *,                       /* is_block_step */               \
+      const int *,                        /* cu_seqlens_q_output */          \
+      const int *,                        /* actual_candidate_len */        \
+      int,                                /* real_bsz */                    \
+      int,                                /* max_draft_tokens */            \
+      int,                                /* end_length */                  \
+      int,                                /* max_seq_len */                 \
+      int,                                /* max_candidate_len */           \
+      int,                                /* verify_window */               \
+      bool,                               /* prefill_one_step_stop */       \
+      bool,                               /* benchmark_mode */              \
+      bool,                               /* accept_all_drafts */           \
+      bool                                /* use_target_sampling */         \
   );
 
 INSTANTIATE_SPECULATE_VERIFY(false, false)

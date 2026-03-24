@@ -1112,7 +1112,7 @@ class MTPProposer(Proposer):
                     forward_meta=self.forward_meta,
                 )
                 hidden_states = xpu_process_output(
-                    model_output, self.model_inputs["cum_offsets"], self.forward_meta, self.model_inputs
+                    model_output, self.forward_meta, self.model_inputs
                 )
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
