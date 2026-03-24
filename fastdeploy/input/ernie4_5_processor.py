@@ -107,6 +107,11 @@ class Ernie4_5Processor(BaseDataProcessor):
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
             request["bad_words_token_ids"] = bad_words_token_ids
 
+        logits_processors_args = self._prepare_think_stop_sentence(
+            request.get("logits_processors_args") or {}, max_model_len
+        )
+        request["logits_processors_args"] = logits_processors_args
+
         # processing prompt_token_ids
         if not request.get("prompt_token_ids"):
             if request.get("prompt"):
@@ -143,6 +148,10 @@ class Ernie4_5Processor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+        logits_processors_args = self._update_thinking_prompt_state(
+            request["prompt_token_ids"], request.get("logits_processors_args") or {}
+        )
+        request["logits_processors_args"] = logits_processors_args
         max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_tokens)
@@ -357,19 +366,19 @@ class Ernie4_5Processor(BaseDataProcessor):
             # prefix offset & read offset & history token ids & history token strings
             self.decode_status[task_id] = [0, 0, [], ""]
 
-        prefix_offset = self.decode_status[task_id][0]
-        read_offset = self.decode_status[task_id][1]
-        previous_token_ids = self.decode_status[task_id][2]
-        previous_texts = self.decode_status[task_id][3]
-        decode_str, prefix_offset, read_offset = self.tokenizer.decode_token(
-            previous_token_ids + token_id, prefix_offset, read_offset
-        )
-        self.decode_status[task_id][0] = prefix_offset
-        self.decode_status[task_id][1] = read_offset
-        self.decode_status[task_id][2] += token_id
-        self.decode_status[task_id][3] += decode_str
+        status = self.decode_status[task_id]
+        previous_texts = status[3]
 
-        return decode_str, previous_token_ids, previous_texts
+        # Extend in-place first, then pass the full list to decode_token
+        # Avoids creating an O(n) temporary list every token
+        status[2].extend(token_id)
+
+        decode_str, prefix_offset, read_offset = self.tokenizer.decode_token(status[2], status[0], status[1])
+        status[0] = prefix_offset
+        status[1] = read_offset
+        status[3] += decode_str
+
+        return decode_str, status[2], previous_texts
 
     def _load_tokenizer(self):
         """

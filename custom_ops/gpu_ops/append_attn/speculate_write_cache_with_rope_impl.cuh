@@ -18,7 +18,10 @@
 #include "mma_tensor_op.cuh"
 #include "utils.cuh"
 
-template <typename T, int VecSize = 1, typename InT = T>
+template <typename T,
+          int VecSize = 1,
+          typename InT = T,
+          bool EnforceFmulRN = false>
 __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     const InT* __restrict__ qkv,  // [token_num, num_heads + 2 * gqa_group_size,
                                   // head_size]
@@ -129,8 +132,10 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
       if (hi < num_heads + gqa_group_size) {
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
-        float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
+        float tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                     fmul_func<EnforceFmulRN>(input_right, sin_tmp);
+        float tmp2 = fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                     fmul_func<EnforceFmulRN>(input_left, sin_tmp);
         thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
         tmp_vec[2 * i] = tmp1;
         tmp_vec[2 * i + 1] = tmp2;
@@ -331,7 +336,10 @@ __global__ void append_clear_cache_int4_block(
   }
 }
 
-template <typename T, int VecSize = 1, typename InT = T>
+template <typename T,
+          int VecSize = 1,
+          typename InT = T,
+          bool EnforceFmulRN = false>
 __global__ void append_speculate_cache_rope_kernel(
     const InT* __restrict__ qkv,  // [token_num, num_heads + 2 * gqa_group_size,
                                   // head_size]
@@ -434,9 +442,11 @@ __global__ void append_speculate_cache_rope_kernel(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         bias_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         bias_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         bias_vec[2 * i] = static_cast<T>(input_left);
         bias_vec[2 * i + 1] = static_cast<T>(input_right);
@@ -462,7 +472,10 @@ __global__ void append_speculate_cache_rope_kernel(
   }
 }
 
-template <typename T, int VecSize = 1, typename InT = T>
+template <typename T,
+          int VecSize = 1,
+          typename InT = T,
+          bool EnforceFmulRN = false>
 __global__ void append_speculate_cache_neox_rope_kernel(
     const InT* __restrict__ qkv,  // [token_num, num_heads + 2 * gqa_group_size,
                                   // head_size]
@@ -568,9 +581,11 @@ __global__ void append_speculate_cache_neox_rope_kernel(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         left_bias_vec[i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         right_bias_vec[i] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         left_bias_vec[i] = static_cast<T>(input_left);
         right_bias_vec[i] = static_cast<T>(input_right);
@@ -601,7 +616,10 @@ __global__ void append_speculate_cache_neox_rope_kernel(
   }
 }
 
-template <typename T, int VecSize = 1, typename InT = T>
+template <typename T,
+          int VecSize = 1,
+          typename InT = T,
+          bool EnforceFmulRN = false>
 __global__ void append_speculate_cache_neox_partial_rope_kernel(
     const InT* __restrict__ qkv,  // [token_num, num_heads + 2 * gqa_group_size,
                                   // head_size]
@@ -724,9 +742,11 @@ __global__ void append_speculate_cache_neox_partial_rope_kernel(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         left_bias_vec[i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         right_bias_vec[i] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         left_bias_vec[i] = static_cast<T>(input_left);
         right_bias_vec[i] = static_cast<T>(input_right);
@@ -766,7 +786,8 @@ template <typename T,
           int RoundType = 0,
           int HeadDim = 128,
           bool IsFP8 = false,
-          bool IsDynamic = true>
+          bool IsDynamic = true,
+          bool EnforceFmulRN = false>
 __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
     const T* __restrict__ quant_qkv,    // [num_head, num_heads + 2 *
                                         // gqa_group_size, head_size]
@@ -864,8 +885,10 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
         float input_right = static_cast<float>(src_vec[2 * i + 1]);
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
-        float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
+        float tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                     fmul_func<EnforceFmulRN>(input_right, sin_tmp);
+        float tmp2 = fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                     fmul_func<EnforceFmulRN>(input_left, sin_tmp);
         thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
         bias_vec[2 * i] = static_cast<T>(tmp1);
         bias_vec[2 * i + 1] = static_cast<T>(tmp2);
@@ -929,8 +952,10 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
     if (head_idx < num_heads + gqa_group_size) {
       float cos_tmp = cos_emb_vec1[0];
       float sin_tmp = sin_emb_vec1[0];
-      float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
-      float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
+      float tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                   fmul_func<EnforceFmulRN>(input_right, sin_tmp);
+      float tmp2 = fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                   fmul_func<EnforceFmulRN>(input_left, sin_tmp);
       thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
       bias_vec1[0] = static_cast<T>(tmp1);
       bias_vec1[1] = static_cast<T>(tmp2);
@@ -944,8 +969,10 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
     if (head_idx < num_heads + gqa_group_size) {
       float cos_tmp = cos_emb_vec2[0];
       float sin_tmp = sin_emb_vec2[0];
-      float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
-      float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
+      float tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                   fmul_func<EnforceFmulRN>(input_right, sin_tmp);
+      float tmp2 = fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                   fmul_func<EnforceFmulRN>(input_left, sin_tmp);
       thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
       bias_vec2[0] = static_cast<T>(tmp1);
       bias_vec2[1] = static_cast<T>(tmp2);
@@ -1045,7 +1072,8 @@ template <typename T,
           int RoundType = 0,
           int HeadDim = 128,
           typename InT = int,
-          bool IsFP8 = false>
+          bool IsFP8 = false,
+          bool EnforceFmulRN = false>
 __global__ void append_speculate_cache_int8_rope_kernel(
     const InT* __restrict__ quant_qkv,  // [num_head, num_heads + 2 *
                                         // gqa_group_size, head_size]
@@ -1149,9 +1177,11 @@ __global__ void append_speculate_cache_int8_rope_kernel(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         bias_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         bias_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       }
       Store<T, VecSize>(bias_vec, &qkv_out_now[bias_idx]);
     }
@@ -1215,9 +1245,11 @@ __global__ void append_speculate_cache_int8_rope_kernel(
       float cos_tmp = cos_emb_vec1[0];
       float sin_tmp = sin_emb_vec1[0];
       bias_vec1[0] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
       bias_vec1[1] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     } else {
       bias_vec1[0] = static_cast<T>(input_left);
       bias_vec1[1] = static_cast<T>(input_right);
@@ -1238,9 +1270,11 @@ __global__ void append_speculate_cache_int8_rope_kernel(
       float cos_tmp = cos_emb_vec2[0];
       float sin_tmp = sin_emb_vec2[0];
       bias_vec2[0] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
       bias_vec2[1] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     } else {
       bias_vec2[0] = static_cast<T>(input_left);
       bias_vec2[1] = static_cast<T>(input_right);
@@ -1285,7 +1319,8 @@ template <typename T,
           int VecSize = 4,
           int RoundType = 0,
           int HeadDim = 128,
-          typename InT = int>
+          typename InT = int,
+          bool EnforceFmulRN = false>
 __global__ void append_speculate_cache_int8_neox_rope_kernel(
     const InT* __restrict__ quant_qkv,  // [num_head, num_heads + 2 *
                                         // gqa_group_size, head_size]
@@ -1396,9 +1431,11 @@ __global__ void append_speculate_cache_int8_neox_rope_kernel(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         left_bias_vec[i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         right_bias_vec[i] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       }
       Store<T, VecSize>(left_bias_vec, &qkv_out_now[bias_idx_left]);
       Store<T, VecSize>(right_bias_vec, &qkv_out_now[bias_idx_right]);
@@ -1485,9 +1522,11 @@ __global__ void append_speculate_cache_int8_neox_rope_kernel(
           float cos_tmp = cos_emb_vec1[i];
           float sin_tmp = sin_emb_vec1[i];
           left_bias_vec1[i] =
-              static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                             fmul_func<EnforceFmulRN>(input_right, sin_tmp));
           right_bias_vec1[i] =
-              static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                             fmul_func<EnforceFmulRN>(input_left, sin_tmp));
 
           input_left = static_cast<float>(left_src_vec2[i]);
           input_right = static_cast<float>(right_src_vec2[i]);
@@ -1500,9 +1539,11 @@ __global__ void append_speculate_cache_int8_neox_rope_kernel(
           cos_tmp = cos_emb_vec2[i];
           sin_tmp = sin_emb_vec2[i];
           left_bias_vec2[i] =
-              static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                             fmul_func<EnforceFmulRN>(input_right, sin_tmp));
           right_bias_vec2[i] =
-              static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                             fmul_func<EnforceFmulRN>(input_left, sin_tmp));
 
           float quant_value1 = static_cast<float>(scale * left_bias_vec1[i]);
           float quant_value2 = static_cast<float>(scale * left_bias_vec2[i]);
@@ -1669,7 +1710,8 @@ template <typename T,
           int VecSize = 4,
           int RoundType = 0,
           int HeadDim = 128,
-          typename InT = int>
+          typename InT = int,
+          bool EnforceFmulRN = false>
 __global__ void append_speculate_cache_int4_rope_kernel(
     const InT* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * gqa_group_size,
                                         // head_size]
@@ -1774,9 +1816,11 @@ __global__ void append_speculate_cache_int4_rope_kernel(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         bias_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         bias_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       }
       Store<T, VecSize>(bias_vec, &qkv_out_now[bias_idx]);
     }
@@ -1877,9 +1921,11 @@ __global__ void append_speculate_cache_int4_rope_kernel(
       float cos_tmp = cos_emb_vec1[0];
       float sin_tmp = sin_emb_vec1[0];
       bias_vec1[0] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
       bias_vec1[1] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     } else {
       bias_vec1[0] = static_cast<T>(input_left);
       bias_vec1[1] = static_cast<T>(input_right);
@@ -1895,9 +1941,11 @@ __global__ void append_speculate_cache_int4_rope_kernel(
       float cos_tmp = cos_emb_vec2[0];
       float sin_tmp = sin_emb_vec2[0];
       bias_vec2[0] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
       bias_vec2[1] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     } else {
       bias_vec2[0] = static_cast<T>(input_left);
       bias_vec2[1] = static_cast<T>(input_right);
@@ -2017,7 +2065,8 @@ template <typename T,
           int VecSize = 4,
           int RoundType = 0,
           int HeadDim = 128,
-          typename InT = int>
+          typename InT = int,
+          bool EnforceFmulRN = false>
 __global__ void append_speculate_cache_int4_neox_rope_kernel(
     const InT* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * gqa_group_size,
                                         // head_size]
@@ -2133,9 +2182,11 @@ __global__ void append_speculate_cache_int4_neox_rope_kernel(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         left_bias_vec[i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         right_bias_vec[i] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       }
       Store<T, VecSize>(left_bias_vec, &qkv_out_now[bias_idx_left]);
       Store<T, VecSize>(right_bias_vec, &qkv_out_now[bias_idx_right]);
@@ -2234,18 +2285,22 @@ __global__ void append_speculate_cache_int4_neox_rope_kernel(
           float cos_tmp = cos_emb_vec1[0];
           float sin_tmp = sin_emb_vec1[0];
           left_bias_vec1[i] =
-              static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                             fmul_func<EnforceFmulRN>(input_right, sin_tmp));
           right_bias_vec1[i] =
-              static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                             fmul_func<EnforceFmulRN>(input_left, sin_tmp));
 
           input_left = static_cast<float>(left_src_vec2[i]);
           input_right = static_cast<float>(right_src_vec2[i]);
           cos_tmp = cos_emb_vec2[i];
           sin_tmp = sin_emb_vec2[i];
           left_bias_vec2[i] =
-              static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                             fmul_func<EnforceFmulRN>(input_right, sin_tmp));
           right_bias_vec2[i] =
-              static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                             fmul_func<EnforceFmulRN>(input_left, sin_tmp));
           // quant + write k
         }
         LoadKVResT left_cache_vec, right_cache_vec;

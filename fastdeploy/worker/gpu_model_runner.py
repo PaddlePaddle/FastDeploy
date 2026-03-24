@@ -982,7 +982,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
         if self.spec_method == SpecMethod.MTP:
-            self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
+            self.proposer.insert_tasks_v1(req_dicts, num_running_requests, self.share_inputs.index_to_batch_id)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         raise NotImplementedError("GPUs only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")
@@ -1091,7 +1091,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
             self.exist_prefill_flag = True
             self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
-            self.share_inputs["prompt_lens"][idx : idx + 1] = 0
+            self.share_inputs["prompt_lens"][idx : idx + 1] = input_length
             self.share_inputs["step_idx"][idx : idx + 1] = 0
             self.share_inputs["max_dec_len"][idx : idx + 1] = max_dec_len
             self.share_inputs["min_dec_len"][idx : idx + 1] = max_dec_len
@@ -1226,7 +1226,7 @@ class GPUModelRunner(ModelRunnerBase):
             reorder_split_prefill_and_decode(input_batch=self.share_inputs)
             if self.speculative_decoding:
                 if self.spec_method == SpecMethod.MTP:
-                    self.proposer.reorder_inputs()
+                    self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
 
     def load_model(self) -> None:
         """load or download model"""
@@ -1265,6 +1265,8 @@ class GPUModelRunner(ModelRunnerBase):
         routing_replay_table = None
         if self.routing_replay_manager is not None:
             routing_replay_table = self.routing_replay_manager.get_routing_table()
+
+        num_running_requests = self.share_inputs["seq_lens_this_time"].shape[0]
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
@@ -1277,13 +1279,13 @@ class GPUModelRunner(ModelRunnerBase):
             decoder_num_blocks_device=self.share_inputs["decoder_num_blocks_device"],
             decoder_chunk_size_device=self.share_inputs["decoder_chunk_size_device"],
             max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
-            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
-            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+            seq_lens_encoder=self.share_inputs["seq_lens_encoder"][:num_running_requests],
+            seq_lens_decoder=self.share_inputs["seq_lens_decoder"][:num_running_requests],
             seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
             batch_id_per_token=self.share_inputs["batch_id_per_token"],
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
-            block_tables=self.share_inputs["block_tables"],
+            block_tables=self.share_inputs["block_tables"][:num_running_requests],
             caches=self.share_inputs["caches"],
             encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
             encoder_tile_ids_per_batch=self.share_inputs["encoder_tile_ids_per_batch"],
@@ -1746,8 +1748,6 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=self.model_config.think_end_id,
             splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
             enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
-            is_naive_mode=(self.speculative_decoding and self.proposer is None),
-            prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
         )
         self.exist_prefill_flag = False
         if self.speculative_decoding:
@@ -1881,7 +1881,7 @@ class GPUModelRunner(ModelRunnerBase):
             elif self.speculative_decoding and self.spec_method == SpecMethod.MTP:
                 # Capture Target Model without bsz 1
                 for capture_size in sorted(capture_sizes, reverse=True):
-                    expected_decode_len = self.speculative_config.num_speculative_tokens * 2 + 1
+                    expected_decode_len = (self.speculative_config.num_speculative_tokens + 1) * 2
                     self._dummy_run(
                         num_tokens=self.fd_config.get_max_chunk_tokens(),
                         batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
@@ -2037,7 +2037,7 @@ class GPUModelRunner(ModelRunnerBase):
     ) -> None:
         model_inputs, p_done_idxs, _ = self._preprocess(model_forward_batch, num_running_requests)
         model_output = self._execute(model_inputs)
-        if model_output is None:
+        if model_output is None or self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item() <= 0:
             return
         model_output_data, sampler_output, post_process_event = self._postprocess(
             model_output, p_done_idxs, model_forward_batch, num_running_requests
@@ -2361,8 +2361,6 @@ class GPUModelRunner(ModelRunnerBase):
                 think_end_id=self.model_config.think_end_id,
                 splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
-                is_naive_mode=(self.speculative_decoding and self.proposer is None),
-                prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
                 routing_replay_manager=self.routing_replay_manager,
             )
 

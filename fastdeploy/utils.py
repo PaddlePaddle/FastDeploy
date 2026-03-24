@@ -33,6 +33,7 @@ import time
 import traceback
 from datetime import datetime
 from enum import Enum
+from functools import cache
 from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, distribution
 from logging.handlers import BaseRotatingHandler
@@ -1308,6 +1309,15 @@ def do_nothing(*args, **kwargs):
         return func
 
     return decorator
+
+
+@cache
+def _is_package_installed(dist_name: str) -> bool:
+    try:
+        distribution(dist_name)
+        return True
+    except PackageNotFoundError:
+        return False
 
 
 if hasattr(paddle.static, "register_op"):
