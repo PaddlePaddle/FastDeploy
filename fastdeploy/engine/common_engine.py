@@ -1427,11 +1427,11 @@ class EngineService:
             )
         elif isinstance(tags, list):
             tags = ",".join(tags)
-        
+
         for tag in tags.split(","):
             if tag not in allowed_tags:
                 raise ValueError(f"Unsupported tag [{tag}] in [{tags}], expected one of {allowed_tags}")
-        
+
         return tags
 
     def _control_sleep(self, control_request: ControlRequest):
