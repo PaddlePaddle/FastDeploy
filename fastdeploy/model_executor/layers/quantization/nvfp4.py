@@ -619,32 +619,16 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                 weight_scale.dtype == paddle.float8_e4m3fn
             ), f"{name} Weight Blockscale must be represented as FP8-E4M3"
 
-        if self.backend == "flashinfer-cutedsl":
-            up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
-            create_parameter_and_copy(
-                layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
-            )
-            free_tensor(layer.up_gate_proj_weight_scale)
-            layer.up_gate_proj_weight_scale = None
-            down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
-            create_parameter_and_copy(
-                layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled
-            )
-            free_tensor(layer.down_proj_weight_scale)
-            layer.down_proj_weight_scale = None
-        else:
-            up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
-            free_tensor(layer.up_gate_proj_weight_scale)
-            layer.up_gate_proj_weight_scale = None
-            create_parameter_and_copy(
-                layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
-            )
-            down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
-            free_tensor(layer.down_proj_weight_scale)
-            layer.down_proj_weight_scale = None
-            create_parameter_and_copy(
-                layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled
-            )
+        up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
+        free_tensor(layer.up_gate_proj_weight_scale)
+        layer.up_gate_proj_weight_scale = None
+        create_parameter_and_copy(
+            layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
+        )
+        down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
+        free_tensor(layer.down_proj_weight_scale)
+        layer.down_proj_weight_scale = None
+        create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
 
     def _run_cutedsl_grouped_masked(self, layer, hidden_states_3d, masked_m):
 
