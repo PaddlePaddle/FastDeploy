@@ -80,8 +80,10 @@ def load_deep_gemm():
 
                 logger.info("Detected sm100, use PFCC DeepGEMM")
         else:
-            logger.info("use FastDeploy DeepGEMM")
-            import fastdeploy.model_executor.ops.gpu.deep_gemm as deep_gemm
+            paddle.enable_compat(scope={"deep_gemm"})
+            import deep_gemm as deep_gemm
+
+            logger.info("Use PFCC DeepGEMM")
     else:
         deep_gemm = None
     return deep_gemm
