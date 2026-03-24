@@ -581,6 +581,9 @@ class PaddleDisWorkerProc:
                     paddle.distributed.barrier(self.parallel_config.ep_group)
 
                 req_dicts, control_reqs = [], []
+                if not tasks:
+                    # should never happen
+                    continue
                 # In EP + DP prefill, empty task ([]) is delived in worker to barrier. For empty task, just skip and continue.
                 if tasks[0][0]:
                     for req_dict, bsz in tasks:

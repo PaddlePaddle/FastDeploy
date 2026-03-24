@@ -1017,7 +1017,7 @@ class EngineService:
                     # Continue preprocessing incoming requests and accumulating them in the queue when forward pass not finished.
                     # Once the forward pass finishes, these accumulated requests can be scheduled in larger,
                     # more efficient batches.
-                    if not (self.engine_worker_queue.num_tasks() == 0 and self.engine_forward_signal.value[0] == 0):
+                    if self.engine_worker_queue.exist_tasks() or self.engine_forward_signal.value[0] != 0:
                         time.sleep(0.001)
                         continue
                 else:
