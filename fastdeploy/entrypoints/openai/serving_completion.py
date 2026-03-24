@@ -898,7 +898,11 @@ class OpenAIServingCompletion:
                                    tensors.
         """
 
-        token_ids, logprobs, ranks = prompt_logprobs_tensors
+        token_ids, logprobs, ranks = (
+            prompt_logprobs_tensors.logprob_token_ids,
+            prompt_logprobs_tensors.logprobs,
+            prompt_logprobs_tensors.selected_token_ranks,
+        )
 
         # Detokenize non-incrementally.
         # Output is flat: [num_tok, num_lps] -> [num_tok * num_lps]
