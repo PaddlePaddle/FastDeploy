@@ -141,6 +141,7 @@ class MTPProposer(Proposer):
 
         self.attn_backends: list[AttentionBackend] = []
         self._initialize_attn_backend()
+        self.eb5_runner = bool(int(os.getenv("EB5_ENABLE_FD_RUNNER", "0")))
 
         # Forward meta store the global meta information of the forward
         self.forward_meta = None
@@ -503,7 +504,7 @@ class MTPProposer(Proposer):
                 self.model_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
-                if self.enable_mm:
+                if self.enable_mm and not self.eb5_runner:
                     inputs = request.multimodal_inputs
                     self.model_inputs["attn_mask_offsets_full"][idx][0 : prefill_end_index - prefill_start_index] = (
                         paddle.to_tensor(
@@ -885,7 +886,7 @@ class MTPProposer(Proposer):
                     self.model_inputs["seq_lens_decoder"],
                 )
 
-                if self.enable_mm:
+                if self.enable_mm and not self.eb5_runner:
                     attn_mask_offsets = update_attn_mask_offsets(
                         ids_remove_padding,
                         getattr(
