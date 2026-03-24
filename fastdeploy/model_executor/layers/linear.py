@@ -86,6 +86,7 @@ class UnquantizedLinearMethod(QuantMethodBase):
             return paddle._C_ops.linear(x, layer.weight, layer.bias)
         return paddle.matmul(x, layer.weight)
 
+
 class LinearBase(nn.Layer):
     """
     LinearBase Layer.
