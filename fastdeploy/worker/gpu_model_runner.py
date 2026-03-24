@@ -88,7 +88,7 @@ from fastdeploy.model_executor.pre_and_post_process import (
 )
 
 if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
-    from fastdeploy.spec_decode import MTPProposer, NgramProposer
+    from fastdeploy.spec_decode import MTPProposer, NgramProposer, SuffixProposer
 
 import zmq
 
@@ -224,8 +224,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Rollout routing replay config
         self.routing_replay_manager = None
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            self.routing_replay_manager = RoutingReplayManager(fd_config=self.fd_config)
 
         self.zmq_client = None
         self.async_output_queue = None
@@ -388,6 +386,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.device_id,
                 self.share_inputs,
             )
+        elif self.speculative_method == "suffix":
+            self.proposer = SuffixProposer(self.fd_config)
         else:
             self.proposer = None
 
@@ -694,10 +694,6 @@ class GPUModelRunner(ModelRunnerBase):
         req_dict: A list of Request dict
         num_running_requests: batch_size
         """
-        # NOTE(luotingdan): Lazy initialize kv cache
-        if "caches" not in self.share_inputs:
-            self.initialize_kv_cache()
-
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
@@ -808,10 +804,17 @@ class GPUModelRunner(ModelRunnerBase):
                 self.forward_batch_reqs_list[idx] = request
                 has_prefill_task = True
 
+                if self.speculative_decoding and self.speculative_method == "suffix" and self.proposer is not None:
+                    if isinstance(request.prompt_token_ids, np.ndarray):
+                        prompt_token_ids = request.prompt_token_ids.tolist()
+                    else:
+                        prompt_token_ids = request.prompt_token_ids
+                    self.proposer.start_request(idx, request.request_id, prompt_token_ids)
+
                 # Routing Replay
                 if self.fd_config.routing_replay_config.enable_routing_replay:
-                    if prefill_start_index == 0:
-                        self.routing_replay_manager.register_request(batch_id=idx, request_id=request.request_id)
+                    # 1.prefix task(need regist) 2. chunkend task(not need regist)
+                    self.routing_replay_manager.register_request(batch_id=idx, request_id=request.request_id)
 
                 if (
                     self.fd_config.scheduler_config.splitwise_role == "decode"
@@ -1069,6 +1072,15 @@ class GPUModelRunner(ModelRunnerBase):
                     return res
                 else:
                     return default_value
+
+            # Start suffix decoding request if using suffix proposer
+            if self.speculative_decoding and self.speculative_method == "suffix" and self.proposer is not None:
+                if isinstance(request.prompt_token_ids, np.ndarray):
+                    prompt_token_ids = request.prompt_token_ids.tolist()
+                else:
+                    prompt_token_ids = request.prompt_token_ids
+                self.proposer.start_request(request.request_id, prompt_token_ids)
+                self.proposer.update_request_mapping(request.request_id, idx)
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
@@ -1775,6 +1787,7 @@ class GPUModelRunner(ModelRunnerBase):
         self,
         hidden_states: paddle.Tensor,
         model_output: paddle.Tensor,
+        batch_size: int,
         accept_all_drafts=False,
         reject_all_drafts=False,
     ) -> paddle.Tensor:
@@ -1883,8 +1896,7 @@ class GPUModelRunner(ModelRunnerBase):
                     is_dummy_run=True,
                 )
             else:
-                self.proposer.run(share_inputs=self.share_inputs)
-
+                self.proposer.prepare_dummy_speculative_drafts(share_inputs=self.share_inputs, batch_size=batch_size)
         return sampler_output
 
     def _dummy_run(
@@ -1961,7 +1973,7 @@ class GPUModelRunner(ModelRunnerBase):
                     (self.share_inputs["batch_id_per_token_output"] if self.speculative_decoding else None),
                     (self.share_inputs["cu_seqlens_q_output"] if self.speculative_decoding else None),
                 )
-                self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
+                self._dummy_sampler_run(hidden_states, model_output, batch_size, accept_all_drafts, reject_all_drafts)
 
             # 7. Updata 'infer_seed' and step_cuda()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
@@ -1979,9 +1991,6 @@ class GPUModelRunner(ModelRunnerBase):
             if capture_prefill and self.graph_opt_config.graph_opt_level > 0:
                 # only need to capture prefill
                 break
-
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            self.routing_replay_manager.clear_routing_table()
 
     def _update_chunked_prefill(self, tasks):
         """
@@ -2071,22 +2080,19 @@ class GPUModelRunner(ModelRunnerBase):
                     logger.info(
                         f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
                     )
-            elif self.speculative_decoding and self.speculative_method == "mtp":
+            elif self.speculative_decoding:
                 # Capture Target Model without bsz 1
                 for capture_size in sorted(capture_sizes, reverse=True):
+                    expected_decode_len = self.speculative_config.num_speculative_tokens * 2 + 1
                     self._dummy_run(
-                        num_tokens=(
-                            self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
-                            if self.scheduler_config.splitwise_role == "decode"
-                            else self.fd_config.get_max_chunk_tokens()
-                        ),
+                        num_tokens=self.fd_config.get_max_chunk_tokens(),
                         batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
                         in_capturing=True,
-                        expected_decode_len=self.speculative_config.num_speculative_tokens * 2 + 1,
+                        expected_decode_len=expected_decode_len,
                         accept_all_drafts=True,
                     )
                     logger.info(
-                        f"Warm up the model with the num_tokens:{capture_size}, expected_decode_len:{self.speculative_config.num_speculative_tokens}"
+                        f"Warm up the model with the num_tokens:{capture_size}, expected_decode_len:{expected_decode_len}"
                     )
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
@@ -2299,6 +2305,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         token_num_event = self._prepare_inputs(last_token_num)
         self.sampler.pre_process(p_done_idxs)
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager.pending_update_positions = self.routing_replay_manager.get_token_positions(
+                seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+                seq_lens_this_time=self.share_inputs["seq_lens_this_time_buffer"],
+            )
 
         # 1.1 Update state of logits processor
         for proc in self.sampling_metadata.logits_processors:
@@ -2399,6 +2410,7 @@ class GPUModelRunner(ModelRunnerBase):
                 skip_save_output=False,
                 async_output_queue=self.async_output_queue,
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
+                routing_replay_manager=self.routing_replay_manager,
             )
             self.share_inputs["not_need_stop"].copy_(self.share_inputs["not_need_stop_device"], True)
 
@@ -2532,6 +2544,7 @@ class GPUModelRunner(ModelRunnerBase):
                 think_end_id=self.model_config.think_end_id,
                 splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
+                routing_replay_manager=self.routing_replay_manager,
             )
 
             if self.guided_backend is not None and sampler_output is not None:
@@ -2543,6 +2556,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self.proposer.run(
                         full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
                     )
+                elif self.speculative_method == "suffix":
+                    self.proposer.run(share_inputs=self.share_inputs)
                 else:
                     self.proposer.run(share_inputs=self.share_inputs)
 
@@ -2587,15 +2602,6 @@ class GPUModelRunner(ModelRunnerBase):
                 post_process_event.record()
 
         self.exist_prefill_flag = False
-        # Routing replay
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            if (
-                not self.exist_prefill()
-                and not self.exist_decode()
-                and self.share_inputs["is_block_step"].sum() == 0
-                and self.share_inputs["is_chunk_step"].sum() == 0
-            ):
-                self.routing_replay_manager.put_table_to_store()
         return model_output_data, sampler_output, post_process_event, token_num
 
     def _save_model_output(
@@ -2822,8 +2828,10 @@ class GPUModelRunner(ModelRunnerBase):
         self.prompt_logprobs_reqs.clear()
         self.in_progress_prompt_logprobs.clear()
         self.forward_batch_reqs_list = [None for _ in range(self.scheduler_config.max_num_seqs)]
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            self.routing_replay_manager.put_table_to_store()
+
+        # Routing Replay
+        if self.routing_replay_manager:
+            self.routing_replay_manager.clear_all_request()
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
@@ -2841,9 +2849,13 @@ class GPUModelRunner(ModelRunnerBase):
         # Recapture CUDAGraph
         if self.use_cudagraph:
             self.capture_model()
+        # Rollout Routing Replay
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            # TODO(gongshaotian): Delete suspend func
+            self.routing_replay_manager.update_suspend_routing_replay()
+
         # Send single
         self.dynamic_weight_manager.finalize_update(pid)
-
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
     def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
@@ -3143,3 +3155,12 @@ class GPUModelRunner(ModelRunnerBase):
             del self.prompt_logprobs_reqs[req.request_id]
             del self.in_progress_prompt_logprobs[req.request_id]
         return prompt_logprobs_list
+
+    def initialize_routing_replay_manager(self):
+        """Initialize the routing replay manager after initialize the KVCache"""
+        # Use updated block number
+        self.routing_replay_manager = RoutingReplayManager(
+            fd_config=self.fd_config,
+            block_table=self.share_inputs["block_tables"],
+            total_block_num=self.num_gpu_blocks,
+        )

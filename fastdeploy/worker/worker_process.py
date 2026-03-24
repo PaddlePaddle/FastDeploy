@@ -650,7 +650,7 @@ class PaddleDisWorkerProc:
 
             if num_blocks_local <= 0:
                 raise ValueError(
-                    "The total number of blocks cannot be less than zero. "
+                    f"The total number of blocks cannot be less than zero bug got {num_blocks_local}. "
                     "Please increase gpu_memory_utilization "
                     "Or decrease max_num_batched_tokens(max model length)."
                 )
@@ -1218,6 +1218,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     return fd_config
 
 
+@paddle.no_grad()
 def run_worker_proc() -> None:
     """
     start worker process
