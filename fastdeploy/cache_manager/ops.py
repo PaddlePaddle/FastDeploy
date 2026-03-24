@@ -24,12 +24,6 @@ from fastdeploy.utils import llm_logger as logger
 try:
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import (
-            swap_cache_per_layer,  # 单层 KV cache 换入算子（同步）
-        )
-        from fastdeploy.model_executor.ops.gpu import (
-            swap_cache_per_layer_async,  # 单层 KV cache 换入算子（异步，无强制 sync）
-        )
-        from fastdeploy.model_executor.ops.gpu import (
             cuda_host_alloc,
             cuda_host_free,
             get_data_ptr_ipc,
@@ -39,6 +33,8 @@ try:
             set_data_ipc,
             share_external_data,
             swap_cache_all_layers,
+            swap_cache_per_layer,        # 新增：单层 KV cache 换入算子
+            swap_cache_all_layers_batch, # 新增：多层批量 KV cache 换入算子
             swap_cache_layout,
             unset_data_ipc,
         )
@@ -57,6 +53,8 @@ try:
             set_data_ipc,
             share_external_data,
             swap_cache_all_layers,
+            swap_cache_per_layer,        # 新增：单层 KV cache 换入算子
+            swap_cache_all_layers_batch, # 新增：多层批量 KV cache 换入算子
             unset_data_ipc,
         )
 
@@ -89,6 +87,8 @@ try:
             set_data_ipc,
             share_external_data,
             swap_cache_all_layers,
+            swap_cache_per_layer,        # 新增：单层 KV cache 换入算子
+            swap_cache_all_layers_batch, # 新增：多层批量 KV cache 换入算子
         )
 
         unset_data_ipc = None
@@ -149,8 +149,8 @@ except Exception as e:
     set_data_ipc = None
     share_external_data_ = None
     swap_cache_all_layers = None
-    swap_cache_per_layer = None  # 单层 KV cache 换入算子（同步）
-    swap_cache_per_layer_async = None  # 单层 KV cache 换入算子（异步）
+    swap_cache_per_layer = None  # 新增：单层 KV cache 换入算子
+    swap_cache_all_layers_batch = None  # 新增：多层批量 KV cache 换入算子
     unset_data_ipc = None
     set_device = None
     memory_allocated = None
@@ -169,8 +169,8 @@ __all__ = [
     "set_data_ipc",
     "share_external_data_",
     "swap_cache_all_layers",
-    "swap_cache_per_layer",  # 单层 KV cache 换入算子（同步）
-    "swap_cache_per_layer_async",  # 单层 KV cache 换入算子（异步，无强制 sync）
+    "swap_cache_per_layer",        # 新增：单层 KV cache 换入算子
+    "swap_cache_all_layers_batch", # 新增：多层批量 KV cache 换入算子
     "unset_data_ipc",  # XPU是 None
     "set_device",
     "memory_allocated",

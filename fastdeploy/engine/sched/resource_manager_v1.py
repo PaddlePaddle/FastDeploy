@@ -250,9 +250,6 @@ class ResourceManagerV1(ResourceManager):
         else:
             block_num = min(block_num, self.config.cache_config.max_block_num_per_seq)
 
-        if self.enable_cache_manager_v1:
-            block_num += request.match_result.matched_host_nums
-
         return block_num
 
     def _is_decoding(self, request) -> bool:
@@ -1068,6 +1065,8 @@ class ResourceManagerV1(ResourceManager):
                             self.waiting.popleft()
                             continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
+
+                        llm_logger.debug(f"request.request_id {request.request_id} num_new_block {num_new_block}, request.need_prefill_tokens {request.need_prefill_tokens}, request.num_computed_tokens {request.num_computed_tokens}, token_budget {token_budget}")
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             num_new_block
                         )
@@ -1318,6 +1317,7 @@ class ResourceManagerV1(ResourceManager):
         return self.real_bsz
 
     def _allocate_gpu_blocks(self, request: Request, num_blocks: int) -> List[int]:
+        llm_logger.info(f"[DEBUG allocate_gpu_blocks] request_id={request.request_id}, num_blocks={num_blocks}")
         if self.enable_cache_manager_v1:
             return self.cache_manager.allocate_gpu_blocks(request, num_blocks)
         else:

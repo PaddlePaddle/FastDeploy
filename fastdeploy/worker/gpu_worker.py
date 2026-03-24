@@ -24,7 +24,7 @@ from paddle import nn
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.engine.request import BatchRequest, Request
+from fastdeploy.engine.request import Request, BatchRequest
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
 from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed
@@ -126,12 +126,14 @@ class GpuWorker(WorkerBase):
         before_run_meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
 
         logger.info(
-            "Before running the profile, the memory usage info is as follows:"
-            f"\nDevice Total memory: {before_run_meminfo.total / Gb}"
-            f"\nDevice used memory: {before_run_meminfo.used / Gb}"
-            f"\nDevice free memory: {before_run_meminfo.free / Gb}"
-            f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}"
-            f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}"
+            (
+                "Before running the profile, the memory usage info is as follows:",
+                f"\nDevice Total memory: {before_run_meminfo.total / Gb}",
+                f"\nDevice used memory: {before_run_meminfo.used / Gb}",
+                f"\nDevice free memory: {before_run_meminfo.free / Gb}",
+                f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}",
+                f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}",
+            )
         )
 
         # 2. Profile run
@@ -159,14 +161,16 @@ class GpuWorker(WorkerBase):
 
         end_time = time.perf_counter()
         logger.info(
-            "After running the profile, the memory usage info is as follows:"
-            f"\nDevice Total memory: {after_run_meminfo.total / Gb}"
-            f"\nDevice used memory: {after_run_meminfo.used / Gb}"
-            f"\nDevice free memory: {after_run_meminfo.free / Gb}"
-            f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}"
-            f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}"
-            f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}"
-            f"Profile time: {end_time - start_time}"
+            (
+                "After running the profile, the memory usage info is as follows:",
+                f"\nDevice Total memory: {after_run_meminfo.total / Gb}",
+                f"\nDevice used memory: {after_run_meminfo.used / Gb}",
+                f"\nDevice free memory: {after_run_meminfo.free / Gb}",
+                f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}",
+                f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}",
+                f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}",
+                f"Profile time: {end_time - start_time}",
+            )
         )
 
         return available_kv_cache_memory  # return to calculate the block num in this device

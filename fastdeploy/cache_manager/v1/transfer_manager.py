@@ -1,42 +1,24 @@
 """
-# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+CacheTransferManager - Manages cache transfer operations.
+
+Responsible for:
+- Coordinating Host↔Device transfers (synchronous only)
+
+Note: All methods in CacheTransferManager are synchronous.
+Async operations are handled by CacheController, not here.
 """
 
+import os
 import threading
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
-
-import paddle
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from paddleformers.utils.log import logger
-
-# Import cupy for independent CUDA stream management
-try:
-    import cupy as cp
-
-    _HAS_CUPY = True
-except ImportError:
-    _HAS_CUPY = False
-    logger.warning("cupy not available, falling back to synchronous transfers")
 
 # Import ops for cache swap
 from fastdeploy.cache_manager.ops import (
-    swap_cache_per_layer,  # sync fallback (used when cupy not available)
+    swap_cache_all_layers,
+    swap_cache_per_layer,        # 新增：单层 KV cache 换入算子
+    swap_cache_all_layers_batch, # 新增：多层批量 KV cache 换入算子
 )
-from fastdeploy.cache_manager.ops import (
-    swap_cache_per_layer_async,  # async per-layer op (no cudaStreamSynchronize)
-)
-from fastdeploy.cache_manager.ops import swap_cache_all_layers
 from fastdeploy.cache_manager.v1.storage import create_storage_connector
 from fastdeploy.cache_manager.v1.transfer import create_transfer_connector
 
@@ -48,12 +30,13 @@ class CacheTransferManager:
     """
     KV Cache Transfer Manager.
 
-    H2D (load): layer-by-layer on _input_stream, overlaps with forward compute.
-    D2H (evict): all-layers on _output_stream, fire-and-forget.
+    Coordinates Host↔Device transfers (synchronous operations only).
+    Created in Worker process, held by CacheController.
 
     Data organization:
-    1. Name-indexed storage (_cache_kvs_map, _host_cache_kvs_map): for building layer indices
-    2. Layer-indexed storage (_device_key_caches, etc.): passed to swap operators
+    1. Name-indexed storage (_cache_kvs_map, _host_cache_kvs_map): for single-layer access
+    2. Layer-indexed storage (_device_key_caches, etc.): for all-layer transfers,
+       compatible with swap_cache_all_layers operator
 
     Attributes:
         config: FDConfig instance.
@@ -83,33 +66,12 @@ class CacheTransferManager:
         self._cache_dtype = config.cache_config.cache_dtype
         self._num_host_blocks = self.cache_config.num_cpu_blocks or 0
 
+        self.swap_all_layers = self.cache_config.swap_all_layers
+        self.use_swap_all_layers_batch = os.getenv('FD_USE_OPTIMIZED_SWAP', '0') == '1'  # 新增：是否使用优化批量算子
         self._lock = threading.RLock()
 
-        # ============ Async Transfer Streams (cupy-based) ============
-        # Two independent CUDA streams for fully async transfer
-        # _input_stream: H2D transfer (load to device, layer-by-layer)
-        # _output_stream: D2H transfer (evict to host, all-layers)
-        # They run in parallel without waiting for each other
-        # Using cupy to avoid affecting Paddle's internal stream state
-        if _HAS_CUPY and paddle.is_compiled_with_cuda():
-            self._cupy_device_id = cp.cuda.runtime.getDevice()
-            logger.info(
-                f"[TransferManager] Creating streams: local_rank={self._local_rank}, device_id={self._device_id}, "
-                f"cupy_device_id={self._cupy_device_id}"
-            )
-            with cp.cuda.Device(self._cupy_device_id):
-                self._input_stream = cp.cuda.Stream(non_blocking=False)
-                self._output_stream = cp.cuda.Stream(non_blocking=False)
-            logger.info(
-                f"[TransferManager] Using cupy streams: input={id(self._input_stream)}, output={id(self._output_stream)}"
-            )
-        else:
-            self._input_stream = None
-            self._output_stream = None
-            logger.warning("[TransferManager] cupy not available, async transfers disabled")
-
         # ============ KV Cache Data Storage ============
-        # Name-indexed storage (used to build layer-indexed structures below)
+        # Name-indexed storage (for single-layer access)
         self._cache_kvs_map: Dict[str, Any] = {}
         self._host_cache_kvs_map: Dict[str, Any] = {}
 
@@ -130,15 +92,26 @@ class CacheTransferManager:
         self._storage_connector = create_storage_connector(self.cache_config)
         self._transfer_connector = create_transfer_connector(self.cache_config)
 
-    # ============ Cache Map Setters ============
-
     @property
     def cache_kvs_map(self) -> Dict[str, Any]:
+        """
+        Get the shared KV cache tensor map.
+
+        Returns:
+            Dict[str, Any]: The KV cache tensor dictionary.
+        """
         return self._cache_kvs_map
 
     def set_cache_kvs_map(self, cache_kvs_map: Dict[str, Any]) -> None:
         """
         Share the KV cache tensor map from CacheController.
+
+        This method allows CacheController to share its created KV cache tensors
+        with CacheTransferManager, enabling direct access to KV cache data
+        during transfer operations (Host↔Device, Storage, etc.).
+
+        Also parses cache_kvs_map and builds layer-indexed data structures
+        for compatibility with swap_cache_all_layers operator.
 
         Args:
             cache_kvs_map: Dictionary mapping cache names to tensors.
@@ -155,14 +128,19 @@ class CacheTransferManager:
             self._build_device_layer_indices()
 
     def _build_device_layer_indices(self) -> None:
-        """Build layer-indexed Device cache lists from _cache_kvs_map."""
+        """
+        Parse layer-indexed Device cache lists from _cache_kvs_map.
+
+        Builds the following lists:
+        - _device_key_caches: key cache per layer
+        - _device_value_caches: value cache per layer
+        - _device_key_scales: key scales per layer (fp8)
+        - _device_value_scales: value scales per layer (fp8)
+        """
         if not self._cache_kvs_map:
-            self._device_key_caches = []
-            self._device_value_caches = []
-            self._device_key_scales = []
-            self._device_value_scales = []
             return
 
+        # Build layer-indexed lists
         self._device_key_caches = []
         self._device_value_caches = []
         self._device_key_scales = []
@@ -183,16 +161,32 @@ class CacheTransferManager:
 
     @property
     def host_cache_kvs_map(self) -> Dict[str, Any]:
+        """
+        Get the shared Host KV cache tensor map.
+
+        Returns:
+            Dict[str, Any]: The Host KV cache tensor dictionary.
+        """
         return self._host_cache_kvs_map
 
     def set_host_cache_kvs_map(self, host_cache_kvs_map: Dict[str, Any]) -> None:
         """
         Share the Host KV cache tensor map from CacheController.
 
+        This method allows CacheController to share its created Host KV cache tensors
+        with CacheTransferManager, enabling direct access to Host cache data
+        during host-device transfer operations.
+
+        Also parses host_cache_kvs_map and builds layer-indexed Host pointer lists
+        for compatibility with swap_cache_all_layers operator.
+
         Args:
-            host_cache_kvs_map: Dictionary mapping cache names to Host pointers (int).
+            host_cache_kvs_map: Dictionary mapping cache names to Host tensors.
                 Format: {
                     "key_caches_{layer_id}_rank{rank}.device{device}": pointer (int),
+                    "value_caches_{layer_id}_rank{rank}.device{device}": pointer (int),
+                    "key_cache_scales_{layer_id}_rank{rank}.device{device}": pointer (int),  # fp8
+                    "value_cache_scales_{layer_id}_rank{rank}.device{device}": pointer (int), # fp8
                     ...
                 }
         """
@@ -201,14 +195,26 @@ class CacheTransferManager:
             self._build_host_layer_indices()
 
     def _build_host_layer_indices(self) -> None:
-        """Build layer-indexed Host pointer lists from _host_cache_kvs_map."""
+        """
+        Parse layer-indexed Host pointer lists from _host_cache_kvs_map.
+
+        Builds the following lists:
+        - _host_key_ptrs: key cache host pointers per layer
+        - _host_value_ptrs: value cache host pointers per layer
+        - _host_key_scales_ptrs: key scale host pointers per layer (fp8)
+        - _host_value_scales_ptrs: value scale host pointers per layer (fp8)
+        """
+        # Early return if no host cache configured
         if self._num_host_blocks <= 0:
             return
+
         if not self._host_cache_kvs_map:
             return
+
         if self._num_layers == 0:
             return
 
+        # Build layer-indexed Host pointer lists
         self._host_key_ptrs = []
         self._host_value_ptrs = []
         self._host_key_scales_ptrs = []
@@ -226,6 +232,69 @@ class CacheTransferManager:
             if self._is_fp8_quantization():
                 self._host_key_scales_ptrs.append(self._host_cache_kvs_map.get(key_scale_name, 0))
                 self._host_value_scales_ptrs.append(self._host_cache_kvs_map.get(val_scale_name, 0))
+
+    def get_host_cache_tensor(self, cache_name: str) -> Optional[Any]:
+        """
+        Get a specific Host cache tensor by name.
+
+        Args:
+            cache_name: Name of the cache tensor (e.g., "key_caches_0_rank0.device0").
+
+        Returns:
+            The Host cache tensor if found, None otherwise.
+        """
+        # Early return if no host cache configured
+        if self._num_host_blocks <= 0:
+            return None
+        return self._host_cache_kvs_map.get(cache_name)
+
+    def get_host_layer_caches(self, layer_idx: int) -> Dict[str, Any]:
+        """
+        Get all Host cache tensors for a specific layer.
+
+        Args:
+            layer_idx: Layer index.
+
+        Returns:
+            Dictionary containing key and value Host caches for the layer.
+        """
+        # Early return if no host cache configured
+        if self._num_host_blocks <= 0:
+            return {}
+
+        layer_caches = {}
+        for name, tensor in self._host_cache_kvs_map.items():
+            if f"_{layer_idx}_" in name:
+                layer_caches[name] = tensor
+        return layer_caches
+
+    def get_cache_tensor(self, cache_name: str) -> Optional[Any]:
+        """
+        Get a specific cache tensor by name.
+
+        Args:
+            cache_name: Name of the cache tensor (e.g., "key_caches_0_rank0.device0").
+
+        Returns:
+            The cache tensor if found, None otherwise.
+        """
+        return self._cache_kvs_map.get(cache_name)
+
+    def get_layer_caches(self, layer_idx: int) -> Dict[str, Any]:
+        """
+        Get all cache tensors for a specific layer.
+
+        Args:
+            layer_idx: Layer index.
+
+        Returns:
+            Dictionary containing key and value caches for the layer.
+        """
+        layer_caches = {}
+        for name, tensor in self._cache_kvs_map.items():
+            if f"_{layer_idx}_" in name:
+                layer_caches[name] = tensor
+        return layer_caches
 
     # ============ Metadata Properties ============
 
@@ -247,18 +316,22 @@ class CacheTransferManager:
 
     @property
     def num_layers(self) -> int:
+        """Get the number of layers."""
         return self._num_layers
 
     @property
     def local_rank(self) -> int:
+        """Get the local rank."""
         return self._local_rank
 
     @property
     def device_id(self) -> int:
+        """Get the device ID."""
         return self._device_id
 
     @property
     def cache_dtype(self) -> str:
+        """Get the cache dtype."""
         return self._cache_dtype
 
     @property
@@ -268,9 +341,10 @@ class CacheTransferManager:
 
     @property
     def num_host_blocks(self) -> int:
+        """Get the number of Host blocks."""
         return self._num_host_blocks
 
-    # ============ Layer Indexed Access ============
+    # ============ Device/Host Layer Indexed Access ============
 
     def get_device_key_cache(self, layer_idx: int) -> Optional[Any]:
         """Get Device key cache tensor for a specific layer."""
@@ -286,6 +360,7 @@ class CacheTransferManager:
 
     def get_host_key_ptr(self, layer_idx: int) -> int:
         """Get Host key cache pointer for a specific layer."""
+        # Early return if no host cache configured
         if self._num_host_blocks <= 0:
             return 0
         if 0 <= layer_idx < len(self._host_key_ptrs):
@@ -294,13 +369,14 @@ class CacheTransferManager:
 
     def get_host_value_ptr(self, layer_idx: int) -> int:
         """Get Host value cache pointer for a specific layer."""
+        # Early return if no host cache configured
         if self._num_host_blocks <= 0:
             return 0
         if 0 <= layer_idx < len(self._host_value_ptrs):
             return self._host_value_ptrs[layer_idx]
         return 0
 
-    # ============ Internal Sync Fallbacks (used when cupy not available) ============
+    # ============ All-Layer Synchronous Swap Methods ============
 
     def _swap_all_layers(
         self,
@@ -309,60 +385,197 @@ class CacheTransferManager:
         mode: int,
     ) -> bool:
         """
-        Synchronous all-layer transfer fallback (used when cupy streams unavailable).
+        Synchronous all-layer transfer (directly calls swap_cache_all_layers operator).
+
+        Transfers KV cache data for all layers at once, supporting consecutive
+        block merge transfer optimization.
 
         Args:
             device_block_ids: Device block IDs to swap.
-            host_block_ids: Host block IDs to swap.
-            mode: 0=Device→Host (evict), 1=Host→Device (load).
+            host_block_ids: Host block IDs to swap (corresponding to device_block_ids).
+            mode: Transfer mode, 0=Device→Host (evict), 1=Host→Device (load).
+
+        Returns:
+            True if transfer succeeded, False if failed.
         """
+        # Early return if no host cache configured
         if self._num_host_blocks <= 0:
             return False
 
         try:
-            swap_cache_all_layers(
-                self._device_key_caches,
-                self._host_key_ptrs,
-                self._num_host_blocks,
-                device_block_ids,
-                host_block_ids,
-                self._device_id,
-                mode,
-            )
-            swap_cache_all_layers(
-                self._device_value_caches,
-                self._host_value_ptrs,
-                self._num_host_blocks,
-                device_block_ids,
-                host_block_ids,
-                self._device_id,
-                mode,
-            )
-            if self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
-                swap_cache_all_layers(
-                    self._device_key_scales,
-                    self._host_key_scales_ptrs,
+            # Use swap_cache_all_layers_batch for batch optimization
+            if self.use_swap_all_layers_batch:
+                # Swap key caches - batch transfer for all layers
+                swap_cache_all_layers_batch(
+                    self._device_key_caches,
+                    self._host_key_ptrs,
                     self._num_host_blocks,
                     device_block_ids,
                     host_block_ids,
                     self._device_id,
                     mode,
                 )
-                swap_cache_all_layers(
-                    self._device_value_scales,
-                    self._host_value_scales_ptrs,
+                # Swap value caches - batch transfer for all layers
+                swap_cache_all_layers_batch(
+                    self._device_value_caches,
+                    self._host_value_ptrs,
                     self._num_host_blocks,
                     device_block_ids,
                     host_block_ids,
                     self._device_id,
                     mode,
                 )
+                # Swap key scales for fp8
+                if self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
+                    swap_cache_all_layers_batch(
+                        self._device_key_scales,
+                        self._host_key_scales_ptrs,
+                        self._num_host_blocks,
+                        device_block_ids,
+                        host_block_ids,
+                        self._device_id,
+                        mode,
+                    )
+                # Swap value scales for fp8
+                if self._is_fp8_quantization() and self._device_value_scales and self._host_value_scales_ptrs:
+                    swap_cache_all_layers_batch(
+                        self._device_value_scales,
+                        self._host_value_scales_ptrs,
+                        self._num_host_blocks,
+                        device_block_ids,
+                        host_block_ids,
+                        self._device_id,
+                        mode,
+                    )
+            # Use original swap_cache_all_layers operator
+            else:
+                # Swap key caches
+                swap_cache_all_layers(
+                    self._device_key_caches,
+                    self._host_key_ptrs,
+                    self._num_host_blocks,
+                    device_block_ids,
+                    host_block_ids,
+                    self._device_id,
+                    mode,
+                )
+
+                # Swap value caches
+                swap_cache_all_layers(
+                    self._device_value_caches,
+                    self._host_value_ptrs,
+                    self._num_host_blocks,
+                    device_block_ids,
+                    host_block_ids,
+                    self._device_id,
+                    mode,
+                )
+
+                # Swap scales for fp8
+                if self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
+                    swap_cache_all_layers(
+                        self._device_key_scales,
+                        self._host_key_scales_ptrs,
+                        self._num_host_blocks,
+                        device_block_ids,
+                        host_block_ids,
+                        self._device_id,
+                        mode,
+                    )
+                    swap_cache_all_layers(
+                        self._device_value_scales,
+                        self._host_value_scales_ptrs,
+                        self._num_host_blocks,
+                        device_block_ids,
+                        host_block_ids,
+                        self._device_id,
+                        mode,
+                    )
+
             return True
+
         except Exception:
             import traceback
 
             traceback.print_exc()
             return False
+
+    def evict_to_host_all_layers(
+        self,
+        device_block_ids: List[int],
+        host_block_ids: List[int],
+    ) -> bool:
+        """
+        Evict all layers of KV Cache from Device to Host (synchronous).
+
+        Args:
+            device_block_ids: Device block IDs to evict.
+            host_block_ids: Host block IDs to receive (corresponding to device_block_ids).
+
+        Returns:
+            True if transfer succeeded, False if failed.
+        """
+        # Early return if no host cache configured
+        if self._num_host_blocks <= 0:
+            return False
+
+        return self._swap_all_layers(device_block_ids, host_block_ids, mode=0)
+
+    def load_to_device_all_layers(
+        self,
+        host_block_ids: List[int],
+        device_block_ids: List[int],
+    ) -> bool:
+        """
+        Load all layers of KV Cache from Host to Device (synchronous).
+
+        Args:
+            host_block_ids: Host block IDs to load from.
+            device_block_ids: Device block IDs to receive (corresponding to host_block_ids).
+
+        Returns:
+            True if transfer succeeded, False if failed.
+        """
+        # Early return if no host cache configured
+        if self._num_host_blocks <= 0:
+            return False
+
+        return self._swap_all_layers(device_block_ids, host_block_ids, mode=1)
+
+    def _validate_swap_params(
+        self,
+        device_block_ids: List[int],
+        host_block_ids: List[int],
+    ) -> bool:
+        """
+        Validate swap parameters.
+
+        Args:
+            device_block_ids: Device block IDs.
+            host_block_ids: Host block IDs.
+
+        Returns:
+            True if parameters are valid, False if invalid.
+        """
+        # Early return if no host cache configured
+        if self._num_host_blocks <= 0:
+            return False
+
+        if not device_block_ids or not host_block_ids:
+            return False
+
+        if len(device_block_ids) != len(host_block_ids):
+            return False
+
+        if not self._device_key_caches or not self._device_value_caches:
+            return False
+
+        if not self._host_key_ptrs or not self._host_value_ptrs:
+            return False
+
+        return True
+
+    # ============ Per-Layer Synchronous Swap Methods ============
 
     def _swap_single_layer(
         self,
@@ -372,32 +585,46 @@ class CacheTransferManager:
         mode: int,
     ) -> bool:
         """
-        Synchronous single-layer transfer fallback (used when cupy streams unavailable).
+        Synchronous single-layer transfer.
+
+        Uses optimized swap_cache_per_layer operator for
+        transferring KV cache data for a single layer.
 
         Args:
             layer_idx: Layer index to transfer.
             device_block_ids: Device block IDs to swap.
-            host_block_ids: Host block IDs to swap.
-            mode: 0=Device→Host (evict), 1=Host→Device (load).
+            host_block_ids: Host block IDs to swap (corresponding to device_block_ids).
+            mode: Transfer mode, 0=Device→Host (evict), 1=Host→Device (load).
+
+        Returns:
+            True if transfer succeeded, False if failed.
         """
+        # Early return if no host cache configured
         if self._num_host_blocks <= 0:
             return False
+
         if not device_block_ids or not host_block_ids:
             return False
+
         if len(device_block_ids) != len(host_block_ids):
             return False
 
         try:
+            # Get device cache tensors for this layer
             key_cache = self.get_device_key_cache(layer_idx)
             value_cache = self.get_device_value_cache(layer_idx)
+
             if key_cache is None or value_cache is None:
                 return False
 
+            # Get host pointers for this layer
             key_ptr = self.get_host_key_ptr(layer_idx)
             value_ptr = self.get_host_value_ptr(layer_idx)
+
             if key_ptr == 0 or value_ptr == 0:
                 return False
 
+            # Swap key cache for this layer using optimized per-layer operator
             swap_cache_per_layer(
                 key_cache,
                 key_ptr,
@@ -407,6 +634,8 @@ class CacheTransferManager:
                 self._device_id,
                 mode,
             )
+
+            # Swap value cache for this layer using optimized per-layer operator
             swap_cache_per_layer(
                 value_cache,
                 value_ptr,
@@ -416,198 +645,93 @@ class CacheTransferManager:
                 self._device_id,
                 mode,
             )
+
             return True
+
         except Exception:
             import traceback
 
             traceback.print_exc()
             return False
 
-    # ============ Async Transfer Methods ============
-
-    def _swap_all_layers_async(
-        self,
-        device_block_ids: List[int],
-        host_block_ids: List[int],
-        mode: int,
-    ) -> bool:
-        """
-        Async all-layer transfer on dedicated stream.
-
-        D2H uses _output_stream (fire-and-forget).
-        H2D uses _input_stream (but H2D always goes through _swap_single_layer_async).
-        Falls back to _swap_all_layers if cupy not available.
-
-        Args:
-            device_block_ids: Device block IDs to swap.
-            host_block_ids: Host block IDs to swap.
-            mode: 0=Device→Host (evict), 1=Host→Device (load).
-        """
-        if self._num_host_blocks <= 0:
-            return False
-
-        if self._input_stream is None or self._output_stream is None:
-            return self._swap_all_layers(device_block_ids, host_block_ids, mode)
-
-        stream = self._output_stream if mode == 0 else self._input_stream
-        try:
-            logger.debug(
-                f"[TransferManager] _swap_all_layers_async: local_rank={self._local_rank}, device_id={self._device_id}, "
-                f"cupy_device_id={self._cupy_device_id}, stream_device={stream.device_id}, mode={mode}"
-            )
-            with cp.cuda.Device(self._cupy_device_id):
-                with stream:
-                    swap_cache_all_layers(
-                        self._device_key_caches,
-                        self._host_key_ptrs,
-                        self._num_host_blocks,
-                        device_block_ids,
-                        host_block_ids,
-                        self._device_id,
-                        mode,
-                    )
-                    swap_cache_all_layers(
-                        self._device_value_caches,
-                        self._host_value_ptrs,
-                        self._num_host_blocks,
-                        device_block_ids,
-                        host_block_ids,
-                        self._device_id,
-                        mode,
-                    )
-                    if self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
-                        swap_cache_all_layers(
-                            self._device_key_scales,
-                            self._host_key_scales_ptrs,
-                            self._num_host_blocks,
-                            device_block_ids,
-                            host_block_ids,
-                            self._device_id,
-                            mode,
-                        )
-                        swap_cache_all_layers(
-                            self._device_value_scales,
-                            self._host_value_scales_ptrs,
-                            self._num_host_blocks,
-                            device_block_ids,
-                            host_block_ids,
-                            self._device_id,
-                            mode,
-                        )
-            return True
-        except Exception:
-            import traceback
-
-            traceback.print_exc()
-            return False
-
-    def _swap_single_layer_async(
+    def evict_layer_to_host(
         self,
         layer_idx: int,
         device_block_ids: List[int],
         host_block_ids: List[int],
-        mode: int,
     ) -> bool:
         """
-        Async single-layer transfer on _input_stream (H2D) or _output_stream (D2H).
-
-        Falls back to _swap_single_layer if cupy not available.
+        Evict a single layer of KV Cache from Device to Host (synchronous).
 
         Args:
-            layer_idx: Layer index to transfer.
-            device_block_ids: Device block IDs to swap.
-            host_block_ids: Host block IDs to swap.
-            mode: 0=Device→Host (evict), 1=Host→Device (load).
+            layer_idx: Layer index to evict.
+            device_block_ids: Device block IDs to evict.
+            host_block_ids: Host block IDs to receive (corresponding to device_block_ids).
+
+        Returns:
+            True if transfer succeeded, False if failed.
         """
+        # Early return if no host cache configured
         if self._num_host_blocks <= 0:
             return False
 
-        if self._input_stream is None or self._output_stream is None:
-            return self._swap_single_layer(layer_idx, device_block_ids, host_block_ids, mode)
+        return self._swap_single_layer(layer_idx, device_block_ids, host_block_ids, mode=0)
 
-        stream = self._output_stream if mode == 0 else self._input_stream
-        key_cache = self.get_device_key_cache(layer_idx)
-        value_cache = self.get_device_value_cache(layer_idx)
-        if key_cache is None or value_cache is None:
-            return False
-
-        key_ptr = self.get_host_key_ptr(layer_idx)
-        value_ptr = self.get_host_value_ptr(layer_idx)
-        if key_ptr == 0 or value_ptr == 0:
-            return False
-
-        try:
-            with cp.cuda.Device(self._cupy_device_id):
-                with stream:
-                    swap_cache_per_layer_async(
-                        key_cache,
-                        key_ptr,
-                        self._num_host_blocks,
-                        device_block_ids,
-                        host_block_ids,
-                        self._device_id,
-                        mode,
-                    )
-                    swap_cache_per_layer_async(
-                        value_cache,
-                        value_ptr,
-                        self._num_host_blocks,
-                        device_block_ids,
-                        host_block_ids,
-                        self._device_id,
-                        mode,
-                    )
-            return True
-        except Exception:
-            import traceback
-
-            traceback.print_exc()
-            return False
-
-    # ============ Public Async API ============
-
-    def evict_to_host_async(
+    def load_layer_to_device(
         self,
-        device_block_ids: List[int],
+        layer_idx: int,
         host_block_ids: List[int],
+        device_block_ids: List[int],
     ) -> bool:
         """
-        Async evict all layers of KV Cache from Device to Host (D2H).
-
-        Runs on _output_stream, fire-and-forget.
+        Load a single layer of KV Cache from Host to Device (synchronous).
 
         Args:
-            device_block_ids: Device block IDs to evict.
-            host_block_ids: Host block IDs to receive.
-        """
-        return self._swap_all_layers_async(device_block_ids, host_block_ids, mode=0)
+            layer_idx: Layer index to load.
+            host_block_ids: Host block IDs to load from.
+            device_block_ids: Device block IDs to receive.
 
-    def load_layers_to_device_async(
+        Returns:
+            True if transfer succeeded, False if failed.
+        """
+        # Early return if no host cache configured
+        if self._num_host_blocks <= 0:
+            return False
+
+        logger.debug(f"[Transfer] load_layer_to_device layer={layer_idx} starting")
+        result = self._swap_single_layer(layer_idx, device_block_ids, host_block_ids, mode=1)
+        logger.debug(f"[Transfer] load_layer_to_device layer={layer_idx} done, success={result}")
+        return result
+
+    def evict_layers_to_host(
         self,
         layer_indices: List[int],
-        host_block_ids: List[int],
         device_block_ids: List[int],
+        host_block_ids: List[int],
         on_layer_complete: Optional[callable] = None,
     ) -> bool:
         """
-        Async load KV Cache from Host to Device layer-by-layer (H2D).
+        Evict multiple layers of KV Cache from Device to Host (synchronous, layer-by-layer).
 
-        Each layer runs on _input_stream. Overlaps with forward compute:
-        the callback is invoked after each layer's kernel is submitted so
-        the forward thread can start using that layer's data once the event fires.
+        This method transfers layers one by one, calling the callback after each layer
+        completes. This allows overlapping transfer with forward computation.
 
         Args:
-            layer_indices: Layer indices to load.
-            host_block_ids: Host block IDs to load from.
-            device_block_ids: Device block IDs to receive.
-            on_layer_complete: Optional callback(layer_idx) after each layer is submitted.
+            layer_indices: Layer indices to evict.
+            device_block_ids: Device block IDs to evict.
+            host_block_ids: Host block IDs to receive.
+            on_layer_complete: Optional callback(layer_idx) called after each layer completes.
+
+        Returns:
+            True if all transfers succeeded, False if any failed.
         """
+        # Early return if no host cache configured
         if self._num_host_blocks <= 0:
             return False
 
         all_success = True
         for layer_idx in layer_indices:
-            success = self._swap_single_layer_async(layer_idx, device_block_ids, host_block_ids, mode=1)
+            success = self.evict_layer_to_host(layer_idx, device_block_ids, host_block_ids)
             if not success:
                 all_success = False
             if on_layer_complete is not None:
@@ -617,40 +741,43 @@ class CacheTransferManager:
                     pass
         return all_success
 
-    # ============ Stream Utilities ============
-
-    def sync_input_stream(self):
-        """Wait for all pending _input_stream (H2D) transfers to complete."""
-        if self._input_stream is not None:
-            self._input_stream.synchronize()
-
-    def sync_output_stream(self):
-        """Wait for all pending _output_stream (D2H) transfers to complete."""
-        if self._output_stream is not None:
-            self._output_stream.synchronize()
-
-    def record_input_stream_event(self) -> Any:
+    def load_layers_to_device(
+        self,
+        layer_indices: List[int],
+        host_block_ids: List[int],
+        device_block_ids: List[int],
+        on_layer_complete: Optional[callable] = None,
+    ) -> bool:
         """
-        Record a CUDA event on _input_stream and return it.
+        Load multiple layers of KV Cache from Host to Device (synchronous, layer-by-layer).
 
-        Used by _on_layer_complete callback in CacheController so that
-        LayerDoneCounter.wait_for_layer() can synchronize on the actual
-        H2D transfer stream rather than Paddle's default stream.
+        This method transfers layers one by one, calling the callback after each layer
+        completes. This allows overlapping transfer with forward computation.
+
+        Args:
+            layer_indices: Layer indices to load.
+            host_block_ids: Host block IDs to load from.
+            device_block_ids: Device block IDs to receive.
+            on_layer_complete: Optional callback(layer_idx) called after each layer completes.
 
         Returns:
-            cupy.cuda.Event if cupy streams are available, else None.
+            True if all transfers succeeded, False if any failed.
         """
-        if not _HAS_CUPY or self._input_stream is None:
-            return None
-        try:
-            with cp.cuda.Device(self._cupy_device_id):
-                event = cp.cuda.Event()
-                with self._input_stream:
-                    event.record()
-            return event
-        except Exception as e:
-            logger.warning(f"[TransferManager] Failed to record input_stream event: {e}")
-            return None
+        # Early return if no host cache configured
+        if self._num_host_blocks <= 0:
+            return False
+
+        all_success = True
+        for layer_idx in layer_indices:
+            success = self.load_layer_to_device(layer_idx, host_block_ids, device_block_ids)
+            if not success:
+                all_success = False
+            if on_layer_complete is not None:
+                try:
+                    on_layer_complete(layer_idx)
+                except Exception:
+                    pass
+        return all_success
 
     def get_stats(self) -> Dict[str, Any]:
         """Get transfer manager statistics."""

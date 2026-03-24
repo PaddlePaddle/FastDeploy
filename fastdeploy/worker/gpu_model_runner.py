@@ -29,7 +29,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.engine.request import ImagePosition, Request, RequestType
+from fastdeploy.engine.request import ImagePosition, Request, RequestType, BatchRequest
 from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
     sot_warmup_guard,
@@ -787,7 +787,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
         return feature_positions
 
-    def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
+    def insert_tasks_v1(self, req_dicts: BatchRequest, num_running_requests: int = None):
         """
         Process scheduler output tasks, used when ENABLE_V1_KVCACHE_SCHEDULER=1
         req_dict: A list of Request dict
@@ -824,20 +824,18 @@ class GPUModelRunner(ModelRunnerBase):
                     f"cache evict wait time: {evict_wait_ms:.2f}ms, "
                     f"{evict_length} pending evictions"
                 )
-            
-            logger.info(f"type is : {type(req_dicts[0])}")
-    
-            if len(req_dicts.cache_swap_metadata):
+
+            if req_dicts.cache_swap_metadata:
                 logger.info(f"cache_swap_metadata: {req_dicts.cache_swap_metadata}")
                 self.cache_controller.load_host_to_device(req_dicts.cache_swap_metadata)
-                self._pending_swap_in_handlers.extend(
-                    m.async_handler for m in req_dicts.cache_swap_metadata
+                self._pending_swap_in_handlers.append(
+                    req_dicts.cache_swap_metadata.async_handler
                 )
-            elif len(req_dicts.cache_evict_metadata) != 0:
+            if req_dicts.cache_evict_metadata:
                 logger.info(f"cache_evict_metadata: {req_dicts.cache_evict_metadata}")
                 self.cache_controller.evict_device_to_host(req_dicts.cache_evict_metadata)
-                self._pending_evict_handlers.extend(
-                    m.async_handler for m in req_dicts.cache_evict_metadata
+                self._pending_evict_handlers.append(
+                    req_dicts.cache_evict_metadata.async_handler
                 )
 
         for i in range(req_len):
@@ -1492,6 +1490,21 @@ class GPUModelRunner(ModelRunnerBase):
         # for zero size
         self.forward_meta.is_zero_size = self.forward_meta.ids_remove_padding.shape[0] == 0
         self.forward_meta.exist_prefill = self.exist_prefill()
+
+        # ============ V1 KVCACHE Manager: Swap-in waiting config ============
+        if self.enable_cache_manager_v1:
+            swap_all_layers = self.cache_config.swap_all_layers
+            self.forward_meta.cache_controller = self.cache_controller
+            # Simplified: directly get task_ids from _pending_swap_in_handlers
+            if not swap_all_layers and self._pending_swap_in_handlers:
+                self.forward_meta.swap_in_task_ids = [h.task_id for h in self._pending_swap_in_handlers]
+            else:
+                self.forward_meta.swap_in_task_ids = []
+            self.forward_meta.enable_layer_swap_wait = not swap_all_layers and len(self._pending_swap_in_handlers) > 0
+        else:
+            self.forward_meta.cache_controller = None
+            self.forward_meta.swap_in_task_ids = []
+            self.forward_meta.enable_layer_swap_wait = False
 
     def initialize_kv_cache(self, profile: bool = False) -> None:
         """
@@ -2437,32 +2450,57 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _execute(self, model_inputs: Dict[str, paddle.Tensor]) -> None:
         if self.enable_cache_manager_v1:
-            # Wait for swap-in of current batch
-            swap_in_wait_start = time.time()
-            for handler in self._pending_swap_in_handlers:
-                if not handler.is_completed:
-                    result = handler.get_result()
-                else:
-                    result = handler.result
-                logger.info(f"cache swap in result: {result}")
-            swap_in_handler_count = len(self._pending_swap_in_handlers)
-            self._pending_swap_in_handlers.clear()
-            swap_in_wait_ms = (time.time() - swap_in_wait_start) * 1000
-            if swap_in_wait_ms > 0.01:
-                logger.info(
-                    f"cache swap in wait time: {swap_in_wait_ms:.2f}ms, "
-                    f"handler count: {swap_in_handler_count}"
-                )
+            # Get swap mode from cache config
+            swap_all_layers = self.cache_config.swap_all_layers
 
+            if swap_all_layers:
+                # Original behavior: wait for all swap-in to complete before forward
+                swap_in_wait_start = time.time()
+                for handler in self._pending_swap_in_handlers:
+                    if not handler.is_completed:
+                        result = handler.get_result()
+                    else:
+                        result = handler.result
+                    logger.info(f"cache swap in result: {result}")
+                swap_in_handler_count = len(self._pending_swap_in_handlers)
+                self._pending_swap_in_handlers.clear()
+                swap_in_wait_ms = (time.time() - swap_in_wait_start) * 1000
+                if swap_in_wait_ms > 0.01:
+                    logger.info(
+                        f"cache swap in wait time: {swap_in_wait_ms:.2f}ms, "
+                        f"handler count: {swap_in_handler_count} (all-layers mode)"
+                    )
+
+        model_output = None
         if model_inputs is not None and len(model_inputs) > 0:
             model_output = self.model(
                 model_inputs,
                 self.forward_meta,
             )
+
+            # ============ Clear pending swap handlers after forward completes ============
+            if self.enable_cache_manager_v1 and not swap_all_layers:
+                logger.info("cache swap in wait begin")
+                self._pending_swap_in_handlers.clear()
+
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
-        else:
-            model_output = None
+
+            # ============ V1 KVCACHE Manager: Print all layer swap-in times ============
+            if (
+                self.enable_cache_manager_v1
+                and self.forward_meta.enable_layer_swap_wait
+                and self.forward_meta.swap_in_task_ids
+            ):
+                for task_id in self.forward_meta.swap_in_task_ids:
+                    layer_times = self.cache_controller.get_all_layer_times(task_id)
+                    if layer_times:
+                        time_strs = []
+                        for layer_idx in sorted(layer_times.keys()):
+                            wait_t = self.cache_controller.get_layer_wait_time(task_id, layer_idx)
+                            complete_t = layer_times[layer_idx]
+                            time_strs.append(f"layer{layer_idx}={wait_t*1000:.1f}ms" if wait_t is not None else f"layer{layer_idx}=N/A")
+                        logger.info(f"[SwapInTimes] task_id={task_id[:8]}..., " + ", ".join(time_strs))
         return model_output
 
     def _postprocess(

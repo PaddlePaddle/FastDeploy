@@ -448,7 +448,6 @@ class TestRadixTreeReset:
         assert len(tree._evictable_set) == 0
         assert len(tree._evictable_device_heap) == 0
         assert len(tree._evictable_host_heap) == 0
-        assert len(tree._node_id_to_node) == 0
 
 
 class TestRadixTreeFullWorkflow:
@@ -515,13 +514,18 @@ class TestRadixTreeEdgeCases:
     def test_node_id_uniqueness(self):
         """Test that each node has a unique node_id."""
         tree = RadixTree()
-        tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])
 
+        # Collect node_ids from the tree structure
         node_ids = set()
-        for node_id, node in tree._node_id_to_node.items():
-            assert node_id == node.node_id
-            node_ids.add(node_id)
 
+        def traverse(node):
+            if node.hash_value:  # Skip root
+                node_ids.add(node.node_id)
+            for child in node.children.values():
+                traverse(child)
+
+        traverse(tree._root)
         assert len(node_ids) == 3  # All unique
 
     def test_eviction_order_lru(self):
@@ -542,3 +546,595 @@ class TestRadixTreeEdgeCases:
         assert len(device_ids) == 3
         # h1 should be evicted first (least recently accessed after find_prefix)
         assert device_ids[0] == 1
+
+
+class TestRadixTreeMultiSequenceWorkflow:
+    """Tests for multi-sequence workflows simulating real usage patterns."""
+
+    def test_multi_sequence_shared_prefix_reuse(self):
+        """
+        Test multiple sequences sharing a common prefix.
+
+        Simulates CacheManager usage:
+        1. Request A: [h1, h2, h3] -> cached
+        2. Request B: [h1, h2, h4] -> finds prefix match for [h1, h2], inserts new [h4]
+        3. Request C: [h1, h2] -> finds full prefix match
+        """
+        tree = RadixTree(enable_host_cache=True)
+
+        # Request A: Insert full sequence
+        nodes_a, _ = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])
+        assert len(nodes_a) == 3
+
+        # After insert, h1 has ref_count=1
+        h1_node = tree._root.children["h1"]
+        assert h1_node.ref_count == 1
+
+        # Simulate request finish - decrement ref
+        tree.decrement_ref_nodes(nodes_a)
+
+        # Now h1, h2, h3 are all evictable (ref_count=0)
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 3
+
+        # Request B: Share prefix, insert new suffix
+        nodes_b, wasted = tree.insert([("h1", 1), ("h2", 2), ("h4", 4)])
+        assert len(nodes_b) == 3
+        # h1 and h2 should be reused (not incremented), h4 is new
+        # h1 and h2 still have ref_count=0, h4 has ref_count=1
+        assert tree.node_count() == 5  # root + h1, h2, h3, h4
+
+        h4_node = h1_node.children["h2"].children["h4"]
+        assert h4_node.ref_count == 1
+
+        # Decrement B's refs
+        tree.decrement_ref_nodes(nodes_b)
+
+        # Request C: Find prefix for [h1, h2]
+        matched = tree.find_prefix(["h1", "h2"])
+        assert len(matched) == 2
+
+        # Increment ref for matched nodes to prevent eviction
+        tree.increment_ref_nodes(matched)
+        assert h1_node.ref_count == 1
+        assert h1_node.children["h2"].ref_count == 1
+
+        # Decrement when done
+        tree.decrement_ref_nodes(matched)
+
+    def test_incremental_insert_after_prefix_match(self):
+        """
+        Test incremental insertion from a matched prefix node.
+
+        Simulates CacheManager usage where:
+        1. Insert [h1, h2] and cache it
+        2. Later request comes with [h1, h2, h3, h4]
+        3. find_prefix returns [h1, h2]
+        4. insert remaining [h3, h4] starting from matched node
+        """
+        tree = RadixTree()
+
+        # Initial sequence
+        nodes1, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes1)
+
+        # Later request with longer sequence
+        matched = tree.find_prefix(["h1", "h2"])
+        assert len(matched) == 2
+
+        # Incremental insert starting from last matched node
+        last_node = matched[-1]
+        nodes2, wasted = tree.insert(
+            [("h3", 3), ("h4", 4)],
+            start_node=last_node
+        )
+        assert len(nodes2) == 2
+        assert len(wasted) == 0
+
+        # Verify complete sequence
+        full_match = tree.find_prefix(["h1", "h2", "h3", "h4"])
+        assert len(full_match) == 4
+
+    def test_three_request_caching_cycle(self):
+        """
+        Test complete caching cycle with three sequential requests.
+
+        Workflow:
+        1. Request 1: Insert [A, B, C], finish
+        2. Request 2: Find [A, B], gets match, continue with [X, Y], finish
+        3. Request 3: Find [A, B], gets full match
+
+        Note: Request 3 finds [A, B] but NOT [X] because X is under A, not B.
+        """
+        tree = RadixTree(enable_host_cache=True)
+
+        # Request 1: Insert and cache
+        req1_nodes, _ = tree.insert([("A", 1), ("B", 2), ("C", 3)])
+        tree.decrement_ref_nodes(req1_nodes)
+
+        # Request 2: Find prefix, add new blocks
+        matched = tree.find_prefix(["A", "B"])
+        assert len(matched) == 2
+        tree.increment_ref_nodes(matched)
+
+        req2_new, wasted = tree.insert([("X", 10), ("Y", 11)])
+        assert len(req2_new) == 2
+
+        tree.decrement_ref_nodes(matched)
+        tree.decrement_ref_nodes(req2_new)
+
+        # Request 3: Find [A, B] - should get full match
+        # X is NOT under B, so we can only match A, B
+        matched3 = tree.find_prefix(["A", "B"])
+        assert len(matched3) == 2
+
+        # Stats should show correct state
+        stats = tree.get_stats()
+        # Tree has: root, A, B, C (from req1), X, Y (from req2)
+        assert stats.node_count == 6
+
+
+class TestRadixTreeCompleteEvictionCycle:
+    """Tests for complete eviction cycles (DEVICE -> HOST -> Removed)."""
+
+    def test_full_eviction_cycle_single_sequence(self):
+        """
+        Test complete eviction cycle for a single sequence.
+
+        Cycle: Insert -> Decrement -> Evict to Host -> Remove from Host
+        """
+        tree = RadixTree(enable_host_cache=True)
+
+        # Step 1: Insert
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])
+        assert tree.node_count() == 4
+
+        # Step 2: Decrement refs to make evictable
+        tree.decrement_ref_nodes(nodes)
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 3
+
+        # Step 3: Evict to host
+        released = tree.evict_device_to_host(3, [100, 101, 102])
+        assert sorted(released) == [1, 2, 3]
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 0
+        assert stats.evictable_host_count == 3
+
+        # Verify nodes are now HOST
+        for node in nodes:
+            assert node.cache_status == CacheStatus.HOST
+            assert node.block_id in [100, 101, 102]
+
+        # Step 4: Remove from host
+        evicted = tree.evict_host_nodes(3)
+        assert sorted(evicted) == [100, 101, 102]
+        assert tree.node_count() == 1  # Only root remains
+
+    def test_full_eviction_cycle_multiple_rounds(self):
+        """
+        Test eviction in multiple rounds.
+
+        Insert 10 blocks, evict 3, then evict remaining 7.
+        """
+        tree = RadixTree(enable_host_cache=True)
+
+        nodes, _ = tree.insert([(f"h{i}", i) for i in range(10)])
+        tree.decrement_ref_nodes(nodes)
+
+        # Round 1: Evict 3
+        released1 = tree.evict_device_to_host(3, [100, 101, 102])
+        assert len(released1) == 3
+
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 7
+        assert stats.evictable_host_count == 3
+
+        # Round 2: Evict remaining 7
+        released2 = tree.evict_device_to_host(7, [200, 201, 202, 203, 204, 205, 206])
+        assert len(released2) == 7
+
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 0
+        assert stats.evictable_host_count == 10
+
+        # Now remove all from host
+        evicted = tree.evict_host_nodes(10)
+        assert len(evicted) == 10
+        assert tree.node_count() == 1
+
+    def test_eviction_with_shared_prefix_multiple_refs(self):
+        """
+        Test eviction when nodes have shared prefixes with active references.
+
+        Tree structure:
+            root
+            └── h1 (ref=2) - shared by both sequences, incremented each insert
+                ├── h2 (evicted to HOST)
+                └── h3 (ref=1 after decrement)
+
+        After seq1 finishes: h1 stays (ref=1), h2 is evicted to HOST (still in tree)
+        """
+        tree = RadixTree(enable_host_cache=True)
+
+        # Insert seq1: h1 -> h2
+        nodes1, _ = tree.insert([("h1", 1), ("h2", 2)])
+        # Insert seq2: h1 -> h3 (shares h1)
+        nodes2, _ = tree.insert([("h1", 1), ("h3", 3)])
+
+        # Shared h1 has ref_count=2 (incremented on each insert traversal)
+        h1_node = tree._root.children["h1"]
+        assert h1_node.ref_count == 2
+
+        # Seq1 finishes - decrement its refs
+        tree.decrement_ref_nodes(nodes1)
+
+        # h1 still has ref=1, h2 should be evictable
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 1
+
+        # Evict h2 to host (changes status, node stays in tree until evict_host_nodes)
+        released = tree.evict_device_to_host(1, [100])
+        assert released == [2]
+
+        # h2 is now on host but still in tree
+        assert "h1" in tree._root.children
+        # evict_device_to_host only changes status, doesn't remove from tree
+        assert tree.node_count() == 4  # root + h1 + h2 + h3
+
+        # h2 is now on host with ref=0 (evictable in host heap)
+        h2_node = h1_node.children["h2"]
+        assert h2_node.cache_status == CacheStatus.HOST
+        assert h2_node.ref_count == 0
+
+
+class TestRadixTreeSwapWorkflow:
+    """Tests for HOST -> DEVICE swap workflow."""
+
+    def test_swap_host_to_device_complete_cycle(self):
+        """
+        Test full swap cycle: DEVICE -> HOST -> SWAP_TO_DEVICE -> DEVICE.
+
+        This simulates loading cached blocks back to GPU.
+        """
+        tree = RadixTree(enable_host_cache=True)
+
+        # Step 1: Insert and evict to host
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes)
+        tree.evict_device_to_host(2, [100, 101])
+
+        # Verify nodes are on host
+        for node in nodes:
+            assert node.cache_status == CacheStatus.HOST
+            assert node.block_id in [100, 101]
+
+        # Step 2: Swap back to device
+        original_ids = tree.swap_to_device(nodes, [50, 51])
+        assert sorted(original_ids) == [100, 101]
+
+        # Verify status changed to SWAP_TO_DEVICE (intermediate state)
+        for node in nodes:
+            assert node.cache_status == CacheStatus.SWAP_TO_DEVICE
+            assert node.block_id in [50, 51]
+
+        # Step 3: Complete swap
+        gpu_ids = tree.complete_swap_to_device(nodes)
+        assert sorted(gpu_ids) == [50, 51]
+
+        for node in nodes:
+            assert node.cache_status == CacheStatus.DEVICE
+            assert node.block_id in [50, 51]
+
+    def test_swap_after_find_prefix(self):
+        """
+        Test that swapped blocks can still be found via find_prefix.
+
+        After swap_to_device, nodes should be findable again.
+        """
+        tree = RadixTree(enable_host_cache=True)
+
+        # Insert and evict
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes)
+        tree.evict_device_to_host(2, [100, 101])
+
+        # Find prefix (should find HOST nodes)
+        matched = tree.find_prefix(["h1", "h2"])
+        assert len(matched) == 2
+
+        # Increment refs to prevent eviction during swap
+        tree.increment_ref_nodes(matched)
+
+        # Swap to device
+        original_ids = tree.swap_to_device(matched, [50, 51])
+        assert sorted(original_ids) == [100, 101]
+
+        # Find should still work
+        matched2 = tree.find_prefix(["h1", "h2"])
+        assert len(matched2) == 2
+        block_ids = [n.block_id for n in matched2]
+        assert sorted(block_ids) == [50, 51]
+
+        tree.decrement_ref_nodes(matched2)
+
+
+class TestRadixTreeConcurrencySafety:
+    """Tests for thread safety and concurrent access patterns."""
+
+    def test_concurrent_insert_and_find(self):
+        """Test concurrent insert and find_prefix operations."""
+        import threading
+
+        tree = RadixTree(enable_host_cache=True)
+
+        def insert_sequence(prefix, start_id, count):
+            for i in range(count):
+                blocks = [(f"{prefix}_{j}", start_id + j) for j in range(5)]
+                tree.insert(blocks)
+
+        def find_sequence(prefix, results):
+            for _ in range(10):
+                matched = tree.find_prefix([f"{prefix}_0", f"{prefix}_1"])
+                results.append(len(matched))
+
+        threads = []
+        results = []
+
+        # Create 5 threads doing inserts
+        for i in range(5):
+            t = threading.Thread(target=insert_sequence, args=(f"P{i}", i * 10, 10))
+            threads.append(t)
+
+        # Create 5 threads doing finds
+        for i in range(5):
+            t = threading.Thread(target=find_sequence, args=(f"P{i}", results))
+            threads.append(t)
+
+        for t in threads:
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        # All find operations should complete without error
+        assert len(results) == 50
+        # Find results may vary depending on timing, but should be valid
+        for r in results:
+            assert 0 <= r <= 2
+
+    def test_concurrent_eviction_and_access(self):
+        """Test concurrent eviction and find_prefix operations."""
+        import threading
+
+        tree = RadixTree(enable_host_cache=True)
+
+        # Setup: Insert and make evictable
+        nodes, _ = tree.insert([(f"h{i}", i) for i in range(20)])
+        tree.decrement_ref_nodes(nodes)
+
+        results = []
+        errors = []
+
+        def evict_blocks():
+            try:
+                for _ in range(5):
+                    released = tree.evict_device_to_host(2, [1000, 1001])
+                    if released:
+                        results.append(("evict", len(released)))
+            except Exception as e:
+                errors.append(e)
+
+        def access_blocks():
+            try:
+                for _ in range(10):
+                    matched = tree.find_prefix(["h0", "h1"])
+                    results.append(("access", len(matched)))
+            except Exception as e:
+                errors.append(e)
+
+        threads = [
+            threading.Thread(target=evict_blocks),
+            threading.Thread(target=access_blocks),
+            threading.Thread(target=access_blocks),
+        ]
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # Should have completed without error
+        assert len(errors) == 0
+        # Should have results from all operations
+        assert len(results) > 0
+        # Access results should be valid (0, 1, or 2 blocks matched)
+        for op, count in results:
+            if op == "access":
+                assert 0 <= count <= 2
+
+
+class TestRadixTreeMemoryManagement:
+    """Tests for proper memory management and reference counting."""
+
+    def test_node_reuse_different_block_ids(self):
+        """
+        Test that reusing a node with different block_id tracks wasted blocks.
+
+        When inserting a sequence that partially reuses existing nodes
+        but with different block_ids, the conflicting block_ids should
+        be tracked as wasted.
+
+        In this case:
+        - h1 already exists with block_id=1, new block_id=100 -> wasted
+        - h2 already exists with block_id=2, new block_id=200 -> wasted
+        """
+        tree = RadixTree()
+
+        # Insert first sequence
+        nodes1, wasted1 = tree.insert([("h1", 1), ("h2", 2)])
+        assert len(wasted1) == 0
+
+        # Insert same hashes but different block_ids - both are wasted
+        nodes2, wasted2 = tree.insert([("h1", 100), ("h2", 200)])
+        # Both h1 and h2 already exist, so both new block_ids are wasted
+        assert len(wasted2) == 2
+        assert sorted(wasted2) == [100, 200]
+
+        # Verify nodes still have original block_ids
+        h1_node = tree._root.children["h1"]
+        h2_node = h1_node.children["h2"]
+        assert h1_node.block_id == 1
+        assert h2_node.block_id == 2
+
+    def test_multiple_insert_same_node_tracking(self):
+        """
+        Test that multiple inserts of the same path correctly track refs.
+
+        Insert the same sequence 5 times, then decrement 5 times.
+        Node should become evictable only after all decrements.
+        """
+        tree = RadixTree()
+
+        # Insert same sequence 5 times
+        all_nodes = []
+        for i in range(5):
+            nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+            all_nodes.append(nodes)
+
+        h1_node = tree._root.children["h1"]
+        assert h1_node.ref_count == 5
+
+        # Decrement refs one by one
+        for i in range(5):
+            tree.decrement_ref_nodes(all_nodes[i])
+            expected_ref = 5 - i - 1
+            assert h1_node.ref_count == expected_ref
+
+        # Now h1 should be evictable
+        assert h1_node.ref_count == 0
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == 2  # h1 and h2
+
+    def test_reset_clears_all_tracking(self):
+        """Test that reset properly clears all tracking structures."""
+        tree = RadixTree(enable_host_cache=True)
+
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])
+        tree.decrement_ref_nodes(nodes)
+        tree.evict_device_to_host(3, [100, 101, 102])
+
+        assert tree.node_count() == 4
+        stats = tree.get_stats()
+        assert stats.evictable_host_count == 3
+
+        # Reset
+        tree.reset()
+
+        assert tree.node_count() == 1
+        assert len(tree._evictable_set) == 0
+        assert len(tree._evictable_device_heap) == 0
+        assert len(tree._evictable_host_heap) == 0
+
+
+class TestRadixTreeComplexScenarios:
+    """Tests for complex real-world scenarios."""
+
+    def test_batched_requests_with_partial_match(self):
+        """
+        Test handling multiple batched requests with partial prefix matches.
+
+        Simulates a batch of 3 requests:
+        - Req1: [sys, user1] -> insert both
+        - Req2: [sys, user2] -> prefix match [sys], insert [user2]
+        - Req3: [sys, user1] -> full prefix match
+        """
+        tree = RadixTree(enable_host_cache=True)
+
+        # Request 1: Full insert
+        req1_nodes, _ = tree.insert([("sys", 0), ("user1", 1)])
+        tree.decrement_ref_nodes(req1_nodes)
+
+        # Request 2: Partial match (sys), new suffix (user2)
+        matched = tree.find_prefix(["sys"])
+        assert len(matched) == 1
+        tree.increment_ref_nodes(matched)
+
+        req2_nodes, wasted = tree.insert([("user2", 2)])
+        assert len(wasted) == 0
+
+        tree.decrement_ref_nodes(matched)
+        tree.decrement_ref_nodes(req2_nodes)
+
+        # Request 3: Full match
+        matched3 = tree.find_prefix(["sys", "user1"])
+        assert len(matched3) == 2
+
+        # Stats check
+        stats = tree.get_stats()
+        assert stats.node_count == 4  # sys, user1, user2 + root
+
+    def test_deep_chain_insertion(self):
+        """
+        Test insertion and access of deep node chains.
+
+        Insert a chain of 20 blocks, verify find_prefix works at various depths.
+        """
+        tree = RadixTree()
+
+        # Insert deep chain
+        depth = 20
+        blocks = [(f"h{i}", i) for i in range(depth)]
+        nodes, _ = tree.insert(blocks)
+
+        assert len(nodes) == depth
+        assert tree.node_count() == depth + 1
+
+        # Find at various depths
+        for d in [5, 10, 15, 20]:
+            matched = tree.find_prefix([f"h{i}" for i in range(d)])
+            assert len(matched) == d
+
+        # Decrement and verify all become evictable
+        tree.decrement_ref_nodes(nodes)
+        stats = tree.get_stats()
+        assert stats.evictable_device_count == depth
+
+    def test_wide_tree_with_shared_prefix(self):
+        """
+        Test tree with many branches sharing a common prefix.
+
+        Structure:
+            root
+            └── shared (ref=100) - incremented each insert
+                ├── branch_0 (ref=0 after release)
+                ├── branch_1 (ref=0 after release)
+                ... (50 branches released, 50 still held)
+        """
+        tree = RadixTree(enable_host_cache=True)
+        num_branches = 100
+
+        # Insert 100 sequences, all sharing "shared" prefix
+        all_branch_nodes = []
+        for i in range(num_branches):
+            nodes, _ = tree.insert([("shared", 0), (f"branch_{i}", i)])
+            all_branch_nodes.append(nodes)
+
+        # shared has ref_count=100 (incremented on each insert traversal)
+        shared_node = tree._root.children["shared"]
+        assert shared_node.ref_count == 100
+
+        # Release half the branches
+        for i in range(num_branches // 2):
+            tree.decrement_ref_nodes(all_branch_nodes[i])
+
+        stats = tree.get_stats()
+        # 50 branch nodes become evictable, shared stays at ref=50
+        assert stats.evictable_device_count == num_branches // 2  # 50
+
+        # shared node should still have ref=50 (not evictable)
+        assert shared_node.ref_count == num_branches // 2
+
+        # Verify one remaining branch is still findable
+        matched = tree.find_prefix(["shared", f"branch_{num_branches // 2}"])
+        assert len(matched) == 2
