@@ -152,22 +152,22 @@ class TestRadixTreeRefCount:
 
         # Release nodes first
         tree.decrement_ref_nodes(nodes)
-        assert len(tree._evictable_set) == 2
+        assert len(tree._evictable_device) == 2
 
         # Increment again - should remove from evictable
         tree.increment_ref_nodes(nodes)
-        assert len(tree._evictable_set) == 0
+        assert len(tree._evictable_device) == 0
 
     def test_decrement_ref_nodes(self):
         """Test decrementing reference count for nodes."""
         tree = RadixTree()
         nodes, _ = tree.insert([("hash1", 1), ("hash2", 2)])
 
-        assert len(tree._evictable_set) == 0
+        assert len(tree._evictable_device) == 0
 
         # Decrement ref count
         tree.decrement_ref_nodes(nodes)
-        assert len(tree._evictable_set) == 2
+        assert len(tree._evictable_device) == 2
 
     def test_decrement_ref_nodes_shared_prefix(self):
         """Test decrementing with shared prefix."""
@@ -178,12 +178,12 @@ class TestRadixTreeRefCount:
         # Release first sequence
         tree.decrement_ref_nodes(nodes1)
         # hash2 should be evictable, hash1 still has ref=1
-        assert len(tree._evictable_set) == 1
+        assert len(tree._evictable_device) == 1
 
         # Release second sequence
         tree.decrement_ref_nodes(nodes2)
         # Now hash1 and hash3 should be evictable (hash2 already was)
-        assert len(tree._evictable_set) == 3
+        assert len(tree._evictable_device) == 3
 
 
 class TestEvictDeviceToHost:
@@ -445,9 +445,8 @@ class TestRadixTreeReset:
         tree.reset()
 
         assert tree.node_count() == 1
-        assert len(tree._evictable_set) == 0
-        assert len(tree._evictable_device_heap) == 0
-        assert len(tree._evictable_host_heap) == 0
+        assert len(tree._evictable_device) == 0
+        assert len(tree._evictable_host) == 0
 
 
 class TestRadixTreeFullWorkflow:
@@ -465,7 +464,7 @@ class TestRadixTreeFullWorkflow:
         tree.decrement_ref_nodes(nodes_a)
 
         # h3 should be evictable, but h1 and h2 still have ref_count=1
-        assert len(tree._evictable_set) == 1
+        assert len(tree._evictable_device) == 1
 
         # Find prefix for new sequence should still match h1, h2
         matched_nodes = tree.find_prefix(["h1", "h2", "h5"])
@@ -509,7 +508,7 @@ class TestRadixTreeEdgeCases:
         assert result is None
 
         # Node should still be evictable
-        assert len(tree._evictable_set) == 1
+        assert len(tree._evictable_device) == 1
 
     def test_node_id_uniqueness(self):
         """Test that each node has a unique node_id."""
@@ -1032,9 +1031,8 @@ class TestRadixTreeMemoryManagement:
         tree.reset()
 
         assert tree.node_count() == 1
-        assert len(tree._evictable_set) == 0
-        assert len(tree._evictable_device_heap) == 0
-        assert len(tree._evictable_host_heap) == 0
+        assert len(tree._evictable_device) == 0
+        assert len(tree._evictable_host) == 0
 
 
 class TestRadixTreeComplexScenarios:
