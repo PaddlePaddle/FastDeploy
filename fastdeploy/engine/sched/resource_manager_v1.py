@@ -49,7 +49,12 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
-from fastdeploy.utils import download_from_bos, init_bos_client, llm_logger
+from fastdeploy.utils import (
+    download_from_bos,
+    init_bos_client,
+    llm_logger,
+    offload_logger,
+)
 
 
 @dataclass
@@ -220,6 +225,13 @@ class ResourceManagerV1(ResourceManager):
         # Scheduler-side requests that have not been moved into resource manager waiting queue yet.
         self.scheduler_unhandled_request_num = 0
 
+        # OffloadManager for decode instances
+        self.offload_manager = None
+        if config.scheduler_config.splitwise_role == "decode" and getattr(config, "enable_decode_offload", False):
+            from fastdeploy.engine.offload_manager import OffloadManager
+
+            self.offload_manager = OffloadManager(config, self.cache_manager, None)
+
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
 
@@ -322,6 +334,27 @@ class ResourceManagerV1(ResourceManager):
                 if preempted_req.use_extend_tables:
                     self.running.insert(0, preempted_req)
                     continue
+
+                # Try offload for decode instance requests in decode phase
+                is_decode_phase = (
+                    preempted_req.num_computed_tokens >= preempted_req.need_prefill_tokens
+                    if preempted_req.need_prefill_tokens is not None
+                    else False
+                )
+                offloaded = False
+                if (
+                    self.config.scheduler_config.splitwise_role == "decode"
+                    and is_decode_phase
+                    and self.offload_manager is not None
+                    and self.offload_manager.can_offload(preempted_req)
+                ):
+                    if self.offload_manager.offload_req(preempted_req):
+                        offloaded = True
+                        offload_logger.info(
+                            f"Request {preempted_req.request_id} offloaded before preempt, "
+                            f"tokens={preempted_req.num_computed_tokens}"
+                        )
+
                 preempted_req.status = RequestStatus.PREEMPTED
                 preempted_req.num_computed_tokens = 0
                 if self.config.scheduler_config.splitwise_role == "decode":
@@ -331,10 +364,12 @@ class ResourceManagerV1(ResourceManager):
                         del self.requests[preempted_req.request_id]
                     if preempted_req.request_id in self.req_dict:
                         del self.req_dict[preempted_req.request_id]
-                    self._free_blocks(preempted_req)
+                    if not offloaded:
+                        self._free_blocks(preempted_req)
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 else:
-                    self._free_blocks(preempted_req)
+                    if not offloaded:
+                        self._free_blocks(preempted_req)
                     preempted_req.num_cached_blocks = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
                     trace_print(
@@ -956,6 +991,23 @@ class ResourceManagerV1(ResourceManager):
                                 self._free_blocks(request)
                             break
                     elif request.status == RequestStatus.PREEMPTED:
+                        # Try to resume offloaded request first
+                        if request.is_offloaded and self.offload_manager is not None:
+                            resume_success, _ = self.offload_manager.resume_decode(request)
+                            if resume_success:
+                                offload_logger.info(f"Resumed offloaded request {request.request_id}")
+                                self.waiting.popleft()
+                                self.running.append(request)
+                                scheduled_reqs.append(self._prepare_decode_task(request))
+                                continue
+                            else:
+                                offload_logger.debug(
+                                    f"Failed to resume offloaded request {request.request_id}, will retry"
+                                )
+                                skip_requests.append(request)
+                                self.waiting.popleft()
+                                continue
+
                         request.need_prefill_tokens = (
                             request.num_total_tokens
                         )  # Before preempted task rescheduled, preempted task has been sent to engine, no more tokens are output, here num_total_tokens should be static and correct

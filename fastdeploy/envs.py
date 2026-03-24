@@ -169,6 +169,12 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_FILL_BITMASK_BATCH": lambda: int(os.getenv("FD_FILL_BITMASK_BATCH", "4")),
     "FD_ENABLE_PDL": lambda: int(os.getenv("FD_ENABLE_PDL", "1")),
     "FD_ENABLE_ASYNC_LLM": lambda: int(os.getenv("FD_ENABLE_ASYNC_LLM", "0")),
+    # Enable decode KV cache offload for preempted requests
+    "FD_ENABLE_DECODE_OFFLOAD": lambda: bool(int(os.getenv("FD_ENABLE_DECODE_OFFLOAD", "0"))),
+    # CPU memory limit in bytes for offload
+    "FD_CPU_MEMORY_LIMIT": lambda: int(os.getenv("FD_CPU_MEMORY_LIMIT", str(50 * 1024 * 1024 * 1024))),
+    "FD_CPU_OFFLOAD_CHUNK_SIZE": lambda: int(os.getenv("FD_CPU_OFFLOAD_CHUNK_SIZE", "8192")),
+    "FD_OFFLOAD_STORAGE_PATH": lambda: os.getenv("FD_OFFLOAD_STORAGE_PATH", "/tmp/fastdeploy_offload"),
     "FD_GUIDANCE_DISABLE_ADDITIONAL": lambda: bool(int(os.getenv("FD_GUIDANCE_DISABLE_ADDITIONAL", "1"))),
     "FD_LLGUIDANCE_LOG_LEVEL": lambda: int(os.getenv("FD_LLGUIDANCE_LOG_LEVEL", "0")),
     # "Number of tokens in the group for Mixture of Experts (MoE) computation processing on HPU"

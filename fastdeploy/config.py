@@ -1805,6 +1805,7 @@ class FDConfig:
         tool_parser: str = None,
         test_mode=False,
         routing_replay_config: Optional[RoutingReplayConfig] = None,
+        enable_decode_offload: bool = False,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1821,6 +1822,7 @@ class FDConfig:
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
         self.routing_replay_config = routing_replay_config
+        self.enable_decode_offload = enable_decode_offload
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs

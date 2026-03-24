@@ -869,6 +869,11 @@ def parse_args():
         help="enable chunked moe",
     )
     parser.add_argument(
+        "--enable_decode_offload",
+        action="store_true",
+        help="enable decode KV cache offload for preempted requests",
+    )
+    parser.add_argument(
         "--chunked_moe_size",
         type=int,
         default=256,
@@ -1223,6 +1228,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         scheduler_config=scheduler_config,
         ips=args.ips,
         plas_attention_config=plas_attention_config,
+        enable_decode_offload=args.enable_decode_offload,
         structured_outputs_config=structured_outputs_config,
         eplb_config=eplb_config,
         routing_replay_config=routing_replay_config,

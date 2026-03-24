@@ -185,6 +185,7 @@ class Request:
         self.status = RequestStatus.WAITING
         self.task_type = RequestType.PREFILL
         self.has_been_preempted_before = False
+        self.is_offloaded = False
         self.idx = None
         self.need_prefill_tokens = self.prompt_token_ids_len
         self.audio_output_token_ids = []

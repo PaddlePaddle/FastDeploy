@@ -551,6 +551,11 @@ class EngineArgs:
     Flag to enable prefill_use_worst_num_tokens. Default is False (disabled).
     """
 
+    enable_decode_offload: bool = False
+    """
+    Flag to enable decode offload. Default is False (disabled).
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -1071,6 +1076,12 @@ class EngineArgs:
             default=EngineArgs.ep_prefill_use_worst_num_tokens,
             help="Enable prefill use worst num tokens for EP.",
         )
+        parallel_group.add_argument(
+            "--enable-decode-offload",
+            action="store_true",
+            default=EngineArgs.enable_decode_offload,
+            help="Enable decode offload.",
+        )
 
         # Load group
         load_group = parser.add_argument_group("Load Configuration")
@@ -1514,4 +1525,5 @@ class EngineArgs:
             plas_attention_config=plas_attention_config,
             early_stop_config=early_stop_cfg,
             routing_replay_config=routing_replay_config,
+            enable_decode_offload=self.enable_decode_offload,
         )
