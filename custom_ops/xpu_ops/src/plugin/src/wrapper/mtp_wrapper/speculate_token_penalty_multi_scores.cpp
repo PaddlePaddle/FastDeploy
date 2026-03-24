@@ -26,7 +26,7 @@ __attribute__((global)) void speculate_min_length_logits_process(
     const int64_t* min_len,
     const int64_t* eos_token_id,
     const int* batch_id_per_token_output,
-    const int *cu_seqlens_q_output,
+    const int* cu_seqlens_q_output,
     const int64_t bs,
     const int64_t length,
     const int64_t length_id,
@@ -398,8 +398,9 @@ int speculate_token_penalty_multi_scores(api::Context* ctx,
   WRAPPER_CHECK_PTR(ctx, int64_t, min_len_len, min_len);
   WRAPPER_CHECK_PTR(ctx, int64_t, eos_token_id_len, eos_token_id);
   WRAPPER_CHECK_PTR(ctx, int64_t, bad_words_len, bad_words);
-  // WRAPPER_CHECK_PTR(ctx, int, output_padding_offset_len, output_padding_offset);
-  // WRAPPER_CHECK_PTR(ctx, int, output_cum_offsets_len, output_cum_offsets);
+  // WRAPPER_CHECK_PTR(ctx, int, output_padding_offset_len,
+  // output_padding_offset); WRAPPER_CHECK_PTR(ctx, int, output_cum_offsets_len,
+  // output_cum_offsets);
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper<T>(ctx,
                           pre_ids,

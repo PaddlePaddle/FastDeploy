@@ -34,7 +34,7 @@ void prof_start();
 void prof_stop();
 
 std::vector<paddle::Tensor> AdjustBatch(
-    const paddle::Tensor& x,            // [token_num, dim_embed]
+    const paddle::Tensor& x,  // [token_num, dim_embed]
     const paddle::Tensor& encoder_seq_lod,
     const paddle::Tensor& decoder_seq_lod,
     const paddle::Tensor& encoder_batch_idx,
@@ -411,7 +411,7 @@ std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& step_idx);
 
 std::vector<paddle::Tensor> GatherNextToken(
-    const paddle::Tensor& x,            // [token_num, dim_embed]
+    const paddle::Tensor& x,  // [token_num, dim_embed]
     const paddle::Tensor& encoder_seq_lod,
     const paddle::Tensor& decoder_seq_lod,
     const paddle::Tensor& encoder_batch_map,
@@ -834,7 +834,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_encoder"),         // 编码器序列长度张量
         py::arg("seq_lens_decoder"),         // 解码器序列长度张量
         py::arg("step_idx"),                 // 步骤索引张量
-        py::arg("cu_seqlens_q_output"),       // 输出累积偏移量张量
+        py::arg("cu_seqlens_q_output"),      // 输出累积偏移量张量
         py::arg("stop_flags"),               // 停止标志张量
         py::arg("not_need_stop"),            // 无需停止标志张量
         py::arg("max_dec_len"),              // 最大解码长度张量

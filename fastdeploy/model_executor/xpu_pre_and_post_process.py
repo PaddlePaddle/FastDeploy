@@ -40,9 +40,7 @@ if current_platform.is_xpu():
         save_output_topk,
         set_stop_value_multi_ends,
         speculate_clear_accept_nums,
-        speculate_get_output_padding_offset,
-        speculate_get_padding_offset,
-        speculate_get_seq_lens_output,
+        speculate_pre_process,
         speculate_save_output,
         speculate_set_stop_value_multi_seqs,
         speculate_set_value_by_flags_and_idx,
@@ -53,7 +51,6 @@ if current_platform.is_xpu():
         step_paddle,
         update_inputs,
         update_inputs_v1,
-        speculate_pre_process,
     )
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
@@ -110,7 +107,6 @@ def xpu_pre_process(
 ) -> XPUForwardMeta:
     """ """
     max_len = input_ids.shape[1]
-    print(f"ch -- debug max_len:{max_len}")
 
     token_num_cpu = paddle.sum(seq_lens_this_time).cpu()
     if use_speculate_method:
@@ -239,7 +235,7 @@ def xpu_process_output(
         xpu_forward_meta.decoder_batch_map_cpu,
         xpu_forward_meta.len_info_cpu,
         output_padding_offset,  # output_padding_offset
-        xpu_forward_meta.max_num_seqs, 
+        xpu_forward_meta.max_num_seqs,
     )
     return hiddden_states
 

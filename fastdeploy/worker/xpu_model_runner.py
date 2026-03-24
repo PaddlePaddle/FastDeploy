@@ -1579,9 +1579,7 @@ class XPUModelRunner(ModelRunnerBase):
             )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
-            hidden_states = xpu_process_output(
-                model_output, self.forward_meta, self.share_inputs
-            )
+            hidden_states = xpu_process_output(model_output, self.forward_meta, self.share_inputs)
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
             sampler_output = None

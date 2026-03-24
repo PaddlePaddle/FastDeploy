@@ -1111,9 +1111,7 @@ class MTPProposer(Proposer):
                     previous_hidden_states=self.model_inputs["target_hidden_states"],
                     forward_meta=self.forward_meta,
                 )
-                hidden_states = xpu_process_output(
-                    model_output, self.forward_meta, self.model_inputs
-                )
+                hidden_states = xpu_process_output(model_output, self.forward_meta, self.model_inputs)
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
                 sampled_token_ids, sampler_output = self.sampler(

@@ -11,8 +11,8 @@ __global__ void speculate_min_length_logits_process(
     const int64_t* cur_len,
     const int64_t* min_len,
     const int64_t* eos_token_id,
-    const int *batch_id_per_token_output,
-    const int *cu_seqlens_q_output,
+    const int* batch_id_per_token_output,
+    const int* cu_seqlens_q_output,
     const int64_t bs,
     const int64_t length,
     const int64_t length_id,
@@ -74,8 +74,8 @@ __global__ void speculate_min_length_logits_process(
       const int64_t* cur_len,                                              \
       const int64_t* min_len,                                              \
       const int64_t* eos_token_id,                                         \
-      const int* batch_id_per_token_output,                                    \
-      const int* cu_seqlens_q_output,                                       \
+      const int* batch_id_per_token_output,                                \
+      const int* cu_seqlens_q_output,                                      \
       const int64_t bs,                                                    \
       const int64_t length,                                                \
       const int64_t length_id,                                             \

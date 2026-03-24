@@ -47,7 +47,9 @@ __device__ void speculate_update_repeat_times_normal(
     int step = nli * max_sm_len;
     int cur_length = min(max_sm_len, length - step);
     for (int64_t i = clusterid; i < token_num; i += nclusters) {
-      GM2LM(batch_id_per_token_output + i, &batch_id_per_token_output_now, sizeof(int));
+      GM2LM(batch_id_per_token_output + i,
+            &batch_id_per_token_output_now,
+            sizeof(int));
       int64_t bi = batch_id_per_token_output_now;
       if (bi >= bs || cur_len_lm[bi] < 0) {
         continue;
@@ -86,9 +88,9 @@ __device__ void speculate_update_repeat_times_normal(
 __device__ void speculate_update_repeat_times_optimized(
     char *lm,
     __shared_ptr__ char *sm,
-    __global_ptr__ const int64_t *pre_ids,            // {bs, length_id}
-    __global_ptr__ const int64_t *cur_len,            // {bs}
-    __global_ptr__ int *repeat_times,                 // {token_num, length}
+    __global_ptr__ const int64_t *pre_ids,                // {bs, length_id}
+    __global_ptr__ const int64_t *cur_len,                // {bs}
+    __global_ptr__ int *repeat_times,                     // {token_num, length}
     __global_ptr__ const int *batch_id_per_token_output,  // {token_num}
     const int64_t bs,
     const int64_t length,
@@ -119,8 +121,8 @@ __device__ void speculate_update_repeat_times_optimized(
   int64_t i = clusterid;
   if (i < token_num && cid == 0) {
     GM2SM_ASYNC(cur_len, cur_len_sm, bs * sizeof(int64_t));
-    buffer_ptr_batch_id_per_token_output.gm_load_async(batch_id_per_token_output + i,
-                                                   1);
+    buffer_ptr_batch_id_per_token_output.gm_load_async(
+        batch_id_per_token_output + i, 1);
     mfence_sm();
   }
   sync_all();
@@ -224,15 +226,16 @@ __device__ void speculate_update_repeat_times_optimized(
   }
 }
 
-__global__ void speculate_update_repeat_times(const int64_t *pre_ids,
-                                              const int64_t *cur_len,
-                                              int *repeat_times,
-                                              const int *batch_id_per_token_output,
-                                              const int64_t bs,
-                                              const int64_t length,
-                                              const int64_t length_id,
-                                              const int64_t token_num,
-                                              const int64_t max_seq_len) {
+__global__ void speculate_update_repeat_times(
+    const int64_t *pre_ids,
+    const int64_t *cur_len,
+    int *repeat_times,
+    const int *batch_id_per_token_output,
+    const int64_t bs,
+    const int64_t length,
+    const int64_t length_id,
+    const int64_t token_num,
+    const int64_t max_seq_len) {
   char lm[6 * 1024];
   __shared__ char sm[256 * 1024];
 

@@ -22,7 +22,7 @@
 #endif
 
 std::vector<paddle::Tensor> GatherNextToken(
-    const paddle::Tensor& x,            // [token_num, dim_embed]
+    const paddle::Tensor& x,  // [token_num, dim_embed]
     const paddle::Tensor& encoder_seq_lod,
     const paddle::Tensor& decoder_seq_lod,
     const paddle::Tensor& encoder_batch_map,
@@ -45,7 +45,6 @@ std::vector<paddle::Tensor> GatherNextToken(
   typedef paddle::bfloat16 data_t;
   const int dim = x.dims()[1];
   const int token_num = x.shape()[0];
-  // int bsz = cum_offsets.shape()[0];
   int bsz = -1;
   int enc_batch = len_info_cpu.data<int32_t>()[0];
   int dec_batch = len_info_cpu.data<int32_t>()[1];

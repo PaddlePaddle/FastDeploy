@@ -133,7 +133,7 @@ __global__ void speculate_update_value_by_repeat_times(
       const DATA_TYPE *presence_score,                             \
       const float *temperatures,                                   \
       DATA_TYPE *logits,                                           \
-      const int *batch_id_per_token_output,                            \
+      const int *batch_id_per_token_output,                        \
       const int64_t bs,                                            \
       const int64_t length,                                        \
       const int64_t token_num,                                     \
@@ -266,7 +266,7 @@ __global__ void speculate_update_value_by_repeat_times_simd(
       const DATA_TYPE *presence_score,                                  \
       const float *temperatures,                                        \
       DATA_TYPE *logits,                                                \
-      const int *batch_id_per_token_output,                                 \
+      const int *batch_id_per_token_output,                             \
       const int64_t bs,                                                 \
       const int64_t length,                                             \
       const int64_t token_num,                                          \

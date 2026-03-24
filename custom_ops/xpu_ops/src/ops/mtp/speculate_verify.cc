@@ -57,7 +57,8 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
 
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
-  api::Context* ctx = static_cast<const phi::XPUContext*>(dev_ctx)->x_context();
+  api::Context *ctx =
+      static_cast<const phi::XPUContext *>(dev_ctx)->x_context();
   bool xpu_ctx_flag = true;
   if (draft_tokens.is_cpu()) {
     ctx = new api::Context(api::kCPU);
@@ -65,17 +66,17 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
   }
 
   bool use_topk = false;
-  char* env_var = getenv("SPECULATE_VERIFY_USE_TOPK");
+  char *env_var = getenv("SPECULATE_VERIFY_USE_TOPK");
   if (env_var) {
     use_topk = static_cast<bool>(std::stoi(env_var));
   }
   bool use_target_sampling = false;
-  char* env_var_1 = getenv("SPECULATE_VERIFY_USE_TARGET_SAMPLING");
+  char *env_var_1 = getenv("SPECULATE_VERIFY_USE_TARGET_SAMPLING");
   if (env_var_1) {
     use_target_sampling = static_cast<bool>(std::stoi(env_var_1));
   }
   bool prefill_one_step_stop = false;
-  if (const char* env_p = std::getenv("PREFILL_NODE_ONE_STEP_STOP")) {
+  if (const char *env_p = std::getenv("PREFILL_NODE_ONE_STEP_STOP")) {
     // std::cout << "Your PATH is: " << env_p << '\n';
     if (env_p[0] == '1') {
       prefill_one_step_stop = true;
@@ -90,7 +91,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
     std::mt19937_64 engine(infer_seed[i]);
     dev_curand_states_cpu.push_back(dist(engine));
   }
-  float* dev_curand_states = dev_curand_states_cpu.data();
+  float *dev_curand_states = dev_curand_states_cpu.data();
   auto dev_curand_states_tensor =
       paddle::empty({static_cast<int64_t>(dev_curand_states_cpu.size())},
                     paddle::DataType::FLOAT32,
@@ -110,10 +111,10 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
       ret = fastdeploy::plugin::speculate_verify<true, true>(
           ctx,
           sampled_token_ids.data<int64_t>(),
-          const_cast<int64_t*>(accept_tokens.data<int64_t>()),
-          const_cast<int*>(accept_num.data<int>()),
-          const_cast<int64_t*>(step_idx.data<int64_t>()),
-          const_cast<bool*>(stop_flags.data<bool>()),
+          const_cast<int64_t *>(accept_tokens.data<int64_t>()),
+          const_cast<int *>(accept_num.data<int>()),
+          const_cast<int64_t *>(step_idx.data<int64_t>()),
+          const_cast<bool *>(stop_flags.data<bool>()),
           seq_lens_encoder.data<int>(),
           seq_lens_decoder.data<int>(),
           draft_tokens.data<int64_t>(),
@@ -143,10 +144,10 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
       ret = fastdeploy::plugin::speculate_verify<false, true>(
           ctx,
           sampled_token_ids.data<int64_t>(),
-          const_cast<int64_t*>(accept_tokens.data<int64_t>()),
-          const_cast<int*>(accept_num.data<int>()),
-          const_cast<int64_t*>(step_idx.data<int64_t>()),
-          const_cast<bool*>(stop_flags.data<bool>()),
+          const_cast<int64_t *>(accept_tokens.data<int64_t>()),
+          const_cast<int *>(accept_num.data<int>()),
+          const_cast<int64_t *>(step_idx.data<int64_t>()),
+          const_cast<bool *>(stop_flags.data<bool>()),
           seq_lens_encoder.data<int>(),
           seq_lens_decoder.data<int>(),
           draft_tokens.data<int64_t>(),
@@ -178,10 +179,10 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
       ret = fastdeploy::plugin::speculate_verify<true, false>(
           ctx,
           sampled_token_ids.data<int64_t>(),
-          const_cast<int64_t*>(accept_tokens.data<int64_t>()),
-          const_cast<int*>(accept_num.data<int>()),
-          const_cast<int64_t*>(step_idx.data<int64_t>()),
-          const_cast<bool*>(stop_flags.data<bool>()),
+          const_cast<int64_t *>(accept_tokens.data<int64_t>()),
+          const_cast<int *>(accept_num.data<int>()),
+          const_cast<int64_t *>(step_idx.data<int64_t>()),
+          const_cast<bool *>(stop_flags.data<bool>()),
           seq_lens_encoder.data<int>(),
           seq_lens_decoder.data<int>(),
           draft_tokens.data<int64_t>(),
@@ -211,10 +212,10 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
       ret = fastdeploy::plugin::speculate_verify<false, false>(
           ctx,
           sampled_token_ids.data<int64_t>(),
-          const_cast<int64_t*>(accept_tokens.data<int64_t>()),
-          const_cast<int*>(accept_num.data<int>()),
-          const_cast<int64_t*>(step_idx.data<int64_t>()),
-          const_cast<bool*>(stop_flags.data<bool>()),
+          const_cast<int64_t *>(accept_tokens.data<int64_t>()),
+          const_cast<int *>(accept_num.data<int>()),
+          const_cast<int64_t *>(step_idx.data<int64_t>()),
+          const_cast<bool *>(stop_flags.data<bool>()),
           seq_lens_encoder.data<int>(),
           seq_lens_decoder.data<int>(),
           draft_tokens.data<int64_t>(),

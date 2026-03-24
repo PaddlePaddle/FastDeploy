@@ -16,7 +16,8 @@
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
 namespace fd_xpu3 {
-__attribute__((global)) void draft_model_update(const int64_t* inter_next_tokens,
+__attribute__((global)) void draft_model_update(
+    const int64_t* inter_next_tokens,
     int64_t* draft_tokens,
     int64_t* pre_ids,
     int* seq_lens_this_time,

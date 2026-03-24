@@ -63,7 +63,7 @@ __global__ void speculate_ban_bad_words(T* logits,
   template __global__ void speculate_ban_bad_words( \
       DATA_TYPE* logits,                            \
       const int64_t* bad_words_list,                \
-      const int* batch_id_per_token_output_lm,             \
+      const int* batch_id_per_token_output_lm,      \
       const int64_t bs,                             \
       const int64_t length,                         \
       const int64_t bad_words_length,               \

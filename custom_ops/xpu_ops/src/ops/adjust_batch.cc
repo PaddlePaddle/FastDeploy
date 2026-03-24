@@ -24,7 +24,7 @@
 
 template <paddle::DataType T>
 std::vector<paddle::Tensor> AdjustBatchKernel(
-    const paddle::Tensor &x,            // [token_num, dim_embed]
+    const paddle::Tensor &x,  // [token_num, dim_embed]
     const paddle::Tensor &encoder_seq_lod,
     const paddle::Tensor &decoder_seq_lod,
     const paddle::Tensor &encoder_batch_idx,
@@ -85,7 +85,7 @@ std::vector<paddle::Tensor> AdjustBatchKernel(
 }
 
 using AdjustBatchKernelFuncPtr = std::vector<paddle::Tensor> (*)(
-    const paddle::Tensor &x,            // [token_num, dim_embed]
+    const paddle::Tensor &x,  // [token_num, dim_embed]
     const paddle::Tensor &encoder_seq_lod,
     const paddle::Tensor &decoder_seq_lod,
     const paddle::Tensor &encoder_batch_idx,
@@ -99,7 +99,7 @@ using AdjustBatchKernelFuncPtr = std::vector<paddle::Tensor> (*)(
     int max_input_length);
 
 std::vector<paddle::Tensor> AdjustBatch(
-    const paddle::Tensor &x,            // [token_num, dim_embed]
+    const paddle::Tensor &x,  // [token_num, dim_embed]
     const paddle::Tensor &encoder_seq_lod,
     const paddle::Tensor &decoder_seq_lod,
     const paddle::Tensor &encoder_batch_idx,

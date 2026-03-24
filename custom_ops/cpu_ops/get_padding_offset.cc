@@ -58,7 +58,7 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
   const int bsz = seq_len.shape()[0];
   const int seq_length = input_ids_shape[1];
   auto cum_offsets_out = cum_offsets.copy_to(paddle::CPUPlace(), false);
-  // token num is cpu tensor  
+  // token num is cpu tensor
   const int token_num_data = token_num.data<int64_t>()[0];
   auto x_remove_padding = paddle::empty(
       {token_num_data}, paddle::DataType::INT64, input_ids.place());

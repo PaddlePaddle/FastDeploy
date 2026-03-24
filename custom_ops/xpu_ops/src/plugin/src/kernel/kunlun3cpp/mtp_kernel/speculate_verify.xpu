@@ -95,36 +95,31 @@ topp_sampling_kernel(__global_ptr__ const int64_t *candidate_ids,
 template <bool ENABLE_TOPP, bool USE_TOPK>
 __global__ void speculate_verify(
     const int64_t *sampled_token_ids,
-    int64_t *accept_tokens,  // out [real_bsz, max_draft_tokens]
-    int *accept_num,  // out [real_bsz],
-    int64_t
-        *step_idx,  // out [real_bsz],
-    bool *stop_flags,  // out [real_bsz],
-    const int *seq_lens_encoder,  // [real_bsz]
-    const int *seq_lens_decoder,  // [real_bsz]
-    const int64_t *
-        draft_tokens,  // [real_bsz, max_draft_tokens],
+    int64_t *accept_tokens,              // out [real_bsz, max_draft_tokens]
+    int *accept_num,                     // out [real_bsz],
+    int64_t *step_idx,                   // out [real_bsz],
+    bool *stop_flags,                    // out [real_bsz],
+    const int *seq_lens_encoder,         // [real_bsz]
+    const int *seq_lens_decoder,         // [real_bsz]
+    const int64_t *draft_tokens,         // [real_bsz, max_draft_tokens],
     const int *actual_draft_token_nums,  // [real_bsz], 实际有效的 token 数量
     const float *dev_curand_states,      // used for random
     const float *topp,                   // [real_bsz]，
-    const int *seq_lens_this_time,  // [real_bsz], 
+    const int *seq_lens_this_time,       // [real_bsz],
     const int64_t
         *verify_tokens,  // [sum(seq_lens_this_time), max_candidate_len]
-    const float
-        *verify_scores, 
+    const float *verify_scores,
     const int64_t *max_dec_len,  // [real_bsz],
-    const int64_t
-        *end_tokens,  // [end_length]
-    const bool *is_block_step,  // [real_bsz], 
-    const int
-        *cu_seqlens_q_output,
+    const int64_t *end_tokens,   // [end_length]
+    const bool *is_block_step,   // [real_bsz],
+    const int *cu_seqlens_q_output,
     const int *actual_candidate_len,  // [sum(seq_lens_this_time)],
-    const int real_bsz,          // batch size
-    const int max_draft_tokens,  
+    const int real_bsz,               // batch size
+    const int max_draft_tokens,
     const int end_length,
-    const int max_seq_len,  
-    const int max_candidate_len,  
-    const int verify_window,  
+    const int max_seq_len,
+    const int max_candidate_len,
+    const int verify_window,
     const bool prefill_one_step_stop,
     const bool benchmark_mode,
     const bool accept_all_drafts,

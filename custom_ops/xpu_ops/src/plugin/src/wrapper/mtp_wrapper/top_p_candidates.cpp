@@ -17,16 +17,17 @@
 
 namespace fd_xpu3 {
 template <typename T, int MaxLength, int TopPBeamTopK>
-__attribute__((global)) void top_p_candidates(const T* src,
-                                              const T* top_ps,
-                                              const int* batch_id_per_token_output,
-                                              int64_t* out_id,
-                                              T* out_val,
-                                              int* actual_candidates_lens,
-                                              int vocab_size,
-                                              int token_num,
-                                              int max_candidate_len,
-                                              int max_seq_len);
+__attribute__((global)) void top_p_candidates(
+    const T* src,
+    const T* top_ps,
+    const int* batch_id_per_token_output,
+    int64_t* out_id,
+    T* out_val,
+    int* actual_candidates_lens,
+    int vocab_size,
+    int token_num,
+    int max_candidate_len,
+    int max_seq_len);
 }  // namespace fd_xpu3
 
 namespace fastdeploy {
@@ -135,7 +136,8 @@ int top_p_candidates(api::Context* ctx,
                      int max_seq_len) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(ctx, "top_p_candidates", T);
-  WRAPPER_DUMP_PARAM5(ctx, src, top_ps, batch_id_per_token_output, out_id, out_val);
+  WRAPPER_DUMP_PARAM5(
+      ctx, src, top_ps, batch_id_per_token_output, out_id, out_val);
   WRAPPER_DUMP_PARAM5(ctx,
                       actual_candidates_lens,
                       vocab_size,

@@ -58,7 +58,7 @@ namespace fastdeploy {
 namespace plugin {
 
 static inline bool is_in_end(const int64_t id,
-                             const int64_t* end_ids,
+                             const int64_t *end_ids,
                              int length) {
   bool flag = false;
   for (int i = 0; i < length; i++) {
@@ -69,7 +69,7 @@ static inline bool is_in_end(const int64_t id,
   return flag;
 }
 
-static inline bool is_in(const int64_t* candidates,
+static inline bool is_in(const int64_t *candidates,
                          const int64_t draft,
                          const int candidate_len) {
   for (int i = 0; i < candidate_len; i++) {
@@ -80,7 +80,7 @@ static inline bool is_in(const int64_t* candidates,
   return false;
 }
 
-static inline unsigned int xorwow(unsigned int& state) {  // NOLINT
+static inline unsigned int xorwow(unsigned int &state) {  // NOLINT
   state ^= state >> 7;
   state ^= state << 9;
   state ^= state >> 13;
@@ -89,9 +89,9 @@ static inline unsigned int xorwow(unsigned int& state) {  // NOLINT
 
 typedef uint32_t curandStatePhilox4_32_10_t;
 
-static int64_t topp_sampling_kernel(const int64_t* candidate_ids,
-                                    const float* candidate_scores,
-                                    const float* dev_curand_states,
+static int64_t topp_sampling_kernel(const int64_t *candidate_ids,
+                                    const float *candidate_scores,
+                                    const float *dev_curand_states,
                                     const int candidate_len,
                                     const float topp,
                                     int tid) {
@@ -155,11 +155,11 @@ static int cpu_wrapper(api::Context *ctx,
         stop_flag_now_int = 1;
       } else {  // 这里prefill阶段也会进入，但是因为draft
                 // tokens会置零，因此会直接到最后的采样阶段
-        auto* verify_tokens_now =
+        auto *verify_tokens_now =
             verify_tokens + start_token_id * max_candidate_len;
-        auto* draft_tokens_now = draft_tokens + bid * max_draft_tokens;
-        auto* actual_candidate_len_now = actual_candidate_len + start_token_id;
-        auto* sampled_token_id_now = sampled_token_ids + start_token_id;
+        auto *draft_tokens_now = draft_tokens + bid * max_draft_tokens;
+        auto *actual_candidate_len_now = actual_candidate_len + start_token_id;
+        auto *sampled_token_id_now = sampled_token_ids + start_token_id;
 
         int i = 0;
         // printf("seq_lens_this_time[%d]-1: %d \n",bid,
@@ -306,7 +306,7 @@ static int cpu_wrapper(api::Context *ctx,
         // 也是从verify_tokens_now[i]中选一个 但是停止的情况不算
         if (!stop_flag_now_int) {
           int64_t accept_token;
-          const float* verify_scores_now =
+          const float *verify_scores_now =
               verify_scores + start_token_id * max_candidate_len;
           step_idx[bid]++;
           if (use_target_sampling) {
@@ -380,22 +380,22 @@ static int xpu3_wrapper(api::Context *ctx,
   using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
   int32_t ret_xre = fd_xpu3::speculate_verify<ENABLE_TOPP, USE_TOPK>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
-          reinterpret_cast<const XPU_INT64*>(sampled_token_ids),
-          reinterpret_cast<XPU_INT64*>(accept_tokens),
+          reinterpret_cast<const XPU_INT64 *>(sampled_token_ids),
+          reinterpret_cast<XPU_INT64 *>(accept_tokens),
           accept_num,
-          reinterpret_cast<XPU_INT64*>(step_idx),
+          reinterpret_cast<XPU_INT64 *>(step_idx),
           stop_flags,
           seq_lens_encoder,
           seq_lens_decoder,
-          reinterpret_cast<const XPU_INT64*>(draft_tokens),
+          reinterpret_cast<const XPU_INT64 *>(draft_tokens),
           actual_draft_token_nums,
           dev_curand_states,
           topp,
           seq_lens_this_time,
-          reinterpret_cast<const XPU_INT64*>(verify_tokens),
+          reinterpret_cast<const XPU_INT64 *>(verify_tokens),
           verify_scores,
-          reinterpret_cast<const XPU_INT64*>(max_dec_len),
-          reinterpret_cast<const XPU_INT64*>(end_tokens),
+          reinterpret_cast<const XPU_INT64 *>(max_dec_len),
+          reinterpret_cast<const XPU_INT64 *>(end_tokens),
           is_block_step,
           cu_seqlens_q_output,
           actual_candidate_len,
@@ -593,7 +593,7 @@ int speculate_verify(api::Context *ctx,
       const int64_t *,                    /* max_dec_len */                 \
       const int64_t *,                    /* end_tokens */                  \
       const bool *,                       /* is_block_step */               \
-      const int *,                        /* cu_seqlens_q_output */          \
+      const int *,                        /* cu_seqlens_q_output */         \
       const int *,                        /* actual_candidate_len */        \
       int,                                /* real_bsz */                    \
       int,                                /* max_draft_tokens */            \
