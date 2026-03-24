@@ -47,8 +47,8 @@ if current_platform.is_xpu():
         mtp_step_paddle,
         set_data_ipc,
         share_external_data,
-        update_attn_mask_offsets,
         speculate_save_output_topk,
+        update_attn_mask_offsets,
     )
     from fastdeploy.model_executor.xpu_pre_and_post_process import (
         xpu_pre_process,
