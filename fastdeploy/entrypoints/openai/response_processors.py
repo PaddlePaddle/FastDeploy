@@ -121,7 +121,7 @@ class ChatResponseProcessor:
                         else:
                             self._audio_buffer[req_id] = [token_ids]
                 else:
-                    if self._is_async_processor:
+                    if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
                         response = await self.data_processor.process_response_dict(
                             response_dict=request_output,
                             stream=stream,
