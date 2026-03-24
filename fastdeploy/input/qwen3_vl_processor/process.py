@@ -27,12 +27,13 @@ from PIL import Image
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_vl_processor import read_video_decord
+from fastdeploy.input.image_processors.common import ceil_by_factor, floor_by_factor
 from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
 
-from .image_processor import ImageProcessor, ceil_by_factor, floor_by_factor
+from .image_processor import ImageProcessor
 
 VIDEO_MIN_PIXELS = 128 * 28 * 28
 VIDEO_MAX_PIXELS = 768 * 28 * 28

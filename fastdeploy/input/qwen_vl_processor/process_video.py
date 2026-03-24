@@ -18,9 +18,8 @@ from typing import Optional, Union
 
 import numpy as np
 
+from fastdeploy.input.image_processors.common import ceil_by_factor, floor_by_factor
 from fastdeploy.utils import data_processor_logger
-
-from .image_processor import ceil_by_factor, floor_by_factor
 
 
 def sample_frames(
