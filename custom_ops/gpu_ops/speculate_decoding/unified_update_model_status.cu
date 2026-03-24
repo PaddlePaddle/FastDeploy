@@ -43,7 +43,6 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
                                                    bool *has_running_seqs,
                                                    int *mask_rollback,
                                                    int64_t *step_input_ids,
-                                                   int *adaptive_step_input_len,
                                                    int64_t *step_output_ids,
                                                    int *step_output_len,
                                                    bool *stop_flags,
@@ -58,36 +57,25 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
                                                    int max_bsz,
                                                    int max_step_tokens,
                                                    int max_model_len,
-                                                   int num_end_tokens,
-                                                   bool is_naive_mode,
-                                                   bool prefill_one_step_stop) {
+                                                   int num_end_tokens) {
   const int batch_id = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   const bool is_valid_slot = batch_id < max_bsz;
   int stop_flag_int = 0;
 
   if (is_valid_slot) {
-    // Read state
+    // 1. Read state
     int cur_seq_len_encoder = seq_lens_encoder[batch_id];
     int cur_seq_len_decoder = seq_lens_decoder[batch_id];
     bool cur_stop_flag = stop_flags[batch_id];
-    int output_len = 0;
+    int output_len = step_output_len[batch_id];
     int64_t cur_step_idx = step_idx[batch_id];
     bool cur_is_paused = is_paused[batch_id];
+    int64_t prompt_len = prompt_lens[batch_id];
 
     bool is_running = !cur_stop_flag && !cur_is_paused;
 
-    // Compute output length
-    if (is_running) {
-      if (is_naive_mode) {
-        output_len = 1;
-      } else {
-        output_len = step_output_len[batch_id];
-      }
-    }
-
-    // EOS detection
+    // 2. EOS detection
     if (is_running && output_len > 0) {
-      bool hit_stop = false;
       int64_t *output_ids = &step_output_ids[batch_id * max_step_tokens];
 
       for (int i = 0; i < output_len; i++) {
@@ -100,62 +88,55 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
           if (!is_eos) output_ids[i] = end_tokens[0];
           output_len = i + 1;
           cur_stop_flag = true;
-          hit_stop = true;
           break;
         }
       }
-
-      if (!hit_stop && prefill_one_step_stop && cur_seq_len_encoder > 0) {
-        cur_stop_flag = true;
-      }
     }
 
-    // Update state and write back
     if (is_running) {
-      if (cur_stop_flag) {
-        stop_flag_int = 1;
-        if (output_len == 0) cur_seq_len_decoder = 0;
-        stop_flags[batch_id] = true;
-        mask_rollback[batch_id] = 0;
-      } else if (cur_seq_len_encoder == 0) {
+      // 3. Update state and write back
+      if (cur_seq_len_encoder > 0) {
+        cur_seq_len_decoder += cur_seq_len_encoder;
+        cur_seq_len_encoder = 0;
+      } else if (cur_seq_len_decoder > 0) {
         cur_seq_len_decoder += output_len;
         mask_rollback[batch_id] = seq_lens_this_time[batch_id] - output_len;
       } else {
         mask_rollback[batch_id] = 0;
       }
 
-      if (cur_seq_len_encoder > 0) {
-        cur_seq_len_decoder += cur_seq_len_encoder;
-        cur_seq_len_encoder = 0;
+      if (cur_stop_flag) {
+        // It should clear seq_lens_decoder in next step for save_output
+        stop_flag_int = 1;
+        stop_flags[batch_id] = true;
+        mask_rollback[batch_id] = 0;
       }
 
+      // 4. Update model status
       seq_lens_encoder[batch_id] = cur_seq_len_encoder;
       seq_lens_decoder[batch_id] = cur_seq_len_decoder;
       step_output_len[batch_id] = output_len;
       step_idx[batch_id] = cur_step_idx;
 
-      // Write history to token_ids_all
-      if (cur_step_idx > 0 && output_len > 0) {
-        // Bounds check: highest write index is prompt_lens + cur_step_idx
-        if (prompt_lens[batch_id] + cur_step_idx < max_model_len) {
+      // 5. Write history to token_ids_all (forward loop: position base+k =
+      // output_ids[k])
+      if (output_len > 0) {
+        // Bounds check: highest write index is prompt_len + cur_step_idx
+        if (prompt_len + cur_step_idx < max_model_len) {
           int64_t *token_ids_all_now =
-              &token_ids_all[batch_id * max_model_len + prompt_lens[batch_id]];
+              &token_ids_all[batch_id * max_model_len + prompt_len];
           int64_t *output_ids = &step_output_ids[batch_id * max_step_tokens];
+          int64_t base = cur_step_idx - output_len + 1;
           for (int i = 0; i < output_len; i++) {
-            token_ids_all_now[cur_step_idx - i] =
-                output_ids[output_len - 1 - i];
+            token_ids_all_now[base + i] = output_ids[i];
           }
         }
       }
 
-      // Setup next input
+      // 6. Prepare next step input[0]
       if (output_len > 0) {
         step_input_ids[batch_id * max_step_tokens] =
             step_output_ids[batch_id * max_step_tokens + output_len - 1];
-      }
-
-      if (is_naive_mode) {
-        seq_lens_this_time[batch_id] = cur_stop_flag ? 0 : 1;
       }
     } else if (batch_id >= real_bsz) {
       // Padding slot: just count as stopped, don't modify state
@@ -164,6 +145,7 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
       // Stopped or paused slot (batch_id < real_bsz)
       stop_flag_int = 1;
       stop_flags[batch_id] = true;
+      seq_lens_encoder[batch_id] = 0;
       seq_lens_decoder[batch_id] = 0;
       seq_lens_this_time[batch_id] = 0;
       step_output_len[batch_id] = 0;
@@ -175,11 +157,9 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
   typedef cub::BlockReduce<int64_t, BLOCK_SIZE> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
 
-  // printf("stop_flag_now_int %d \n", stop_flag_int);
   int64_t stop_sum = BlockReduce(temp_storage).Sum(stop_flag_int);
 
   if (threadIdx.x == 0) {
-    // printf("stop_sum %d \n", stop_sum);
     has_running_seqs[0] = stop_sum < max_bsz;
   }
 }
@@ -189,7 +169,6 @@ void UnifiedUpdateModelStatus(const paddle::Tensor &seq_lens_encoder,
                               const paddle::Tensor &seq_lens_decoder,
                               const paddle::Tensor &has_running_seqs,
                               const paddle::Tensor &step_input_ids,
-                              const paddle::Tensor &adaptive_step_input_len,
                               const paddle::Tensor &step_output_ids,
                               const paddle::Tensor &step_output_len,
                               const paddle::Tensor &stop_flags,
@@ -200,9 +179,7 @@ void UnifiedUpdateModelStatus(const paddle::Tensor &seq_lens_encoder,
                               const paddle::Tensor &prompt_lens,
                               const paddle::Tensor &step_idx,
                               const paddle::Tensor &end_tokens,
-                              const paddle::Tensor &max_dec_len,
-                              const bool is_naive_mode,
-                              const bool prefill_one_step_stop) {
+                              const paddle::Tensor &max_dec_len) {
   const int real_bsz = seq_lens_this_time.shape()[0];
   const int max_bsz = stop_flags.shape()[0];
   PADDLE_ENFORCE_LE(
@@ -228,7 +205,6 @@ void UnifiedUpdateModelStatus(const paddle::Tensor &seq_lens_encoder,
           const_cast<bool *>(has_running_seqs_gpu.data<bool>()),
           const_cast<int *>(mask_rollback.data<int>()),
           const_cast<int64_t *>(step_input_ids.data<int64_t>()),
-          const_cast<int *>(adaptive_step_input_len.data<int>()),
           const_cast<int64_t *>(step_output_ids.data<int64_t>()),
           const_cast<int *>(step_output_len.data<int>()),
           const_cast<bool *>(stop_flags.data<bool>()),
@@ -243,9 +219,7 @@ void UnifiedUpdateModelStatus(const paddle::Tensor &seq_lens_encoder,
           max_bsz,
           max_step_tokens,
           max_model_len,
-          num_end_tokens,
-          is_naive_mode,
-          prefill_one_step_stop);
+          num_end_tokens);
   // Copy result back to CPU
   auto has_running_seqs_cpu =
       has_running_seqs_gpu.copy_to(has_running_seqs.place(), false);
@@ -258,7 +232,6 @@ PD_BUILD_STATIC_OP(unified_update_model_status)
              "seq_lens_decoder",
              "has_running_seqs",
              "step_input_ids",
-             "adaptive_step_input_len",
              "step_output_ids",
              "step_output_len",
              "stop_flags",
@@ -270,12 +243,10 @@ PD_BUILD_STATIC_OP(unified_update_model_status)
              "step_idx",
              "end_tokens",
              "max_dec_len"})
-    .Attrs({"is_naive_mode: bool", "prefill_one_step_stop: bool"})
     .Outputs({"seq_lens_encoder_out",
               "seq_lens_decoder_out",
               "has_running_seqs_out",
               "step_input_ids_out",
-              "adaptive_step_input_len_out",
               "step_output_ids_out",
               "step_output_len_out",
               "stop_flags_out",
@@ -287,7 +258,6 @@ PD_BUILD_STATIC_OP(unified_update_model_status)
                     {"seq_lens_decoder", "seq_lens_decoder_out"},
                     {"has_running_seqs", "has_running_seqs_out"},
                     {"step_input_ids", "step_input_ids_out"},
-                    {"adaptive_step_input_len", "adaptive_step_input_len_out"},
                     {"step_output_ids", "step_output_ids_out"},
                     {"step_output_len", "step_output_len_out"},
                     {"stop_flags", "stop_flags_out"},

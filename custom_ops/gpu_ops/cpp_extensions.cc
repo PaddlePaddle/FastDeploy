@@ -875,7 +875,6 @@ void UnifiedUpdateModelStatus(const paddle::Tensor& seq_lens_encoder,
                               const paddle::Tensor& seq_lens_decoder,
                               const paddle::Tensor& has_running_seqs,
                               const paddle::Tensor& step_input_ids,
-                              const paddle::Tensor& adaptive_step_input_len,
                               const paddle::Tensor& step_output_ids,
                               const paddle::Tensor& step_output_len,
                               const paddle::Tensor& stop_flags,
@@ -886,9 +885,13 @@ void UnifiedUpdateModelStatus(const paddle::Tensor& seq_lens_encoder,
                               const paddle::Tensor& prompt_lens,
                               const paddle::Tensor& step_idx,
                               const paddle::Tensor& end_tokens,
-                              const paddle::Tensor& max_dec_len,
-                              const bool is_naive_mode,
-                              const bool prefill_one_step_stop);
+                              const paddle::Tensor& max_dec_len);
+
+void NaiveUpdateModelStatus(const paddle::Tensor& accept_tokens,
+                            const paddle::Tensor& accept_num,
+                            const paddle::Tensor& seq_lens_this_time,
+                            const paddle::Tensor& next_tokens,
+                            const paddle::Tensor& cu_seqlens_q_output);
 
 void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& token_ids_all,
                                     const paddle::Tensor& prompt_lens,
@@ -971,24 +974,17 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& seq_lens_decoder,
                           const paddle::Tensor& step_idx,
                           const paddle::Tensor& not_need_stop,
-                          const paddle::Tensor& is_block_step,
-                          const paddle::Tensor& batch_drop,
                           const paddle::Tensor& pre_ids,
-                          const paddle::Tensor& mask_rollback,
-                          const paddle::Tensor& recompute_token_num,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
-                          const paddle::Tensor& base_model_seq_lens_this_time,
-                          const paddle::Tensor& base_model_seq_lens_encoder,
-                          const paddle::Tensor& base_model_seq_lens_decoder,
-                          const paddle::Tensor& base_model_step_idx,
-                          const paddle::Tensor& base_model_stop_flags,
-                          const paddle::Tensor& base_model_is_block_step,
-                          const paddle::Tensor& base_model_draft_tokens,
-                          const int max_draft_token,
-                          const bool truncate_first_token,
-                          const bool splitwise_prefill,
-                          const bool kvcache_scheduler_v1);
+                          const paddle::Tensor& target_model_seq_lens_encoder,
+                          const paddle::Tensor& target_model_seq_lens_decoder,
+                          const paddle::Tensor& target_model_step_idx,
+                          const paddle::Tensor& target_model_stop_flags,
+                          const paddle::Tensor& max_dec_len,
+                          const paddle::Tensor& target_model_draft_tokens,
+                          const int num_model_step,
+                          const bool is_splitwise_prefill);
 
 void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& draft_tokens,
@@ -1244,6 +1240,7 @@ void PerTokenGroupQuantFp8(const paddle::Tensor& input,
                            bool scale_ue8m0);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
+#ifdef ENABLE_SM80_EXT_OPS
   m.def("get_expert_token_num",
         &GetExpertTokenNum,
         py::arg("topk_ids"),
@@ -1266,6 +1263,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("enable_softmax_top_k_fused"),
         py::arg("redundant_ep_rank_num_plus_one"),
         "moe export RedundantTopKSelect function");
+#endif
 
   /**
    * open_shm_and_get_meta_signal.cc
@@ -1291,9 +1289,11 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("wait_flag"),
         "get_output_kv_signal function");
 
+#ifdef ENABLE_SM75_EXT_OPS
   m.def("moe_deepgemm_permute", &MoEDeepGEMMPermute, "MoEDeepGEMMPermute");
   m.def(
       "moe_deepgemm_depermute", &MoEDeepGEMMDePermute, "MoEDeepGEMMDePermute");
+#endif
   /**
    * alloc_cache_pinned.cc
    * cuda_host_alloc
@@ -1307,6 +1307,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def(
       "cuda_host_free", &cuda_host_free, "Free pinned memory", py::arg("ptr"));
   py::register_exception<CudaError>(m, "CudaError");
+#ifdef ENABLE_SM80_EXT_OPS
   /**
    * append_attention.cu
    * append_attention
@@ -1315,11 +1316,13 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("append_attention_with_output",
         &AppendAttentionWithOutput,
         "append attention with output function");
+#endif
 
 #ifdef ENABLE_FLASH_MASK_ATTENTION
   m.def("flash_mask_attention", &FlashAttentionMask, "flash_mask_attention");
 #endif
 
+#ifdef ENABLE_SM80_EXT_OPS
   /**
    * gqa_rope_write_cache.cu
    * gqa_rope_write_cache
@@ -1334,6 +1337,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("pre_cache_len_concat",
         &PreCacheLenConcat,
         "pre_cache len concat function");
+
   /**
    * moe/fused_moe/fused_moe.cu
    * fused_moe
@@ -1389,6 +1393,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("norm_topk_prob"),
         py::arg("routed_scaling_factor"),
         "ep moe export combine function");
+#endif
 
   m.def("per_token_quant",
         &PerTokenQuant,
@@ -1445,6 +1450,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "machete supported schedules function");
 #endif
 
+#ifdef ENABLE_SM80_EXT_OPS
   /**
    * moe/fused_moe/moe_topk_select.cu
    * moe_topk_select
@@ -1486,6 +1492,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("norm_topk_prob"),
         py::arg("routed_scaling_factor"),
         "moe export reduce function");
+#endif
 
   /**
    * dequant_int8.cu
@@ -1509,6 +1516,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &OpenShmAndGetMetaSignalFunc,
         "open_shm_and_get_meta_signal function");
 
+#ifdef ENABLE_SM80_EXT_OPS
   /**
    * append_attn/get_block_shape_and_split_kv_block.cu
    * get_block_shape_and_split_kv_block
@@ -1516,6 +1524,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_block_shape_and_split_kv_block",
         &GetBlockShapeAndSplitKVBlock,
         "get_block_shape_and_split_kv_block function");
+#endif
 
   /**
    * get_padding_offset.cu
@@ -1567,9 +1576,11 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &RecoverDecodeTask,
         "recover decode task for scheduler v1 function");
 
+#ifdef ENABLE_SM80_EXT_OPS
   m.def("group_swiglu_with_masked",
         &GroupSwigluWithMasked,
         "group_swiglu_with_masked function");
+#endif
 
   m.def("text_image_index_out",
         &TextImageIndexOut,
@@ -1579,7 +1590,9 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &TextImageGatherScatter,
         "text_image_gather_scatter function");
 
+#ifdef ENABLE_SM80_EXT_OPS
   m.def("count_tokens_per_expert_func", &count_tokens_per_expert_func);
+
   m.def("tritonmoe_preprocess_func", &tritonmoe_preprocess_kernel);
 
   m.def("MoeWna16MarlinGemmApi",
@@ -1609,6 +1622,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("use_atomic_add"),
         py::arg("use_fp32_reduce"),
         py::arg("is_zp_float"));
+#endif
 
   m.def("get_position_ids_and_mask_encoder_batch",
         &GetPositionIdsAndMaskEncoderBatch,
@@ -1651,6 +1665,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("input"),
         py::arg("scales"),
         py::arg("scale_ub"));
+#ifdef ENABLE_SM80_EXT_OPS
   m.def("decode_mla_write_cache",
         &DecodeMLAWriteCacheKernel,
         "decode_mla_write_cache function");
@@ -1658,14 +1673,17 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("prefill_mla_write_cache",
         &PrefillMLAWriteCacheKernel,
         "prefill_mla_write_cache function");
+#endif
 
   m.def("fused_rotary_position_encoding",
         &FusedRotaryPositionEncoding,
         "fused_rotary_position_encoding function");
 
+#ifdef ENABLE_SM80_EXT_OPS
   m.def("multi_head_latent_attention",
         &MultiHeadLatentAttention,
         "multi_head_latent_attention function");
+#endif
 
   m.def("noaux_tc", &NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
 
@@ -1731,6 +1749,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &get_graph_buffer_ipc_meta,
         "get_graph_buffer_ipc_meta");
 
+#ifdef ENABLE_SM80_EXT_OPS
   m.def("speculate_get_seq_lens_output",
         &SpeculateGetSeqLensOutput,
         "speculate_get_seq_lens_output function");
@@ -1761,6 +1780,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("unified_update_model_status",
         &UnifiedUpdateModelStatus,
         "unified_update_model_status function");
+
+  m.def("naive_update_model_status",
+        &NaiveUpdateModelStatus,
+        "naive_update_model_status function");
 
   m.def("speculate_set_value_by_flags_and_idx",
         &SpeculateSetValueByFlagsAndIdx,
@@ -1839,6 +1862,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_get_target_logits",
         &SpeculateGetTargetLogits,
         "speculate_get_target_logits function");
+#endif
 
   m.def("update_attn_mask_offsets",
         &UpdateAttnMaskOffsets,
@@ -1848,7 +1872,9 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &FusedNeoxRopeEmbedding,
         "fused_neox_rope_embedding function");
 
+#ifndef DISABLE_GELU_TANH_OP
   m.def("gelu_tanh", &GeluTanh, "gelu_tanh function");
+#endif
 
   m.def("reasoning_phase_token_constraint",
         &ReasoningPhaseTokenConstraint,

@@ -20,9 +20,20 @@ Kernel semantics (from unified_update_model_status.cu):
   - real_bsz = seq_lens_this_time.shape[0], max_bsz = stop_flags.shape[0].
   - has_running_seqs is a CPU tensor (copied to GPU, kernel writes, copied back).
   - Padding slots (batch_id >= real_bsz): only counted as stopped, NO state modified.
-  - Stopped/paused real slots: set stop_flags=true, seq_lens_decoder=0,
-    seq_lens_this_time=0, step_output_len=0.
-  - Running slots: EOS detection → state update → token_ids_all write → next input setup.
+  - Stopped/paused real slots: set stop_flags=true, clear seq_lens_encoder/decoder,
+    seq_lens_this_time, step_output_len.
+  - Running slots (is_running = !stop_flags && !is_paused):
+      1. EOS detection: scan step_output_ids[0..output_len), truncate at EOS/max_dec_len,
+         replace non-EOS end token with end_tokens[0], set cur_stop_flag=true.
+      2. seq_lens update (always executed, even when EOS is hit):
+           encoder > 0  → decoder += encoder, encoder = 0
+           decoder > 0  → decoder += output_len, mask_rollback = seq_lens_this_time - output_len
+           else         → mask_rollback = 0
+      3. If cur_stop_flag (EOS hit): stop_flags=true, mask_rollback=0.
+      4. Write back: seq_lens_encoder, seq_lens_decoder, step_output_len, step_idx.
+      5. Write history to token_ids_all at [prompt_len + base + i] (forward loop).
+      6. Set step_input_ids[0] = last output token.
+  - is_naive_mode has been removed: naive mode is handled by naive_update_model_status.
 """
 
 import unittest
@@ -58,14 +69,13 @@ def to_paddle_inputs(inputs: Dict[str, Any]) -> Dict[str, Any]:
     return paddle_inputs
 
 
-def run_kernel(paddle_inputs: Dict[str, Any], inputs: Dict[str, Any]):
+def run_kernel(paddle_inputs: Dict[str, Any]):
     """Call unified_update_model_status kernel."""
     unified_update_model_status(
         paddle_inputs["seq_lens_encoder"],
         paddle_inputs["seq_lens_decoder"],
         paddle_inputs["has_running_seqs"],
         paddle_inputs["step_input_ids"],
-        paddle_inputs["adaptive_step_input_len"],
         paddle_inputs["step_output_ids"],
         paddle_inputs["step_output_len"],
         paddle_inputs["stop_flags"],
@@ -77,12 +87,10 @@ def run_kernel(paddle_inputs: Dict[str, Any], inputs: Dict[str, Any]):
         paddle_inputs["step_idx"],
         paddle_inputs["end_tokens"],
         paddle_inputs["max_dec_len"],
-        inputs["is_naive_mode"],
-        inputs["prefill_one_step_stop"],
     )
 
 
-# All 12 in-place output keys (from SetInplaceMap in .cu)
+# All 11 in-place output keys (from SetInplaceMap in .cu)
 OUTPUT_KEYS = [
     "seq_lens_encoder",
     "seq_lens_decoder",
@@ -95,7 +103,6 @@ OUTPUT_KEYS = [
     "mask_rollback",
     "token_ids_all",
     "step_idx",
-    # adaptive_step_input_len is in InplaceMap but kernel never writes it
 ]
 
 
@@ -114,8 +121,6 @@ def gen_inputs(
     max_step_tokens: int = 16,
     max_model_len: int = 256,
     seed: int = 42,
-    is_naive_mode: bool = False,
-    prefill_one_step_stop: bool = False,
 ) -> Dict[str, Any]:
     """Generate randomized test inputs for unified_update_model_status kernel.
 
@@ -131,7 +136,6 @@ def gen_inputs(
     seq_lens_encoder = rng.integers(0, 5, size=max_bsz, dtype=np.int32)
     seq_lens_decoder = rng.integers(10, 100, size=max_bsz, dtype=np.int32)
     step_input_ids = rng.integers(0, 1000, size=(max_bsz, max_step_tokens), dtype=np.int64)
-    adaptive_step_input_len = rng.integers(1, max_step_tokens + 1, size=max_bsz, dtype=np.int32)
     step_output_ids = rng.integers(0, 1000, size=(max_bsz, max_step_tokens), dtype=np.int64)
     step_output_len = rng.integers(1, max_step_tokens + 1, size=max_bsz, dtype=np.int32)
     stop_flags = np.zeros(max_bsz, dtype=bool)
@@ -159,7 +163,6 @@ def gen_inputs(
         "seq_lens_decoder": seq_lens_decoder,
         "has_running_seqs": has_running_seqs,
         "step_input_ids": step_input_ids,
-        "adaptive_step_input_len": adaptive_step_input_len,
         "step_output_ids": step_output_ids,
         "step_output_len": step_output_len,
         "stop_flags": stop_flags,
@@ -176,8 +179,6 @@ def gen_inputs(
         "max_bsz": max_bsz,
         "max_step_tokens": max_step_tokens,
         "max_model_len": max_model_len,
-        "is_naive_mode": is_naive_mode,
-        "prefill_one_step_stop": prefill_one_step_stop,
     }
 
 
@@ -207,8 +208,6 @@ def reference_impl(inputs: Dict[str, Any]) -> Dict[str, Any]:
     real_bsz = inputs["real_bsz"]
     max_bsz = inputs["max_bsz"]
     max_model_len = inputs["max_model_len"]
-    is_naive_mode = inputs["is_naive_mode"]
-    prefill_one_step_stop = inputs["prefill_one_step_stop"]
     end_tokens = inputs["end_tokens"]
     num_end_tokens = len(end_tokens)
     max_dec_len = inputs["max_dec_len"]
@@ -232,86 +231,72 @@ def reference_impl(inputs: Dict[str, Any]) -> Dict[str, Any]:
 
         # --- line 80-86: Compute output length ---
         if is_running:
-            output_len = 1 if is_naive_mode else int(step_output_len[batch_id])
+            output_len = int(step_output_len[batch_id])
 
-        # --- line 89-110: EOS detection ---
+        # --- line 89-104: EOS detection ---
         if is_running and output_len > 0:
-            hit_stop = False
             for i in range(output_len):
-                cur_step_idx += 1  # line 94
-                token = int(step_output_ids[batch_id, i])  # line 95
-                is_eos = any(token == end_tokens[j] for j in range(num_end_tokens))  # line 96
-                max_len_hit = cur_step_idx >= int(max_dec_len[batch_id])  # line 97
+                cur_step_idx += 1
+                token = int(step_output_ids[batch_id, i])
+                is_eos = any(token == end_tokens[j] for j in range(num_end_tokens))
+                max_len_hit = cur_step_idx >= int(max_dec_len[batch_id])
 
-                if is_eos or max_len_hit:  # line 99
+                if is_eos or max_len_hit:
                     if not is_eos:
-                        step_output_ids[batch_id, i] = end_tokens[0]  # line 100
-                    output_len = i + 1  # line 101
-                    cur_stop_flag = True  # line 102
-                    hit_stop = True  # line 103
-                    break  # line 104
+                        step_output_ids[batch_id, i] = end_tokens[0]
+                    output_len = i + 1
+                    cur_stop_flag = True
+                    break
 
-            # line 108-110
-            if not hit_stop and prefill_one_step_stop and cur_seq_len_encoder > 0:
-                cur_stop_flag = True
-
-        # --- line 114-166: Update state and write back ---
+        # --- line 99-120: Update state and write back (mirrors kernel order) ---
         if is_running:
-            if cur_stop_flag:
-                # line 115-119
-                stop_count += 1
-                if output_len == 0:
-                    cur_seq_len_decoder = 0  # line 117
-                stop_flags[batch_id] = True  # line 118
-                mask_rollback[batch_id] = 0  # line 119
-            elif cur_seq_len_encoder == 0:
-                # line 120-122
-                cur_seq_len_decoder += output_len  # line 121
-                mask_rollback[batch_id] = int(seq_lens_this_time[batch_id]) - output_len  # line 122
+            # seq_lens update happens regardless of EOS (kernel always updates before stop check).
+            if cur_seq_len_encoder > 0:
+                cur_seq_len_decoder += cur_seq_len_encoder
+                cur_seq_len_encoder = 0
+            elif cur_seq_len_decoder > 0:
+                cur_seq_len_decoder += output_len
+                mask_rollback[batch_id] = int(seq_lens_this_time[batch_id]) - output_len
             else:
-                # line 123-124 (encoder > 0, not stopped)
                 mask_rollback[batch_id] = 0
 
-            # line 127-130: Fold encoder into decoder
-            if cur_seq_len_encoder > 0:
-                cur_seq_len_decoder += cur_seq_len_encoder  # line 128
-                cur_seq_len_encoder = 0  # line 129
+            if cur_stop_flag:
+                stop_count += 1
+                stop_flags[batch_id] = True
+                mask_rollback[batch_id] = 0
 
-            # line 132-135: Write back scalar state
+            # Write back scalar state
             seq_lens_encoder[batch_id] = cur_seq_len_encoder
             seq_lens_decoder[batch_id] = cur_seq_len_decoder
             step_output_len[batch_id] = output_len
             step_idx[batch_id] = cur_step_idx
 
-            # line 138-145: Write history to token_ids_all
-            if cur_step_idx > 0 and output_len > 0:
-                base = int(prompt_lens[batch_id])
+            # Write history to token_ids_all (forward loop, mirrors kernel step 5)
+            if output_len > 0:
+                base_addr = int(prompt_lens[batch_id])
+                base = cur_step_idx - output_len + 1
                 for i in range(output_len):
-                    # token_ids_all_now[cur_step_idx - i] = output_ids[output_len - 1 - i]
-                    write_idx = base + cur_step_idx - i
+                    write_idx = base_addr + base + i
                     if 0 <= write_idx < max_model_len:
-                        token_ids_all[batch_id, write_idx] = step_output_ids[batch_id, output_len - 1 - i]
+                        token_ids_all[batch_id, write_idx] = step_output_ids[batch_id, i]
 
-            # line 148-151: Setup next step_input_ids
+            # Setup next step_input_ids
             if output_len > 0:
                 step_input_ids[batch_id, 0] = step_output_ids[batch_id, output_len - 1]
 
-            # line 153-155: naive_mode → seq_lens_this_time
-            if is_naive_mode:
-                seq_lens_this_time[batch_id] = 0 if cur_stop_flag else 1
-
         elif batch_id >= real_bsz:
-            # line 156-158: Padding slot — only count, don't modify state
+            # Padding slot — only count as stopped, don't modify state
             stop_count += 1
         else:
-            # line 159-166: Stopped or paused real slot
+            # Stopped or paused real slot (batch_id < real_bsz)
             stop_count += 1
-            stop_flags[batch_id] = True  # line 162
-            seq_lens_decoder[batch_id] = 0  # line 163
-            seq_lens_this_time[batch_id] = 0  # line 164
-            step_output_len[batch_id] = 0  # line 165
+            stop_flags[batch_id] = True
+            seq_lens_encoder[batch_id] = 0
+            seq_lens_decoder[batch_id] = 0
+            seq_lens_this_time[batch_id] = 0
+            step_output_len[batch_id] = 0
 
-    # line 177-179: has_running_seqs = stop_sum < max_bsz
+    # has_running_seqs = stop_sum < max_bsz
     has_running_seqs = np.array([stop_count < max_bsz], dtype=bool)
 
     return {
@@ -334,31 +319,19 @@ def reference_impl(inputs: Dict[str, Any]) -> Dict[str, Any]:
 # ============================================================
 
 TEST_CONFIGS = [
-    # --- basic mode coverage ---
     {
         "name": "mtp_mode",
         "real_bsz": 8,
         "max_step_tokens": 16,
         "max_model_len": 256,
         "seed": 42,
-        "is_naive_mode": False,
     },
-    {
-        "name": "naive_mode",
-        "real_bsz": 8,
-        "max_step_tokens": 16,
-        "max_model_len": 256,
-        "seed": 42,
-        "is_naive_mode": True,
-    },
-    # --- batch size ---
     {
         "name": "small_batch",
         "real_bsz": 1,
         "max_step_tokens": 8,
         "max_model_len": 128,
         "seed": 42,
-        "is_naive_mode": False,
     },
     {
         "name": "large_batch",
@@ -366,34 +339,20 @@ TEST_CONFIGS = [
         "max_step_tokens": 16,
         "max_model_len": 512,
         "seed": 42,
-        "is_naive_mode": False,
     },
-    # --- prefill_one_step_stop ---
-    {
-        "name": "prefill_one_step_stop",
-        "real_bsz": 8,
-        "max_step_tokens": 8,
-        "max_model_len": 128,
-        "seed": 42,
-        "is_naive_mode": False,
-        "prefill_one_step_stop": True,
-    },
-    # --- different seeds for randomized coverage ---
     {
         "name": "seed_100",
         "real_bsz": 8,
         "max_step_tokens": 16,
         "max_model_len": 256,
         "seed": 100,
-        "is_naive_mode": False,
     },
     {
-        "name": "seed_200_naive",
+        "name": "seed_200",
         "real_bsz": 8,
         "max_step_tokens": 16,
         "max_model_len": 256,
         "seed": 200,
-        "is_naive_mode": True,
     },
 ]
 
@@ -413,7 +372,7 @@ class TestUnifiedUpdateModelStatus(unittest.TestCase):
 
     def _run_and_get(self, inputs: Dict[str, Any]) -> Dict[str, np.ndarray]:
         paddle_inputs = to_paddle_inputs(inputs)
-        run_kernel(paddle_inputs, inputs)
+        run_kernel(paddle_inputs)
         return get_outputs(paddle_inputs)
 
     def _check_all_outputs(self, inputs: Dict[str, Any], outputs: Dict[str, np.ndarray]):
@@ -423,7 +382,7 @@ class TestUnifiedUpdateModelStatus(unittest.TestCase):
             if not np.array_equal(outputs[key], ref[key]):
                 diff_mask = outputs[key] != ref[key]
                 diff_indices = np.argwhere(diff_mask)
-                for idx in diff_indices[:10]:  # print first 10 mismatches
+                for idx in diff_indices[:10]:
                     idx_tuple = tuple(idx)
                     print(
                         f"  [{key}] mismatch at {idx_tuple}: "
@@ -444,10 +403,6 @@ class TestUnifiedUpdateModelStatus(unittest.TestCase):
                         )
                 np.testing.assert_array_equal(outputs[key], ref[key], err_msg=f"{key} mismatch")
 
-        # Sanity: running slots must have encoder zeroed
-        for i in range(inputs["real_bsz"]):
-            if not inputs["stop_flags"][i] and not inputs["is_paused"][i]:
-                self.assertEqual(outputs["seq_lens_encoder"][i], 0, f"Running slot {i} should have encoder=0")
         self.assertTrue(np.all(outputs["seq_lens_decoder"] >= 0), "negative seq_lens_decoder")
         self.assertTrue(np.all(outputs["step_output_len"] >= 0), "negative step_output_len")
         self.assertTrue(np.all(outputs["step_idx"] >= 0), "negative step_idx")
@@ -480,8 +435,6 @@ class TestUnifiedUpdateModelStatus(unittest.TestCase):
 
     def test_max_dec_len_stop(self):
         """step_idx near max_dec_len should trigger stop and replace with end_tokens[0]."""
-        # Use large max_model_len to avoid token_ids_all overflow:
-        # kernel doesn't bounds-check prompt_lens + step_idx < max_model_len
         inputs = gen_inputs(real_bsz=2, max_step_tokens=8, max_model_len=512, seed=42)
         inputs["step_idx"][:] = [95, 50, 0, 0, 0, 0]
         inputs["max_dec_len"][:] = 100
@@ -526,7 +479,6 @@ class TestUnifiedUpdateModelStatus(unittest.TestCase):
         inputs["stop_flags"][: inputs["real_bsz"]] = False
         inputs["is_paused"][:] = False
         inputs["seq_lens_encoder"][:] = 0
-        # Use end_tokens that won't collide with output_ids
         inputs["end_tokens"][:] = [9990, 9991, 9992, 9993]
         inputs["max_dec_len"][:] = 10000
         inputs["step_output_ids"][0, :3] = [100, 200, 300]
@@ -535,23 +487,11 @@ class TestUnifiedUpdateModelStatus(unittest.TestCase):
         self._check_all_outputs(inputs, outputs)
 
     def test_zero_output_len(self):
-        """Running slot with output_len=0 in MTP mode: output_len stays 0."""
+        """Running slot with output_len=0: output_len stays 0, no token write."""
         inputs = gen_inputs(real_bsz=2, max_step_tokens=8, max_model_len=128, seed=42)
         inputs["step_output_len"][:] = [0, 5, 0, 0, 0, 0]
         inputs["stop_flags"][: inputs["real_bsz"]] = False
         inputs["is_paused"][:] = False
-        outputs = self._run_and_get(inputs)
-        self._check_all_outputs(inputs, outputs)
-
-    def test_prefill_one_step_stop_with_encoder(self):
-        """prefill_one_step_stop + encoder>0 should stop even without EOS."""
-        inputs = gen_inputs(real_bsz=4, max_step_tokens=8, max_model_len=128, seed=42, prefill_one_step_stop=True)
-        inputs["seq_lens_encoder"][:] = [5, 0, 0, 0, 0, 0, 0, 0]
-        inputs["stop_flags"][: inputs["real_bsz"]] = False
-        inputs["is_paused"][:] = False
-        # Ensure no accidental EOS hit
-        inputs["end_tokens"][:] = [9990, 9991, 9992, 9993]
-        inputs["max_dec_len"][:] = 10000
         outputs = self._run_and_get(inputs)
         self._check_all_outputs(inputs, outputs)
 
@@ -563,7 +503,6 @@ class TestUnifiedUpdateModelStatus(unittest.TestCase):
         inputs["seq_lens_encoder"][:] = 0  # All decode slots
         inputs["seq_lens_this_time"][:] = [6, 4, 8, 3]
         inputs["step_output_len"][:] = [3, 2, 5, 1, 0, 0, 0, 0]
-        # Avoid EOS/max_dec_len hits
         inputs["end_tokens"][:] = [9990, 9991, 9992, 9993]
         inputs["max_dec_len"][:] = 10000
         outputs = self._run_and_get(inputs)
