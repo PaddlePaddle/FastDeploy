@@ -271,9 +271,8 @@ class XPUModelRunner(ModelRunnerBase):
                 raw_logprobs = logits
             else:
                 raw_logprobs = self.sampler.compute_logprobs(logits)
-            token_ids, logprobs, ranks = self.sampler.gather_logprobs(
-                raw_logprobs, num_prompt_logprobs, prompt_token_ids_tensor
-            )
+            gathered = self.sampler.gather_logprobs(raw_logprobs, num_prompt_logprobs, prompt_token_ids_tensor)
+            token_ids, logprobs, ranks = gathered.logprob_token_ids, gathered.logprobs, gathered.selected_token_ranks
             chunk_slice = slice(start_idx, start_idx + num_logits)
             logprobs_tensors.logprob_token_ids[chunk_slice].copy_(token_ids, False)
             logprobs_tensors.logprobs[chunk_slice].copy_(logprobs, False)
