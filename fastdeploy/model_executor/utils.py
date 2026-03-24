@@ -630,6 +630,3 @@ def need_memory_reconstruction(fd_config):
         return True
     else:
         return False
-
-def has_flashinfer():
-    return importlib.util.find_spec("flashinfer") is not None
