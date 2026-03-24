@@ -185,6 +185,7 @@ class CacheTransferManager:
         self.key_prefix = ""
 
         # extract other arg values
+        self.model_path = args.model_path
         self.model_id = os.path.basename(args.model_path.rstrip("/"))
         self.n_ranks = args.mp_num
         self.rank = args.rank
@@ -370,19 +371,18 @@ class CacheTransferManager:
             raise ValueError(f"Invalid write policy: {args.write_policy}")
         self.write_policy = args.write_policy
 
-        version_file_path = os.path.join(args.model_path, "version.yaml")
-        if os.path.exists(version_file_path):
-            self.key_prefix = get_key_prefix_from_version(version_file_path)
-        logger.info(f"The key_prefix of cache storage is {self.key_prefix}")
+        self._update_key_prefix()
 
         logger.info("Initialize cache storage successfully")
 
     def _update_key_prefix(self):
         # use key_prefix to distinguish cache for different version of weight in rl
-        version_file_path = os.path.join(args.model_path, "version.yaml")
-        assert os.path.exists(version_file_path), f"version.yaml not found at {version_file_path}"
-        self.key_prefix = get_key_prefix_from_version(version_file_path)
-        logger.info(f"Update key_prefix of cache storage to {self.key_prefix}")
+        version_file_path = os.path.join(self.model_path, "version.yaml")
+        if os.path.exists(version_file_path):
+            self.key_prefix = get_key_prefix_from_version(version_file_path)
+            logger.info(f"Update key_prefix of cache storage to {self.key_prefix}")
+        else:
+            logger.error(f"version.yaml not found at {version_file_path}")
 
     def _init_storage_buffer(self, args):
         """
