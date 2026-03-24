@@ -411,23 +411,21 @@ class OpenAIServingChat:
 
                     delta_message = DeltaMessage(
                         reasoning_content=output["reasoning_content"],
-                        prompt_token_ids=None,
                         tool_calls=output["tool_calls"],
-                        completion_token_ids=None,
                     )
 
                     if output["tool_calls"] is not None:
                         tool_called[idx] = True
 
                     if response_processor.enable_multimodal_content():
-                        delta_message.multimodal_content = output["multipart"]
+                        delta_message.multimodal_content = [{}] if output["skipped"] else output["multipart"]
                     else:
-                        delta_message.content = output["text"]
+                        delta_message.content = "" if output["skipped"] else output["text"]
 
                     if output.get("audio_content", None) is not None:
                         delta_message.audio_content = output["audio_content"]
 
-                    if output["skipped"]:
+                    if output["skipped"] and not request.return_token_ids:
                         continue
 
                     choice = ChatCompletionResponseStreamChoice(
