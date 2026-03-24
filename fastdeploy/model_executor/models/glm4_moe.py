@@ -50,23 +50,6 @@ from fastdeploy.model_executor.models.model_base import (
 )
 
 
-class NVTX_MINE:
-    def __init__(self, real=False):
-        self.real = real
-
-    def range_push(self, message):
-        if self.real:
-            paddle.cuda.nvtx.range_push(message)
-
-    def range_pop(self):
-        if self.real:
-            paddle.cuda.nvtx.range_pop()
-        pass
-
-
-nvtx_mine = NVTX_MINE()
-
-
 class Glm4MoeMLP(nn.Layer):
     """ """
 
@@ -126,15 +109,9 @@ class Glm4MoeMLP(nn.Layer):
 
     def forward(self, x, forward_meta=None):
         """ """
-        nvtx_mine.range_push("Glm4MoeMLP/up_gate_proj")
         gate_up_out = self.up_gate_proj(x)
-        nvtx_mine.range_pop()
-        nvtx_mine.range_push("Glm4MoeMLP/act_fn")
         act_out = self.act_fn(gate_up_out)
-        nvtx_mine.range_pop()
-        nvtx_mine.range_push("Glm4MoeMLP/down_proj")
         down_out = self.down_proj(act_out)
-        nvtx_mine.range_pop()
         return down_out
 
 
@@ -227,9 +204,7 @@ class Glm4Moe(nn.Layer):
                 del self.shared_experts
 
     def forward(self, x, forward_meta: ForwardMeta = None):
-        nvtx_mine.range_push("Glm4Moe/fused_experts")
         out = self.experts(x, self.gate, forward_meta)
-        nvtx_mine.range_pop()
         # triton path：shared experts 已融合进 self.experts，此处 shared_experts 已被删除
         # 非 triton path：shared_experts 仍存在，单独 forward 后相加
         if self.n_shared_experts > 0 and hasattr(self, "shared_experts"):
@@ -287,22 +262,14 @@ class Glm4MoeAttention(nn.Layer):
         hidden_states: paddle.Tensor,
     ):
         """ """
-        nvtx_mine.range_push("Glm4MoeAttn/qkv_proj")
         qkv_out = self.qkv_proj(hidden_states)
-        nvtx_mine.range_pop()
         if self.use_qk_norm:
-            nvtx_mine.range_push("Glm4MoeAttn/qk_norm")
             qkv_out = self.qk_norm(qkv_out)
-            nvtx_mine.range_pop()
-        nvtx_mine.range_push("Glm4MoeAttn/attn_kernel")
         atten_out = self.attn(
             qkv=qkv_out,
             forward_meta=forward_meta,
         )
-        nvtx_mine.range_pop()
-        nvtx_mine.range_push("Glm4MoeAttn/o_proj")
         output = self.o_proj(atten_out)
-        nvtx_mine.range_pop()
         return output
 
 
@@ -360,27 +327,17 @@ class Glm4MoeDecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
-        lid = self.layer_id
-        nvtx_mine.range_push(f"layer{lid}/input_layernorm")
         hidden_states, residual = self.input_layernorm(
             hidden_states, residual_input=residual, forward_meta=forward_meta
         )
-        nvtx_mine.range_pop()
-
-        nvtx_mine.range_push(f"layer{lid}/self_attn")
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
-        nvtx_mine.range_pop()
 
-        nvtx_mine.range_push(f"layer{lid}/post_attn_layernorm")
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
-        nvtx_mine.range_pop()
 
-        nvtx_mine.range_push(f"layer{lid}/mlp")
         hidden_states = self.mlp(hidden_states, forward_meta)
-        nvtx_mine.range_pop()
 
         return hidden_states, residual
 
@@ -434,25 +391,17 @@ class Glm4MoeModel(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        nvtx_mine.range_push("Glm4MoeModel/embed_tokens")
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
-        nvtx_mine.range_pop()
 
         residual = None
 
         for i in range(self.num_layers):
-            nvtx_mine.range_push(f"Glm4MoeModel/layer{i}")
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
-            nvtx_mine.range_pop()
 
-        nvtx_mine.range_push("Glm4MoeModel/final_norm")
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
-        nvtx_mine.range_pop()
 
         if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
-            nvtx_mine.range_push("Glm4MoeModel/norm_allgather")
             out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
-            nvtx_mine.range_pop()
 
         return out
 
@@ -603,9 +552,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        nvtx_mine.range_push("Glm4MoeForCausalLM/forward")
         hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
-        nvtx_mine.range_pop()
         return hidden_states
 
     def clear_grpah_opt_backend(self):
