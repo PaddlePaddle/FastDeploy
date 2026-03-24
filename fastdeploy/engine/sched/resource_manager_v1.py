@@ -524,6 +524,32 @@ class ResourceManagerV1(ResourceManager):
 
         return total_reserved_tokens
 
+    def _calculate_decode_batch_block_pressure(self) -> int:
+        """
+        Estimate how many new KV blocks the current decode batch will need this step.
+        This is a lightweight batch-level pressure check before entering the per-request
+        decode loop, so we can retract first instead of waiting for a single request to
+        fail at the block boundary.
+        """
+        block_size = self.config.cache_config.block_size
+        total_needed_blocks = 0
+
+        for req in self.running:
+            if req.num_computed_tokens < req.need_prefill_tokens:
+                continue
+            if self.config.scheduler_config.splitwise_role == "prefill":
+                continue
+            if (req.num_total_tokens - 1) % block_size == 0:
+                total_needed_blocks += 1
+
+        if total_needed_blocks > 0:
+            llm_logger.debug(
+                f"Decode batch block pressure: need={total_needed_blocks}, "
+                f"free={self.cache_manager.get_num_free_gpu_blocks()}, running={len(self.running)}"
+            )
+
+        return total_needed_blocks
+
     def _calculate_decode_reserved_tokens_for_new_requests(self, new_decode_reserved_tokens: float):
         """Return pre-computed reserved tokens for NEW decode requests in this cycle."""
         return new_decode_reserved_tokens
@@ -679,19 +705,40 @@ class ResourceManagerV1(ResourceManager):
                 break
         return matched_token_num
 
-    def _get_num_new_tokens(self, request, rem_chunk_tokens, rem_input_tokens):
-        # SGLang-aligned:
-        # - All admitted prefills share rem_input_tokens.
-        # - When chunk budget is enabled, requests that do not fit in the remaining
-        #   chunk budget are truncated to a chunk-sized prefill.
-        remaining = request.need_prefill_tokens - request.num_computed_tokens
-        num_new_tokens = min(remaining, rem_input_tokens)
+    def _get_paged_prefill_tokens(self, num_new_tokens: int) -> int:
+        if num_new_tokens <= 0:
+            return 0
 
         block_size = self.config.cache_config.block_size
+        if block_size <= 1:
+            return num_new_tokens
+
+        return -(-num_new_tokens // block_size) * block_size
+
+    def _get_num_new_tokens(self, request, rem_chunk_tokens, rem_input_tokens):
+        # SGLang-aligned:
+        # - First compute this round's candidate prefill length.
+        # - Then judge whether the paged input length can fit in rem_chunk_tokens.
+        # - If it does not fit, truncate to one page-aligned chunk.
+        remaining = request.need_prefill_tokens - request.num_computed_tokens
+        if remaining <= 0 or rem_input_tokens <= 0:
+            return 0
+
+        block_size = self.config.cache_config.block_size
+        num_new_tokens = min(remaining, rem_input_tokens)
         is_truncated = num_new_tokens < remaining
 
-        if rem_chunk_tokens is not None and remaining > rem_chunk_tokens:
-            num_new_tokens = min(num_new_tokens, rem_chunk_tokens)
+        paged_input_tokens = self._get_paged_prefill_tokens(num_new_tokens)
+        if rem_chunk_tokens is not None and paged_input_tokens > rem_chunk_tokens:
+            if block_size > 1:
+                trunc_len = (rem_chunk_tokens // block_size) * block_size
+            else:
+                trunc_len = rem_chunk_tokens
+
+            if trunc_len <= 0:
+                return 0
+
+            num_new_tokens = min(num_new_tokens, trunc_len)
             is_truncated = True
 
         if current_platform.is_intel_hpu():
@@ -949,6 +996,26 @@ class ResourceManagerV1(ResourceManager):
 
             def _schedule_decode_requests():
                 nonlocal num_decoding_req_nums
+                decode_batch_block_pressure = self._calculate_decode_batch_block_pressure()
+                if decode_batch_block_pressure > 0 and not self.cache_manager.can_allocate_gpu_blocks(
+                    decode_batch_block_pressure
+                ):
+                    first_decode_request = next(
+                        (
+                            req
+                            for req in self.running
+                            if req.num_computed_tokens >= req.need_prefill_tokens
+                        ),
+                        None,
+                    )
+                    if first_decode_request is not None:
+                        self._trigger_preempt(
+                            first_decode_request,
+                            decode_batch_block_pressure,
+                            preempted_reqs,
+                            scheduled_reqs,
+                        )
+
                 req_index = 0
                 while req_index < len(self.running):
                     request = self.running[req_index]
@@ -1116,8 +1183,9 @@ class ResourceManagerV1(ResourceManager):
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             has_scheduled_prefill = True
                             has_scheduled_running_prefill = True
-                            rem_input_tokens -= num_new_tokens
-                            rem_chunk_tokens -= num_new_tokens
+                            budgeted_prefill_tokens = self._get_paged_prefill_tokens(num_new_tokens)
+                            rem_input_tokens -= budgeted_prefill_tokens
+                            rem_chunk_tokens -= budgeted_prefill_tokens
                             if is_last_chunk:
                                 max_new = min(
                                     _get_request_max_new_tokens(request), self.clip_max_new_tokens_estimation
@@ -1213,8 +1281,9 @@ class ResourceManagerV1(ResourceManager):
 
                             # SGLang-aligned: every admitted prefill chunk consumes both
                             # the total input budget and the shared per-step chunk budget.
-                            rem_input_tokens -= num_new_tokens
-                            rem_chunk_tokens -= num_new_tokens
+                            budgeted_prefill_tokens = self._get_paged_prefill_tokens(num_new_tokens)
+                            rem_input_tokens -= budgeted_prefill_tokens
+                            rem_chunk_tokens -= budgeted_prefill_tokens
                             if is_last_chunk:
                                 max_new = min(_get_request_max_new_tokens(request), self.clip_max_new_tokens_estimation)
                                 scheduled_new_decode_reserved_tokens += max_new
@@ -1284,8 +1353,9 @@ class ResourceManagerV1(ResourceManager):
 
                             # SGLang-aligned: every admitted prefill chunk consumes both
                             # the total input budget and the shared per-step chunk budget.
-                            rem_input_tokens -= num_new_tokens
-                            rem_chunk_tokens -= num_new_tokens
+                            budgeted_prefill_tokens = self._get_paged_prefill_tokens(num_new_tokens)
+                            rem_input_tokens -= budgeted_prefill_tokens
+                            rem_chunk_tokens -= budgeted_prefill_tokens
                             if is_last_chunk:
                                 max_new = min(_get_request_max_new_tokens(request), self.clip_max_new_tokens_estimation)
                                 scheduled_new_decode_reserved_tokens += max_new
