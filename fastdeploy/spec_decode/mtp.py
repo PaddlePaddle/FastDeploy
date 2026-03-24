@@ -745,7 +745,7 @@ class MTPProposer(Proposer):
             self.role == "prefill",  # is_splitwise_prefill
         )
 
-        target_hidden_states = eagle_get_hidden_states(
+        target_hidden_states, output_token_num = eagle_get_hidden_states(
             full_hidden_states,
             self.model_inputs["seq_lens_this_time"],
             self.model_inputs["seq_lens_encoder"],
@@ -756,6 +756,8 @@ class MTPProposer(Proposer):
             self.target_model_inputs["seq_lens_encoder"],
             self.num_model_steps,
         )
+        self._mtp_input_token_num_host.copy_(output_token_num, False)
+        self._mtp_input_token_num_event.record()
 
         self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
@@ -790,32 +792,17 @@ class MTPProposer(Proposer):
             use_v1_cache_scheduler,
         )
 
-        if current_platform.is_cuda() or current_platform.is_maca():
-            target_hidden_states, output_token_num = eagle_get_hidden_states(
-                full_hidden_states,
-                self.model_inputs["seq_lens_this_time"],
-                self.model_inputs["seq_lens_encoder"],
-                self.model_inputs["seq_lens_decoder"],
-                self.model_inputs["stop_flags"],
-                self.target_model_inputs["accept_num"],
-                self.target_model_inputs["seq_lens_this_time"],
-                self.target_model_inputs["seq_lens_encoder"],
-                self.num_model_steps,
-            )
-            self._mtp_input_token_num_host.copy_(output_token_num, False)
-            self._mtp_input_token_num_event.record()
-        else:
-            target_hidden_states = eagle_get_hidden_states(
-                full_hidden_states,
-                self.model_inputs["seq_lens_this_time"],
-                self.model_inputs["seq_lens_encoder"],
-                self.model_inputs["seq_lens_decoder"],
-                self.model_inputs["stop_flags"],
-                self.target_model_inputs["accept_num"],
-                self.target_model_inputs["seq_lens_this_time"],
-                self.target_model_inputs["seq_lens_encoder"],
-                self.num_model_steps,
-            )
+        target_hidden_states = eagle_get_hidden_states(
+            full_hidden_states,
+            self.model_inputs["seq_lens_this_time"],
+            self.model_inputs["seq_lens_encoder"],
+            self.model_inputs["seq_lens_decoder"],
+            self.model_inputs["stop_flags"],
+            self.target_model_inputs["accept_num"],
+            self.target_model_inputs["seq_lens_this_time"],
+            self.target_model_inputs["seq_lens_encoder"],
+            self.num_model_steps,
+        )
         self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
     def _post_process(self, sampled_token_ids):
