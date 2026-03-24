@@ -872,6 +872,10 @@ class GPUModelRunner(ModelRunnerBase):
                     cache_ids_2d = self._normalize_head_wise_cache_ids_2d(cache_ids_2d)
                     if cache_ids_2d is not None:
                         request.block_tables_3d = cache_ids_2d
+                        head0_row = cache_ids_2d[0] if len(cache_ids_2d) > 0 and cache_ids_2d[0] is not None else []
+                        request.block_tables = list(head0_row)
+                    elif request.block_tables and isinstance(request.block_tables[0], list):
+                        request.block_tables = list(request.block_tables[0] or [])
                     self._update_block_tables_3d_slot(idx, cache_ids_2d, str(request.request_id))
                     if cache_ids_2d:
                         head0_row = cache_ids_2d[0] if cache_ids_2d[0] is not None else []
@@ -943,6 +947,10 @@ class GPUModelRunner(ModelRunnerBase):
                     cache_ids_2d = self._normalize_head_wise_cache_ids_2d(cache_ids_2d)
                     if cache_ids_2d is not None:
                         request.block_tables_3d = cache_ids_2d
+                        head0_row = cache_ids_2d[0] if len(cache_ids_2d) > 0 and cache_ids_2d[0] is not None else []
+                        request.block_tables = list(head0_row)
+                    elif request.block_tables and isinstance(request.block_tables[0], list):
+                        request.block_tables = list(request.block_tables[0] or [])
                     self._update_block_tables_3d_slot(idx, cache_ids_2d, str(request.request_id))
                     # Keep cached request metadata in sync for subsequent forward_meta assembly.
                     cached_req = self.forward_batch_reqs_list[idx]
