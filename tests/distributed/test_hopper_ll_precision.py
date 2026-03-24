@@ -12,6 +12,8 @@ class TestFusedMoE(unittest.TestCase):
 
     def test_fused_moe(self):
         num_ranks = dist.get_world_size()
+        if num_ranks <= 1:
+            return
         rank_id = dist.get_rank()
         paddle.seed(rank_id + 100)
 
