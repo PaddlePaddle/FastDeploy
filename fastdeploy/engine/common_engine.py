@@ -1413,6 +1413,27 @@ class EngineService:
                 raise Exception(error_msg)
         return self._call_worker(control_request, 60)
 
+    def _parse_tags(self, control_request: ControlRequest):
+        """
+        Parse tags from control request.
+        """
+        allowed_tags = ["weight", "kv_cache"]
+        tags = control_request.args.get("tags", None)
+        if tags is None:
+            tags = ",".join(allowed_tags)
+            control_request.args["tags"] = tags
+            self.llm_logger.info(
+                f"Detected empty tags of request {control_request.request_id}, defaulting to tags: {tags}"
+            )
+        elif isinstance(tags, list):
+            tags = ",".join(tags)
+        
+        for tag in tags.split(","):
+            if tag not in allowed_tags:
+                raise ValueError(f"Unsupported tag [{tag}] in [{tags}], expected one of {allowed_tags}")
+        
+        return tags
+
     def _control_sleep(self, control_request: ControlRequest):
         """
         Offload gpu memory occupation for certain parts, e.g. weight, cache.
@@ -1425,19 +1446,8 @@ class EngineService:
             or merely offloading to cpu memory for now.
         """
         # Args check
-        allowed_tags = ["weight", "kv_cache"]
-        tags = control_request.args.get("tags", "")
-
-        if tags is None or tags == "":
-            tags = ",".join(allowed_tags)
-            control_request.args["tags"] = tags
-            self.llm_logger.info(
-                f"Detected empty tags of request {control_request.request_id}, defaulting to tags: {tags}"
-            )
-
-        for tag in tags.split(","):
-            if tag not in allowed_tags:
-                raise ValueError(f"Unsupported tag [{tag}] in [{tags}], expected one of {allowed_tags}")
+        tags = self._parse_tags(control_request)
+        control_request.args["tags"] = tags
 
         # Make sure llm engine is paused.
         self.llm_logger.warning(
@@ -1456,9 +1466,9 @@ class EngineService:
                 executors.add("cache_transfer")
             if self.cfg.cache_config.enable_prefix_caching:
                 self.resource_manager.cache_manager.reset()
-        self.llm_logger.info(f"Dispatch sleep request to executors: {list(executors)}")
 
         # Dispatch sleep request to executors
+        self.llm_logger.info(f"Dispatch sleep request to executors: {list(executors)}")
         self._dispatch_control_request(control_request, executors)
         return asyncio.run(self._wait_for_control_responses(control_request.request_id, 60, executors=executors))
 
@@ -1471,19 +1481,8 @@ class EngineService:
                 tags: list of tags to reload, supported values: ["weight", "kv_cache"]
         """
         # Args check
-        allowed_tags = ["weight", "kv_cache"]
-        tags = control_request.args.get("tags", "")
-
-        if tags is None or tags == "":
-            tags = ",".join(allowed_tags)
-            control_request.args["tags"] = tags
-            self.llm_logger.info(
-                f"Detected empty tags of request {control_request.request_id}, defaulting to tags: {tags}"
-            )
-
-        for tag in tags.split(","):
-            if tag not in allowed_tags:
-                raise ValueError(f"Unsupported tag {tag} in {tags}, expected one of {allowed_tags}")
+        tags = self._parse_tags(control_request)
+        control_request.args["tags"] = tags
 
         # Determine which executors are needed for the wakeup command
         executors = set()
@@ -1495,6 +1494,7 @@ class EngineService:
                 executors.add("cache_transfer")
 
         # Dispatch wakeup request to executors
+        self.llm_logger.info(f"Dispatch wakeup request to executors: {list(executors)}")
         self._dispatch_control_request(control_request, executors)
         result = asyncio.run(self._wait_for_control_responses(control_request.request_id, 300, executors=executors))
 
