@@ -225,8 +225,8 @@ class TestCacheTransferManager(unittest.TestCase):
             version_path = os.path.join(tmpdir, "version.yaml")
             with open(version_path, "w", encoding="utf-8") as handle:
                 handle.write("version: RL-STEP03-20250101-uuid\n")
-            args.model_path = tmpdir
-            args.kvcache_storage_backend = None
+            self.manager.model_path = tmpdir
+            self.manager.kvcache_storage_backend = None
             self.manager._init_storage(args)
 
         self.assertEqual(self.manager.key_prefix, "RL-STEP03")
