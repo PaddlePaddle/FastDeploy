@@ -21,8 +21,10 @@ MoE: 32 experts, top-2 routing per token
 from __future__ import annotations
 
 import math
-from typing import Dict
+import re
+from typing import Dict, Union
 
+import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
@@ -223,24 +225,42 @@ class MiniMaxM1LinearAttention(nn.Layer):
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
         self.num_attention_heads = fd_config.model_config.num_attention_heads
+        hidden_inner = self.num_attention_heads * self.head_dim
 
         # QKV projection
         self.qkv_proj = ColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.qkv_proj",
             input_size=self.hidden_size,
-            output_size=self.num_attention_heads * self.head_dim * 3,
+            output_size=hidden_inner * 3,
             with_bias=False,
         )
 
-        # Output projection
-        self.o_proj = RowParallelLinear(
+        # Output gate (sigmoid gating on attention output)
+        self.output_gate = ColumnParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.output_gate",
+            input_size=self.hidden_size,
+            output_size=hidden_inner,
+            with_bias=False,
+        )
+
+        # Output projection (HF name: out_proj)
+        self.out_proj = RowParallelLinear(
             fd_config,
-            prefix=f"{prefix}.o_proj",
-            input_size=self.num_attention_heads * self.head_dim,
+            prefix=f"{prefix}.out_proj",
+            input_size=hidden_inner,
             output_size=self.hidden_size,
             with_bias=False,
             layer_id=layer_id,
+        )
+
+        # RMSNorm on attention output before gating
+        self.norm = RMSNorm(
+            fd_config,
+            hidden_size=hidden_inner,
+            eps=1e-5,
+            prefix=f"{prefix}.norm",
         )
 
         # Build slope tensor for exponential decay
@@ -257,7 +277,9 @@ class MiniMaxM1LinearAttention(nn.Layer):
 
     def load_state_dict(self, state_dict):
         self.qkv_proj.load_state_dict(state_dict)
-        self.o_proj.load_state_dict(state_dict)
+        self.output_gate.load_state_dict(state_dict)
+        self.out_proj.load_state_dict(state_dict)
+        self.norm.load_state_dict(state_dict)
 
     @staticmethod
     def _build_slope_tensor(n_heads: int):
@@ -281,17 +303,16 @@ class MiniMaxM1LinearAttention(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
     ):
-        """Linear attention forward."""
+        """Linear attention forward with output gating."""
         # Project QKV
         qkv = self.qkv_proj(hidden_states)
-        q, k, v = qkv.split(
-            [
-                self.num_attention_heads * self.head_dim,
-                self.num_attention_heads * self.head_dim,
-                self.num_attention_heads * self.head_dim,
-            ],
-            axis=-1,
-        )
+        hidden_inner = self.num_attention_heads * self.head_dim
+        q, k, v = qkv.split([hidden_inner, hidden_inner, hidden_inner], axis=-1)
+
+        # Apply SiLU activation (matches HF MiniMax convention)
+        q = paddle.nn.functional.silu(q.astype("float32"))
+        k = paddle.nn.functional.silu(k.astype("float32"))
+        v = paddle.nn.functional.silu(v.astype("float32"))
 
         # Reshape for lightning attention
         batch_size = q.shape[0]
@@ -304,23 +325,29 @@ class MiniMaxM1LinearAttention(nn.Layer):
         k = k.transpose([0, 2, 1, 3])
         v = v.transpose([0, 2, 1, 3])
 
-        # Initialize KV history if needed
-        kv_history = paddle.zeros(
-            [batch_size, self.num_attention_heads, self.head_dim, self.head_dim],
-            dtype=q.dtype,
-        )
+        # Retrieve or initialize KV history for recurrent state persistence
+        if not hasattr(self, "_kv_history") or self._kv_history is None:
+            self._kv_history = paddle.zeros(
+                [batch_size, self.num_attention_heads, self.head_dim, self.head_dim],
+                dtype=q.dtype,
+            )
 
         # Apply lightning attention
-        attn_output, _ = lightning_attention(
-            q, k, v, self.slope_rate.squeeze(-1), block_size=256, kv_history=kv_history
+        attn_output, new_kv_history = lightning_attention(
+            q, k, v, self.slope_rate.squeeze(-1), block_size=256, kv_history=self._kv_history
         )
+        # Update persisted KV state for next token generation
+        self._kv_history = new_kv_history
 
-        # Reshape back
+        # Reshape back to [batch, seq, hidden_inner]
         attn_output = attn_output.transpose([0, 2, 1, 3])
         attn_output = attn_output.reshape([batch_size, -1, self.num_attention_heads * self.head_dim])
 
-        # Output projection
-        output = self.o_proj(attn_output)
+        # Norm → gate → output projection (matches vLLM/HF forward)
+        attn_output = self.norm(attn_output)[0]
+        gate = self.output_gate(hidden_states)
+        attn_output = paddle.nn.functional.sigmoid(gate) * attn_output.astype(hidden_states.dtype)
+        output = self.out_proj(attn_output)
         return output
 
 
@@ -391,23 +418,29 @@ class MiniMaxM1DecoderLayer(nn.Layer):
             prefix=f"{prefix}.post_attention_layernorm",
         )
 
-        # DeepNorm alpha/beta scaling
-        self.layernorm_attention_alpha = getattr(
-            fd_config.model_config, "layernorm_full_attention_alpha", 3.5565588200778455
-        )
-        self.layernorm_attention_beta = getattr(fd_config.model_config, "layernorm_full_attention_beta", 1.0)
+        # DeepNorm alpha/beta scaling — separate coefficients for linear vs full attention
+        if self.attention_type == 0:  # Linear attention
+            self.layernorm_attention_alpha = getattr(
+                fd_config.model_config, "layernorm_linear_attention_alpha", 3.5565588200778455
+            )
+            self.layernorm_attention_beta = getattr(fd_config.model_config, "layernorm_linear_attention_beta", 1.0)
+        else:  # Full attention
+            self.layernorm_attention_alpha = getattr(
+                fd_config.model_config, "layernorm_full_attention_alpha", 3.5565588200778455
+            )
+            self.layernorm_attention_beta = getattr(fd_config.model_config, "layernorm_full_attention_beta", 1.0)
         self.layernorm_mlp_alpha = getattr(fd_config.model_config, "layernorm_mlp_alpha", 3.5565588200778455)
         self.layernorm_mlp_beta = getattr(fd_config.model_config, "layernorm_mlp_beta", 1.0)
 
         # FFN (MLP or MoE)
         if fd_config.model_config.num_local_experts > 1:
-            self.mlp = MiniMaxM1MoE(
+            self.block_sparse_moe = MiniMaxM1MoE(
                 fd_config,
                 layer_id=layer_id,
-                prefix=f"{prefix}.mlp",
+                prefix=f"{prefix}.block_sparse_moe",
             )
         else:
-            self.mlp = MiniMaxM1MLP(
+            self.block_sparse_moe = MiniMaxM1MLP(
                 fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}.mlp",
@@ -416,7 +449,7 @@ class MiniMaxM1DecoderLayer(nn.Layer):
 
     def load_state_dict(self, state_dict):
         self.self_attn.load_state_dict(state_dict)
-        self.mlp.load_state_dict(state_dict)
+        self.block_sparse_moe.load_state_dict(state_dict)
         self.input_layernorm.load_state_dict(state_dict)
         self.post_attention_layernorm.load_state_dict(state_dict)
 
@@ -426,31 +459,49 @@ class MiniMaxM1DecoderLayer(nn.Layer):
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None,
     ):
-        """Decoder layer forward with DeepNorm."""
-        # Pre-norm
+        """Decoder layer forward with DeepNorm.
+
+        When postnorm=True (MiniMax-M1 default), the residual stream carries the
+        *normed* activations rather than the pre-norm sum.  This follows the
+        vLLM reference: ``residual = layernorm_output if postnorm else layernorm_input``.
+        """
+        # Input layernorm  (fused: x + residual → norm)
         hidden_states, residual = self.input_layernorm(
             hidden_states,
             residual_input=residual,
             forward_meta=forward_meta,
         )
+        # hidden_states = norm(input + prev_residual)
+        # residual      = input + prev_residual  (pre-norm)
+        if self.postnorm:
+            residual = hidden_states  # postnorm: residual = normed output
 
         # Attention (dispatch based on type)
-        if self.attention_type == 1:  # Full attention
-            attn_output = self.self_attn(forward_meta=forward_meta, hidden_states=hidden_states)
-        else:  # Linear attention
-            attn_output = self.self_attn(forward_meta=forward_meta, hidden_states=hidden_states)
+        attn_output = self.self_attn(forward_meta=forward_meta, hidden_states=hidden_states)
 
         # DeepNorm alpha/beta scaling
         residual = residual * self.layernorm_attention_alpha
         attn_output = attn_output * self.layernorm_attention_beta
 
-        # Post-attention
-        hidden_states, residual = self.post_attention_layernorm(attn_output, residual)
+        # Post-attention layernorm
+        if self.postnorm:
+            layernorm_input = residual + attn_output
+            hidden_states, residual = self.post_attention_layernorm(
+                layernorm_input,
+                forward_meta=forward_meta,
+            )
+            residual = hidden_states  # postnorm: residual = normed output
+        else:
+            hidden_states, residual = self.post_attention_layernorm(
+                attn_output,
+                residual_input=residual,
+                forward_meta=forward_meta,
+            )
 
         # FFN
-        mlp_output = self.mlp(hidden_states, forward_meta)
+        mlp_output = self.block_sparse_moe(hidden_states, forward_meta)
 
-        # DeepNorm MLPalpha/beta
+        # DeepNorm MLP alpha/beta
         residual = residual * self.layernorm_mlp_alpha
         mlp_output = mlp_output * self.layernorm_mlp_beta
 
@@ -531,6 +582,12 @@ class MiniMaxM1Model(nn.Layer):
 
 
 @ModelRegistry.register_model_class(
+    architecture="MiniMaxM1ForCausalLM",
+    module_name="minimax_m1",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
+@ModelRegistry.register_model_class(
     architecture="MiniMaxText01ForCausalLM",
     module_name="minimax_m1",
     category=ModelCategory.TEXT_GENERATION,
@@ -538,6 +595,16 @@ class MiniMaxM1Model(nn.Layer):
 )
 class MiniMaxM1ForCausalLM(ModelForCasualLM):
     """MiniMax-M1 Causal LM Model"""
+
+    # Mapping HF checkpoint names → FD merged parameter names.
+    # For full attention layers: separate q/k/v → merged qkv_proj
+    # For MoE: gate_proj/up_proj → merged gate_up_proj (dense MLP fallback)
+    _STACKED_PARAMS_MAPPING = [
+        # (fd_param_name, hf_weight_name, shard_id)
+        ("qkv_proj", "q_proj", "q"),
+        ("qkv_proj", "k_proj", "k"),
+        ("qkv_proj", "v_proj", "v"),
+    ]
 
     def __init__(self, fd_config: FDConfig):
         super().__init__(fd_config)
@@ -553,13 +620,126 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
     @classmethod
     def name(cls):
         """Model name."""
-        return "MiniMaxText01ForCausalLM"
+        return "MiniMaxM1ForCausalLM"
 
     @paddle.no_grad()
-    def set_state_dict(self, state_dict: Dict):
-        """Load model parameters."""
-        self.model.load_state_dict(state_dict)
-        self.lm_head.load_state_dict(state_dict)
+    def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
+        """Load model parameters (v0 loader path).
+
+        Pre-processes HF weight keys to match FD naming conventions, then
+        delegates to sub-layer ``load_state_dict`` calls.
+        """
+        renamed: Dict[str, Union[np.ndarray, paddle.Tensor]] = {}
+        # Collect full-attention q/k/v weights for merging into qkv_proj
+        qkv_buffers: Dict[str, Dict[str, Union[np.ndarray, paddle.Tensor]]] = {}
+
+        for name, weight in list(state_dict.items()):
+            # Expert weights: w1→gate_proj, w3→up_proj, w2→down_proj
+            if "block_sparse_moe.experts." in name:
+                name = re.sub(r"\.w1\.weight$", ".gate_proj.weight", name)
+                name = re.sub(r"\.w3\.weight$", ".up_proj.weight", name)
+                name = re.sub(r"\.w2\.weight$", ".down_proj.weight", name)
+                renamed[name] = weight
+            # Full attention: merge separate q/k/v into qkv_proj
+            elif ".self_attn.q_proj." in name or ".self_attn.k_proj." in name or ".self_attn.v_proj." in name:
+                # Extract layer prefix: e.g. "model.layers.7.self_attn"
+                prefix_match = re.match(r"(.*\.self_attn)\.(q|k|v)_proj\.weight$", name)
+                if prefix_match:
+                    attn_prefix = prefix_match.group(1)
+                    proj_type = prefix_match.group(2)
+                    if attn_prefix not in qkv_buffers:
+                        qkv_buffers[attn_prefix] = {}
+                    qkv_buffers[attn_prefix][proj_type] = weight
+                else:
+                    renamed[name] = weight
+            else:
+                renamed[name] = weight
+
+        # Merge q/k/v into qkv_proj for full attention layers
+        for attn_prefix, projections in qkv_buffers.items():
+            if "q" in projections and "k" in projections and "v" in projections:
+                q_w = projections["q"]
+                k_w = projections["k"]
+                v_w = projections["v"]
+                if isinstance(q_w, np.ndarray):
+                    merged = np.concatenate([q_w, k_w, v_w], axis=0)
+                else:
+                    merged = paddle.concat([q_w, k_w, v_w], axis=0)
+                renamed[f"{attn_prefix}.qkv_proj.weight"] = merged
+
+        self.model.load_state_dict(renamed)
+        self.lm_head.load_state_dict(renamed)
+
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """Load model parameters from a weights iterator (v1 loader path).
+
+        Handles HF→FD name mapping for:
+        - Full attention: q_proj/k_proj/v_proj → qkv_proj (stacked)
+        - MoE experts: w1/w3 → up_gate_proj, w2 → down_proj
+        """
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
+
+        stacked_params_mapping = list(self._STACKED_PARAMS_MAPPING)
+
+        # Expert weight mapping: HF w1/w2/w3 → FD up_gate_proj/down_proj
+        n_experts = getattr(self.fd_config.model_config, "num_local_experts", 1)
+        expert_params_mapping = FusedMoE.make_expert_params_mapping(
+            num_experts=n_experts,
+            ckpt_gate_proj_name="w1",
+            ckpt_down_proj_name="w2",
+            ckpt_up_proj_name="w3",
+            param_gate_up_proj_name="experts.up_gate_proj_",
+            param_down_proj_name="experts.down_proj_",
+        )
+
+        params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
+
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            logger.debug(f"Loading weight: {loaded_weight_name}")
+
+            # Stacked params (q/k/v → qkv_proj)
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                # Skip expert weights — handled separately
+                if "block_sparse_moe.experts." in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight, shard_id)
+                break
+            else:
+                # Expert params (w1/w2/w3 → up_gate_proj/down_proj)
+                for mapping in expert_params_mapping:
+                    param_name, weight_name, expert_id, shard_id = mapping
+                    if weight_name not in loaded_weight_name:
+                        continue
+                    model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                    if model_param_name not in params_dict:
+                        continue
+                    param = params_dict[model_param_name]
+                    weight_loader = param.weight_loader
+                    weight_loader(param, loaded_weight, shard_id=shard_id, expert_id=expert_id)
+                    break
+                else:
+                    # Direct loading (norm, embed, lm_head, output_gate, out_proj, etc.)
+                    model_param_name = loaded_weight_name
+                    if model_param_name not in params_dict:
+                        continue
+                    param = params_dict[model_param_name]
+                    weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                    weight_loader(param, loaded_weight)
+
+            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
 
     def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         """Compute logits."""
@@ -587,9 +767,9 @@ class MiniMaxM1PretrainedModel(PretrainedModel):
     @classmethod
     def arch_name(cls):
         """Architecture name."""
-        return "MiniMaxText01ForCausalLM"
+        return "MiniMaxM1ForCausalLM"
 
     @classmethod
     def name(cls):
         """Model name."""
-        return "MiniMaxText01ForCausalLM"
+        return "MiniMaxM1ForCausalLM"

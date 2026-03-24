@@ -124,7 +124,8 @@ class _ModelRegistry:
     @classmethod
     def register_model_class(cls, model_class=None, **kw):
         def _register(mc):
-            cls._arch_to_model_cls[mc.name()] = mc
+            arch = kw.get("architecture", mc.name())
+            cls._arch_to_model_cls[arch] = mc
             return mc
 
         return _register(model_class) if model_class is not None else _register
@@ -219,18 +220,21 @@ class TestBuildSlopeTensor:
 
 class TestModelRegistration:
 
-    def test_architecture_registered(self):
+    def test_primary_architecture_registered(self):
+        assert "MiniMaxM1ForCausalLM" in ModelRegistry._arch_to_model_cls
+
+    def test_alias_architecture_registered(self):
         assert "MiniMaxText01ForCausalLM" in ModelRegistry._arch_to_model_cls
 
     def test_registered_class(self):
-        assert ModelRegistry._arch_to_model_cls["MiniMaxText01ForCausalLM"] is MiniMaxM1ForCausalLM
+        assert ModelRegistry._arch_to_model_cls["MiniMaxM1ForCausalLM"] is MiniMaxM1ForCausalLM
 
     def test_name_method(self):
-        assert MiniMaxM1ForCausalLM.name() == "MiniMaxText01ForCausalLM"
+        assert MiniMaxM1ForCausalLM.name() == "MiniMaxM1ForCausalLM"
 
     def test_pretrained_name(self):
-        assert MiniMaxM1PretrainedModel.arch_name() == "MiniMaxText01ForCausalLM"
-        assert MiniMaxM1PretrainedModel.name() == "MiniMaxText01ForCausalLM"
+        assert MiniMaxM1PretrainedModel.arch_name() == "MiniMaxM1ForCausalLM"
+        assert MiniMaxM1PretrainedModel.name() == "MiniMaxM1ForCausalLM"
 
 
 # ===================================================================
@@ -258,6 +262,8 @@ def _make_fd_config(num_layers=4, attn_type_list=None, num_local_experts=4):
         attn_type_list=attn_type_list,
         layernorm_full_attention_alpha=3.556,
         layernorm_full_attention_beta=1.0,
+        layernorm_linear_attention_alpha=3.556,
+        layernorm_linear_attention_beta=1.0,
         layernorm_mlp_alpha=3.556,
         layernorm_mlp_beta=1.0,
         pretrained_config=SimpleNamespace(prefix_name="model"),
@@ -274,6 +280,9 @@ class TestDecoderLayerConstruction:
         assert layer.attention_type == 0
         assert isinstance(layer.self_attn, MiniMaxM1LinearAttention)
         assert hasattr(layer.self_attn, "slope_rate")
+        assert hasattr(layer.self_attn, "output_gate")
+        assert hasattr(layer.self_attn, "norm")
+        assert hasattr(layer.self_attn, "out_proj")
 
     def test_full_attention_layer(self):
         fd = _make_fd_config()
@@ -290,12 +299,12 @@ class TestDecoderLayerConstruction:
     def test_moe_when_experts_gt_1(self):
         fd = _make_fd_config(num_local_experts=4)
         layer = MiniMaxM1DecoderLayer(fd, layer_id=0, prefix="model.layers.0")
-        assert isinstance(layer.mlp, MiniMaxM1MoE)
+        assert isinstance(layer.block_sparse_moe, MiniMaxM1MoE)
 
     def test_dense_mlp_when_single_expert(self):
         fd = _make_fd_config(num_local_experts=1)
         layer = MiniMaxM1DecoderLayer(fd, layer_id=0, prefix="model.layers.0")
-        assert isinstance(layer.mlp, MiniMaxM1MLP)
+        assert isinstance(layer.block_sparse_moe, MiniMaxM1MLP)
 
     def test_fallback_attn_type_when_no_config(self):
         fd = _make_fd_config(num_layers=80)
@@ -321,7 +330,7 @@ class TestDecoderLayerForward:
         object.__setattr__(layer, "input_layernorm", MagicMock(side_effect=_norm_fn))
         object.__setattr__(layer, "post_attention_layernorm", MagicMock(side_effect=_norm_fn))
         object.__setattr__(layer, "self_attn", MagicMock(return_value=paddle.randn([4, hidden_size])))
-        object.__setattr__(layer, "mlp", MagicMock(return_value=paddle.randn([4, hidden_size])))
+        object.__setattr__(layer, "block_sparse_moe", MagicMock(return_value=paddle.randn([4, hidden_size])))
 
     def test_linear_layer_returns_tuple(self):
         fd = _make_fd_config()
@@ -342,8 +351,18 @@ class TestDecoderLayerForward:
 
     def test_deepnorm_scaling_applied(self):
         fd = _make_fd_config()
-        fd.model_config.layernorm_full_attention_alpha = 2.0
+        fd.model_config.layernorm_linear_attention_alpha = 2.0
         fd.model_config.layernorm_mlp_alpha = 3.0
         layer = MiniMaxM1DecoderLayer(fd, layer_id=0, prefix="model.layers.0")
         assert layer.layernorm_attention_alpha == 2.0
         assert layer.layernorm_mlp_alpha == 3.0
+
+    def test_postnorm_forward(self):
+        fd = _make_fd_config()
+        fd.model_config.postnorm = True
+        layer = MiniMaxM1DecoderLayer(fd, layer_id=0, prefix="model.layers.0")
+        self._patch_layer(layer, 256)
+
+        out = layer(forward_meta=SimpleNamespace(), hidden_states=paddle.randn([4, 256]))
+        assert isinstance(out, tuple) and len(out) == 2
+        assert out[0].shape == [4, 256]
