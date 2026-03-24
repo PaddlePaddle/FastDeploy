@@ -23,6 +23,18 @@ import time
 import pytest
 import requests
 
+
+def _strip_logits_stats(obj):
+    """Recursively remove 'logits_stats' keys from logprobs response."""
+    if isinstance(obj, dict):
+        obj.pop("logits_stats", None)
+        for v in obj.values():
+            _strip_logits_stats(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            _strip_logits_stats(item)
+
+
 tests_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, tests_dir)
 
@@ -606,6 +618,7 @@ def test_non_stream_with_logprobs(api_url):
     resp_json = send_request(url=api_url, payload=payload).json()
 
     logprobs = resp_json["choices"][0]["logprobs"]
+    _strip_logits_stats(logprobs)
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
