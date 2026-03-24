@@ -206,8 +206,13 @@ class TestGPUPromptLogprobs(unittest.TestCase):
             ref_raw_logprobs = model_runner.sampler.compute_logprobs(ref_logits)
             token_is = paddle.to_tensor(req.prompt_token_ids[1:], dtype="int64")
 
-            ref_token_ids, ref_logprobs, ref_ranks = model_runner.sampler.gather_logprobs(
+            gathered = model_runner.sampler.gather_logprobs(
                 ref_raw_logprobs, model_runner.fd_config.model_config.ori_vocab_size, token_is
+            )
+            ref_token_ids, ref_logprobs, ref_ranks = (
+                gathered.logprob_token_ids,
+                gathered.logprobs,
+                gathered.selected_token_ranks,
             )
             prompt_logprobs = model_runner._get_prompt_logprobs_list(hidden_states)[0]
             np.testing.assert_allclose(ref_logprobs.numpy(), prompt_logprobs.logprobs.numpy(), rtol=1e-04, atol=1e-04)
