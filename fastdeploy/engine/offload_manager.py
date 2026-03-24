@@ -22,14 +22,17 @@ from typing import Dict, List, Optional, Tuple
 import paddle
 
 from fastdeploy import envs
+from fastdeploy.cache_manager.cache_data import CacheStatus
+from fastdeploy.cache_manager.cache_tasks import (
+    DecodeCleanupTask,
+    DecodeOffloadTask,
+    DecodeResumeTask,
+)
 from fastdeploy.engine.request import Request, RequestStatus
 from fastdeploy.utils import offload_logger
 
-# 导入 share_external_data 用于从共享内存获取 KV cache
-try:
-    from fastdeploy.cache_manager.ops import share_external_data_
-except ImportError:
-    share_external_data_ = None
+# Legacy direct-tensor helpers are kept only for SSD/offline fallback stubs.
+share_external_data_ = None
 
 
 class OffloadManager:
@@ -75,13 +78,16 @@ class OffloadManager:
         # 保存offloaded请求的相关cache信息
         self._offloaded_requests: Dict[str, dict] = {}
         self._lock = threading.Lock()
+        self.max_resume_retry = 3
+        self._transfer_events: Dict[Tuple[int, str], threading.Event] = {}
+        self._transfer_results: Dict[Tuple[int, str], list] = {}
 
         # 缓存配置信息（延迟初始化）
         self._cache_config = None
         self._key_cache_shape = None
         self._value_cache_shape = None
         self._num_layers = None
-        self._tensor_parallel_size = None
+        self._tensor_parallel_size = getattr(getattr(config, "parallel_config", None), "tensor_parallel_size", 1)
         self._local_rank = 0
         self._device_id = 0
         self._cache_dtype = None
@@ -94,6 +100,55 @@ class OffloadManager:
             f"[DEBUG: offload] OffloadManager initialized: enable_offload={self.enable_offload}, "
             f"min_steps={self.min_steps}, storage_path={self.storage_path}"
         )
+        if self.cache_manager is not None and hasattr(self.cache_manager, "register_transfer_result_handler"):
+            self.cache_manager.register_transfer_result_handler(self._handle_transfer_result)
+
+    def _transfer_key(self, event_type, task_id: str) -> Tuple[int, str]:
+        return (event_type.value, task_id)
+
+    def _handle_transfer_result(self, data) -> bool:
+        event_type = data[0]
+        if event_type.value not in (
+            CacheStatus.DECODE_OFFLOAD.value,
+            CacheStatus.DECODE_RESUME.value,
+            CacheStatus.DECODE_CLEANUP.value,
+        ):
+            return False
+        task_id, rank, ok, meta = data[1:]
+        key = self._transfer_key(event_type, task_id)
+        with self._lock:
+            if key not in self._transfer_results:
+                self._transfer_results[key] = []
+            self._transfer_results[key].append(
+                {
+                    "rank": rank,
+                    "ok": ok,
+                    "meta": meta,
+                }
+            )
+            if len(self._transfer_results[key]) >= self._tensor_parallel_size:
+                event = self._transfer_events.get(key)
+                if event is not None:
+                    event.set()
+        return True
+
+    def _issue_transfer_task(self, event_type, task):
+        if self.cache_manager is None or not hasattr(self.cache_manager, "cache_task_queue"):
+            return None
+        key = self._transfer_key(event_type, task.task_id)
+        event = threading.Event()
+        with self._lock:
+            self._transfer_events[key] = event
+            self._transfer_results.pop(key, None)
+        self.cache_manager.cache_task_queue.put_transfer_task((event_type, task))
+        event.wait()
+        with self._lock:
+            results = self._transfer_results.pop(key, [])
+            self._transfer_events.pop(key, None)
+        return {
+            "ok": bool(results) and all(item["ok"] for item in results),
+            "results": results,
+        }
 
     def _init_cache_info(self):
         """初始化cache配置信息（延迟初始化）"""
@@ -359,16 +414,7 @@ class OffloadManager:
         if offloaded_info is None:
             return False
 
-        # 检查是否存在有效的KV Cache副本
-        storage_level = offloaded_info.get("storage_level")
-        if storage_level == self.STORAGE_LEVEL_CPU:
-            if offloaded_info.get("kv_cache_cpu") is None:
-                return False
-        elif storage_level == self.STORAGE_LEVEL_SSD:
-            storage_path = offloaded_info.get("storage_path")
-            if not storage_path or not os.path.exists(storage_path):
-                return False
-        else:
+        if offloaded_info.get("snapshot_handle") is None:
             return False
 
         # 检查GPU内存是否充足
@@ -481,42 +527,16 @@ class OffloadManager:
 
         # 初始化cache信息
         self._init_cache_info()
-
-        # 尝试L2 offload (CPU)
         storage_level = self.STORAGE_LEVEL_CPU
-        kv_cache_cpu = None
-
-        try:
-            kv_cache_cpu = self.get_cpu_copy(request)
-            if kv_cache_cpu is None:
-                # CPU offload失败,尝试SSD offload
-                # 注意: SSD offload同样需要先获取数据,这里直接返回失败
-                # 如果未来需要SSD offload,需要实现直接GPU->SSD的传输
-                offload_logger.error(
-                    f"[DEBUG: offload_req] CPU offload failed for {request.request_id}, " f"no available fallback"
-                )
-                return False
-        except Exception as e:
-            offload_logger.error(f"[DEBUG: offload_req] CPU offload failed: {e}")
+        if self.cache_manager is None:
             return False
-
-        # 如果需要L3,保存到SSD (当前kv_cache_cpu已包含数据)
-        storage_path = None
-        if storage_level == self.STORAGE_LEVEL_SSD:
-            try:
-                storage_path = self.save_to_storage(kv_cache_cpu)
-                if storage_path is None:
-                    offload_logger.error(f"[DEBUG: offload_req] SSD offload failed for {request.request_id}")
-                    # 清理已分配的CPU blocks
-                    if kv_cache_cpu and self.cache_manager:
-                        self.cache_manager.recycle_cpu_blocks(kv_cache_cpu.get("cpu_block_ids", []))
-                    return False
-                if kv_cache_cpu is not None:
-                    del kv_cache_cpu
-                    kv_cache_cpu = None
-            except Exception as e:
-                offload_logger.error(f"[DEBUG: offload_req] SSD offload failed: {e}")
-                return False
+        snapshot_task = DecodeOffloadTask(task_id=request.request_id, gpu_block_ids=list(request.block_tables))
+        snapshot_result = self._issue_transfer_task(CacheStatus.DECODE_OFFLOAD, snapshot_task)
+        if snapshot_result is None or not snapshot_result.get("ok", False):
+            offload_logger.error(
+                f"[DEBUG: offload_req] Failed to snapshot request {request.request_id}, result={snapshot_result}"
+            )
+            return False
 
         # 保存offload信息 - 在释放GPU blocks之前保存
         with self._lock:
@@ -533,8 +553,6 @@ class OffloadManager:
                 )
 
             self._offloaded_requests[request.request_id] = {
-                "kv_cache_cpu": kv_cache_cpu,
-                "storage_path": storage_path,
                 "storage_level": storage_level,
                 "num_tokens": request.num_total_tokens,
                 "num_blocks_needed": len(original_block_tables),
@@ -545,6 +563,8 @@ class OffloadManager:
                 "prompt_token_ids_len": request.prompt_token_ids_len,
                 "sampling_params": request.sampling_params,
                 "block_tables": original_block_tables,
+                "snapshot_handle": request.request_id,
+                "resume_retry_count": 0,
             }
 
         # 释放GPU blocks
@@ -911,7 +931,7 @@ class OffloadManager:
 
     # ==================== Resume接口 ====================
 
-    def resume_decode(self, request: Request) -> Tuple[bool, Optional[int]]:
+    def resume_decode(self, request: Request) -> Tuple[bool, Optional[int], bool]:
         """
         恢复被offload的请求到GPU
 
@@ -930,28 +950,25 @@ class OffloadManager:
         """
         start_time = time.time()
         if not self.enable_offload:
-            return False, None
+            return False, None, False
 
         # 使用锁保护offloaded_requests的读取
         with self._lock:
             if request.request_id not in self._offloaded_requests:
                 offload_logger.warning(f"[DEBUG: resume_decode] Request {request.request_id} is not offloaded")
-                return False, None
+                return False, None, True
 
             offloaded_info = self._offloaded_requests.get(request.request_id)
             if offloaded_info is None:
-                return False, None
+                return False, None, True
 
             # 复制需要的信息，避免长时间持有锁
             storage_level = offloaded_info["storage_level"]
             num_blocks_needed = offloaded_info["num_blocks_needed"]
-            saved_num_tokens = offloaded_info["num_tokens"]
             saved_num_computed_tokens = offloaded_info["num_computed_tokens"]
             saved_need_prefill_tokens = offloaded_info["need_prefill_tokens"]
-            storage_path = offloaded_info.get("storage_path")
-            # 对于CPU层级，需要复制kv_cache_cpu引用（用于完整性检查）
-            kv_cache_cpu_ref = offloaded_info.get("kv_cache_cpu") if storage_level == self.STORAGE_LEVEL_CPU else None
-            cache_valid_flag = offloaded_info.get("cache_valid", True)
+            snapshot_handle = offloaded_info.get("snapshot_handle")
+            resume_retry_count = offloaded_info.get("resume_retry_count", 0)
             # 复制output_token_ids和need_prefill_tokens用于恢复
             output_token_ids = list(offloaded_info.get("output_token_ids", []))
             need_prefill_tokens = offloaded_info.get("need_prefill_tokens")
@@ -964,100 +981,43 @@ class OffloadManager:
                 f"need_prefill_tokens={saved_need_prefill_tokens}), "
                 f"should recompute instead of resume"
             )
-            # 返回token数，让调用者决定是否重新计算
-            return False, saved_num_computed_tokens
+            return False, saved_num_computed_tokens, True
 
         if self.cache_manager is None:
-            return False, saved_num_computed_tokens
+            return False, saved_num_computed_tokens, True
 
         if not self.cache_manager.can_allocate_gpu_blocks(num_blocks_needed):
             offload_logger.warning(
                 f"[DEBUG: resume_decode] Insufficient GPU memory for request {request.request_id}, "
                 f"need {num_blocks_needed} blocks"
             )
-            return False, saved_num_computed_tokens
-
-        # 检查cache_valid_flag，如果之前已经标记为无效，直接返回失败
-        if not cache_valid_flag:
-            offload_logger.warning(
-                f"[DEBUG: resume_decode] Cache for request {request.request_id} is marked as invalid"
-            )
-            return False, saved_num_computed_tokens
+            should_recompute = resume_retry_count + 1 >= self.max_resume_retry
+            with self._lock:
+                if request.request_id in self._offloaded_requests:
+                    self._offloaded_requests[request.request_id]["resume_retry_count"] = resume_retry_count + 1
+            return False, saved_num_computed_tokens, should_recompute
 
         try:
-            kv_cache_cpu = None
-            cache_valid = False
-
-            # 根据存储层级恢复
-            if storage_level == self.STORAGE_LEVEL_CPU:
-                kv_cache_cpu = kv_cache_cpu_ref
-                if kv_cache_cpu is None:
-                    offload_logger.error(f"[DEBUG: resume_decode] No CPU cache found for {request.request_id}")
-                else:
-                    # 构建临时的offloaded_info用于验证
-                    temp_offloaded_info = {
-                        "num_blocks_needed": num_blocks_needed,
-                        "num_tokens": saved_num_tokens,
-                    }
-                    cache_valid = self._verify_cache_integrity(kv_cache_cpu, temp_offloaded_info)
-
-            elif storage_level == self.STORAGE_LEVEL_SSD:
-                if not storage_path or not os.path.exists(storage_path):
-                    offload_logger.error(f"[DEBUG: resume_decode] No SSD storage path for {request.request_id}")
-                else:
-                    kv_cache_cpu = self.load_from_storage(storage_path)
-                    if kv_cache_cpu is not None:
-                        # 构建临时的offloaded_info用于验证
-                        temp_offloaded_info = {
-                            "num_blocks_needed": num_blocks_needed,
-                            "num_tokens": saved_num_tokens,
-                        }
-                        cache_valid = self._verify_cache_integrity(kv_cache_cpu, temp_offloaded_info)
-                    else:
-                        offload_logger.error(f"[DEBUG: resume_decode] Failed to load from storage: {storage_path}")
-
-            # 验证cache完整性
-            if not cache_valid:
-                offload_logger.error(
-                    f"[DEBUG: resume_decode] Cache integrity check failed for {request.request_id}, "
-                    f"saved_tokens={saved_num_tokens}, cache may be corrupted"
-                )
-                # 清理无效的cache资源
-                if kv_cache_cpu is not None and isinstance(kv_cache_cpu, dict):
-                    cpu_block_ids = kv_cache_cpu.get("cpu_block_ids", [])
-                    if cpu_block_ids and self.cache_manager:
-                        self.cache_manager.recycle_cpu_blocks(cpu_block_ids)
-
-                # 更新offloaded_info标记为无效，避免后续再次尝试使用无效的CPU blocks
-                with self._lock:
-                    if request.request_id in self._offloaded_requests:
-                        offloaded_info = self._offloaded_requests[request.request_id]
-                        offloaded_info["kv_cache_cpu"] = None
-                        offloaded_info["cache_valid"] = False
-                        # 不删除offloaded_info，保留其他元数据供后续使用
-
-                # 返回token数，让调用者可以重新计算
-                return False, saved_num_computed_tokens
+            if snapshot_handle is None:
+                return False, saved_num_computed_tokens, True
 
             # 分配GPU blocks
             new_block_ids = self.cache_manager.allocate_gpu_blocks(num_blocks_needed, request.request_id)
             request.block_tables = new_block_ids
-
-            # 更新kv_cache_cpu中的block_ids为新的分配
-            if kv_cache_cpu is not None:
-                kv_cache_cpu["block_ids"] = new_block_ids
-
-            # 加载cache到GPU
-            if not self.load_cpu_copy(kv_cache_cpu, request):
-                offload_logger.error(f"[DEBUG: resume_decode] Failed to load CPU copy to GPU for {request.request_id}")
-                # 释放已分配的blocks
+            resume_task = DecodeResumeTask(task_id=snapshot_handle, gpu_block_ids=new_block_ids)
+            restore_result = self._issue_transfer_task(CacheStatus.DECODE_RESUME, resume_task)
+            if restore_result is None or not restore_result.get("ok", False):
+                offload_logger.error(
+                    f"[DEBUG: resume_decode] Failed to restore CPU snapshot for {request.request_id}, "
+                    f"result={restore_result}"
+                )
                 self.cache_manager.recycle_gpu_blocks(new_block_ids, request.request_id)
                 request.block_tables = []
-                return False, saved_num_computed_tokens
-
-            # 对于SSD层级，清理临时内存
-            if storage_level == self.STORAGE_LEVEL_SSD:
-                del kv_cache_cpu
+                should_recompute = resume_retry_count + 1 >= self.max_resume_retry
+                with self._lock:
+                    if request.request_id in self._offloaded_requests:
+                        self._offloaded_requests[request.request_id]["resume_retry_count"] = resume_retry_count + 1
+                return False, saved_num_computed_tokens, should_recompute
 
             # 恢复请求状态
             request.output_token_ids = output_token_ids
@@ -1094,15 +1054,20 @@ class OffloadManager:
             # 尝试预取其他 SSD 数据到 CPU
             self.prefetch_ssd_to_cpu()
 
-            return True, saved_num_computed_tokens
+            return True, saved_num_computed_tokens, False
 
         except Exception as e:
             elapsed_time = time.time() - start_time
+            should_recompute = False
             offload_logger.error(
                 f"[DEBUG: resume_decode] Failed to resume request {request.request_id}: {e}, elapsed_time={elapsed_time:.4f}s"
             )
-            # 失败时保持offload状态,下次可以重试
-            return False, saved_num_computed_tokens
+            with self._lock:
+                if request.request_id in self._offloaded_requests:
+                    retries = self._offloaded_requests[request.request_id].get("resume_retry_count", 0) + 1
+                    self._offloaded_requests[request.request_id]["resume_retry_count"] = retries
+                    should_recompute = retries >= self.max_resume_retry
+            return False, saved_num_computed_tokens, should_recompute
 
     def _verify_cache_integrity(self, kv_cache_cpu: dict, offloaded_info: dict) -> bool:
         """
@@ -1164,18 +1129,7 @@ class OffloadManager:
                 return
 
             offloaded_info = self._offloaded_requests[request_id]
-
-            # 清理CPU内存中的KV cache tensors
-            kv_cache_cpu = offloaded_info.get("kv_cache_cpu")
-            if kv_cache_cpu is not None:
-                # 显式删除CPU tensors释放内存
-                for key in ["key_caches", "value_caches", "key_scales", "value_scales"]:
-                    cache_list = kv_cache_cpu.get(key)
-                    if cache_list:
-                        for tensor in cache_list:
-                            del tensor
-                        kv_cache_cpu[key] = None
-                del offloaded_info["kv_cache_cpu"]
+            snapshot_handle = offloaded_info.get("snapshot_handle")
 
             # 清理SSD存储文件
             storage_path = offloaded_info.get("storage_path")
@@ -1187,6 +1141,12 @@ class OffloadManager:
                     offload_logger.warning(f"[DEBUG: offload] Failed to delete storage file: {e}")
 
             self._offloaded_requests.pop(request_id)
+        if self.cache_manager is not None and snapshot_handle is not None:
+            try:
+                self._issue_transfer_task(CacheStatus.DECODE_CLEANUP, DecodeCleanupTask(task_id=snapshot_handle))
+            except Exception as e:
+                offload_logger.warning(f"[DEBUG: offload] Failed to cleanup snapshot {snapshot_handle}: {e}")
+        with self._lock:
             offload_logger.info(f"[DEBUG: offload] Cleaned up offloaded request: {request_id}")
 
     def get_offloaded_request_count(self) -> int:

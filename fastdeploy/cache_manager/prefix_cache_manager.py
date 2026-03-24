@@ -97,6 +97,7 @@ class PrefixCacheManager:
         self.task_write_back_event = {}
         self.task_prefetch_event = {}
         self.storage_prefetch_block_ids = {}
+        self.transfer_result_handlers = []
 
         # gpu cache data structure
         self.gpu_lru_leaf_heap = []
@@ -293,7 +294,11 @@ class PrefixCacheManager:
         else:
             storage_arg_str = " "
 
-        if self.cache_config.swap_space or self.cache_config.kvcache_storage_backend:
+        if (
+            self.cache_config.swap_space
+            or self.cache_config.kvcache_storage_backend
+            or getattr(self.config, "enable_decode_offload", False)
+        ):
             for i in range(tensor_parallel_size):
                 launch_cmd = (
                     "FLAGS_allocator_strategy=auto_growth "
@@ -352,7 +357,11 @@ class PrefixCacheManager:
                 )
 
         # Start additional threads
-        if cache_config.kvcache_storage_backend or self.num_cpu_blocks > 0:
+        if (
+            cache_config.kvcache_storage_backend
+            or self.num_cpu_blocks > 0
+            or getattr(self.config, "enable_decode_offload", False)
+        ):
             logger.info("Enable hierarchical cache.")
             threading.Thread(target=self.recv_data_transfer_result, daemon=True).start()
         if cache_config.enable_prefix_caching:
@@ -1190,6 +1199,10 @@ class PrefixCacheManager:
         del self.task_prefetch_event[req_id]
         del self.storage_prefetch_block_ids[req_id]
         return storage_block_ids
+
+    def register_transfer_result_handler(self, handler):
+        if handler not in self.transfer_result_handlers:
+            self.transfer_result_handlers.append(handler)
 
     def free_nodes_directly(self, node):
         with self.request_release_lock:
@@ -2058,6 +2071,16 @@ class PrefixCacheManager:
                     time.sleep(0.001)
                     continue
                 event_type = data[0]
+                handled = False
+                for handler in self.transfer_result_handlers:
+                    try:
+                        if handler(data):
+                            handled = True
+                            break
+                    except Exception as e:
+                        logger.warning(f"transfer result handler failed: {e}")
+                if handled:
+                    continue
 
                 if event_type.value == CacheStatus.STORAGE2GPU.value:
                     logger.info(f"recv_data_transfer_result: {data}")

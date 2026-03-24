@@ -32,6 +32,9 @@ class CacheStatus(Enum):
     CPU = 3
     GPU2STORAGE = 4
     STORAGE2GPU = 5
+    DECODE_OFFLOAD = 6
+    DECODE_RESUME = 7
+    DECODE_CLEANUP = 8
 
 
 class BlockNode:

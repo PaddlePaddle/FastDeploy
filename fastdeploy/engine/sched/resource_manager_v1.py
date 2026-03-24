@@ -360,12 +360,11 @@ class ResourceManagerV1(ResourceManager):
                 if self.config.scheduler_config.splitwise_role == "decode":
                     self.tasks_list[preempted_req.idx] = None
                     self.stop_flags[preempted_req.idx] = True
-                    if preempted_req.request_id in self.requests:
-                        del self.requests[preempted_req.request_id]
                     if preempted_req.request_id in self.req_dict:
                         del self.req_dict[preempted_req.request_id]
                     if not offloaded:
                         self._free_blocks(preempted_req)
+                    self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 else:
                     if not offloaded:
@@ -993,13 +992,20 @@ class ResourceManagerV1(ResourceManager):
                     elif request.status == RequestStatus.PREEMPTED:
                         # Try to resume offloaded request first
                         if request.is_offloaded and self.offload_manager is not None:
-                            resume_success, _ = self.offload_manager.resume_decode(request)
+                            resume_success, _, should_recompute = self.offload_manager.resume_decode(request)
                             if resume_success:
                                 offload_logger.info(f"Resumed offloaded request {request.request_id}")
                                 self.waiting.popleft()
                                 self.running.append(request)
                                 scheduled_reqs.append(self._prepare_decode_task(request))
                                 continue
+                            if should_recompute:
+                                offload_logger.info(
+                                    f"Resume retry limit reached or snapshot invalid for {request.request_id}, "
+                                    "fallback to recompute"
+                                )
+                                request.is_offloaded = False
+                                self.offload_manager.cleanup_offloaded_request(request.request_id)
                             else:
                                 offload_logger.debug(
                                     f"Failed to resume offloaded request {request.request_id}, will retry"
@@ -1464,6 +1470,8 @@ class ResourceManagerV1(ResourceManager):
                     if request is None:
                         llm_logger.error(f"invalid request id: {req_id} self.requests: {self.requests}")
                         continue
+                    if self.offload_manager is not None:
+                        self.offload_manager.cleanup_offloaded_request(req_id)
                     if request in self.waiting:
                         llm_logger.error(f"request {request.request_id} scheduled into waiting list, after finished")
                         continue

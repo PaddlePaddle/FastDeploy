@@ -35,3 +35,20 @@ class ReadStorageTask(CacheTask):
 @dataclass(frozen=True, kw_only=True)
 class WriteStorageTask(CacheTask):
     timeout: float = 30.0
+
+
+@dataclass(frozen=True, kw_only=True)
+class DecodeOffloadTask:
+    task_id: str
+    gpu_block_ids: List[int]
+
+
+@dataclass(frozen=True, kw_only=True)
+class DecodeResumeTask:
+    task_id: str
+    gpu_block_ids: List[int]
+
+
+@dataclass(frozen=True, kw_only=True)
+class DecodeCleanupTask:
+    task_id: str

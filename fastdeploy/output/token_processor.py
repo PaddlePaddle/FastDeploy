@@ -201,6 +201,8 @@ class TokenProcessor:
                     batch_id_set.add(data.batch_id)
                 llm_logger.debug(f"_reschedule_preempt_task_use_zmq batch_id_set {batch_id_set}")
             for request_id in need_to_be_reschedule_req_ids:
+                if request_id not in self.resource_manager.requests:
+                    continue
                 if (
                     self.resource_manager.requests[request_id].idx not in batch_id_set
                 ):  # No more token generated for preempted request
@@ -821,6 +823,7 @@ class TokenProcessor:
                         if (
                             task_id in self.resource_manager.to_be_rescheduled_request_id_set
                             and token_id == PREEMPTED_TOKEN_ID
+                            and task_id in self.resource_manager.requests
                         ):
                             llm_logger.info(f"sync preemption for request_id {task_id} done.")
                             self.resource_manager.reschedule_preempt_task(task_id)

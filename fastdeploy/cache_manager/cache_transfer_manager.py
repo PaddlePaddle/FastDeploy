@@ -31,7 +31,13 @@ import yaml
 
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import CacheStatus
-from fastdeploy.cache_manager.cache_tasks import ReadStorageTask, WriteStorageTask
+from fastdeploy.cache_manager.cache_tasks import (
+    DecodeCleanupTask,
+    DecodeOffloadTask,
+    DecodeResumeTask,
+    ReadStorageTask,
+    WriteStorageTask,
+)
 from fastdeploy.cache_manager.ops import (
     cuda_host_alloc,
     cuda_host_free,
@@ -199,9 +205,13 @@ class CacheTransferManager:
         self.swap_to_gpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.read_storage_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.write_back_storage_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self.decode_offload_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self.decode_resume_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self.decode_cleanup_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.timeout_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         self.transfer_task_queue = queue.Queue()  # 用来接收传输任务
         self.tansfer_done_queue = queue.Queue()  # 用来告知任务执行完毕
+        self.decode_offload_snapshots = {}
 
         address = (args.pod_ip, args.cache_queue_port)
         self.cache_task_queue = EngineCacheQueue(
@@ -1035,6 +1045,108 @@ class CacheTransferManager:
 
         return True, ""
 
+    def _snapshot_blocks_to_cpu(self, gpu_cache_tensors, block_ids: List[int]):
+        snapshots = []
+        for cache_tensor in gpu_cache_tensors:
+            blocks = [cache_tensor[block_id] for block_id in block_ids]
+            layer_tensor = paddle.stack(blocks) if len(blocks) > 1 else blocks[0].unsqueeze(0)
+            snapshots.append(layer_tensor.to("cpu"))
+        return snapshots
+
+    def _restore_blocks_from_cpu(self, cpu_tensors, gpu_cache_tensors, block_ids: List[int]):
+        device = f"gpu:{self.device}"
+        for layer_id, cpu_tensor in enumerate(cpu_tensors):
+            gpu_tensor = gpu_cache_tensors[layer_id]
+            gpu_data = cpu_tensor.to(device)
+            for idx, block_id in enumerate(block_ids):
+                gpu_tensor[block_id] = gpu_data[idx]
+
+    def decode_offload_task(self, task: DecodeOffloadTask):
+        ok = False
+        meta = {
+            "rank": self.rank,
+            "num_blocks": len(task.gpu_block_ids),
+            "storage_level": "L2",
+        }
+        try:
+            if not task.gpu_block_ids:
+                raise ValueError(f"decode offload task {task.task_id} has empty gpu_block_ids")
+            snapshot = {
+                "key_caches": self._snapshot_blocks_to_cpu(self.gpu_cache_k_tensors, task.gpu_block_ids),
+                "value_caches": (
+                    self._snapshot_blocks_to_cpu(self.gpu_cache_v_tensors, task.gpu_block_ids)
+                    if self.gpu_cache_v_tensors
+                    else []
+                ),
+                "key_scales": (
+                    self._snapshot_blocks_to_cpu(self.gpu_cache_scales_k_tensors, task.gpu_block_ids)
+                    if self.gpu_cache_scales_k_tensors
+                    else []
+                ),
+                "value_scales": (
+                    self._snapshot_blocks_to_cpu(self.gpu_cache_scales_v_tensors, task.gpu_block_ids)
+                    if self.gpu_cache_scales_v_tensors
+                    else []
+                ),
+            }
+            self.decode_offload_snapshots[task.task_id] = snapshot
+            ok = True
+        except Exception as e:
+            meta["error"] = str(e)
+            logger.error(
+                f"decode_offload_task failed for {task.task_id}, error: {e}, traceback:\n{traceback.format_exc()}"
+            )
+        finally:
+            result = (CacheStatus.DECODE_OFFLOAD, task.task_id, self.rank, ok, meta)
+            self.cache_task_queue.put_transfer_done_signal(result)
+
+    def decode_resume_task(self, task: DecodeResumeTask):
+        ok = False
+        meta = {
+            "rank": self.rank,
+            "num_blocks": len(task.gpu_block_ids),
+        }
+        try:
+            if task.task_id not in self.decode_offload_snapshots:
+                raise KeyError(f"snapshot for {task.task_id} not found")
+            snapshot = self.decode_offload_snapshots[task.task_id]
+            self._restore_blocks_from_cpu(snapshot["key_caches"], self.gpu_cache_k_tensors, task.gpu_block_ids)
+            if self.gpu_cache_v_tensors and snapshot["value_caches"]:
+                self._restore_blocks_from_cpu(snapshot["value_caches"], self.gpu_cache_v_tensors, task.gpu_block_ids)
+            if self.gpu_cache_scales_k_tensors and snapshot["key_scales"]:
+                self._restore_blocks_from_cpu(
+                    snapshot["key_scales"], self.gpu_cache_scales_k_tensors, task.gpu_block_ids
+                )
+            if self.gpu_cache_scales_v_tensors and snapshot["value_scales"]:
+                self._restore_blocks_from_cpu(
+                    snapshot["value_scales"], self.gpu_cache_scales_v_tensors, task.gpu_block_ids
+                )
+            del self.decode_offload_snapshots[task.task_id]
+            ok = True
+        except Exception as e:
+            meta["error"] = str(e)
+            logger.error(
+                f"decode_resume_task failed for {task.task_id}, error: {e}, traceback:\n{traceback.format_exc()}"
+            )
+        finally:
+            result = (CacheStatus.DECODE_RESUME, task.task_id, self.rank, ok, meta)
+            self.cache_task_queue.put_transfer_done_signal(result)
+
+    def decode_cleanup_task(self, task: DecodeCleanupTask):
+        ok = False
+        meta = {"rank": self.rank}
+        try:
+            self.decode_offload_snapshots.pop(task.task_id, None)
+            ok = True
+        except Exception as e:
+            meta["error"] = str(e)
+            logger.error(
+                f"decode_cleanup_task failed for {task.task_id}, error: {e}, traceback:\n{traceback.format_exc()}"
+            )
+        finally:
+            result = (CacheStatus.DECODE_CLEANUP, task.task_id, self.rank, ok, meta)
+            self.cache_task_queue.put_transfer_done_signal(result)
+
     def submit_task(self, thread_pool: concurrent.futures.ThreadPoolExecutor, task_fn, *args):
 
         def inflight_task(fn, *args):
@@ -1128,6 +1240,27 @@ class CacheTransferManager:
                             self.write_back_storage_thread_pool,
                             self.write_back_storage_task,
                             write_storage_task,
+                        )
+                    elif event_type.value == CacheStatus.DECODE_OFFLOAD.value:
+                        decode_offload_task = event_args[0]
+                        self.submit_task(
+                            self.decode_offload_thread_pool,
+                            self.decode_offload_task,
+                            decode_offload_task,
+                        )
+                    elif event_type.value == CacheStatus.DECODE_RESUME.value:
+                        decode_resume_task = event_args[0]
+                        self.submit_task(
+                            self.decode_resume_thread_pool,
+                            self.decode_resume_task,
+                            decode_resume_task,
+                        )
+                    elif event_type.value == CacheStatus.DECODE_CLEANUP.value:
+                        decode_cleanup_task = event_args[0]
+                        self.submit_task(
+                            self.decode_cleanup_thread_pool,
+                            self.decode_cleanup_task,
+                            decode_cleanup_task,
                         )
                 else:
                     if self.n_ranks > 1:
