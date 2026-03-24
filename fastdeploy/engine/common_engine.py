@@ -1609,6 +1609,7 @@ class EngineService:
             Exception: If the overall wait times out, or if any queue reports a non-200
                 control response or fails while waiting.
         """
+
         def select_control_queues(executors: List[str] = None):
             """Select control response queues by executors."""
             if executors is None:
