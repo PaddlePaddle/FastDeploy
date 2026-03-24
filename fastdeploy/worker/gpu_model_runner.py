@@ -870,8 +870,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self._cached_launch_token_num = -1
                     if self.speculative_decoding:
                         # D speculate decode, seq_lens_this_time = length + 1
-                        logger.info(f"seq_lens_this_time: {length + 1}")
-                        logger.info(f"draft_tokens: {request.draft_token_ids}")
                         self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length + 1
                         self.share_inputs["draft_tokens"][idx : idx + 1, 0 : length + 1] = paddle.to_tensor(
                             request.draft_token_ids[0 : length + 1],
