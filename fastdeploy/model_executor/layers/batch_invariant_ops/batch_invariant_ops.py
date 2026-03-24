@@ -6,16 +6,13 @@ from collections import namedtuple
 from collections.abc import Callable
 from typing import Any, Dict
 
-from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
-    enable_compat_on_triton_kernel,
-)
-from fastdeploy.utils import get_logger
-
-logger = get_logger("worker_process", "worker_process.log")
-
 import paddle
 import triton
 import triton.language as tl
+
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
 
 __all__ = [
     "set_batch_invariant_mode",
@@ -518,6 +515,8 @@ def mean_batch_invariant(
         return out
     return result
 
+
+_original_ops = {"mm": None, "addmm": None, "_log_softmax": None, "mean_dim": None}
 
 _batch_invariant_MODE = False
 

@@ -14,59 +14,7 @@
 # limitations under the License.
 """
 
-import logging
 import os
-from contextlib import contextmanager
-
-# Create standard format (without color)
-_root_formatter = logging.Formatter(
-    "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
-)
-
-# Save original getLogger before any patching
-_original_getLogger = logging.getLogger
-
-
-@contextmanager
-def _intercept_paddle_loggers():
-    """Intercept and configure paddle loggers during import."""
-
-    def _patched(name=None):
-        if name and str(name).startswith("paddle"):
-            # Configure paddle logger immediately on first access
-            return _configure_logger(name)
-        return _original_getLogger(name)
-
-    logging.getLogger = _patched
-    try:
-        yield
-    finally:
-        logging.getLogger = _original_getLogger
-
-
-def _configure_logger(name=None):
-    """Configure logger with unified format.
-
-    Args:
-        name: Logger name. If None, configures root logger.
-    """
-    # Use original getLogger to avoid recursion when interceptor is active
-    logger = _original_getLogger(name)
-    logger.setLevel(logging.DEBUG if envs.FD_DEBUG else logging.INFO)
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
-    handler = logging.StreamHandler()
-    handler.setFormatter(_root_formatter)
-    logger.addHandler(handler)
-    logger.propagate = False
-    return logger
-
-
-from fastdeploy.utils import _is_package_installed, envs
-
-# Configure root logger
-_configure_logger()
-
 import uuid
 
 # suppress warning log from paddlepaddle
@@ -99,7 +47,13 @@ from paddleformers.utils.log import logger as pf_logger
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
-from fastdeploy.utils import console_logger, current_package_version, get_version_info
+from fastdeploy.utils import (
+    _is_package_installed,
+    console_logger,
+    current_package_version,
+    envs,
+    get_version_info,
+)
 
 # We can use enable_compat only when torch is not installed, otherwise it will
 # cause some unexpected issues in triton kernels. We use enable_compat_on_triton_kernel
