@@ -1,0 +1,84 @@
+WARNING: OMP_NUM_THREADS set to 3, not 1. The computation speed will not be optimized if you use data parallel. It will fail if this PaddlePaddle binary is compiled with OpenBlas since OpenBlas does not support multi-threads.
+PLEASE USE OMP_NUM_THREADS WISELY.
+WARNING  2026-03-20 19:52:00,056 3848467 prometheus_multiprocess_setup.py[line:41] Found PROMETHEUS_MULTIPROC_DIR:/tmp/fd_prom_c9d08ea9-8344-4946-8066-259fc53ea106 was set by user. you will find inaccurate metrics. Unset the variable will properly handle cleanup.
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/_distutils_hack/__init__.py:30: UserWarning: Setuptools is replacing distutils. Support for replacing an already imported distutils is deprecated. In the future, this condition will fail. Register concerns at https://github.com/pypa/setuptools/issues/new?template=distutils-deprecation.yml
+  warnings.warn(
+None of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[33m[2026-03-20 19:52:00,399] [ WARNING][0m - Due to potential compatibility issues between PaddlePaddle and PyTorch in PaddleFormers, PaddleFormers defaults `transformers.utils.import_utils.is_torch_available` and `transformers.utils.import_utils.is_torchvision_available` to False. If you need to use PyTorch in transformers or torchvision, please add `del sys.modules['transformers']` before using them.[0m
+WARNING  2026-03-20 19:52:00,653 3848467 prometheus_multiprocess_setup.py[line:41] Found PROMETHEUS_MULTIPROC_DIR:/tmp/fd_prom_c9d08ea9-8344-4946-8066-259fc53ea106 was set by user. you will find inaccurate metrics. Unset the variable will properly handle cleanup.
+WARNING  2026-03-20 19:52:00,659 3848467 import_ops.py[line:46] Ops of fastdeploy.model_executor.ops.cpu import failed, it may be not compiled. No module named 'fastdeploy.model_executor.ops.cpu.fastdeploy_cpu_ops'
+WARNING  2026-03-20 19:52:00,660 3848467 import_ops.py[line:46] Ops of fastdeploy.model_executor.ops.gcu import failed, it may be not compiled. No module named 'fastdeploy.model_executor.ops.gcu.fastdeploy_ops'
+current sm_version=100
+WARNING  2026-03-20 19:52:00,902 3848467 import_ops.py[line:46] Ops of fastdeploy.model_executor.ops.iluvatar import failed, it may be not compiled. No module named 'fastdeploy.model_executor.ops.iluvatar.fastdeploy_ops'
+WARNING  2026-03-20 19:52:00,903 3848467 import_ops.py[line:46] Ops of paddle_custom_device import failed, it may be not compiled. No module named 'paddle_custom_device'
+WARNING  2026-03-20 19:52:00,903 3848467 import_ops.py[line:46] Ops of fastdeploy.model_executor.ops.npu import failed, it may be not compiled. No module named 'fastdeploy.model_executor.ops.npu.fastdeploy_ops'
+WARNING  2026-03-20 19:52:00,903 3848467 import_ops.py[line:46] Ops of fastdeploy.model_executor.ops.xpu import failed, it may be not compiled. No module named 'fastdeploy.model_executor.ops.xpu.fastdeploy_ops'
+INFO     2026-03-20 19:52:00,922 3848467 utils.py[line:38] Available plugins for group fastdeploy.tool_parser_plugins:
+INFO     2026-03-20 19:52:00,922 3848467 utils.py[line:40] - tool_parser -> ernie5_serving.tool_call:register
+INFO     2026-03-20 19:52:00,922 3848467 utils.py[line:43] All plugins in this group is not allowed. You can set `FD_PLUGINS` to control which plugins to load.
+INFO     2026-03-20 19:52:00,930 3848467 utils.py[line:38] Available plugins for group fastdeploy.reasoning_parser_plugins:
+INFO     2026-03-20 19:52:00,930 3848467 utils.py[line:40] - reasoning_parser -> ernie5_serving.reasoning:register
+INFO     2026-03-20 19:52:00,930 3848467 utils.py[line:43] All plugins in this group is not allowed. You can set `FD_PLUGINS` to control which plugins to load.
+INFO     2026-03-20 19:52:00,941 3848467 utils.py[line:38] Available plugins for group fastdeploy.token_processor_plugins:
+INFO     2026-03-20 19:52:00,941 3848467 utils.py[line:40] - output_processor -> ernie5_serving.output_processor:get_token_processor
+INFO     2026-03-20 19:52:00,941 3848467 utils.py[line:43] All plugins in this group is not allowed. You can set `FD_PLUGINS` to control which plugins to load.
+<frozen importlib._bootstrap_external>:1184: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+[2026-03-20 19:52:01,222] [    INFO] distributed_strategy.py:341 - distributed strategy initialized
+======================= Modified FLAGS detected =======================
+FLAGS(name='FLAGS_pir_interpreter_record_stream_for_gc_cache', current_value=True, default_value=False)
+FLAGS(name='FLAGS_cusolver_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/cusolver/lib', default_value='')
+FLAGS(name='FLAGS_specialize_device_in_dy2st', current_value=True, default_value=False)
+FLAGS(name='FLAGS_enable_pir_in_executor', current_value=True, default_value=False)
+FLAGS(name='FLAGS_curand_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/curand/lib', default_value='')
+FLAGS(name='FLAGS_selected_gpus', current_value='0', default_value='')
+FLAGS(name='FLAGS_parameters_persistent_mode_in_dy2st', current_value=True, default_value=False)
+FLAGS(name='FLAGS_cublas_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/cublas/lib', default_value='')
+FLAGS(name='FLAGS_cupti_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/cuda_cupti/lib', default_value='')
+FLAGS(name='FLAGS_nccl_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/nccl/lib', default_value='')
+FLAGS(name='FLAGS_nvidia_package_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia', default_value='')
+FLAGS(name='FLAGS_cuda_cccl_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/cuda_cccl/include/', default_value='')
+FLAGS(name='FLAGS_cusparse_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/cusparse/lib', default_value='')
+FLAGS(name='FLAGS_cudnn_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/cudnn/lib', default_value='')
+=======================================================================
+[2026-03-20 19:52:03,232] [    INFO] topology.py:535 - Total 4 pipe comm group(s) create successfully!
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/distributed/communication/group.py:145: UserWarning: Current global rank 0 is not in group _default_pg10
+  warnings.warn(
+[2026-03-20 19:52:03,273] [    INFO] topology.py:535 - Total 4 data comm group(s) create successfully!
+[2026-03-20 19:52:03,274] [    INFO] topology.py:535 - Total 1 model comm group(s) create successfully!
+[2026-03-20 19:52:03,274] [    INFO] topology.py:535 - Total 4 sharding comm group(s) create successfully!
+[2026-03-20 19:52:03,274] [    INFO] topology.py:449 - HybridParallelInfo: rank_id: 0, mp_degree: 4, sharding_degree: 1, pp_degree: 1, dp_degree: 1, sep_degree: 1, mp_group: [0, 1, 2, 3],  sharding_group: [0], pp_group: [0], dp_group: [0], sep:group: None, check/clip group: [0, 1, 2, 3]
+INFO     2026-03-20 19:52:03,274 3848467 download.py[line:142] Using download source: huggingface
+INFO     2026-03-20 19:52:03,274 3848467 configuration_utils.py[line:1215] Loading configuration file /raid0/ERNIE-4.5-21B-A3B-FP4/config.json
+WARNING  2026-03-20 19:52:03,274 3848467 configuration_utils.py[line:1246] You are using a model of type ernie4_5_moe to instantiate a model of type . This is not supported for all configurations of models and can yield errors.
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'triton'}, new scope: {'flash_mla'}.
+  warnings.warn(msg)
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'flash_mla', 'triton'}, new scope: {'cutlass'}.
+  warnings.warn(msg)
+CUTE_DSL failed with loading generated IR cache. Unable to parse module assembly:
+error: "-":0:0: invalid section ID: 44
+ note: "-":0:0: in bytecode version 6 produced by: MLIR20.0.0git
+INFO     2026-03-20 19:52:06,236 3848467 flash_attn_backend.py[line:93] The current platform supports Flash Attention V4.
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'flash_mla', 'cutlass', 'triton'}, new scope: {'flash_mla'}.
+  warnings.warn(msg)
+/root/paddlejob/workspace/output/lizexu/FastDeploy-1/fastdeploy/model_executor/graph_optimization/utils.py:21: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'flash_mla', 'cutlass', 'triton'}, new scope: {'deep_gemm'}.
+  warnings.warn(msg)
+INFO     2026-03-20 19:52:11,407 3848467 fp8_utils.py[line:52] Detected sm100, use PFCC DeepGEMM
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'flash_mla', 'cutlass', 'deep_gemm', 'triton'}, new scope: {'deep_gemm'}.
+  warnings.warn(msg)
+Traceback (most recent call last):
+  File "/root/paddlejob/workspace/output/lizexu/FastDeploy-1/fastdeploy/engine/../worker/worker_process.py", line 1300, in <module>
+    run_worker_proc()
+  File "/root/paddlejob/workspace/output/lizexu/FastDeploy-1/fastdeploy/engine/../worker/worker_process.py", line 1255, in run_worker_proc
+    fd_config = initialize_fd_config(args, ranks, local_rank)
+  File "/root/paddlejob/workspace/output/lizexu/FastDeploy-1/fastdeploy/engine/../worker/worker_process.py", line 1172, in initialize_fd_config
+    quant_config = parse_quant_config(
+  File "/root/paddlejob/workspace/output/lizexu/FastDeploy-1/fastdeploy/model_executor/layers/quantization/__init__.py", line 128, in parse_quant_config
+    quant_cls = get_quantization_config(quant_config_name)
+  File "/root/paddlejob/workspace/output/lizexu/FastDeploy-1/fastdeploy/model_executor/layers/quantization/__init__.py", line 164, in get_quantization_config
+    from .nvfp4 import ModelOptNvFp4Config
+  File "/root/paddlejob/workspace/output/lizexu/FastDeploy-1/fastdeploy/model_executor/layers/quantization/nvfp4.py", line 561
+    up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+IndentationError: expected an indented block after 'for' statement on line 556

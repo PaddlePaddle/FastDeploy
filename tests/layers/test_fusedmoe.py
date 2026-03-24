@@ -36,9 +36,6 @@ from fastdeploy.config import (
 )
 from fastdeploy.model_executor.layers.linear import ReplicatedLinear
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
-from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
-    BlockWiseFP8Config,
-)
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.worker_process import init_distributed_environment
 
@@ -471,7 +468,8 @@ class FuseMoEWrapper(paddle.nn.Layer):
                     "data_parallel_size": self.ep_size,
                 }
             ),
-            quant_config=BlockWiseFP8Config(weight_block_size=[128, 128]),
+            # quant_config=BlockWiseFP8Config(weight_block_size=[128, 128]),
+            quant_config=None,
             # quant_config=WINT8Config({}),
             # quant_config=WINT4Config({}),
             scheduler_config=SchedulerConfig({}),
@@ -487,8 +485,10 @@ class FuseMoEWrapper(paddle.nn.Layer):
         self.fd_config.parallel_config.expert_parallel_size = self.ep_size
         if self.ep_size > 1:
             self.fd_config.parallel_config.ep_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
-            self.fd_config.scheduler_config.splitwise_role = "decode"
-            self.fd_config.model_config.moe_phase.phase = "decode"
+            self.fd_config.scheduler_config.splitwise_role = "prefill"
+            # "decode"
+            self.fd_config.model_config.moe_phase.phase = "prefill"
+            # "decode"
 
         weight_key_map = {
             "gate_weight_key": f"{self.prefix}.gate.weight",
@@ -624,6 +624,7 @@ class TestFusedMoE(unittest.TestCase):
         test_token_nums = [4096 * i for i in [1, 2, 4, 8]]
         if is_decoder:
             test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256]
+        is_decoder = False
         for idx, num_tokens in enumerate(test_token_nums):
 
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)

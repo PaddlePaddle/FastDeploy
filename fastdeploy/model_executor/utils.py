@@ -130,7 +130,6 @@ def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
 
 
 def process_weight_transpose(layer, weight_name):
-    logger.info(f"weight_name:{weight_name}")
     weight = getattr(layer, weight_name)
     if not weight._is_initialized():
         logger.info("权重没初始化啊！")
@@ -145,7 +144,7 @@ def process_weight_transpose(layer, weight_name):
         default_initializer=paddle.nn.initializer.Constant(0),
         is_bias=False,
     )
-    logger.info(f"weight_tmp:{weight_tmp}")
+    # logger.info(f"weight_tmp:{weight_tmp}")
     if layer.fd_config.load_config.dynamic_load_weight or getattr(layer.fd_config.model_config, "enable_cache", False):
         free_tensor(weight)
         setattr(layer, weight_name, weight_tmp)

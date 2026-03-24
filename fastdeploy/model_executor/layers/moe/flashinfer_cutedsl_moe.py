@@ -127,7 +127,11 @@ def flashinfer_cutedsl_moe_masked(
             num_experts
         ], f"input_global_scale must be (l,), got {input_global_scale.shape}"
 
-        a_q, a_q_sf = scaled_fp4_grouped_quantize(hidden_states[0], masked_m, input_global_scale)
+        a_q, a_q_sf = scaled_fp4_grouped_quantize(
+            hidden_states[0],
+            masked_m,
+            input_global_scale,
+        )
 
     assert w1.shape[-2] == 2 * n, f"w1 last-2 dim must be 2*n={2*n}, got {w1.shape[-2]}"
     assert w1.shape[-1] * 2 == k, f"w1 last dim * 2 must equal k={k}, got {w1.shape[-1] * 2}"

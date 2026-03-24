@@ -19,7 +19,6 @@ from typing import Optional
 import numpy as np
 import paddle
 from paddle import nn
-from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import (
@@ -224,7 +223,6 @@ class LinearBase(nn.Layer):
             weight_tensor = paddle.concat([q_weight_tensor, kv_weight_tensor], axis=-1)
         else:
             weight_tensor = get_tensor(state_dict.pop(self.weight_key))
-        logger.info(f"self.quant_method:{self.quant_method}")
         self.quant_method.process_loaded_weights(self, weight_tensor)
 
     def load_state_dict(self, state_dict: dict):
@@ -309,7 +307,6 @@ class ReplicatedLinear(LinearBase):
         )
 
         self.hidden_size = fd_config.model_config.hidden_size
-        logger.info(f"prefix:{prefix}")
 
         assert self.quant_method is not None
         self.quant_method.create_weights(
@@ -1179,7 +1176,6 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             "gate",
         ], f"loaded_shard_id must be one of ['qkv', 'gate'], but got {loaded_shard_id}"
 
-        logger.info(f"loaded_shard_id:{loaded_shard_id}")
         if loaded_shard_id == "qkv":
             self.qkv_weight_loader(param, loaded_weight, None)
         else:
@@ -1242,7 +1238,6 @@ class QKVGateParallelLinear(ColumnParallelLinear):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
             param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-            logger.info(f"loaded_weight.shape:{loaded_weight.shape}")
             assert param.shape == loaded_weight.shape, (
                 f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
             )

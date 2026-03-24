@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 from typing import Callable, Optional
 
 import paddle
@@ -34,9 +35,95 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 
 paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
-from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
-    flashinfer_cutedsl_moe_masked,
-)
+
+try:
+    # flashinfer cutedsl blockscaled gemm takes long time to complie, it may not be imported in function.
+    # we will add flashinfer.cutedsl.blockscaled_gemm into setup.py by AOT.
+    from flashinfer import (
+        scaled_fp4_grouped_quantize,
+        silu_and_mul_scaled_nvfp4_experts_quantize,
+    )
+    from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
+
+    from fastdeploy.model_executor.layers.moe.ep import deep_ep
+    from fastdeploy.model_executor.ops.gpu import (
+        depermute_prefill_combine,
+        prefill_permute_to_masked_gemm,
+    )
+
+    _FLASHINFER_CUTEDSL_AVAILABLE = True
+except:
+    _FLASHINFER_CUTEDSL_AVAILABLE = False
+
+
+def call_prefill_permute_to_masked_gemm(
+    x: paddle.Tensor,
+    scale: paddle.Tensor,
+    topk_ids: paddle.Tensor,
+    num_local_experts: int,
+    max_token_num: int,
+):
+    """
+    Permute input tokens and scales from token-major to expert-major layout
+    for MoE masked GEMM operations.
+
+    Args:
+        x: Input hidden states [num_tokens, hidden].
+        scale: Input scales [num_tokens, hidden_scale].
+        topk_ids: Expert routing indices [num_tokens, topk] (int64 or int32).
+        num_local_experts: Number of local experts on this device.
+        max_token_num: Maximum tokens per expert buffer.
+
+    Returns:
+        tuple: (permute_x, permute_scale, permuted_indice_map, token_nums_per_expert)
+    """
+    if topk_ids.dtype != paddle.int64:
+        topk_ids = topk_ids.cast(paddle.int64)
+
+    results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num)
+
+    return results[0], results[1], results[2], results[3]
+
+
+def call_depermute_prefill_combine(
+    x: paddle.Tensor,
+    indice_map: paddle.Tensor,
+    topk_weights: paddle.Tensor,
+    num_worst_tokens: int,
+):
+    """
+    Depermute and combine expert outputs back to token-major layout.
+
+    Args:
+        x: Expert outputs [num_local_experts, max_tokens_per_expert, hidden].
+        indice_map: Flat index tensor [num_worst_tokens, topk] (int32).
+        topk_weights: Combination weights [num_worst_tokens, topk] (float32).
+        num_worst_tokens: Number of output tokens to produce.
+
+    Returns:
+        depermuted_x: Combined output [num_worst_tokens, hidden].
+    """
+    results = depermute_prefill_combine(x, indice_map, topk_weights, num_worst_tokens)
+
+    return results
+
+
+def _perm(tensor, *dims):
+    try:
+        return tensor.transpose(list(dims))
+    except TypeError:
+        return tensor.permute(*dims)
+
+
+def _get_cute_dtype(input_tensor) -> str:
+    s = str(input_tensor.dtype).split(".")[-1]
+    if s == "bfloat16":
+        return "bfloat16"
+    if s == "float16":
+        return "float16"
+    if s == "float32":
+        return "float32"
+    raise ValueError(f"Unsupported cute dtype {input_tensor.dtype}")
 
 
 def next_power_of_2(n: int):
@@ -146,7 +233,6 @@ class ModelOptNvFp4Config(QuantConfigBase):
                 raise ValueError(
                     f"NVFP4 quantization requires the following fields in " f"hf_quant_config.json: {missing_fields}"
                 )
-
         return cls(
             is_checkpoint_nvfp4_serialized=is_checkpoint_nvfp4_serialized,
             kv_cache_quant_algo=kv_cache_quant_algo,
@@ -188,6 +274,8 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
             raise ValueError(
                 "No valid NVFP4 GEMM backend found. Please check your platform capability and installtion of Flashinfer."
             )
+
+        logger.info(f"Using {self.backend} for NVFP4 GEMM")
 
     def create_weights(
         self,
@@ -380,7 +468,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             "up_gate_proj_weight_scale",
             "down_proj_weight_scale",
         ]
-        self.quant_config = quant_config
         self.backend = "none"
 
         if envs.FD_MOE_BACKEND is None:
@@ -393,7 +480,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             raise ValueError(
                 "No valid NVFP4 flashinfer MoE backend found. Please check your platform capability and installtion of FlashInfer."
             )
-        logger.info(f"-----{self.backend} -----")
+
+        logger.info(f"Using {self.backend} for NVFP4 FusedMoE")
 
     def create_weights(self, layer, **extra_weight_attrs):
         """
@@ -409,14 +497,12 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             layer.hidden_size,
             layer.moe_intermediate_size // 2,
         ]
-        # logger.info(f"self.down_proj_weight_shaoe前面:{self.down_proj_scale_shape}")
         self.up_gate_proj_scale_shape = self.up_gate_proj_weight_shape[0:2] + [
             layer.hidden_size // self.quant_config.group_size
         ]
         self.down_proj_scale_shape = self.down_proj_weight_shape[0:2] + [
             layer.moe_intermediate_size // self.quant_config.group_size
         ]
-        # logger.info(f"后面down:{self.down_proj_scale_shape}")
 
         self.weight_scale_dtype = paddle.float8_e4m3fn
         self.weight_dtype = paddle.uint8
@@ -507,14 +593,17 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         set_weight_attrs(layer.up_gate_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
         set_weight_attrs(layer.down_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
 
-    @property
-    def load_up_proj_weight_first(self) -> bool:
-        # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
-        # 目前默认给True
-        return False
-
     def process_weights_after_loading(self, layer):
         """ """
+
+        # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
+
+        if self.backend == "flashinfer-cutlass":
+            [a, b] = layer.up_gate_proj_weight.split(2, axis=1)
+            layer.up_gate_proj_weight.set_value(paddle.concat([b, a], axis=1))
+            [a, b] = layer.up_gate_proj_weight_scale.split(2, axis=1)
+            layer.up_gate_proj_weight_scale.set_value(paddle.concat([b, a], axis=1))
+
         up_gate_proj_weight_scale_2 = layer.up_gate_proj_weight_scale_2[:, 0]
         free_tensor(layer.up_gate_proj_weight_scale_2)
         create_parameter_and_copy(layer, name="up_gate_proj_weight_scale_2", weight=up_gate_proj_weight_scale_2)
@@ -533,43 +622,33 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         )
         create_parameter_and_copy(layer, "down_proj_input_scale_quant", (1 / down_proj_input_scale).cast("float32"))
 
-        # logger.info(f"layer.down_proj.weight_scale:{layer.down_proj_weight_scale}")
         for name, weight_scale in [
             ("up_gate", layer.up_gate_proj_weight_scale),
             ("down", layer.down_proj_weight_scale),
         ]:
+            assert weight_scale.shape[2] % 16 == 0, f"Expected {name}_weight_scale.dim(2) to be divisible by 16"
+            assert (
+                weight_scale.dtype == paddle.float8_e4m3fn
+            ), f"{name} Weight Blockscale must be represented as FP8-E4M3"
 
-            if weight_scale.shape[2] % 4 != 0:
-                logger.warning(
-                    "NVFP4 %s_weight_scale K' not multiple of 4: shape=%s, group_size=%s",
-                    name,
-                    tuple(weight_scale.shape),
-                    getattr(self.quant_config, "group_size", None),
-                )
-
-        # up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
-        up_gate_proj_blockscale_swizzled = layer.up_gate_proj_weight_scale
+        up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
+        free_tensor(layer.up_gate_proj_weight_scale)
+        layer.up_gate_proj_weight_scale = None
         create_parameter_and_copy(
             layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
         )
-        free_tensor(layer.up_gate_proj_weight_scale)
-        layer.up_gate_proj_weight_scale = None
-
-        # down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
-        down_proj_blockscale_swizzled = layer.down_proj_weight_scale
-        create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
+        down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
         free_tensor(layer.down_proj_weight_scale)
         layer.down_proj_weight_scale = None
-
-        logger.info(f"up_gate_proj_input_scale:{up_gate_proj_input_scale}")
-        logger.info(f"up_gate_proj_weight_scale_2:{up_gate_proj_weight_scale_2}")
-        logger.info(f"down_proj_input_scale:{down_proj_input_scale}")
-        logger.info(f"down_proj_weight_scale_2:{layer.down_proj_weight_scale_2}")
+        create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
 
     def _run_cutedsl_grouped_masked(self, layer, hidden_states_3d, masked_m):
 
         if self.backend != "flashinfer-cutedsl":
             raise NotImplementedError("NVFP4 EP backend only supports CuteDSL implementation.")
+
+        if not _FLASHINFER_CUTEDSL_AVAILABLE:
+            raise ImportError("install flashinfer cutedsl blockscaled gemm")
 
         masked_m = masked_m.cast(paddle.int32)
         num_experts = int(layer.num_local_experts)
@@ -595,23 +674,58 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         )
         a2_global_scale = _to_expert_scale_vec(layer.down_proj_input_scale_quant, "down_proj_input_scale_quant")
 
-        if isinstance(hidden_states_3d, tuple) and hidden_states_3d[1] is not None:
-            hidden_states = hidden_states_3d
-        else:
-            hidden_states = (hidden_states_3d[0] if isinstance(hidden_states_3d, tuple) else hidden_states_3d, None)
+        n = layer.down_proj_weight.shape[-1] * 2
 
-        return flashinfer_cutedsl_moe_masked(
-            hidden_states=hidden_states,
-            input_global_scale=input_global_scale,
-            w1=layer.up_gate_proj_weight,
-            w1_blockscale=layer.up_gate_proj_blockscale_swizzled,
-            w1_alpha=w1_alpha,
-            w2=layer.down_proj_weight,
-            a2_global_scale=a2_global_scale,
-            w2_blockscale=layer.down_proj_blockscale_swizzled,
-            w2_alpha=w2_alpha,
-            masked_m=masked_m,
+        if isinstance(hidden_states_3d, tuple) and hidden_states_3d[1] is not None:
+            a_q = hidden_states_3d[0].view(paddle.uint8)
+            a_q_sf = hidden_states_3d[1].view(paddle.float8_e4m3fn)
+            m, k_by_2, _ = a_q.shape
+            k = k_by_2 * 2
+        else:
+            hidden_states = hidden_states_3d[0] if isinstance(hidden_states_3d, tuple) else hidden_states_3d
+            _, m, k = hidden_states.shape
+            a_q, a_q_sf = scaled_fp4_grouped_quantize(hidden_states, masked_m, input_global_scale)
+
+        ab_dtype = "float4_e2m1fn"
+        sf_dtype = "float8_e4m3fn"
+        c_dtype = "bfloat16"
+        sf_vec_size = 16
+
+        gateup_output = paddle.empty([num_experts, m, n * 2], dtype=paddle.bfloat16).transpose([1, 2, 0])
+        grouped_gemm_nt_masked(
+            (a_q, a_q_sf),
+            (_perm(layer.up_gate_proj_weight, 1, 2, 0), layer.up_gate_proj_blockscale_swizzled),
+            gateup_output,
+            masked_m,
+            ab_dtype=ab_dtype,
+            sf_dtype=sf_dtype,
+            c_dtype=c_dtype,
+            sf_vec_size=sf_vec_size,
+            alpha=w1_alpha.reshape([1, 1, num_experts]),
+            alpha_dtype=_get_cute_dtype(w1_alpha),
         )
+
+        diq, diq_sf = silu_and_mul_scaled_nvfp4_experts_quantize(
+            gateup_output.transpose([2, 0, 1]),
+            masked_m,
+            a2_global_scale,
+        )
+
+        out = paddle.empty([num_experts, m, k], dtype=paddle.bfloat16).transpose([1, 2, 0])
+        grouped_gemm_nt_masked(
+            (diq, diq_sf),
+            (_perm(layer.down_proj_weight, 1, 2, 0), layer.down_proj_blockscale_swizzled),
+            out,
+            masked_m,
+            ab_dtype=ab_dtype,
+            sf_dtype=sf_dtype,
+            c_dtype=c_dtype,
+            sf_vec_size=sf_vec_size,
+            alpha=w2_alpha.reshape([1, 1, num_experts]),
+            alpha_dtype=_get_cute_dtype(w2_alpha),
+        )
+
+        return out.transpose([2, 0, 1])
 
     def apply_ep_prefill(
         self,
@@ -622,143 +736,141 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
 
-        logger.info("------apply_ep_prefill nvfp4 flashinfer-cutedsl: fallback to apply_tp-------")
-        return self.apply_tp(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
+        # 1. top experts and weights
+        gate_out = gate(x.cast("float32"))
+        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+        hidden_size = x.shape[1]
 
-        # if layer.fd_config.parallel_config.use_internode_ll_two_stage:
-        #     raise NotImplementedError("NVFP4 CuteDSL EP prefill does not support DeepEP two-stage low-latency.")
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
 
-        # from fastdeploy.model_executor.layers.moe.ep import deep_ep
+        event = deep_ep.Buffer.capture()
 
-        # # 1. Gate routing
-        # gate_out = gate(x.cast("float32"))
-        # topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+        # 2. ep dispatch
+        (
+            recv_x,
+            recv_topk_idx,
+            recv_topk_weights,
+            recv_num_tokens_per_expert_list,
+            handle,
+            event,
+        ) = self.ep_prefill_runner.dispatch(
+            x,
+            topk_idx,
+            topk_weights,
+            expert_alignment=128,
+            previous_event=event,
+        )
 
-        # if topk_ids_hookfunc is not None:
-        #     topk_ids_hookfunc(topk_ids=topk_idx)
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
 
-        # # 2. DeepEP batch dispatch (BF16, no FP8 pre-quantization).
-        # # Returns:
-        # #   recv_x:                       [N_recv, H]     unique received tokens
-        # #   recv_topk_idx:                [N_recv, top_k] LOCAL expert indices per token
-        # #   recv_topk_weights:            [N_recv, top_k] expert weights per token
-        # #   recv_num_tokens_per_expert:   padded buffer sizes per local expert (multiples of 128)
-        # event = deep_ep.Buffer.capture()
-        # (
-        #     recv_x,
-        #     recv_topk_idx,
-        #     recv_topk_weights,
-        #     recv_num_tokens_per_expert_list,
-        #     handle,
-        #     event,
-        # ) = self.ep_prefill_runner.dispatch(
-        #     x,
-        #     topk_idx,
-        #     topk_weights,
-        #     expert_alignment=128,
-        #     previous_event=event,
-        # )
+        # BF16 dispatch without scale or a tuple (FP8 dispatch)
+        if isinstance(recv_x, tuple):
+            recv_x_value, recv_x_scale = recv_x
+        else:
+            recv_x_value = recv_x
+            recv_x_scale = None
 
-        # if self.ep_prefill_runner.ep_engine.async_finish:
-        #     event.current_stream_wait()
+        # 3. compute ffn
+        if self.ep_prefill_runner.num_worst_tokens > 0:
+            top_k = layer.top_k
+            num_local_experts = layer.num_local_experts
 
-        # hidden_size = x.shape[-1]
-        # num_local_experts = int(layer.num_local_experts)
+            if top_k in (4, 8):
+                token_split_factor = 2 if int(os.getenv("USE_TBO", "0")) == 1 else 1
+                max_tokens_per_rank = (
+                    layer.fd_config.scheduler_config.max_num_batched_tokens
+                    // layer.fd_config.parallel_config.tensor_parallel_size
+                    // token_split_factor
+                )
 
-        # # Unwrap tuple if dispatch returns (x_value, scale)
-        # if isinstance(recv_x, tuple):
-        #     recv_x = recv_x[0]
+                if recv_x_scale is None:
+                    recv_x_scale = paddle.zeros([recv_x_value.shape[0], 1], dtype=paddle.int32)
 
-        # # Padded per-expert buffer sizes (for max_m computation).
-        # padded_counts = [int(c) for c in recv_num_tokens_per_expert_list]
-        # max_m = max(padded_counts) if padded_counts else 1
-        # N_received = recv_x.shape[0]
+                permute_input, permute_scale, permuted_indice_map, token_nums_per_expert = (
+                    call_prefill_permute_to_masked_gemm(
+                        x=recv_x_value,
+                        scale=recv_x_scale,
+                        topk_ids=recv_topk_idx,
+                        num_local_experts=num_local_experts,
+                        max_token_num=layer.ep_size * max_tokens_per_rank,
+                    )
+                )
 
-        # if N_received > 0:
-        #     # 3. Build expert-major hidden_states_3d [E, max_m, H].
-        #     #
-        #     # recv_topk_idx may be [N, top_k] (each token has multiple assignments)
-        #     # or [N] (one assignment per token).  Values are LOCAL expert indices.
-        #     if recv_topk_idx.ndim == 2:
-        #         top_k_local = recv_topk_idx.shape[1]
-        #         expert_flat = recv_topk_idx.reshape([-1]).cast(paddle.int64)       # [N*k]
-        #         token_flat  = (
-        #             paddle.arange(N_received, dtype=paddle.int64)
-        #             .unsqueeze(1)
-        #             .expand([N_received, top_k_local])
-        #             .reshape([-1])
-        #         )                                                                    # [N*k]
-        #     else:
-        #         expert_flat = recv_topk_idx.cast(paddle.int64)                     # [N]
-        #         token_flat  = paddle.arange(N_received, dtype=paddle.int64)        # [N]
+                # token_nums_per_expert: [num_local_experts, 1] -> [num_local_experts]
+                ffn_out = self._run_cutedsl_grouped_masked(layer, permute_input, token_nums_per_expert.reshape([-1]))
 
-        #     # Sort pairs by (expert, token) to get expert-major ordering.
-        #     sort_key   = expert_flat * (N_received + 1) + token_flat
-        #     sort_order = paddle.argsort(sort_key)
-        #     sorted_token = token_flat[sort_order]   # token index per sorted pair
+                tmp_ffn_out = call_depermute_prefill_combine(
+                    x=ffn_out,
+                    indice_map=permuted_indice_map,
+                    topk_weights=recv_topk_weights,
+                    num_worst_tokens=recv_x_value.shape[0],
+                )
+            else:
+                expert_token_lists = [[] for _ in range(num_local_experts)]
+                recv_n = recv_x_value.shape[0]
+                recv_topk_idx_numpy = recv_topk_idx.numpy()  # [N_recv, top_k]
+                for ti in range(recv_n):
+                    for ki in range(top_k):
+                        ei = int(recv_topk_idx_numpy[ti, ki])
+                        if ei >= 0:
+                            expert_token_lists[ei].append(ti)
 
-        #     # Actual (unpadded) token count per local expert
-        #     real_counts = paddle.bincount(
-        #         expert_flat, minlength=num_local_experts
-        #     ).cast(paddle.int32)                                                    # [E]
+                token_counts = [len(lst) for lst in expert_token_lists]
+                max_expert_tokens = max(token_counts) if token_counts else 0
 
-        #     # Fill expert e's rows in hidden_states_3d with its assigned tokens
-        #     hidden_states_3d = paddle.zeros(
-        #         [num_local_experts, max_m, hidden_size], dtype=recv_x.dtype
-        #     )
-        #     cum = 0
-        #     for e in range(num_local_experts):
-        #         cnt = int(real_counts[e])
-        #         if cnt > 0:
-        #             hidden_states_3d[e, :cnt] = recv_x[sorted_token[cum : cum + cnt]]
-        #         cum += cnt
+                # Build blocked input: [num_local_experts, max_expert_tokens, H]
+                H = recv_x_value.shape[1]
+                if max_expert_tokens > 0:
+                    blocked = paddle.zeros(
+                        [num_local_experts, max_expert_tokens, H],
+                        dtype=recv_x_value.dtype,
+                    )
+                    for ei, indices in enumerate(expert_token_lists):
+                        if indices:
+                            blocked[ei, : len(indices)] = recv_x_value[paddle.to_tensor(indices, dtype=paddle.int64)]
+                    masked_m = paddle.to_tensor(token_counts, dtype=paddle.int32)
+                    ffn_out_blocked = self._run_cutedsl_grouped_masked(layer, blocked, masked_m)
+                    # ffn_out_blocked: [num_local_experts, max_expert_tokens, H]
 
-        #     # 4. NVFP4 grouped GEMM: [E, max_m, H] → [E, max_m, H]
-        #     ffn_out = self._run_cutedsl_grouped_masked(layer, hidden_states_3d, real_counts)
+                    # De-permute: accumulate weighted expert outputs back to
+                    # [N_recv, H] in-place.
+                    tmp_ffn_out = paddle.zeros([recv_n, H], dtype=paddle.float32)
+                    recv_topk_weights_np = recv_topk_weights.cast(paddle.float32).numpy()
+                    ffn_out_f32 = ffn_out_blocked.cast(paddle.float32)
+                    for ti in range(recv_n):
+                        for ki in range(top_k):
+                            ei = int(recv_topk_idx_numpy[ti, ki])
+                            if ei >= 0:
+                                slot = expert_token_lists[ei].index(ti)
+                                w = float(recv_topk_weights_np[ti, ki])
+                                tmp_ffn_out[ti] += w * ffn_out_f32[ei, slot]
+                    tmp_ffn_out = tmp_ffn_out.cast(paddle.bfloat16)
+                else:
+                    tmp_ffn_out = paddle.zeros([recv_n, H], dtype=paddle.bfloat16)
 
-        #     # 5. Weighted sum across experts → tmp_ffn_out [N_recv, H].
-        #     #
-        #     # combine() expects tmp_ffn_out.shape[0] == N_received (one row per unique
-        #     # received token, with expert contributions already combined via weights).
-        #     #
-        #     # For each expert e and its assigned tokens (sorted_token[cum:cum+cnt]):
-        #     #   weight for expert e on token t = recv_topk_weights[t, k] where
-        #     #   recv_topk_idx[t, k] == e.  We select it via masked dot product.
-        #     tmp_ffn_out = paddle.zeros([N_received, hidden_size], dtype=ffn_out.dtype)
-        #     cum = 0
-        #     for e in range(num_local_experts):
-        #         cnt = int(real_counts[e])
-        #         if cnt > 0:
-        #             tokens_e = sorted_token[cum : cum + cnt]   # [cnt] token indices
-        #             if recv_topk_idx.ndim == 2:
-        #                 # mask-select weight for expert e at each token
-        #                 idx_e = recv_topk_idx[tokens_e]        # [cnt, top_k]
-        #                 w_e   = recv_topk_weights[tokens_e]    # [cnt, top_k]
-        #                 # Exactly one column per row satisfies idx_e[:,k] == e
-        #                 w_scalar = (
-        #                     (idx_e == e).cast(w_e.dtype) * w_e
-        #                 ).sum(axis=1)                          # [cnt]
-        #             else:
-        #                 w_scalar = recv_topk_weights[tokens_e] # [cnt]
-        #             # Scatter-add weighted expert output to each token's slot
-        #             tmp_ffn_out[tokens_e] = (
-        #                 tmp_ffn_out[tokens_e]
-        #                 + w_scalar.unsqueeze(-1) * ffn_out[e, :cnt]
-        #             )
-        #         cum += cnt
-        # else:
-        #     tmp_ffn_out = paddle.zeros([N_received, hidden_size], dtype=paddle.bfloat16)
+        else:
+            tmp_ffn_out = paddle.empty([0, hidden_size], paddle.bfloat16)
+            logger.warning("num_worst_tokens is disabled!")
 
-        # # 6. DeepEP combine: all-to-all back to originating ranks.
-        # event = deep_ep.Buffer.capture()
-        # tmp_ffn_out, event = self.ep_prefill_runner.combine(
-        #     tmp_ffn_out, handle, recv_topk_weights, event
-        # )
+        if shared_experts is not None:
+            s_x = shared_experts(x)
 
-        # if self.ep_prefill_runner.ep_engine.async_finish:
-        #     event.current_stream_wait()
+        # 4. EP combine
+        event = deep_ep.Buffer.capture()
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
 
-        # return tmp_ffn_out
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+
+        logger.info(f"shared_experts:{shared_experts}")
+        if shared_experts is not None:
+            tmp_ffn_out += s_x
+
+        logger.info(f"tmp_ffn_out:{tmp_ffn_out}")
+
+        return tmp_ffn_out
 
     def apply_ep_decode(
         self,
@@ -768,9 +880,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
-
-        logger.info("----------apply_ep_decode nvfp4 flashinfer-cutedsl-------")
-
         if layer.fd_config.parallel_config.use_internode_ll_two_stage:
             raise NotImplementedError("NVFP4 CuteDSL EP decode does not support DeepEP two-stage low-latency.")
 
@@ -788,7 +897,10 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         )
 
         ffn_out = self._run_cutedsl_grouped_masked(layer, recv_x, token_nums_per_expert)
-        return self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
+
+        out = self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
+
+        return out
 
     def apply_tp(
         self,
@@ -796,64 +908,43 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
-        shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
+        pass
 
-        gate_out = gate(x.cast("float32"))
-        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            layer.top_k,
-            True,
-            False,
-        )
-
-        if topk_ids_hookfunc is not None:
-            topk_ids_hookfunc(topk_ids)
-
-        if self.backend == "flashinfer-cutedsl":
-            num_local_experts = layer.num_local_experts
-            hidden_dim = x.shape[1]
-            flat_topk_ids = topk_ids.reshape([-1])
-
-            masked_m = paddle.zeros([num_local_experts], dtype=paddle.int32)
-            for i in range(num_local_experts):
-                masked_m[i] = int((flat_topk_ids == i).sum())
-
-            max_m = max(1, int(masked_m.max()))
-            hidden_states_3d = paddle.zeros([num_local_experts, max_m, hidden_dim], dtype=x.dtype)
-            for i in range(num_local_experts):
-                count = int(masked_m[i])
-                if count > 0:
-                    token_indices = paddle.nonzero(flat_topk_ids == i).squeeze(-1)
-                    src_indices = token_indices // layer.top_k
-                    hidden_states_3d[i, :count, :] = x[src_indices]
-
-            ffn_out = self._run_cutedsl_grouped_masked(layer, hidden_states_3d, masked_m)
-
-            bs = x.shape[0]
-            output = paddle.zeros([bs, hidden_dim], dtype=ffn_out.dtype)
-            flat_weights = topk_weights.reshape([-1])
-            for i in range(num_local_experts):
-                count = int(masked_m[i])
-                if count == 0:
-                    continue
-                token_indices = paddle.nonzero(flat_topk_ids == i).squeeze(-1)
-                batch_indices = (token_indices // layer.top_k).tolist()
-                weights_list = flat_weights[token_indices].cast(ffn_out.dtype)
-                expert_out = ffn_out[i, :count, :]
-                for j, b in enumerate(batch_indices):
-                    output[b] += expert_out[j] * weights_list[j]
-        elif self.backend == "flashinfer-cutlass":
-            from flashinfer.fused_moe import (
-                cutlass_fused_moe as flashinfer_cutlass_fused_moe,
+    def apply(
+        self,
+        layer,
+        x,
+        gate,
+        topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
+    ):
+        """
+        flashinfer nvfp4 fusedmoe for Model Optimizer
+        """
+        if self.backend == "flashinfer-cutlass":
+            gate_out = gate(x.cast("float32"))
+            topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                layer.top_k,
+                True,  # apply_norm_weight,
+                False,
             )
+
+            if topk_ids_hookfunc is not None:
+                topk_ids_hookfunc(topk_ids)
 
             output_dtype = x.dtype
             x_sf = None
             output = paddle.empty_like(x)
 
-            output = flashinfer_cutlass_fused_moe(
+            # flashinfer cutlass
+            from flashinfer.fused_moe import (
+                cutlass_fused_moe as flashinfer_cutlass_fused_moe,
+            )
+
+            _ = flashinfer_cutlass_fused_moe(
                 input=x,
                 token_selected_experts=topk_ids.to(paddle.int),
                 token_final_scales=topk_weights,
@@ -877,46 +968,17 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                 output=output,
             )
 
-        return output
+            return output
 
-    def apply(
-        self,
-        layer,
-        x,
-        gate,
-        topk_ids_hookfunc: Callable = None,
-        shared_experts: nn.Layer = None,
-    ):
-        """
-        flashinfer nvfp4 fusedmoe for Model Optimizer
-        """
-        if layer.ep_size > 1:
-            # max_decode_tokens = self.ep_decoder_runner.ep_engine.buffer.num_max_dispatch_tokens_per_rank
-            # if x.shape[0] <= max_decode_tokens:
-            return self.apply_ep_decode(
-                layer,
-                x,
-                gate,
-                topk_ids_hookfunc=topk_ids_hookfunc,
-                shared_experts=shared_experts,
-            )
-        #     else:
-        #         logger.info(
-        #             f"apply_ep_decode: token count {x.shape[0]} > max_decode_tokens {max_decode_tokens}, "
-        #             f"fallback to apply_tp"
-        #         )
-        #         return self.apply_tp(
-        #             layer,
-        #             x,
-        #             gate,
-        #             topk_ids_hookfunc=topk_ids_hookfunc,
-        #             shared_experts=shared_experts,
-        #         )
-        # else:
-        #     return self.apply_tp(
-        #         layer,
-        #         x,
-        #         gate,
-        #         topk_ids_hookfunc=topk_ids_hookfunc,
-        #         shared_experts=shared_experts,
-        #     )
+        elif self.backend == "flashinfer-cutedsl" and layer.ep_size > 1:
+            if layer.fd_config.model_config.moe_phase.phase == "prefill":
+                return self.apply_ep_prefill(
+                    layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
+                )
+            else:
+                return self.apply_ep_decode(
+                    layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
+                )
+
+        # flashinfer-trtllm
+        return paddle.empty_like(x)

@@ -561,10 +561,8 @@ def get_sm_version():
 def modules_to_convert(prefix: str, fd_config: FDConfig):
     import fnmatch
 
-    # Check exclude patterns from multiple sources
     exclude_patterns = []
 
-    # 1. Check quantization_config["modules_to_not_convert"]
     if (
         hasattr(fd_config.model_config, "quantization_config")
         and fd_config.model_config.quantization_config is not None

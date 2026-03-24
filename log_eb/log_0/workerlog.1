@@ -1,0 +1,1623 @@
+WARNING: OMP_NUM_THREADS set to 3, not 1. The computation speed will not be optimized if you use data parallel. It will fail if this PaddlePaddle binary is compiled with OpenBlas since OpenBlas does not support multi-threads.
+PLEASE USE OMP_NUM_THREADS WISELY.
+WARNING  2026-03-22 13:51:01,502 1049493 prometheus_multiprocess_setup.py[line:41] Found PROMETHEUS_MULTIPROC_DIR:/tmp/fd_prom_85d70a87-9bb8-4103-a1ac-b52815f825c7 was set by user. you will find inaccurate metrics. Unset the variable will properly handle cleanup.
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/_distutils_hack/__init__.py:30: UserWarning: Setuptools is replacing distutils. Support for replacing an already imported distutils is deprecated. In the future, this condition will fail. Register concerns at https://github.com/pypa/setuptools/issues/new?template=distutils-deprecation.yml
+  warnings.warn(
+None of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[33m[2026-03-22 13:51:01,842] [ WARNING][0m - Due to potential compatibility issues between PaddlePaddle and PyTorch in PaddleFormers, PaddleFormers defaults `transformers.utils.import_utils.is_torch_available` and `transformers.utils.import_utils.is_torchvision_available` to False. If you need to use PyTorch in transformers or torchvision, please add `del sys.modules['transformers']` before using them.[0m
+WARNING  2026-03-22 13:51:02,111 1049493 prometheus_multiprocess_setup.py[line:41] Found PROMETHEUS_MULTIPROC_DIR:/tmp/fd_prom_85d70a87-9bb8-4103-a1ac-b52815f825c7 was set by user. you will find inaccurate metrics. Unset the variable will properly handle cleanup.
+WARNING  2026-03-22 13:51:02,117 1049493 import_ops.py[line:46] Ops of fastdeploy.model_executor.ops.cpu import failed, it may be not compiled. No module named 'fastdeploy.model_executor.ops.cpu.fastdeploy_cpu_ops'
+WARNING  2026-03-22 13:51:02,118 1049493 import_ops.py[line:46] Ops of fastdeploy.model_executor.ops.gcu import failed, it may be not compiled. No module named 'fastdeploy.model_executor.ops.gcu.fastdeploy_ops'
+current sm_version=100
+WARNING  2026-03-22 13:51:02,342 1049493 import_ops.py[line:46] Ops of fastdeploy.model_executor.ops.iluvatar import failed, it may be not compiled. No module named 'fastdeploy.model_executor.ops.iluvatar.fastdeploy_ops'
+WARNING  2026-03-22 13:51:02,343 1049493 import_ops.py[line:46] Ops of paddle_custom_device import failed, it may be not compiled. No module named 'paddle_custom_device'
+WARNING  2026-03-22 13:51:02,343 1049493 import_ops.py[line:46] Ops of fastdeploy.model_executor.ops.npu import failed, it may be not compiled. No module named 'fastdeploy.model_executor.ops.npu.fastdeploy_ops'
+WARNING  2026-03-22 13:51:02,343 1049493 import_ops.py[line:46] Ops of fastdeploy.model_executor.ops.xpu import failed, it may be not compiled. No module named 'fastdeploy.model_executor.ops.xpu.fastdeploy_ops'
+INFO     2026-03-22 13:51:02,361 1049493 utils.py[line:38] Available plugins for group fastdeploy.tool_parser_plugins:
+INFO     2026-03-22 13:51:02,361 1049493 utils.py[line:40] - tool_parser -> ernie5_serving.tool_call:register
+INFO     2026-03-22 13:51:02,361 1049493 utils.py[line:43] All plugins in this group is not allowed. You can set `FD_PLUGINS` to control which plugins to load.
+INFO     2026-03-22 13:51:02,369 1049493 utils.py[line:38] Available plugins for group fastdeploy.reasoning_parser_plugins:
+INFO     2026-03-22 13:51:02,369 1049493 utils.py[line:40] - reasoning_parser -> ernie5_serving.reasoning:register
+INFO     2026-03-22 13:51:02,369 1049493 utils.py[line:43] All plugins in this group is not allowed. You can set `FD_PLUGINS` to control which plugins to load.
+INFO     2026-03-22 13:51:02,380 1049493 utils.py[line:38] Available plugins for group fastdeploy.token_processor_plugins:
+INFO     2026-03-22 13:51:02,380 1049493 utils.py[line:40] - output_processor -> ernie5_serving.output_processor:get_token_processor
+INFO     2026-03-22 13:51:02,380 1049493 utils.py[line:43] All plugins in this group is not allowed. You can set `FD_PLUGINS` to control which plugins to load.
+<frozen importlib._bootstrap_external>:1184: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+[2026-03-22 13:51:02,672] [    INFO] distributed_strategy.py:341 - distributed strategy initialized
+======================= Modified FLAGS detected =======================
+FLAGS(name='FLAGS_cupti_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/cuda_cupti/lib', default_value='')
+FLAGS(name='FLAGS_enable_pir_in_executor', current_value=True, default_value=False)
+FLAGS(name='FLAGS_cusparse_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/cusparse/lib', default_value='')
+FLAGS(name='FLAGS_selected_gpus', current_value='1', default_value='')
+FLAGS(name='FLAGS_cusolver_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/cusolver/lib', default_value='')
+FLAGS(name='FLAGS_parameters_persistent_mode_in_dy2st', current_value=True, default_value=False)
+FLAGS(name='FLAGS_pir_interpreter_record_stream_for_gc_cache', current_value=True, default_value=False)
+FLAGS(name='FLAGS_specialize_device_in_dy2st', current_value=True, default_value=False)
+FLAGS(name='FLAGS_nccl_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/nccl/lib', default_value='')
+FLAGS(name='FLAGS_nvidia_package_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia', default_value='')
+FLAGS(name='FLAGS_cuda_cccl_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/cuda_cccl/include/', default_value='')
+FLAGS(name='FLAGS_cublas_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/cublas/lib', default_value='')
+FLAGS(name='FLAGS_cudnn_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/cudnn/lib', default_value='')
+FLAGS(name='FLAGS_curand_dir', current_value='/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/../nvidia/curand/lib', default_value='')
+=======================================================================
+[2026-03-22 13:51:06,487] [    INFO] topology.py:535 - Total 4 pipe comm group(s) create successfully!
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/distributed/communication/group.py:145: UserWarning: Current global rank 1 is not in group _default_pg11
+  warnings.warn(
+[2026-03-22 13:51:06,489] [    INFO] topology.py:535 - Total 4 data comm group(s) create successfully!
+[2026-03-22 13:51:06,489] [    INFO] topology.py:535 - Total 1 model comm group(s) create successfully!
+[2026-03-22 13:51:06,490] [    INFO] topology.py:535 - Total 4 sharding comm group(s) create successfully!
+[2026-03-22 13:51:06,490] [    INFO] topology.py:449 - HybridParallelInfo: rank_id: 1, mp_degree: 4, sharding_degree: 1, pp_degree: 1, dp_degree: 1, sep_degree: 1, mp_group: [0, 1, 2, 3],  sharding_group: [1], pp_group: [1], dp_group: [1], sep:group: None, check/clip group: [0, 1, 2, 3]
+INFO     2026-03-22 13:51:06,490 1049493 download.py[line:142] Using download source: huggingface
+INFO     2026-03-22 13:51:06,490 1049493 configuration_utils.py[line:1215] Loading configuration file /raid0/ERNIE-4.5-21B-A3B-FP4/config.json
+WARNING  2026-03-22 13:51:06,490 1049493 configuration_utils.py[line:1246] You are using a model of type ernie4_5_moe to instantiate a model of type . This is not supported for all configurations of models and can yield errors.
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'triton'}, new scope: {'flash_mla'}.
+  warnings.warn(msg)
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'flash_mla', 'triton'}, new scope: {'cutlass'}.
+  warnings.warn(msg)
+CUTE_DSL failed with loading generated IR cache. Unable to parse module assembly:
+error: "-":0:0: invalid section ID: 44
+ note: "-":0:0: in bytecode version 6 produced by: MLIR20.0.0git
+INFO     2026-03-22 13:51:09,475 1049493 flash_attn_backend.py[line:93] The current platform supports Flash Attention V4.
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'flash_mla', 'triton', 'cutlass'}, new scope: {'flash_mla'}.
+  warnings.warn(msg)
+/root/paddlejob/workspace/output/lizexu/FastDeploy-1/fastdeploy/model_executor/graph_optimization/utils.py:21: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'flash_mla', 'triton', 'cutlass'}, new scope: {'deep_gemm'}.
+  warnings.warn(msg)
+INFO     2026-03-22 13:51:14,657 1049493 fp8_utils.py[line:52] Detected sm100, use PFCC DeepGEMM
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'flash_mla', 'deep_gemm', 'triton', 'cutlass'}, new scope: {'deep_gemm'}.
+  warnings.warn(msg)
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'flash_mla', 'deep_gemm', 'triton', 'cutlass'}, new scope: {'flashinfer'}.
+  warnings.warn(msg)
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'flash_mla', 'deep_gemm', 'triton', 'flashinfer', 'cutlass'}, new scope: {'flashinfer'}.
+  warnings.warn(msg)
+WARNING  2026-03-22 13:51:14,700 1049493 nvfp4.py[line:81] Detected ModelOpt NVFP4 checkpoint. Please note that the format is experimental and could change in future.
+INFO     2026-03-22 13:51:15,467 1049493 sampler.py[line:129] GuidedDecoding max_num_seqs=4 fill_bitmask_parallel_batch_size=4 is_cuda_platform=True max_workers=1
+INFO     2026-03-22 13:51:17,948 1049493 input_batch.py[line:340] Enabled logits processors: []
+INFO     2026-03-22 13:51:17,949 1049493 cuda.py[line:59] Using APPEND ATTN backend.
+INFO     2026-03-22 13:51:17,949 1049493 gpu_model_runner.py[line:229] queue id is 45109
+INFO     2026-03-22 13:51:17,950 1049493 gpu_model_runner.py[line:273] Using overlap schedule
+INFO     2026-03-22 13:51:17,950 1049493 gpu_model_runner.py[line:1233] Starting to load model Ernie4_5_MoeForCausalLM
+INFO     2026-03-22 13:51:17,960 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:18,083 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:18,083 1049493 linear.py[line:312] prefix:ernie.layers.1.mlp.gate
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'flash_mla', 'deep_gemm', 'triton', 'flashinfer', 'cutlass'}, new scope: {'deep_ep'}.
+  warnings.warn(msg)
+INFO     2026-03-22 13:51:18,140 1049493 ep.py[line:52] FD use PFCCLab/DeepEP now.
+INFO     2026-03-22 13:51:18,141 1049493 ep.py[line:159] DeepEP num nvl bytes : 73483136, num rdma bytes : 170394240
+INFO     2026-03-22 13:51:18,141 1049493 ep.py[line:168] Initializing mixed mode buffer (low latency).
+INFO     2026-03-22 13:51:25,820 1049493 ep.py[line:192] DeepEP buffer created successfully.
+INFO     2026-03-22 13:51:25,820 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:25,822 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:25,949 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:25,949 1049493 linear.py[line:312] prefix:ernie.layers.2.mlp.gate
+INFO     2026-03-22 13:51:25,950 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:25,950 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:26,102 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:26,102 1049493 linear.py[line:312] prefix:ernie.layers.3.mlp.gate
+INFO     2026-03-22 13:51:26,103 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:26,103 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:26,267 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:26,267 1049493 linear.py[line:312] prefix:ernie.layers.4.mlp.gate
+INFO     2026-03-22 13:51:26,268 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:26,268 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:26,428 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:26,428 1049493 linear.py[line:312] prefix:ernie.layers.5.mlp.gate
+INFO     2026-03-22 13:51:26,428 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:26,429 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:26,581 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:26,581 1049493 linear.py[line:312] prefix:ernie.layers.6.mlp.gate
+INFO     2026-03-22 13:51:26,582 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:26,582 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:26,745 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:26,746 1049493 linear.py[line:312] prefix:ernie.layers.7.mlp.gate
+INFO     2026-03-22 13:51:26,746 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:26,746 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:26,908 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:26,909 1049493 linear.py[line:312] prefix:ernie.layers.8.mlp.gate
+INFO     2026-03-22 13:51:26,909 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:26,909 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:27,063 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:27,064 1049493 linear.py[line:312] prefix:ernie.layers.9.mlp.gate
+INFO     2026-03-22 13:51:27,064 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:27,064 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:27,223 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:27,224 1049493 linear.py[line:312] prefix:ernie.layers.10.mlp.gate
+INFO     2026-03-22 13:51:27,224 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:27,224 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:27,347 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:27,347 1049493 linear.py[line:312] prefix:ernie.layers.11.mlp.gate
+INFO     2026-03-22 13:51:27,347 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:27,348 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:27,470 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:27,470 1049493 linear.py[line:312] prefix:ernie.layers.12.mlp.gate
+INFO     2026-03-22 13:51:27,470 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:27,470 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:27,594 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:27,594 1049493 linear.py[line:312] prefix:ernie.layers.13.mlp.gate
+INFO     2026-03-22 13:51:27,594 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:27,594 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:27,717 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:27,717 1049493 linear.py[line:312] prefix:ernie.layers.14.mlp.gate
+INFO     2026-03-22 13:51:27,718 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:27,718 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:27,840 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:27,841 1049493 linear.py[line:312] prefix:ernie.layers.15.mlp.gate
+INFO     2026-03-22 13:51:27,841 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:27,841 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:27,985 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:27,985 1049493 linear.py[line:312] prefix:ernie.layers.16.mlp.gate
+INFO     2026-03-22 13:51:27,985 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:27,986 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:28,136 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:28,136 1049493 linear.py[line:312] prefix:ernie.layers.17.mlp.gate
+INFO     2026-03-22 13:51:28,136 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:28,137 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:28,285 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:28,285 1049493 linear.py[line:312] prefix:ernie.layers.18.mlp.gate
+INFO     2026-03-22 13:51:28,285 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:28,286 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:28,432 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:28,433 1049493 linear.py[line:312] prefix:ernie.layers.19.mlp.gate
+INFO     2026-03-22 13:51:28,433 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:28,433 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:28,586 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:28,586 1049493 linear.py[line:312] prefix:ernie.layers.20.mlp.gate
+INFO     2026-03-22 13:51:28,587 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:28,587 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:28,736 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:28,736 1049493 linear.py[line:312] prefix:ernie.layers.21.mlp.gate
+INFO     2026-03-22 13:51:28,736 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:28,737 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:28,894 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:28,894 1049493 linear.py[line:312] prefix:ernie.layers.22.mlp.gate
+INFO     2026-03-22 13:51:28,894 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:28,895 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:29,042 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:29,042 1049493 linear.py[line:312] prefix:ernie.layers.23.mlp.gate
+INFO     2026-03-22 13:51:29,042 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:29,042 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:29,203 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:29,204 1049493 linear.py[line:312] prefix:ernie.layers.24.mlp.gate
+INFO     2026-03-22 13:51:29,204 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:29,204 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:29,354 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:29,355 1049493 linear.py[line:312] prefix:ernie.layers.25.mlp.gate
+INFO     2026-03-22 13:51:29,355 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:29,355 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:29,516 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:29,516 1049493 linear.py[line:312] prefix:ernie.layers.26.mlp.gate
+INFO     2026-03-22 13:51:29,516 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:29,517 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+INFO     2026-03-22 13:51:29,676 1049493 attention.py[line:125] Attention is running in cache kv bfloat16 mode
+INFO     2026-03-22 13:51:29,677 1049493 linear.py[line:312] prefix:ernie.layers.27.mlp.gate
+INFO     2026-03-22 13:51:29,677 1049493 ep.py[line:606] prefill_num_worst_tokens 0
+INFO     2026-03-22 13:51:29,677 1049493 moe.py[line:255] MoE config is num_experts=64[16, 32),         top_k=6, hidden_size=2560, moe_intermediate_size=1536,             , ep_size=4,             tp_size=1.
+Loading safetensors weights:   0%|          | 0/21056 [00:00<?, ?it/s]Loading safetensors weights:   0%|          | 1/21056 [00:04<24:14:56,  4.15s/it]Loading safetensors weights:   0%|          | 24/21056 [00:04<44:28,  7.88it/s]  Loading safetensors weights:   0%|          | 60/21056 [00:04<14:40, 23.84it/s]Loading safetensors weights:   0%|          | 96/21056 [00:04<07:53, 44.26it/s]Loading safetensors weights:   1%|          | 132/21056 [00:04<05:01, 69.41it/s]Loading safetensors weights:   1%|          | 168/21056 [00:04<03:31, 98.96it/s]Loading safetensors weights:   1%|          | 204/21056 [00:04<02:38, 131.79it/s]Loading safetensors weights:   1%|          | 238/21056 [00:04<02:08, 161.70it/s]Loading safetensors weights:   1%|▏         | 271/21056 [00:04<01:48, 191.19it/s]Loading safetensors weights:   1%|▏         | 304/21056 [00:05<01:36, 215.61it/s]Loading safetensors weights:   2%|▏         | 336/21056 [00:05<01:27, 237.59it/s]Loading safetensors weights:   2%|▏         | 368/21056 [00:05<01:20, 256.02it/s]Loading safetensors weights:   2%|▏         | 400/21056 [00:05<01:16, 271.63it/s]Loading safetensors weights:   2%|▏         | 436/21056 [00:05<01:10, 293.48it/s]Loading safetensors weights:   2%|▏         | 472/21056 [00:05<01:06, 310.02it/s]Loading safetensors weights:   2%|▏         | 508/21056 [00:05<01:03, 322.15it/s]Loading safetensors weights:   3%|▎         | 544/21056 [00:05<01:01, 330.99it/s]Loading safetensors weights:   3%|▎         | 580/21056 [00:05<01:00, 337.37it/s]Loading safetensors weights:   3%|▎         | 616/21056 [00:05<00:59, 341.84it/s]Loading safetensors weights:   3%|▎         | 652/21056 [00:06<00:59, 343.68it/s]Loading safetensors weights:   3%|▎         | 688/21056 [00:06<00:58, 347.50it/s]Loading safetensors weights:   3%|▎         | 724/21056 [00:06<00:57, 350.57it/s]Loading safetensors weights:   4%|▎         | 760/21056 [00:06<00:58, 347.97it/s]Loading safetensors weights:   4%|▍         | 800/21056 [00:06<00:56, 359.54it/s]Loading safetensors weights:   4%|▍         | 837/21056 [00:06<00:55, 361.57it/s]Loading safetensors weights:   4%|▍         | 874/21056 [00:06<00:55, 363.25it/s]Loading safetensors weights:   4%|▍         | 911/21056 [00:06<00:56, 355.91it/s]Loading safetensors weights:   4%|▍         | 947/21056 [00:06<00:56, 356.31it/s]Loading safetensors weights:   5%|▍         | 983/21056 [00:07<00:56, 354.32it/s]Loading safetensors weights:   5%|▍         | 1019/21056 [00:07<00:58, 343.19it/s]Loading safetensors weights:   5%|▌         | 1054/21056 [00:07<00:59, 338.83it/s]Loading safetensors weights:   5%|▌         | 1088/21056 [00:07<01:00, 327.38it/s]Loading safetensors weights:   5%|▌         | 1121/21056 [00:07<01:00, 327.37it/s]Loading safetensors weights:   5%|▌         | 1154/21056 [00:07<01:00, 327.58it/s]Loading safetensors weights:   6%|▌         | 1187/21056 [00:07<01:00, 325.91it/s]Loading safetensors weights:   6%|▌         | 1223/21056 [00:07<00:59, 335.15it/s]Loading safetensors weights:   6%|▌         | 1259/21056 [00:07<00:57, 341.67it/s]Loading safetensors weights:   6%|▌         | 1295/21056 [00:07<00:57, 346.34it/s]Loading safetensors weights:   6%|▋         | 1331/21056 [00:08<00:56, 349.54it/s]Loading safetensors weights:   6%|▋         | 1367/21056 [00:08<00:56, 350.05it/s]Loading safetensors weights:   7%|▋         | 1403/21056 [00:08<00:55, 352.16it/s]Loading safetensors weights:   7%|▋         | 1439/21056 [00:08<00:55, 353.82it/s]Loading safetensors weights:   7%|▋         | 1475/21056 [00:08<00:55, 355.02it/s]Loading safetensors weights:   7%|▋         | 1511/21056 [00:08<00:55, 353.30it/s]Loading safetensors weights:   7%|▋         | 1547/21056 [00:08<00:54, 354.80it/s]Loading safetensors weights:   8%|▊         | 1587/21056 [00:08<00:53, 363.54it/s]Loading safetensors weights:   8%|▊         | 1624/21056 [00:08<00:54, 358.48it/s]Loading safetensors weights:   8%|▊         | 1660/21056 [00:08<00:54, 353.37it/s]Loading safetensors weights:   8%|▊         | 1696/21056 [00:09<00:54, 352.41it/s]Loading safetensors weights:   8%|▊         | 1732/21056 [00:09<00:54, 352.67it/s]Loading safetensors weights:   8%|▊         | 1768/21056 [00:09<00:55, 345.42it/s]Loading safetensors weights:   9%|▊         | 1803/21056 [00:09<00:57, 334.53it/s]Loading safetensors weights:   9%|▊         | 1837/21056 [00:09<00:57, 334.73it/s]Loading safetensors weights:   9%|▉         | 1871/21056 [00:09<00:59, 323.14it/s]Loading safetensors weights:   9%|▉         | 1904/21056 [00:09<00:59, 323.64it/s]Loading safetensors weights:   9%|▉         | 1937/21056 [00:09<00:59, 323.28it/s]Loading safetensors weights:   9%|▉         | 1970/21056 [00:09<00:59, 322.83it/s]Loading safetensors weights:  10%|▉         | 2006/21056 [00:10<00:57, 332.69it/s]Loading safetensors weights:  10%|▉         | 2042/21056 [00:10<00:56, 337.51it/s]Loading safetensors weights:  10%|▉         | 2078/21056 [00:10<00:55, 342.47it/s]Loading safetensors weights:  10%|█         | 2114/21056 [00:10<00:54, 346.06it/s]Loading safetensors weights:  10%|█         | 2150/21056 [00:10<00:54, 346.72it/s]Loading safetensors weights:  10%|█         | 2186/21056 [00:10<00:53, 349.97it/s]Loading safetensors weights:  11%|█         | 2222/21056 [00:10<00:54, 346.07it/s]Loading safetensors weights:  11%|█         | 2258/21056 [00:10<00:54, 347.37it/s]Loading safetensors weights:  11%|█         | 2294/21056 [00:10<00:53, 348.63it/s]Loading safetensors weights:  11%|█         | 2330/21056 [00:10<00:53, 348.78it/s]Loading safetensors weights:  11%|█         | 2365/21056 [00:11<00:57, 322.57it/s]Loading safetensors weights:  11%|█▏        | 2401/21056 [00:11<00:56, 329.79it/s]Loading safetensors weights:  12%|█▏        | 2437/21056 [00:11<00:55, 333.54it/s]Loading safetensors weights:  12%|█▏        | 2473/21056 [00:11<00:55, 336.42it/s]Loading safetensors weights:  12%|█▏        | 2509/21056 [00:11<00:54, 338.99it/s]Loading safetensors weights:  12%|█▏        | 2544/21056 [00:11<00:54, 340.89it/s]Loading safetensors weights:  12%|█▏        | 2579/21056 [00:11<00:56, 326.88it/s]Loading safetensors weights:  12%|█▏        | 2612/21056 [00:11<00:56, 325.40it/s]Loading safetensors weights:  13%|█▎        | 2645/21056 [00:11<00:58, 316.96it/s]Loading safetensors weights:  13%|█▎        | 2677/21056 [00:12<00:58, 313.57it/s]Loading safetensors weights:  13%|█▎        | 2709/21056 [00:12<00:58, 312.78it/s]Loading safetensors weights:  13%|█▎        | 2742/21056 [00:12<00:58, 313.33it/s]Loading safetensors weights:  13%|█▎        | 2778/21056 [00:12<00:56, 323.86it/s]Loading safetensors weights:  13%|█▎        | 2814/21056 [00:12<00:55, 329.69it/s]Loading safetensors weights:  14%|█▎        | 2850/21056 [00:12<00:54, 335.22it/s]Loading safetensors weights:  14%|█▎        | 2886/21056 [00:12<00:53, 339.08it/s]Loading safetensors weights:  14%|█▍        | 2922/21056 [00:12<00:53, 341.94it/s]Loading safetensors weights:  14%|█▍        | 2958/21056 [00:12<00:52, 344.15it/s]Loading safetensors weights:  14%|█▍        | 2994/21056 [00:12<00:52, 345.29it/s]Loading safetensors weights:  14%|█▍        | 3030/21056 [00:13<00:52, 346.41it/s]Loading safetensors weights:  15%|█▍        | 3066/21056 [00:13<00:51, 347.37it/s]Loading safetensors weights:  15%|█▍        | 3102/21056 [00:13<00:51, 347.89it/s]Loading safetensors weights:  15%|█▍        | 3141/21056 [00:13<00:50, 356.21it/s]Loading safetensors weights:  15%|█▌        | 3177/21056 [00:13<00:50, 353.96it/s]Loading safetensors weights:  15%|█▌        | 3213/21056 [00:13<00:50, 352.43it/s]Loading safetensors weights:  15%|█▌        | 3249/21056 [00:13<00:50, 351.38it/s]Loading safetensors weights:  16%|█▌        | 3285/21056 [00:13<00:50, 350.48it/s]Loading safetensors weights:  16%|█▌        | 3321/21056 [00:13<00:50, 348.22it/s]Loading safetensors weights:  16%|█▌        | 3356/21056 [00:14<00:52, 337.61it/s]Loading safetensors weights:  16%|█▌        | 3390/21056 [00:14<00:53, 330.10it/s]Loading safetensors weights:  16%|█▋        | 3424/21056 [00:14<00:55, 319.84it/s]Loading safetensors weights:  16%|█▋        | 3457/21056 [00:14<00:56, 313.90it/s]Loading safetensors weights:  17%|█▋        | 3489/21056 [00:14<00:56, 308.27it/s]Loading safetensors weights:  17%|█▋        | 3521/21056 [00:14<00:56, 310.12it/s]Loading safetensors weights:  17%|█▋        | 3557/21056 [00:14<00:54, 319.97it/s]Loading safetensors weights:  17%|█▋        | 3593/21056 [00:14<00:53, 326.98it/s]Loading safetensors weights:  17%|█▋        | 3629/21056 [00:14<00:52, 332.29it/s]Loading safetensors weights:  17%|█▋        | 3665/21056 [00:14<00:51, 336.70it/s]Loading safetensors weights:  18%|█▊        | 3701/21056 [00:15<00:51, 339.93it/s]Loading safetensors weights:  18%|█▊        | 3737/21056 [00:15<00:50, 342.71it/s]Loading safetensors weights:  18%|█▊        | 3773/21056 [00:15<00:50, 344.82it/s]Loading safetensors weights:  18%|█▊        | 3808/21056 [00:15<00:51, 333.36it/s]Loading safetensors weights:  18%|█▊        | 3842/21056 [00:15<00:51, 333.81it/s]Loading safetensors weights:  18%|█▊        | 3876/21056 [00:15<00:54, 313.75it/s]Loading safetensors weights:  19%|█▊        | 3908/21056 [00:15<00:57, 299.63it/s]Loading safetensors weights:  19%|█▊        | 3939/21056 [00:15<00:59, 288.56it/s]Loading safetensors weights:  19%|█▉        | 3969/21056 [00:15<01:00, 282.79it/s]Loading safetensors weights:  19%|█▉        | 4004/21056 [00:16<00:57, 298.20it/s]Loading safetensors weights:  19%|█▉        | 4040/21056 [00:16<00:54, 312.23it/s]Loading safetensors weights:  19%|█▉        | 4076/21056 [00:16<00:52, 322.52it/s]Loading safetensors weights:  20%|█▉        | 4111/21056 [00:16<00:52, 324.81it/s]Loading safetensors weights:  20%|█▉        | 4144/21056 [00:16<00:53, 318.06it/s]Loading safetensors weights:  20%|█▉        | 4176/21056 [00:16<00:53, 316.52it/s]Loading safetensors weights:  20%|█▉        | 4208/21056 [00:16<00:54, 311.15it/s]Loading safetensors weights:  20%|██        | 4240/21056 [00:16<00:54, 310.51it/s]Loading safetensors weights:  20%|██        | 4272/21056 [00:16<00:54, 309.04it/s]Loading safetensors weights:  20%|██        | 4307/21056 [00:17<00:52, 317.13it/s]Loading safetensors weights:  21%|██        | 4343/21056 [00:17<00:51, 326.25it/s]Loading safetensors weights:  21%|██        | 4379/21056 [00:17<00:50, 332.74it/s]Loading safetensors weights:  21%|██        | 4415/21056 [00:17<00:49, 337.20it/s]Loading safetensors weights:  21%|██        | 4451/21056 [00:17<00:48, 340.40it/s]Loading safetensors weights:  21%|██▏       | 4487/21056 [00:17<00:48, 342.32it/s]Loading safetensors weights:  21%|██▏       | 4523/21056 [00:17<00:48, 344.16it/s]Loading safetensors weights:  22%|██▏       | 4559/21056 [00:17<00:47, 345.45it/s]Loading safetensors weights:  22%|██▏       | 4595/21056 [00:17<00:47, 346.35it/s]Loading safetensors weights:  22%|██▏       | 4630/21056 [00:17<00:47, 346.27it/s]Loading safetensors weights:  22%|██▏       | 4665/21056 [00:18<00:47, 342.59it/s]Loading safetensors weights:  22%|██▏       | 4703/21056 [00:18<00:46, 352.54it/s]Loading safetensors weights:  23%|██▎       | 4739/21056 [00:18<00:46, 350.88it/s]Loading safetensors weights:  23%|██▎       | 4775/21056 [00:18<00:46, 349.87it/s]Loading safetensors weights:  23%|██▎       | 4811/21056 [00:18<00:46, 349.17it/s]Loading safetensors weights:  23%|██▎       | 4847/21056 [00:18<00:46, 348.74it/s]Loading safetensors weights:  23%|██▎       | 4882/21056 [00:18<00:46, 348.42it/s]Loading safetensors weights:  23%|██▎       | 4917/21056 [00:18<00:47, 338.99it/s]Loading safetensors weights:  24%|██▎       | 4951/21056 [00:18<00:49, 324.87it/s]Loading safetensors weights:  24%|██▎       | 4984/21056 [00:19<00:49, 322.98it/s]Loading safetensors weights:  24%|██▍       | 5017/21056 [00:19<00:49, 321.71it/s]Loading safetensors weights:  24%|██▍       | 5050/21056 [00:19<00:50, 315.53it/s]Loading safetensors weights:  24%|██▍       | 5083/21056 [00:19<00:50, 316.21it/s]Loading safetensors weights:  24%|██▍       | 5118/21056 [00:19<00:48, 325.51it/s]Loading safetensors weights:  24%|██▍       | 5154/21056 [00:19<00:47, 332.24it/s]Loading safetensors weights:  25%|██▍       | 5190/21056 [00:19<00:47, 337.03it/s]Loading safetensors weights:  25%|██▍       | 5226/21056 [00:19<00:46, 340.36it/s]Loading safetensors weights:  25%|██▍       | 5262/21056 [00:19<00:46, 342.54it/s]Loading safetensors weights:  25%|██▌       | 5298/21056 [00:19<00:46, 341.95it/s]Loading safetensors weights:  25%|██▌       | 5334/21056 [00:20<00:45, 343.59it/s]Loading safetensors weights:  26%|██▌       | 5370/21056 [00:20<00:45, 344.63it/s]Loading safetensors weights:  26%|██▌       | 5406/21056 [00:20<00:45, 345.72it/s]Loading safetensors weights:  26%|██▌       | 5442/21056 [00:20<00:45, 345.99it/s]Loading safetensors weights:  26%|██▌       | 5482/21056 [00:20<00:43, 357.26it/s]Loading safetensors weights:  26%|██▌       | 5518/21056 [00:20<00:43, 354.49it/s]Loading safetensors weights:  26%|██▋       | 5554/21056 [00:20<00:43, 352.48it/s]Loading safetensors weights:  27%|██▋       | 5590/21056 [00:20<00:44, 348.28it/s]Loading safetensors weights:  27%|██▋       | 5626/21056 [00:20<00:44, 348.04it/s]Loading safetensors weights:  27%|██▋       | 5661/21056 [00:20<00:44, 344.61it/s]Loading safetensors weights:  27%|██▋       | 5696/21056 [00:21<00:45, 334.58it/s]Loading safetensors weights:  27%|██▋       | 5730/21056 [00:21<00:47, 321.80it/s]Loading safetensors weights:  27%|██▋       | 5763/21056 [00:21<00:47, 320.92it/s]Loading safetensors weights:  28%|██▊       | 5796/21056 [00:21<00:47, 318.97it/s]Loading safetensors weights:  28%|██▊       | 5828/21056 [00:21<00:48, 316.47it/s]Loading safetensors weights:  28%|██▊       | 5861/21056 [00:21<00:48, 315.78it/s]Loading safetensors weights:  28%|██▊       | 5897/21056 [00:21<00:46, 325.39it/s]Loading safetensors weights:  28%|██▊       | 5933/21056 [00:21<00:45, 331.89it/s]Loading safetensors weights:  28%|██▊       | 5969/21056 [00:21<00:44, 336.59it/s]Loading safetensors weights:  29%|██▊       | 6005/21056 [00:22<00:44, 339.69it/s]Loading safetensors weights:  29%|██▊       | 6041/21056 [00:22<00:43, 341.40it/s]Loading safetensors weights:  29%|██▉       | 6077/21056 [00:22<00:43, 342.88it/s]Loading safetensors weights:  29%|██▉       | 6112/21056 [00:22<00:43, 340.86it/s]Loading safetensors weights:  29%|██▉       | 6147/21056 [00:22<00:43, 340.16it/s]Loading safetensors weights:  29%|██▉       | 6182/21056 [00:22<00:43, 339.76it/s]Loading safetensors weights:  30%|██▉       | 6218/21056 [00:22<00:43, 342.23it/s]Loading safetensors weights:  30%|██▉       | 6260/21056 [00:22<00:41, 359.07it/s]Loading safetensors weights:  30%|██▉       | 6296/21056 [00:22<00:41, 355.69it/s]Loading safetensors weights:  30%|███       | 6332/21056 [00:22<00:41, 353.32it/s]Loading safetensors weights:  30%|███       | 6368/21056 [00:23<00:41, 350.25it/s]Loading safetensors weights:  30%|███       | 6404/21056 [00:23<00:41, 349.35it/s]Loading safetensors weights:  31%|███       | 6439/21056 [00:23<00:42, 340.57it/s]Loading safetensors weights:  31%|███       | 6474/21056 [00:23<00:44, 327.57it/s]Loading safetensors weights:  31%|███       | 6507/21056 [00:23<00:44, 325.07it/s]Loading safetensors weights:  31%|███       | 6540/21056 [00:23<00:45, 317.98it/s]Loading safetensors weights:  31%|███       | 6572/21056 [00:23<00:45, 315.92it/s]Loading safetensors weights:  31%|███▏      | 6604/21056 [00:23<00:46, 314.08it/s]Loading safetensors weights:  32%|███▏      | 6637/21056 [00:23<00:45, 314.07it/s]Loading safetensors weights:  32%|███▏      | 6673/21056 [00:24<00:44, 324.07it/s]Loading safetensors weights:  32%|███▏      | 6709/21056 [00:24<00:43, 330.94it/s]Loading safetensors weights:  32%|███▏      | 6745/21056 [00:24<00:42, 335.87it/s]Loading safetensors weights:  32%|███▏      | 6781/21056 [00:24<00:42, 339.68it/s]Loading safetensors weights:  32%|███▏      | 6817/21056 [00:24<00:41, 341.87it/s]Loading safetensors weights:  33%|███▎      | 6853/21056 [00:24<00:41, 343.64it/s]Loading safetensors weights:  33%|███▎      | 6888/21056 [00:24<00:41, 344.13it/s]Loading safetensors weights:  33%|███▎      | 6923/21056 [00:24<00:41, 343.74it/s]Loading safetensors weights:  33%|███▎      | 6958/21056 [00:24<00:41, 341.98it/s]Loading safetensors weights:  33%|███▎      | 6993/21056 [00:24<00:41, 340.96it/s]Loading safetensors weights:  33%|███▎      | 7035/21056 [00:25<00:39, 357.70it/s]Loading safetensors weights:  34%|███▎      | 7071/21056 [00:25<00:39, 354.41it/s]Loading safetensors weights:  34%|███▍      | 7107/21056 [00:25<00:39, 352.39it/s]Loading safetensors weights:  34%|███▍      | 7143/21056 [00:25<00:39, 350.94it/s]Loading safetensors weights:  34%|███▍      | 7179/21056 [00:25<00:39, 349.92it/s]Loading safetensors weights:  34%|███▍      | 7215/21056 [00:25<00:39, 348.92it/s]Loading safetensors weights:  34%|███▍      | 7250/21056 [00:25<00:41, 335.26it/s]Loading safetensors weights:  35%|███▍      | 7284/21056 [00:25<00:42, 322.81it/s]Loading safetensors weights:  35%|███▍      | 7317/21056 [00:25<00:42, 322.28it/s]Loading safetensors weights:  35%|███▍      | 7350/21056 [00:26<00:42, 320.58it/s]Loading safetensors weights:  35%|███▌      | 7383/21056 [00:26<00:43, 314.22it/s]Loading safetensors weights:  35%|███▌      | 7415/21056 [00:26<00:43, 315.03it/s]Loading safetensors weights:  35%|███▌      | 7451/21056 [00:26<00:41, 324.78it/s]Loading safetensors weights:  36%|███▌      | 7487/21056 [00:26<00:40, 331.38it/s]Loading safetensors weights:  36%|███▌      | 7523/21056 [00:26<00:40, 336.37it/s]Loading safetensors weights:  36%|███▌      | 7559/21056 [00:26<00:39, 339.87it/s]Loading safetensors weights:  36%|███▌      | 7595/21056 [00:26<00:39, 342.34it/s]Loading safetensors weights:  36%|███▌      | 7631/21056 [00:26<00:39, 344.15it/s]Loading safetensors weights:  36%|███▋      | 7666/21056 [00:26<00:39, 336.36it/s]Loading safetensors weights:  37%|███▋      | 7700/21056 [00:27<00:44, 302.36it/s]Loading safetensors weights:  37%|███▋      | 7736/21056 [00:27<00:42, 314.75it/s]Loading safetensors weights:  37%|███▋      | 7771/21056 [00:27<00:40, 324.06it/s]Loading safetensors weights:  37%|███▋      | 7810/21056 [00:27<00:38, 342.69it/s]Loading safetensors weights:  37%|███▋      | 7846/21056 [00:27<00:38, 344.21it/s]Loading safetensors weights:  37%|███▋      | 7882/21056 [00:27<00:38, 344.23it/s]Loading safetensors weights:  38%|███▊      | 7918/21056 [00:27<00:38, 345.14it/s]Loading safetensors weights:  38%|███▊      | 7953/21056 [00:27<00:38, 344.11it/s]Loading safetensors weights:  38%|███▊      | 7988/21056 [00:27<00:38, 339.40it/s]Loading safetensors weights:  38%|███▊      | 8023/21056 [00:28<00:39, 326.46it/s]Loading safetensors weights:  38%|███▊      | 8056/21056 [00:28<00:40, 320.98it/s]Loading safetensors weights:  38%|███▊      | 8089/21056 [00:28<00:40, 319.29it/s]Loading safetensors weights:  39%|███▊      | 8121/21056 [00:28<00:40, 315.67it/s]Loading safetensors weights:  39%|███▊      | 8153/21056 [00:28<00:41, 312.91it/s]Loading safetensors weights:  39%|███▉      | 8185/21056 [00:28<00:41, 310.66it/s]Loading safetensors weights:  39%|███▉      | 8218/21056 [00:28<00:40, 316.24it/s]Loading safetensors weights:  39%|███▉      | 8254/21056 [00:28<00:39, 324.57it/s]Loading safetensors weights:  39%|███▉      | 8290/21056 [00:28<00:38, 330.08it/s]Loading safetensors weights:  40%|███▉      | 8326/21056 [00:28<00:38, 333.89it/s]Loading safetensors weights:  40%|███▉      | 8362/21056 [00:29<00:37, 336.64it/s]Loading safetensors weights:  40%|███▉      | 8398/21056 [00:29<00:37, 337.82it/s]Loading safetensors weights:  40%|████      | 8434/21056 [00:29<00:37, 338.75it/s]Loading safetensors weights:  40%|████      | 8470/21056 [00:29<00:37, 339.25it/s]Loading safetensors weights:  40%|████      | 8506/21056 [00:29<00:36, 339.47it/s]Loading safetensors weights:  41%|████      | 8542/21056 [00:29<00:36, 341.02it/s]Loading safetensors weights:  41%|████      | 8582/21056 [00:29<00:35, 353.73it/s]Loading safetensors weights:  41%|████      | 8618/21056 [00:29<00:35, 350.44it/s]Loading safetensors weights:  41%|████      | 8654/21056 [00:29<00:35, 348.34it/s]Loading safetensors weights:  41%|████▏     | 8689/21056 [00:30<00:35, 348.53it/s]Loading safetensors weights:  41%|████▏     | 8725/21056 [00:30<00:35, 346.85it/s]Loading safetensors weights:  42%|████▏     | 8761/21056 [00:30<00:35, 345.75it/s]Loading safetensors weights:  42%|████▏     | 8796/21056 [00:30<00:36, 338.15it/s]Loading safetensors weights:  42%|████▏     | 8830/21056 [00:30<00:37, 322.84it/s]Loading safetensors weights:  42%|████▏     | 8863/21056 [00:30<00:38, 320.66it/s]Loading safetensors weights:  42%|████▏     | 8896/21056 [00:30<00:38, 319.12it/s]Loading safetensors weights:  42%|████▏     | 8928/21056 [00:30<00:38, 314.94it/s]Loading safetensors weights:  43%|████▎     | 8960/21056 [00:30<00:38, 312.39it/s]Loading safetensors weights:  43%|████▎     | 8993/21056 [00:30<00:38, 316.75it/s]Loading safetensors weights:  43%|████▎     | 9029/21056 [00:31<00:37, 324.99it/s]Loading safetensors weights:  43%|████▎     | 9065/21056 [00:31<00:36, 330.37it/s]Loading safetensors weights:  43%|████▎     | 9101/21056 [00:31<00:35, 334.12it/s]Loading safetensors weights:  43%|████▎     | 9135/21056 [00:31<00:35, 335.25it/s]Loading safetensors weights:  44%|████▎     | 9169/21056 [00:31<00:35, 335.15it/s]Loading safetensors weights:  44%|████▎     | 9205/21056 [00:31<00:35, 337.43it/s]Loading safetensors weights:  44%|████▍     | 9241/21056 [00:31<00:34, 339.14it/s]Loading safetensors weights:  44%|████▍     | 9277/21056 [00:31<00:34, 339.24it/s]Loading safetensors weights:  44%|████▍     | 9313/21056 [00:31<00:34, 339.98it/s]Loading safetensors weights:  44%|████▍     | 9349/21056 [00:32<00:34, 340.25it/s]Loading safetensors weights:  45%|████▍     | 9384/21056 [00:32<00:34, 336.05it/s]Loading safetensors weights:  45%|████▍     | 9420/21056 [00:32<00:34, 338.55it/s]Loading safetensors weights:  45%|████▍     | 9456/21056 [00:32<00:34, 339.87it/s]Loading safetensors weights:  45%|████▌     | 9490/21056 [00:32<00:34, 339.30it/s]Loading safetensors weights:  45%|████▌     | 9525/21056 [00:32<00:34, 337.63it/s]Loading safetensors weights:  45%|████▌     | 9560/21056 [00:32<00:34, 337.28it/s]Loading safetensors weights:  46%|████▌     | 9594/21056 [00:32<00:34, 328.09it/s]Loading safetensors weights:  46%|████▌     | 9627/21056 [00:32<00:35, 326.03it/s]Loading safetensors weights:  46%|████▌     | 9660/21056 [00:32<00:35, 318.25it/s]Loading safetensors weights:  46%|████▌     | 9692/21056 [00:33<00:37, 305.48it/s]Loading safetensors weights:  46%|████▌     | 9724/21056 [00:33<00:36, 306.74it/s]Loading safetensors weights:  46%|████▋     | 9757/21056 [00:33<00:36, 309.83it/s]Loading safetensors weights:  47%|████▋     | 9792/21056 [00:33<00:35, 320.72it/s]Loading safetensors weights:  47%|████▋     | 9828/21056 [00:33<00:34, 326.22it/s]Loading safetensors weights:  47%|████▋     | 9864/21056 [00:33<00:33, 330.64it/s]Loading safetensors weights:  47%|████▋     | 9900/21056 [00:33<00:33, 334.20it/s]Loading safetensors weights:  47%|████▋     | 9934/21056 [00:33<00:33, 334.76it/s]Loading safetensors weights:  47%|████▋     | 9969/21056 [00:33<00:33, 334.15it/s]Loading safetensors weights:  48%|████▊     | 10005/21056 [00:34<00:32, 336.59it/s]Loading safetensors weights:  48%|████▊     | 10040/21056 [00:34<00:32, 339.84it/s]Loading safetensors weights:  48%|████▊     | 10076/21056 [00:34<00:32, 339.88it/s]Loading safetensors weights:  48%|████▊     | 10112/21056 [00:34<00:32, 339.89it/s]Loading safetensors weights:  48%|████▊     | 10151/21056 [00:34<00:30, 353.48it/s]Loading safetensors weights:  48%|████▊     | 10187/21056 [00:34<00:31, 350.31it/s]Loading safetensors weights:  49%|████▊     | 10223/21056 [00:34<00:31, 344.25it/s]Loading safetensors weights:  49%|████▊     | 10258/21056 [00:34<00:31, 345.55it/s]Loading safetensors weights:  49%|████▉     | 10293/21056 [00:34<00:31, 343.14it/s]Loading safetensors weights:  49%|████▉     | 10328/21056 [00:34<00:31, 341.42it/s]Loading safetensors weights:  49%|████▉     | 10363/21056 [00:35<00:32, 333.95it/s]Loading safetensors weights:  49%|████▉     | 10397/21056 [00:35<00:32, 326.82it/s]Loading safetensors weights:  50%|████▉     | 10430/21056 [00:35<00:32, 324.94it/s]Loading safetensors weights:  50%|████▉     | 10463/21056 [00:35<00:33, 317.55it/s]Loading safetensors weights:  50%|████▉     | 10495/21056 [00:35<00:33, 315.78it/s]Loading safetensors weights:  50%|████▉     | 10527/21056 [00:35<00:33, 315.86it/s]Loading safetensors weights:  50%|█████     | 10563/21056 [00:35<00:32, 324.78it/s]Loading safetensors weights:  50%|█████     | 10599/21056 [00:35<00:31, 331.26it/s]Loading safetensors weights:  51%|█████     | 10635/21056 [00:35<00:31, 335.78it/s]Loading safetensors weights:  51%|█████     | 10671/21056 [00:36<00:30, 339.19it/s]Loading safetensors weights:  51%|█████     | 10707/21056 [00:36<00:30, 341.22it/s]Loading safetensors weights:  51%|█████     | 10743/21056 [00:36<00:30, 342.64it/s]Loading safetensors weights:  51%|█████     | 10779/21056 [00:36<00:29, 343.72it/s]Loading safetensors weights:  51%|█████▏    | 10814/21056 [00:36<00:29, 342.49it/s]Loading safetensors weights:  52%|█████▏    | 10849/21056 [00:36<00:30, 339.29it/s]Loading safetensors weights:  52%|█████▏    | 10884/21056 [00:36<00:30, 338.54it/s]Loading safetensors weights:  52%|█████▏    | 10926/21056 [00:36<00:28, 356.11it/s]Loading safetensors weights:  52%|█████▏    | 10962/21056 [00:36<00:31, 317.41it/s]Loading safetensors weights:  52%|█████▏    | 10995/21056 [00:37<00:35, 281.83it/s]Loading safetensors weights:  52%|█████▏    | 11030/21056 [00:37<00:33, 298.13it/s]Loading safetensors weights:  53%|█████▎    | 11066/21056 [00:37<00:32, 309.91it/s]Loading safetensors weights:  53%|█████▎    | 11102/21056 [00:37<00:31, 318.73it/s]Loading safetensors weights:  53%|█████▎    | 11135/21056 [00:37<00:32, 308.44it/s]Loading safetensors weights:  53%|█████▎    | 11167/21056 [00:37<00:32, 306.95it/s]Loading safetensors weights:  53%|█████▎    | 11199/21056 [00:37<00:32, 306.34it/s]Loading safetensors weights:  53%|█████▎    | 11231/21056 [00:37<00:32, 305.90it/s]Loading safetensors weights:  53%|█████▎    | 11263/21056 [00:37<00:32, 305.09it/s]Loading safetensors weights:  54%|█████▎    | 11294/21056 [00:38<00:33, 295.59it/s]Loading safetensors weights:  54%|█████▍    | 11327/21056 [00:38<00:32, 303.28it/s]Loading safetensors weights:  54%|█████▍    | 11362/21056 [00:38<00:30, 316.07it/s]Loading safetensors weights:  54%|█████▍    | 11398/21056 [00:38<00:29, 323.73it/s]Loading safetensors weights:  54%|█████▍    | 11434/21056 [00:38<00:29, 329.04it/s]Loading safetensors weights:  54%|█████▍    | 11470/21056 [00:38<00:28, 332.93it/s]Loading safetensors weights:  55%|█████▍    | 11506/21056 [00:38<00:28, 335.87it/s]Loading safetensors weights:  55%|█████▍    | 11542/21056 [00:38<00:28, 337.89it/s]Loading safetensors weights:  55%|█████▍    | 11578/21056 [00:38<00:27, 339.16it/s]Loading safetensors weights:  55%|█████▌    | 11614/21056 [00:38<00:27, 339.65it/s]Loading safetensors weights:  55%|█████▌    | 11650/21056 [00:39<00:27, 339.85it/s]Loading safetensors weights:  55%|█████▌    | 11684/21056 [00:39<00:27, 336.39it/s]Loading safetensors weights:  56%|█████▌    | 11722/21056 [00:39<00:27, 345.36it/s]Loading safetensors weights:  56%|█████▌    | 11805/21056 [00:39<00:19, 484.59it/s]Loading safetensors weights:  56%|█████▋    | 11894/21056 [00:39<00:15, 598.29it/s]Loading safetensors weights:  57%|█████▋    | 11962/21056 [00:39<00:14, 615.74it/s]Loading safetensors weights:  57%|█████▋    | 12037/21056 [00:39<00:13, 654.73it/s]Loading safetensors weights:  58%|█████▊    | 12130/21056 [00:39<00:12, 732.99it/s]Loading safetensors weights:  58%|█████▊    | 12229/21056 [00:39<00:10, 807.56it/s]Loading safetensors weights:  59%|█████▊    | 12337/21056 [00:39<00:09, 873.26it/s]Loading safetensors weights:  59%|█████▉    | 12445/21056 [00:40<00:09, 917.47it/s]Loading safetensors weights:  60%|█████▉    | 12549/21056 [00:40<00:09, 941.86it/s]Loading safetensors weights:  60%|██████    | 12648/21056 [00:40<00:08, 954.62it/s]Loading safetensors weights:  61%|██████    | 12744/21056 [00:40<00:09, 907.72it/s]Loading safetensors weights:  61%|██████    | 12836/21056 [00:40<00:09, 884.76it/s]Loading safetensors weights:  61%|██████▏   | 12925/21056 [00:40<00:09, 882.48it/s]Loading safetensors weights:  62%|██████▏   | 13032/21056 [00:40<00:08, 920.64it/s]Loading safetensors weights:  62%|██████▏   | 13137/21056 [00:40<00:08, 955.44it/s]Loading safetensors weights:  63%|██████▎   | 13236/21056 [00:40<00:08, 964.06it/s]Loading safetensors weights:  63%|██████▎   | 13340/21056 [00:41<00:07, 974.89it/s]Loading safetensors weights:  64%|██████▍   | 13439/21056 [00:41<00:07, 977.63it/s]Loading safetensors weights:  64%|██████▍   | 13537/21056 [00:41<00:08, 916.83it/s]Loading safetensors weights:  65%|██████▍   | 13630/21056 [00:41<00:08, 881.69it/s]Loading safetensors weights:  65%|██████▌   | 13727/21056 [00:41<00:08, 899.02it/s]Loading safetensors weights:  66%|██████▌   | 13835/21056 [00:41<00:07, 934.14it/s]Loading safetensors weights:  66%|██████▌   | 13943/21056 [00:41<00:07, 959.45it/s]Loading safetensors weights:  67%|██████▋   | 14040/21056 [00:41<00:07, 880.89it/s]Loading safetensors weights:  67%|██████▋   | 14130/21056 [00:42<00:10, 664.75it/s]Loading safetensors weights:  67%|██████▋   | 14205/21056 [00:42<00:11, 619.85it/s]Loading safetensors weights:  68%|██████▊   | 14273/21056 [00:42<00:12, 548.90it/s]Loading safetensors weights:  68%|██████▊   | 14333/21056 [00:42<00:14, 477.48it/s]Loading safetensors weights:  68%|██████▊   | 14385/21056 [00:42<00:14, 447.65it/s]Loading safetensors weights:  69%|██████▊   | 14433/21056 [00:42<00:15, 428.35it/s]Loading safetensors weights:  69%|██████▉   | 14478/21056 [00:42<00:15, 421.86it/s]Loading safetensors weights:  69%|██████▉   | 14522/21056 [00:43<00:15, 409.61it/s]Loading safetensors weights:  69%|██████▉   | 14564/21056 [00:43<00:16, 401.60it/s]Loading safetensors weights:  69%|██████▉   | 14605/21056 [00:43<00:16, 384.45it/s]Loading safetensors weights:  70%|██████▉   | 14644/21056 [00:43<00:16, 385.69it/s]Loading safetensors weights:  70%|██████▉   | 14683/21056 [00:43<00:17, 366.76it/s]Loading safetensors weights:  70%|██████▉   | 14726/21056 [00:43<00:16, 379.75it/s]Loading safetensors weights:  70%|███████   | 14765/21056 [00:43<00:17, 362.98it/s]Loading safetensors weights:  70%|███████   | 14802/21056 [00:43<00:17, 349.70it/s]Loading safetensors weights:  70%|███████   | 14841/21056 [00:43<00:17, 360.21it/s]Loading safetensors weights:  71%|███████   | 14878/21056 [00:44<00:17, 352.29it/s]Loading safetensors weights:  71%|███████   | 14914/21056 [00:44<00:17, 348.99it/s]Loading safetensors weights:  71%|███████   | 14949/21056 [00:44<00:17, 349.01it/s]Loading safetensors weights:  71%|███████   | 14985/21056 [00:44<00:17, 346.81it/s]Loading safetensors weights:  71%|███████▏  | 15020/21056 [00:44<00:17, 342.14it/s]Loading safetensors weights:  71%|███████▏  | 15055/21056 [00:44<00:18, 327.63it/s]Loading safetensors weights:  72%|███████▏  | 15088/21056 [00:44<00:18, 323.29it/s]Loading safetensors weights:  72%|███████▏  | 15121/21056 [00:44<00:18, 314.39it/s]Loading safetensors weights:  72%|███████▏  | 15153/21056 [00:44<00:18, 311.20it/s]Loading safetensors weights:  72%|███████▏  | 15185/21056 [00:44<00:19, 308.01it/s]Loading safetensors weights:  72%|███████▏  | 15218/21056 [00:45<00:18, 310.86it/s]Loading safetensors weights:  72%|███████▏  | 15253/21056 [00:45<00:18, 322.02it/s]Loading safetensors weights:  73%|███████▎  | 15289/21056 [00:45<00:17, 327.91it/s]Loading safetensors weights:  73%|███████▎  | 15325/21056 [00:45<00:17, 331.96it/s]Loading safetensors weights:  73%|███████▎  | 15361/21056 [00:45<00:17, 334.41it/s]Loading safetensors weights:  73%|███████▎  | 15396/21056 [00:45<00:16, 338.90it/s]Loading safetensors weights:  73%|███████▎  | 15430/21056 [00:45<00:16, 333.48it/s]Loading safetensors weights:  73%|███████▎  | 15465/21056 [00:45<00:16, 337.81it/s]Loading safetensors weights:  74%|███████▎  | 15499/21056 [00:45<00:16, 335.90it/s]Loading safetensors weights:  74%|███████▍  | 15533/21056 [00:46<00:16, 333.31it/s]Loading safetensors weights:  74%|███████▍  | 15567/21056 [00:46<00:16, 335.07it/s]Loading safetensors weights:  74%|███████▍  | 15605/21056 [00:46<00:15, 345.30it/s]Loading safetensors weights:  74%|███████▍  | 15640/21056 [00:46<00:15, 345.65it/s]Loading safetensors weights:  74%|███████▍  | 15675/21056 [00:46<00:15, 344.54it/s]Loading safetensors weights:  75%|███████▍  | 15710/21056 [00:46<00:15, 340.58it/s]Loading safetensors weights:  75%|███████▍  | 15745/21056 [00:46<00:15, 337.82it/s]Loading safetensors weights:  75%|███████▍  | 15781/21056 [00:46<00:15, 339.01it/s]Loading safetensors weights:  75%|███████▌  | 15815/21056 [00:46<00:15, 330.51it/s]Loading safetensors weights:  75%|███████▌  | 15849/21056 [00:46<00:16, 315.84it/s]Loading safetensors weights:  75%|███████▌  | 15881/21056 [00:47<00:16, 312.21it/s]Loading safetensors weights:  76%|███████▌  | 15913/21056 [00:47<00:16, 309.31it/s]Loading safetensors weights:  76%|███████▌  | 15945/21056 [00:47<00:16, 306.96it/s]Loading safetensors weights:  76%|███████▌  | 15977/21056 [00:47<00:16, 306.29it/s]Loading safetensors weights:  76%|███████▌  | 16012/21056 [00:47<00:15, 317.82it/s]Loading safetensors weights:  76%|███████▌  | 16045/21056 [00:47<00:15, 318.79it/s]Loading safetensors weights:  76%|███████▋  | 16080/21056 [00:47<00:15, 327.29it/s]Loading safetensors weights:  77%|███████▋  | 16116/21056 [00:47<00:14, 331.20it/s]Loading safetensors weights:  77%|███████▋  | 16150/21056 [00:47<00:14, 330.07it/s]Loading safetensors weights:  77%|███████▋  | 16184/21056 [00:48<00:14, 332.10it/s]Loading safetensors weights:  77%|███████▋  | 16218/21056 [00:48<00:14, 334.39it/s]Loading safetensors weights:  77%|███████▋  | 16252/21056 [00:48<00:14, 335.14it/s]Loading safetensors weights:  77%|███████▋  | 16288/21056 [00:48<00:14, 336.35it/s]Loading safetensors weights:  78%|███████▊  | 16324/21056 [00:48<00:14, 337.18it/s]Loading safetensors weights:  78%|███████▊  | 16360/21056 [00:48<00:13, 337.04it/s]Loading safetensors weights:  78%|███████▊  | 16399/21056 [00:48<00:13, 347.65it/s]Loading safetensors weights:  78%|███████▊  | 16472/21056 [00:48<00:10, 456.12it/s]Loading safetensors weights:  78%|███████▊  | 16518/21056 [00:48<00:10, 420.74it/s]Loading safetensors weights:  79%|███████▊  | 16580/21056 [00:48<00:09, 471.35it/s]Loading safetensors weights:  79%|███████▉  | 16628/21056 [00:49<00:09, 465.58it/s]Loading safetensors weights:  79%|███████▉  | 16680/21056 [00:49<00:09, 474.91it/s]Loading safetensors weights:  79%|███████▉  | 16732/21056 [00:49<00:09, 479.61it/s]Loading safetensors weights:  80%|███████▉  | 16781/21056 [00:49<00:08, 479.16it/s]Loading safetensors weights:  80%|████████  | 16855/21056 [00:49<00:07, 553.74it/s]Loading safetensors weights:  80%|████████  | 16911/21056 [00:49<00:07, 529.31it/s]Loading safetensors weights:  81%|████████  | 16971/21056 [00:49<00:07, 541.89it/s]Loading safetensors weights:  81%|████████  | 17047/21056 [00:49<00:06, 595.47it/s]Loading safetensors weights:  81%|████████  | 17107/21056 [00:49<00:06, 589.27it/s]Loading safetensors weights:  82%|████████▏ | 17194/21056 [00:50<00:05, 666.22it/s]Loading safetensors weights:  82%|████████▏ | 17261/21056 [00:50<00:07, 522.13it/s]Loading safetensors weights:  82%|████████▏ | 17334/21056 [00:50<00:06, 572.12it/s]Loading safetensors weights:  83%|████████▎ | 17415/21056 [00:50<00:05, 631.60it/s]Loading safetensors weights:  83%|████████▎ | 17483/21056 [00:50<00:05, 635.52it/s]Loading safetensors weights:  83%|████████▎ | 17550/21056 [00:50<00:07, 490.82it/s]Loading safetensors weights:  84%|████████▎ | 17606/21056 [00:50<00:07, 440.63it/s]Loading safetensors weights:  84%|████████▍ | 17656/21056 [00:51<00:08, 411.38it/s]Loading safetensors weights:  84%|████████▍ | 17701/21056 [00:51<00:08, 393.72it/s]Loading safetensors weights:  84%|████████▍ | 17743/21056 [00:51<00:08, 373.96it/s]Loading safetensors weights:  84%|████████▍ | 17782/21056 [00:51<00:08, 366.79it/s]Loading safetensors weights:  85%|████████▍ | 17820/21056 [00:51<00:09, 359.02it/s]Loading safetensors weights:  85%|████████▍ | 17857/21056 [00:51<00:08, 355.62it/s]Loading safetensors weights:  85%|████████▍ | 17893/21056 [00:51<00:09, 350.89it/s]Loading safetensors weights:  85%|████████▌ | 17929/21056 [00:51<00:09, 334.31it/s]Loading safetensors weights:  85%|████████▌ | 17963/21056 [00:51<00:09, 329.69it/s]Loading safetensors weights:  85%|████████▌ | 17997/21056 [00:52<00:09, 332.17it/s]Loading safetensors weights:  86%|████████▌ | 18033/21056 [00:52<00:09, 334.53it/s]Loading safetensors weights:  86%|████████▌ | 18067/21056 [00:52<00:08, 335.29it/s]Loading safetensors weights:  86%|████████▌ | 18101/21056 [00:52<00:08, 336.18it/s]Loading safetensors weights:  86%|████████▌ | 18135/21056 [00:52<00:08, 330.97it/s]Loading safetensors weights:  86%|████████▋ | 18169/21056 [00:52<00:08, 321.63it/s]Loading safetensors weights:  86%|████████▋ | 18202/21056 [00:52<00:09, 313.43it/s]Loading safetensors weights:  87%|████████▋ | 18234/21056 [00:52<00:09, 310.68it/s]Loading safetensors weights:  87%|████████▋ | 18266/21056 [00:52<00:09, 309.11it/s]Loading safetensors weights:  87%|████████▋ | 18298/21056 [00:53<00:08, 306.95it/s]Loading safetensors weights:  87%|████████▋ | 18333/21056 [00:53<00:08, 314.70it/s]Loading safetensors weights:  87%|████████▋ | 18369/21056 [00:53<00:08, 322.44it/s]Loading safetensors weights:  87%|████████▋ | 18405/21056 [00:53<00:08, 328.04it/s]Loading safetensors weights:  88%|████████▊ | 18438/21056 [00:53<00:08, 327.11it/s]Loading safetensors weights:  88%|████████▊ | 18473/21056 [00:53<00:07, 328.57it/s]Loading safetensors weights:  88%|████████▊ | 18506/21056 [00:53<00:07, 327.84it/s]Loading safetensors weights:  88%|████████▊ | 18541/21056 [00:53<00:07, 333.96it/s]Loading safetensors weights:  88%|████████▊ | 18577/21056 [00:53<00:07, 336.18it/s]Loading safetensors weights:  88%|████████▊ | 18613/21056 [00:53<00:07, 337.03it/s]Loading safetensors weights:  89%|████████▊ | 18649/21056 [00:54<00:07, 337.82it/s]Loading safetensors weights:  89%|████████▊ | 18685/21056 [00:54<00:07, 338.66it/s]Loading safetensors weights:  89%|████████▉ | 18724/21056 [00:54<00:06, 352.99it/s]Loading safetensors weights:  89%|████████▉ | 18760/21056 [00:54<00:06, 349.02it/s]Loading safetensors weights:  89%|████████▉ | 18825/21056 [00:54<00:05, 436.02it/s]Loading safetensors weights:  90%|████████▉ | 18869/21056 [00:54<00:05, 408.71it/s]Loading safetensors weights:  90%|████████▉ | 18924/21056 [00:54<00:04, 443.05it/s]Loading safetensors weights:  90%|█████████ | 18969/21056 [00:54<00:04, 431.15it/s]Loading safetensors weights:  90%|█████████ | 19017/21056 [00:54<00:04, 439.93it/s]Loading safetensors weights:  91%|█████████ | 19062/21056 [00:55<00:04, 423.12it/s]Loading safetensors weights:  91%|█████████ | 19116/21056 [00:55<00:04, 451.34it/s]Loading safetensors weights:  91%|█████████ | 19168/21056 [00:55<00:04, 463.01it/s]Loading safetensors weights:  91%|█████████▏| 19220/21056 [00:55<00:03, 470.88it/s]Loading safetensors weights:  92%|█████████▏| 19288/21056 [00:55<00:03, 521.39it/s]Loading safetensors weights:  92%|█████████▏| 19341/21056 [00:55<00:03, 467.00it/s]Loading safetensors weights:  92%|█████████▏| 19404/21056 [00:55<00:03, 502.43it/s]Loading safetensors weights:  92%|█████████▏| 19456/21056 [00:55<00:03, 498.77it/s]Loading safetensors weights:  93%|█████████▎| 19548/21056 [00:55<00:02, 613.26it/s]Loading safetensors weights:  93%|█████████▎| 19647/21056 [00:56<00:01, 715.95it/s]Loading safetensors weights:  94%|█████████▎| 19732/21056 [00:56<00:01, 753.17it/s]Loading safetensors weights:  94%|█████████▍| 19812/21056 [00:56<00:01, 766.12it/s]Loading safetensors weights:  94%|█████████▍| 19896/21056 [00:56<00:01, 786.76it/s]Loading safetensors weights:  95%|█████████▍| 19995/21056 [00:56<00:01, 844.17it/s]Loading safetensors weights:  95%|█████████▌| 20100/21056 [00:56<00:01, 903.32it/s]Loading safetensors weights:  96%|█████████▌| 20199/21056 [00:56<00:00, 924.16it/s]Loading safetensors weights:  96%|█████████▋| 20292/21056 [00:56<00:00, 884.42it/s]Loading safetensors weights:  97%|█████████▋| 20390/21056 [00:56<00:00, 901.58it/s]Loading safetensors weights:  97%|█████████▋| 20486/21056 [00:56<00:00, 905.50it/s]Loading safetensors weights:  98%|█████████▊| 20577/21056 [00:57<00:00, 876.40it/s]Loading safetensors weights:  98%|█████████▊| 20665/21056 [00:57<00:00, 852.39it/s]Loading safetensors weights:  99%|█████████▊| 20762/21056 [00:57<00:00, 883.37it/s]Loading safetensors weights:  99%|█████████▉| 20867/21056 [00:57<00:00, 930.01it/s]Loading safetensors weights: 100%|█████████▉| 20966/21056 [00:57<00:00, 937.11it/s]Loading safetensors weights: 100%|██████████| 21056/21056 [00:57<00:00, 365.75it/s]
+INFO     2026-03-22 13:52:27,630 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:27,654 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:27,654 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:27,670 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:27,670 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:27,824 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 24576], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:27,824 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:27,900 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[12288, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:27,900 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:27,923 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:27,923 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:27,939 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:27,939 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:27,940 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:27,967 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,004 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,007 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,027 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,027 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,049 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,049 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,064 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,064 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,065 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,066 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,104 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,137 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,155 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,156 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,177 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,177 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,179 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,180 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,180 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,181 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,218 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,231 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,250 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,251 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,273 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,273 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,275 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,275 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,276 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,277 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,318 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,319 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,338 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,338 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,361 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,361 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,363 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,363 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,364 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,365 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,404 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,404 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,423 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,423 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,446 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,446 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,448 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,448 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,448 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,450 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,488 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,488 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,507 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,508 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,530 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,530 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,532 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,533 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,533 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,534 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,573 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,573 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,592 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,593 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,615 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,615 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,617 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,618 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,618 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,619 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,658 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,658 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,678 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,678 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,701 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,701 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,703 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,703 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,703 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,705 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,743 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,744 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,763 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,763 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,786 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,786 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,788 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,788 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,789 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,790 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,829 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,829 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,849 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,849 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,872 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,872 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,874 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,874 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,874 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,876 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,915 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,915 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,934 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,934 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,956 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,957 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,959 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,959 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,959 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,960 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:28,999 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:28,999 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,018 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,018 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,041 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,041 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,043 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,043 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,043 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,045 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,083 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,084 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,103 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,103 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,126 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,126 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,128 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,128 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,129 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,130 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,168 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,168 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,187 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,188 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,210 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,210 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,212 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,212 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,213 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,214 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,252 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,253 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,272 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,272 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,294 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,295 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,297 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,297 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,297 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,299 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,336 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,336 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,356 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,356 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,378 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,378 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,380 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,380 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,381 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,382 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,420 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,420 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,439 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,439 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,462 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,462 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,464 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,464 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,465 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,466 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,504 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,504 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,523 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,524 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,546 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,546 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,548 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,548 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,549 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,550 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,588 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,588 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,607 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,607 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,630 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,630 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,632 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,633 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,633 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,634 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,673 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,673 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,692 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,693 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,715 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,715 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,717 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,718 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,718 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,719 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,758 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,758 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,777 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,777 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,800 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,800 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,802 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,802 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,803 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,804 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,842 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,842 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,861 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,861 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,884 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,884 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,886 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,886 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,887 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,888 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,925 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,926 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,944 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,944 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,967 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,967 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,969 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,969 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:29,970 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:29,971 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,010 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,011 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,030 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,030 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,053 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,053 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,055 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,055 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,056 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,057 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,096 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,096 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,115 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,115 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,138 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,138 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,140 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,140 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,141 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,142 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,180 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,180 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,199 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,199 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,222 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 3584], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,222 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,224 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,224 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,224 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 64], dtype=float32, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,226 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,263 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[2560, 6144], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,263 1049493 utils.py[line:133] weight_name:weight
+INFO     2026-03-22 13:52:30,282 1049493 utils.py[line:148] weight_tmp:Parameter containing:
+Tensor(shape=[3072, 2560], dtype=bfloat16, place=Place(gpu:1), stop_gradient=False,
+       [[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+INFO     2026-03-22 13:52:30,284 1049493 load_weight_utils.py[line:228] Model loading took 60.397 seconds
+INFO     2026-03-22 13:52:31,206 1049493 gpu_model_runner.py[line:1402] Initializing kv cache for all layers. [0]
+INFO     2026-03-22 13:52:31,206 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 0: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,208 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 1: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,209 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 2: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,211 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 3: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,212 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 4: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,213 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 5: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,214 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 6: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,216 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 7: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,217 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 8: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,218 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 9: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,219 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 10: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,221 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 11: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,222 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 12: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,223 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 13: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,224 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 14: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,225 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 15: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,226 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 16: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,227 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 17: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,228 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 18: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,229 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 19: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,230 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 20: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,232 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 21: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,233 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 22: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,234 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 23: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,236 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 24: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,237 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 25: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,238 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 26: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,240 1049493 gpu_model_runner.py[line:1415] ..creating kv cache for layer 27: key:[2048, 4, 64, 128], value:[2048, 4, 64, 128], indexer:[]
+INFO     2026-03-22 13:52:31,241 1049493 gpu_model_runner.py[line:1487] ✅ kv cache is ready! [1]
+INFO     2026-03-22 13:52:31,241 1049493 gpu_model_runner.py[line:1490] kv cache is initialized!
+INFO     2026-03-22 13:52:31,241 1049493 gpu_model_runner.py[line:1863] Skipping CUDA graph capture. Please check GraphOptimizationConfig
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/compat/proxy.py:415: UserWarning: Extending PyTorch compat scope, previous scope: {'flash_mla', 'deep_gemm', 'triton', 'deep_ep', 'flashinfer', 'cutlass'}, new scope: {'flashinfer'}.
+  warnings.warn(msg)
+/root/paddlejob/workspace/output/lizexu/miniconda3/envs/lzx/lib/python3.10/site-packages/paddle/library.py:158: UserWarning: The feature 'register_fake' in function 'torch.library.register_fake' is not implemented in PaddlePaddle's custom operator interface.
+  warn_about_unimplemented_torch_features(
