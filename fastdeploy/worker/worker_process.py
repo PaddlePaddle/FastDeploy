@@ -286,6 +286,10 @@ class PaddleDisWorkerProc:
         )
 
         # init engine forward signal
+        # If engine is being forward, engine_forward_signal_data should be 1.
+        # If engine is out of forward, engine_forward_signal_data should be 0.
+        # In pd disaggregation + EP parallel, only when engine is out of forward, scheduler send next batch to worker.
+        # When engine is out of forward, engine_forward_signal_data must be 0, otherwise scheduler will not schedule next batch.
         engine_forward_signal_data = np.zeros([1], dtype=np.int32)
         self.engine_forward_signal = IPCSignal(
             name="engine_forward_signal",
@@ -581,11 +585,13 @@ class PaddleDisWorkerProc:
                     paddle.distributed.barrier(self.parallel_config.ep_group)
 
                 req_dicts, control_reqs = [], []
-                if not tasks:
-                    # should never happen
-                    continue
+                assert len(tasks) == 2, f"task_queue.get_tasks() should contain a tuple, ([req1, ...] ,real_bsz), but got len(tasks)={len(tasks)}"
                 # In EP + DP prefill, empty task ([]) is delived in worker to barrier. For empty task, just skip and continue.
-                if tasks[0][0]:
+                # tasks contains two part, ([req1, ...] ,real_bsz)
+                # tasks[0] is [req1, ...]
+                # if empty batch is delived, eval(tasks[0][0]) should be False, 
+                # if batch with requests is delived, eval(tasks[0][0]) should be True, then to be processed as below.
+                if tasks[0][0]: 
                     for req_dict, bsz in tasks:
                         if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
                             control_reqs.append(req_dict[0])
