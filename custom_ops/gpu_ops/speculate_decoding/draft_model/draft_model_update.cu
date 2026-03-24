@@ -54,43 +54,31 @@ __global__ void draft_model_update_kernel(const int64_t* inter_next_tokens,
     auto seq_len_decoder = seq_lens_decoder[tid];
 
     // 1. update step_idx && seq_lens_dec
-    if (!stop_flags[tid] /* seq_lens_decoder > 0 or seq_lens_encoder > 0 */) {
+    if (!stop_flags[tid]) {
       int64_t token_this_time = -1;
-      // decoder step
-      if (seq_len_decoder > 0 && seq_len_encoder <= 0) {
-        seq_lens_decoder[tid] += seq_len_this_time;
-        token_this_time = next_tokens_start[seq_len_this_time - 1];
-        draft_token_now[0] = next_tokens_start[seq_len_this_time - 1];
-        base_model_draft_tokens_now[substep + 1] = token_this_time;
-        step_idx[tid] += seq_len_this_time;
-        pre_ids_now[step_idx[tid]] = token_this_time;
-
-      } else {
+      if (seq_len_encoder > 0) {
         token_this_time = next_tokens_start[0];
-
-        // seq_lens_decoder[tid] = seq_lens_encoder[tid];
         seq_lens_decoder[tid] = seq_len_encoder + seq_len_decoder;
         seq_lens_encoder[tid] = 0;
         pre_ids_now[1] = token_this_time;
         step_idx[tid] += 1;
         draft_token_now[0] = token_this_time;
-        base_model_draft_tokens_now[substep + 1] = token_this_time;
+        if (step_idx[tid] < max_dec_len[tid]) {
+          base_model_draft_tokens_now[substep + 1] = token_this_time;
+        }
+      } else if (seq_len_decoder > 0) {
+        if (step_idx[tid] >= max_dec_len[tid] - 1) {
+          // If up to max_dec_len -1. Recompute but not update.
+          base_model_draft_tokens_now[substep + 1] = -1;
+        } else {
+          seq_lens_decoder[tid] += seq_len_this_time;
+          token_this_time = next_tokens_start[seq_len_this_time - 1];
+          draft_token_now[0] = next_tokens_start[seq_len_this_time - 1];
+          base_model_draft_tokens_now[substep + 1] = token_this_time;
+          step_idx[tid] += seq_len_this_time;
+          pre_ids_now[step_idx[tid]] = token_this_time;
+        }
       }
-
-      // multi_end
-      // TODO(liuzichang): Don't check eos in future
-      if (is_in_end(token_this_time, end_ids, end_ids_len) ||
-          prefill_one_step_stop) {
-        stop_flags[tid] = true;
-        stop_flag_now_int = 1;
-        // max_dec_len
-      } else if (step_idx[tid] >= max_dec_len[tid]) {
-        stop_flags[tid] = true;
-        draft_token_now[seq_len_this_time - 1] = end_ids[0];
-        base_model_draft_tokens_now[substep + 1] = end_ids[0];
-        stop_flag_now_int = 1;
-      }
-
     } else {
       draft_token_now[0] = -1;
       base_model_draft_tokens_now[substep + 1] = -1;
