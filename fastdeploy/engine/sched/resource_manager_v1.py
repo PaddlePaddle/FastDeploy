@@ -996,6 +996,9 @@ class ResourceManagerV1(ResourceManager):
                             if resume_success:
                                 offload_logger.info(f"Resumed offloaded request {request.request_id}")
                                 self.waiting.popleft()
+                                self.tasks_list[request.idx] = request
+                                self.stop_flags[request.idx] = False
+                                self.req_dict[request.request_id] = request.idx
                                 self.running.append(request)
                                 scheduled_reqs.append(self._prepare_decode_task(request))
                                 continue
