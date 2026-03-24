@@ -555,7 +555,7 @@ class OpenAIServingCompletion:
                     output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
-                        text=output["text"],
+                        text="" if output["skipped"] else output["text"],
                         prompt_token_ids=None,
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
                         tool_calls=output["tool_calls"],
@@ -573,7 +573,7 @@ class OpenAIServingCompletion:
                     if output["tool_calls"] is not None:
                         tool_called[idx] = True
 
-                    if output["skipped"]:
+                    if output["skipped"] and not request.return_token_ids:
                         continue
 
                     choices.append(delta_message)
