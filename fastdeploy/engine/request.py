@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import time
 import traceback
@@ -896,7 +897,27 @@ class RequestMetrics:
         """
         Convert the RequestMetrics object to a dictionary.
         """
-        return {k: v for k, v in asdict(self).items()}
+        d = {}
+        for k in self.__dataclass_fields__:
+            v = getattr(self, k)
+            if v is None or type(v) in (int, float, str, bool):
+                d[k] = v
+            elif dataclasses.is_dataclass(v):
+                if hasattr(v, "to_dict"):
+                    d[k] = v.to_dict()
+                else:
+                    d[k] = asdict(v)
+            elif isinstance(v, list):
+                # Note: This is a shallow copy for performance. If RequestMetrics
+                # ever contains lists of nested dataclasses, they must be manually
+                # serialized here or fallback to asdict.
+                d[k] = list(v)
+            elif isinstance(v, dict):
+                # Note: This is a shallow copy for performance.
+                d[k] = dict(v)
+            else:
+                d[k] = v
+        return d
 
     def record_recv_first_token(self):
         cur_time = time.time()
