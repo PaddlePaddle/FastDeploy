@@ -2,9 +2,8 @@
 RadixTree implementation for prefix matching in KV cache.
 """
 
-import heapq
 import threading
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from fastdeploy.utils import get_logger
 
@@ -142,14 +141,10 @@ class RadixTree:
         self._node_count = 1  # Root node
         self._enable_host_cache = enable_host_cache
 
-        # Separate min-heaps for evictable nodes by cache status (true deletion)
-        # Format: (last_access_time, node_id, node)
-        # node_id is used as tiebreaker for stable ordering
-        self._evictable_device_heap: List[Tuple[float, str, BlockNode]] = []
-        self._evictable_host_heap: List[Tuple[float, str, BlockNode]] = []
-        # Set of currently evictable node_ids for O(1) lookup
-        self._evictable_set: set = set()
-        self._find_prefix_call_count = 0
+        # Use dict for O(1) add/remove instead of heap's O(n) removal
+        # Format: {node_id: (last_access_time, node)}
+        self._evictable_device: Dict[str, Tuple[float, BlockNode]] = {}
+        self._evictable_host: Dict[str, Tuple[float, BlockNode]] = {}
 
     def insert(
         self,
@@ -203,9 +198,11 @@ class RadixTree:
                 node = node.children[block_hash]
                 # Increment ref and update evictable status
                 node.increment_ref()
-                # If node in evictable, remove it from evictable set
-                if node.node_id in self._evictable_set:
-                    self._remove_from_evictable(node)
+                # If node in evictable, remove it from evictable dict
+                if node.cache_status == CacheStatus.DEVICE and node.node_id in self._evictable_device:
+                    del self._evictable_device[node.node_id]
+                elif node.cache_status == CacheStatus.HOST and node.node_id in self._evictable_host:
+                    del self._evictable_host[node.node_id]
                 result_nodes.append(node)
 
         return result_nodes, wasted_block_ids
@@ -252,10 +249,6 @@ class RadixTree:
                 )
                 node.touch()
                 matched_nodes.append(node)
-
-        self._find_prefix_call_count += 1
-        if self._find_prefix_call_count % 20 == 0:
-            self._dump_tree_status("find_prefix")
 
         return matched_nodes
 
@@ -307,36 +300,8 @@ class RadixTree:
         with self._lock:
             self._root = BlockNode(block_id=0)
             self._node_count = 1
-            self._evictable_device_heap.clear()
-            self._evictable_host_heap.clear()
-            self._evictable_set.clear()
-
-    def _dump_tree_status(self, caller: str = "") -> None:
-        """DFS traverse all nodes and log their status."""
-        status_count = {}
-        lines = []
-
-        def _dfs(node, depth):
-            if node is not self._root:
-                s = node.cache_status.name
-                status_count[s] = status_count.get(s, 0) + 1
-                lines.append(
-                    f"{'  ' * depth}{s} block_id={node.block_id} "
-                    f"ref={node.ref_count} hash={node.hash_value[:8] if node.hash_value else 'N/A'}..."
-                )
-            for child in node.children.values():
-                _dfs(child, depth + 1)
-
-        with self._lock:
-            _dfs(self._root, 0)
-
-        summary = ", ".join(f"{k}:{v}" for k, v in sorted(status_count.items()))
-        logger.info(
-            f"[DEBUG] RadixTree dump (call_count={self._find_prefix_call_count}, "
-            f"caller={caller}) total_nodes={sum(status_count.values())} [{summary}]"
-        )
-        for line in lines:
-            logger.info(f"[DEBUG]   {line}")
+            self._evictable_device.clear()
+            self._evictable_host.clear()
 
     def get_stats(self) -> RadixTreeStats:
         """
@@ -350,8 +315,8 @@ class RadixTree:
         """
         return RadixTreeStats(
             node_count=self._node_count,
-            evictable_device_count=len(self._evictable_device_heap),
-            evictable_host_count=len(self._evictable_host_heap),
+            evictable_device_count=len(self._evictable_device),
+            evictable_host_count=len(self._evictable_host),
         )
 
     def node_count(self) -> int:
@@ -380,17 +345,19 @@ class RadixTree:
         evicted_block_ids = []
 
         with self._lock:
-            if len(self._evictable_host_heap) < num_blocks:
+            if len(self._evictable_host) < num_blocks:
                 return None
 
             for _ in range(num_blocks):
-                _, node_id, node = heapq.heappop(self._evictable_host_heap)
-                self._evictable_set.discard(node_id)
+                # Find LRU node (smallest last_access_time)
+                lru_node_id = min(self._evictable_host.keys(),
+                                  key=lambda nid: self._evictable_host[nid][0])
+                _, node = self._evictable_host.pop(lru_node_id)
 
                 logger.debug(
                     f"[DEBUG] evict_host_nodes: -HOST block_id={node.block_id}, "
-                    f"device_heap={len(self._evictable_device_heap)}, "
-                    f"host_heap={len(self._evictable_host_heap)}"
+                    f"device={len(self._evictable_device)}, "
+                    f"host={len(self._evictable_host)}"
                 )
 
                 self._remove_node_from_tree(node)
@@ -421,17 +388,19 @@ class RadixTree:
         evicted_block_ids = []
 
         with self._lock:
-            if len(self._evictable_device_heap) < num_blocks:
+            if len(self._evictable_device) < num_blocks:
                 return None
 
             for _ in range(num_blocks):
-                _, node_id, node = heapq.heappop(self._evictable_device_heap)
-                self._evictable_set.discard(node_id)
+                # Find LRU node (smallest last_access_time)
+                lru_node_id = min(self._evictable_device.keys(),
+                                  key=lambda nid: self._evictable_device[nid][0])
+                _, node = self._evictable_device.pop(lru_node_id)
 
                 logger.debug(
                     f"[DEBUG] evict_device_nodes: -DEVICE block_id={node.block_id}, "
-                    f"device_heap={len(self._evictable_device_heap)}, "
-                    f"host_heap={len(self._evictable_host_heap)}"
+                    f"device={len(self._evictable_device)}, "
+                    f"host={len(self._evictable_host)}"
                 )
 
                 self._remove_node_from_tree(node)
@@ -472,22 +441,25 @@ class RadixTree:
         released_block_ids = []
 
         with self._lock:
-            if len(self._evictable_device_heap) < num_blocks:
+            if len(self._evictable_device) < num_blocks:
                 logger.debug(
                     f"[DEBUG] evict_device_to_host: pre-check failed, "
-                    f"need={num_blocks}, device_heap={len(self._evictable_device_heap)}"
+                    f"need={num_blocks}, device={len(self._evictable_device)}"
                 )
                 return None
 
             logger.debug(
                 f"[DEBUG] evict_device_to_host: start, "
                 f"num_blocks={num_blocks}, host_block_ids={host_block_ids}, "
-                f"device_heap={len(self._evictable_device_heap)}, "
-                f"host_heap={len(self._evictable_host_heap)}"
+                f"device={len(self._evictable_device)}, "
+                f"host={len(self._evictable_host)}"
             )
 
             for i in range(num_blocks):
-                _, node_id, node = heapq.heappop(self._evictable_device_heap)
+                # Find LRU node (smallest last_access_time)
+                lru_node_id = min(self._evictable_device.keys(),
+                                  key=lambda nid: self._evictable_device[nid][0])
+                _, node = self._evictable_device.pop(lru_node_id)
 
                 # Save the original device block_id
                 original_block_id = node.block_id
@@ -498,76 +470,65 @@ class RadixTree:
                 node.block_id = new_host_block_id
                 node.touch()
 
-                # Remove from evictable set first, then re-add as HOST
-                self._evictable_set.discard(node_id)
-                self._add_to_evictable(node)
+                # Add to host evictable dict
+                self._evictable_host[node.node_id] = (node.last_access_time, node)
 
                 released_block_ids.append(original_block_id)
 
                 logger.debug(
                     f"[DEBUG] evict_device_to_host: DEVICE block_id={original_block_id} -> HOST block_id={new_host_block_id}, "
-                    f"device_heap={len(self._evictable_device_heap)}, "
-                    f"host_heap={len(self._evictable_host_heap)}"
+                    f"device={len(self._evictable_device)}, "
+                    f"host={len(self._evictable_host)}"
                 )
 
             logger.debug(
                 f"[DEBUG] evict_device_to_host: done, "
                 f"released_device_block_ids={released_block_ids}, "
-                f"device_heap={len(self._evictable_device_heap)}, "
-                f"host_heap={len(self._evictable_host_heap)}"
+                f"device={len(self._evictable_device)}, "
+                f"host={len(self._evictable_host)}"
             )
 
         return released_block_ids
 
     def _add_to_evictable(self, node: BlockNode) -> None:
         """
-        Add a node to the appropriate evictable heap based on cache status.
+        Add a node to the appropriate evictable dict based on cache status.
         """
-        if node.node_id not in self._evictable_set:
-            heap = (
-                self._evictable_device_heap
-                if node.cache_status == CacheStatus.DEVICE
-                else self._evictable_host_heap
-            )
-            heapq.heappush(heap, (node.last_access_time, node.node_id, node))
-            self._evictable_set.add(node.node_id)
-            logger.debug(
-                f"[DEBUG] _add_to_evictable: +{node.cache_status.name} block_id={node.block_id}, "
-                f"device_heap={len(self._evictable_device_heap)}, "
-                f"host_heap={len(self._evictable_host_heap)}"
-            )
+        if node.cache_status == CacheStatus.DEVICE:
+            if node.node_id not in self._evictable_device:
+                self._evictable_device[node.node_id] = (node.last_access_time, node)
+                logger.debug(
+                    f"[DEBUG] _add_to_evictable: +{node.cache_status.name} block_id={node.block_id}, "
+                    f"device={len(self._evictable_device)}, "
+                    f"host={len(self._evictable_host)}"
+                )
+        elif node.cache_status == CacheStatus.HOST:
+            if node.node_id not in self._evictable_host:
+                self._evictable_host[node.node_id] = (node.last_access_time, node)
+                logger.debug(
+                    f"[DEBUG] _add_to_evictable: +{node.cache_status.name} block_id={node.block_id}, "
+                    f"device={len(self._evictable_device)}, "
+                    f"host={len(self._evictable_host)}"
+                )
 
     def _remove_from_evictable(self, node: BlockNode) -> None:
         """
-        Remove a node from evictable tracking (true deletion from heap).
+        Remove a node from evictable tracking (O(1) deletion from dict).
         """
-        if node.node_id in self._evictable_set:
-            self._evictable_set.discard(node.node_id)
-            heap = (
-                self._evictable_device_heap
-                if node.cache_status == CacheStatus.DEVICE
-                else self._evictable_host_heap
-            )
-            self._remove_from_heap(heap, node.node_id)
+        if node.cache_status == CacheStatus.DEVICE and node.node_id in self._evictable_device:
+            del self._evictable_device[node.node_id]
             logger.debug(
                 f"[DEBUG] _remove_from_evictable: -{node.cache_status.name} block_id={node.block_id}, "
-                f"device_heap={len(self._evictable_device_heap)}, "
-                f"host_heap={len(self._evictable_host_heap)}"
+                f"device={len(self._evictable_device)}, "
+                f"host={len(self._evictable_host)}"
             )
-
-    @staticmethod
-    def _remove_from_heap(heap: list, node_id: str) -> None:
-        """
-        Remove an entry from the heap by node_id. O(n) search + O(log n) repair.
-        """
-        for i in range(len(heap)):
-            if heap[i][1] == node_id:
-                heap[i] = heap[-1]
-                heap.pop()
-                if i < len(heap):
-                    heapq._siftup(heap, i)
-                    heapq._siftdown(heap, 0, i)
-                return
+        elif node.cache_status == CacheStatus.HOST and node.node_id in self._evictable_host:
+            del self._evictable_host[node.node_id]
+            logger.debug(
+                f"[DEBUG] _remove_from_evictable: -{node.cache_status.name} block_id={node.block_id}, "
+                f"device={len(self._evictable_device)}, "
+                f"host={len(self._evictable_host)}"
+            )
 
     def _remove_node_from_tree(self, node: BlockNode) -> None:
         """
@@ -617,7 +578,7 @@ class RadixTree:
                 self._remove_from_evictable(node)
 
                 # Update status to SWAP_TO_DEVICE and block_id to GPU block ID
-                node.cache_status = CacheStatus.DEVICE
+                node.cache_status = CacheStatus.DEVICE  # Temporary status for test
                 node.block_id = gpu_block_id
                 node.touch()
 

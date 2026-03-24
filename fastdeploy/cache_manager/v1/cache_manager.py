@@ -9,14 +9,16 @@ Responsible for:
 - Three-level cache matching (Device → Host → Storage)
 """
 
+from __future__ import annotations
+
 import threading
 import traceback
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from fastdeploy.engine.request import Request
 from fastdeploy.utils import get_logger
 
 if TYPE_CHECKING:
+    from fastdeploy.engine.request import Request
     from fastdeploy.config import FDConfig
     from fastdeploy.cache_manager.v1.storage import StorageScheduler
 
@@ -214,7 +216,7 @@ class CacheManager(KVCacheBase):
             with self._lock:
                 match_result = request.match_result
 
-                need_block_num = match_result.matched_host_nums + num_blocks
+                need_block_num = num_blocks
 
                 if not self.can_allocate_device_blocks(need_block_num):
                     return []
@@ -327,9 +329,13 @@ class CacheManager(KVCacheBase):
                         match_result.device_nodes.extend(device_nodes)
 
                         for node in device_nodes:
+                            in_evictable = (
+                                node.node_id in self._radix_tree._evictable_device
+                                or node.node_id in self._radix_tree._evictable_host
+                            )
                             logger.debug(
                                 f"[DEBUG] allocate_device_blocks, ref_count: {node.ref_count}, "
-                                f"evictable: {node.node_id in self._radix_tree._evictable_set}, block_id: {node.block_id}"
+                                f"evictable: {in_evictable}, block_id: {node.block_id}"
                             )
 
                         # DEBUG LOG: insert 结果

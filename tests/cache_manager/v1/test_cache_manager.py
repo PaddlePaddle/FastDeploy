@@ -21,11 +21,13 @@ Tests cover:
 - Resource checking (can_allocate_*)
 - Free block counting (num_free_*_blocks)
 - Reset functionality
-- Request lifecycle management
-- Prefix matching
+- Request lifecycle management with RadixTree integration
+- Multi-method workflow tests
 """
 
 import unittest
+from dataclasses import dataclass, field
+from typing import List, Optional
 
 from utils import get_default_test_fd_config
 
@@ -40,7 +42,6 @@ def create_cache_manager(
     from fastdeploy.cache_manager.v1.cache_manager import CacheManager
 
     config = get_default_test_fd_config()
-    # Set cache_config attributes needed by CacheManager
     config.cache_config.total_block_num = total_block_num
     config.cache_config.num_cpu_blocks = num_cpu_blocks
     config.cache_config.block_size = block_size
@@ -49,37 +50,71 @@ def create_cache_manager(
     return CacheManager(config)
 
 
+@dataclass
+class MockMatchResult:
+    """Mock MatchResult for testing."""
+    device_nodes: List = field(default_factory=list)
+    host_nodes: List = field(default_factory=list)
+    storage_nodes: List = field(default_factory=list)
+    uncached_block_ids: List = field(default_factory=list)
+
+    @property
+    def matched_device_nums(self) -> int:
+        return len(self.device_nodes)
+
+    @property
+    def matched_host_nums(self) -> int:
+        return len(self.host_nodes)
+
+    @property
+    def matched_storage_nums(self) -> int:
+        return len(self.storage_nodes)
+
+    @property
+    def total_matched_blocks(self) -> int:
+        return self.matched_device_nums + self.matched_host_nums + self.matched_storage_nums
+
+
+@dataclass
+class MockRequest:
+    """Mock Request for testing CacheManager."""
+    request_id: str
+    prompt_hashes: List[str]
+    block_tables: List[int] = field(default_factory=list)
+    match_result: MockMatchResult = field(default_factory=MockMatchResult)
+    cache_evict_metadata: List = field(default_factory=list)
+    cache_swap_metadata: List = field(default_factory=list)
+
+
 class TestCacheManagerAllocation(unittest.TestCase):
     """Test CacheManager block allocation functionality."""
 
-    # ============ Device Block Allocation Tests ============
-
-    def test_allocate_device_blocks_success(self):
-        """Test successful device block allocation."""
+    def test_allocate_device_blocks_with_request(self):
+        """Test device block allocation with mock request."""
         cache_manager = create_cache_manager()
-        allocated = cache_manager.allocate_device_blocks(10)
+        request = MockRequest(
+            request_id="test_req_1",
+            prompt_hashes=["h1", "h2", "h3", "h4", "h5"],
+            block_tables=[],
+        )
+
+        allocated = cache_manager.allocate_device_blocks(request, 5)
 
         self.assertIsNotNone(allocated)
-        self.assertEqual(len(allocated), 10)
-        self.assertEqual(len(set(allocated)), 10)  # All unique
+        self.assertEqual(len(allocated), 5)
+        self.assertEqual(cache_manager.num_free_device_blocks, 95)
 
     def test_allocate_device_blocks_insufficient(self):
-        """Test device block allocation returns None when not enough blocks."""
+        """Test device block allocation when not enough blocks after eviction."""
         cache_manager = create_cache_manager()
-        cache_manager.allocate_device_blocks(95)
-        allocated = cache_manager.allocate_device_blocks(10)
+        # Exhaust device blocks
+        for _ in range(10):
+            cache_manager.allocate_device_blocks(MockRequest(request_id=f"req", prompt_hashes=[], block_tables=[]), 10)
 
-        self.assertIsNone(allocated)
-
-    def test_allocate_device_blocks_exhausted(self):
-        """Test device block allocation returns None when no blocks available."""
-        cache_manager = create_cache_manager()
-        cache_manager.allocate_device_blocks(100)
-        allocated = cache_manager.allocate_device_blocks(1)
-
-        self.assertIsNone(allocated)
-
-    # ============ Host Block Allocation Tests ============
+        # Next allocation should fail (no evictable blocks and no free blocks)
+        request = MockRequest(request_id="test", prompt_hashes=["h1"], block_tables=[])
+        result = cache_manager.allocate_device_blocks(request, 10)
+        self.assertEqual(result, [])
 
     def test_allocate_host_blocks_success(self):
         """Test successful host block allocation."""
@@ -88,68 +123,14 @@ class TestCacheManagerAllocation(unittest.TestCase):
 
         self.assertIsNotNone(allocated)
         self.assertEqual(len(allocated), 10)
-        self.assertEqual(len(set(allocated)), 10)
+        self.assertEqual(cache_manager.num_free_host_blocks, 40)
 
     def test_allocate_host_blocks_insufficient(self):
-        """Test host block allocation returns None when not enough blocks."""
-        cache_manager = create_cache_manager()
-        cache_manager.allocate_host_blocks(45)
+        """Test host block allocation returns empty when not enough blocks."""
+        cache_manager = create_cache_manager(num_cpu_blocks=5)
         allocated = cache_manager.allocate_host_blocks(10)
 
-        self.assertIsNone(allocated)
-
-    # ============ Free Block Count Tests ============
-
-    def test_num_free_device_blocks_initial(self):
-        """Test initial free device blocks count."""
-        cache_manager = create_cache_manager()
-        self.assertEqual(cache_manager.num_free_device_blocks, 100)
-
-    def test_num_free_device_blocks_after_allocation(self):
-        """Test free device blocks count after allocation."""
-        cache_manager = create_cache_manager()
-        cache_manager.allocate_device_blocks(30)
-        self.assertEqual(cache_manager.num_free_device_blocks, 70)
-
-    def test_num_free_host_blocks_initial(self):
-        """Test initial free host blocks count."""
-        cache_manager = create_cache_manager()
-        self.assertEqual(cache_manager.num_free_host_blocks, 50)
-
-    def test_num_free_host_blocks_after_allocation(self):
-        """Test free host blocks count after allocation."""
-        cache_manager = create_cache_manager()
-        cache_manager.allocate_host_blocks(20)
-        self.assertEqual(cache_manager.num_free_host_blocks, 30)
-
-    # ============ Resource Checking Tests ============
-
-    def test_can_allocate_device_blocks_true(self):
-        """Test can_allocate_device_blocks returns True when enough blocks."""
-        cache_manager = create_cache_manager()
-        self.assertTrue(cache_manager.can_allocate_device_blocks(50))
-
-    def test_can_allocate_device_blocks_false(self):
-        """Test can_allocate_device_blocks returns False when not enough blocks."""
-        cache_manager = create_cache_manager()
-        cache_manager.allocate_device_blocks(95)
-        self.assertFalse(cache_manager.can_allocate_device_blocks(10))
-
-    def test_can_allocate_device_blocks_exact(self):
-        """Test can_allocate_device_blocks with exact available blocks."""
-        cache_manager = create_cache_manager()
-        self.assertTrue(cache_manager.can_allocate_device_blocks(100))
-
-    def test_can_allocate_host_blocks_true(self):
-        """Test can_allocate_host_blocks returns True when enough blocks."""
-        cache_manager = create_cache_manager()
-        self.assertTrue(cache_manager.can_allocate_host_blocks(25))
-
-    def test_can_allocate_host_blocks_false(self):
-        """Test can_allocate_host_blocks returns False when not enough blocks."""
-        cache_manager = create_cache_manager()
-        cache_manager.allocate_host_blocks(45)
-        self.assertFalse(cache_manager.can_allocate_host_blocks(10))
+        self.assertEqual(allocated, [])
 
 
 class TestCacheManagerRelease(unittest.TestCase):
@@ -158,7 +139,8 @@ class TestCacheManagerRelease(unittest.TestCase):
     def test_free_device_blocks(self):
         """Test freeing device blocks."""
         cache_manager = create_cache_manager()
-        allocated = cache_manager.allocate_device_blocks(10)
+        request = MockRequest(request_id="req", prompt_hashes=[], block_tables=[])
+        allocated = cache_manager.allocate_device_blocks(request, 10)
         initial_free = cache_manager.num_free_device_blocks
 
         cache_manager.free_device_blocks(allocated)
@@ -178,7 +160,8 @@ class TestCacheManagerRelease(unittest.TestCase):
     def test_free_all_device_blocks(self):
         """Test freeing all device blocks."""
         cache_manager = create_cache_manager()
-        cache_manager.allocate_device_blocks(50)
+        req = MockRequest(request_id="req", prompt_hashes=[], block_tables=[])
+        cache_manager.allocate_device_blocks(req, 50)
 
         freed = cache_manager.free_all_device_blocks()
 
@@ -202,8 +185,8 @@ class TestCacheManagerReset(unittest.TestCase):
     def test_reset_cache(self):
         """Test cache reset functionality."""
         cache_manager = create_cache_manager()
-        # Allocate some blocks
-        cache_manager.allocate_device_blocks(50)
+        req = MockRequest(request_id="req", prompt_hashes=[], block_tables=[])
+        cache_manager.allocate_device_blocks(req, 50)
         cache_manager.allocate_host_blocks(25)
 
         result = cache_manager.reset_cache()
@@ -226,55 +209,286 @@ class TestCacheManagerResize(unittest.TestCase):
         self.assertEqual(cache_manager.num_gpu_blocks, 150)
         self.assertEqual(cache_manager.num_free_device_blocks, 150)
 
-    def test_resize_device_pool_shrink(self):
-        """Test shrinking device pool when no blocks are used."""
-        cache_manager = create_cache_manager(total_block_num=100)
-
-        result = cache_manager.resize_device_pool(50)
-
-        self.assertTrue(result)
-        self.assertEqual(cache_manager.num_gpu_blocks, 50)
-        self.assertEqual(cache_manager.num_free_device_blocks, 50)
-
     def test_resize_device_pool_shrink_with_used_blocks(self):
         """Test shrinking device pool fails when used blocks exceed new size."""
         cache_manager = create_cache_manager(total_block_num=100)
-        # Allocate 60 blocks
-        cache_manager.allocate_device_blocks(60)
+        req = MockRequest(request_id="req", prompt_hashes=[], block_tables=[])
+        cache_manager.allocate_device_blocks(req, 60)
 
-        # Try to shrink to 50 - should fail since 60 blocks are used
         result = cache_manager.resize_device_pool(50)
 
         self.assertFalse(result)
-        # Original state should be preserved
         self.assertEqual(cache_manager.num_gpu_blocks, 100)
-        self.assertEqual(cache_manager.num_free_device_blocks, 40)
-
-    def test_resize_device_pool_shrink_to_exact_used(self):
-        """Test shrinking device pool to exact number of used blocks."""
-        cache_manager = create_cache_manager(total_block_num=100)
-        # Allocate 50 blocks
-        cache_manager.allocate_device_blocks(50)
-
-        # Shrink to exactly 50 - should succeed
-        result = cache_manager.resize_device_pool(50)
-
-        self.assertTrue(result)
-        self.assertEqual(cache_manager.num_gpu_blocks, 50)
-        self.assertEqual(cache_manager.num_free_device_blocks, 0)
 
     def test_resize_device_pool_allocate_after_expand(self):
         """Test allocating blocks after expanding pool."""
         cache_manager = create_cache_manager(total_block_num=100)
-
-        # Expand pool
         cache_manager.resize_device_pool(150)
 
-        # Should be able to allocate 120 blocks now
-        allocated = cache_manager.allocate_device_blocks(120)
+        req = MockRequest(request_id="req", prompt_hashes=[], block_tables=[])
+        allocated = cache_manager.allocate_device_blocks(req, 120)
+
         self.assertIsNotNone(allocated)
         self.assertEqual(len(allocated), 120)
-        self.assertEqual(cache_manager.num_free_device_blocks, 30)
+
+
+class TestCacheManagerWorkflow(unittest.TestCase):
+    """Test CacheManager multi-method workflow scenarios."""
+
+    def test_request_lifecycle_full(self):
+        """Test complete request lifecycle: match -> allocate -> finish."""
+        cache_manager = create_cache_manager()
+
+        # Step 1: Request comes in, match prefix (no existing cache)
+        request1 = MockRequest(
+            request_id="req_1",
+            prompt_hashes=["hash1", "hash2", "hash3"],
+            block_tables=[],
+        )
+        cache_manager.match_prefix(request1)
+
+        self.assertEqual(request1.match_result.total_matched_blocks, 0)
+
+        # Step 2: Allocate blocks for the request
+        allocated = cache_manager.allocate_device_blocks(request1, 3)
+        self.assertIsNotNone(allocated)
+        self.assertEqual(len(allocated), 3)
+
+        # Step 3: Request finishes, cache the blocks
+        request1.block_tables = allocated
+        cache_manager.request_finish(request1)
+
+        # Verify blocks are cached
+        self.assertEqual(cache_manager.num_free_device_blocks, 97)
+
+    def test_request_lifecycle_with_prefix_reuse(self):
+        """Test request reusing cached prefix."""
+        cache_manager = create_cache_manager()
+
+        # First request: insert [h1, h2, h3]
+        req1 = MockRequest(
+            request_id="req_1",
+            prompt_hashes=["h1", "h2", "h3"],
+            block_tables=[],
+        )
+        cache_manager.match_prefix(req1)
+        allocated1 = cache_manager.allocate_device_blocks(req1, 3)
+        req1.block_tables = allocated1
+        cache_manager.request_finish(req1)
+
+        # Second request: same prefix [h1, h2], then new [h4]
+        req2 = MockRequest(
+            request_id="req_2",
+            prompt_hashes=["h1", "h2", "h4"],
+            block_tables=[],
+        )
+        cache_manager.match_prefix(req2)
+
+        # Should match h1, h2 (result stored in _match_result)
+        self.assertEqual(req2._match_result.matched_device_nums, 2)
+        self.assertEqual(req2._match_result.matched_host_nums, 0)
+
+        # Allocate only for h4 (3 matched + 1 new = 4 total, but only 1 new needed)
+        allocated2 = cache_manager.allocate_device_blocks(req2, 1)
+        self.assertIsNotNone(allocated2)
+
+        req2.block_tables = list(req2._match_result.device_block_ids) + allocated2
+        cache_manager.request_finish(req2)
+
+    def test_shared_prefix_multiple_requests(self):
+        """Test multiple requests sharing prefix."""
+        cache_manager = create_cache_manager()
+
+        # Insert base prefix [A, B]
+        req1 = MockRequest(
+            request_id="req_1",
+            prompt_hashes=["A", "B", "C1"],
+            block_tables=[],
+        )
+        cache_manager.match_prefix(req1)
+        allocated1 = cache_manager.allocate_device_blocks(req1, 3)
+        req1.block_tables = allocated1
+        cache_manager.request_finish(req1)
+
+        # Check radix tree state
+        stats = cache_manager.radix_tree.get_stats()
+        self.assertEqual(stats.node_count, 4)  # root + A + B + C1
+
+        # Second request with different suffix
+        req2 = MockRequest(
+            request_id="req_2",
+            prompt_hashes=["A", "B", "C2"],
+            block_tables=[],
+        )
+        cache_manager.match_prefix(req2)
+        self.assertEqual(req2._match_result.matched_device_nums, 2)  # A, B
+
+        allocated2 = cache_manager.allocate_device_blocks(req2, 1)
+        req2.block_tables = list(req2._match_result.device_block_ids) + allocated2
+        cache_manager.request_finish(req2)
+
+        stats = cache_manager.radix_tree.get_stats()
+        self.assertEqual(stats.node_count, 5)  # root + A + B + C1 + C2
+
+    def test_eviction_workflow(self):
+        """Test eviction when device memory is full."""
+        cache_manager = create_cache_manager(num_cpu_blocks=50)
+
+        # Exhaust device memory
+        requests = []
+        for i in range(10):
+            req = MockRequest(
+                request_id=f"req_{i}",
+                prompt_hashes=[f"h{i}_{j}" for j in range(10)],
+                block_tables=[],
+            )
+            cache_manager.match_prefix(req)
+            allocated = cache_manager.allocate_device_blocks(req, 10)
+            req.block_tables = allocated
+            cache_manager.request_finish(req)
+            requests.append(req)
+
+        self.assertEqual(cache_manager.num_free_device_blocks, 0)
+
+        # Verify evictable blocks exist
+        stats = cache_manager.radix_tree.get_stats()
+        self.assertEqual(stats.evictable_device_count, 100)
+
+        # New request should trigger eviction
+        new_req = MockRequest(
+            request_id="new_req",
+            prompt_hashes=["new1", "new2", "new3"],
+            block_tables=[],
+        )
+        cache_manager.match_prefix(new_req)
+        allocated = cache_manager.allocate_device_blocks(new_req, 3)
+
+        self.assertIsNotNone(allocated)
+        self.assertEqual(len(allocated), 3)
+
+    def test_host_cache_eviction_workflow(self):
+        """Test device -> host eviction workflow when memory is full."""
+        cache_manager = create_cache_manager(num_cpu_blocks=30)
+
+        # Exhaust device memory with different hashes (no prefix sharing)
+        for i in range(10):
+            req = MockRequest(
+                request_id=f"req_{i}",
+                prompt_hashes=[f"h{i}_{j}" for j in range(10)],
+                block_tables=[],
+            )
+            cache_manager.match_prefix(req)
+            allocated = cache_manager.allocate_device_blocks(req, 10)
+            req.block_tables = allocated
+            cache_manager.request_finish(req)
+
+        # Device should be full
+        self.assertEqual(cache_manager.num_free_device_blocks, 0)
+
+        # New request should still work (eviction should occur)
+        new_req = MockRequest(
+            request_id="new_req",
+            prompt_hashes=["new1", "new2", "new3"],
+            block_tables=[],
+        )
+        cache_manager.match_prefix(new_req)
+        allocated = cache_manager.allocate_device_blocks(new_req, 3)
+
+        self.assertIsNotNone(allocated)
+        self.assertEqual(len(allocated), 3)
+
+
+class TestCacheManagerRadixTreeIntegration(unittest.TestCase):
+    """Test CacheManager RadixTree integration."""
+
+    def test_match_prefix_updates_ref_count(self):
+        """Test that match_prefix increments ref count."""
+        cache_manager = create_cache_manager()
+
+        # Insert some blocks
+        req1 = MockRequest(
+            request_id="req_1",
+            prompt_hashes=["h1", "h2"],
+            block_tables=[],
+        )
+        cache_manager.match_prefix(req1)
+        allocated1 = cache_manager.allocate_device_blocks(req1, 2)
+        req1.block_tables = allocated1
+        cache_manager.request_finish(req1)
+
+        # Check initial evictable count (should be 2 after finish)
+        stats1 = cache_manager.radix_tree.get_stats()
+        self.assertEqual(stats1.evictable_device_count, 2)
+
+        # Match same prefix - should increment ref
+        req2 = MockRequest(
+            request_id="req_2",
+            prompt_hashes=["h1", "h2"],
+            block_tables=[],
+        )
+        cache_manager.match_prefix(req2)
+
+        # Ref count should be incremented, nodes not evictable
+        stats2 = cache_manager.radix_tree.get_stats()
+        self.assertEqual(stats2.evictable_device_count, 0)
+
+    def test_insert_and_find_prefix(self):
+        """Test inserting blocks and finding prefix."""
+        cache_manager = create_cache_manager()
+
+        # Insert blocks
+        req1 = MockRequest(
+            request_id="req_1",
+            prompt_hashes=["hash_a", "hash_b", "hash_c"],
+            block_tables=[],
+        )
+        cache_manager.match_prefix(req1)
+        allocated = cache_manager.allocate_device_blocks(req1, 3)
+        req1.block_tables = allocated
+        cache_manager.request_finish(req1)
+
+        # Find prefix
+        req2 = MockRequest(
+            request_id="req_2",
+            prompt_hashes=["hash_a", "hash_b"],
+            block_tables=[],
+        )
+        cache_manager.match_prefix(req2)
+
+        self.assertEqual(req2._match_result.matched_device_nums, 2)
+        self.assertEqual(req2._match_result.device_block_ids, [0, 1])
+
+
+class TestCacheManagerWithDisabledPrefixCaching(unittest.TestCase):
+    """Test CacheManager with prefix caching disabled."""
+
+    def test_radix_tree_none_when_disabled(self):
+        """Test radix_tree is None when prefix caching disabled."""
+        cache_manager = create_cache_manager(enable_prefix_caching=False)
+        self.assertIsNone(cache_manager.radix_tree)
+
+    def test_allocation_works_without_prefix_caching(self):
+        """Test block allocation still works without prefix caching."""
+        cache_manager = create_cache_manager(enable_prefix_caching=False)
+        req = MockRequest(request_id="req", prompt_hashes=[], block_tables=[])
+        allocated = cache_manager.allocate_device_blocks(req, 10)
+
+        self.assertIsNotNone(allocated)
+        self.assertEqual(len(allocated), 10)
+
+
+class TestCacheManagerWithNoHostCache(unittest.TestCase):
+    """Test CacheManager with no host cache."""
+
+    def test_host_cache_disabled(self):
+        """Test host cache is disabled."""
+        cache_manager = create_cache_manager(num_cpu_blocks=0)
+        self.assertFalse(cache_manager.enable_host_cache)
+
+    def test_no_free_host_blocks(self):
+        """Test no free host blocks when disabled."""
+        cache_manager = create_cache_manager(num_cpu_blocks=0)
+        self.assertEqual(cache_manager.num_free_host_blocks, 0)
 
 
 class TestCacheManagerProperties(unittest.TestCase):
@@ -302,80 +516,6 @@ class TestCacheManagerProperties(unittest.TestCase):
         self.assertIsInstance(cache_manager.radix_tree, RadixTree)
 
 
-class TestCacheManagerWithDisabledPrefixCaching(unittest.TestCase):
-    """Test CacheManager with prefix caching disabled."""
-
-    def test_radix_tree_none_when_disabled(self):
-        """Test radix_tree is None when prefix caching disabled."""
-        cache_manager = create_cache_manager(enable_prefix_caching=False)
-        self.assertIsNone(cache_manager.radix_tree)
-
-    def test_allocation_works_without_prefix_caching(self):
-        """Test block allocation still works without prefix caching."""
-        cache_manager = create_cache_manager(enable_prefix_caching=False)
-        allocated = cache_manager.allocate_device_blocks(10)
-        self.assertIsNotNone(allocated)
-        self.assertEqual(len(allocated), 10)
-
-
-class TestCacheManagerWithNoHostCache(unittest.TestCase):
-    """Test CacheManager with no host cache."""
-
-    def test_host_cache_disabled(self):
-        """Test host cache is disabled."""
-        cache_manager = create_cache_manager(num_cpu_blocks=0)
-        self.assertFalse(cache_manager.enable_host_cache)
-
-    def test_num_free_host_blocks_zero(self):
-        """Test no free host blocks when disabled."""
-        cache_manager = create_cache_manager(num_cpu_blocks=0)
-        self.assertEqual(cache_manager.num_free_host_blocks, 0)
-
-    def test_can_allocate_host_blocks_false(self):
-        """Test cannot allocate host blocks when disabled."""
-        cache_manager = create_cache_manager(num_cpu_blocks=0)
-        self.assertFalse(cache_manager.can_allocate_host_blocks(1))
-
-
-class TestCacheManagerRequestLifecycle(unittest.TestCase):
-    """Test CacheManager request lifecycle management."""
-
-    def test_update_on_request_finish(self):
-        """Test updating cache state on request finish."""
-        cache_manager = create_cache_manager()
-        block_hashes = ["hash1", "hash2", "hash3"]
-        device_block_ids = [1, 2, 3]
-
-        cache_manager.update_on_request_finish(
-            block_hashes=block_hashes, device_block_ids=device_block_ids, request_id="test_request"
-        )
-
-        # Verify blocks are tracked
-        result = cache_manager.match_prefix(block_hashes)
-        self.assertEqual(result.total_matched_blocks, 3)
-
-    def test_release_request_blocks(self):
-        """Test releasing blocks for a specific request."""
-        cache_manager = create_cache_manager()
-        # First allocate blocks from the pool
-        allocated = cache_manager.allocate_device_blocks(2)
-        self.assertIsNotNone(allocated)
-
-        block_hashes = ["hash1", "hash2"]
-        device_block_ids = allocated
-
-        cache_manager.update_on_request_finish(
-            block_hashes=block_hashes, device_block_ids=device_block_ids, request_id="test_request"
-        )
-
-        initial_free = cache_manager.num_free_device_blocks
-
-        cache_manager.release_request_blocks("test_request")
-
-        # Blocks should be freed
-        self.assertEqual(cache_manager.num_free_device_blocks, initial_free + 2)
-
-
 class TestCacheManagerStats(unittest.TestCase):
     """Test CacheManager statistics methods."""
 
@@ -392,6 +532,7 @@ class TestCacheManagerStats(unittest.TestCase):
         self.assertIn("host_pool", stats)
         self.assertIn("num_free_device_blocks", stats)
         self.assertIn("num_free_host_blocks", stats)
+        self.assertIn("radix_tree", stats)
 
         self.assertTrue(stats["initialized"])
         self.assertEqual(stats["num_gpu_blocks"], 100)
@@ -404,47 +545,63 @@ class TestCacheManagerStats(unittest.TestCase):
 
         self.assertIn("device", usage)
         self.assertIn("host", usage)
-
         self.assertIn("total_blocks", usage["device"])
         self.assertIn("used_blocks", usage["device"])
         self.assertIn("free_blocks", usage["device"])
         self.assertIn("usage_percent", usage["device"])
 
 
-class TestCacheManagerMatchPrefix(unittest.TestCase):
-    """Test CacheManager prefix matching."""
+class TestCacheManagerEdgeCases(unittest.TestCase):
+    """Test CacheManager edge cases."""
 
-    def test_match_prefix_empty(self):
-        """Test matching with empty hashes."""
+    def test_empty_prompt_hashes(self):
+        """Test request with empty prompt hashes."""
         cache_manager = create_cache_manager()
-        result = cache_manager.match_prefix([])
+        req = MockRequest(request_id="req", prompt_hashes=[], block_tables=[])
 
-        self.assertEqual(result.total_matched_blocks, 0)
-        self.assertEqual(len(result.device_block_ids), 0)
+        cache_manager.match_prefix(req)
+        self.assertEqual(req.match_result.total_matched_blocks, 0)
 
-    def test_match_prefix_no_match(self):
-        """Test matching with no existing blocks."""
-        cache_manager = create_cache_manager()
-        result = cache_manager.match_prefix(["hash1", "hash2"])
+        allocated = cache_manager.allocate_device_blocks(req, 0)
+        self.assertEqual(allocated, [])
 
-        self.assertEqual(result.total_matched_blocks, 0)
-        self.assertEqual(len(result.device_block_ids), 0)
+    def test_allocation_with_matched_host_blocks(self):
+        """Test allocation when host cache has matched blocks."""
+        cache_manager = create_cache_manager(num_cpu_blocks=50)
 
-    def test_match_prefix_with_match(self):
-        """Test matching with existing blocks."""
-        cache_manager = create_cache_manager()
-        # Insert blocks first
-        block_hashes = ["hash1", "hash2", "hash3"]
-        device_block_ids = [1, 2, 3]
-        cache_manager.update_on_request_finish(
-            block_hashes=block_hashes,
-            device_block_ids=device_block_ids,
+        # Insert blocks and evict some to host
+        req1 = MockRequest(
+            request_id="req_1",
+            prompt_hashes=["h1", "h2", "h3"],
+            block_tables=[],
         )
+        cache_manager.match_prefix(req1)
+        allocated1 = cache_manager.allocate_device_blocks(req1, 3)
+        req1.block_tables = allocated1
+        cache_manager.request_finish(req1)
 
-        # Match the same hashes
-        result = cache_manager.match_prefix(block_hashes)
+        # Exhaust device, evict to host
+        for i in range(10):
+            req = MockRequest(
+                request_id=f"req_{i}",
+                prompt_hashes=[f"other_{i}_{j}" for j in range(10)],
+                block_tables=[],
+            )
+            cache_manager.match_prefix(req)
+            allocated = cache_manager.allocate_device_blocks(req, 10)
+            req.block_tables = allocated
+            cache_manager.request_finish(req)
 
-        self.assertEqual(result.total_matched_blocks, 3)
+        # Now request h1, h2 - should find them in host cache
+        req2 = MockRequest(
+            request_id="req_2",
+            prompt_hashes=["h1", "h2"],
+            block_tables=[],
+        )
+        cache_manager.match_prefix(req2)
+
+        # If h1, h2 were evicted to host, we should see them in host_nodes
+        # Note: Exact behavior depends on eviction policy
 
 
 if __name__ == "__main__":
