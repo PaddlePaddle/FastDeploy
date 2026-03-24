@@ -2029,9 +2029,21 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
     def test_wait_for_control_responses_ignores_mismatch(self):
         eng = self._make_mixed_engine()
 
+        class DummyQueue:
+            def __init__(self, name, payloads):
+                self.name = name
+                self.payloads = list(payloads)
+
+            async def get(self, timeout=None):
+                return Mock(payload=self.payloads.pop(0))
+
         eng._ctrl_output_queues = {
-            "ctrl_w2e_rank0_6778": self._make_ctrl_queue(
-                "q0", Mock(request_id="old", error_code=200, result={"ok": False})
+            "ctrl_w2e_rank0_6778": DummyQueue(
+                "q0",
+                [
+                    Mock(request_id="old", error_code=200, result={"ok": False}),
+                    Mock(request_id="req", error_code=200, result={"ok": "from-q0"}),
+                ],
             ),
             "ctrl_w2e_rank1_6778": self._make_ctrl_queue(
                 "q1", Mock(request_id="req", error_code=200, result={"ok": True})
@@ -2039,7 +2051,11 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         }
 
         results = asyncio.run(eng._wait_for_control_responses("req", timeout=1))
-        self.assertEqual(results, [{"ok": True}])
+        self.assertEqual(results, [{"ok": "from-q0"}, {"ok": True}])
+        self.assertEqual(
+            eng._ctrl_response_mailboxes["ctrl_w2e_rank0_6778"]["old"].result,
+            {"ok": False},
+        )
         self._detach_finalizer(eng)
 
     def test_wait_for_control_responses_error_paths(self):
@@ -3342,7 +3358,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         # Lines 1299-1300: try block start + info logging
         info_msgs = [str(c) for c in mock_logger.info.call_args_list]
-        self.assertTrue(any("START run control method" in m for m in info_msgs))
+        self.assertTrue(any("Start to run control method" in m for m in info_msgs))
         # worker_pid should be popped from the map
         self.assertNotIn("ctrl-log", eng.request_worker_map)
         self._detach_finalizer(eng)
