@@ -305,11 +305,20 @@ class ResourceManagerV1(ResourceManager):
     def preempted_all(self):
         with self.lock:
             preempted_reqs = []
-            for i in range(len(self.running)):
-                req = self.running.pop()
+            reqs_to_preempt = []
+            if self.active_chunked_prefill_req is not None:
+                reqs_to_preempt.append(self.active_chunked_prefill_req)
+                self.active_chunked_prefill_req = None
+            for _ in range(len(self.running)):
+                reqs_to_preempt.append(self.running.pop())
+
+            for req in reqs_to_preempt:
                 # txt2image: req.use_extend_tables is True, req can not be preempted. txt2image is not used in RL.
                 if req.use_extend_tables:
-                    self.running.insert(0, req)
+                    if req.num_computed_tokens < req.need_prefill_tokens and self.active_chunked_prefill_req is None:
+                        self.active_chunked_prefill_req = req
+                    else:
+                        self.running.insert(0, req)
                     continue
                 req.status = RequestStatus.PREEMPTED
                 req.num_computed_tokens = 0
@@ -323,7 +332,11 @@ class ResourceManagerV1(ResourceManager):
         count = 0
         while count < timeout * 1000:
             # wait ongoing running and rescheduled requests finished in worker
-            running_reqs_count = len(self.to_be_rescheduled_request_id_set) + len(self.running)
+            running_reqs_count = (
+                len(self.to_be_rescheduled_request_id_set)
+                + len(self.running)
+                + (1 if self.active_chunked_prefill_req is not None else 0)
+            )
             if running_reqs_count == 0:
                 break
 
@@ -524,32 +537,6 @@ class ResourceManagerV1(ResourceManager):
 
         return total_reserved_tokens
 
-    def _calculate_decode_batch_block_pressure(self) -> int:
-        """
-        Estimate how many new KV blocks the current decode batch will need this step.
-        This is a lightweight batch-level pressure check before entering the per-request
-        decode loop, so we can retract first instead of waiting for a single request to
-        fail at the block boundary.
-        """
-        block_size = self.config.cache_config.block_size
-        total_needed_blocks = 0
-
-        for req in self.running:
-            if req.num_computed_tokens < req.need_prefill_tokens:
-                continue
-            if self.config.scheduler_config.splitwise_role == "prefill":
-                continue
-            if (req.num_total_tokens - 1) % block_size == 0:
-                total_needed_blocks += 1
-
-        if total_needed_blocks > 0:
-            llm_logger.debug(
-                f"Decode batch block pressure: need={total_needed_blocks}, "
-                f"free={self.cache_manager.get_num_free_gpu_blocks()}, running={len(self.running)}"
-            )
-
-        return total_needed_blocks
-
     def _calculate_decode_reserved_tokens_for_new_requests(self, new_decode_reserved_tokens: float):
         """Return pre-computed reserved tokens for NEW decode requests in this cycle."""
         return new_decode_reserved_tokens
@@ -715,13 +702,25 @@ class ResourceManagerV1(ResourceManager):
 
         return -(-num_new_tokens // block_size) * block_size
 
-    def _get_num_new_tokens(self, request, rem_chunk_tokens, rem_input_tokens):
+    def _get_num_new_tokens(
+        self,
+        request,
+        rem_chunk_tokens,
+        rem_input_tokens,
+        *,
+        existing_prefill_in_batch: bool = False,
+    ):
         # SGLang-aligned:
-        # - First compute this round's candidate prefill length.
-        # - Then judge whether the paged input length can fit in rem_chunk_tokens.
-        # - If it does not fit, truncate to one page-aligned chunk.
+        # - rem_input_tokens is a hard stop only after some prefill has already
+        #   been admitted into this batch.
         remaining = request.need_prefill_tokens - request.num_computed_tokens
-        if remaining <= 0 or rem_input_tokens <= 0:
+        if remaining <= 0:
+            return 0
+
+        if rem_input_tokens <= 0:
+            return 0
+
+        if existing_prefill_in_batch and self._get_paged_prefill_tokens(remaining) >= rem_input_tokens:
             return 0
 
         block_size = self.config.cache_config.block_size
@@ -742,11 +741,14 @@ class ResourceManagerV1(ResourceManager):
             is_truncated = True
 
         if current_platform.is_intel_hpu():
-            if is_truncated and min(rem_input_tokens, rem_chunk_tokens or rem_input_tokens) > block_size:
+            hpu_budget = min(rem_input_tokens, rem_chunk_tokens or rem_input_tokens)
+            if is_truncated and hpu_budget > block_size:
                 num_new_tokens = num_new_tokens // block_size * block_size
         elif block_size > 1 and is_truncated:
             # SGLang-aligned: floor-align truncated chunk to block boundary
             num_new_tokens = num_new_tokens // block_size * block_size
+        if num_new_tokens <= 0:
+            return 0
         request.with_image = False
 
         if not self.config.model_config.enable_mm:
@@ -996,26 +998,6 @@ class ResourceManagerV1(ResourceManager):
 
             def _schedule_decode_requests():
                 nonlocal num_decoding_req_nums
-                decode_batch_block_pressure = self._calculate_decode_batch_block_pressure()
-                if decode_batch_block_pressure > 0 and not self.cache_manager.can_allocate_gpu_blocks(
-                    decode_batch_block_pressure
-                ):
-                    first_decode_request = next(
-                        (
-                            req
-                            for req in self.running
-                            if req.num_computed_tokens >= req.need_prefill_tokens
-                        ),
-                        None,
-                    )
-                    if first_decode_request is not None:
-                        self._trigger_preempt(
-                            first_decode_request,
-                            decode_batch_block_pressure,
-                            preempted_reqs,
-                            scheduled_reqs,
-                        )
-
                 req_index = 0
                 while req_index < len(self.running):
                     request = self.running[req_index]
@@ -1202,10 +1184,11 @@ class ResourceManagerV1(ResourceManager):
 
             # Second, schedule the WAITING requests.
             # Priority: in-flight prefill (RUNNING) > new prefill (WAITING) > decode.
-            # Only ONE prefill is scheduled per step total. If RUNNING already scheduled
-            # an in-flight prefill chunk (has_scheduled_running_prefill=True), skip WAITING
-            # entirely this step. Otherwise admit at most one new request from WAITING.
-            if not preempted_reqs and not has_scheduled_running_prefill and self.active_chunked_prefill_req is None:
+            # If an in-flight chunked prefill was admitted this round, continue filling
+            # the same batch from WAITING under the same shared budgets and threshold
+            # checks. We still preserve the invariant that at most one unfinished
+            # chunked prefill remains active after this scheduling step.
+            if not preempted_reqs and (has_scheduled_running_prefill or self.active_chunked_prefill_req is None):
                 skip_requests: list[Request] = []
                 # SGLang-aligned: waiting requests share a single chunk budget.
                 # Requests that fit in the remaining budget are admitted in full;
@@ -1255,10 +1238,17 @@ class ResourceManagerV1(ResourceManager):
                         ):
                             continue
                         # Allocate blocks for the tokens that does not hit cache
-                        num_new_tokens = self._get_num_new_tokens(request, rem_chunk_tokens, rem_input_tokens)
+                        num_new_tokens = self._get_num_new_tokens(
+                            request,
+                            rem_chunk_tokens,
+                            rem_input_tokens,
+                            existing_prefill_in_batch=has_scheduled_prefill,
+                        )
                         if num_new_tokens <= 0:
                             break
                         is_last_chunk = self._is_last_prefill_chunk(request, num_new_tokens)
+                        if self.active_chunked_prefill_req is not None and not is_last_chunk:
+                            break
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             request,
@@ -1327,10 +1317,17 @@ class ResourceManagerV1(ResourceManager):
                                 break
 
                         # Allocate blocks for the tokens that does not hit cache
-                        num_new_tokens = self._get_num_new_tokens(request, rem_chunk_tokens, rem_input_tokens)
+                        num_new_tokens = self._get_num_new_tokens(
+                            request,
+                            rem_chunk_tokens,
+                            rem_input_tokens,
+                            existing_prefill_in_batch=has_scheduled_prefill,
+                        )
                         if num_new_tokens <= 0:
                             break
                         is_last_chunk = self._is_last_prefill_chunk(request, num_new_tokens)
+                        if self.active_chunked_prefill_req is not None and not is_last_chunk:
+                            break
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             request,
