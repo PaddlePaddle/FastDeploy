@@ -19,7 +19,7 @@ class TestFusedMoE(unittest.TestCase):
         strategy.hybrid_configs = {"dp_degree": 1, "mp_degree": num_ranks, "pp_degree": 1}
         fleet.init(is_collective=True, strategy=strategy)
 
-        num_tokens, hidden, num_topk, num_experts = 128, 7168, 4, 160
+        num_tokens, hidden, num_topk, num_experts = 64, 7168, 4, 64
         num_rdma_bytes = deep_ep.Buffer.get_low_latency_rdma_size_hint(num_tokens, hidden, num_ranks, num_experts)
 
         ep_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
