@@ -14,12 +14,41 @@
 # limitations under the License.
 """
 
+import importlib
+
 import paddle
 from paddleformers.utils.log import logger
 
 from fastdeploy.platforms import current_platform
 
 from ..utils import get_sm_version
+
+
+def try_import(modules, name=None, fail_msg=None):
+    """
+    try_import
+    """
+    if not isinstance(modules, (list, tuple)):
+        modules = [modules]
+
+    for m in modules:
+        assert isinstance(m, str), m
+        try:
+            m = importlib.import_module(m)
+        except ImportError:
+            m = None
+
+        if m is not None:
+            if name is None:
+                return m
+            elif hasattr(m, name):
+                return getattr(m, name)
+
+    if fail_msg is not None:
+        logger.warning(fail_msg)
+
+
+paddlefleet_ops = try_import(["paddlefleet.ops"])
 
 
 def load_deep_gemm():
@@ -130,3 +159,25 @@ def quant_weight_ue8m0(weight_dequant, weight_block_size):
     )
 
     return out_w, out_s
+
+
+def fused_stack_transpose_quant(expert_weight_list, use_ue8m0=False):
+    """fused_stack_transpose_quant"""
+    if hasattr(paddlefleet_ops, "fuse_stack_transpose_fp8_quant"):
+        # Blackwell (SM100) GPUs require pow2_scale quantization.
+        # Guard with is_cuda() so non-CUDA environments do not call into
+        # paddle.device.cuda.* and cause a crash.
+        use_pow2_scale = current_platform.is_cuda() and get_sm_version() == 100
+
+        w, scale = paddlefleet_ops.fuse_stack_transpose_fp8_quant(
+            expert_weight_list,
+            use_pow2_scale,
+            use_ue8m0,
+            use_ue8m0,
+        )
+        if use_ue8m0:
+            scale = scale.T
+    else:
+        raise RuntimeError("'fuse_stack_transpose_fp8_quant' is not available in the current paddlefleet_ops.")
+
+    return w, scale

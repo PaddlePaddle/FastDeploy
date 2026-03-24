@@ -22,7 +22,10 @@ from paddleformers.utils.log import logger
 
 import fastdeploy
 from fastdeploy.model_executor.layers.moe.ep import deep_ep
-from fastdeploy.model_executor.layers.quantization.fp8_utils import deep_gemm
+from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    deep_gemm,
+    paddlefleet_ops,
+)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
 from fastdeploy.platforms import current_platform
@@ -84,6 +87,7 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
     layer_added_scale_attrs_1: paddle.Tensor,  # getattr(layer, self.added_scale_attrs[1])
     quant_config_weight_block_size_0: int,  # self.quant_config.weight_block_size[0]
     disable_ue8m0_cast: bool,
+    dst_weights: paddle.Tensor,
 ):
 
     # up_gate_proj
@@ -104,23 +108,30 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
     )
 
     # swiglu
-    ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out)
-
-    # down_proj
-    if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
-        ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-            ffn_out, quant_config_weight_block_size_0
+    if fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE:
+        ffn_in_x, ffn_in_x_scale_tensor = paddlefleet_ops.fuse_weighted_swiglu_fp8_quant(
+            ffn_out, dst_weights, using_pow2_scaling=True, use_ue8m0=not disable_ue8m0_cast
         )
 
-        ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous()
-        ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0])
+        ffn_in_x_scale_tensor = paddle.transpose(paddle.transpose(ffn_in_x_scale_tensor, [1, 0]).contiguous(), [1, 0])
     else:
-        ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            ffn_out,
-            using_pow2_scale=not disable_ue8m0_cast,
-            using_ue8m0_scale=not disable_ue8m0_cast,
-        )
-        ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
+        ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out)
+
+        # down_proj
+        if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
+            ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
+                ffn_out, quant_config_weight_block_size_0, not disable_ue8m0_cast
+            )
+
+            ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous()
+            ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0])
+        else:
+            ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
+                ffn_out,
+                using_pow2_scale=not disable_ue8m0_cast,
+                using_ue8m0_scale=not disable_ue8m0_cast,
+            )
+            ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
 
     ffn_out = paddle.empty(
         (permute_input.shape[0], layer_added_weight_attrs_1.shape[1]),
@@ -134,6 +145,66 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         m_indices,
     )
     return ffn_out
+
+
+def moe_topk_select(
+    gating_output: paddle.Tensor,
+    n_group: int,
+    topk_group: int,
+    top_k: int,
+    routed_scaling_factor: float,
+    e_score_correction_bias: paddle.Tensor,
+    renormalize: bool = False,
+):
+    """
+    Topk selection using paddle PHI topk API.
+
+    Args:
+        gating_output: gate output logits, shape [seq_len, n_experts]
+        n_group: number of expert groups
+        topk_group: number of top-k groups to select
+        top_k: number of top experts per token
+        routed_scaling_factor: scaling factor for routed experts
+        e_score_correction_bias: bias for expert selection
+        renormalize: whether to renormalize topk probabilities
+
+    Returns:
+        topk_weights: normalized topk probabilities, shape [seq_len, top_k]
+        topk_ids: topk expert indices, shape [seq_len, top_k]
+    """
+    # compute gate probs via sigmoid
+    gate_probs = paddle.nn.functional.sigmoid(gating_output)
+    # probs_for_choice includes correction bias for topk selection
+    probs_for_choice = gate_probs + e_score_correction_bias if e_score_correction_bias is not None else gate_probs
+    # group-based topk selection
+    n_group = n_group if n_group > 0 else 1
+    topk_group = topk_group if topk_group > 0 else 1
+    if n_group > 1 and topk_group < n_group:
+        seq_length, n_experts = probs_for_choice.shape
+        group_scores = (
+            probs_for_choice.reshape([seq_length, n_group, -1]).topk(2, axis=-1)[0].sum(axis=-1)
+        )  # [seq_len, n_group]
+        group_idx = paddle.topk(group_scores, k=topk_group, axis=-1, sorted=True)[1]  # [seq_len, topk_group]
+        group_mask = paddle.zeros_like(group_scores).put_along_axis(
+            group_idx, paddle.to_tensor(1.0, dtype=group_scores.dtype), axis=-1
+        )
+        score_mask = (
+            group_mask.unsqueeze(-1).expand([seq_length, n_group, n_experts // n_group]).reshape([seq_length, -1])
+        )  # [seq_len, n_experts]
+        probs_for_choice = probs_for_choice.masked_fill(~score_mask.astype(paddle.bool), float("-inf"))
+
+    _, topk_ids = paddle.topk(probs_for_choice, top_k, axis=-1)
+    topk_weights = paddle.take_along_axis(gate_probs, topk_ids, axis=-1)
+
+    # normalize combine weights
+    if renormalize:
+        topk_weights = topk_weights / paddle.clip(topk_weights.sum(-1, keepdim=True), min=1e-12)
+
+    # apply routed scaling factor
+    if routed_scaling_factor:
+        topk_weights = topk_weights * routed_scaling_factor
+
+    return topk_weights, topk_ids
 
 
 class DeepGemmFusedMoeMethod(MoEMethodBase):
@@ -257,7 +328,22 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         hidden_size = x.shape[1]
 
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+        if (
+            fastdeploy.envs.FD_USE_PHI_MOE_TOPK
+            and layer.redundant_table_manger is None
+            and layer.topk_method == "noaux_tc"
+        ):
+            topk_weights, topk_idx = moe_topk_select(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                layer.top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
+            )
+        else:
+            topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
@@ -371,22 +457,31 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             )
             del permute_input
 
-            # swiglu
-            ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
+            if fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE:
+                ffn_in_x, ffn_in_x_scale_tensor = paddlefleet_ops.fuse_weighted_swiglu_fp8_quant(
+                    ffn_out, dst_weights, using_pow2_scaling=True, use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
+                )
 
-            # down_proj
-            if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
-                ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-                    ffn_out, self.quant_config.weight_block_size[0]
+                ffn_in_x_scale_tensor = paddle.transpose(
+                    paddle.transpose(ffn_in_x_scale_tensor, [1, 0]).contiguous(), [1, 0]
                 )
-                ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous().transpose([1, 0])
             else:
-                ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
-                    ffn_out,
-                    using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
-                    using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
-                )
-                ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
+                # swiglu
+                ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
+
+                # down_proj
+                if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
+                    ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
+                        ffn_out, self.quant_config.weight_block_size[0], self.quant_config.deepgemm_scale_ue8m0
+                    )
+                    ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous().transpose([1, 0])
+                else:
+                    ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
+                        ffn_out,
+                        using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
+                        using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
+                    )
+                    ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
 
             del ffn_out
             ffn_out = paddle.empty(
@@ -408,7 +503,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     token_prob_unzipped=dst_weights,
                     total_zipped_tokens=recv_x.shape[0],
                     num_experts=layer.num_local_experts,
-                    using_weighted_combine=True,
+                    using_weighted_combine=not fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE,
                 )
 
             else:
@@ -523,15 +618,28 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x.cast("float32"))
 
         if layer.topk_method == "noaux_tc":
-            _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(
-                gate_out,
-                layer.n_group,
-                layer.topk_group,
-                layer.top_k,
-                layer.routed_scaling_factor,
-                layer.gate_correction_bias,
-                getattr(layer, "renormalize", True),
-            )
+
+            if not fastdeploy.envs.FD_USE_PHI_MOE_TOPK:
+                _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(
+                    gate_out,
+                    layer.n_group,
+                    layer.topk_group,
+                    layer.top_k,
+                    layer.routed_scaling_factor,
+                    layer.gate_correction_bias,
+                    getattr(layer, "renormalize", True),
+                )
+            else:
+                topk_weights, topk_ids = moe_topk_select(
+                    gate_out,
+                    layer.n_group,
+                    layer.topk_group,
+                    layer.top_k,
+                    layer.routed_scaling_factor,
+                    layer.gate_correction_bias,
+                    getattr(layer, "renormalize", True),
+                )
+
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
@@ -613,6 +721,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             getattr(layer, self.added_scale_attrs[1]),
             self.quant_config.weight_block_size[0],
             disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
+            dst_weights=dst_weights if fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE else None,
         )
 
         # prmt back per rank
@@ -624,7 +733,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 token_prob_unzipped=dst_weights,
                 total_zipped_tokens=recv_x.shape[0],
                 num_experts=layer.num_experts,
-                using_weighted_combine=True,
+                using_weighted_combine=not fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE,
             )
         else:
             tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
