@@ -43,17 +43,6 @@ try:
 except ImportError:
     pass
 
-try:
-    # flashinfer cutedsl blockscaled gemm takes long time to complie, it may not be imported in function.
-    # we will add flashinfer.cutedsl.blockscaled_gemm into setup.py by AOT.
-    from flashinfer import (
-        scaled_fp4_grouped_quantize,
-        silu_and_mul_scaled_nvfp4_experts_quantize,
-    )
-    from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
-except ImportError:
-    pass
-
 
 def call_prefill_permute_to_masked_gemm(
     x: paddle.Tensor,
@@ -661,6 +650,14 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         if self.backend != "flashinfer-cutedsl":
             raise NotImplementedError("NVFP4 EP backend only supports CuteDSL implementation.")
+
+        # flashinfer cutedsl blockscaled gemm takes long time to complie, it may not be imported in function.
+        # we will add flashinfer.cutedsl.blockscaled_gemm into setup.py by AOT.
+        from flashinfer import (
+            scaled_fp4_grouped_quantize,
+            silu_and_mul_scaled_nvfp4_experts_quantize,
+        )
+        from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
 
         masked_m = masked_m.cast(paddle.int32)
         num_experts = int(layer.num_local_experts)
