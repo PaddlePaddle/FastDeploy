@@ -8,14 +8,22 @@ Note: All methods in CacheTransferManager are synchronous.
 Async operations are handled by CacheController, not here.
 """
 
+import os
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from paddleformers.utils.log import logger
 
 # Import ops for cache swap
-from fastdeploy.cache_manager.ops import swap_cache_all_layers
+from fastdeploy.cache_manager.ops import (
+    swap_cache_all_layers,
+    swap_cache_per_layer,        # 新增：单层 KV cache 换入算子
+    swap_cache_all_layers_batch, # 新增：多层批量 KV cache 换入算子
+)
 from fastdeploy.cache_manager.v1.storage import create_storage_connector
 from fastdeploy.cache_manager.v1.transfer import create_transfer_connector
-from fastdeploy.config import FDConfig
+
+if TYPE_CHECKING:
+    from fastdeploy.config import FDConfig
 
 
 class CacheTransferManager:
@@ -58,8 +66,8 @@ class CacheTransferManager:
         self._cache_dtype = config.cache_config.cache_dtype
         self._num_host_blocks = self.cache_config.num_cpu_blocks or 0
 
-        self.swap_all_layers = True
-
+        self.swap_all_layers = self.cache_config.swap_all_layers
+        self.use_swap_all_layers_batch = os.getenv('FD_USE_OPTIMIZED_SWAP', '0') == '1'  # 新增：是否使用优化批量算子
         self._lock = threading.RLock()
 
         # ============ KV Cache Data Storage ============
@@ -83,8 +91,6 @@ class CacheTransferManager:
         # ============ Connectors (for future use) ============
         self._storage_connector = create_storage_connector(self.cache_config)
         self._transfer_connector = create_transfer_connector(self.cache_config)
-
-    # ============ KV Cache Map Sharing ============
 
     @property
     def cache_kvs_map(self) -> Dict[str, Any]:
@@ -397,48 +403,94 @@ class CacheTransferManager:
             return False
 
         try:
-            # Swap key caches
-            swap_cache_all_layers(
-                self._device_key_caches,
-                self._host_key_ptrs,
-                self._num_host_blocks,
-                device_block_ids,
-                host_block_ids,
-                self._device_id,
-                mode,
-            )
-
-            # Swap value caches
-            swap_cache_all_layers(
-                self._device_value_caches,
-                self._host_value_ptrs,
-                self._num_host_blocks,
-                device_block_ids,
-                host_block_ids,
-                self._device_id,
-                mode,
-            )
-
-            # Swap scales for fp8
-            if self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
-                swap_cache_all_layers(
-                    self._device_key_scales,
-                    self._host_key_scales_ptrs,
+            # Use swap_cache_all_layers_batch for batch optimization
+            if self.use_swap_all_layers_batch:
+                # Swap key caches - batch transfer for all layers
+                swap_cache_all_layers_batch(
+                    self._device_key_caches,
+                    self._host_key_ptrs,
                     self._num_host_blocks,
                     device_block_ids,
                     host_block_ids,
                     self._device_id,
                     mode,
                 )
-                swap_cache_all_layers(
-                    self._device_value_scales,
-                    self._host_value_scales_ptrs,
+                # Swap value caches - batch transfer for all layers
+                swap_cache_all_layers_batch(
+                    self._device_value_caches,
+                    self._host_value_ptrs,
                     self._num_host_blocks,
                     device_block_ids,
                     host_block_ids,
                     self._device_id,
                     mode,
                 )
+                # Swap key scales for fp8
+                if self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
+                    swap_cache_all_layers_batch(
+                        self._device_key_scales,
+                        self._host_key_scales_ptrs,
+                        self._num_host_blocks,
+                        device_block_ids,
+                        host_block_ids,
+                        self._device_id,
+                        mode,
+                    )
+                # Swap value scales for fp8
+                if self._is_fp8_quantization() and self._device_value_scales and self._host_value_scales_ptrs:
+                    swap_cache_all_layers_batch(
+                        self._device_value_scales,
+                        self._host_value_scales_ptrs,
+                        self._num_host_blocks,
+                        device_block_ids,
+                        host_block_ids,
+                        self._device_id,
+                        mode,
+                    )
+            # Use original swap_cache_all_layers operator
+            else:
+                # Swap key caches
+                swap_cache_all_layers(
+                    self._device_key_caches,
+                    self._host_key_ptrs,
+                    self._num_host_blocks,
+                    device_block_ids,
+                    host_block_ids,
+                    self._device_id,
+                    mode,
+                )
+
+                # Swap value caches
+                swap_cache_all_layers(
+                    self._device_value_caches,
+                    self._host_value_ptrs,
+                    self._num_host_blocks,
+                    device_block_ids,
+                    host_block_ids,
+                    self._device_id,
+                    mode,
+                )
+
+                # Swap scales for fp8
+                if self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
+                    swap_cache_all_layers(
+                        self._device_key_scales,
+                        self._host_key_scales_ptrs,
+                        self._num_host_blocks,
+                        device_block_ids,
+                        host_block_ids,
+                        self._device_id,
+                        mode,
+                    )
+                    swap_cache_all_layers(
+                        self._device_value_scales,
+                        self._host_value_scales_ptrs,
+                        self._num_host_blocks,
+                        device_block_ids,
+                        host_block_ids,
+                        self._device_id,
+                        mode,
+                    )
 
             return True
 
@@ -467,11 +519,7 @@ class CacheTransferManager:
         if self._num_host_blocks <= 0:
             return False
 
-        if self.swap_all_layers:
-            return self._swap_all_layers(device_block_ids, host_block_ids, mode=0)
-        else:
-            # TODO: Support per-layer transfer
-            return False
+        return self._swap_all_layers(device_block_ids, host_block_ids, mode=0)
 
     def load_to_device_all_layers(
         self,
@@ -492,11 +540,7 @@ class CacheTransferManager:
         if self._num_host_blocks <= 0:
             return False
 
-        if self.swap_all_layers:
-            return self._swap_all_layers(device_block_ids, host_block_ids, mode=1)
-        else:
-            # TODO: Support per-layer transfer
-            return False
+        return self._swap_all_layers(device_block_ids, host_block_ids, mode=1)
 
     def _validate_swap_params(
         self,
@@ -543,8 +587,8 @@ class CacheTransferManager:
         """
         Synchronous single-layer transfer.
 
-        Transfers KV cache data for a single layer using swap_cache_all_layers
-        operator with single-element lists.
+        Uses optimized swap_cache_per_layer operator for
+        transferring KV cache data for a single layer.
 
         Args:
             layer_idx: Layer index to transfer.
@@ -580,10 +624,10 @@ class CacheTransferManager:
             if key_ptr == 0 or value_ptr == 0:
                 return False
 
-            # Swap key cache for this layer (using single-element lists)
-            swap_cache_all_layers(
-                [key_cache],
-                [key_ptr],
+            # Swap key cache for this layer using optimized per-layer operator
+            swap_cache_per_layer(
+                key_cache,
+                key_ptr,
                 self._num_host_blocks,
                 device_block_ids,
                 host_block_ids,
@@ -591,50 +635,16 @@ class CacheTransferManager:
                 mode,
             )
 
-            # Swap value cache for this layer
-            swap_cache_all_layers(
-                [value_cache],
-                [value_ptr],
+            # Swap value cache for this layer using optimized per-layer operator
+            swap_cache_per_layer(
+                value_cache,
+                value_ptr,
                 self._num_host_blocks,
                 device_block_ids,
                 host_block_ids,
                 self._device_id,
                 mode,
             )
-
-            # Swap scales for fp8 if needed
-            if self._is_fp8_quantization():
-                key_scale = self._device_key_scales[layer_idx] if layer_idx < len(self._device_key_scales) else None
-                value_scale = (
-                    self._device_value_scales[layer_idx] if layer_idx < len(self._device_value_scales) else None
-                )
-                key_scale_ptr = (
-                    self._host_key_scales_ptrs[layer_idx] if layer_idx < len(self._host_key_scales_ptrs) else 0
-                )
-                value_scale_ptr = (
-                    self._host_value_scales_ptrs[layer_idx] if layer_idx < len(self._host_value_scales_ptrs) else 0
-                )
-
-                if key_scale is not None and key_scale_ptr > 0:
-                    swap_cache_all_layers(
-                        [key_scale],
-                        [key_scale_ptr],
-                        self._num_host_blocks,
-                        device_block_ids,
-                        host_block_ids,
-                        self._device_id,
-                        mode,
-                    )
-                if value_scale is not None and value_scale_ptr > 0:
-                    swap_cache_all_layers(
-                        [value_scale],
-                        [value_scale_ptr],
-                        self._num_host_blocks,
-                        device_block_ids,
-                        host_block_ids,
-                        self._device_id,
-                        mode,
-                    )
 
             return True
 
@@ -679,7 +689,7 @@ class CacheTransferManager:
         Args:
             layer_idx: Layer index to load.
             host_block_ids: Host block IDs to load from.
-            device_block_ids: Device block IDs to receive (corresponding to host_block_ids).
+            device_block_ids: Device block IDs to receive.
 
         Returns:
             True if transfer succeeded, False if failed.
@@ -688,7 +698,10 @@ class CacheTransferManager:
         if self._num_host_blocks <= 0:
             return False
 
-        return self._swap_single_layer(layer_idx, device_block_ids, host_block_ids, mode=1)
+        logger.debug(f"[Transfer] load_layer_to_device layer={layer_idx} starting")
+        result = self._swap_single_layer(layer_idx, device_block_ids, host_block_ids, mode=1)
+        logger.debug(f"[Transfer] load_layer_to_device layer={layer_idx} done, success={result}")
+        return result
 
     def evict_layers_to_host(
         self,

@@ -9,16 +9,17 @@ Factory functions:
     - create_storage_connector: Create a StorageConnector instance based on config
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
-from fastdeploy.config import CacheConfig
+if TYPE_CHECKING:
+    from fastdeploy.config import CacheConfig
 
 from ..metadata import StorageType
 from .base import StorageConnector, StorageScheduler
 
 
 def create_storage_scheduler(
-    config: "CacheConfig",
+    config: Any,
 ) -> Optional[StorageScheduler]:
     """
     Create a StorageScheduler instance based on configuration.

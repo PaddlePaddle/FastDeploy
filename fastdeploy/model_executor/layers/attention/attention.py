@@ -272,6 +272,41 @@ class Attention(nn.Layer):
             compressed_kv: optional compressed key-value cache (for MLA)
             k_pe: optional key positional encoding (for MLA)
         """
+        # ============ V1 KVCACHE Manager: Layer-by-layer swap wait ============
+        # Wait for swap-in of current layer before using cache
+        if (
+            forward_meta.enable_layer_swap_wait
+            and forward_meta.cache_controller is not None
+            and forward_meta.swap_in_task_ids is not None
+        ):
+            import time
+            layer_wait_start = time.time()
+            for task_id in forward_meta.swap_in_task_ids:
+                forward_meta.cache_controller.wait_for_layer(task_id, self.layer_id)
+            layer_wait_ms = (time.time() - layer_wait_start) * 1000
+
+            # Get transfer time from cache controller for logging
+            transfer_time_ms = None
+            try:
+                t = forward_meta.cache_controller.get_layer_wait_time(task_id, self.layer_id)
+                if t is not None:
+                    transfer_time_ms = t * 1000
+            except Exception:
+                pass
+
+            if transfer_time_ms is not None:
+                logger.info(
+                    f"[LayerWait] layer={self.layer_id}, "
+                    f"wait_ms={layer_wait_ms:.2f}, "
+                    f"transfer_ms={transfer_time_ms:.2f}, "
+                    f"task_id={task_id[:8]}..."
+                )
+            else:
+                logger.info(
+                    f"[LayerWait] layer={self.layer_id}, wait_ms={layer_wait_ms:.2f}, "
+                    f"task_id={task_id[:8]}..."
+                )
+
         return forward_meta.attn_backend.forward(
             q,
             k,

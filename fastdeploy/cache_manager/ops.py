@@ -33,6 +33,8 @@ try:
             set_data_ipc,
             share_external_data,
             swap_cache_all_layers,
+            swap_cache_per_layer,        # 新增：单层 KV cache 换入算子
+            swap_cache_all_layers_batch, # 新增：多层批量 KV cache 换入算子
             swap_cache_layout,
             unset_data_ipc,
         )
@@ -51,6 +53,8 @@ try:
             set_data_ipc,
             share_external_data,
             swap_cache_all_layers,
+            swap_cache_per_layer,        # 新增：单层 KV cache 换入算子
+            swap_cache_all_layers_batch, # 新增：多层批量 KV cache 换入算子
             unset_data_ipc,
         )
 
@@ -74,6 +78,8 @@ try:
             set_data_ipc,
             share_external_data,
             swap_cache_all_layers,
+            swap_cache_per_layer,        # 新增：单层 KV cache 换入算子
+            swap_cache_all_layers_batch, # 新增：多层批量 KV cache 换入算子
         )
 
         unset_data_ipc = None
@@ -88,6 +94,12 @@ try:
 
         def ipc_sent_key_value_cache_by_remote_ptr_block_sync(*args, **kwargs):
             raise RuntimeError("XPU No ipc_sent_key_value_cache_by_remote_ptr UNIMPLENENTED")
+
+        def swap_cache_per_layer(*args, **kwargs):  # 新增：单层 KV cache 换入算子
+            raise RuntimeError("XPU swap_cache_per_layer UNIMPLENENTED")
+
+        def swap_cache_all_layers_batch(*args, **kwargs):  # 新增：多层批量 KV cache 换入算子
+            raise RuntimeError("XPU swap_cache_all_layers_batch UNIMPLENENTED")
 
     else:
         raise RuntimeError("Prefix cache ops only supported CUDA nor XPU platform ")
@@ -128,6 +140,8 @@ except Exception as e:
     set_data_ipc = None
     share_external_data_ = None
     swap_cache_all_layers = None
+    swap_cache_per_layer = None  # 新增：单层 KV cache 换入算子
+    swap_cache_all_layers_batch = None  # 新增：多层批量 KV cache 换入算子
     unset_data_ipc = None
     set_device = None
     memory_allocated = None
@@ -146,6 +160,8 @@ __all__ = [
     "set_data_ipc",
     "share_external_data_",
     "swap_cache_all_layers",
+    "swap_cache_per_layer",        # 新增：单层 KV cache 换入算子
+    "swap_cache_all_layers_batch", # 新增：多层批量 KV cache 换入算子
     "unset_data_ipc",  # XPU是 None
     "set_device",
     "memory_allocated",

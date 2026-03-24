@@ -16,7 +16,7 @@ Key components:
 """
 
 from .base import KVCacheBase
-from .cache_controller import CacheController
+from .cache_controller import CacheController, LayerSwapTimeoutError
 from .cache_manager import CacheManager
 from .cache_utils import LayerDoneCounter
 from .metadata import (
@@ -46,6 +46,8 @@ __all__ = [
     "CacheManager",
     "CacheController",
     "CacheTransferManager",
+    # Exceptions
+    "LayerSwapTimeoutError",
     # Utils
     "LayerDoneCounter",
     # Metadata

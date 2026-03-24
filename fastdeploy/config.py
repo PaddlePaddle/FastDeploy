@@ -1563,6 +1563,8 @@ class CacheConfig:
         prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding.
         enable_prefix_caching (bool): Flag to enable prefix caching.
         enable_output_caching (bool): Flag to enable kv cache output tokens, only works in V1 scheduler.
+        swap_all_layers (bool): Whether to swap all layers at once (True) or layer-by-layer (False).
+            When False, swap-in can overlap with forward computation for better performance. Default is False.
     """
 
     def __init__(self, args):
@@ -1612,6 +1614,7 @@ class CacheConfig:
         self.write_policy = None
         self.num_cpu_blocks = None
         self.use_mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
+        self.swap_all_layers = True  # Default to layer-by-layer swap for better performance
 
         for key, value in args.items():
             if hasattr(self, key):

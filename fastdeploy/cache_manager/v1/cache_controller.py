@@ -19,11 +19,17 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 import paddle
 from paddleformers.utils.log import logger
 
+
+class LayerSwapTimeoutError(Exception):
+    """Exception raised when layer swap operation times out."""
+    pass
+
+
 if TYPE_CHECKING:
     from fastdeploy.config import FDConfig
 
 # Import ops for CPU cache allocation
-from fastdeploy.cache_manager.ops import cuda_host_alloc
+from fastdeploy.cache_manager.ops import cuda_host_alloc, cuda_host_free
 
 from .base import KVCacheBase
 from .cache_utils import LayerDoneCounter
@@ -370,7 +376,7 @@ class CacheController(KVCacheBase):
         Creates an independent async transfer task for each CacheSwapMetadata.
         The handler is saved in meta.async_handler for upstream tracking.
 
-        Transfer mode is determined by global config self._transfer_manager.swap_all_layers.
+        Transfer mode is determined by global config self.cache_config.swap_all_layers.
 
         Args:
             meta: CacheSwapMetadata containing src_block_ids and dst_block_ids.
@@ -395,9 +401,8 @@ class CacheController(KVCacheBase):
             handler.set_error(meta.error_message)
             return
 
-        use_all_layers = self._transfer_manager.swap_all_layers
         layers_to_transfer = list(range(self._num_layers))
-        mode = "all_layers" if use_all_layers else "layer_by_layer"
+        mode = "all_layers" if self.cache_config.swap_all_layers else "layer_by_layer"
 
         logger.info(
             f"[SwapTask] submit task_id={task_id} {src_location}->{dst_location} "
@@ -421,17 +426,60 @@ class CacheController(KVCacheBase):
             task.status = TransferStatus.IN_PROGRESS
 
         def _on_layer_complete(layer_idx: int) -> None:
-            self._layer_counter.mark_layer_done(task_id, layer_idx)
+            """Callback called after each layer transfer completes."""
+            logger.debug(f"[LayerComplete] _on_layer_complete called for task_id={task_id}, layer={layer_idx}")
+            # Create and record CUDA event for this layer completion
+            cuda_event = None
+            try:
+                cuda_event = paddle.device.cuda.Event()
+                cuda_event.record()
+            except Exception as e:
+                logger.warning(f"Failed to create CUDA event for layer {layer_idx}: {e}")
+
+            # Mark layer done with CUDA event
+            mark_result = self._layer_counter.mark_layer_done(task_id, layer_idx, cuda_event=cuda_event)
+            logger.debug(f"[LayerComplete] mark_layer_done task_id={task_id}, layer={layer_idx}, result={mark_result}")
+
+            # Log layer completion time
+            try:
+                wait_time = self._layer_counter.get_layer_wait_time(task_id, layer_idx)
+                if wait_time is not None:
+                    logger.debug(
+                        f"[LayerComplete] task_id={task_id}, layer={layer_idx}, "
+                        f"transfer_time={wait_time*1000:.2f}ms"
+                    )
+            except Exception:
+                pass
 
         def _do_transfer():
             try:
                 start_time = time.time()
-                if use_all_layers:
+                if self.cache_config.swap_all_layers:
                     success = transfer_fn_all(src_block_ids, dst_block_ids)
                     elapsed = time.time() - start_time
                     if success:
-                        for layer_idx in layers_to_transfer:
-                            _on_layer_complete(layer_idx)
+                        # Create a single CUDA event for all layers (optimization)
+                        cuda_event = None
+                        try:
+                            cuda_event = paddle.device.cuda.Event()
+                            cuda_event.record()
+                        except Exception as e:
+                            logger.warning(f"Failed to create CUDA event for all layers: {e}")
+
+                        # Mark all layers done at once instead of iterating
+                        self._layer_counter.mark_all_layers_done(task_id, cuda_event=cuda_event)
+
+                        # Log timing for all layers
+                        try:
+                            wait_time = self._layer_counter.get_layer_wait_time(task_id, 0)
+                            if wait_time is not None:
+                                logger.debug(
+                                    f"[SwapTask] task_id={task_id} all_layers transfer completed, "
+                                    f"elapsed={wait_time*1000:.2f}ms"
+                                )
+                        except Exception:
+                            pass
+
                     result = TransferResult(
                         src_block_ids=src_block_ids,
                         dst_block_ids=dst_block_ids,
@@ -447,6 +495,7 @@ class CacheController(KVCacheBase):
                         f"src={src_block_ids} dst={dst_block_ids}"
                     )
                 else:
+                    logger.debug(f"[SwapTask] task_id={task_id} starting layer_by_layer transfer, num_layers={len(layers_to_transfer)}")
                     success = transfer_fn_layer(
                         layers_to_transfer,
                         _on_layer_complete,
@@ -454,6 +503,7 @@ class CacheController(KVCacheBase):
                         dst_block_ids,
                     )
                     elapsed = time.time() - start_time
+                    logger.debug(f"[SwapTask] task_id={task_id} layer_by_layer transfer_fn_layer returned, success={success}, elapsed={elapsed:.3f}s")
                     result = TransferResult(
                         src_block_ids=src_block_ids,
                         dst_block_ids=dst_block_ids,
@@ -514,77 +564,75 @@ class CacheController(KVCacheBase):
 
     def load_host_to_device(
         self,
-        swap_metadata: list[CacheSwapMetadata],
+        swap_metadata: CacheSwapMetadata,
     ) -> None:
         """
         Load host cache to device (async).
 
-        Creates an independent async transfer task for each CacheSwapMetadata, executed in parallel.
-        Each task's AsyncTaskHandler is saved in the corresponding CacheSwapMetadata.async_handler,
-        allowing the caller to track each task's execution status.
+        Creates an async transfer task for CacheSwapMetadata.
+        The task's AsyncTaskHandler is saved in CacheSwapMetadata.async_handler,
+        allowing caller to track task's execution status.
 
         Uses layer-by-layer transfer strategy to overlap with forward computation.
         Each layer's completion is marked via LayerDoneCounter.
 
         Args:
-            swap_metadata: CacheSwapMetadata list, each element containing:
+            swap_metadata: CacheSwapMetadata containing:
                 - src_block_ids: Source host block IDs
                 - dst_block_ids: Destination device block IDs
         """
-        for meta in swap_metadata:
-            self._submit_swap_task(
-                meta=meta,
-                src_location="host",
-                dst_location="device",
-                transfer_fn_all=lambda src_ids, dst_ids: self._transfer_manager.load_to_device_all_layers(
-                    src_ids, dst_ids
-                ),
-                transfer_fn_layer=lambda layer_indices, on_layer_complete, src_ids, dst_ids: self._transfer_manager.load_layers_to_device(
-                    layer_indices=layer_indices,
-                    host_block_ids=src_ids,
-                    device_block_ids=dst_ids,
-                    on_layer_complete=on_layer_complete,
-                ),
-            )
+        self._submit_swap_task(
+            meta=swap_metadata,
+            src_location="host",
+            dst_location="device",
+            transfer_fn_all=lambda src_ids, dst_ids: self._transfer_manager.load_to_device_all_layers(
+                src_ids, dst_ids
+            ),
+            transfer_fn_layer=lambda layer_indices, on_layer_complete, src_ids, dst_ids: self._transfer_manager.load_layers_to_device(
+                layer_indices=layer_indices,
+                host_block_ids=src_ids,
+                device_block_ids=dst_ids,
+                on_layer_complete=on_layer_complete,
+            ),
+        )
         logger.info(
-            f"[LoadHostToDevice] submitted {len(swap_metadata)} swap task(s), "
-            f"total_blocks={sum(len(m.src_block_ids) for m in swap_metadata)}"
+            f"[LoadHostToDevice] submitted swap task, "
+            f"total_blocks={len(swap_metadata.src_block_ids)}"
         )
 
     def evict_device_to_host(
         self,
-        swap_metadata: list[CacheSwapMetadata],
+        swap_metadata: CacheSwapMetadata,
     ) -> None:
         """
         Evict device cache to host (async).
 
-        Creates an independent async transfer task for each CacheSwapMetadata, executed in parallel.
-        Each task's AsyncTaskHandler is saved in the corresponding CacheSwapMetadata.async_handler,
-        allowing the caller to track each task's execution status.
+        Creates an async transfer task for CacheSwapMetadata.
+        The task's AsyncTaskHandler is saved in CacheSwapMetadata.async_handler,
+        allowing caller to track task's execution status.
 
         Args:
-            swap_metadata: CacheSwapMetadata list, each element containing:
+            swap_metadata: CacheSwapMetadata containing:
                 - src_block_ids: Source device block IDs
                 - dst_block_ids: Destination host block IDs
         """
-        for meta in swap_metadata:
-            self._submit_swap_task(
-                meta=meta,
-                src_location="device",
-                dst_location="host",
-                transfer_fn_all=lambda src_ids, dst_ids: self._transfer_manager.evict_to_host_all_layers(
-                    src_ids, dst_ids
-                ),
-                transfer_fn_layer=lambda layer_indices, on_layer_complete, src_ids, dst_ids: self._transfer_manager.evict_layers_to_host(
-                    layer_indices=layer_indices,
-                    device_block_ids=src_ids,
-                    host_block_ids=dst_ids,
-                    on_layer_complete=on_layer_complete,
-                ),
-            )
+        self._submit_swap_task(
+            meta=swap_metadata,
+            src_location="device",
+            dst_location="host",
+            transfer_fn_all=lambda src_ids, dst_ids: self._transfer_manager.evict_to_host_all_layers(
+                src_ids, dst_ids
+            ),
+            transfer_fn_layer=lambda layer_indices, on_layer_complete, src_ids, dst_ids: self._transfer_manager.evict_layers_to_host(
+                layer_indices=layer_indices,
+                device_block_ids=src_ids,
+                host_block_ids=dst_ids,
+                on_layer_complete=on_layer_complete,
+            ),
+        )
         logger.info(
-            f"[EvictDeviceToHost] submitted {len(swap_metadata)} swap task(s), "
-            f"total_blocks={sum(len(m.src_block_ids) for m in swap_metadata)}"
+            f"[EvictDeviceToHost] submitted swap task, "
+            f"total_blocks={len(swap_metadata.src_block_ids)}"
         )
 
     def prefetch_from_storage(
@@ -827,26 +875,87 @@ class CacheController(KVCacheBase):
         This is used by the forward computation thread to wait for
         layer transfer completion before using the cache.
 
+        Uses CUDA events for efficient waiting when available.
+
         Args:
             transfer_id: Unique identifier for the transfer
             layer_idx: Index of the layer to wait for
-            timeout: Maximum wait time in seconds
+            timeout: Maximum wait time in seconds (default: 300s)
 
         Returns:
-            True if layer completed, False if timeout or transfer not found
+            True if layer completed
+
+        Raises:
+            LayerSwapTimeoutError: If timeout occurs before layer completes
         """
-        # Polling wait (could be optimized with events)
-        start_time = time.time()
-        while True:
-            if self._layer_counter.is_layer_done(transfer_id, layer_idx):
-                return True
+        # First check if already done (fast path)
+        if self._layer_counter.is_layer_done(transfer_id, layer_idx):
+            return True
 
-            if timeout is not None:
-                elapsed = time.time() - start_time
-                if elapsed >= timeout:
-                    return False
+        logger.debug(f"[WaitForLayer] task_id={transfer_id}, layer={layer_idx} starting wait")
 
-            time.sleep(0.001)  # Small sleep to avoid busy waiting
+        # Increment wait count to prevent premature clear_transfer
+        self._layer_counter.increment_wait_count(transfer_id)
+        try:
+            # Try CUDA event waiting first (most efficient)
+            cuda_event = self._layer_counter.get_layer_cuda_event(transfer_id, layer_idx)
+            if cuda_event is not None:
+                try:
+                    # Use CUDA event synchronization
+                    cuda_event.synchronize()
+                    # Double check after synchronize
+                    if self._layer_counter.is_layer_done(transfer_id, layer_idx):
+                        logger.debug(f"[WaitForLayer] task_id={transfer_id}, layer={layer_idx} done via CUDA event")
+                        return True
+                except Exception as e:
+                    logger.warning(f"CUDA event sync failed for layer {layer_idx}: {e}")
+
+            # Fallback to polling wait
+            start_time = time.time()
+            default_timeout = 1.0  # 1 second default timeout
+            timeout = timeout if timeout is not None else default_timeout
+            while True:
+                if self._layer_counter.is_layer_done(transfer_id, layer_idx):
+                    logger.debug(f"[WaitForLayer] task_id={transfer_id}, layer={layer_idx} done via polling")
+                    return True
+
+                if timeout is not None:
+                    elapsed = time.time() - start_time
+                    if elapsed >= timeout:
+                        logger.error(f"[WaitForLayer] task_id={transfer_id}, layer={layer_idx} TIMEOUT after {elapsed:.2f}s")
+                        raise LayerSwapTimeoutError(
+                            f"Layer swap timeout: transfer_id={transfer_id}, layer={layer_idx}, elapsed={elapsed:.2f}s"
+                        )
+
+                time.sleep(0.001)  # Small sleep to avoid busy waiting
+        finally:
+            # Decrement wait count when done waiting
+            self._layer_counter.decrement_wait_count(transfer_id)
+
+    def get_layer_wait_time(self, transfer_id: str, layer_idx: int) -> Optional[float]:
+        """
+        Get the time from transfer start to layer completion.
+
+        Args:
+            transfer_id: Unique identifier for the transfer
+            layer_idx: Index of the layer
+
+        Returns:
+            Time in seconds, or None if transfer not found or layer not completed
+        """
+        return self._layer_counter.get_layer_wait_time(transfer_id, layer_idx)
+
+    def get_all_layer_times(self, transfer_id: str) -> Dict[int, float]:
+        """
+        Get completion times for all layers.
+
+        Args:
+            transfer_id: Unique identifier for the transfer
+
+        Returns:
+            Dictionary mapping layer_idx to completion time
+        """
+        return self._layer_counter.get_all_layer_times(transfer_id)
 
     def register_layer_callback(
         self,
@@ -895,9 +1004,18 @@ class CacheController(KVCacheBase):
 
     def reset_cache(self) -> bool:
         """
-        Reset all cache state.
+        Reset cache state (clear content only, do NOT free storage).
 
-        Clears active tasks and resets layer counter.
+        This method only clears the transfer state:
+        - Cancels all active transfer tasks
+        - Resets layer counters
+        - Clears active tasks and async handlers
+
+        It does NOT free any storage (GPU memory, CPU pinned memory, or storage).
+        Use free_cache() to release storage resources.
+
+        Returns:
+            True if successful, False otherwise.
         """
         try:
             with self._lock:
@@ -914,27 +1032,58 @@ class CacheController(KVCacheBase):
         except Exception:
             return False
 
-    def reset_controller_cache(self, reset_external: bool = False) -> bool:
+    def free_cache(self) -> bool:
         """
-        Reset controller cache state.
+        Free all cache storage (GPU memory + CPU pinned memory + storage).
 
-        Args:
-            reset_external: If True, also reset external storage cache
+        This releases all underlying storage resources, not just clears content.
+        Use this when shutting down or wanting to fully release cache resources.
 
         Returns:
-            True if successful, False otherwise
+            True if successful, False otherwise.
         """
-        success = self.reset_cache()
+        try:
+            # First reset transfer state
+            self.reset_cache()
 
-        # Reset external storage if requested
-        if reset_external and self._transfer_manager.storage_connector:
-            try:
-                # TODO: Call storage connector clear method
-                pass
-            except Exception:
-                pass
+            # Free GPU cache
+            self._free_gpu_cache()
 
-        return success
+            # Free CPU cache (pinned memory)
+            self._free_host_cache()
+
+            # Clear storage
+            self._clear_storage()
+
+            return True
+        except Exception:
+            return False
+
+    def _free_gpu_cache(self) -> None:
+        """Free GPU cache tensors stored in cache_kvs_map."""
+        if not hasattr(self, "cache_kvs_map") or not self.cache_kvs_map:
+            return
+
+        logger.info(f"[CacheController] Freeing GPU cache memory, {len(self.cache_kvs_map)} tensors.")
+        self.cache_kvs_map.clear()
+        paddle.device.cuda.empty_cache()
+        logger.info("[CacheController] GPU cache memory released.")
+
+    def _clear_storage(self) -> None:
+        """Clear storage connector cache."""
+        storage_connector = getattr(self._transfer_manager, "_storage_connector", None)
+        if not storage_connector:
+            return
+
+        try:
+            if hasattr(storage_connector, "clear") and callable(storage_connector.clear):
+                count = storage_connector.clear()
+                logger.info(f"[CacheController] Cleared {count} entries from storage.")
+            elif hasattr(storage_connector, "disconnect") and callable(storage_connector.disconnect):
+                storage_connector.disconnect()
+                logger.info("[CacheController] Storage connector disconnected.")
+        except Exception as e:
+            logger.warning(f"[CacheController] Failed to clear storage: {e}")
 
     # ============ Statistics Methods ============
 
@@ -963,3 +1112,29 @@ class CacheController(KVCacheBase):
         self._transfer_manager.stop()
         # Shutdown thread pool executor
         self._executor.shutdown(wait=False)
+
+    def __del__(self) -> None:
+        """Destructor to release pinned host memory."""
+        try:
+            self._free_host_cache()
+        except Exception:
+            pass
+
+    def _free_host_cache(self) -> None:
+        """Free pinned host memory allocated for swap space."""
+        if not hasattr(self, "host_cache_kvs_map"):
+            return
+
+        if not self.host_cache_kvs_map:
+            return
+
+        logger.info(f"[CacheController] Freeing host cache memory, {len(self.host_cache_kvs_map)} tensors.")
+        for name, ptr in list(self.host_cache_kvs_map.items()):
+            if ptr != 0:
+                try:
+                    cuda_host_free(ptr)
+                    logger.debug(f"[CacheController] Freed host cache: {name}")
+                except Exception as e:
+                    logger.warning(f"[CacheController] Failed to free host cache {name}: {e}")
+        self.host_cache_kvs_map.clear()
+        logger.info("[CacheController] Host cache memory released.")

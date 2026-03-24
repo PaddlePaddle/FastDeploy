@@ -52,6 +52,7 @@ from fastdeploy.worker.output import (
     SampleLogprobs,
     SpeculateMetrics,
 )
+from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
 
 
 class RequestStatus(Enum):
@@ -614,9 +615,9 @@ class BatchRequest:
     def append_swap_metadata(self, metadata: List[CacheSwapMetadata]):
         for meta in metadata:
             if self.cache_swap_metadata:
-                self.cache_evict_metadata.src_block_ids.extend(meta.src_block_ids)
-                self.cache_evict_metadata.dst_block_ids.extend(meta.dst_block_ids)
-                self.cache_evict_metadata.hash_values.extend(meta.hash_values)
+                self.cache_swap_metadata.src_block_ids.extend(meta.src_block_ids)
+                self.cache_swap_metadata.dst_block_ids.extend(meta.dst_block_ids)
+                self.cache_swap_metadata.hash_values.extend(meta.hash_values)
             else:
                 self.cache_swap_metadata = CacheSwapMetadata(
                     src_block_ids=meta.src_block_ids,
