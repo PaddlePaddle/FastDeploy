@@ -30,6 +30,7 @@ __global__ inline void min_length_logits_process(
   const int token_idx = threadIdx.x;
   if (token_idx >= token_num) return;
   const int bi = batch_id_per_token_output[token_idx];
+  if (bi < 0) return;
   if (bi >= bs) return;
   const int query_start_token_idx = cu_seqlens_q_output[bi];
 
@@ -59,6 +60,7 @@ __global__ inline void min_length_logits_process<half>(
   const int token_idx = threadIdx.x;
   if (token_idx >= token_num) return;
   const int bi = batch_id_per_token_output[token_idx];
+  if (bi < 0) return;
   if (bi >= bs) return;
   const int query_start_token_idx = cu_seqlens_q_output[bi];
 
@@ -85,6 +87,7 @@ __global__ void update_repeat_times(const int64_t *token_ids_all,
   const int token_idx = blockIdx.x;
   if (token_idx >= token_num) return;
   const int bi = batch_id_per_token_output[token_idx];
+  if (bi < 0) return;
   if (bi >= bs) return;
   if (cur_len[bi] < 0) {
     return;
@@ -115,6 +118,7 @@ __global__ void update_value_by_repeat_times(
   const int token_idx = blockIdx.x;
   if (token_idx >= token_num) return;
   const int bi = batch_id_per_token_output[token_idx];
+  if (bi < 0) return;
   if (bi >= bs) return;
   int tid = threadIdx.x;
   T *logits_now = logits + token_idx * length;
@@ -146,7 +150,7 @@ __global__ void ban_bad_words(T *logits,
   const int token_idx = blockIdx.x;
   if (token_idx >= token_num) return;
   const int bi = batch_id_per_token_output[token_idx];
-
+  if (bi < 0) return;
   if (bi >= bs) return;
   int tid = threadIdx.x;
   T *logits_now = logits + token_idx * length;
