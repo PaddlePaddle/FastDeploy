@@ -45,19 +45,13 @@ class TestFusedMoE(unittest.TestCase):
 
         num_tests = 10
 
-        for _ in range(num_tests * 10):
-
-            topk_info = paddle.topk(scores, num_topk, axis=-1, largest=True, sorted=False)
-            topk_weight = topk_info[0]
-            topk_idx = topk_info[1]
-
-            scores = paddle.randn([num_tokens, num_experts], dtype="float32").abs() + 1
+        for _ in range(num_tests):
 
             dispatch_use_fp8 = False
             packed_recv_x, packed_recv_count, handle, event, hook = buffer.low_latency_dispatch(
                 x,
                 topk_idx,
-                None,  # expertwise_scale!
+                None,  # expertwise_scale， used in w4a8.
                 num_tokens,
                 num_experts,
                 use_fp8=dispatch_use_fp8,
@@ -75,7 +69,13 @@ class TestFusedMoE(unittest.TestCase):
                 fp32 = fp32.reshape([0, 0, -1])
 
             combined_hidden_states, _, _ = buffer.low_latency_combine(
-                packed_recv_x, topk_idx, topk_weight, handle, False, False, False
+                packed_recv_x,
+                topk_idx,
+                topk_weight,
+                handle,
+                zero_copy=False,
+                async_finish=False,
+                return_recv_hook=False,
             )
 
         num_local_experts = num_experts // num_ranks
