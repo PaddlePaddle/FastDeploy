@@ -875,7 +875,6 @@ void UnifiedUpdateModelStatus(const paddle::Tensor& seq_lens_encoder,
                               const paddle::Tensor& seq_lens_decoder,
                               const paddle::Tensor& has_running_seqs,
                               const paddle::Tensor& step_input_ids,
-                              const paddle::Tensor& adaptive_step_input_len,
                               const paddle::Tensor& step_output_ids,
                               const paddle::Tensor& step_output_len,
                               const paddle::Tensor& stop_flags,
@@ -886,9 +885,13 @@ void UnifiedUpdateModelStatus(const paddle::Tensor& seq_lens_encoder,
                               const paddle::Tensor& prompt_lens,
                               const paddle::Tensor& step_idx,
                               const paddle::Tensor& end_tokens,
-                              const paddle::Tensor& max_dec_len,
-                              const bool is_naive_mode,
-                              const bool prefill_one_step_stop);
+                              const paddle::Tensor& max_dec_len);
+
+void NaiveUpdateModelStatus(const paddle::Tensor& accept_tokens,
+                            const paddle::Tensor& accept_num,
+                            const paddle::Tensor& seq_lens_this_time,
+                            const paddle::Tensor& next_tokens,
+                            const paddle::Tensor& cu_seqlens_q_output);
 
 void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& token_ids_all,
                                     const paddle::Tensor& prompt_lens,
@@ -971,24 +974,17 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& seq_lens_decoder,
                           const paddle::Tensor& step_idx,
                           const paddle::Tensor& not_need_stop,
-                          const paddle::Tensor& is_block_step,
-                          const paddle::Tensor& batch_drop,
                           const paddle::Tensor& pre_ids,
-                          const paddle::Tensor& mask_rollback,
-                          const paddle::Tensor& recompute_token_num,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
-                          const paddle::Tensor& base_model_seq_lens_this_time,
-                          const paddle::Tensor& base_model_seq_lens_encoder,
-                          const paddle::Tensor& base_model_seq_lens_decoder,
-                          const paddle::Tensor& base_model_step_idx,
-                          const paddle::Tensor& base_model_stop_flags,
-                          const paddle::Tensor& base_model_is_block_step,
-                          const paddle::Tensor& base_model_draft_tokens,
-                          const int max_draft_token,
-                          const bool truncate_first_token,
-                          const bool splitwise_prefill,
-                          const bool kvcache_scheduler_v1);
+                          const paddle::Tensor& target_model_seq_lens_encoder,
+                          const paddle::Tensor& target_model_seq_lens_decoder,
+                          const paddle::Tensor& target_model_step_idx,
+                          const paddle::Tensor& target_model_stop_flags,
+                          const paddle::Tensor& max_dec_len,
+                          const paddle::Tensor& target_model_draft_tokens,
+                          const int num_model_step,
+                          const bool is_splitwise_prefill);
 
 void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& draft_tokens,
@@ -1784,6 +1780,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("unified_update_model_status",
         &UnifiedUpdateModelStatus,
         "unified_update_model_status function");
+
+  m.def("naive_update_model_status",
+        &NaiveUpdateModelStatus,
+        "naive_update_model_status function");
 
   m.def("speculate_set_value_by_flags_and_idx",
         &SpeculateSetValueByFlagsAndIdx,
