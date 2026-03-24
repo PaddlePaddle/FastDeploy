@@ -762,6 +762,7 @@ class ResourceManagerV1(ResourceManager):
             preempted_reqs: list[Request] = []
             error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.scheduler_config.max_num_batched_tokens
+            block_size = self.config.cache_config.block_size
             need_abort_requests = []  # users trigger abortion
 
             # First, schedule the RUNNING requests.
@@ -959,10 +960,11 @@ class ResourceManagerV1(ResourceManager):
                                 self.cache_manager.num_cpu_blocks > 0
                                 or self.config.cache_config.kvcache_storage_backend
                             ):
-                                if not self.cache_manager.can_allocate_gpu_blocks(
-                                    (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
-                                    // self.config.cache_config.block_size
-                                ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
+                                match_token_num, _ = self.cache_manager.pre_match_block_on_gpu(request)
+                                need_prefill_tokens = request.need_prefill_tokens - match_token_num
+                                need_block_num = (need_prefill_tokens + block_size - 1) // block_size
+                                if not self.cache_manager.can_allocate_gpu_blocks(need_block_num):
+                                    # to prevent block allocation for matching in hierarchical cache and cause dead lock
                                     break
                             success = self.get_prefix_cached_blocks(request)
                             if not success:
@@ -1031,10 +1033,11 @@ class ResourceManagerV1(ResourceManager):
                                 self.cache_manager.num_cpu_blocks > 0
                                 or self.config.cache_config.kvcache_storage_backend
                             ):
-                                if not self.cache_manager.can_allocate_gpu_blocks(
-                                    (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
-                                    // self.config.cache_config.block_size
-                                ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
+                                match_token_num, _ = self.cache_manager.pre_match_block_on_gpu(request)
+                                need_prefill_tokens = request.need_prefill_tokens - match_token_num
+                                need_block_num = (need_prefill_tokens + block_size - 1) // block_size
+                                if not self.cache_manager.can_allocate_gpu_blocks(need_block_num):
+                                    # to prevent block allocation for matching in hierarchical cache and cause dead lock
                                     break
                             success = self.get_prefix_cached_blocks(request)
                             if not success:
@@ -1321,17 +1324,21 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             if self.available_batch() == 0:
                 return False
+
+            block_size = self.config.cache_config.block_size
             request.need_prefill_tokens = len(request.prompt_token_ids)
             need_prealloc_prefill_blocks = (
-                request.need_prefill_tokens + self.config.cache_config.block_size - 1
-            ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
+                request.need_prefill_tokens + block_size - 1
+            ) // block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
+
             if self.config.cache_config.enable_prefix_caching:
                 # Enable prefix caching
                 if self.cache_manager.num_cpu_blocks > 0 or self.config.cache_config.kvcache_storage_backend:
-                    if not self.cache_manager.can_allocate_gpu_blocks(
-                        (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
-                        // self.config.cache_config.block_size
-                    ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
+                    match_token_num, _ = self.cache_manager.pre_match_block_on_gpu(request)
+                    need_prefill_tokens = request.need_prefill_tokens - match_token_num
+                    need_block_num = (need_prefill_tokens + block_size - 1) // block_size
+                    if not self.cache_manager.can_allocate_gpu_blocks(need_block_num):
+                        # to prevent block allocation for matching in hierarchical cache and cause dead lock
                         return False
                 success = self.get_prefix_cached_blocks(request)
                 if not success:

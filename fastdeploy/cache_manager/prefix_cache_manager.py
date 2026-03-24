@@ -816,8 +816,8 @@ class PrefixCacheManager:
                 # 2. prepare cpu cache: allocate gpu cache for matched cpu blocks, wait for data transfer to complete
                 gpu_recv_block_ids = []
                 match_cpu_blocks_num = len(match_cpu_block_ids)
-                if self.can_allocate_gpu_blocks(num_blocks=match_cpu_blocks_num):
-                    if match_cpu_blocks_num > 0:
+                if match_cpu_blocks_num > 0:
+                    if self.can_allocate_gpu_blocks(num_blocks=match_cpu_blocks_num):
                         logger.debug(
                             f"request_match_blocks: req_id {req_id}, allocate {match_cpu_blocks_num} block to receive cpu cache"
                         )
@@ -833,10 +833,10 @@ class PrefixCacheManager:
                             )
                             cost_time = time.time() - start_time
                             metrics["cpu_cache_prepare_time"] = cost_time
-                else:
-                    raise Exception(
-                        "request_match_blocks: Not enough GPU memory to allocate cache for matched CPU Cache"
-                    )
+                    else:
+                        raise Exception(
+                            "request_match_blocks: Not enough GPU memory to allocate cache for matched CPU Cache"
+                        )
 
                 # 3. match and prefetch cache from storage
                 match_token_num = gpu_match_token_num + cpu_match_token_num
@@ -1747,6 +1747,76 @@ class PrefixCacheManager:
             current_match_node,
             gpu_match_token_num,
             cpu_match_token_num,
+        )
+
+    def pre_match_block_on_gpu(self, request):
+        """
+        Pre-match request tokens against cached GPU blocks in the radix tree.
+
+        This method performs a prefix matching operation to find the longest sequence
+        of tokens that already exist in GPU cache blocks. It traverses the radix tree
+        from the root, computing hash values for each block-sized chunk of tokens
+        and checking if corresponding nodes exist with GPU-resident data.
+
+        Args:
+            request: The inference request object containing prompt_token_ids and
+                     output_token_ids to be matched against the cache.
+
+        Returns:
+            tuple: A tuple containing:
+                - match_token_num (int): The total number of tokens that were
+                  successfully matched in GPU-resident blocks.
+                - last_node (BlockNode): The last matched node in the radix tree,
+                  which represents the deepest point of prefix cache hit.
+
+        Note:
+            - Only blocks with `has_in_gpu=True` are considered as valid matches.
+            - The matching stops at the first mismatch or when a block is not in GPU.
+            - This is a read-only operation that does not modify the radix tree
+              or LRU data structures.
+        """
+        if isinstance(request.prompt_token_ids, np.ndarray):
+            prompt_token_ids = request.prompt_token_ids.tolist()
+        else:
+            prompt_token_ids = request.prompt_token_ids
+        input_ids = prompt_token_ids + request.output_token_ids
+        total_token_num = len(input_ids)
+
+        last_node = self.radix_tree_root
+        match_token_num = 0
+        mm_idx = 0
+        prefix_block_key = []
+        block_size = self.config.cache_config.block_size
+
+        with self.cache_status_lock:
+            while match_token_num < total_token_num:
+                token_block = input_ids[match_token_num : match_token_num + block_size]
+                if len(token_block) != block_size:
+                    break
+
+                mm_idx, extra_keys = self.get_block_hash_extra_keys(
+                    request=request,
+                    start_idx=match_token_num,
+                    end_idx=match_token_num + block_size,
+                    mm_idx=mm_idx,
+                )
+                prefix_block_key.extend(extra_keys)
+                hash_value = get_hash_str(token_block, prefix_block_key)
+                prefix_block_key = [hash_value]
+
+                if hash_value not in last_node.children:
+                    break
+
+                child = last_node.children[hash_value]
+                if not child.has_in_gpu:
+                    break
+                match_token_num += block_size
+                last_node = child
+
+        logger.info(f"match_block: req_id {request.request_id}, match_token_num {match_token_num}")
+        return (
+            match_token_num,
+            last_node,
         )
 
     def match_block(self, req_id, input_ids, block_size):
