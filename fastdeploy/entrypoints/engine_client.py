@@ -599,7 +599,10 @@ class EngineClient:
         req_dict = request.to_dict()
         if envs.ZMQ_SEND_BATCH_DATA:
             req_dict["zmq_worker_pid"] = self.worker_pid
-        self.zmq_client.send_json(req_dict)
+        if not self.enable_mm and not envs.ENABLE_V1_DATA_PROCESSOR:
+            self.zmq_client.send_json(req_dict)
+        else:
+            self.zmq_client.send_pyobj(req_dict)
         request_id = request.request_id
         dealer, response_queue = await self.connection_manager.get_connection(request_id)
         if not envs.ZMQ_SEND_BATCH_DATA:

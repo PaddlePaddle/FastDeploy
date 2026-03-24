@@ -2709,7 +2709,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         paddle.device.cuda.empty_cache()
         logger.info(f"<<< finish offloading memory! time cost: {time.perf_counter()-start_time:.3f}s")
-        print_gpu_memory_use(self.local_rank, f"After offloading memory [{tags}]")
+        print_gpu_memory_use(f"After offloading memory [{tags}]", self.local_rank, self.device_id)
 
     def wakeup(self, tags):
         if not self.is_sleeping:
@@ -2750,7 +2750,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.is_weight_sleeping = False
 
         logger.info(f"<<< finish reloading memory! time cost: {time.perf_counter()-start_time:.3f}s")
-        print_gpu_memory_use(self.local_rank, f"After reloading memory [{tags}]")
+        print_gpu_memory_use(f"After reloading memory [{tags}]", self.local_rank, self.device_id)
 
     def padding_cudagraph_inputs(self) -> None:
         """

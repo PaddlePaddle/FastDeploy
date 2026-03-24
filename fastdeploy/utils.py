@@ -702,12 +702,15 @@ def singleton(cls):
     return get_instance
 
 
-def print_gpu_memory_use(gpu_id: int, title: str) -> None:
+def print_gpu_memory_use(title: str, gpu_id: int, device_id: int | None = None) -> None:
     """Print memory usage"""
     import pynvml
 
+    if device_id is None:
+        device_id = gpu_id
+
     pynvml.nvmlInit()
-    handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_id)
+    handle = pynvml.nvmlDeviceGetHandleByIndex(device_id)
     meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
     pynvml.nvmlShutdown()
 
@@ -724,7 +727,7 @@ def print_gpu_memory_use(gpu_id: int, title: str) -> None:
         f"\n\tPaddle max memory Reserved(GiB): {paddle_max_reserved / 1024.0 / 1024.0 / 1024.0}",
         f"\n\tPaddle max memory Allocated(GiB): {paddle_max_allocated / 1024.0 / 1024.0 / 1024.0}",
         f"\n\tPaddle memory Reserved(GiB): {paddle_reserved / 1024.0 / 1024.0 / 1024.0}",
-        f"\n\tPaddle memory Allocated(GiB): {paddle_allocated / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle memory Allocated(GiB): {paddle_allocated / 1024.0 / 1024.0 / 1024.0}\n",
     )
 
 
