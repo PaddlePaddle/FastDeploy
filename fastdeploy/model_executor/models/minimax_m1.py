@@ -104,7 +104,7 @@ class MiniMaxM1MLP(nn.Layer):
 
 
 class MiniMaxM1MoE(nn.Layer):
-    """MiniMax-M1 MoE Layer"""
+    """MiniMax-M1 MoE Layer with low-bit quantization support."""
 
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str) -> None:
         super().__init__()
@@ -112,10 +112,43 @@ class MiniMaxM1MoE(nn.Layer):
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.norm_topk_prob = getattr(fd_config.model_config, "norm_topk_prob", False)
 
-        weight_key_map = {
-            "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
-            "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
-        }
+        # Build quantization-aware weight key map (mirrors Ernie4_5_MoE pattern)
+        moe_quant_type = ""
+        quant_config = getattr(fd_config, "quant_config", None)
+        if quant_config and hasattr(quant_config, "moe_quant_type"):
+            moe_quant_type = quant_config.moe_quant_type or ""
+
+        is_quantized = getattr(fd_config.model_config, "is_quantized", False)
+        moe_dynamic_quant = getattr(quant_config, "moe_dynamic_quant", False) if quant_config else False
+
+        if moe_quant_type in ("w4a8", "tensor_wise_fp8", "block_wise_fp8") or (
+            moe_quant_type == "w4afp8" and is_quantized and not moe_dynamic_quant
+        ):
+            weight_key_map = {
+                "gate_weight_key": f"{prefix}.gate.weight",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
+                "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
+                "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
+            }
+        elif moe_quant_type == "w4afp8" and is_quantized:
+            # Dynamic w4afp8: no activation scales
+            weight_key_map = {
+                "gate_weight_key": f"{prefix}.gate.weight",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
+            }
+        else:
+            # Default: unquantized
+            weight_key_map = {
+                "gate_weight_key": f"{prefix}.gate.weight",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
+            }
 
         self.gate = ReplicatedLinear(
             fd_config=fd_config,
@@ -635,29 +668,35 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
 
         for name, weight in list(state_dict.items()):
             # Expert weights: w1→gate_proj, w3→up_proj, w2→down_proj
+            # Handles both .weight (FP) and .quant_weight / .weight_scale / .activation_scale (quantized)
             if "block_sparse_moe.experts." in name:
-                name = re.sub(r"\.w1\.weight$", ".gate_proj.weight", name)
-                name = re.sub(r"\.w3\.weight$", ".up_proj.weight", name)
-                name = re.sub(r"\.w2\.weight$", ".down_proj.weight", name)
+                name = re.sub(r"\.w1\.", ".gate_proj.", name)
+                name = re.sub(r"\.w3\.", ".up_proj.", name)
+                name = re.sub(r"\.w2\.", ".down_proj.", name)
                 renamed[name] = weight
             # Full attention: merge separate q/k/v into qkv_proj
             elif ".self_attn.q_proj." in name or ".self_attn.k_proj." in name or ".self_attn.v_proj." in name:
                 # Extract layer prefix: e.g. "model.layers.7.self_attn"
-                prefix_match = re.match(r"(.*\.self_attn)\.(q|k|v)_proj\.weight$", name)
+                prefix_match = re.match(
+                    r"(.*\.self_attn)\.(q|k|v)_proj\.(weight|quant_weight|weight_scale|activation_scale)$", name
+                )
                 if prefix_match:
                     attn_prefix = prefix_match.group(1)
                     proj_type = prefix_match.group(2)
-                    if attn_prefix not in qkv_buffers:
-                        qkv_buffers[attn_prefix] = {}
-                    qkv_buffers[attn_prefix][proj_type] = weight
+                    suffix = prefix_match.group(3)
+                    buf_key = f"{attn_prefix}|{suffix}"
+                    if buf_key not in qkv_buffers:
+                        qkv_buffers[buf_key] = {}
+                    qkv_buffers[buf_key][proj_type] = weight
                 else:
                     renamed[name] = weight
             else:
                 renamed[name] = weight
 
         # Merge q/k/v into qkv_proj for full attention layers
-        for attn_prefix, projections in qkv_buffers.items():
+        for buf_key, projections in qkv_buffers.items():
             if "q" in projections and "k" in projections and "v" in projections:
+                attn_prefix, suffix = buf_key.split("|", 1)
                 q_w = projections["q"]
                 k_w = projections["k"]
                 v_w = projections["v"]
@@ -665,7 +704,7 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
                     merged = np.concatenate([q_w, k_w, v_w], axis=0)
                 else:
                     merged = paddle.concat([q_w, k_w, v_w], axis=0)
-                renamed[f"{attn_prefix}.qkv_proj.weight"] = merged
+                renamed[f"{attn_prefix}.qkv_proj.{suffix}"] = merged
 
         self.model.load_state_dict(renamed)
         self.lm_head.load_state_dict(renamed)

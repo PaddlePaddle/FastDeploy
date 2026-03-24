@@ -312,6 +312,43 @@ class TestDecoderLayerConstruction:
         layer = MiniMaxM1DecoderLayer(fd, layer_id=7, prefix="model.layers.7")
         assert layer.attention_type == 1
 
+    def test_moe_default_weight_key_map(self):
+        """Unquantized config → weight_key_map has plain .weight keys."""
+        fd = _make_fd_config(num_local_experts=4)
+        FusedMoE = sys.modules["fastdeploy.model_executor.layers.moe.moe"].FusedMoE
+        FusedMoE.reset_mock()
+        MiniMaxM1MoE(fd, layer_id=0, prefix="model.layers.0.block_sparse_moe")
+        wkm = FusedMoE.call_args[1]["weight_key_map"]
+        assert "gate_weight_key" in wkm
+        assert wkm["up_gate_proj_expert_weight_key"].endswith(".up_gate_proj.weight")
+        assert "weight_scale" not in str(wkm)
+
+    def test_moe_w4a8_weight_key_map(self):
+        """w4a8 quant config → weight_key_map has .quant_weight + scales."""
+        fd = _make_fd_config(num_local_experts=4)
+        fd.quant_config = SimpleNamespace(moe_quant_type="w4a8")
+        fd.model_config.is_quantized = True
+        FusedMoE = sys.modules["fastdeploy.model_executor.layers.moe.moe"].FusedMoE
+        FusedMoE.reset_mock()
+        MiniMaxM1MoE(fd, layer_id=0, prefix="model.layers.0.block_sparse_moe")
+        wkm = FusedMoE.call_args[1]["weight_key_map"]
+        assert "quant_weight" in wkm["up_gate_proj_expert_weight_key"]
+        assert "weight_scale" in wkm["up_gate_proj_expert_weight_scale_key"]
+        assert "activation_scale" in wkm["up_gate_proj_expert_in_scale_key"]
+
+    def test_moe_w4afp8_dynamic_weight_key_map(self):
+        """Dynamic w4afp8 → quant_weight + weight_scale but no activation_scale."""
+        fd = _make_fd_config(num_local_experts=4)
+        fd.quant_config = SimpleNamespace(moe_quant_type="w4afp8", moe_dynamic_quant=True)
+        fd.model_config.is_quantized = True
+        FusedMoE = sys.modules["fastdeploy.model_executor.layers.moe.moe"].FusedMoE
+        FusedMoE.reset_mock()
+        MiniMaxM1MoE(fd, layer_id=0, prefix="model.layers.0.block_sparse_moe")
+        wkm = FusedMoE.call_args[1]["weight_key_map"]
+        assert "quant_weight" in wkm["up_gate_proj_expert_weight_key"]
+        assert "weight_scale" in wkm["up_gate_proj_expert_weight_scale_key"]
+        assert "in_scale_key" not in str(wkm)
+
 
 # ===================================================================
 # 4. Forward-pass smoke tests
