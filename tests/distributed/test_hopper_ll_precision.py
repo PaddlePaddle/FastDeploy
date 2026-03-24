@@ -24,7 +24,11 @@ class TestFusedMoE(unittest.TestCase):
 
         ep_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
         buffer = deep_ep.Buffer(
-            ep_group, 0, num_rdma_bytes, low_latency_mode=True, num_qps_per_rank=num_experts // num_ranks
+            ep_group,
+            num_nvl_bytes=0,
+            num_rdma_bytes=num_rdma_bytes,
+            low_latency_mode=True,
+            num_qps_per_rank=num_experts // num_ranks,
         )
 
         x = paddle.randn(shape=[num_tokens, hidden], dtype="bfloat16")
