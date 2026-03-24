@@ -421,7 +421,9 @@ class OpenAIServingChat:
                     )
 
                     if response_processor.enable_multimodal_content():
-                        delta_message.multimodal_content = [{}] if output["skipped"] else output["multipart"]
+                        delta_message.multimodal_content = (
+                            [{"type": "text", "text": ""}] if output["skipped"] else output["multipart"]
+                        )
                     else:
                         delta_message.content = "" if output["skipped"] else (output["text"] or "")
 
