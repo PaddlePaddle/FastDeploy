@@ -204,6 +204,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
     # Whether to use phi FP8 quantization,if 1,use paddle default.
     "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
+    # Enables the Paddle/phi combined TopK operator only when topk_method == noaux_tc,
+    # intended for training alignment. Defaults to 0 (disabled).
+    "FD_USE_PHI_MOE_TOPK": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_TOPK", "0"))),
     # Whether to use phi MOE permute,if 1,use paddle op.
     "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))),
     # Control class SiluAndMul to use swiglu or fusid_bias_act operator in the forward_cuda function
@@ -242,6 +245,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # has been observed to cause NaN computation errors.
     # Set to 1 to enable the lock; defaults to 0 (disabled).
     "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
+    # Whether to probe MoE routing probabilities and use Fleet's fused SwiGLU kernel.
+    "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
     # Whether to use batch send data in zmq
     "ZMQ_SEND_BATCH_DATA": lambda: int(os.getenv("ZMQ_SEND_BATCH_DATA", "1")),
 }

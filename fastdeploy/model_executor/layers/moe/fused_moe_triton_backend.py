@@ -40,6 +40,7 @@ except ImportError:
     pass
 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    fused_stack_transpose_quant,
     quant_weight_ue8m0,
     transform_scale_ue8m0,
 )
@@ -1632,22 +1633,45 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                     )
                     weight[expert_id].copy_(weight_quant, False)
             else:
-                weight = paddle.empty(shape=weight_shape, dtype=weight_dtype)
-                scale_list = []
+                if fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
+                    num_expert = layer.num_local_experts
+                    expert_weight_list = [getattr(layer, unquantized_weight_name)[i] for i in range(num_expert)]
+                    weight = paddle.empty(shape=weight_shape, dtype=weight_dtype)
+                    scale_list = []
+                    chunk_size = 64
 
-                for expert_id in range(layer.num_local_experts):
-                    w_q, s_fp32 = quant_weight_ue8m0(
-                        weight_dequant=getattr(layer, unquantized_weight_name)[expert_id]
-                        .transpose([1, 0])
-                        .contiguous(),
-                        weight_block_size=self.quant_config.weight_block_size,
-                    )
-                    s_ue8m0 = transform_scale_ue8m0(
-                        s_fp32, mn=w_q.shape[-2], weight_block_size=self.quant_config.weight_block_size
-                    )
-                    weight[expert_id].copy_(w_q, False)
-                    scale_list.append(s_ue8m0)
-                scale = paddle.to_tensor(scale_list)
+                    for start_idx in range(0, num_expert, chunk_size):
+                        end_idx = min(start_idx + chunk_size, num_expert)
+                        local_chunk_size = end_idx - start_idx
+                        chunk_experts = [w.contiguous() for w in expert_weight_list[start_idx:end_idx]]
+
+                        w1_t_quant, w1_t_scale = fused_stack_transpose_quant(
+                            chunk_experts, use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
+                        )
+                        w1_t_quant = w1_t_quant.reshape([local_chunk_size, -1, w1_t_quant.shape[-1]])
+                        w1_t_scale = w1_t_scale.reshape([local_chunk_size, -1, w1_t_scale.shape[-1]])
+
+                        weight[start_idx:end_idx].copy_(w1_t_quant, False)
+                        scale_list.append(w1_t_scale)
+
+                    scale = paddle.concat(scale_list, axis=0)
+                else:
+                    weight = paddle.empty(shape=weight_shape, dtype=weight_dtype)
+                    scale_list = []
+
+                    for expert_id in range(layer.num_local_experts):
+                        w_q, s_fp32 = quant_weight_ue8m0(
+                            weight_dequant=getattr(layer, unquantized_weight_name)[expert_id]
+                            .transpose([1, 0])
+                            .contiguous(),
+                            weight_block_size=self.quant_config.weight_block_size,
+                        )
+                        s_ue8m0 = transform_scale_ue8m0(
+                            s_fp32, mn=w_q.shape[-2], weight_block_size=self.quant_config.weight_block_size
+                        )
+                        weight[expert_id].copy_(w_q, False)
+                        scale_list.append(s_ue8m0)
+                    scale = paddle.to_tensor(scale_list)
 
             free_tensor(getattr(layer, unquantized_weight_name))
             free_tensor(getattr(layer, weight_name))
