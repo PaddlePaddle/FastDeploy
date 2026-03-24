@@ -27,6 +27,7 @@ from typing import Optional, Union
 
 import numpy as np
 
+from fastdeploy.input.image_processors.common import ceil_by_factor, floor_by_factor
 from fastdeploy.utils import data_processor_logger
 
 __all__ = [
@@ -67,10 +68,9 @@ class VideoReaderWrapper:
 
         with ntf(delete=True, suffix=".gif") as gif_file:
             gif_input = None
-            self.original_file = None
+            self.original_file = None  # only set when we create a temp file
 
             if isinstance(video_path, str):
-                self.original_file = video_path
                 if video_path.lower().endswith(".gif"):
                     gif_input = video_path
             elif isinstance(video_path, bytes):
@@ -88,10 +88,12 @@ class VideoReaderWrapper:
             if gif_input is not None:
                 clip = mp.VideoFileClip(gif_input)
                 mp4_file = ntf(delete=False, suffix=".mp4")
-                clip.write_videofile(mp4_file.name, verbose=False, logger=None)
+                mp4_path = mp4_file.name
+                mp4_file.close()  # release handle before moviepy writes to the path
+                clip.write_videofile(mp4_path, verbose=False, logger=None)
                 clip.close()
-                video_path = mp4_file.name
-                self.original_file = video_path
+                video_path = mp4_path
+                self.original_file = video_path  # temp mp4 we created, safe to delete
 
             self._reader = decord.VideoReader(video_path, *args, **kwargs)
             self._reader.seek(0)
@@ -151,16 +153,8 @@ def read_video_decord(video_path, save_to_disk: bool = False):
 
 
 # ---------------------------------------------------------------------------
-# sample_frames — qwen_vl 变体
+# sample_frames — qwen_vl variant
 # ---------------------------------------------------------------------------
-
-
-def _ceil_by_factor(number: int, factor: int) -> int:
-    return math.ceil(number / factor) * factor
-
-
-def _floor_by_factor(number: int, factor: int) -> int:
-    return math.floor(number / factor) * factor
 
 
 def sample_frames_qwen(
@@ -204,8 +198,8 @@ def sample_frames_qwen(
                 "when sampling with `fps`. Please pass in `VideoMetadata` object or use a fixed `num_frames` "
                 "per input video"
             )
-        min_frames = _ceil_by_factor(min_frames, frame_factor)
-        max_frames = _floor_by_factor(min(max_frames, total_num_frames), frame_factor)
+        min_frames = ceil_by_factor(min_frames, frame_factor)
+        max_frames = floor_by_factor(min(max_frames, total_num_frames), frame_factor)
 
         num_frames = total_num_frames / metadata["fps"] * fps
 
@@ -213,7 +207,7 @@ def sample_frames_qwen(
             data_processor_logger.warning(f"smart_nframes: nframes[{num_frames}] > total_frames[{total_num_frames}]")
 
         num_frames = min(min(max(num_frames, min_frames), max_frames), total_num_frames)
-        num_frames = _floor_by_factor(num_frames, frame_factor)
+        num_frames = floor_by_factor(num_frames, frame_factor)
 
     if num_frames > total_num_frames:
         raise ValueError(
