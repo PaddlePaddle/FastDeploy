@@ -15,7 +15,7 @@
 #include "decoder_write_cache_with_rope_kernel.h"
 #include "utils.cuh"
 
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
                                       T* key_cache,
                                       T* value_cache,
@@ -53,7 +53,7 @@ void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
   GetNumBlocks<128>(pack_num, &grid_size);
   dim3 block_dim(kWarpSize, blocksize / kWarpSize, 1);
   launchWithPdlWhenEnabled(
-      append_decode_cache_T_rope_qk_norm_kernel<T, PackSize>,
+      append_decode_cache_T_rope_qk_norm_kernel<T, PackSize, EnforceFmulRN>,
       grid_size,
       block_dim,
       0,
@@ -81,7 +81,7 @@ void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
       rms_norm_eps);
 }
 
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void append_decode_cache_rope(const QKV_TYPE* qkv,
                               T* key_cache,
                               T* value_cache,
@@ -117,7 +117,9 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
   if (use_neox_style) {
     if (qkv_out_scales) {
       launchWithPdlWhenEnabled(
-          append_decode_cache_T_quant_neox_rope_kernel<T, PackSize>,
+          append_decode_cache_T_quant_neox_rope_kernel<T,
+                                                       PackSize,
+                                                       EnforceFmulRN>,
           grid_size,
           blocksize,
           0,
@@ -145,7 +147,9 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
     } else {
       if (rotary_dim < dim_head) {
         auto* kernelFn =
-            append_decode_cache_T_neox_partial_rope_kernel<T, PackSize>;
+            append_decode_cache_T_neox_partial_rope_kernel<T,
+                                                           PackSize,
+                                                           EnforceFmulRN>;
         launchWithPdlWhenEnabled(kernelFn,
                                  grid_size,
                                  blocksize,
@@ -171,7 +175,8 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                                  kv_num_heads,
                                  rope_3d);
       } else {
-        auto* kernelFn = append_decode_cache_T_neox_rope_kernel<T, PackSize>;
+        auto* kernelFn =
+            append_decode_cache_T_neox_rope_kernel<T, PackSize, EnforceFmulRN>;
         launchWithPdlWhenEnabled(kernelFn,
                                  grid_size,
                                  blocksize,
@@ -200,7 +205,7 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
   } else {
     if (qkv_out_scales) {
       launchWithPdlWhenEnabled(
-          append_decode_cache_T_quant_rope_kernel<T, PackSize>,
+          append_decode_cache_T_quant_rope_kernel<T, PackSize, EnforceFmulRN>,
           grid_size,
           blocksize,
           0,
@@ -226,7 +231,8 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
           kv_num_heads,
           rope_3d);
     } else {
-      auto* kernelFn = append_decode_cache_T_rope_kernel<T, PackSize>;
+      auto* kernelFn =
+          append_decode_cache_T_rope_kernel<T, PackSize, EnforceFmulRN>;
       launchWithPdlWhenEnabled(kernelFn,
                                grid_size,
                                blocksize,
@@ -257,7 +263,8 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
 template <typename T,
           typename QKV_TYPE,
           bool is_scale_channel_wise = false,
-          bool IsFP8 = false>
+          bool IsFP8 = false,
+          bool EnforceFmulRN = false>
 void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
                                    uint8_t* key_cache,
                                    uint8_t* value_cache,
@@ -289,7 +296,11 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
   if (use_neox_style) {
     if (qkv_out_scales) {
       launchWithPdlWhenEnabled(
-          int_append_decode_cache_int8_neox_rope_kernel<T, 4>,
+          int_append_decode_cache_int8_neox_rope_kernel<T,
+                                                        4,
+                                                        0,
+                                                        128,
+                                                        EnforceFmulRN>,
           grids,
           num_warps * 32,
           0,
@@ -317,31 +328,36 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
           kv_num_heads,
           rope_3d);
     } else {
-      launchWithPdlWhenEnabled(append_decode_cache_int8_neox_rope_kernel<T, 4>,
-                               grids,
-                               num_warps * 32,
-                               0,
-                               stream,
-                               reinterpret_cast<const T*>(qkv),
-                               key_cache,
-                               value_cache,
-                               qkv_out,
-                               block_tables,
-                               cu_seqlens_q,
-                               seq_lens,
-                               seq_lens_encoder,
-                               cos_emb,
-                               sin_emb,
-                               cache_k_scale,
-                               cache_v_scale,
-                               max_seq_len,
-                               max_blocks_per_seq,
-                               num_heads,
-                               block_size,
-                               127.0f,
-                               -127.0f,
-                               kv_num_heads,
-                               rope_3d);
+      launchWithPdlWhenEnabled(
+          append_decode_cache_int8_neox_rope_kernel<T,
+                                                    4,
+                                                    0,
+                                                    128,
+                                                    EnforceFmulRN>,
+          grids,
+          num_warps * 32,
+          0,
+          stream,
+          reinterpret_cast<const T*>(qkv),
+          key_cache,
+          value_cache,
+          qkv_out,
+          block_tables,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_encoder,
+          cos_emb,
+          sin_emb,
+          cache_k_scale,
+          cache_v_scale,
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          block_size,
+          127.0f,
+          -127.0f,
+          kv_num_heads,
+          rope_3d);
     }
   } else {
     if (qkv_out_scales) {
@@ -351,7 +367,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
                                                    0,
                                                    128,
                                                    is_scale_channel_wise,
-                                                   IsFP8>,
+                                                   IsFP8,
+                                                   EnforceFmulRN>,
           grids,
           num_warps * 32,
           0,
@@ -385,7 +402,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
                                                0,
                                                128,
                                                is_scale_channel_wise,
-                                               IsFP8>,
+                                               IsFP8,
+                                               EnforceFmulRN>,
           grids,
           num_warps * 32,
           0,
@@ -414,7 +432,7 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
   }
 }
 
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
                                    uint8_t* key_cache,
                                    uint8_t* value_cache,
@@ -448,7 +466,11 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
   if (use_neox_style) {
     if (qkv_out_scales) {
       launchWithPdlWhenEnabled(
-          int_append_decode_cache_int4_neox_rope_kernel<T, 4>,
+          int_append_decode_cache_int4_neox_rope_kernel<T,
+                                                        4,
+                                                        0,
+                                                        128,
+                                                        EnforceFmulRN>,
           grids,
           num_warps * 32,
           0,
@@ -478,97 +500,104 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
           kv_num_heads,
           rope_3d);
     } else {
-      launchWithPdlWhenEnabled(append_decode_cache_int4_neox_rope_kernel<T, 4>,
-                               grids,
-                               num_warps * 32,
-                               0,
-                               stream,
-                               reinterpret_cast<const T*>(qkv),
-                               key_cache,
-                               value_cache,
-                               qkv_out,
-                               block_tables,
-                               cu_seqlens_q,
-                               seq_lens,
-                               seq_lens_encoder,
-                               cos_emb,
-                               sin_emb,
-                               cache_k_scale,
-                               cache_v_scale,
-                               cache_k_zp,
-                               cache_v_zp,
-                               max_seq_len,
-                               max_blocks_per_seq,
-                               num_heads,
-                               block_size,
-                               7.0f,
-                               -8.0f,
-                               kv_num_heads,
-                               rope_3d);
+      launchWithPdlWhenEnabled(
+          append_decode_cache_int4_neox_rope_kernel<T,
+                                                    4,
+                                                    0,
+                                                    128,
+                                                    EnforceFmulRN>,
+          grids,
+          num_warps * 32,
+          0,
+          stream,
+          reinterpret_cast<const T*>(qkv),
+          key_cache,
+          value_cache,
+          qkv_out,
+          block_tables,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_encoder,
+          cos_emb,
+          sin_emb,
+          cache_k_scale,
+          cache_v_scale,
+          cache_k_zp,
+          cache_v_zp,
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          block_size,
+          7.0f,
+          -8.0f,
+          kv_num_heads,
+          rope_3d);
     }
   } else {
     if (qkv_out_scales) {
-      launchWithPdlWhenEnabled(int_append_decode_cache_int4_rope_kernel<T, 4>,
-                               grids,
-                               num_warps * 32,
-                               0,
-                               stream,
-                               reinterpret_cast<const int*>(qkv),
-                               key_cache,
-                               value_cache,
-                               qkv_out,
-                               block_tables,
-                               cu_seqlens_q,
-                               seq_lens,
-                               seq_lens_encoder,
-                               cos_emb,
-                               sin_emb,
-                               qkv_out_scales,
-                               qkv_biases,
-                               cache_k_scale,
-                               cache_v_scale,
-                               cache_k_zp,
-                               cache_v_zp,
-                               max_seq_len,
-                               max_blocks_per_seq,
-                               num_heads,
-                               block_size,
-                               7.0f,
-                               -8.0f,
-                               kv_num_heads,
-                               rope_3d);
+      launchWithPdlWhenEnabled(
+          int_append_decode_cache_int4_rope_kernel<T, 4, 0, 128, EnforceFmulRN>,
+          grids,
+          num_warps * 32,
+          0,
+          stream,
+          reinterpret_cast<const int*>(qkv),
+          key_cache,
+          value_cache,
+          qkv_out,
+          block_tables,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_encoder,
+          cos_emb,
+          sin_emb,
+          qkv_out_scales,
+          qkv_biases,
+          cache_k_scale,
+          cache_v_scale,
+          cache_k_zp,
+          cache_v_zp,
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          block_size,
+          7.0f,
+          -8.0f,
+          kv_num_heads,
+          rope_3d);
     } else {
-      launchWithPdlWhenEnabled(append_decode_cache_int4_rope_kernel<T, 4>,
-                               grids,
-                               num_warps * 32,
-                               0,
-                               stream,
-                               reinterpret_cast<const T*>(qkv),
-                               key_cache,
-                               value_cache,
-                               qkv_out,
-                               block_tables,
-                               cu_seqlens_q,
-                               seq_lens,
-                               seq_lens_encoder,
-                               cos_emb,
-                               sin_emb,
-                               cache_k_scale,
-                               cache_v_scale,
-                               cache_k_zp,
-                               cache_v_zp,
-                               max_seq_len,
-                               max_blocks_per_seq,
-                               num_heads,
-                               block_size,
-                               7.0f,
-                               -8.0f,
-                               kv_num_heads,
-                               rope_3d);
+      launchWithPdlWhenEnabled(
+          append_decode_cache_int4_rope_kernel<T, 4, 0, 128, EnforceFmulRN>,
+          grids,
+          num_warps * 32,
+          0,
+          stream,
+          reinterpret_cast<const T*>(qkv),
+          key_cache,
+          value_cache,
+          qkv_out,
+          block_tables,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_encoder,
+          cos_emb,
+          sin_emb,
+          cache_k_scale,
+          cache_v_scale,
+          cache_k_zp,
+          cache_v_zp,
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          block_size,
+          7.0f,
+          -8.0f,
+          kv_num_heads,
+          rope_3d);
     }
   }
 }
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN>
 void DecoderWriteCacheWithRoPEKernel(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,
@@ -632,7 +661,7 @@ void DecoderWriteCacheWithRoPEKernel(
 
   if (q_norm_weight && k_norm_weight) {
     if (cache_quant_type_str == "none") {
-      append_decode_cache_rope_qk_norm(
+      append_decode_cache_rope_qk_norm<DataType_, QKV_TYPE, EnforceFmulRN>(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
           reinterpret_cast<DataType_*>(key_cache_out->data<T>()),
           reinterpret_cast<DataType_*>(value_cache_out->data<T>()),
@@ -672,7 +701,8 @@ void DecoderWriteCacheWithRoPEKernel(
                                                        128,
                                                        false,
                                                        true,
-                                                       true>,
+                                                       true,
+                                                       EnforceFmulRN>,
           grids,
           num_warps * 32,
           0,
@@ -714,7 +744,8 @@ void DecoderWriteCacheWithRoPEKernel(
                                                        128,
                                                        false,
                                                        true,
-                                                       false>,
+                                                       false,
+                                                       EnforceFmulRN>,
           grids,
           num_warps * 32,
           0,
@@ -751,7 +782,7 @@ void DecoderWriteCacheWithRoPEKernel(
     }
   } else {
     if (cache_quant_type_str == "none") {
-      append_decode_cache_rope(
+      append_decode_cache_rope<DataType_, QKV_TYPE, EnforceFmulRN>(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
           reinterpret_cast<DataType_*>(key_cache_out->data<T>()),
           reinterpret_cast<DataType_*>(value_cache_out->data<T>()),
@@ -784,7 +815,11 @@ void DecoderWriteCacheWithRoPEKernel(
         is_scale_channel_wise = true;
       }
       if (is_scale_channel_wise) {
-        append_decode_cache_int8_rope<DataType_, QKV_TYPE, true>(
+        append_decode_cache_int8_rope<DataType_,
+                                      QKV_TYPE,
+                                      true,
+                                      false,
+                                      EnforceFmulRN>(
             reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
             key_cache_out->data<uint8_t>(),
             value_cache_out->data<uint8_t>(),
@@ -816,7 +851,11 @@ void DecoderWriteCacheWithRoPEKernel(
             use_neox_rotary_style,
             rope_3d);
       } else {
-        append_decode_cache_int8_rope<DataType_, QKV_TYPE, false>(
+        append_decode_cache_int8_rope<DataType_,
+                                      QKV_TYPE,
+                                      false,
+                                      false,
+                                      EnforceFmulRN>(
             reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
             key_cache_out->data<uint8_t>(),
             value_cache_out->data<uint8_t>(),
@@ -849,7 +888,11 @@ void DecoderWriteCacheWithRoPEKernel(
             rope_3d);
       }
     } else if (cache_quant_type_str == "cache_fp8") {
-      append_decode_cache_int8_rope<DataType_, QKV_TYPE, false, true>(
+      append_decode_cache_int8_rope<DataType_,
+                                    QKV_TYPE,
+                                    false,
+                                    true,
+                                    EnforceFmulRN>(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
           key_cache_out->data<uint8_t>(),
           value_cache_out->data<uint8_t>(),
@@ -892,7 +935,9 @@ void DecoderWriteCacheWithRoPEKernel(
                                                         0,
                                                         128,
                                                         false,
-                                                        true>,
+                                                        true,
+                                                        true,
+                                                        EnforceFmulRN>,
             grids,
             num_warps * 32,
             0,
@@ -927,7 +972,9 @@ void DecoderWriteCacheWithRoPEKernel(
                                                          0,
                                                          128,
                                                          false,
-                                                         true>,
+                                                         true,
+                                                         true,
+                                                         EnforceFmulRN>,
             grids,
             num_warps * 32,
             0,
@@ -959,7 +1006,7 @@ void DecoderWriteCacheWithRoPEKernel(
             rms_norm_eps);
       }
     } else if (cache_quant_type_str == "cache_int4_zp") {
-      append_decode_cache_int4_rope(
+      append_decode_cache_int4_rope<DataType_, QKV_TYPE, EnforceFmulRN>(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
           key_cache_out->data<uint8_t>(),
           value_cache_out->data<uint8_t>(),

@@ -15,7 +15,7 @@
 
 #include "decoder_write_cache_with_rope_impl.cuh"
 
-template <typename T, typename QKV_TYPE = int>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void DecoderWriteCacheWithRoPEKernel(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor&
