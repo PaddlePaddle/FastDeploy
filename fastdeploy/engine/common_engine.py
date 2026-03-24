@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections
 import copy
 import json
 import multiprocessing
@@ -106,6 +107,7 @@ class EngineService:
         self._pause_cond = threading.Condition()
 
         self._ctrl_output_queues = {}
+        self._ctrl_response_mailboxes = collections.defaultdict(collections.OrderedDict)
         tp_size = cfg.parallel_config.tensor_parallel_size
         dp_index = cfg.parallel_config.local_data_parallel_id
         for tp_rank in range(tp_size):
@@ -1258,7 +1260,7 @@ class EngineService:
         request_id = control_req.request_id
 
         try:
-            self.llm_logger.info(f"START run control method {request_id}: {method}")
+            self.llm_logger.info(f"Start to run control method {method}: {request_id}")
 
             handler_name = f"_control_{method}"
             handler = getattr(self, handler_name, None)
@@ -1269,12 +1271,12 @@ class EngineService:
                 return
 
             result = handler(control_req)
-            self.llm_logger.info(f"SUCCESS run control method {method}.")
+            self.llm_logger.info(f"Successfully run control method {method}: {request_id} {result}")
             succ_result = ControlResponse(request_id, 200, "Success", result)
             self.send_response_server.send_response(request_id, [succ_result])
 
         except Exception as e:
-            error_msg = f"Failed run control method {method}: {str(e)}"
+            error_msg = f"Failed to run control method {method}: {request_id} {str(e)}"
             self.llm_logger.error(f"{error_msg}\n{traceback.format_exc()}")
             error_result = ControlResponse(request_id, 500, error_msg)
             self.send_response_server.send_response(request_id, [error_result])
@@ -1494,7 +1496,7 @@ class EngineService:
 
         # Dispatch wakeup request to executors
         self._dispatch_control_request(control_request, executors)
-        result = asyncio.run(self._wait_for_control_responses(control_request.request_id, 60, executors=executors))
+        result = asyncio.run(self._wait_for_control_responses(control_request.request_id, 300, executors=executors))
 
         # Resume the engine after wakeup
         self._control_resume(None)
@@ -1517,63 +1519,105 @@ class EngineService:
         return
 
     async def _wait_for_control_responses(self, request_id: str, timeout: int, executors: List[str] = None):
-        """Wait for control responses from specified queues.
+        """Wait for matching control responses from the selected executor queues.
+
+        This helper selects the control-response queues that belong to the requested
+        executors, then waits for all of them concurrently. Each queue gets a local
+        waiter that keeps reading until it sees the target request ID and stashes stale
+        responses into that queue's mailbox.
 
         Args:
-            request_id: The request ID to match responses against
-            timeout: Global timeout in seconds
-            executors: List of executors to wait for, e.g., ["worker", "cache_transfer"]
-                        If None, waits for all queues
+            request_id: The control request ID that all returned responses must match.
+            timeout: Global timeout budget in seconds for the full multi-queue wait.
+            executors: Executor groups to wait for, for example `["worker"]` or
+                `["worker", "cache_transfer"]`. If `None`, waits for all control
+                response queues.
+
+        Returns:
+            A list of `response.result` values collected from all matched
+            `ControlResponse` objects. If no queue is selected, returns `None`.
+
+        Raises:
+            Exception: If the overall wait times out, or if any queue reports a non-200
+                control response or fails while waiting.
         """
-        timeout_ms = timeout * 1000 if timeout else None
 
-        # determine which queues to wait for by executors
-        queues = {}
-        if executors is None:
-            queues = self._ctrl_output_queues
-        else:
-            if "worker" in executors:
-                for name, queue in self._ctrl_output_queues.items():
-                    if "w2e" in name:
-                        queues[name] = queue
-            if "cache_transfer" in executors:
-                for name, queue in self._ctrl_output_queues.items():
-                    if "c2e" in name:
-                        queues[name] = queue
+        def select_control_queues(executors: List[str] = None):
+            """Select control response queues by executors."""
+            if executors is None:
+                return self._ctrl_output_queues
+            else:
+                queues = {}
+                for k, v in self._ctrl_output_queues.items():
+                    if "w2e" in k and "worker" in executors:
+                        queues[k] = v
+                    elif "c2e" in k and "cache_transfer" in executors:
+                        queues[k] = v
+                return queues
 
+        async def wait_one(queue_name: str, queue):
+            """Wait until one queue returns a response for the current request_id."""
+            mailbox = self._ctrl_response_mailboxes[queue_name]
+            # Reuse a previously stashed response for this request before touching FMQ again.
+            cached_response = mailbox.pop(request_id, None)
+            if cached_response is not None:
+                self.llm_logger.info(f"Returning cached control response from {queue_name}.")
+                return cached_response
+
+            while True:
+                msg = await queue.get()
+
+                # Return if the response matches the control request
+                response: ControlResponse = msg.payload
+                if response.request_id == request_id:
+                    self.llm_logger.info(f"Returning new control response from {queue_name}.")
+                    return response
+
+                # Stash late responses from other control requests so they do not consume the
+                # current request's only read chance on this queue.
+                mailbox[response.request_id] = response
+                self.llm_logger.info(
+                    f"Stashed old control response from {queue_name}. "
+                    f"Expected request {request_id}, got request {response.request_id}"
+                )
+
+        # Select only the control response queues that belong to the requested executors.
+        queues = select_control_queues(executors)
         if not queues:
             self.llm_logger.info(f"No queues to wait for, executors: {executors}")
             return
         self.llm_logger.info(f"Waiting for control responses from {len(queues)} queues: {list(queues.keys())}")
 
-        # Create one get() coroutine per queue
-        tasks = [q.get(timeout=timeout_ms) for q in queues.values()]
-
-        try:
-            results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=timeout,
+        # Each queue gets its own waiter, which will stash stale responses until it finds the
+        # target request ID for this control request.
+        tasks = {name: asyncio.create_task(wait_one(name, queue)) for name, queue in queues.items()}
+        done, pending = await asyncio.wait(tasks.values(), timeout=timeout)
+        if pending:
+            pending_names = [name for name, task in tasks.items() if task in pending]
+            done_names = [name for name, task in tasks.items() if task in done]
+            self.llm_logger.error(
+                f"Control request {request_id} execution timeout. "
+                f"Pending queues: {pending_names}, completed queues: {done_names}."
             )
-        except asyncio.TimeoutError:
-            # Keep the error message consistent with previous behavior
-            raise Exception(f"Control request {request_id} timeouted after {timeout}s")
+            # Stop unfinished queue waiters so they do not outlive the control request.
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+            raise Exception(f"Control request {request_id} timed out after {timeout}s")
 
+        # Collect the results from all completed queues.
         responses = []
-        for name, msg in zip(queues.keys(), results):
-            if isinstance(msg, Exception):
-                self.llm_logger.error(f"Call {name} failed: {repr(msg)}")
-                raise Exception(f"Call {name} error: {repr(msg)}")
-            if msg is None:
-                raise Exception(f"No message received from {name}")
-            response: ControlResponse = msg.payload
-            if response.request_id != request_id:
-                self.llm_logger.info(f"ignore old control response from {name}: {response}")
-                continue
+        for name, task in tasks.items():
+            try:
+                response = task.result()
+            except Exception as e:
+                self.llm_logger.error(f"Waiting for control response from {name} failed: {repr(e)}")
+                raise
+
             if response.error_code != 200:
-                self.llm_logger.info(f"Call {name} failed: {response.error_message}")
-                raise Exception(f"Call {name} error: {response.error_message}")
-            self.llm_logger.info(f"Call {name} succeed: {response.result}")
+                raise Exception(f"Error response from {name}: {response.error_message}")
             responses.append(response.result)
+
         return responses
 
     def _call_worker(self, control_request: ControlRequest, timeout: int):
