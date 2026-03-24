@@ -22,7 +22,11 @@
 // This function is very easy!
 // just make HeadDim data to be new HeadDim data!
 
-template <typename T, int VecSize = 8, int HEAD_DIM = 128, int NUM_THREADS = 32>
+template <typename T,
+          int VecSize = 8,
+          int HEAD_DIM = 128,
+          int NUM_THREADS = 32,
+          bool EnforceFmulRN = false>
 __device__ __forceinline__ void apply_rope(const T* input,
                                            const float* cos_emb,
                                            const float* sin_emb,
@@ -53,16 +57,18 @@ __device__ __forceinline__ void apply_rope(const T* input,
 
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
-      out_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                      __fmul_rn(input_right, sin_tmp));
-      out_vec[2 * i + 1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                          __fmul_rn(input_left, sin_tmp));
+      out_vec[2 * i] =
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+      out_vec[2 * i + 1] =
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     }
     Store<T, VecSize>(out_vec, &output[head_bias]);
   }
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void append_decode_cache_T_rope_qk_norm_kernel(
     const T* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                       // head_size]
@@ -154,10 +160,10 @@ __global__ void append_decode_cache_T_rope_qk_norm_kernel(
       if (hi < num_heads + kv_num_heads) {
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        float tmp1 =
-            __fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp);
-        float tmp2 =
-            __fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp);
+        float tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                     fmul_func<EnforceFmulRN>(input_right, sin_tmp);
+        float tmp2 = fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                     fmul_func<EnforceFmulRN>(input_left, sin_tmp);
         thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
         tmp_vec[2 * i] = tmp1;
         tmp_vec[2 * i + 1] = tmp2;
@@ -208,7 +214,7 @@ __global__ void append_decode_cache_T_rope_qk_norm_kernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void append_decode_cache_T_rope_kernel(
     const T* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                       // head_size]
@@ -290,10 +296,12 @@ __global__ void append_decode_cache_T_rope_kernel(
       if (hi < num_heads + kv_num_heads) {
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        out_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                        __fmul_rn(input_right, sin_tmp));
-        out_vec[2 * i + 1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                            __fmul_rn(input_left, sin_tmp));
+        out_vec[2 * i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        out_vec[2 * i + 1] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         out_vec[2 * i] = src_vec[2 * i];
         out_vec[2 * i + 1] = src_vec[2 * i + 1];
@@ -321,7 +329,7 @@ __global__ void append_decode_cache_T_rope_kernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void append_decode_cache_T_quant_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -418,10 +426,12 @@ __global__ void append_decode_cache_T_quant_rope_kernel(
       if (hi < num_heads + kv_num_heads) {
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        bias_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                         __fmul_rn(input_right, sin_tmp));
-        bias_vec[2 * i + 1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                             __fmul_rn(input_left, sin_tmp));
+        bias_vec[2 * i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        bias_vec[2 * i + 1] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         bias_vec[2 * i] = static_cast<T>(input_left);
         bias_vec[2 * i + 1] = static_cast<T>(input_right);
@@ -449,7 +459,7 @@ __global__ void append_decode_cache_T_quant_rope_kernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void append_decode_cache_T_neox_partial_rope_kernel(
     const T* __restrict__ qkv,    // [bsz, num_heads + 2 * kv_num_heads,
                                   // head_size]
@@ -552,10 +562,12 @@ __global__ void append_decode_cache_T_neox_partial_rope_kernel(
       if (hi < num_heads + kv_num_heads && h_bias < half_rotary_dim) {
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        left_bias_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                          __fmul_rn(input_right, sin_tmp));
-        right_bias_vec[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                           __fmul_rn(input_left, sin_tmp));
+        left_bias_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        right_bias_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         left_bias_vec[i] = static_cast<T>(input_left);
         right_bias_vec[i] = static_cast<T>(input_right);
@@ -593,7 +605,7 @@ __global__ void append_decode_cache_T_neox_partial_rope_kernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void append_decode_cache_T_neox_rope_kernel(
     const T* __restrict__ qkv,    // [bsz, num_heads + 2 * kv_num_heads,
                                   // head_size]
@@ -677,10 +689,12 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
       if (hi < num_heads + kv_num_heads) {
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        left_bias_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                          __fmul_rn(input_right, sin_tmp));
-        right_bias_vec[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                           __fmul_rn(input_left, sin_tmp));
+        left_bias_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        right_bias_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         left_bias_vec[i] = static_cast<T>(input_left);
         right_bias_vec[i] = static_cast<T>(input_right);
@@ -712,7 +726,7 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void append_decode_cache_T_quant_neox_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -816,10 +830,12 @@ __global__ void append_decode_cache_T_quant_neox_rope_kernel(
       if (hi < num_heads + kv_num_heads) {
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        left_bias_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                          __fmul_rn(input_right, sin_tmp));
-        right_bias_vec[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                           __fmul_rn(input_left, sin_tmp));
+        left_bias_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        right_bias_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         left_bias_vec[i] = static_cast<T>(input_left);
         right_bias_vec[i] = static_cast<T>(input_right);
@@ -857,7 +873,8 @@ template <typename T,
           int HeadDim = 128,
           bool is_scale_channel_wise = false,
           bool IsFP8 = true,
-          bool IsDynamic = true>
+          bool IsDynamic = true,
+          bool EnforceFmulRN = false>
 __global__ void append_decode_cache_T_int8_neox_rope_kernel(
     const T* __restrict__ quant_qkv,    // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -943,10 +960,10 @@ __global__ void append_decode_cache_T_int8_neox_rope_kernel(
 
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        float tmp1 =
-            __fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp);
-        float tmp2 =
-            __fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp);
+        float tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                     fmul_func<EnforceFmulRN>(input_right, sin_tmp);
+        float tmp2 = fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                     fmul_func<EnforceFmulRN>(input_left, sin_tmp);
         thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
         out_vec[i] = static_cast<T>(tmp1);
         out_vec_right[i] = static_cast<T>(tmp2);
@@ -1036,9 +1053,11 @@ __global__ void append_decode_cache_T_int8_neox_rope_kernel(
       float sin_tmp = sin_emb_vec1[0];
       float tmp1 = 0;
       if (head_bias < half_head_size) {
-        tmp1 = __fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp);
+        tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+               fmul_func<EnforceFmulRN>(input_right, sin_tmp);
       } else {
-        tmp1 = __fmul_rn(input_left, cos_tmp) + __fmul_rn(input_right, sin_tmp);
+        tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) +
+               fmul_func<EnforceFmulRN>(input_right, sin_tmp);
       }
       out_vec1[0] = static_cast<T>(tmp1);
       input_left = static_cast<float>(src_vec1[1]);
@@ -1046,9 +1065,11 @@ __global__ void append_decode_cache_T_int8_neox_rope_kernel(
       cos_tmp = cos_emb_vec1[1];
       sin_tmp = sin_emb_vec1[1];
       if (head_bias < half_head_size) {
-        tmp1 = __fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp);
+        tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+               fmul_func<EnforceFmulRN>(input_right, sin_tmp);
       } else {
-        tmp1 = __fmul_rn(input_left, cos_tmp) + __fmul_rn(input_right, sin_tmp);
+        tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) +
+               fmul_func<EnforceFmulRN>(input_right, sin_tmp);
       }
       out_vec1[1] = static_cast<T>(tmp1);
     } else {
@@ -1064,9 +1085,11 @@ __global__ void append_decode_cache_T_int8_neox_rope_kernel(
       float sin_tmp = sin_emb_vec2[0];
       float tmp1 = 0;
       if (head_bias < half_head_size) {
-        tmp1 = __fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp);
+        tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+               fmul_func<EnforceFmulRN>(input_right, sin_tmp);
       } else {
-        tmp1 = __fmul_rn(input_left, cos_tmp) + __fmul_rn(input_right, sin_tmp);
+        tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) +
+               fmul_func<EnforceFmulRN>(input_right, sin_tmp);
       }
       out_vec2[0] = static_cast<T>(tmp1);
       input_left = static_cast<float>(src_vec2[1]);
@@ -1074,9 +1097,11 @@ __global__ void append_decode_cache_T_int8_neox_rope_kernel(
       cos_tmp = cos_emb_vec2[1];
       sin_tmp = sin_emb_vec2[1];
       if (head_bias < half_head_size) {
-        tmp1 = __fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp);
+        tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+               fmul_func<EnforceFmulRN>(input_right, sin_tmp);
       } else {
-        tmp1 = __fmul_rn(input_left, cos_tmp) + __fmul_rn(input_right, sin_tmp);
+        tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) +
+               fmul_func<EnforceFmulRN>(input_right, sin_tmp);
       }
       out_vec2[1] = static_cast<T>(tmp1);
     } else {
@@ -1168,7 +1193,8 @@ template <typename T,
           int HeadDim = 128,
           bool is_scale_channel_wise = false,
           bool IsFP8 = true,
-          bool IsDynamic = true>
+          bool IsDynamic = true,
+          bool EnforceFmulRN = false>
 __global__ void append_decode_cache_int8_rope_qk_norm_kernel(
     const T* __restrict__ quant_qkv,    // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -1254,10 +1280,10 @@ __global__ void append_decode_cache_int8_rope_qk_norm_kernel(
 
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        float tmp1 =
-            __fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp);
-        float tmp2 =
-            __fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp);
+        float tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                     fmul_func<EnforceFmulRN>(input_right, sin_tmp);
+        float tmp2 = fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                     fmul_func<EnforceFmulRN>(input_left, sin_tmp);
         thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
         out_vec[2 * i] = static_cast<T>(tmp1);
         out_vec[2 * i + 1] = static_cast<T>(tmp2);
@@ -1350,10 +1376,10 @@ __global__ void append_decode_cache_int8_rope_qk_norm_kernel(
     if (head_idx < num_heads + kv_num_heads) {
       float cos_tmp = cos_emb_vec1[0];
       float sin_tmp = sin_emb_vec1[0];
-      float tmp1 =
-          __fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp);
-      float tmp2 =
-          __fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp);
+      float tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                   fmul_func<EnforceFmulRN>(input_right, sin_tmp);
+      float tmp2 = fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                   fmul_func<EnforceFmulRN>(input_left, sin_tmp);
       thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
       out_vec1[0] = static_cast<T>(tmp1);
       out_vec1[1] = static_cast<T>(tmp2);
@@ -1368,10 +1394,10 @@ __global__ void append_decode_cache_int8_rope_qk_norm_kernel(
     if (head_idx < num_heads + kv_num_heads) {
       float cos_tmp = cos_emb_vec2[0];
       float sin_tmp = sin_emb_vec2[0];
-      float tmp1 =
-          __fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp);
-      float tmp2 =
-          __fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp);
+      float tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                   fmul_func<EnforceFmulRN>(input_right, sin_tmp);
+      float tmp2 = fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                   fmul_func<EnforceFmulRN>(input_left, sin_tmp);
       thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
       out_vec2[0] = static_cast<T>(tmp1);
       out_vec2[1] = static_cast<T>(tmp2);
@@ -1482,7 +1508,8 @@ template <typename T,
           int RoundType = 0,
           int HeadDim = 128,
           bool is_scale_channel_wise = false,
-          bool IsFP8 = false>
+          bool IsFP8 = false,
+          bool EnforceFmulRN = false>
 __global__ void append_decode_cache_int8_rope_kernel(
     const T* __restrict__ quant_qkv,    // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -1538,11 +1565,11 @@ __global__ void append_decode_cache_int8_rope_kernel(
 
     uint32_t emb_offset = write_seq_id * half_head_size;
     emb_offset += rope_3d ? bid * max_seq_len * HeadDim : 0;
-    apply_rope<T, VecSize, HeadDim, 32>(qkv_now,
-                                        cos_emb + emb_offset,
-                                        sin_emb + emb_offset,
-                                        qkv_out_now,
-                                        lane_id);
+    apply_rope<T, VecSize, HeadDim, 32, EnforceFmulRN>(qkv_now,
+                                                       cos_emb + emb_offset,
+                                                       sin_emb + emb_offset,
+                                                       qkv_out_now,
+                                                       lane_id);
 
   } else if (head_idx < num_heads + 2 * kv_num_heads) {
     // k
@@ -1628,10 +1655,12 @@ __global__ void append_decode_cache_int8_rope_kernel(
       if (head_idx < num_heads + kv_num_heads) {
         float cos_tmp = cos_emb_vec1[0];
         float sin_tmp = sin_emb_vec1[0];
-        out_vec1[0] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                     __fmul_rn(input_right, sin_tmp));
-        out_vec1[1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                     __fmul_rn(input_left, sin_tmp));
+        out_vec1[0] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        out_vec1[1] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         out_vec1[0] = src_vec1[0];
         out_vec1[1] = src_vec1[1];
@@ -1640,12 +1669,14 @@ __global__ void append_decode_cache_int8_rope_kernel(
       if (head_idx < num_heads + kv_num_heads) {
         float cos_tmp = cos_emb_vec1[0];
         float sin_tmp = sin_emb_vec1[0];
-        out_vec1[0] = static_cast<T>(
-            (__fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp)) *
-            float(cache_k_scale_cur[0]));
-        out_vec1[1] = static_cast<T>(
-            (__fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp)) *
-            float(cache_k_scale_cur[1]));
+        out_vec1[0] =
+            static_cast<T>((fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                            fmul_func<EnforceFmulRN>(input_right, sin_tmp)) *
+                           float(cache_k_scale_cur[0]));
+        out_vec1[1] =
+            static_cast<T>((fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                            fmul_func<EnforceFmulRN>(input_left, sin_tmp)) *
+                           float(cache_k_scale_cur[1]));
       } else {
         out_vec1[0] = static_cast<T>(input_left * float(cache_v_scale_cur[0]));
         out_vec1[1] = static_cast<T>(input_right * float(cache_v_scale_cur[1]));
@@ -1658,10 +1689,12 @@ __global__ void append_decode_cache_int8_rope_kernel(
       if (head_idx < num_heads + kv_num_heads) {
         float cos_tmp = cos_emb_vec2[0];
         float sin_tmp = sin_emb_vec2[0];
-        out_vec2[0] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                     __fmul_rn(input_right, sin_tmp));
-        out_vec2[1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                     __fmul_rn(input_left, sin_tmp));
+        out_vec2[0] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        out_vec2[1] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         out_vec2[0] = src_vec2[0];
         out_vec2[1] = src_vec2[1];
@@ -1670,12 +1703,14 @@ __global__ void append_decode_cache_int8_rope_kernel(
       if (head_idx < num_heads + kv_num_heads) {
         float cos_tmp = cos_emb_vec2[0];
         float sin_tmp = sin_emb_vec2[0];
-        out_vec2[0] = static_cast<T>(
-            (__fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp)) *
-            float(cache_k_scale_cur[8]));
-        out_vec2[1] = static_cast<T>(
-            (__fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp)) *
-            float(cache_k_scale_cur[9]));
+        out_vec2[0] =
+            static_cast<T>((fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                            fmul_func<EnforceFmulRN>(input_right, sin_tmp)) *
+                           float(cache_k_scale_cur[8]));
+        out_vec2[1] =
+            static_cast<T>((fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                            fmul_func<EnforceFmulRN>(input_left, sin_tmp)) *
+                           float(cache_k_scale_cur[9]));
       } else {
         out_vec2[0] = static_cast<T>(input_left * float(cache_v_scale_cur[8]));
         out_vec2[1] = static_cast<T>(input_right * float(cache_v_scale_cur[9]));
@@ -1725,7 +1760,8 @@ template <typename T,
           int RoundType = 0,
           int HeadDim = 128,
           bool is_scale_channel_wise = false,
-          bool IsFP8 = false>
+          bool IsFP8 = false,
+          bool EnforceFmulRN = false>
 __global__ void int_append_decode_cache_int8_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -1824,10 +1860,12 @@ __global__ void int_append_decode_cache_int8_rope_kernel(
                                  : input_right * out_scale_vec[2 * i + 1];
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        bias_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                         __fmul_rn(input_right, sin_tmp));
-        bias_vec[2 * i + 1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                             __fmul_rn(input_left, sin_tmp));
+        bias_vec[2 * i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        bias_vec[2 * i + 1] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       }
       Store<T, VecSize>(bias_vec, &qkv_out_now[bias_idx]);
     }
@@ -1931,10 +1969,12 @@ __global__ void int_append_decode_cache_int8_rope_kernel(
       if (head_idx < num_heads + kv_num_heads) {
         float cos_tmp = cos_emb_vec1[0];
         float sin_tmp = sin_emb_vec1[0];
-        bias_vec1[0] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                      __fmul_rn(input_right, sin_tmp));
-        bias_vec1[1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                      __fmul_rn(input_left, sin_tmp));
+        bias_vec1[0] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        bias_vec1[1] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         bias_vec1[0] = static_cast<T>(input_left);
         bias_vec1[1] = static_cast<T>(input_right);
@@ -1943,12 +1983,14 @@ __global__ void int_append_decode_cache_int8_rope_kernel(
       if (head_idx < num_heads + kv_num_heads) {
         float cos_tmp = cos_emb_vec1[0];
         float sin_tmp = sin_emb_vec1[0];
-        bias_vec1[0] = static_cast<T>(
-            (__fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp)) *
-            float(cache_k_scale_cur[0]));
-        bias_vec1[1] = static_cast<T>(
-            (__fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp)) *
-            float(cache_k_scale_cur[1]));
+        bias_vec1[0] =
+            static_cast<T>((fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                            fmul_func<EnforceFmulRN>(input_right, sin_tmp)) *
+                           float(cache_k_scale_cur[0]));
+        bias_vec1[1] =
+            static_cast<T>((fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                            fmul_func<EnforceFmulRN>(input_left, sin_tmp)) *
+                           float(cache_k_scale_cur[1]));
       } else {
         bias_vec1[0] = static_cast<T>(input_left * float(cache_v_scale_cur[0]));
         bias_vec1[1] =
@@ -1968,10 +2010,12 @@ __global__ void int_append_decode_cache_int8_rope_kernel(
       if (head_idx < num_heads + kv_num_heads) {
         float cos_tmp = cos_emb_vec2[0];
         float sin_tmp = sin_emb_vec2[0];
-        bias_vec2[0] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                      __fmul_rn(input_right, sin_tmp));
-        bias_vec2[1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                      __fmul_rn(input_left, sin_tmp));
+        bias_vec2[0] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        bias_vec2[1] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         bias_vec2[0] = static_cast<T>(input_left);
         bias_vec2[1] = static_cast<T>(input_right);
@@ -1980,12 +2024,14 @@ __global__ void int_append_decode_cache_int8_rope_kernel(
       if (head_idx < num_heads + kv_num_heads) {
         float cos_tmp = cos_emb_vec2[0];
         float sin_tmp = sin_emb_vec2[0];
-        bias_vec2[0] = static_cast<T>(
-            (__fmul_rn(input_left, cos_tmp) - __fmul_rn(input_right, sin_tmp)) *
-            float(cache_k_scale_cur[8]));
-        bias_vec2[1] = static_cast<T>(
-            (__fmul_rn(input_right, cos_tmp) + __fmul_rn(input_left, sin_tmp)) *
-            float(cache_k_scale_cur[9]));
+        bias_vec2[0] =
+            static_cast<T>((fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                            fmul_func<EnforceFmulRN>(input_right, sin_tmp)) *
+                           float(cache_k_scale_cur[8]));
+        bias_vec2[1] =
+            static_cast<T>((fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                            fmul_func<EnforceFmulRN>(input_left, sin_tmp)) *
+                           float(cache_k_scale_cur[9]));
       } else {
         bias_vec2[0] = static_cast<T>(input_left * float(cache_v_scale_cur[8]));
         bias_vec2[1] =
@@ -2043,7 +2089,11 @@ __global__ void int_append_decode_cache_int8_rope_kernel(
 #endif
 }
 
-template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
+template <typename T,
+          int VecSize = 4,
+          int RoundType = 0,
+          int HeadDim = 128,
+          bool EnforceFmulRN = false>
 __global__ void append_decode_cache_int8_neox_rope_kernel(
     const T* __restrict__ quant_qkv,    // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -2129,10 +2179,12 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
         float input_right = static_cast<float>(right_vec[i]);
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        left_bias_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                          __fmul_rn(input_right, sin_tmp));
-        right_bias_vec[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                           __fmul_rn(input_left, sin_tmp));
+        left_bias_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        right_bias_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       }
       Store<T, VecSize>(left_bias_vec, &qkv_out_now[bias_idx_left]);
       Store<T, VecSize>(right_bias_vec, &qkv_out_now[bias_idx_right]);
@@ -2215,19 +2267,23 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
 
           float cos_tmp = cos_emb_vec1[i];
           float sin_tmp = sin_emb_vec1[i];
-          left_bias_vec1[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                             __fmul_rn(input_right, sin_tmp));
-          right_bias_vec1[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                              __fmul_rn(input_left, sin_tmp));
+          left_bias_vec1[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                             fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+          right_bias_vec1[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                             fmul_func<EnforceFmulRN>(input_left, sin_tmp));
 
           input_left = static_cast<float>(left_src_vec2[i]);
           input_right = static_cast<float>(right_src_vec2[i]);
           cos_tmp = cos_emb_vec2[i];
           sin_tmp = sin_emb_vec2[i];
-          left_bias_vec2[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                             __fmul_rn(input_right, sin_tmp));
-          right_bias_vec2[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                              __fmul_rn(input_left, sin_tmp));
+          left_bias_vec2[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                             fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+          right_bias_vec2[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                             fmul_func<EnforceFmulRN>(input_left, sin_tmp));
 
           float quant_value1 = static_cast<float>(scale * left_bias_vec1[i]);
           float quant_value2 = static_cast<float>(scale * left_bias_vec2[i]);
@@ -2351,7 +2407,11 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
 #endif
 }
 
-template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
+template <typename T,
+          int VecSize = 4,
+          int RoundType = 0,
+          int HeadDim = 128,
+          bool EnforceFmulRN = false>
 __global__ void int_append_decode_cache_int8_neox_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -2460,10 +2520,12 @@ __global__ void int_append_decode_cache_int8_neox_rope_kernel(
                                  : input_right * right_out_scale_vec[i];
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        left_bias_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                          __fmul_rn(input_right, sin_tmp));
-        right_bias_vec[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                           __fmul_rn(input_left, sin_tmp));
+        left_bias_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        right_bias_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       }
       Store<T, VecSize>(left_bias_vec, &qkv_out_now[bias_idx_left]);
       Store<T, VecSize>(right_bias_vec, &qkv_out_now[bias_idx_right]);
@@ -2573,10 +2635,12 @@ __global__ void int_append_decode_cache_int8_neox_rope_kernel(
 
           float cos_tmp = cos_emb_vec1[i];
           float sin_tmp = sin_emb_vec1[i];
-          left_bias_vec1[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                             __fmul_rn(input_right, sin_tmp));
-          right_bias_vec1[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                              __fmul_rn(input_left, sin_tmp));
+          left_bias_vec1[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                             fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+          right_bias_vec1[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                             fmul_func<EnforceFmulRN>(input_left, sin_tmp));
 
           input_left = static_cast<float>(left_src_vec2[i]);
           input_right = static_cast<float>(right_src_vec2[i]);
@@ -2588,10 +2652,12 @@ __global__ void int_append_decode_cache_int8_neox_rope_kernel(
                                    : input_right * right_out_scale_vec2[i];
           cos_tmp = cos_emb_vec2[i];
           sin_tmp = sin_emb_vec2[i];
-          left_bias_vec2[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                             __fmul_rn(input_right, sin_tmp));
-          right_bias_vec2[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                              __fmul_rn(input_left, sin_tmp));
+          left_bias_vec2[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                             fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+          right_bias_vec2[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                             fmul_func<EnforceFmulRN>(input_left, sin_tmp));
 
           float quant_value1 = static_cast<float>(scale * left_bias_vec1[i]);
           float quant_value2 = static_cast<float>(scale * left_bias_vec2[i]);
@@ -2753,7 +2819,11 @@ __global__ void int_append_decode_cache_int8_neox_rope_kernel(
 #endif
 }
 
-template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
+template <typename T,
+          int VecSize = 4,
+          int RoundType = 0,
+          int HeadDim = 128,
+          bool EnforceFmulRN = false>
 __global__ void append_decode_cache_int4_rope_kernel(
     const T* __restrict__ quant_qkv,    // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -2813,11 +2883,11 @@ __global__ void append_decode_cache_int4_rope_kernel(
 
     uint32_t emb_offset = write_seq_id * half_head_size;
     emb_offset += rope_3d ? bid * max_seq_len * HeadDim : 0;
-    apply_rope<T, VecSize, HeadDim, 32>(qkv_now,
-                                        cos_emb + emb_offset,
-                                        sin_emb + emb_offset,
-                                        qkv_out_now,
-                                        lane_id);
+    apply_rope<T, VecSize, HeadDim, 32, EnforceFmulRN>(qkv_now,
+                                                       cos_emb + emb_offset,
+                                                       sin_emb + emb_offset,
+                                                       qkv_out_now,
+                                                       lane_id);
 
   } else if (head_idx < num_heads + 2 * kv_num_heads) {
     // k
@@ -2899,10 +2969,12 @@ __global__ void append_decode_cache_int4_rope_kernel(
     if (head_idx < num_heads + kv_num_heads) {
       float cos_tmp = cos_emb_vec1[0];
       float sin_tmp = sin_emb_vec1[0];
-      out_vec1[0] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                   __fmul_rn(input_right, sin_tmp));
-      out_vec1[1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                   __fmul_rn(input_left, sin_tmp));
+      out_vec1[0] =
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+      out_vec1[1] =
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     } else {
       out_vec1[0] = src_vec1[0];
       out_vec1[1] = src_vec1[1];
@@ -2913,10 +2985,12 @@ __global__ void append_decode_cache_int4_rope_kernel(
     if (head_idx < num_heads + kv_num_heads) {
       float cos_tmp = cos_emb_vec2[0];
       float sin_tmp = sin_emb_vec2[0];
-      out_vec2[0] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                   __fmul_rn(input_right, sin_tmp));
-      out_vec2[1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                   __fmul_rn(input_left, sin_tmp));
+      out_vec2[0] =
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+      out_vec2[1] =
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     } else {
       out_vec2[0] = src_vec2[0];
       out_vec2[1] = src_vec2[1];
@@ -3032,7 +3106,11 @@ __global__ void append_decode_cache_int4_rope_kernel(
 #endif
 }
 
-template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
+template <typename T,
+          int VecSize = 4,
+          int RoundType = 0,
+          int HeadDim = 128,
+          bool EnforceFmulRN = false>
 __global__ void int_append_decode_cache_int4_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -3131,10 +3209,12 @@ __global__ void int_append_decode_cache_int4_rope_kernel(
                                  : input_right * out_scale_vec[2 * i + 1];
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        bias_vec[2 * i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                         __fmul_rn(input_right, sin_tmp));
-        bias_vec[2 * i + 1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                             __fmul_rn(input_left, sin_tmp));
+        bias_vec[2 * i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        bias_vec[2 * i + 1] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       }
       Store<T, VecSize>(bias_vec, &qkv_out_now[bias_idx]);
     }
@@ -3232,10 +3312,12 @@ __global__ void int_append_decode_cache_int4_rope_kernel(
     if (head_idx < num_heads + kv_num_heads) {
       float cos_tmp = cos_emb_vec1[0];
       float sin_tmp = sin_emb_vec1[0];
-      bias_vec1[0] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                    __fmul_rn(input_right, sin_tmp));
-      bias_vec1[1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                    __fmul_rn(input_left, sin_tmp));
+      bias_vec1[0] =
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+      bias_vec1[1] =
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     } else {
       bias_vec1[0] = static_cast<T>(input_left);
       bias_vec1[1] = static_cast<T>(input_right);
@@ -3252,10 +3334,12 @@ __global__ void int_append_decode_cache_int4_rope_kernel(
     if (head_idx < num_heads + kv_num_heads) {
       float cos_tmp = cos_emb_vec2[0];
       float sin_tmp = sin_emb_vec2[0];
-      bias_vec2[0] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                    __fmul_rn(input_right, sin_tmp));
-      bias_vec2[1] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                    __fmul_rn(input_left, sin_tmp));
+      bias_vec2[0] =
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+      bias_vec2[1] =
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     } else {
       bias_vec2[0] = static_cast<T>(input_left);
       bias_vec2[1] = static_cast<T>(input_right);
@@ -3370,7 +3454,11 @@ __global__ void int_append_decode_cache_int4_rope_kernel(
 #endif
 }
 
-template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
+template <typename T,
+          int VecSize = 4,
+          int RoundType = 0,
+          int HeadDim = 128,
+          bool EnforceFmulRN = false>
 __global__ void append_decode_cache_int4_neox_rope_kernel(
     const T* __restrict__ quant_qkv,    // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -3458,10 +3546,12 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
 
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        left_out_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                         __fmul_rn(input_right, sin_tmp));
-        right_out_vec[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                          __fmul_rn(input_left, sin_tmp));
+        left_out_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        right_out_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       }
       Store<T, VecSize>(left_out_vec, &qkv_out_now[bias_idx_left]);
       Store<T, VecSize>(right_out_vec, &qkv_out_now[bias_idx_right]);
@@ -3558,19 +3648,23 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
           float input_right = static_cast<float>(right_src_vec1[i]);
           float cos_tmp = cos_emb_vec1[0];
           float sin_tmp = sin_emb_vec1[0];
-          left_out_vec1[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                            __fmul_rn(input_right, sin_tmp));
-          right_out_vec1[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                             __fmul_rn(input_left, sin_tmp));
+          left_out_vec1[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                             fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+          right_out_vec1[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                             fmul_func<EnforceFmulRN>(input_left, sin_tmp));
 
           input_left = static_cast<float>(left_src_vec2[i]);
           input_right = static_cast<float>(right_src_vec2[i]);
           cos_tmp = cos_emb_vec2[i];
           sin_tmp = sin_emb_vec2[i];
-          left_out_vec2[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                            __fmul_rn(input_right, sin_tmp));
-          right_out_vec2[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                             __fmul_rn(input_left, sin_tmp));
+          left_out_vec2[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                             fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+          right_out_vec2[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                             fmul_func<EnforceFmulRN>(input_left, sin_tmp));
           // quant + write k
         }
         LoadKVResT left_cache_vec, right_cache_vec;
@@ -3749,7 +3843,11 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
 #endif
 }
 
-template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
+template <typename T,
+          int VecSize = 4,
+          int RoundType = 0,
+          int HeadDim = 128,
+          bool EnforceFmulRN = false>
 __global__ void int_append_decode_cache_int4_neox_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -3857,10 +3955,12 @@ __global__ void int_append_decode_cache_int4_neox_rope_kernel(
                                  : input_right * right_out_scale_vec[i];
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        left_bias_vec[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                          __fmul_rn(input_right, sin_tmp));
-        right_bias_vec[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                           __fmul_rn(input_left, sin_tmp));
+        left_bias_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+        right_bias_vec[i] =
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       }
       Store<T, VecSize>(left_bias_vec, &qkv_out_now[bias_idx_left]);
       Store<T, VecSize>(right_bias_vec, &qkv_out_now[bias_idx_right]);
@@ -3986,19 +4086,23 @@ __global__ void int_append_decode_cache_int4_neox_rope_kernel(
                                    : input_right * right_out_scale_vec1[i];
           float cos_tmp = cos_emb_vec1[0];
           float sin_tmp = sin_emb_vec1[0];
-          left_bias_vec1[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                             __fmul_rn(input_right, sin_tmp));
-          right_bias_vec1[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                              __fmul_rn(input_left, sin_tmp));
+          left_bias_vec1[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                             fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+          right_bias_vec1[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                             fmul_func<EnforceFmulRN>(input_left, sin_tmp));
 
           input_left = static_cast<float>(left_src_vec2[i]);
           input_right = static_cast<float>(right_src_vec2[i]);
           cos_tmp = cos_emb_vec2[i];
           sin_tmp = sin_emb_vec2[i];
-          left_bias_vec2[i] = static_cast<T>(__fmul_rn(input_left, cos_tmp) -
-                                             __fmul_rn(input_right, sin_tmp));
-          right_bias_vec2[i] = static_cast<T>(__fmul_rn(input_right, cos_tmp) +
-                                              __fmul_rn(input_left, sin_tmp));
+          left_bias_vec2[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                             fmul_func<EnforceFmulRN>(input_right, sin_tmp));
+          right_bias_vec2[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                             fmul_func<EnforceFmulRN>(input_left, sin_tmp));
           // quant + write k
         }
 
