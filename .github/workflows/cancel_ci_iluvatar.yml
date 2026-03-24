@@ -1,0 +1,20 @@
+name: ILUVATAR-CI
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [develop, release/**]
+permissions: read-all
+
+concurrency:
+  group: ${{ github.event.pull_request.number }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  cancel:
+    name: Cancel ILUVATAR-CI for ${{ github.event.pull_request.number }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel ILUVATAR-CI
+        run: |
+          exit 0

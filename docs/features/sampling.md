@@ -23,17 +23,59 @@ Sampling strategies are used to determine how to select the next token from the 
 
 During deployment, you can choose the sampling algorithm by setting the environment variable `FD_SAMPLING_CLASS`. Available values are `base`, `base_non_truncated`, `air`, or `rejection`.
 
-**Algorithms Supporting Only Top-p Sampling**
-
 * `base` (default): Directly normalizes using the `top_p` value, favoring tokens with greater probabilities.
 * `base_non_truncated`: Strictly follows the Top-p sampling logic, first selecting the smallest set that reaches the cumulative probability of `top_p`, then normalizing these selected elements.
 * `air`: This algorithm is inspired by [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) and supports Top-p sampling.
-
-**Algorithms Supporting Top-p and Top-k_Top-p Sampling**
-
 * `rejection`: This algorithm is inspired by [flashinfer](https://github.com/flashinfer-ai/flashinfer) and allows flexible settings for `top_k` and `top_p` parameters for Top-p or Top-k_Top-p sampling.
 
 ## Configuration Method
+
+### Greedy Sampling
+
+1. During deployment, set the environment variable to select the sampling algorithm, default is base:
+
+```bash
+export FD_SAMPLING_CLASS=rejection  # base, base_non_truncated, or air
+```
+
+2. When sending a request, specify the following parameters:
+
+* Example request with curl:
+
+```bash
+
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How old are you"}
+  ],
+  "top_k": 1
+}'
+# or "top_p": 0.0
+```
+
+* Example request with Python:
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8170"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+    ],
+    stream=True,
+    top_k=1   # or "top_p": 0.0
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
+```
 
 ### Top-p Sampling
 

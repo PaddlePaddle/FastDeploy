@@ -162,6 +162,7 @@ class EngineClient:
         self.connection_manager = DealerConnectionManager(
             pid, max_connections=int(os.getenv("FD_DEALER_CONNECTIONS", 50))
         )
+        self.worker_pid = os.getpid()
         self.connection_initialized = False
         self.clear_update_lock = FileLock(f"/tmp/fd_weight_clear_update_lock__pid{pid}_port{port}.lock")
 
@@ -434,6 +435,8 @@ class EngineClient:
             raise EngineError(str(e), error_code=400)
 
     def _send_task(self, task):
+        if envs.ZMQ_SEND_BATCH_DATA:
+            task["zmq_worker_pid"] = self.worker_pid
         if not self.enable_mm and not envs.ENABLE_V1_DATA_PROCESSOR:
             self.zmq_client.send_json(task)
         else:
@@ -593,10 +596,14 @@ class EngineClient:
 
     async def run_control_method(self, request: ControlRequest):
         api_server_logger.info(f"Start Run Control Method: {request}")
-        self.zmq_client.send_json(request.to_dict())
+        req_dict = request.to_dict()
+        if envs.ZMQ_SEND_BATCH_DATA:
+            req_dict["zmq_worker_pid"] = self.worker_pid
+        self.zmq_client.send_json(req_dict)
         request_id = request.request_id
         dealer, response_queue = await self.connection_manager.get_connection(request_id)
-        dealer.write([b"", request_id.encode("utf-8")])
+        if not envs.ZMQ_SEND_BATCH_DATA:
+            dealer.write([b"", request_id.encode("utf-8")])
         try:
             # todo: support user specified timeout. default 600s is enough for most control cases
             response = await asyncio.wait_for(response_queue.get(), timeout=600)

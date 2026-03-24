@@ -30,18 +30,36 @@ std::vector<paddle::Tensor> WeightQuantizeKernel(const paddle::Tensor &x,
   int64_t n = x.shape()[1];
 
   paddle::Tensor scale =
-      paddle::full({n}, 0, paddle::DataType::FLOAT32, x.place());
+      paddle::empty({n}, paddle::DataType::FLOAT32, x.place());
   if (algo == "weight_only_int8") {
     paddle::Tensor out =
-        paddle::full({k, n}, 0, paddle::DataType::INT8, x.place());
-    int ret = fastdeploy::plugin::quant2d_per_channel<XPUType, float, int8_t>(
+        paddle::empty({k, n}, paddle::DataType::INT8, x.place());
+    paddle::Tensor x_trans = paddle::empty({k, n}, x.dtype(), x.place());
+    paddle::Tensor out_trans =
+        paddle::empty({k, n}, paddle::DataType::INT8, x.place());
+    XPUType *x_trans_ptr = const_cast<XPUType *>(
+        reinterpret_cast<const XPUType *>(x_trans.data<T>()));
+    int ret = baidu::xpu::api::transpose<XPUType>(
         xpu_ctx->x_context(),
-        reinterpret_cast<const XPUType *>(x.template data<T>()),
+        reinterpret_cast<const XPUType *>(x.data<T>()),
+        x_trans_ptr,
+        {k, n},
+        {1, 0});
+    PD_CHECK(ret == 0);
+    ret = infer_ops::quant2d_per_token<XPUType, float, int8_t>(
+        xpu_ctx->x_context(),
+        x_trans_ptr,
         nullptr,
-        out.data<int8_t>(),
+        out_trans.data<int8_t>(),
         scale.data<float>(),
-        k,
-        n);
+        n,
+        k);
+    PD_CHECK(ret == 0);
+    ret = baidu::xpu::api::transpose<int8_t>(xpu_ctx->x_context(),
+                                             out_trans.data<int8_t>(),
+                                             out.data<int8_t>(),
+                                             {n, k},
+                                             {1, 0});
     PD_CHECK(ret == 0);
     return {out, scale};
   } else if (algo == "weight_only_int4") {
@@ -49,30 +67,30 @@ std::vector<paddle::Tensor> WeightQuantizeKernel(const paddle::Tensor &x,
     // quant2d_per_token + transpose at now
     PD_CHECK(k % 2 == 0);
     paddle::Tensor out =
-        paddle::full({(k + 1) / 2, n}, 0, paddle::DataType::INT8, x.place());
-    xpu::ctx_guard RAII_GUARD(xpu_ctx->x_context());
-    XPUType *x_trans = RAII_GUARD.alloc<XPUType>(k * n);
-    int8_t *out_trans = RAII_GUARD.alloc<int8_t>(k * n / 2);
-    PD_CHECK(x_trans != nullptr);
-    PD_CHECK(out_trans != nullptr);
+        paddle::empty({(k + 1) / 2, n}, paddle::DataType::INT8, x.place());
+    paddle::Tensor x_trans = paddle::empty({k, n}, x.dtype(), x.place());
+    paddle::Tensor out_trans =
+        paddle::empty({(k + 1) / 2, n}, paddle::DataType::INT8, x.place());
+    XPUType *x_trans_ptr = const_cast<XPUType *>(
+        reinterpret_cast<const XPUType *>(x_trans.data<T>()));
     int ret = baidu::xpu::api::transpose<XPUType>(
         xpu_ctx->x_context(),
         reinterpret_cast<const XPUType *>(x.data<T>()),
-        x_trans,
+        x_trans_ptr,
         {k, n},
         {1, 0});
     PD_CHECK(ret == 0);
     ret = infer_ops::quant2d_per_token<XPUType, float, int4_t>(
         xpu_ctx->x_context(),
-        x_trans,
+        x_trans_ptr,
         nullptr,
-        reinterpret_cast<int4_t *>(out_trans),
+        reinterpret_cast<int4_t *>(out_trans.data<int8_t>()),
         scale.data<float>(),
         n,
         k);
     PD_CHECK(ret == 0);
     ret = baidu::xpu::api::transpose<int8_t>(xpu_ctx->x_context(),
-                                             out_trans,
+                                             out_trans.data<int8_t>(),
                                              out.data<int8_t>(),
                                              {n, k / 2},
                                              {1, 0});
