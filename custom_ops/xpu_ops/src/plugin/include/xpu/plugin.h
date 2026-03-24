@@ -724,7 +724,7 @@ DLL_EXPORT int speculate_limit_thinking_content_length_kernel(
     const int eos_token_id_len,
     const int inject_len,
     const bool splitwise_role_is_decode);
-DLL_EXPORT int speculate_get_target_logits(Context* ctx,
+DLL_EXPORT int speculate_get_target_logits(api::Context* ctx,
                                            float* target_logtis,
                                            const float* logits,
                                            const int* cu_batch_token_offset,
@@ -735,7 +735,7 @@ DLL_EXPORT int speculate_get_target_logits(Context* ctx,
                                            const int vocab_size,
                                            const int real_bsz);
 
-DLL_EXPORT int speculate_insert_first_token(Context* ctx,
+DLL_EXPORT int speculate_insert_first_token(api::Context* ctx,
                                             int64_t* token_ids,
                                             const int64_t* accept_tokens,
                                             const int64_t* next_tokens,

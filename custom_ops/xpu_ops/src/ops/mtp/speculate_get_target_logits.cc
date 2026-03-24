@@ -38,7 +38,7 @@ void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
 
   const int vocab_size = logits.shape()[1];
   const int real_bsz = seq_lens_this_time.shape()[0];
-  int r = baidu::xpu::api::plugin::speculate_get_target_logits(
+  int r = fastdeploy::plugin::speculate_get_target_logits(
       ctx,
       const_cast<float*>(target_logits.data<float>()),
       logits.data<float>(),

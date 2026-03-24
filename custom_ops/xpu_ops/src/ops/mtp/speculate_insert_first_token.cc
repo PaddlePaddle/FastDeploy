@@ -38,7 +38,7 @@ void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
 
   const int max_draft_tokens = accept_tokens.shape()[1];
   const int real_bsz = seq_lens_this_time.shape()[0];
-  int r = baidu::xpu::api::plugin::speculate_insert_first_token(
+  int r = fastdeploy::plugin::speculate_insert_first_token(
       ctx,
       const_cast<int64_t*>(token_ids.data<int64_t>()),
       accept_tokens.data<int64_t>(),
@@ -49,7 +49,7 @@ void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
       seq_lens_encoder.data<int>(),
       max_draft_tokens,
       real_bsz);
-  PD_CHECK(r == 0, "speculate_get_target_logits failed.");
+  PD_CHECK(r == 0, "speculate_insert_first_token failed.");
 }
 
 PD_BUILD_STATIC_OP(speculate_insert_first_token)
