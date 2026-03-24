@@ -1078,7 +1078,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
         if self.spec_method == SpecMethod.MTP:
-            self.proposer.insert_tasks_v1(req_dicts, num_running_requests, self.share_inputs.index_to_batch_id)
+            try:
+                self.proposer.insert_tasks_v1(req_dicts, num_running_requests, self.share_inputs.index_to_batch_id)
+            except TypeError:
+                # Backward compatibility with older proposer signature.
+                self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
     def _get_head_wise_block_tables_buffer(self) -> paddle.Tensor:
         block_tables_3d = self.share_inputs.get("block_tables_3d", None)
@@ -1505,7 +1509,11 @@ class GPUModelRunner(ModelRunnerBase):
                 self._sync_forward_batch_reqs_after_reorder()
                 if self.speculative_decoding:
                     if self.spec_method == SpecMethod.MTP:
-                        self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
+                        try:
+                            self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
+                        except TypeError:
+                            # Backward compatibility with older proposer signature.
+                            self.proposer.reorder_inputs()
             else:
                 return
 
@@ -1617,7 +1625,6 @@ class GPUModelRunner(ModelRunnerBase):
         routing_replay_table = None
         if self.routing_replay_manager is not None:
             routing_replay_table = self.routing_replay_manager.get_routing_table()
-
         num_running_requests = self.share_inputs["seq_lens_this_time"].shape[0]
         block_tables_3d = self.share_inputs.get("block_tables_3d", None)
         if self.enable_head_wise_kv_cache and block_tables_3d is not None:
@@ -1641,7 +1648,7 @@ class GPUModelRunner(ModelRunnerBase):
             batch_id_per_token=self.share_inputs["batch_id_per_token"],
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
-            block_tables=self.share_inputs["block_tables"],
+            block_tables=self.share_inputs["block_tables"][:num_running_requests],
             block_tables_3d=block_tables_3d,
             caches=self.share_inputs["caches"],
             encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
@@ -2097,7 +2104,7 @@ class GPUModelRunner(ModelRunnerBase):
             enable_pd_reorder=getattr(self.share_inputs, "enable_pd_reorder", False),
         )
 
-        post_process(
+        post_process_kwargs = dict(
             sampler_or_pooler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
@@ -2109,7 +2116,17 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=self.model_config.think_end_id,
             splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
             enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
+            is_naive_mode=(self.speculative_decoding and self.proposer is None),
+            prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
         )
+        try:
+            post_process(**post_process_kwargs)
+        except TypeError:
+            # Backward/forward compatibility with post_process signatures that
+            # do not accept speculative compatibility kwargs.
+            post_process_kwargs.pop("is_naive_mode", None)
+            post_process_kwargs.pop("prefill_one_step_stop", None)
+            post_process(**post_process_kwargs)
         self.exist_prefill_flag = False
         if self.speculative_decoding:
             if self.spec_method == SpecMethod.MTP:
