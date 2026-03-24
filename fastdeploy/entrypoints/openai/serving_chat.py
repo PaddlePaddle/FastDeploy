@@ -409,24 +409,24 @@ class OpenAIServingChat:
 
                     output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
 
+                    if output["tool_calls"] is not None:
+                        tool_called[idx] = True
+
+                    if output["skipped"] and not request.return_token_ids:
+                        continue
+
                     delta_message = DeltaMessage(
                         reasoning_content=output["reasoning_content"],
                         tool_calls=output["tool_calls"],
                     )
 
-                    if output["tool_calls"] is not None:
-                        tool_called[idx] = True
-
                     if response_processor.enable_multimodal_content():
                         delta_message.multimodal_content = [{}] if output["skipped"] else output["multipart"]
                     else:
-                        delta_message.content = "" if output["skipped"] else output["text"]
+                        delta_message.content = "" if output["skipped"] else (output["text"] or "")
 
                     if output.get("audio_content", None) is not None:
                         delta_message.audio_content = output["audio_content"]
-
-                    if output["skipped"] and not request.return_token_ids:
-                        continue
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=idx,
