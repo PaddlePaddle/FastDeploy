@@ -81,15 +81,11 @@ class EngineCacheQueue:
             # Server-side initialization for shared resources
             self.transfer_task_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
             self.tansfer_done_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
-            self.control_done_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
             self.cache_sync_value_init: List[Value] = [Value("i", 0) for _ in range(self.local_data_parallel_size)]
             self.transfer_task_lock_init: List[threading.Lock] = [
                 threading.Lock() for _ in range(self.local_data_parallel_size)
             ]
             self.transfer_task_done_lock_init: List[threading.Lock] = [
-                threading.Lock() for _ in range(self.local_data_parallel_size)
-            ]
-            self.control_task_done_lock_init: List[threading.Lock] = [
                 threading.Lock() for _ in range(self.local_data_parallel_size)
             ]
 
@@ -136,11 +132,6 @@ class EngineCacheQueue:
                 proxytype=ListProxy,
             )
             QueueManager.register(
-                "get_control_done_queue",
-                callable=lambda idx: self.control_done_queue_init[idx],
-                proxytype=ListProxy,
-            )
-            QueueManager.register(
                 "get_cache_sync_value",
                 callable=lambda idx: self.cache_sync_value_init[idx],
                 proxytype=ValueProxy,
@@ -153,11 +144,6 @@ class EngineCacheQueue:
             QueueManager.register(
                 "get_transfer_task_done_lock",
                 callable=lambda idx: self.transfer_task_done_lock_init[idx],
-                proxytype=AcquirerProxy,
-            )
-            QueueManager.register(
-                "get_control_task_done_lock",
-                callable=lambda idx: self.control_task_done_lock_init[idx],
                 proxytype=AcquirerProxy,
             )
             QueueManager.register("get_barrier", callable=lambda idx: self.barrier[idx])
@@ -207,11 +193,9 @@ class EngineCacheQueue:
             ), f"client_id must be between 0 and {self.num_client-1}, got {self.client_id}"
             QueueManager.register("get_transfer_task_queue")
             QueueManager.register("get_tansfer_done_queue")
-            QueueManager.register("get_control_done_queue")
             QueueManager.register("get_cache_sync_value")
             QueueManager.register("get_transfer_task_lock")
             QueueManager.register("get_transfer_task_done_lock")
-            QueueManager.register("get_control_task_done_lock")
             QueueManager.register("get_barrier")
             QueueManager.register("get_barrier0")
             QueueManager.register("get_barrier1")
@@ -232,11 +216,9 @@ class EngineCacheQueue:
         # Get proxy objects for shared resources
         self.transfer_task_queue = self.manager.get_transfer_task_queue(self.local_data_parallel_id)
         self.tansfer_done_queue = self.manager.get_tansfer_done_queue(self.local_data_parallel_id)
-        self.control_done_queue = self.manager.get_control_done_queue(self.local_data_parallel_id)
         self.task_sync_value = self.manager.get_cache_sync_value(self.local_data_parallel_id)
         self.task_lock = self.manager.get_transfer_task_lock(self.local_data_parallel_id)
         self.task_done_lock = self.manager.get_transfer_task_done_lock(self.local_data_parallel_id)
-        self.ctrl_done_lock = self.manager.get_control_task_done_lock(self.local_data_parallel_id)
 
         # Get barrier proxies
         self.barrier = self.manager.get_barrier(self.local_data_parallel_id)
@@ -364,21 +346,6 @@ class EngineCacheQueue:
             logger.info(f"get_transfer_done_signal: Get swap task {data[-1]} finished signal from queue successful")
         self.task_done_lock.release()
         return data
-
-    def put_control_done_signal(self, item):
-        """ """
-        self.ctrl_done_lock.acquire()
-        self.control_done_queue.append(item)
-        logger.info(f"put_control_done_signal: put control task {item[-1]} finished signal to queue successful")
-        self.ctrl_done_lock.release()
-
-    def get_control_done_signal(self):
-        data = None
-        self.ctrl_done_lock.acquire()
-        if len(self.control_done_queue) > 0:
-            data = self.control_done_queue.pop(0)
-            logger.info(f"get_control_done_signal: Get control task {data[-1]} finished signal from queue successful")
-        self.ctrl_done_lock.release()
 
     def empty(self):
         """
