@@ -900,7 +900,11 @@ class OpenAIServingCompletion:
                                    tensors.
         """
 
-        token_ids, logprobs, ranks = prompt_logprobs_tensors
+        token_ids, logprobs, ranks = (
+            prompt_logprobs_tensors.logprob_token_ids,
+            prompt_logprobs_tensors.logprobs,
+            prompt_logprobs_tensors.selected_token_ranks,
+        )
 
         # Normalize to plain Python lists (support both Tensor and list inputs)
         if hasattr(token_ids, "tolist"):

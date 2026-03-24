@@ -821,38 +821,63 @@ class OpenAIServingChat:
             output_top_logprobs is None
             or len(output_top_logprobs) < 3
             or any(not lst for lst in output_top_logprobs[:3])
-        ):  # check top 3 because logits_stats maybe None
+        ):
             return None
         logprobs_res: Optional[LogProbs] = None
 
-        # Extract logits stats from LogprobsLists if available
-        has_logits_stats = False if output_top_logprobs.logits_min is None else True
+        # Check if output_top_logprobs is a LogprobsLists object(NamedTuple) or a list
+        is_logprobslists = hasattr(output_top_logprobs, "logprob_token_ids")
 
-        # Iterate by index over mandatory fields; optionally include logits stats
-        num_tokens = len(output_top_logprobs.logprobs)
+        # Extract logits stats if available
+        if is_logprobslists:
+            # output_top_logprobs is LogprobsLists namedtuple
+            has_logits_stats = output_top_logprobs.logits_min is not None
+        else:
+            # list from msgpack: [logprob_token_ids, logprobs, sampled_token_ranks, logits_min, logits_max, logits_mean, logits_std]
+            has_logits_stats = len(output_top_logprobs) >= 7 and output_top_logprobs[3] is not None
+
+        if is_logprobslists:
+            num_tokens = len(output_top_logprobs.logprobs)
+            _tk_ids = lambda idx: output_top_logprobs.logprob_token_ids[idx]
+            _lps = lambda idx: output_top_logprobs.logprobs[idx]
+            _ranks = lambda idx: output_top_logprobs.sampled_token_ranks[idx]
+            _lmin = lambda idx: output_top_logprobs.logits_min[idx]
+            _lmax = lambda idx: output_top_logprobs.logits_max[idx]
+            _lmean = lambda idx: output_top_logprobs.logits_mean[idx]
+            _lstd = lambda idx: output_top_logprobs.logits_std[idx]
+        else:
+            num_tokens = len(output_top_logprobs[1])
+            _tk_ids = lambda idx: output_top_logprobs[0][idx]
+            _lps = lambda idx: output_top_logprobs[1][idx]
+            _ranks = lambda idx: output_top_logprobs[2][idx]
+            _lmin = lambda idx: output_top_logprobs[3][idx]
+            _lmax = lambda idx: output_top_logprobs[4][idx]
+            _lmean = lambda idx: output_top_logprobs[5][idx]
+            _lstd = lambda idx: output_top_logprobs[6][idx]
+
         for idx in range(num_tokens):
             logits_stats = None
             if has_logits_stats:
                 top_logprobs = LogprobsLists(
-                    logprob_token_ids=[output_top_logprobs.logprob_token_ids[idx]],
-                    logprobs=[output_top_logprobs.logprobs[idx]],
-                    sampled_token_ranks=[output_top_logprobs.sampled_token_ranks[idx]],
-                    logits_min=[output_top_logprobs.logits_min[idx]],
-                    logits_max=[output_top_logprobs.logits_max[idx]],
-                    logits_mean=[output_top_logprobs.logits_mean[idx]],
-                    logits_std=[output_top_logprobs.logits_std[idx]],
+                    logprob_token_ids=[_tk_ids(idx)],
+                    logprobs=[_lps(idx)],
+                    sampled_token_ranks=[_ranks(idx)],
+                    logits_min=[_lmin(idx)],
+                    logits_max=[_lmax(idx)],
+                    logits_mean=[_lmean(idx)],
+                    logits_std=[_lstd(idx)],
                 )
                 logits_stats = {
-                    "min": float(output_top_logprobs.logits_min[idx]),
-                    "max": float(output_top_logprobs.logits_max[idx]),
-                    "mean": float(output_top_logprobs.logits_mean[idx]),
-                    "std": float(output_top_logprobs.logits_std[idx]),
+                    "min": float(_lmin(idx)),
+                    "max": float(_lmax(idx)),
+                    "mean": float(_lmean(idx)),
+                    "std": float(_lstd(idx)),
                 }
             else:
                 top_logprobs = LogprobsLists(
-                    logprob_token_ids=[output_top_logprobs.logprob_token_ids[idx]],
-                    logprobs=[output_top_logprobs.logprobs[idx]],
-                    sampled_token_ranks=[output_top_logprobs.sampled_token_ranks[idx]],
+                    logprob_token_ids=[_tk_ids(idx)],
+                    logprobs=[_lps(idx)],
+                    sampled_token_ranks=[_ranks(idx)],
                 )
             step_logprobs_res = self._build_logprobs_response(
                 request_logprobs=request_logprobs,
@@ -943,7 +968,11 @@ class OpenAIServingChat:
                                    tensors.
         """
 
-        token_ids, logprobs, ranks = prompt_logprobs_tensors
+        token_ids, logprobs, ranks = (
+            prompt_logprobs_tensors.logprob_token_ids,
+            prompt_logprobs_tensors.logprobs,
+            prompt_logprobs_tensors.selected_token_ranks,
+        )
 
         # Normalize to plain Python lists (support both Tensor and list inputs)
         if hasattr(token_ids, "tolist"):
