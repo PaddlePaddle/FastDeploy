@@ -164,6 +164,20 @@ class SpeculateMetrics:
     """
     accept_ratio_per_head: list[float]
 
+    def to_dict(self):
+        res = {}
+        for k in self.__dataclass_fields__:
+            v = getattr(self, k)
+            if type(v) in (int, float, str, bool, type(None)):
+                res[k] = v
+            elif type(v) is list:
+                res[k] = list(v)
+            elif type(v) is dict:
+                res[k] = dict(v)
+            else:
+                res[k] = v
+        return res
+
 
 @dataclass
 class SamplerOutput:
