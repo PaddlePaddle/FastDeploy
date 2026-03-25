@@ -214,6 +214,15 @@ class TokenProcessor:
                         f"finish reschedule_preempt_task request_id {request_id} at {self.resource_manager.requests[request_id].idx}"
                     )
 
+    def _find_pending_preempt_request_id_by_idx(self, idx: int):
+        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            return None
+        for request_id in list(self.resource_manager.to_be_rescheduled_request_id_set):
+            request = self.resource_manager.requests.get(request_id)
+            if request is not None and getattr(request, "idx", None) == idx:
+                return request_id
+        return None
+
     def _process_per_token(self, task, batch_id: int, token_ids: np.ndarray, result: RequestOutput, is_prefill: bool):
         """
         process output token by token
@@ -280,6 +289,13 @@ class TokenProcessor:
         for _, stream_data in enumerate(receive_datas):
             i = stream_data.batch_id
             if self.resource_manager.stop_flags[i]:
+                pending_preempt_request_id = self._find_pending_preempt_request_id_by_idx(i)
+                if pending_preempt_request_id is None:
+                    continue
+                token_ids = stream_data.tokens
+                if token_ids is not None and token_ids[-1] == PREEMPTED_TOKEN_ID:
+                    llm_logger.info(f"sync preemption for request_id {pending_preempt_request_id} done.")
+                    self.resource_manager.reschedule_preempt_task(pending_preempt_request_id)
                 continue
 
             task: Request = self.resource_manager.tasks_list[i]
@@ -742,7 +758,21 @@ class TokenProcessor:
         batch_result = list()
         # reschedule
         for i in range(batch):
+            pending_preempt_request_id = None
             if self.resource_manager.stop_flags[i]:
+                pending_preempt_request_id = self._find_pending_preempt_request_id_by_idx(i)
+                if pending_preempt_request_id is None:
+                    continue
+                if self.cfg.speculative_config.method:
+                    if accept_num[i] == PREEMPTED_TOKEN_ID:
+                        llm_logger.info(f"sync preemption for request_id {pending_preempt_request_id} done.")
+                        self.resource_manager.reschedule_preempt_task(pending_preempt_request_id)
+                    continue
+
+                token_id = int(tokens[i, 0])
+                if token_id == PREEMPTED_TOKEN_ID:
+                    llm_logger.info(f"sync preemption for request_id {pending_preempt_request_id} done.")
+                    self.resource_manager.reschedule_preempt_task(pending_preempt_request_id)
                 continue
 
             recovery_stop = False

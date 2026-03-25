@@ -99,6 +99,84 @@ class TestResourceManagerV1(unittest.TestCase):
         self.assertEqual(len(self.manager.waiting), 0)
         self.assertEqual(len(self.manager.to_be_rescheduled_request_id_set), 2)
 
+    def test_schedule_resumed_offloaded_request_reassigns_slot(self):
+        engine_args = EngineArgs(
+            model=MODEL_NAME,
+            max_model_len=8192,
+            tensor_parallel_size=1,
+            engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778")),
+            cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT", "6779")),
+        )
+        mock_config = engine_args.create_engine_config()
+        manager = ResourceManagerV1(
+            max_num_seqs=2,
+            config=mock_config,
+            tensor_parallel_size=1,
+            splitwise_role="decode",
+            local_data_parallel_id=0,
+        )
+        manager.cache_manager = Mock()
+        manager.cache_manager.can_allocate_gpu_blocks.return_value = True
+        manager.offload_manager = Mock()
+
+        request = Mock(spec=Request)
+        request.request_id = "req-offloaded"
+        request.status = RequestStatus.PREEMPTED
+        request.is_offloaded = True
+        request.idx = 0
+        request.block_tables = [7, 8]
+        request.num_total_tokens = 32
+        request.need_prefill_tokens = 16
+        request.num_computed_tokens = 32
+
+        def _resume(req):
+            req.block_tables = [11, 12]
+            return True, req.num_computed_tokens, False
+
+        manager.offload_manager.resume_decode.side_effect = _resume
+        manager.requests[request.request_id] = request
+        manager.waiting.append(request)
+        manager.tasks_list[0] = Mock()
+        manager.stop_flags[0] = False
+        manager.tasks_list[1] = None
+        manager.stop_flags[1] = True
+
+        scheduled_reqs, error_reqs = manager.schedule()
+
+        self.assertEqual(error_reqs, [])
+        self.assertEqual(len(scheduled_reqs), 1)
+        self.assertEqual(scheduled_reqs[0].request_id, request.request_id)
+        self.assertEqual(scheduled_reqs[0].idx, 1)
+        self.assertEqual(request.idx, 1)
+        self.assertEqual(manager.req_dict[request.request_id], 1)
+        self.assertIs(manager.tasks_list[1], request)
+        self.assertIsNot(manager.tasks_list[0], request)
+        self.assertFalse(manager.stop_flags[1])
+        manager.need_block_num_signal.clear()
+
+    def test_pending_preempt_slot_is_reserved_until_ack(self):
+        request = Mock(spec=Request)
+        request.request_id = "req-pending"
+        request.idx = 0
+        request.status = RequestStatus.PREEMPTED
+        request.has_been_preempted_before = False
+        request.metrics = Mock()
+        request.metrics.preempted_count = 0
+
+        self.manager.stop_flags = [True, True, True, True]
+        self.manager.requests[request.request_id] = request
+        self.manager.to_be_rescheduled_request_id_set.add(request.request_id)
+
+        self.assertEqual(self.manager.available_batch(), 3)
+        self.assertEqual(self.manager.get_available_position(), 1)
+
+        self.manager.reschedule_preempt_task(request.request_id)
+
+        self.assertEqual(request.idx, None)
+        self.assertEqual(self.manager.available_batch(), 4)
+        self.assertEqual(self.manager.get_available_position(), 0)
+        self.assertEqual(self.manager.waiting[0], request)
+
 
 if __name__ == "__main__":
     unittest.main()

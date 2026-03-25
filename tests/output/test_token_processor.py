@@ -25,6 +25,7 @@ import paddle
 import pytest
 
 from fastdeploy import envs
+from fastdeploy.config import PREEMPTED_TOKEN_ID
 from fastdeploy.engine.request import Request, RequestMetrics, RequestOutput
 from fastdeploy.output import token_processor
 from fastdeploy.output.token_processor import (
@@ -250,6 +251,20 @@ def test_reschedule_preempt_task_use_zmq_reschedules_missing_batch():
     rm.requests = {"req-a": types.SimpleNamespace(idx=1)}
     with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", True):
         processor._reschedule_preempt_task_use_zmq([types.SimpleNamespace(batch_id=0)])
+    assert "reschedule-req-a" in rm.recycled
+
+
+def test_process_batch_output_use_zmq_reschedules_preempted_stopped_slot():
+    processor, rm, _, _ = _make_processor()
+    rm.stop_flags[0] = True
+    rm.to_be_rescheduled_request_id_set = {"req-a"}
+    rm.requests = {"req-a": types.SimpleNamespace(idx=0)}
+    receive_datas = [types.SimpleNamespace(batch_id=0, tokens=np.array([PREEMPTED_TOKEN_ID]), pooler_output=None)]
+
+    with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", True):
+        batch_result = processor._process_batch_output_use_zmq(receive_datas)
+
+    assert batch_result == []
     assert "reschedule-req-a" in rm.recycled
 
 
@@ -994,6 +1009,24 @@ def test_process_batch_output_skips_already_stopped_slot():
         processor._process_batch_output()
 
     assert processor.cached_generated_tokens.put_results.called
+
+
+def test_process_batch_output_reschedules_stopped_slot_negative_token():
+    processor, rm, _, _ = _make_processor()
+    task_id = "req-stopped-neg"
+    rm.stop_flags[0] = True
+    rm.requests = {task_id: types.SimpleNamespace(idx=0)}
+    rm.to_be_rescheduled_request_id_set = {task_id}
+    processor.output_tokens[1, 0] = 1
+    processor.output_tokens[2, 0] = -9
+
+    with (
+        mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", True),
+        mock.patch.object(token_processor, "main_process_metrics", _Metrics()),
+    ):
+        processor._process_batch_output()
+
+    assert rm.recycled[-1] == f"reschedule-{task_id}"
 
 
 def test_process_batch_output_speculative_negative_token_reschedules():

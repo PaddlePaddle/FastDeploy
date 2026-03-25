@@ -258,6 +258,27 @@ class ResourceManagerV1(ResourceManager):
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
 
+    def _get_pending_preempt_slots(self) -> set[int]:
+        pending_slots = set()
+        request_id_set = getattr(self, "to_be_rescheduled_request_id_set", set())
+        requests = getattr(self, "requests", {})
+        for request_id in request_id_set:
+            request = requests.get(request_id)
+            if request is not None and request.idx is not None:
+                pending_slots.add(request.idx)
+        return pending_slots
+
+    def _assign_rescheduled_slot(self, request):
+        allocated_position = self.get_available_position()
+        request.idx = allocated_position
+        self.tasks_list[allocated_position] = request
+        self.stop_flags[allocated_position] = False
+        self.req_dict[request.request_id] = allocated_position
+        return allocated_position
+
+    def available_batch(self):
+        return max(super().available_batch() - len(self._get_pending_preempt_slots()), 0)
+
     def reschedule_preempt_task(self, request_id, process_func=None):
         with self.lock:
             llm_logger.debug(f"reschedule {request_id} into waiting queue")
@@ -267,6 +288,7 @@ class ResourceManagerV1(ResourceManager):
                 request.metrics.preempted_count += 1
                 if process_func is not None:
                     process_func(request)
+                request.idx = None
                 llm_logger.debug(f"self.waiting append request:{request.request_id},req.type:{request.status}")
                 self.waiting.appendleft(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
@@ -503,6 +525,10 @@ class ResourceManagerV1(ResourceManager):
             f"need_prefill={request.need_prefill_tokens}, computed={request.num_computed_tokens}"
         )
         num_new_tokens = min(num_new_tokens, token_budget)
+        decode_chunk_limit = None
+        if self.config.scheduler_config.splitwise_role == "decode":
+            decode_chunk_limit = self.config.get_max_chunk_tokens(self.config.model_config.mm_max_tokens_per_item)
+            num_new_tokens = min(num_new_tokens, decode_chunk_limit)
 
         # Deterministic mode: align chunk boundaries to split_kv_size
         # This ensures batch-invariant attention by making each chunk
@@ -543,6 +569,8 @@ class ResourceManagerV1(ResourceManager):
         request.with_image = False
 
         if not self.config.model_config.enable_mm:
+            if decode_chunk_limit is not None:
+                num_new_tokens = min(num_new_tokens, decode_chunk_limit)
             return num_new_tokens
 
         inputs = request.multimodal_inputs
@@ -713,6 +741,8 @@ class ResourceManagerV1(ResourceManager):
                     request.evict_mm_hashes = self.encoder_cache.apply_cache(cur_mm_hashes, cur_mm_positions)
 
         # Compatible with scenarios without images and videos.
+        if decode_chunk_limit is not None:
+            num_new_tokens = min(num_new_tokens, decode_chunk_limit)
         return num_new_tokens
 
     def exist_mm_prefill(self, scheduled_reqs):
@@ -996,9 +1026,7 @@ class ResourceManagerV1(ResourceManager):
                             if resume_success:
                                 offload_logger.info(f"Resumed offloaded request {request.request_id}")
                                 self.waiting.popleft()
-                                self.tasks_list[request.idx] = request
-                                self.stop_flags[request.idx] = False
-                                self.req_dict[request.request_id] = request.idx
+                                self._assign_rescheduled_slot(request)
                                 self.running.append(request)
                                 scheduled_reqs.append(self._prepare_decode_task(request))
                                 continue
@@ -1055,6 +1083,7 @@ class ResourceManagerV1(ResourceManager):
                                 )
                                 request.block_tables.extend(extra_gpu_block_ids)
                             self.waiting.popleft()
+                            self._assign_rescheduled_slot(request)
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             token_budget -= num_new_tokens
@@ -1199,9 +1228,10 @@ class ResourceManagerV1(ResourceManager):
             inputs["audio_features"] = result
 
     def get_available_position(self) -> int:
+        pending_preempt_slots = self._get_pending_preempt_slots()
         position = 0
         while position < self.max_num_seqs:
-            if self.stop_flags[position] is True:
+            if self.stop_flags[position] is True and position not in pending_preempt_slots:
                 return position
             position += 1
         raise RuntimeError("No available position is available for new request")
