@@ -33,7 +33,6 @@ def py_update_attn_mask_offsets_op(
     attn_mask_offsets_full,
     is_block_step,
     decode_states,
-    mask_rollback,
 ):
     """
     Python-side reference op that mirrors the CUDA kernel you provided (latest version).
@@ -43,7 +42,6 @@ def py_update_attn_mask_offsets_op(
     - attn_mask_offsets_full: numpy array shape (bsz, max_model_len)
     - is_block_step: 1D bool array (bsz,)
     - decode_states: numpy int32 array shape (bsz, decode_states_len)
-    - mask_rollback: 1D numpy int32 (bsz,) or shape (bsz,1)
     Returns:
       attn_mask_offsets_ref (1D int32 length batch_seq_lens * 2),
       decode_states_ref (bsz x decode_states_len int32)
@@ -56,7 +54,6 @@ def py_update_attn_mask_offsets_op(
     is_block_step = np.array(is_block_step, dtype=bool).reshape(-1)
     attn_mask_offsets_full = np.array(attn_mask_offsets_full, dtype=np.int32)
     decode_states = np.array(decode_states, dtype=np.int32).copy()
-    mask_rollback = np.array(mask_rollback, dtype=np.int32).reshape(-1)
 
     bsz = int(seq_lens_this_time.shape[0])
     total_seq = int(np.sum(seq_lens_this_time))
@@ -146,8 +143,6 @@ class UpdateAttnMaskOffsetsTestCase(unittest.TestCase):
         if vision_generate:
             decode_states[:, 0] = 2  # make first element 2 to trigger vision phase
 
-        mask_rollback = np.zeros((bsz,), dtype=np.int32)
-
         # ids_remove_padding: length = total_seq (only length used by op)
         ids_remove_padding = paddle.randint(low=0, high=10, shape=[total_seq], dtype="int32")
         decode_states_tensor = paddle.to_tensor(decode_states, dtype="int32")
@@ -161,7 +156,6 @@ class UpdateAttnMaskOffsetsTestCase(unittest.TestCase):
             paddle.to_tensor(attn_mask_offsets_full, dtype="int32"),
             paddle.to_tensor(np.array(is_block_step, dtype=bool).reshape(-1), dtype="bool"),
             decode_states_tensor,
-            paddle.to_tensor(mask_rollback, dtype="int32"),
         )
 
         # op returns [attn_mask_offsets, decode_states_out] per your PD_BUILD_STATIC_OP outputs
@@ -187,7 +181,6 @@ class UpdateAttnMaskOffsetsTestCase(unittest.TestCase):
             attn_mask_offsets_full=attn_mask_offsets_full,
             is_block_step=np.array(is_block_step, dtype=bool).reshape(-1),
             decode_states=decode_states.copy(),
-            mask_rollback=mask_rollback,
         )
 
         # optionally print debug if env var set

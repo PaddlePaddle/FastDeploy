@@ -23,7 +23,6 @@ __global__ void update_attn_mask_offsets_kernel(
     const int* attn_mask_offsets_full,
     const bool* is_block_step,
     int* decode_states,
-    int* mask_rollback,
     const int real_bsz,
     const int max_model_len,
     const int decode_states_len) {
@@ -80,8 +79,7 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& attn_mask_offsets_full,
     const paddle::Tensor& is_block_step,
-    const paddle::Tensor& decode_states,
-    const paddle::Tensor& mask_rollback) {
+    const paddle::Tensor& decode_states) {
   int max_model_len = attn_mask_offsets_full.shape()[1];
   int real_bsz = seq_lens_this_time.shape()[0];
   int batch_seq_lens = ids_remove_padding.shape()[0];
@@ -107,7 +105,6 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
       attn_mask_offsets_full.data<int>(),
       is_block_step.data<bool>(),
       const_cast<int*>(decode_states.data<int>()),
-      const_cast<int*>(mask_rollback.data<int>()),
       real_bsz,
       max_model_len,
       decode_states_len);
@@ -123,9 +120,7 @@ PD_BUILD_STATIC_OP(update_attn_mask_offsets)
              "cu_seqlens_q",
              "attn_mask_offsets_full",
              "is_block_step",
-             "decode_states",
-             "mask_rollback"})
-    .Outputs({"attn_mask_offsets", "decode_states_out", "mask_rollback_out"})
-    .SetInplaceMap({{"decode_states", "decode_states_out"},
-                    {"mask_rollback", "mask_rollback_out"}})
+             "decode_states"})
+    .Outputs({"attn_mask_offsets", "decode_states_out"})
+    .SetInplaceMap({{"decode_states", "decode_states_out"}})
     .SetKernelFn(PD_KERNEL(UpdateAttnMaskOffsets));

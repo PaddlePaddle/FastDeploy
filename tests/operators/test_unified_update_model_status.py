@@ -27,9 +27,8 @@ Kernel semantics (from unified_update_model_status.cu):
          replace non-EOS end token with end_tokens[0], set cur_stop_flag=true.
       2. seq_lens update (always executed, even when EOS is hit):
            encoder > 0  → decoder += encoder, encoder = 0
-           decoder > 0  → decoder += output_len, mask_rollback = seq_lens_this_time - output_len
-           else         → mask_rollback = 0
-      3. If cur_stop_flag (EOS hit): stop_flags=true, mask_rollback=0.
+           decoder > 0  → decoder += output_len
+      3. If cur_stop_flag (EOS hit): stop_flags=true.
       4. Write back: seq_lens_encoder, seq_lens_decoder, step_output_len, step_idx.
       5. Write history to token_ids_all at [prompt_len + base + i] (forward loop).
       6. Set step_input_ids[0] = last output token.
@@ -81,7 +80,6 @@ def run_kernel(paddle_inputs: Dict[str, Any]):
         paddle_inputs["stop_flags"],
         paddle_inputs["seq_lens_this_time"],
         paddle_inputs["is_paused"],
-        paddle_inputs["mask_rollback"],
         paddle_inputs["token_ids_all"],
         paddle_inputs["prompt_lens"],
         paddle_inputs["step_idx"],
@@ -90,7 +88,7 @@ def run_kernel(paddle_inputs: Dict[str, Any]):
     )
 
 
-# All 11 in-place output keys (from SetInplaceMap in .cu)
+# All 10 in-place output keys (from SetInplaceMap in .cu)
 OUTPUT_KEYS = [
     "seq_lens_encoder",
     "seq_lens_decoder",
@@ -100,7 +98,6 @@ OUTPUT_KEYS = [
     "step_output_len",
     "stop_flags",
     "seq_lens_this_time",
-    "mask_rollback",
     "token_ids_all",
     "step_idx",
 ]
@@ -145,7 +142,6 @@ def gen_inputs(
     # seq_lens_this_time[batch_id] which is only sized real_bsz
     stop_flags[real_bsz:] = True
     is_paused = np.zeros(max_bsz, dtype=bool)
-    mask_rollback = np.zeros(max_bsz, dtype=np.int32)
     prompt_lens = rng.integers(10, 50, size=max_bsz, dtype=np.int64)
     token_ids_all = rng.integers(0, 1000, size=(max_bsz, max_model_len), dtype=np.int64)
     step_idx = rng.integers(0, 50, size=max_bsz, dtype=np.int64)
@@ -168,7 +164,6 @@ def gen_inputs(
         "stop_flags": stop_flags,
         "seq_lens_this_time": seq_lens_this_time,
         "is_paused": is_paused,
-        "mask_rollback": mask_rollback,
         "token_ids_all": token_ids_all,
         "prompt_lens": prompt_lens,
         "step_idx": step_idx,
@@ -198,7 +193,6 @@ def reference_impl(inputs: Dict[str, Any]) -> Dict[str, Any]:
     step_output_len = inputs["step_output_len"].copy()
     stop_flags = inputs["stop_flags"].copy()
     seq_lens_this_time = inputs["seq_lens_this_time"].copy()
-    mask_rollback = inputs["mask_rollback"].copy()
     token_ids_all = inputs["token_ids_all"].copy()
     step_idx = inputs["step_idx"].copy()
     step_input_ids = inputs["step_input_ids"].copy()
@@ -256,14 +250,10 @@ def reference_impl(inputs: Dict[str, Any]) -> Dict[str, Any]:
                 cur_seq_len_encoder = 0
             elif cur_seq_len_decoder > 0:
                 cur_seq_len_decoder += output_len
-                mask_rollback[batch_id] = int(seq_lens_this_time[batch_id]) - output_len
-            else:
-                mask_rollback[batch_id] = 0
 
             if cur_stop_flag:
                 stop_count += 1
                 stop_flags[batch_id] = True
-                mask_rollback[batch_id] = 0
 
             # Write back scalar state
             seq_lens_encoder[batch_id] = cur_seq_len_encoder
@@ -308,7 +298,6 @@ def reference_impl(inputs: Dict[str, Any]) -> Dict[str, Any]:
         "step_output_len": step_output_len,
         "stop_flags": stop_flags,
         "seq_lens_this_time": seq_lens_this_time,
-        "mask_rollback": mask_rollback,
         "token_ids_all": token_ids_all,
         "step_idx": step_idx,
     }
@@ -492,19 +481,6 @@ class TestUnifiedUpdateModelStatus(unittest.TestCase):
         inputs["step_output_len"][:] = [0, 5, 0, 0, 0, 0]
         inputs["stop_flags"][: inputs["real_bsz"]] = False
         inputs["is_paused"][:] = False
-        outputs = self._run_and_get(inputs)
-        self._check_all_outputs(inputs, outputs)
-
-    def test_mask_rollback(self):
-        """mask_rollback = seq_lens_this_time - output_len for running decode slots."""
-        inputs = gen_inputs(real_bsz=4, max_step_tokens=8, max_model_len=128, seed=42)
-        inputs["stop_flags"][: inputs["real_bsz"]] = False
-        inputs["is_paused"][:] = False
-        inputs["seq_lens_encoder"][:] = 0  # All decode slots
-        inputs["seq_lens_this_time"][:] = [6, 4, 8, 3]
-        inputs["step_output_len"][:] = [3, 2, 5, 1, 0, 0, 0, 0]
-        inputs["end_tokens"][:] = [9990, 9991, 9992, 9993]
-        inputs["max_dec_len"][:] = 10000
         outputs = self._run_and_get(inputs)
         self._check_all_outputs(inputs, outputs)
 

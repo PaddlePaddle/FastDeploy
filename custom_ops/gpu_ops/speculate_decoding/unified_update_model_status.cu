@@ -41,7 +41,6 @@ template <int BLOCK_SIZE>
 __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
                                                    int *seq_lens_decoder,
                                                    bool *has_running_seqs,
-                                                   int *mask_rollback,
                                                    int64_t *step_input_ids,
                                                    int64_t *step_output_ids,
                                                    int *step_output_len,
@@ -100,16 +99,12 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
         cur_seq_len_encoder = 0;
       } else if (cur_seq_len_decoder > 0) {
         cur_seq_len_decoder += output_len;
-        mask_rollback[batch_id] = seq_lens_this_time[batch_id] - output_len;
-      } else {
-        mask_rollback[batch_id] = 0;
       }
 
       if (cur_stop_flag) {
         // It should clear seq_lens_decoder in next step for save_output
         stop_flag_int = 1;
         stop_flags[batch_id] = true;
-        mask_rollback[batch_id] = 0;
       }
 
       // 4. Update model status
@@ -174,7 +169,6 @@ void UnifiedUpdateModelStatus(const paddle::Tensor &seq_lens_encoder,
                               const paddle::Tensor &stop_flags,
                               const paddle::Tensor &seq_lens_this_time,
                               const paddle::Tensor &is_paused,
-                              const paddle::Tensor &mask_rollback,
                               const paddle::Tensor &token_ids_all,
                               const paddle::Tensor &prompt_lens,
                               const paddle::Tensor &step_idx,
@@ -203,7 +197,6 @@ void UnifiedUpdateModelStatus(const paddle::Tensor &seq_lens_encoder,
           const_cast<int *>(seq_lens_encoder.data<int>()),
           const_cast<int *>(seq_lens_decoder.data<int>()),
           const_cast<bool *>(has_running_seqs_gpu.data<bool>()),
-          const_cast<int *>(mask_rollback.data<int>()),
           const_cast<int64_t *>(step_input_ids.data<int64_t>()),
           const_cast<int64_t *>(step_output_ids.data<int64_t>()),
           const_cast<int *>(step_output_len.data<int>()),
@@ -237,7 +230,6 @@ PD_BUILD_STATIC_OP(unified_update_model_status)
              "stop_flags",
              "seq_lens_this_time",
              "is_paused",
-             "mask_rollback",
              "token_ids_all",
              "prompt_lens",
              "step_idx",
@@ -251,7 +243,6 @@ PD_BUILD_STATIC_OP(unified_update_model_status)
               "step_output_len_out",
               "stop_flags_out",
               "seq_lens_this_time_out",
-              "mask_rollback_out",
               "token_ids_all_out",
               "step_idx_out"})
     .SetInplaceMap({{"seq_lens_encoder", "seq_lens_encoder_out"},
@@ -262,7 +253,6 @@ PD_BUILD_STATIC_OP(unified_update_model_status)
                     {"step_output_len", "step_output_len_out"},
                     {"stop_flags", "stop_flags_out"},
                     {"seq_lens_this_time", "seq_lens_this_time_out"},
-                    {"mask_rollback", "mask_rollback_out"},
                     {"token_ids_all", "token_ids_all_out"},
                     {"step_idx", "step_idx_out"}})
     .SetKernelFn(PD_KERNEL(UnifiedUpdateModelStatus));

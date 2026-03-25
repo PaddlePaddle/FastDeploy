@@ -880,7 +880,6 @@ void UnifiedUpdateModelStatus(const paddle::Tensor& seq_lens_encoder,
                               const paddle::Tensor& stop_flags,
                               const paddle::Tensor& seq_lens_this_time,
                               const paddle::Tensor& is_paused,
-                              const paddle::Tensor& mask_rollback,
                               const paddle::Tensor& token_ids_all,
                               const paddle::Tensor& prompt_lens,
                               const paddle::Tensor& step_idx,
@@ -1147,8 +1146,7 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& attn_mask_offsets_full,
     const paddle::Tensor& is_block_step,
-    const paddle::Tensor& decode_states,
-    const paddle::Tensor& mask_rollback);
+    const paddle::Tensor& decode_states);
 
 std::vector<paddle::Tensor> FusedNeoxRopeEmbedding(
     const paddle::Tensor& qkv,
