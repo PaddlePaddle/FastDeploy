@@ -32,7 +32,6 @@ import time
 
 import pytest
 
-
 CASE_LOGS_DIR = os.path.join(os.getcwd(), "case_logs")
 
 
