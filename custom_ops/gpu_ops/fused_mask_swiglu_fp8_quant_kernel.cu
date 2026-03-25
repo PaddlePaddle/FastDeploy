@@ -61,35 +61,46 @@ __global__ void fused_swiglu_fp8_quant_kernel(
   int warp = tid >> 5;
   int num_warps = blockDim.x >> 5;
 
-  int64_t block_id = static_cast<int64_t>(blockIdx.x);
+  // Build prefix-sum in shared memory directly from device data.
+  // No D2H / H2D – fully CUDA-graph safe.
+  extern __shared__ int smem_cumsum[];
+  if (tid == 0) {
+    smem_cumsum[0] = 0;
+    for (int i = 0; i < group_num; ++i) {
+      smem_cumsum[i + 1] =
+          smem_cumsum[i] + static_cast<int>(token_nums_per_expert[i]);
+    }
+  }
+  __syncthreads();
+
+  int total_tokens = smem_cumsum[group_num];
 
   using VecBF16 = AlignedVector<T, 4>;
   VecBF16 x1_vec, x2_vec;
   using VecFP8 = AlignedVector<phi::dtype::float8_e4m3fn, 4>;
   VecFP8 q_vec;
 
-  while (true) {
-    // ================= token mapping =================
-    int64_t expert = -1;
-    int64_t token_in_expert = -1;
-
+  for (int64_t block_id = static_cast<int64_t>(blockIdx.x);
+       block_id < total_tokens;
+       block_id += gridDim.x) {
+    // ================= token mapping (lane 0 only + broadcast) =============
+    // Binary search on smem_cumsum, only lane 0 does the search to minimize
+    // shared memory traffic, result broadcast via __shfl_sync.
+    int64_t expert, token_in_expert;
     if (lane == 0) {
-      int64_t cumsum = 0;
-      for (int64_t i = 0; i < group_num; ++i) {
-        int64_t cnt = static_cast<int64_t>(token_nums_per_expert[i]);
-        if (block_id >= cumsum && block_id < cumsum + cnt) {
-          expert = i;
-          token_in_expert = block_id - cumsum;
-          break;
-        }
-        cumsum += cnt;
+      int lo = 0, hi = static_cast<int>(group_num) + 1;
+      while (lo < hi) {
+        int mid = (lo + hi) >> 1;
+        if (smem_cumsum[mid] <= static_cast<int>(block_id))
+          lo = mid + 1;
+        else
+          hi = mid;
       }
+      expert = static_cast<int64_t>(lo - 1);
+      token_in_expert = block_id - static_cast<int64_t>(smem_cumsum[lo - 1]);
     }
-
     expert = __shfl_sync(0xffffffff, expert, 0);
     token_in_expert = __shfl_sync(0xffffffff, token_in_expert, 0);
-
-    if (expert < 0 || token_in_expert >= group_size) break;
 
     // ================= base pointers =================
     int64_t token = expert * group_size + token_in_expert;
@@ -116,7 +127,7 @@ __global__ void fused_swiglu_fp8_quant_kernel(
         float x1 = static_cast<float>(x1_vec[i]);
         float x2 = static_cast<float>(x2_vec[i]);
 
-        float y = x2 * x1 / (1.f + expf(-x1));
+        float y = x2 * x1 / (1.f + __expf(-x1));
         float y_r = static_cast<float>(
             static_cast<T>(y));  // To simulate the data transformation before
                                  // the fusion of swiglu and quant operators
@@ -137,7 +148,7 @@ __global__ void fused_swiglu_fp8_quant_kernel(
       float scale = amax / kFP8Max;
       // ---------- quantize ----------
       if constexpr (UseUE8M0) {
-        scale = exp2f(ceilf(log2f(fmaxf(scale, kEpsilon))));
+        scale = exp2f(ceilf(__log2f(fmaxf(scale, kEpsilon))));
 #pragma unroll
         for (int i = 0; i < 4; ++i) {
           float q = v[i] / scale;
@@ -182,7 +193,6 @@ __global__ void fused_swiglu_fp8_quant_kernel(
 
       Store(q_vec, out + base);
     }
-    block_id += gridDim.x;
   }
 }
 
@@ -220,10 +230,13 @@ std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
   int sm_count = 0;
   cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, 0);
 
-  constexpr int BLOCKS_PER_SM = 2;
+  // With 38 regs/thread on H100 (65536 regs/SM):
+  //   blockx=512  → 3 block/SM (48 warps, 75% occ)  ← best trade-off
+  constexpr int BLOCKS_PER_SM = 3;
+  int blockx = std::min(512L, hidden_size / 128 * 32);
   int gridx =
       std::min(static_cast<int64_t>(sm_count * BLOCKS_PER_SM), token_num);
-  int blockx = std::min(1024L, hidden_size / 128 * 32);
+  int smem_bytes = (group_num + 1) * sizeof(int);
 
   bool use_finegrained_range = false;
   if (auto* env = getenv("PER_TOKEN_QUANT_FP8_USE_FINEGRAINED_RANGE"))
@@ -233,7 +246,7 @@ std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
     BOOL_SWITCH(use_ue8m0, UseUE8M0, [&] {
       using ScaleT = std::conditional_t<UseUE8M0, int, float>;
       fused_swiglu_fp8_quant_kernel<paddle::bfloat16, int, ScaleT, UseUE8M0>
-          <<<gridx, blockx, 0, input.stream()>>>(
+          <<<gridx, blockx, smem_bytes, input.stream()>>>(
               input.data<paddle::bfloat16>(),
               token_nums_per_expert.data<int>(),
               out_fp8.data<phi::dtype::float8_e4m3fn>(),
