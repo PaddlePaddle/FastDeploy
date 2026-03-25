@@ -17,6 +17,7 @@
 #include <cstring>
 #include <string>
 #include "paddle/extension.h"
+#include "../ngram_match_common.cuh"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
@@ -227,74 +228,18 @@ __global__ void ngram_match_mixed_kernel(const int64_t *input_ids,
       continue;
     }
 
-    bool match_global = false;
-    for (int ngram_size = max_ngram_size;
-         ngram_size >= min_ngram_size && !match_global;
-         --ngram_size) {
-      if (cur_step_idx < ngram_size) continue;
-
-      const int64_t *ngram = cur_pre_ids + (cur_step_idx + 1 - ngram_size);
-
-      // Search in input_ids (prompt tokens)
-      for (int64_t i = 0; i <= cur_input_ids_len - ngram_size && !match_global;
-           ++i) {
-        bool match_local = true;
-        for (int j = 0; j < ngram_size; j++) {
-          if (ngram[j] != cur_input_ids[i + j]) {
-            match_local = false;
-            break;
-          }
-        }
-        if (match_local) {
-          int64_t start_idx = i + ngram_size;
-          int64_t end_idx =
-              min(start_idx + static_cast<int64_t>(max_draft_tokens_query),
-                  cur_input_ids_len);
-          if (start_idx >= end_idx) continue;
-
-          int64_t n = end_idx - start_idx;
-          seq_lens_this_time[batch_idx] =
-              static_cast<int32_t>(ori_seq_len_this_time + n);
-          for (int64_t k = 0; k < n; k++) {
-            cur_draft_tokens[ori_seq_len_this_time + k] =
-                cur_input_ids[start_idx + k];
-          }
-          match_global = true;
-          break;
-        }
-      }
-
-      // Search in pre_ids (previously generated tokens)
-      if (!match_global) {
-        for (int64_t i = 0; i <= cur_step_idx - ngram_size && !match_global;
-             ++i) {
-          bool match_local = true;
-          for (int j = 0; j < ngram_size; j++) {
-            if (ngram[j] != cur_pre_ids[i + j]) {
-              match_local = false;
-              break;
-            }
-          }
-          if (match_local) {
-            int64_t start_idx = i + ngram_size;
-            int64_t end_idx =
-                min(start_idx + static_cast<int64_t>(max_draft_tokens_query),
-                    cur_step_idx);
-            int64_t n = end_idx - start_idx;
-            if (start_idx >= end_idx) continue;
-
-            seq_lens_this_time[batch_idx] =
-                static_cast<int32_t>(ori_seq_len_this_time + n);
-            for (int64_t k = 0; k < n; k++) {
-              cur_draft_tokens[ori_seq_len_this_time + k] =
-                  cur_pre_ids[start_idx + k];
-            }
-            match_global = true;
-            break;
-          }
-        }
-      }
-    }
+    // Shared ngram search: write_offset=ori_seq_len_this_time (append to
+    // existing MTP draft tokens), min_ngram_size is configurable.
+    ngram_search_batch_item(cur_input_ids,
+                            cur_input_ids_len,
+                            cur_pre_ids,
+                            cur_step_idx,
+                            cur_draft_tokens,
+                            &seq_lens_this_time[batch_idx],
+                            max_ngram_size,
+                            min_ngram_size,
+                            max_draft_tokens_query,
+                            /*write_offset=*/ori_seq_len_this_time);
   }
 }
 

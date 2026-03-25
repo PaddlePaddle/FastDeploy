@@ -17,6 +17,7 @@
 #include <cstring>
 #include <string>
 #include "paddle/extension.h"
+#include "ngram_match_common.cuh"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
@@ -230,67 +231,18 @@ __global__ void ngram_match_kernel(const int64_t *input_ids,
       continue;
     }
 
-    for (int ngram_size = max_ngram_size; ngram_size > 0; --ngram_size) {
-      if (cur_step_idx < ngram_size) continue;
-
-      const int64_t *ngram = cur_pre_ids + (cur_step_idx + 1 - ngram_size);
-
-      // Search in input_ids (prompt tokens)
-      bool match_input = false;
-      for (int64_t i = 0; i <= cur_input_ids_len - ngram_size; ++i) {
-        bool match = true;
-        for (int j = 0; j < ngram_size; j++) {
-          if (ngram[j] != cur_input_ids[i + j]) {
-            match = false;
-            break;
-          }
-        }
-        if (match) {
-          int64_t start_idx = i + ngram_size;
-          int64_t end_idx =
-              min(start_idx + static_cast<int64_t>(max_draft_tokens),
-                  cur_input_ids_len);
-          if (start_idx >= end_idx) continue;
-
-          int64_t n = end_idx - start_idx;
-          seq_lens_this_time[batch_idx] = static_cast<int32_t>(n + 1);
-          for (int64_t k = 0; k < n; k++) {
-            cur_draft_tokens[1 + k] = cur_input_ids[start_idx + k];
-          }
-          ngram_size = 0;
-          match_input = true;
-          break;
-        }
-      }
-
-      // Search in pre_ids (previously generated tokens)
-      if (!match_input) {
-        for (int64_t i = 0; i <= cur_step_idx - ngram_size; ++i) {
-          bool match = true;
-          for (int j = 0; j < ngram_size; j++) {
-            if (ngram[j] != cur_pre_ids[i + j]) {
-              match = false;
-              break;
-            }
-          }
-          if (match) {
-            int64_t start_idx = i + ngram_size;
-            int64_t end_idx =
-                min(start_idx + static_cast<int64_t>(max_draft_tokens),
-                    cur_step_idx);
-            int64_t n = end_idx - start_idx;
-            if (start_idx >= end_idx) continue;
-
-            seq_lens_this_time[batch_idx] = static_cast<int32_t>(n + 1);
-            for (int64_t k = 0; k < n; k++) {
-              cur_draft_tokens[1 + k] = cur_pre_ids[start_idx + k];
-            }
-            ngram_size = 0;
-            break;
-          }
-        }
-      }
-    }
+    // Shared ngram search: write_offset=1 (first token is the verified token),
+    // min_ngram_size=1 (search down to unigrams).
+    ngram_search_batch_item(cur_input_ids,
+                            cur_input_ids_len,
+                            cur_pre_ids,
+                            cur_step_idx,
+                            cur_draft_tokens,
+                            &seq_lens_this_time[batch_idx],
+                            max_ngram_size,
+                            /*min_ngram_size=*/1,
+                            max_draft_tokens,
+                            /*write_offset=*/1);
   }
 }
 
