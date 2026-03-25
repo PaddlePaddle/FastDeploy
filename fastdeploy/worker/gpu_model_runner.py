@@ -2870,15 +2870,15 @@ class GPUModelRunner(ModelRunnerBase):
         return self.dynamic_weight_manager.update_weights_by_rdma(version, rsync_config)
 
     def sleep(self, tags):
-        if self.is_sleeping:
-            logger.info("GPU model runner is already sleeping, no need to sleep again!")
-            return
 
         logger.info(f">>> start offloading memory, tags: {tags}")
         start_time = time.perf_counter()
 
         # Clear weights, deepep_buffer, cudagraph, etc.
         if "weight" in tags.split(","):
+            if self.is_weight_sleeping:
+                logger.info("GPU model runner's weight is already sleeping, no need to sleep again!")
+                return
             if self.use_cudagraph:
                 self.model.clear_grpah_opt_backend()
             if self.fd_config.parallel_config.enable_expert_parallel:
@@ -2890,6 +2890,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Clear KV cache
         if "kv_cache" in tags.split(","):
+            if self.is_kvcache_sleeping:
+                logger.info("GPU model runner's kv cache is already sleeping, no need to sleep again!")
+                return
             if self.speculative_method in ["mtp"]:
                 self.proposer.clear_mtp_cache()
             self.clear_cache()
@@ -2900,9 +2903,6 @@ class GPUModelRunner(ModelRunnerBase):
         print_gpu_memory_use(f"After offloading memory [{tags}]", self.local_rank, self.device_id)
 
     def wakeup(self, tags):
-        if not self.is_sleeping:
-            logger.info("GPU model runner is not sleeping, no need to wakeup!")
-            return
 
         if tags == "weight" and self.use_cudagraph and self.is_kvcache_sleeping:
             raise RuntimeError(
@@ -2921,6 +2921,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Reinitialize KV cache
         if "kv_cache" in tags.split(","):
+            if not self.is_kvcache_sleeping:
+                logger.info("GPU model runner's kv cache is not sleeping, no need to wakeup!")
+                return
             if self.speculative_method in ["mtp"]:
                 self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
             self.initialize_kv_cache()
@@ -2928,6 +2931,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Reload weights, deepep_buffer, cudagraph, etc.
         if "weight" in tags.split(","):
+            if not self.is_weight_sleeping:
+                logger.info("GPU model runner's weight is not sleeping, no need to wakeup!")
+                return
             if self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
                 self.dynamic_weight_manager.restart_communication_group()
             if self.fd_config.parallel_config.enable_expert_parallel:
