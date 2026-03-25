@@ -69,7 +69,7 @@ from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
-from fastdeploy.utils import get_logger, optional_type
+from fastdeploy.utils import all_gather_values, get_logger, optional_type
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -172,6 +172,7 @@ class PaddleDisWorkerProc:
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule
+        self.cached_control_reqs = []
 
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
@@ -581,23 +582,33 @@ class PaddleDisWorkerProc:
                 if len(control_reqs) > 0:
                     logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
                     for control_req in control_reqs:
-                        self.run_control_method(control_req)
-                        self._tp_barrier_wait() if tp_size > 1 else None
+                        if self.parallel_config.use_ep:
+                            self.cached_control_reqs.append(control_req)
+                            logger.info(f"Rank: {self.local_rank} cached ep control request: {control_req}")
+                        else:
+                            self.run_control_method(control_req)
+                            self._tp_barrier_wait() if tp_size > 1 else None
 
-                # Count prefill requests in current batch
-                num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
-                num_scheduled_requests = len(req_dicts)
-                scheduled_request_ids = [req.request_id for req in req_dicts]
-                logger.info(
-                    f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
-                    f"max_occupied_batch_index: {max_occupied_batch_index}, "
-                    f"num_scheduled_requests: {num_scheduled_requests}, "
-                    f"scheduled_request_ids: {scheduled_request_ids}"
-                )
+                if len(req_dicts) > 0:
+                    # Count prefill requests in current batch
+                    num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
+                    num_scheduled_requests = len(req_dicts)
+                    scheduled_request_ids = [req.request_id for req in req_dicts]
+                    logger.info(
+                        f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
+                        f"max_occupied_batch_index: {max_occupied_batch_index}, "
+                        f"num_scheduled_requests: {num_scheduled_requests}, "
+                        f"scheduled_request_ids: {scheduled_request_ids}"
+                    )
 
-                # Process prefill inputs
-                if req_dicts:
+                    # Process prefill inputs
                     self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+
+            # Let the ep group run control method synchronically
+            if self.parallel_config.use_ep:
+                pendings = all_gather_values(len(self.cached_control_reqs), self.parallel_config.ep_group)
+                if all([p > 0 for p in pendings]):
+                    self.run_control_method(self.cached_control_reqs.pop(0))
 
             if (
                 not self.parallel_config.use_ep
@@ -614,9 +625,7 @@ class PaddleDisWorkerProc:
                 and hasattr(self.worker.model_runner, "is_sleeping")
                 and self.worker.model_runner.is_sleeping
             ):
-                if tp_size > 1:
-                    self._tp_barrier_wait() if tp_size > 1 else None
-                time.sleep(0.001)
+                self._tp_barrier_wait() if tp_size > 1 else None
                 continue
 
             # Execute model to generate token. The generated token will be written to the buffer.
