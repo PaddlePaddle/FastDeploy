@@ -15,7 +15,6 @@
 """
 
 import os
-import threading
 from typing import Callable, Optional
 
 import paddle
@@ -31,7 +30,6 @@ from fastdeploy.model_executor.utils import (
     free_tensor,
     set_weight_attrs,
 )
-from fastdeploy.worker.tbo import let_another_thread_run
 
 from .quant_base import QuantConfigBase, QuantMethodBase
 
@@ -118,24 +116,6 @@ def call_depermute_prefill_combine(
     results = depermute_prefill_combine(x, indice_map, topk_weights, num_worst_tokens)
 
     return results
-
-
-def _perm(tensor, *dims):
-    try:
-        return tensor.transpose(list(dims))
-    except TypeError:
-        return tensor.permute(*dims)
-
-
-def _get_cute_dtype(input_tensor) -> str:
-    s = str(input_tensor.dtype).split(".")[-1]
-    if s == "bfloat16":
-        return "bfloat16"
-    if s == "float16":
-        return "float16"
-    if s == "float32":
-        return "float32"
-    raise ValueError(f"Unsupported cute dtype {input_tensor.dtype}")
 
 
 def next_power_of_2(n: int):
@@ -690,18 +670,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             previous_event=event,
         )
 
-        if self.ep_prefill_runner.num_worst_tokens > 0:
-            let_another_thread_run()
-
-        thread_name = threading.current_thread().name
-
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
-
-        global global_values
-
-        if thread_name not in global_values:
-            global_values[thread_name] = {}
 
         # nvfp4 dispatch returns a plain BF16 tensor (no fp8 scale), unlike deepgemm which returns (value, scale) tuple
         recv_x_value = recv_x
@@ -765,13 +735,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         # 4. EP combine
         event = deep_ep.Buffer.capture()
-        if self.ep_prefill_runner.num_worst_tokens <= 0:
-            let_another_thread_run()
 
         tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
-
-        if self.ep_prefill_runner.num_worst_tokens > 0:
-            let_another_thread_run()
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
@@ -812,7 +777,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             a2_global_scale=layer.down_proj_input_scale_quant.expand([num_experts]),
             w2_blockscale=layer.down_proj_blockscale_swizzled,
             w2_alpha=layer.g2_alphas,
-            masked_m=token_nums_per_expert.cast(paddle.int32),
+            masked_m=token_nums_per_expert,
         )
 
         out = self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)

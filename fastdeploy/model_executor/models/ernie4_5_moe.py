@@ -491,8 +491,7 @@ class Ernie4_5_Model(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        if len(ids_remove_padding) > 1:
-            logger.info(f"ids_remove_padding:{ids_remove_padding}")
+
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:

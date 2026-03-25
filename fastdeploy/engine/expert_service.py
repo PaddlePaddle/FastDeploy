@@ -79,15 +79,16 @@ class ExpertService:
             self.do_profile = False
 
         # Update config for the current dp process
-        self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
-        self.cfg.postprocess_devices_and_ports()
-        self.llm_logger.info(
-            f"Update config for the current dp process: "
-            f"local_engine_worker_queue_port: {self.cfg.parallel_config.local_engine_worker_queue_port} "
-            f"local_cache_queue_port: {self.cfg.cache_config.local_cache_queue_port} "
-            f"local_pd_comm_port: {self.cfg.cache_config.local_pd_comm_port} "
-            f"local_rdma_comm_ports: {self.cfg.cache_config.local_rdma_comm_ports} "
-        )
+        if not envs.FD_ENABLE_MULTI_API_SERVER:
+            self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
+            self.cfg.postprocess_devices_and_ports()
+            self.llm_logger.info(
+                f"Update config for the current dp process: "
+                f"local_engine_worker_queue_port: {self.cfg.parallel_config.local_engine_worker_queue_port} "
+                f"local_cache_queue_port: {self.cfg.cache_config.local_cache_queue_port} "
+                f"local_pd_comm_port: {self.cfg.cache_config.local_pd_comm_port} "
+                f"local_rdma_comm_ports: {self.cfg.cache_config.local_rdma_comm_ports} "
+            )
 
         self.engine = EngineService(self.cfg, start_queue)
         if self.cfg.scheduler_config.name == "splitwise":

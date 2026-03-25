@@ -23,8 +23,6 @@ from flashinfer import (
 )
 from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
 
-_DEBUG_MOE = True  # set False to disable after issue is resolved
-
 
 def _dtype_str(dtype) -> str:
     """Normalize dtype to string, handling both paddle and torch proxy dtypes."""
@@ -132,16 +130,6 @@ def flashinfer_cutedsl_moe_masked(
             input_global_scale,
         )
 
-    # if _DEBUG_MOE:
-    #     print(f"[MOE_DEBUG] hidden_states[0] abs_max={float(hidden_states[0].abs().max()):.6f} shape={list(hidden_states[0].shape)}")
-    #     print(f"[MOE_DEBUG] input_global_scale={input_global_scale.cast('float32').tolist()}")
-    #     print(f"[MOE_DEBUG] masked_m={masked_m.tolist()}")
-    #     print(f"[MOE_DEBUG] w1_alpha={w1_alpha.tolist()}")
-    #     print(f"[MOE_DEBUG] w2_alpha={w2_alpha.tolist()}")
-    #     print(f"[MOE_DEBUG] a_q abs_max={float(a_q.cast(paddle.uint8).cast(paddle.float32).abs().max()):.6f} shape={list(a_q.shape)}")
-    #     print(f"[MOE_DEBUG] w1 shape={list(w1.shape)}, w1_blockscale shape={list(w1_blockscale.shape)}")
-    #     print(f"[MOE_DEBUG] w2 shape={list(w2.shape)}, w2_blockscale shape={list(w2_blockscale.shape)}")
-
     assert w1.shape[-2] == 2 * n, f"w1 last-2 dim must be 2*n={2*n}, got {w1.shape[-2]}"
     assert w1.shape[-1] * 2 == k, f"w1 last dim * 2 must equal k={k}, got {w1.shape[-1] * 2}"
     assert (
@@ -179,10 +167,6 @@ def flashinfer_cutedsl_moe_masked(
         alpha=w1_alpha.reshape([1, 1, num_experts]),
         alpha_dtype=get_cute_dtype(w1_alpha),
     )  # fills gateup_output in logical [m, 2*n, l]
-
-    # if _DEBUG_MOE:
-    #     _go = gateup_output.transpose([2, 0, 1])  # [E, m, 2*n]
-    #     print(f"[MOE_DEBUG] gateup_output after GEMM1 abs_max={float(_go.abs().max()):.6f}")
 
     # === SiLU + mul + quantize intermediate activations to FP4 ===
     # Input expected as [num_experts, m, 2*n]
@@ -223,7 +207,6 @@ def flashinfer_cutedsl_moe_masked(
             else {}
         ),
     )  # fills out in logical [m, k, l]
-    # print("out", out)
 
     # Return [num_experts, m, k]
     return out.transpose([2, 0, 1])
