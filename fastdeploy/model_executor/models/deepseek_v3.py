@@ -53,6 +53,9 @@ from fastdeploy.model_executor.models.model_base import (
     ModelForCasualLM,
     ModelRegistry,
 )
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda() or current_platform.is_maca():
@@ -471,6 +474,7 @@ import triton
 import triton.language as tl
 
 
+@enable_compat_on_triton_kernel
 @triton.jit()
 def extract_kernel(
     q,

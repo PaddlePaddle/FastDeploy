@@ -515,7 +515,6 @@ def post_process_specualate(
         model_output.stop_flags,  # stop_flags (read-write)
         model_output.seq_lens_this_time,  # seq_lens_this_time
         model_output.is_block_step,  # is_paused
-        model_output.mask_rollback,  # mask_rollback
         model_output.token_ids_all,  # token_ids_all
         model_output.prompt_lens,  # prompt_lens
         model_output.step_idx,  # step_idx (read-write)
