@@ -448,6 +448,15 @@ def test_top_k_top_p_sampling_resets_cuda_rng_in_deterministic_mode(monkeypatch)
     mock_reset.assert_called_once()
 
 
+def mixed_mock(probs, *a, **k):
+    ids = paddle.argmax(probs, axis=-1, keepdim=True)
+    # 1 left non_zero token after renorm → greedy, or → renturn 99
+    non_zero_count = (probs > 0).sum(axis=-1, keepdim=True)
+    sampled = non_zero_count > 1
+    ids = paddle.where(sampled, paddle.to_tensor([[99]], dtype="int64"), ids)
+    return None, ids
+
+
 def test_top_k_1_returns_argmax(monkeypatch):
     """top_k=1 should produce argmax results regardless of FD_DETERMINISTIC_MODE."""
     import sys
@@ -480,7 +489,7 @@ def test_top_k_1_returns_argmax(monkeypatch):
     monkeypatch.setattr(
         sampling_mod.paddle.tensor,
         "top_p_sampling",
-        lambda *a, **k: (None, paddle.to_tensor([[99], [99]], dtype="int64")),
+        mixed_mock,
     )
 
     _, ids_mixed = sampling_mod.top_k_top_p_sampling(probs, top_p, top_k_mixed, top_k_list_mixed)
@@ -519,7 +528,7 @@ def test_top_k_1_returns_argmax_without_deterministic_mode(monkeypatch):
     monkeypatch.setattr(
         sampling_mod.paddle.tensor,
         "top_p_sampling",
-        lambda *a, **k: (None, paddle.to_tensor([[99], [99]], dtype="int64")),
+        mixed_mock,
     )
 
     _, ids_mixed = sampling_mod.top_k_top_p_sampling(probs, top_p, top_k_mixed, top_k_list_mixed)

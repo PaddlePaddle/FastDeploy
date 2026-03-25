@@ -444,6 +444,8 @@ class AsyncLLM(EngineServiceClient):
                     f"Cache request with request_id ({request.get('request_id')}), "
                     f"preprocess time cost {preprocess_cost_time}"
                 )
+            if envs.ZMQ_SEND_BATCH_DATA and self.connection_manager is not None:
+                request["zmq_worker_pid"] = self.connection_manager.worker_pid
             if not envs.ENABLE_V1_DATA_PROCESSOR and self.cfg.model_config.enable_mm:
                 self.request_client.send_pyobj(request)
             else:
@@ -517,9 +519,9 @@ class AsyncLLM(EngineServiceClient):
             dealer, response_queue = await self.connection_manager.get_connection(
                 request_id=conn_request_id, num_choices=num_choices
             )
-
-            for child_request_id in child_request_ids:
-                dealer.write([b"", child_request_id.encode("utf-8")])
+            if not envs.ZMQ_SEND_BATCH_DATA:
+                for child_request_id in child_request_ids:
+                    dealer.write([b"", child_request_id.encode("utf-8")])
 
             # 3) Stream responses from all choices interleaved
             remaining = num_choices

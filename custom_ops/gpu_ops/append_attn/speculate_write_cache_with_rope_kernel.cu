@@ -15,7 +15,7 @@
 #include "speculate_write_cache_with_rope_kernel.h"
 #include "utils.cuh"
 
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void append_speculate_cache_rope_qk_norm(const QKV_TYPE* qkv,
                                          T* key_cache,
                                          T* value_cache,
@@ -58,7 +58,10 @@ void append_speculate_cache_rope_qk_norm(const QKV_TYPE* qkv,
     PD_THROW("append_speculate_cache_rope_qk_norm not support neox rope yet");
   } else {
     dim3 block_dim(kWarpSize, blocksize / kWarpSize, 1);
-    append_speculate_cache_T_rope_qk_norm_kernel<T, PackSize>
+    append_speculate_cache_T_rope_qk_norm_kernel<T,
+                                                 PackSize,
+                                                 QKV_TYPE,
+                                                 EnforceFmulRN>
         <<<grid_size, block_dim, 0, stream>>>(qkv,
                                               key_cache,
                                               value_cache,
@@ -88,7 +91,7 @@ void append_speculate_cache_rope_qk_norm(const QKV_TYPE* qkv,
 }
 
 // rope + write
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void append_speculate_cache_rope(const QKV_TYPE* qkv,
                                  T* key_cache,
                                  T* value_cache,
@@ -127,7 +130,10 @@ void append_speculate_cache_rope(const QKV_TYPE* qkv,
   GetNumBlocks(pack_num, &grid_size);
   if (use_neox_style) {
     if (rotary_dim < dim_head) {
-      append_speculate_cache_neox_partial_rope_kernel<T, PackSize>
+      append_speculate_cache_neox_partial_rope_kernel<T,
+                                                      PackSize,
+                                                      QKV_TYPE,
+                                                      EnforceFmulRN>
           <<<grid_size, threads_per_block, 0, stream>>>(
               qkv,  // [token_num, num_heads + 2 * gqa_group_size, head_size]
               key_cache,
@@ -153,7 +159,10 @@ void append_speculate_cache_rope(const QKV_TYPE* qkv,
               kv_num_heads,
               rope_3d);
     } else {
-      append_speculate_cache_neox_rope_kernel<T, PackSize>
+      append_speculate_cache_neox_rope_kernel<T,
+                                              PackSize,
+                                              QKV_TYPE,
+                                              EnforceFmulRN>
           <<<grid_size, threads_per_block, 0, stream>>>(
               qkv,  // [token_num, num_heads + 2 * gqa_group_size, head_size]
               key_cache,
@@ -179,7 +188,7 @@ void append_speculate_cache_rope(const QKV_TYPE* qkv,
               rope_3d);
     }
   } else {
-    append_speculate_cache_rope_kernel<T, PackSize>
+    append_speculate_cache_rope_kernel<T, PackSize, QKV_TYPE, EnforceFmulRN>
         <<<grid_size, threads_per_block, 0, stream>>>(
             qkv,  // [token_num, num_heads + 2 * gqa_group_size, head_size]
             key_cache,
@@ -206,7 +215,7 @@ void append_speculate_cache_rope(const QKV_TYPE* qkv,
   }
 }
 
-template <typename T, bool IsDynamic = true>
+template <typename T, bool IsDynamic = true, bool EnforceFmulRN = false>
 void append_speculate_cache_fp8_rope(const T* qkv,
                                      uint8_t* key_cache,
                                      uint8_t* value_cache,
@@ -238,7 +247,7 @@ void append_speculate_cache_fp8_rope(const T* qkv,
       ((num_heads + 2 * kv_num_heads) + num_warps - 1) / num_warps * num_warps;
   dim3 grids(token_num, all_warps / num_warps);
 
-  append_clear_cache_int8_block<4>
+  append_clear_cache_int8_block<4, 128>
       <<<grids, num_warps * 32, 0, stream>>>(key_cache,
                                              value_cache,
                                              seq_lens,
@@ -256,7 +265,8 @@ void append_speculate_cache_fp8_rope(const T* qkv,
                                                          0,
                                                          128,
                                                          true,
-                                                         IsDynamic>
+                                                         IsDynamic,
+                                                         EnforceFmulRN>
       <<<grids, num_warps * 32, 0, stream>>>(qkv,
                                              key_cache,
                                              value_cache,
@@ -283,7 +293,10 @@ void append_speculate_cache_fp8_rope(const T* qkv,
                                              rms_norm_eps);
 }
 
-template <typename T, typename QKV_TYPE, bool IsFP8 = false>
+template <typename T,
+          typename QKV_TYPE,
+          bool IsFP8 = false,
+          bool EnforceFmulRN = false>
 void append_speculate_cache_int8_rope(const QKV_TYPE* qkv,
                                       uint8_t* key_cache,
                                       uint8_t* value_cache,
@@ -315,7 +328,7 @@ void append_speculate_cache_int8_rope(const QKV_TYPE* qkv,
       ((num_heads + 2 * kv_num_heads) + num_warps - 1) / num_warps * num_warps;
   dim3 grids(token_num, all_warps / num_warps);
 
-  append_clear_cache_int8_block<4>
+  append_clear_cache_int8_block<4, 128>
       <<<grids, num_warps * 32, 0, stream>>>(key_cache,
                                              value_cache,
                                              seq_lens,
@@ -329,7 +342,12 @@ void append_speculate_cache_int8_rope(const QKV_TYPE* qkv,
                                              block_size,
                                              kv_num_heads);
   if (use_neox_style) {
-    append_speculate_cache_int8_neox_rope_kernel<T, 4>
+    append_speculate_cache_int8_neox_rope_kernel<T,
+                                                 4,
+                                                 0,
+                                                 128,
+                                                 QKV_TYPE,
+                                                 EnforceFmulRN>
         <<<grids, num_warps * 32, 0, stream>>>(qkv,
                                                key_cache,
                                                value_cache,
@@ -354,7 +372,13 @@ void append_speculate_cache_int8_rope(const QKV_TYPE* qkv,
                                                kv_num_heads,
                                                rope_3d);
   } else {
-    append_speculate_cache_int8_rope_kernel<T, 4, 0, 128, QKV_TYPE, IsFP8>
+    append_speculate_cache_int8_rope_kernel<T,
+                                            4,
+                                            0,
+                                            128,
+                                            QKV_TYPE,
+                                            IsFP8,
+                                            EnforceFmulRN>
         <<<grids, num_warps * 32, 0, stream>>>(qkv,
                                                key_cache,
                                                value_cache,
@@ -381,7 +405,7 @@ void append_speculate_cache_int8_rope(const QKV_TYPE* qkv,
   }
 }
 
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void append_speculate_cache_int4_rope(const QKV_TYPE* qkv,
                                       uint8_t* key_cache,
                                       uint8_t* value_cache,
@@ -415,7 +439,7 @@ void append_speculate_cache_int4_rope(const QKV_TYPE* qkv,
       ((num_heads + 2 * kv_num_heads) + num_warps - 1) / num_warps * num_warps;
   dim3 grids(token_num, all_warps / num_warps);
 
-  append_clear_cache_int4_block<4>
+  append_clear_cache_int4_block<4, 128>
       <<<grids, num_warps * 32, 0, stream>>>(key_cache,
                                              value_cache,
                                              seq_lens,
@@ -429,7 +453,12 @@ void append_speculate_cache_int4_rope(const QKV_TYPE* qkv,
                                              block_size,
                                              kv_num_heads);
   if (use_neox_style) {
-    append_speculate_cache_int4_neox_rope_kernel<T, 4>
+    append_speculate_cache_int4_neox_rope_kernel<T,
+                                                 4,
+                                                 0,
+                                                 128,
+                                                 QKV_TYPE,
+                                                 EnforceFmulRN>
         <<<grids, num_warps * 32, 0, stream>>>(qkv,
                                                key_cache,
                                                value_cache,
@@ -456,7 +485,12 @@ void append_speculate_cache_int4_rope(const QKV_TYPE* qkv,
                                                kv_num_heads,
                                                rope_3d);
   } else {
-    append_speculate_cache_int4_rope_kernel<T, 4>
+    append_speculate_cache_int4_rope_kernel<T,
+                                            4,
+                                            0,
+                                            128,
+                                            QKV_TYPE,
+                                            EnforceFmulRN>
         <<<grids, num_warps * 32, 0, stream>>>(qkv,
                                                key_cache,
                                                value_cache,
@@ -484,7 +518,7 @@ void append_speculate_cache_int4_rope(const QKV_TYPE* qkv,
                                                rope_3d);
   }
 }
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN>
 void SpeculateWriteCacheWithRoPEKernel(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,
@@ -549,7 +583,7 @@ void SpeculateWriteCacheWithRoPEKernel(
   }
   if (q_norm_weight && k_norm_weight) {
     if (cache_quant_type_str == "none") {
-      append_speculate_cache_rope_qk_norm(
+      append_speculate_cache_rope_qk_norm<DataType_, QKV_TYPE, EnforceFmulRN>(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
           reinterpret_cast<DataType_*>(key_cache_out->data<T>()),
           reinterpret_cast<DataType_*>(value_cache_out->data<T>()),
@@ -580,7 +614,7 @@ void SpeculateWriteCacheWithRoPEKernel(
           rms_norm_eps,
           rope_3d);
     } else if (cache_quant_type_str == "block_wise_fp8") {
-      append_speculate_cache_fp8_rope<DataType_, true>(
+      append_speculate_cache_fp8_rope<DataType_, true, EnforceFmulRN>(
           reinterpret_cast<const DataType_*>(qkv_ptr),
           key_cache_out->data<uint8_t>(),
           value_cache_out->data<uint8_t>(),
@@ -610,7 +644,7 @@ void SpeculateWriteCacheWithRoPEKernel(
           rope_3d,
           rms_norm_eps);
     } else if (cache_quant_type_str == "cache_fp8") {
-      append_speculate_cache_fp8_rope<DataType_, false>(
+      append_speculate_cache_fp8_rope<DataType_, false, EnforceFmulRN>(
           reinterpret_cast<const DataType_*>(qkv_ptr),
           key_cache_out->data<uint8_t>(),
           value_cache_out->data<uint8_t>(),
@@ -648,7 +682,7 @@ void SpeculateWriteCacheWithRoPEKernel(
 
   } else {
     if (cache_quant_type_str == "none") {
-      append_speculate_cache_rope(
+      append_speculate_cache_rope<DataType_, QKV_TYPE, EnforceFmulRN>(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
           reinterpret_cast<DataType_*>(key_cache_out->data<T>()),
           reinterpret_cast<DataType_*>(value_cache_out->data<T>()),
@@ -677,7 +711,10 @@ void SpeculateWriteCacheWithRoPEKernel(
           use_neox_rotary_style,
           rope_3d);
     } else if (cache_quant_type_str == "cache_int8") {
-      append_speculate_cache_int8_rope(
+      append_speculate_cache_int8_rope<DataType_,
+                                       QKV_TYPE,
+                                       false,
+                                       EnforceFmulRN>(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
           key_cache_out->data<uint8_t>(),
           value_cache_out->data<uint8_t>(),
@@ -711,7 +748,10 @@ void SpeculateWriteCacheWithRoPEKernel(
           use_neox_rotary_style,
           rope_3d);
     } else if (cache_quant_type_str == "cache_fp8") {
-      append_speculate_cache_int8_rope<DataType_, QKV_TYPE, true>(
+      append_speculate_cache_int8_rope<DataType_,
+                                       QKV_TYPE,
+                                       true,
+                                       EnforceFmulRN>(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
           key_cache_out->data<uint8_t>(),
           value_cache_out->data<uint8_t>(),
@@ -745,7 +785,7 @@ void SpeculateWriteCacheWithRoPEKernel(
           use_neox_rotary_style,
           rope_3d);
     } else if (cache_quant_type_str == "block_wise_fp8") {
-      append_speculate_cache_fp8_rope(
+      append_speculate_cache_fp8_rope<DataType_, true, EnforceFmulRN>(
           reinterpret_cast<const DataType_*>(qkv_ptr),
           key_cache_out->data<uint8_t>(),
           value_cache_out->data<uint8_t>(),
@@ -775,7 +815,7 @@ void SpeculateWriteCacheWithRoPEKernel(
           rope_3d,
           rms_norm_eps);
     } else if (cache_quant_type_str == "cache_int4_zp") {
-      append_speculate_cache_int4_rope(
+      append_speculate_cache_int4_rope<DataType_, QKV_TYPE, EnforceFmulRN>(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
           key_cache_out->data<uint8_t>(),
           value_cache_out->data<uint8_t>(),

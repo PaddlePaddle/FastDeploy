@@ -266,19 +266,24 @@ class LLMEngine:
         # TODO 输入输出长度确认
 
         if sampling_params is not None:
-            task.update(asdict(sampling_params))
+            if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
+                sampling_params.temperature = 1e-06
+            task.update({k: v for k, v in asdict(sampling_params).items() if v is not None})
+
+        # Prepare chat_template_kwargs before calling process_request_dict
+        chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
+        chat_template_kwargs["chat_template"] = kwargs.get("chat_template")
+        task["chat_template_kwargs"] = chat_template_kwargs
+
+        # Use dict to call process_request_dict
+        task = self.engine.data_processor.process_request_dict(task, self.cfg.model_config.max_model_len)
+
+        # Create Request struct after processing
         request = Request.from_dict(task)
         request.metrics.scheduler_recv_req_time = time.time()
         llm_logger.info(f"Receive request {request}")
-        if sampling_params is not None:
-            if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
-                sampling_params.temperature = 1e-06
-            request.sampling_params = sampling_params
         request.metrics.preprocess_start_time = time.time()
-        chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
-        chat_template_kwargs["chat_template"] = kwargs.get("chat_template")
-        kwargs["chat_template_kwargs"] = chat_template_kwargs
-        request = self.engine.data_processor.process_request(request, self.cfg.model_config.max_model_len, **kwargs)
+
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         request.need_prefill_tokens = request.prompt_token_ids_len
         input_ids_len = request.prompt_token_ids_len
@@ -716,16 +721,18 @@ class LLMEngine:
         for result in self._get_generated_tokens(req_id):
             is_end = result.finished
             if stream and not is_end:
-                processed = self.engine.data_processor.process_response(result)
-                if processed is None:
+                output = self.engine.data_processor.process_response_dict(
+                    result.to_dict(), stream=False, include_stop_str_in_output=False
+                )
+                if output is None:
                     continue
-                output = processed.to_dict()
                 yield output
 
             # Exit loop if termination condition is met
             if is_end:
-                processed = self.engine.data_processor.process_response(result)
-                output = processed.to_dict()
+                output = self.engine.data_processor.process_response_dict(
+                    result.to_dict(), stream=False, include_stop_str_in_output=False, direct_decode=not stream
+                )
                 llm_logger.debug(f"Generate result: {output}")
                 if not stream:
                     yield output

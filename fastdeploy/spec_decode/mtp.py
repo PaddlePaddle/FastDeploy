@@ -116,8 +116,10 @@ class MTPProposer(Proposer):
         self.pd_disaggregation_mode = fd_config.parallel_config.pd_disaggregation_mode
 
         if current_platform.is_xpu():
+            self._prepare_inputs = self._prepare_inputs_xpu
             self._propose = self._propose_xpu
         elif current_platform.is_cuda() or current_platform.is_maca():
+            self._prepare_inputs = self._prepare_inputs_cuda
             self._propose = self._propose_cuda
         else:
             raise RuntimeError(
@@ -456,13 +458,17 @@ class MTPProposer(Proposer):
             }
         )
 
-    def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
+    def insert_tasks_v1(
+        self, req_dicts: List[Request], num_running_requests: int, target_model_index_to_batch_id: dict = {}
+    ):
 
         if "caches" not in self.model_inputs:
             self.initialize_kv_cache()
         req_len = len(req_dicts)
         self.model_inputs["num_running_requests"] = num_running_requests
         self.model_inputs["running_requests_ids"] = range(num_running_requests)
+        if target_model_index_to_batch_id:
+            self.model_inputs.index_to_batch_id = dict(target_model_index_to_batch_id)
         for i in range(req_len):
             request = req_dicts[i]
             logger.debug(f"{i}th request-{request.request_id}: {request}")
@@ -504,9 +510,12 @@ class MTPProposer(Proposer):
                             inputs["attention_mask_offset"][prefill_start_index:prefill_end_index], dtype="int32"
                         )
                     )
-                    self.model_inputs["attn_mask_offsets_decoder"][idx : idx + 1] = (
-                        inputs["attention_mask_offset"][prefill_end_index - 1] + 1
-                    )
+                    # GPU don't need it anymore
+                    # NOTE: XPU backend needs decoder attention mask offset; GPU backend does not use it
+                    if current_platform.is_xpu():
+                        self.model_inputs["attn_mask_offsets_decoder"][idx : idx + 1] = (
+                            inputs["attention_mask_offset"][prefill_end_index - 1] + 1
+                        )
                 if (
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generates first token
@@ -701,10 +710,53 @@ class MTPProposer(Proposer):
         else:
             return 0
 
-    def _prepare_inputs(self, full_hidden_states):
+    def _prepare_inputs_cuda(self, full_hidden_states):
         """
         Prepare MTP inputs
+
+        MTP state (seq_lens_decoder, step_idx) is "shadow state":
+        - Initialized from target model state each round
+        - Used for MTP forward, but not committed until verify
+        - No rollback needed since it's always re-initialized
         """
+
+        draft_model_preprocess(
+            self.model_inputs["draft_tokens"],
+            self.model_inputs["input_ids"],
+            self.model_inputs["stop_flags"],
+            self.model_inputs["seq_lens_this_time"],
+            self.model_inputs["seq_lens_encoder"],
+            self.model_inputs["seq_lens_decoder"],
+            self.model_inputs["step_idx"],
+            self.model_inputs["not_need_stop"],
+            self.model_inputs["pre_ids"],
+            self.target_model_inputs["accept_tokens"],
+            self.target_model_inputs["accept_num"],
+            self.target_model_inputs["seq_lens_encoder"],
+            self.target_model_inputs["seq_lens_decoder"],
+            self.target_model_inputs["step_idx"],
+            self.target_model_inputs["stop_flags"],
+            self.model_inputs["max_dec_len"],
+            self.target_model_inputs["draft_tokens"],
+            self.num_model_steps,
+            self.role == "prefill",  # is_splitwise_prefill
+        )
+
+        target_hidden_states = eagle_get_hidden_states(
+            full_hidden_states,
+            self.model_inputs["seq_lens_this_time"],
+            self.model_inputs["seq_lens_encoder"],
+            self.model_inputs["seq_lens_decoder"],
+            self.model_inputs["stop_flags"],
+            self.target_model_inputs["accept_num"],
+            self.target_model_inputs["seq_lens_this_time"],
+            self.target_model_inputs["seq_lens_encoder"],
+            self.num_model_steps,
+        )
+
+        self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
+
+    def _prepare_inputs_xpu(self, full_hidden_states):
         use_v1_cache_scheduler = bool(envs.ENABLE_V1_KVCACHE_SCHEDULER)
         draft_model_preprocess(
             self.model_inputs["draft_tokens"],
@@ -846,10 +898,8 @@ class MTPProposer(Proposer):
                         self.model_inputs["seq_lens_decoder"],
                         cu_seqlens_q,
                         self.model_inputs["attn_mask_offsets_full"],
-                        self.model_inputs["attn_mask_offsets_decoder"],
                         self.model_inputs["is_block_step"],
                         self.model_inputs["decode_states"],
-                        self.model_inputs["mask_rollback"],
                     )
                     self.model_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
 
@@ -962,9 +1012,8 @@ class MTPProposer(Proposer):
                     recover_model_output_map = recover_batch_index_for_output(
                         self.model_inputs,
                         self.model_inputs.index_to_batch_id,
-                        self.model_inputs.enable_pd_reorder[
-                            "batch_token_num", "cu_batch_token_offset", "seq_lens_decoder", "prompt_lens"
-                        ],
+                        self.model_inputs.enable_pd_reorder,
+                        ["batch_token_num", "cu_batch_token_offset", "seq_lens_decoder", "prompt_lens"],
                     )
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
@@ -1081,7 +1130,8 @@ class MTPProposer(Proposer):
                     recover_model_output_map = recover_batch_index_for_output(
                         self.model_inputs,
                         self.model_inputs.index_to_batch_id,
-                        self.model_inputs.enable_pd_reorder["batch_token_num", "cu_batch_token_offset"],
+                        self.model_inputs.enable_pd_reorder,
+                        ["batch_token_num", "cu_batch_token_offset"],
                     )
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
@@ -1244,11 +1294,11 @@ class MTPProposer(Proposer):
             raise NotImplementedError
         return cache_type
 
-    def reorder_inputs(self):
+    def reorder_inputs(self, target_model_input_batch):
         """
         Reorder inputs to split prefill and decode.
         """
-        reorder_split_prefill_and_decode_form_index_to_batch_id(self.model_inputs)
+        reorder_split_prefill_and_decode_form_index_to_batch_id(self.model_inputs, target_model_input_batch)
 
     def _share_external_data(self, cache, cache_name, cache_shape):
         if current_platform.is_xpu():

@@ -51,7 +51,10 @@ from fastdeploy.spec_decode import SpecMethod, VerifyStrategy
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import build_sampling_params
+    from fastdeploy.model_executor.ops.gpu import (
+        build_sampling_params,
+        naive_update_model_status,
+    )
 
 
 def top_p_normalize_probs_paddle(
@@ -820,7 +823,9 @@ class SpeculativeSampler(nn.Layer):
                 token_num_output_cpu,
                 increment_value,
             )
-            _, target_tokens = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, topp_seed=topp_seed)
+            _, target_tokens = top_k_top_p_sampling(
+                probs, top_p=top_p, top_k=top_k, top_k_list=sampling_metadata.top_k_list, topp_seed=topp_seed
+            )
         elif self.verify_strategy == VerifyStrategy.GREEDY:
             # GREEDY: deterministic argmax in target_tokens, no candidates needed
             target_tokens = paddle.argmax(probs, axis=-1)
@@ -890,7 +895,8 @@ class SpeculativeSampler(nn.Layer):
         Normal sampling without draft token verification.
 
         Used by NAIVE mode: directly samples from target model output
-        and writes results to share_inputs["accept_tokens"]/["accept_num"].
+        and writes results to share_inputs["accept_tokens"]/["accept_num"]
+        via naive_update_model_status (scatter by cu_seqlens_q_output).
 
         Args:
             probs: Target model softmax output
@@ -913,8 +919,15 @@ class SpeculativeSampler(nn.Layer):
             topp_seed=sampling_metadata.seed,
         )
 
-        # For NAIVE mode: write directly to accept_tokens/accept_num
-        share_inputs["accept_tokens"][: next_tokens.shape[0], 0] = next_tokens.squeeze(-1)
+        # Scatter sampled tokens into accept_tokens using cu_seqlens_q_output to
+        # correctly handle mixed prefill+decode batches where token index != batch index.
+        naive_update_model_status(
+            share_inputs["accept_tokens"],
+            share_inputs["accept_num"],
+            share_inputs["seq_lens_this_time"],
+            next_tokens.squeeze(-1),
+            share_inputs["cu_seqlens_q_output"],
+        )
 
         return SamplerOutput(
             sampled_token_ids=share_inputs["accept_tokens"],
@@ -1071,7 +1084,9 @@ class SpeculativeSampler(nn.Layer):
             paddle.reshape(share_inputs["seq_lens_this_time"], shape=[-1]),
             paddle.reshape(share_inputs["seq_lens_encoder"], shape=[-1]),
         )
-        _, sampled_token_ids = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, topp_seed=topp_seed)
+        _, sampled_token_ids = top_k_top_p_sampling(
+            probs, top_p=top_p, top_k=top_k, top_k_list=sampling_metadata.top_k_list, topp_seed=topp_seed
+        )
 
         verify_scores, verify_tokens, actual_candidate_len = top_p_candidates(
             probs,
