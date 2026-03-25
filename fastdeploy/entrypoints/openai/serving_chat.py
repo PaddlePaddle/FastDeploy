@@ -418,6 +418,8 @@ class OpenAIServingChat:
                     delta_message = DeltaMessage(
                         reasoning_content=output["reasoning_content"],
                         tool_calls=output["tool_calls"],
+                        prompt_token_ids=None,
+                        completion_token_ids=None,
                     )
 
                     if response_processor.enable_multimodal_content():
