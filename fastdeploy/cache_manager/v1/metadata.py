@@ -225,6 +225,8 @@ class BlockNode:
         hash_value: Hash value for prefix matching
         cache_status: Current cache status (DEVICE/HOST/SWAP_TO_HOST/SWAP_TO_DEVICE)
         last_access_time: Last access timestamp (defaults to current time on creation)
+        backuped: Whether this block has a backup on host memory
+        host_block_id: Host block ID where the backup is stored (if backuped=True)
     """
 
     node_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -237,6 +239,11 @@ class BlockNode:
     hash_value: Optional[str] = None
     cache_status: CacheStatus = CacheStatus.DEVICE
     last_access_time: float = field(default_factory=time.time)
+    # Backup 相关字段
+    backuped: bool = False  # 是否已有备份
+    host_block_id: Optional[int] = None  # 备份所在的 host block id
+    # write_through_selective 策略相关
+    hit_count: int = 0  # 访问次数，达到阈值后触发 backup
 
     def __post_init__(self):
         """Initialize instance with current time if last_access_time not set."""

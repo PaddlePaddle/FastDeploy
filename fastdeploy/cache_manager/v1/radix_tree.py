@@ -2,6 +2,7 @@
 RadixTree implementation for prefix matching in KV cache.
 """
 
+import heapq
 import threading
 from typing import Dict, List, Optional, Tuple
 
@@ -128,18 +129,27 @@ class RadixTree:
        -> These states are skipped, prefix match stops at these nodes
     """
 
-    def __init__(self, enable_host_cache: bool = False):
+    def __init__(
+        self,
+        enable_host_cache: bool = False,
+        write_policy: str = "write_through",
+    ):
         """
         Initialize the radix tree.
 
         Args:
             enable_host_cache: If True, evict() moves nodes to HOST state
                               instead of removing them from tree.
+            write_policy: Write policy for backup to lower tier.
+                          - "write_through": Every matched node triggers backup check
+                          - "write_through_selective": Only nodes with hit_count >= threshold trigger backup
+                          - "write_back": Backup only when evicted (not implemented yet)
         """
         self._root = BlockNode()
         self._lock = threading.RLock()
         self._node_count = 1  # Root node
         self._enable_host_cache = enable_host_cache
+        self._write_policy = write_policy
 
         # Use dict for O(1) add/remove instead of heap's O(n) removal
         # Format: {node_id: (last_access_time, node)}
@@ -267,6 +277,7 @@ class RadixTree:
         with self._lock:
             for node in nodes:
                 node.increment_ref()
+                node.hit_count += 1
                 node.touch()
                 self._remove_from_evictable(node)
 
@@ -342,28 +353,50 @@ class RadixTree:
         if num_blocks == 0:
             return []
 
-        evicted_block_ids = []
-
         with self._lock:
             if len(self._evictable_host) < num_blocks:
                 return None
 
-            for _ in range(num_blocks):
-                # Find LRU node (smallest last_access_time)
-                lru_node_id = min(self._evictable_host.keys(),
-                                  key=lambda nid: self._evictable_host[nid][0])
-                _, node = self._evictable_host.pop(lru_node_id)
+            nodes = self._get_lru_nodes(self._evictable_host, num_blocks)
+            evicted_block_ids = []
 
+            for node in nodes:
                 logger.debug(
                     f"[DEBUG] evict_host_nodes: -HOST block_id={node.block_id}, "
                     f"device={len(self._evictable_device)}, "
                     f"host={len(self._evictable_host)}"
                 )
-
                 self._remove_node_from_tree(node)
                 evicted_block_ids.append(node.block_id)
 
         return evicted_block_ids
+
+    def _get_lru_nodes(
+        self,
+        evictable_dict: Dict[str, Tuple[float, BlockNode]],
+        num_blocks: int,
+    ) -> List[BlockNode]:
+        """
+        Get the coldest (LRU) nodes from an evictable dict.
+
+        Args:
+            evictable_dict: The evictable dict to get nodes from (_evictable_device or _evictable_host).
+            num_blocks: Number of nodes to get.
+
+        Returns:
+            List of BlockNode objects in LRU order (coldest first).
+        """
+        if num_blocks <= 0 or not evictable_dict:
+            return []
+
+        smallest = heapq.nsmallest(
+            min(num_blocks, len(evictable_dict)), evictable_dict.items(), key=lambda item: item[1][0]
+        )
+
+        nodes = [node for _, (_, node) in smallest]
+        for node_id, _ in smallest:
+            del evictable_dict[node_id]
+        return nodes
 
     def evict_device_nodes(
         self,
@@ -385,24 +418,19 @@ class RadixTree:
         if num_blocks == 0:
             return []
 
-        evicted_block_ids = []
-
         with self._lock:
             if len(self._evictable_device) < num_blocks:
                 return None
 
-            for _ in range(num_blocks):
-                # Find LRU node (smallest last_access_time)
-                lru_node_id = min(self._evictable_device.keys(),
-                                  key=lambda nid: self._evictable_device[nid][0])
-                _, node = self._evictable_device.pop(lru_node_id)
+            nodes = self._get_lru_nodes(self._evictable_device, num_blocks)
+            evicted_block_ids = []
 
+            for node in nodes:
                 logger.debug(
                     f"[DEBUG] evict_device_nodes: -DEVICE block_id={node.block_id}, "
                     f"device={len(self._evictable_device)}, "
                     f"host={len(self._evictable_host)}"
                 )
-
                 self._remove_node_from_tree(node)
                 evicted_block_ids.append(node.block_id)
 
@@ -455,12 +483,10 @@ class RadixTree:
                 f"host={len(self._evictable_host)}"
             )
 
-            for i in range(num_blocks):
-                # Find LRU node (smallest last_access_time)
-                lru_node_id = min(self._evictable_device.keys(),
-                                  key=lambda nid: self._evictable_device[nid][0])
-                _, node = self._evictable_device.pop(lru_node_id)
+            nodes = self._get_lru_nodes(self._evictable_device, num_blocks)
+            released_block_ids = []
 
+            for i, node in enumerate(nodes):
                 # Save the original device block_id
                 original_block_id = node.block_id
                 new_host_block_id = host_block_ids[i]
@@ -611,3 +637,146 @@ class RadixTree:
                 gpu_block_ids.append(node.block_id)
 
         return gpu_block_ids
+
+    def select_blocks_for_backup(
+        self,
+        needed_num: int,
+    ) -> List[BlockNode]:
+        """
+        Select blocks to backup from evictable device nodes.
+
+        Selects the coldest blocks (LRU) from _evictable_device that don't
+        already have a backup.
+
+        Args:
+            needed_num: Number of blocks to select for backup
+
+        Returns:
+            List of BlockNode objects to backup
+        """
+        if needed_num <= 0:
+            return []
+
+        with self._lock:
+            # Find candidates: evictable device nodes without backup
+            candidates = []
+            for node_id, (_, node) in self._evictable_device.items():
+                if not node.backuped:
+                    candidates.append(node)
+
+            if not candidates:
+                return []
+
+            # Sort by last_access_time (LRU - oldest first)
+            candidates.sort(key=lambda n: n.last_access_time)
+
+            return candidates[:needed_num]
+
+    def backup_blocks(
+        self,
+        nodes: List[BlockNode],
+        host_block_ids: List[int],
+    ) -> List[int]:
+        """
+        Mark blocks as backed up and record their host block IDs.
+
+        This method marks the given nodes as backuped and stores the
+        host block IDs. It does NOT perform the actual data transfer -
+        that should be done by the caller via cache_evict_metadata.
+
+        Args:
+            nodes: List of BlockNode objects to backup
+            host_block_ids: Corresponding host block IDs for the backup
+
+        Returns:
+            List of device block IDs that were marked as backuped
+        """
+        if len(nodes) != len(host_block_ids):
+            return []
+
+        backed_up_ids = []
+
+        with self._lock:
+            for node, host_block_id in zip(nodes, host_block_ids):
+                node.backuped = True
+                node.host_block_id = host_block_id
+                backed_up_ids.append(node.block_id)
+
+                logger.debug(
+                    f"[DEBUG] backup_blocks: block_id={node.block_id}, "
+                    f"host_block_id={host_block_id}, backuped=True"
+                )
+
+        return backed_up_ids
+
+    def get_candidates_for_backup(self, threshold: int, pending_block_ids: list[int] = []) -> List[BlockNode]:
+        """
+        Get nodes that are candidates for backup based on write_through_selective policy.
+
+        Returns evictable device nodes that:
+        1. Have hit_count >= threshold
+        2. Are not already backed up
+
+        Args:
+            threshold: Minimum hit_count required for backup candidacy.
+
+        Returns:
+            List of BlockNode objects that are candidates for backup,
+            sorted by LRU (coldest first).
+        """
+        if self._write_policy != "write_through_selective":
+            return []
+
+        candidates = []
+        with self._lock:
+            for node_id, (_, node) in self._evictable_device.items():
+                if not node.backuped and node.hit_count >= threshold and node.block_id not in pending_block_ids:
+                    candidates.append(node)
+
+            # Sort by LRU (oldest last_access_time first)
+            candidates.sort(key=lambda n: n.last_access_time)
+
+        return candidates
+
+    def evict_nodes_selective(
+        self,
+        num_blocks: int,
+    ) -> List[int]:
+        """
+        Evict device nodes with write_through_selective optimization.
+
+        First selects the coldest (LRU) nodes, then categorizes them:
+        - without_backup: Release directly (cold data, no transfer needed)
+        - with_backup: Update metadata to HOST (data already in host)
+
+        Args:
+            num_blocks: Number of blocks to evict
+
+        Returns:
+            List of released device block IDs
+        """
+        if num_blocks <= 0:
+            return []
+
+        with self._lock:
+            if len(self._evictable_device) < num_blocks:
+                return []
+
+            # Get LRU nodes first (this pops them from _evictable_device)
+            nodes = self._get_lru_nodes(self._evictable_device, num_blocks)
+
+            released_device_ids = []
+            for node in nodes:
+                if node.backuped:
+                    released_device_ids.append(node.block_id)
+
+                    node.cache_status = CacheStatus.HOST
+                    node.block_id = node.host_block_id
+                    node.touch()
+                    # Move to host evictable
+                    self._evictable_host[node.node_id] = (node.last_access_time, node)
+                else:
+                    self._remove_node_from_tree(node)
+                    released_device_ids.append(node.block_id)
+
+            return released_device_ids

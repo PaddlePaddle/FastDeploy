@@ -59,7 +59,6 @@ class BlockPool(ABC):
                 f"free_blocks_count={len(self._free_blocks)}, "
                 f"used_blocks_count={len(self._used_blocks)}, "
                 f"free_blocks_preview={self._free_blocks[:10]}..., "
-                f"used_blocks={sorted(self._used_blocks)}"
             )
 
             if num_blocks > len(self._free_blocks):
@@ -96,7 +95,6 @@ class BlockPool(ABC):
                 f"[DEBUG] BlockPool.release request_blocks={block_indices}, "
                 f"free_blocks_count={len(self._free_blocks)}, "
                 f"used_blocks_count={len(self._used_blocks)}, "
-                f"used_blocks={sorted(self._used_blocks)}"
             )
 
             for idx in block_indices:
@@ -110,8 +108,6 @@ class BlockPool(ABC):
                     logger.error(
                         f"[ERROR] BlockPool.release: block_id={idx} NOT in used_blocks! "
                         f"request_blocks={block_indices}, "
-                        f"used_blocks={sorted(self._used_blocks)}, "
-                        f"free_blocks={sorted(self._free_blocks)}, "
                         f"is_in_free_blocks={idx in self._free_blocks}, "
                         f"is_valid_block_id={0 <= idx < self.num_blocks}"
                     )

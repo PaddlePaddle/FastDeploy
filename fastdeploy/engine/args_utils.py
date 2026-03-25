@@ -250,7 +250,7 @@ class EngineArgs:
     """
     The storage backend for kvcache storage. If set, it will use the kvcache storage backend.
     """
-    write_policy: str = "write_through"
+    write_policy: str = "write_through_selective"
     """
     The policy of write cache to storage.
     """
@@ -1152,7 +1152,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--write-policy",
             type=str,
-            choices=["write_through"],
+            choices=["write_through", "write_through_selective", "write_back"],
             default=EngineArgs.write_policy,
             help="KVCache write policy",
         )

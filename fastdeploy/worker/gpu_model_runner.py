@@ -29,7 +29,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import PREEMPTED_TOKEN_ID, FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.engine.request import ImagePosition, Request, RequestType, BatchRequest
+from fastdeploy.engine.request import BatchRequest, ImagePosition, Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
     sot_warmup_guard,
@@ -754,6 +754,11 @@ class GPUModelRunner(ModelRunnerBase):
             "max_tokens_lst": [],
         }
         if self.enable_cache_manager_v1:
+            if req_dicts.cache_evict_metadata:
+                logger.info(f"cache_evict_metadata: {req_dicts.cache_evict_metadata}")
+                self.cache_controller.evict_device_to_host(req_dicts.cache_evict_metadata)
+                self._pending_evict_handlers.append(req_dicts.cache_evict_metadata.async_handler)
+
             # Wait for all pending evictions (may accumulate across batches)
             evict_wait_start = time.time()
             evict_length = len(self._pending_evict_handlers)
@@ -765,24 +770,13 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info(f"cache evict result: {result}")
             self._pending_evict_handlers.clear()
             evict_wait_ms = (time.time() - evict_wait_start) * 1000
-            if evict_wait_ms > 0.01:
-                logger.info(
-                    f"cache evict wait time: {evict_wait_ms:.2f}ms, "
-                    f"{evict_length} pending evictions"
-                )
+            if evict_wait_ms > 0.1:
+                logger.info(f"cache evict wait time: {evict_wait_ms:.2f}ms, " f"{evict_length} pending evictions")
 
             if req_dicts.cache_swap_metadata:
                 logger.info(f"cache_swap_metadata: {req_dicts.cache_swap_metadata}")
                 self.cache_controller.load_host_to_device(req_dicts.cache_swap_metadata)
-                self._pending_swap_in_handlers.append(
-                    req_dicts.cache_swap_metadata.async_handler
-                )
-            if req_dicts.cache_evict_metadata:
-                logger.info(f"cache_evict_metadata: {req_dicts.cache_evict_metadata}")
-                self.cache_controller.evict_device_to_host(req_dicts.cache_evict_metadata)
-                self._pending_evict_handlers.append(
-                    req_dicts.cache_evict_metadata.async_handler
-                )
+                self._pending_swap_in_handlers.append(req_dicts.cache_swap_metadata.async_handler)
 
         for i in range(req_len):
             request = req_dicts[i]
@@ -2288,7 +2282,7 @@ class GPUModelRunner(ModelRunnerBase):
                 swap_in_handler_count = len(self._pending_swap_in_handlers)
                 self._pending_swap_in_handlers.clear()
                 swap_in_wait_ms = (time.time() - swap_in_wait_start) * 1000
-                if swap_in_wait_ms > 0.01:
+                if swap_in_wait_ms > 0.1:
                     logger.info(
                         f"cache swap in wait time: {swap_in_wait_ms:.2f}ms, "
                         f"handler count: {swap_in_handler_count} (all-layers mode)"
@@ -2321,8 +2315,11 @@ class GPUModelRunner(ModelRunnerBase):
                         time_strs = []
                         for layer_idx in sorted(layer_times.keys()):
                             wait_t = self.cache_controller.get_layer_wait_time(task_id, layer_idx)
-                            complete_t = layer_times[layer_idx]
-                            time_strs.append(f"layer{layer_idx}={wait_t*1000:.1f}ms" if wait_t is not None else f"layer{layer_idx}=N/A")
+                            time_strs.append(
+                                f"layer{layer_idx}={wait_t*1000:.1f}ms"
+                                if wait_t is not None
+                                else f"layer{layer_idx}=N/A"
+                            )
                         logger.info(f"[SwapInTimes] task_id={task_id[:8]}..., " + ", ".join(time_strs))
         return model_output
 

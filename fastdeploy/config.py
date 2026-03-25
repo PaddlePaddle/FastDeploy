@@ -1612,6 +1612,7 @@ class CacheConfig:
         self.disable_chunked_mm_input = False
         self.kvcache_storage_backend = None
         self.write_policy = None
+        self.write_through_threshold = 2
         self.num_cpu_blocks = None
         self.use_mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         self.swap_all_layers = True  # Default to layer-by-layer swap for better performance

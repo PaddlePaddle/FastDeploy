@@ -264,6 +264,16 @@ class Request:
         """Set the block hasher for dynamic hash computation."""
         self._block_hasher = block_hasher
 
+    def pop_cache_swap_metadata(self) -> list[CacheSwapMetadata]:
+        result = self.cache_swap_metadata
+        self.cache_swap_metadata = []
+        return result
+
+    def pop_cache_evict_metadata(self) -> list[CacheSwapMetadata]:
+        result = self.cache_evict_metadata
+        self.cache_evict_metadata = []
+        return result
+
     @classmethod
     def _process_guided_json(cls, r: T):
         guided_json_object = None
@@ -604,10 +614,10 @@ class BatchRequest:
 
     def add_request(self, request):
         if hasattr(request, "cache_swap_metadata") and request.cache_swap_metadata:
-            self.append_swap_metadata(request.cache_swap_metadata)
+            self.append_swap_metadata(request.pop_cache_swap_metadata())
             request.cache_swap_metadata = []
         if hasattr(request, "cache_evict_metadata") and request.cache_evict_metadata:
-            self.append_evict_metadata(request.cache_evict_metadata)
+            self.append_evict_metadata(request.pop_cache_evict_metadata())
             request.cache_evict_metadata = []
 
         self.requests.append(request)

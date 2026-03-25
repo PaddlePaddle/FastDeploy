@@ -21,7 +21,7 @@ import traceback
 from collections import deque
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Union
 
 import numpy as np
@@ -32,14 +32,15 @@ from fastdeploy.cache_manager.multimodal_cache_manager import (
     EncoderCacheManager,
     ProcessorCacheManager,
 )
+from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
 from fastdeploy.config import ErnieArchitectures
 from fastdeploy.engine.request import (
+    BatchRequest,
     ImagePosition,
     Request,
     RequestOutput,
     RequestStatus,
     RequestType,
-    BatchRequest,
 )
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.input.utils import IDS_TYPE_FLAG
@@ -54,46 +55,61 @@ from fastdeploy.utils import download_from_bos, init_bos_client, llm_logger
 
 
 @dataclass
-class ScheduledDecodeTask:
+class ScheduledTaskBase:
+    """
+    Task for Scheduled.
+    """
+
+    idx: int
+    request_id: str
+    task_type: RequestType = RequestType.DECODE
+
+    cache_swap_metadata: list[CacheSwapMetadata] = field(default_factory=list)
+    cache_evict_metadata: list[CacheSwapMetadata] = field(default_factory=list)
+
+    def pop_cache_swap_metadata(self) -> list[CacheSwapMetadata]:
+        result = self.cache_swap_metadata
+        self.cache_swap_metadata = []
+        return result
+
+    def pop_cache_evict_metadata(self) -> list[CacheSwapMetadata]:
+        result = self.cache_evict_metadata
+        self.cache_evict_metadata = []
+        return result
+
+
+@dataclass
+class ScheduledDecodeTask(ScheduledTaskBase):
     """
     Task for allocating new blocks to decode.
     """
 
-    idx: int
-    request_id: str
-    block_tables: list[int]
-    task_type: RequestType = RequestType.DECODE
+    block_tables: list[int] = field(default_factory=list)
 
 
 @dataclass
-class ScheduledPreemptTask:
+class ScheduledPreemptTask(ScheduledTaskBase):
     """
     Task for terminating inference to recycle resource.
     """
 
-    idx: int
-    request_id: str
     task_type: RequestType = RequestType.PREEMPTED
 
 
 @dataclass
-class ScheduledExtendBlocksTask:
+class ScheduledExtendBlocksTask(ScheduledTaskBase):
     """
     Task for allocating new blocks to extend.
     """
 
-    idx: int
-    request_id: str
-    extend_block_tables: list[int]
     task_type: RequestType = RequestType.EXTEND
+    extend_block_tables: list[int] = field(default_factory=list)
 
 
 @dataclass
-class ScheduledAbortTask:
+class ScheduledAbortTask(ScheduledTaskBase):
     """Task for allocating new blocks to skip."""
 
-    idx: int
-    request_id: str
     task_type: RequestType = RequestType.ABORT
 
 
@@ -254,13 +270,29 @@ class ResourceManagerV1(ResourceManager):
         return request
 
     def _prepare_decode_task(self, request):
-        return ScheduledDecodeTask(idx=request.idx, request_id=request.request_id, block_tables=request.block_tables)
+        return ScheduledDecodeTask(
+            idx=request.idx,
+            request_id=request.request_id,
+            block_tables=request.block_tables,
+            cache_swap_metadata=request.pop_cache_swap_metadata(),
+            cache_evict_metadata=request.pop_cache_evict_metadata(),
+        )
 
     def _prepare_preempt_task(self, request):
-        return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
+        return ScheduledPreemptTask(
+            idx=request.idx,
+            request_id=request.request_id,
+            cache_swap_metadata=request.pop_cache_swap_metadata(),
+            cache_evict_metadata=request.pop_cache_evict_metadata(),
+        )
 
     def _prepare_abort_task(self, request):
-        return ScheduledAbortTask(idx=request.idx, request_id=request.request_id)
+        return ScheduledAbortTask(
+            idx=request.idx,
+            request_id=request.request_id,
+            cache_swap_metadata=request.pop_cache_swap_metadata(),
+            cache_evict_metadata=request.pop_cache_evict_metadata(),
+        )
 
     def reschedule_preempt_task(self, request_id, process_func=None):
         with self.lock:
@@ -849,6 +881,8 @@ class ResourceManagerV1(ResourceManager):
                                     idx=request.idx,
                                     request_id=request.request_id,
                                     extend_block_tables=request.extend_block_tables,
+                                    cache_swap_metadata=request.pop_cache_swap_metadata(),
+                                    cache_evict_metadata=request.pop_cache_evict_metadata(),
                                 )
                             )
                             llm_logger.debug(f"extend blocks is {request.extend_block_tables}")
@@ -990,7 +1024,9 @@ class ResourceManagerV1(ResourceManager):
                             continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
 
-                        llm_logger.debug(f"request.request_id {request.request_id} num_new_block {num_new_block}, request.need_prefill_tokens {request.need_prefill_tokens}, request.num_computed_tokens {request.num_computed_tokens}, token_budget {token_budget}")
+                        llm_logger.debug(
+                            f"request.request_id {request.request_id} num_new_block {num_new_block}, request.need_prefill_tokens {request.need_prefill_tokens}, request.num_computed_tokens {request.num_computed_tokens}, token_budget {token_budget}"
+                        )
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             num_new_block
                         )
@@ -1107,6 +1143,17 @@ class ResourceManagerV1(ResourceManager):
             self._log_console_scheduler_metrics(batch_request)
 
             self.update_metrics()
+
+            # Issue pending backup tasks to batch_request
+            # This handles write_through_selective policy by attaching backup tasks
+            # to the batch request, which will be processed by the worker
+            if self.enable_cache_manager_v1 and len(batch_request) > 0:
+                evict_metadata = self.cache_manager.issue_pending_backup_to_batch_request()
+                if evict_metadata:
+                    batch_request.append_evict_metadata([evict_metadata])
+
+            if self.enable_cache_manager_v1:
+                self.cache_manager.check_and_add_pending_backup()
 
             return batch_request, error_reqs
 
