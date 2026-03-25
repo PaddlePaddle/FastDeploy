@@ -802,7 +802,7 @@ class MTPProposer(Proposer):
         """
         PostProcess for generation
         """
-         (
+        draft_model_update(
             sampled_token_ids,
             self.model_inputs["draft_tokens"],
             self.model_inputs["pre_ids"],
