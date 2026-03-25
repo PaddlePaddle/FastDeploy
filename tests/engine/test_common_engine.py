@@ -20,7 +20,7 @@ import threading
 import time
 import types
 import unittest
-from unittest.mock import ANY, MagicMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 import numpy as np
 import paddle
@@ -1091,6 +1091,19 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertEqual(result, {"ok": True})
         self._detach_finalizer(eng)
 
+    def test_control_update_weights_updates_cfg_version(self):
+        eng = self._make_mixed_engine()
+        eng.is_paused = True
+        eng._pause_cond = threading.Condition()
+        eng.cfg.model_config.version = "old-version"
+        eng._call_worker = Mock(return_value=[{"version": "new-version"}, {"ok": True}])
+
+        result = eng._control_update_weights(ControlRequest(request_id="ctrl", method="update_weights"))
+
+        self.assertEqual(result, [{"version": "new-version"}, {"ok": True}])
+        self.assertEqual(eng.cfg.model_config.version, "new-version")
+        self._detach_finalizer(eng)
+
     def test_control_pause_and_resume_paths(self):
         eng = self._make_mixed_engine()
         eng.is_paused = False
@@ -1155,10 +1168,48 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             async def get(self, timeout=None):
                 return Mock(payload=ControlResponse(request_id="req", result={"ok": True}, error_code=200))
 
-        eng._ctrl_worker_output_queues = [DummyQueue()]
+        eng._ctrl_output_queues = {"ctrl_w2e_rank0_6778": DummyQueue()}
         result = eng._call_worker(ControlRequest(request_id="req", method="noop"), timeout=1)
         self.assertEqual(result, [{"ok": True}])
         eng.engine_worker_queue.put_tasks.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_control_sleep_defaults_tags_and_dispatches_cache_transfer(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.cfg.cache_config.num_cpu_blocks = 1
+        eng.engine_worker_queue = Mock()
+        eng.cache_task_queue = Mock()
+        eng.resource_manager.cache_manager.reset = Mock()
+        eng._control_pause = Mock()
+        eng._wait_for_control_responses = AsyncMock(return_value=[{"ok": True}])
+
+        result = eng._control_sleep(ControlRequest(request_id="sleep", method="sleep", args={}))
+
+        self.assertEqual(result, [{"ok": True}])
+        eng._control_pause.assert_called_once_with(None)
+        eng.resource_manager.cache_manager.reset.assert_called_once()
+        eng.engine_worker_queue.put_tasks.assert_called_once()
+        eng.cache_task_queue.put_transfer_task.assert_called_once()
+        sleep_req = eng.engine_worker_queue.put_tasks.call_args.args[0][0][0]
+        self.assertEqual(sleep_req.args["tags"], "weight,kv_cache")
+        self._detach_finalizer(eng)
+
+    def test_control_wakeup_resumes_after_wait(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.cfg.cache_config.num_cpu_blocks = 1
+        eng.engine_worker_queue = Mock()
+        eng.cache_task_queue = Mock()
+        eng._control_resume = Mock()
+        eng._wait_for_control_responses = AsyncMock(return_value=[{"ok": True}])
+
+        result = eng._control_wakeup(ControlRequest(request_id="wakeup", method="wakeup", args={"tags": "kv_cache"}))
+
+        self.assertEqual(result, [{"ok": True}])
+        eng.engine_worker_queue.put_tasks.assert_called_once()
+        eng.cache_task_queue.put_transfer_task.assert_called_once()
+        eng._control_resume.assert_called_once_with(None)
         self._detach_finalizer(eng)
 
     def test_control_update_weights_requires_pause(self):
@@ -1940,68 +1991,121 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         mock_logger.warning.assert_called()
         self._detach_finalizer(eng)
 
-    def test_wait_all_control_responses_success(self):
+    def test_wait_for_control_responses_success(self):
         eng = self._make_mixed_engine()
 
-        eng._ctrl_worker_output_queues = [
-            self._make_ctrl_queue("q0", Mock(request_id="req", error_code=200, result={"ok": True})),
-            self._make_ctrl_queue("q1", Mock(request_id="req", error_code=200, result={"ok": True})),
-        ]
+        eng._ctrl_output_queues = {
+            "ctrl_w2e_rank0_6778": self._make_ctrl_queue(
+                "q0", Mock(request_id="req", error_code=200, result={"ok": True})
+            ),
+            "ctrl_w2e_rank1_6778": self._make_ctrl_queue(
+                "q1", Mock(request_id="req", error_code=200, result={"ok": True})
+            ),
+        }
 
-        results = asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+        results = asyncio.run(eng._wait_for_control_responses("req", timeout=1))
         self.assertEqual(results, [{"ok": True}, {"ok": True}])
         self._detach_finalizer(eng)
 
-    def test_wait_all_control_responses_ignores_mismatch(self):
+    def test_wait_for_control_responses_filters_executors(self):
         eng = self._make_mixed_engine()
 
-        eng._ctrl_worker_output_queues = [
-            self._make_ctrl_queue("q0", Mock(request_id="old", error_code=200, result={"ok": False})),
-            self._make_ctrl_queue("q1", Mock(request_id="req", error_code=200, result={"ok": True})),
-        ]
+        eng._ctrl_output_queues = {
+            "ctrl_w2e_rank0_6778": self._make_ctrl_queue(
+                "worker", Mock(request_id="req", error_code=200, result={"worker": True})
+            ),
+            "ctrl_c2e_rank0_6779": self._make_ctrl_queue(
+                "cache", Mock(request_id="req", error_code=200, result={"cache": True})
+            ),
+        }
 
-        results = asyncio.run(eng._wait_all_control_responses("req", timeout=1))
-        self.assertEqual(results, [{"ok": True}])
+        worker_results = asyncio.run(eng._wait_for_control_responses("req", timeout=1, executors=["worker"]))
+        cache_results = asyncio.run(eng._wait_for_control_responses("req", timeout=1, executors=["cache_transfer"]))
+
+        self.assertEqual(worker_results, [{"worker": True}])
+        self.assertEqual(cache_results, [{"cache": True}])
         self._detach_finalizer(eng)
 
-    def test_wait_all_control_responses_error_paths(self):
+    def test_wait_for_control_responses_ignores_mismatch(self):
         eng = self._make_mixed_engine()
 
-        eng._ctrl_worker_output_queues = [
-            self._make_ctrl_queue("q0", Exception("boom"), payload_wrapped=False),
-        ]
+        class DummyQueue:
+            def __init__(self, name, payloads):
+                self.name = name
+                self.payloads = list(payloads)
+
+            async def get(self, timeout=None):
+                return Mock(payload=self.payloads.pop(0))
+
+        eng._ctrl_output_queues = {
+            "ctrl_w2e_rank0_6778": DummyQueue(
+                "q0",
+                [
+                    Mock(request_id="old", error_code=200, result={"ok": False}),
+                    Mock(request_id="req", error_code=200, result={"ok": "from-q0"}),
+                ],
+            ),
+            "ctrl_w2e_rank1_6778": self._make_ctrl_queue(
+                "q1", Mock(request_id="req", error_code=200, result={"ok": True})
+            ),
+        }
+
+        results = asyncio.run(eng._wait_for_control_responses("req", timeout=1))
+        self.assertEqual(results, [{"ok": "from-q0"}, {"ok": True}])
+        self.assertEqual(
+            eng._ctrl_response_mailboxes["ctrl_w2e_rank0_6778"]["old"].result,
+            {"ok": False},
+        )
+        self._detach_finalizer(eng)
+
+    def test_wait_for_control_responses_error_paths(self):
+        eng = self._make_mixed_engine()
+
+        eng._ctrl_output_queues = {
+            "ctrl_w2e_rank0_6778": self._make_ctrl_queue("q0", Exception("boom"), payload_wrapped=False)
+        }
 
         with self.assertRaises(Exception):
-            asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+            asyncio.run(eng._wait_for_control_responses("req", timeout=1))
         self._detach_finalizer(eng)
 
-    def test_wait_all_control_responses_none_message(self):
+    def test_wait_for_control_responses_none_message(self):
         eng = self._make_mixed_engine()
 
-        eng._ctrl_worker_output_queues = [self._make_ctrl_queue("q0", None, payload_wrapped=False)]
+        eng._ctrl_output_queues = {"ctrl_w2e_rank0_6778": self._make_ctrl_queue("q0", None, payload_wrapped=False)}
 
         with self.assertRaises(Exception):
-            asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+            asyncio.run(eng._wait_for_control_responses("req", timeout=1))
         self._detach_finalizer(eng)
 
-    def test_wait_all_control_responses_error_code(self):
+    def test_wait_for_control_responses_error_code(self):
         eng = self._make_mixed_engine()
 
-        eng._ctrl_worker_output_queues = [
-            self._make_ctrl_queue("q0", ControlResponse(request_id="req", error_code=500, error_message="bad")),
-        ]
+        eng._ctrl_output_queues = {
+            "ctrl_w2e_rank0_6778": self._make_ctrl_queue(
+                "q0", ControlResponse(request_id="req", error_code=500, error_message="bad")
+            )
+        }
 
         with self.assertRaises(Exception):
-            asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+            asyncio.run(eng._wait_for_control_responses("req", timeout=1))
         self._detach_finalizer(eng)
 
-    def test_wait_all_control_responses_timeout(self):
+    def test_wait_for_control_responses_timeout(self):
         eng = self._make_mixed_engine()
-        eng._ctrl_worker_output_queues = [self._make_ctrl_queue("q0", None, payload_wrapped=False)]
+        eng._ctrl_output_queues = {"ctrl_w2e_rank0_6778": self._make_ctrl_queue("q0", None, payload_wrapped=False)}
 
         with patch("fastdeploy.engine.common_engine.asyncio.wait_for", side_effect=asyncio.TimeoutError):
             with self.assertRaises(Exception):
-                asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+                asyncio.run(eng._wait_for_control_responses("req", timeout=1))
+        self._detach_finalizer(eng)
+
+    def test_wait_for_control_responses_without_matching_queues(self):
+        eng = self._make_mixed_engine()
+        eng._ctrl_output_queues = {"ctrl_w2e_rank0_6778": self._make_ctrl_queue("q0", None, payload_wrapped=False)}
+
+        result = asyncio.run(eng._wait_for_control_responses("req", timeout=1, executors=["cache_transfer"]))
+        self.assertIsNone(result)
         self._detach_finalizer(eng)
 
     def test_insert_tasks_prefill_error_and_success(self):
@@ -3254,7 +3358,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         # Lines 1299-1300: try block start + info logging
         info_msgs = [str(c) for c in mock_logger.info.call_args_list]
-        self.assertTrue(any("START run control method" in m for m in info_msgs))
+        self.assertTrue(any("Start to run control method" in m for m in info_msgs))
         # worker_pid should be popped from the map
         self.assertNotIn("ctrl-log", eng.request_worker_map)
         self._detach_finalizer(eng)
