@@ -873,8 +873,14 @@ class MTPProposer(Proposer):
         step_use_cudagraph: bool
             Whether to use cuda graph. Use the target model flag to avoid hanging problems with EP.
         """
+        is_blocking = (
+            (not self.fd_config.scheduler_config.enable_overlap_schedule)
+            or is_dummy_run
+            or self.exist_prefill()
+            or real_bsz == 0
+        )
         for substep in range(self.num_model_steps):
-            if is_dummy_run or self.exist_prefill() or real_bsz == 0:
+            if is_blocking:
                 token_num_cpu = self.model_inputs["seq_lens_this_time"].numpy().sum().item()
             else:
                 if substep == 0:
@@ -970,7 +976,7 @@ class MTPProposer(Proposer):
                     self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
                     self.model_inputs.last_seq_lens_encoder.copy_(self.model_inputs["seq_lens_encoder"], False)
 
-                if is_dummy_run or self.exist_prefill():
+                if is_blocking:
                     self._mtp_input_token_num_event.synchronize()
                     real_num = int(self._mtp_input_token_num_host)
                 else:
@@ -984,7 +990,7 @@ class MTPProposer(Proposer):
                 if self.forward_meta.step_use_cudagraph:
                     model_output = model_output[: self.real_token_num]
 
-                if is_dummy_run or self.exist_prefill():
+                if is_blocking:
                     self._draft_output_token_num_event.synchronize()
                     real_num = int(self._draft_output_token_num_host)
                 else:

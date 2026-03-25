@@ -2163,7 +2163,7 @@ class GPUModelRunner(ModelRunnerBase):
     ) -> None:
 
         if self.speculative_decoding:
-            if self.exist_prefill():
+            if self.exist_prefill() or not self.enable_overlap_schedule:
                 self.output_token_num_event.synchronize()
                 real_output_token_num = int(self._real_output_token_num_host)
             else:

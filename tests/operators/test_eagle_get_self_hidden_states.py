@@ -87,7 +87,7 @@ class TestEagleGetSelfHiddenStates(unittest.TestCase):
 
         last_seq_lens_this_time_tensor = paddle.to_tensor(last_seq_lens_this_time, dtype=paddle.int32)
         seq_lens_this_time_tensor = paddle.to_tensor(seq_lens_this_time, dtype=paddle.int32)
-        step_idx_tensor = paddle.to_tensor(step_idx, dtype=paddle.int64)
+        step_idx_tensor = paddle.to_tensor(step_idx, dtype=paddle.int32)
 
         input = np.random.randint(0, 10, (input_token_num, dim_embed), dtype=np.int32)
         input_tensor = paddle.to_tensor(input, dtype=paddle.float16)
