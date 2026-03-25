@@ -585,11 +585,11 @@ class PaddleDisWorkerProc:
                     paddle.distributed.barrier(self.parallel_config.ep_group)
 
                 req_dicts, control_reqs = [], []
-                assert len(tasks) == 2, f"task_queue.get_tasks() should contain a tuple, ([req1, ...] ,real_bsz), but got len(tasks)={len(tasks)}"
+                assert len(tasks) > 0, f"task_queue.get_tasks() should contain at least one tuple, [([req1, ...] ,real_bsz)], but got len(tasks)={len(tasks)}"
                 # In EP + DP prefill, empty task ([]) is delived in worker to barrier. For empty task, just skip and continue.
-                # tasks contains two part, ([req1, ...] ,real_bsz)
-                # tasks[0] is [req1, ...]
-                # if empty batch is delived, eval(tasks[0][0]) should be False, 
+                # tasks[0] contains two part, ([req1, ...] ,real_bsz)
+                # tasks[0][0] is [req1, ...]
+                # if empty batch is delived, eval(tasks[0][0]) should be False ([]), 
                 # if batch with requests is delived, eval(tasks[0][0]) should be True, then to be processed as below.
                 if tasks[0][0]: 
                     for req_dict, bsz in tasks:
