@@ -238,7 +238,7 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         for i, request_output in enumerate(batch_result_buffer):
             assert isinstance(request_output, RequestOutput)
             assert len(request_output.outputs.token_ids) == accept_num[i]
-            assert len(request_output.outputs.top_logprobs) == 3
+            assert len(request_output.outputs.top_logprobs) == 7
             # tokens, scores, ranks
             assert len(request_output.outputs.top_logprobs[0][0]) == K + 1
             assert len(request_output.outputs.top_logprobs[1][0]) == K + 1
@@ -251,8 +251,8 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         for c in cached_generated_tokens.cache:
             assert isinstance(request_output, RequestOutput)
             assert len(request_output.outputs.token_ids) == accept_num[i]
-            assert len(request_output.outputs.top_logprobs) == 3
-            assert len(request_output.outputs.draft_top_logprobs) == 3
+            assert len(request_output.outputs.top_logprobs) == 7
+            assert len(request_output.outputs.draft_top_logprobs) == 7
             # tokens, scores, ranks
             assert len(request_output.outputs.draft_top_logprobs[0][0]) == K + 1
             assert len(request_output.outputs.draft_top_logprobs[1][0]) == K + 1

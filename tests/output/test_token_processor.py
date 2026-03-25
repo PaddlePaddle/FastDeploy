@@ -55,7 +55,7 @@ class _DummyCfg:
             num_speculative_tokens=2,
             enable_draft_logprob=True,
         )
-        self.model_config = types.SimpleNamespace(enable_logprob=enable_logprob)
+        self.model_config = types.SimpleNamespace(enable_logprob=enable_logprob, compute_logits_stats=False)
         self.scheduler_config = types.SimpleNamespace(name="default", splitwise_role="decode")
         self.cache_config = types.SimpleNamespace(
             enable_prefix_caching=enable_prefix_caching,
