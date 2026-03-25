@@ -211,7 +211,6 @@ def _get_weight_only_method_cls_list():
         )
         from fastdeploy.model_executor.layers.quantization.weight_only import (
             GPUWeightOnlyLinearMethod,
-            GPUWeightOnlyMoEMethod,
         )
 
         weight_only_cls_list = [
@@ -219,7 +218,6 @@ def _get_weight_only_method_cls_list():
             TritonWeightOnlyMoEMethod,
             MarlinWeightOnlyMoEMethod,
             GPUWeightOnlyLinearMethod,
-            GPUWeightOnlyMoEMethod,
         ]
     return weight_only_cls_list
 
