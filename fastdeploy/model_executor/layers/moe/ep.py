@@ -339,9 +339,6 @@ class DeepEPEngine:
                 use_ue8m0=use_ue8m0,
             )
         else:
-            logger.info(f"hidden_states:{hidden_states}")
-            logger.info(f"topk_idx:{topk_idx}")
-            logger.info(f"self.buffer.num_max_dispatch_tokens_per_rank:{self.buffer.num_max_dispatch_tokens_per_rank}")
             (
                 packed_recv_x,
                 recv_expert_count,

@@ -527,7 +527,6 @@ class FuseMoEWrapper(paddle.nn.Layer):
         )
         moe_layer = self.fused_moe
 
-        # 为 NVFP4 直接构造量化权重和尺度，避免依赖离线 checkpoint 结构。
         up_gate_proj_weight = getattr(moe_layer, "up_gate_proj_weight")
         down_proj_weight = getattr(moe_layer, "down_proj_weight")
         up_gate_proj_weight.set_value(
