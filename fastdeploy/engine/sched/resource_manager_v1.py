@@ -398,7 +398,7 @@ class ResourceManagerV1(ResourceManager):
         self.can_relax_prefill_strategy = False
         return can_schedule
 
-    def _get_can_schedule_prefill_threshold_block(self, request, num_chunk_new_block):
+    def _get_can_schedule_prefill_threshold_block(self, num_chunk_new_block):
         if self.can_relax_prefill_strategy:
             can_schedule_block_num_threshold = num_chunk_new_block
         else:
@@ -412,7 +412,7 @@ class ResourceManagerV1(ResourceManager):
         return can_schedule_block_num_threshold
 
     def _update_mm_hashes(self, request):
-        if request.multimodal_inputs is None:
+        if request.multimodal_inputs is None or request.has_update_mm_hashes:
             return
 
         inputs = request.multimodal_inputs
@@ -449,6 +449,8 @@ class ResourceManagerV1(ResourceManager):
         elif inputs.get("mm_positions", None) is None or inputs.get("mm_hashes", None) is None:
             inputs["mm_positions"] = []
             inputs["mm_hashes"] = []
+
+        request.has_update_mm_hashes = True
 
     def _is_mm_request(self, request):
         inputs = request.multimodal_inputs
@@ -941,6 +943,10 @@ class ResourceManagerV1(ResourceManager):
                     request = self.waiting[0]
                     if get_enough_request(request, scheduled_reqs):
                         break
+                    running_req_reserved_block_num = self._get_can_schedule_prefill_threshold_block(0)
+                    if not self.cache_manager.can_allocate_gpu_blocks(running_req_reserved_block_num):
+                        break
+
                     if request.status == RequestStatus.WAITING:
                         result = self.waiting_async_process(request)
                         if result is None:
@@ -963,7 +969,9 @@ class ResourceManagerV1(ResourceManager):
                                 match_token_num, _ = self.cache_manager.pre_match_block_on_gpu(request)
                                 need_prefill_tokens = request.need_prefill_tokens - match_token_num
                                 need_block_num = (need_prefill_tokens + block_size - 1) // block_size
-                                if not self.cache_manager.can_allocate_gpu_blocks(need_block_num):
+                                if not self.cache_manager.can_allocate_gpu_blocks(
+                                    need_block_num + running_req_reserved_block_num
+                                ):
                                     # to prevent block allocation for matching in hierarchical cache and cause dead lock
                                     break
                             success = self.get_prefix_cached_blocks(request)
@@ -988,7 +996,7 @@ class ResourceManagerV1(ResourceManager):
                             continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
-                            request, num_new_block
+                            num_new_block
                         )
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
@@ -1036,7 +1044,9 @@ class ResourceManagerV1(ResourceManager):
                                 match_token_num, _ = self.cache_manager.pre_match_block_on_gpu(request)
                                 need_prefill_tokens = request.need_prefill_tokens - match_token_num
                                 need_block_num = (need_prefill_tokens + block_size - 1) // block_size
-                                if not self.cache_manager.can_allocate_gpu_blocks(need_block_num):
+                                if not self.cache_manager.can_allocate_gpu_blocks(
+                                    need_block_num + running_req_reserved_block_num
+                                ):
                                     # to prevent block allocation for matching in hierarchical cache and cause dead lock
                                     break
                             success = self.get_prefix_cached_blocks(request)
@@ -1054,7 +1064,7 @@ class ResourceManagerV1(ResourceManager):
                             continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
-                            request, num_new_block
+                            num_new_block
                         )
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
