@@ -510,9 +510,12 @@ class MTPProposer(Proposer):
                             inputs["attention_mask_offset"][prefill_start_index:prefill_end_index], dtype="int32"
                         )
                     )
-                    self.model_inputs["attn_mask_offsets_decoder"][idx : idx + 1] = (
-                        inputs["attention_mask_offset"][prefill_end_index - 1] + 1
-                    )
+                    # GPU don't need it anymore
+                    # NOTE: XPU backend needs decoder attention mask offset; GPU backend does not use it
+                    if current_platform.is_xpu():
+                        self.model_inputs["attn_mask_offsets_decoder"][idx : idx + 1] = (
+                            inputs["attention_mask_offset"][prefill_end_index - 1] + 1
+                        )
                 if (
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generates first token
@@ -895,10 +898,8 @@ class MTPProposer(Proposer):
                         self.model_inputs["seq_lens_decoder"],
                         cu_seqlens_q,
                         self.model_inputs["attn_mask_offsets_full"],
-                        self.model_inputs["attn_mask_offsets_decoder"],
                         self.model_inputs["is_block_step"],
                         self.model_inputs["decode_states"],
-                        self.model_inputs["mask_rollback"],
                     )
                     self.model_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
 

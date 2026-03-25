@@ -284,6 +284,7 @@ async def lifespan(app: FastAPI):
     app.state.completion_handler = completion_handler
     app.state.embedding_handler = embedding_handler
     app.state.reward_handler = reward_handler
+    app.state.event_loop = asyncio.get_running_loop()
 
     if llm_engine is not None and not isinstance(llm_engine, AsyncLLM):
         llm_engine.engine.data_processor = engine_client.data_processor
@@ -402,6 +403,44 @@ async def resume(request: Request) -> Response:
 async def is_paused(request: Request) -> Response:
     request_id = f"control-{uuid.uuid4()}"
     control_request = ControlRequest(request_id, "is_paused")
+    control_response = await app.state.engine_client.run_control_method(control_request)
+    return control_response.to_api_json_response()
+
+
+@app.post("/v1/sleep")
+async def sleep(request: Request) -> Response:
+    request_id = f"control-{uuid.uuid4()}"
+    # Support both JSON body and query parameter
+    if await request.body():
+        request_data = await request.json()
+    else:
+        # Extract query params
+        request_data = dict(request.query_params)
+
+    try:
+        control_request = ControlRequest(request_id, "sleep", request_data)
+    except TypeError as e:
+        return JSONResponse(status_code=400, content={"error": "Invalid parameter type", "message": str(e)})
+
+    control_response = await app.state.engine_client.run_control_method(control_request)
+    return control_response.to_api_json_response()
+
+
+@app.post("/v1/wakeup")
+async def wakeup(request: Request) -> Response:
+    request_id = f"control-{uuid.uuid4()}"
+    # Support both JSON body and query parameter
+    if await request.body():
+        request_data = await request.json()
+    else:
+        # Extract query params
+        request_data = dict(request.query_params)
+
+    try:
+        control_request = ControlRequest(request_id, "wakeup", request_data)
+    except TypeError as e:
+        return JSONResponse(status_code=400, content={"error": "Invalid parameter type", "message": str(e)})
+
     control_response = await app.state.engine_client.run_control_method(control_request)
     return control_response.to_api_json_response()
 
@@ -606,8 +645,14 @@ def update_model_weight(request: Request) -> Response:
     update model weight
     """
     if app.state.dynamic_load_weight:
-        status_code, msg = app.state.engine_client.update_model_weight()
-        return JSONResponse(content=msg, status_code=status_code)
+        if envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
+            request_id = f"control-{uuid.uuid4()}"
+            control_request = ControlRequest(request_id, "wakeup")
+            control_response = app.state.engine_client.run_control_method_sync(control_request, app.state.event_loop)
+            return control_response.to_api_json_response()
+        else:
+            status_code, msg = app.state.engine_client.update_model_weight()
+            return JSONResponse(content=msg, status_code=status_code)
     else:
         return JSONResponse(content={"error": "Dynamic Load Weight Disabled."}, status_code=404)
 
@@ -619,8 +664,14 @@ def clear_load_weight(request: Request) -> Response:
     clear model weight
     """
     if app.state.dynamic_load_weight:
-        status_code, msg = app.state.engine_client.clear_load_weight()
-        return JSONResponse(content=msg, status_code=status_code)
+        if envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
+            request_id = f"control-{uuid.uuid4()}"
+            control_request = ControlRequest(request_id, "sleep")
+            control_response = app.state.engine_client.run_control_method_sync(control_request, app.state.event_loop)
+            return control_response.to_api_json_response()
+        else:
+            status_code, msg = app.state.engine_client.clear_load_weight()
+            return JSONResponse(content=msg, status_code=status_code)
     else:
         return JSONResponse(content={"error": "Dynamic Load Weight Disabled."}, status_code=404)
 
