@@ -384,10 +384,10 @@ jobs:
       all_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.all_cov_file_url }}
     steps:
       - name: Clone FastDeploy
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
       - name: Download diff coverage file
@@ -403,7 +403,7 @@ jobs:
 
       - name: Upload diff coverage report
         if: always() && hashFiles('python_coverage_all.xml') != ''
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: ./python_coverage_all.xml
           flags: GPU
