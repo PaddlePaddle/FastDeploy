@@ -440,7 +440,6 @@ class EngineService:
                     is_server=True,
                     num_client=self.cfg.parallel_config.tensor_parallel_size,
                     client_id=-1,
-                    local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                 )
                 self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
 
