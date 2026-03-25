@@ -179,14 +179,14 @@ def _compute_sampling_mask_from_probs(
     """
     real_bsz = probs.shape[0]
 
-    # Z_K = sum of probs in the candidate set (using the exact mask).
-    z_k = (probs * mask.astype(probs.dtype)).sum(axis=-1)  # [B]
-    logz_per_batch = paddle.log(z_k + 1e-10).cpu().numpy()  # [B]
+    # # Z_K = sum of probs in the candidate set (using the exact mask).
+    # z_k = (probs * mask.astype(probs.dtype)).sum(axis=-1)  # [B]
+    # logz_per_batch = paddle.log(z_k + 1e-10).cpu().numpy()  # [B]
 
     # Sparse indices: per-row list of retained token ids.
     mask_cpu = mask[:real_bsz].cpu().numpy()  # [B, V]
     sparse_indices = [np.where(mask_cpu[i])[0].astype(np.int64) for i in range(real_bsz)]
-    return sparse_indices, logz_per_batch
+    return sparse_indices, None
 
 
 def _compute_sampling_mask(
