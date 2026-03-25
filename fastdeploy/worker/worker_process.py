@@ -1235,7 +1235,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         structured_outputs_config=structured_outputs_config,
         eplb_config=eplb_config,
         routing_replay_config=routing_replay_config,
-        deploy_modality=DeployModality.from_str(args.deploy_modality),
+        deploy_modality=DeployModality.from_str(getattr(args, "deploy_modality", "mixed")),
     )
     logger.info(f"parallel_config.local_engine_worker_queue_port {parallel_config.local_engine_worker_queue_port}")
 
