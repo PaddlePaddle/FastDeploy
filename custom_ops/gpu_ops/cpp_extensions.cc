@@ -1830,7 +1830,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &EagleGetSelfHiddenStates,
         "eagle_get_self_hidden_states function");
 
-
   m.def("eagle_gather_hidden_states",
         &EagleGatherHiddenStates,
         "eagle_gather_hidden_states function");
