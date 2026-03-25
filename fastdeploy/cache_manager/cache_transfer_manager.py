@@ -214,7 +214,7 @@ class CacheTransferManager:
             is_server=False,
             num_client=args.mp_num,
             client_id=self.rank,
-            local_data_parallel_id=args.local_data_parallel_id,
+            local_data_parallel_id=0,
         )
 
         cache_ready_signal_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
