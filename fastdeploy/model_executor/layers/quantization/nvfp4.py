@@ -294,12 +294,12 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         layer,
         **extra_weight_attrs,
     ):
-        # 因为模型存储是列存储的，所以这里需要not一下！
+        # Model storage is column-major, so we need to invert the output_dim flag
         extra_weight_attrs["output_dim"] = not extra_weight_attrs["output_dim"]
         K = layer.weight_shape[0]
         N = layer.weight_shape[1]
-        # 因为模型的存储时候权重是[N,K//2]
-        # 所以这里创建的权重是为了契合模型存储的权重！
+        # Model stored weights are in [N, K//2] format
+        # Create weight shape to match model storage format
         weight_shape = [N, K // 2]
         layer.weight_dtype = "uint8"
 
@@ -312,12 +312,12 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         self._create_weight_scales(layer, weight_scale_shape, weight_scale_2_shape, extra_weight_attrs)
 
     def _create_main_weight(self, layer, weight_shape, extra_weight_attrs):
-        """创建主权重参数
+        """Create main weight parameter
 
-        参数:
-            layer: 当前层对象
-            weight_shape: 权重形状
-            extra_weight_attrs: 额外权重属性
+        Args:
+            layer: Current layer object
+            weight_shape: Weight shape
+            extra_weight_attrs: Extra weight attributes
         """
         layer.weight = layer.create_parameter(
             shape=weight_shape,
@@ -331,11 +331,11 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         )
 
     def _create_input_scale(self, layer, input_scale_shape):
-        """创建输入缩放参数
+        """Create input scale parameter
 
-        参数:
-            layer: 当前层对象
-            input_scale_shape: 输入缩放形状
+        Args:
+            layer: Current layer object
+            input_scale_shape: Input scale shape
         """
         layer.input_scale = layer.create_parameter(
             shape=input_scale_shape,
@@ -345,13 +345,13 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         )
 
     def _create_weight_scales(self, layer, weight_scale_shape, weight_scale_2_shape, extra_weight_attrs):
-        """创建权重缩放参数
+        """Create weight scale parameters
 
-        参数:
-            layer: 当前层对象
-            weight_scale_shape: 权重缩放形状
-            weight_scale_2_shape: 权重缩放2形状
-            extra_weight_attrs: 额外权重属性
+        Args:
+            layer: Current layer object
+            weight_scale_shape: Weight scale shape
+            weight_scale_2_shape: Secondary weight scale shape
+            extra_weight_attrs: Extra weight attributes
         """
         layer.weight_scale = layer.create_parameter(
             shape=weight_scale_shape,
@@ -442,9 +442,7 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         else:
             raise ValueError(f"Unsupported backend: {self.backend}.")
 
-        # shape 恢复到[K//2,N]
         w = layer.weight.T
-        # shape 恢复到[K//group_size, N]
         w_scale_interleaved = layer.weight_scale_interleaved.T
 
         if backend == "cutlass":
@@ -665,13 +663,11 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
 
+        logger.info("Running prefill")
         # 1. top experts and weights
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         hidden_size = x.shape[1]
-        logger.info(f"输入x:{x}")
-        logger.info(f"topk_idx:{topk_idx}")
-        logger.info(f"topk_weights:{topk_weights}")
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
@@ -693,10 +689,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             expert_alignment=128,
             previous_event=event,
         )
-        logger.info(f"recv_x:{recv_x}")
-        logger.info(f"recv_topk_idx:{recv_topk_idx}")
-        logger.info(f"recv_topk_weights:{recv_topk_weights}")
-        logger.info(f"recv_num_tokens_per_expert_list:{recv_num_tokens_per_expert_list}")
 
         if self.ep_prefill_runner.num_worst_tokens > 0:
             let_another_thread_run()
@@ -718,8 +710,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         # 3. compute ffn
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
-        # logger.info(f"self.ep_prefill_runner.num_worst_tokens:{self.ep_prefill_runner.num_worst_tokens}")
-
         if self.ep_prefill_runner.num_worst_tokens > 0:
             token_split_factor = 2 if int(os.getenv("USE_TBO", "0")) == 1 else 1
             max_tokens_per_rank = (
@@ -739,33 +729,13 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                     max_token_num=layer.ep_size * max_tokens_per_rank,
                 )
             )
-            # logger.info(f"permute_input:{permute_input}")
-            # logger.info(f"permute_scale:{permute_scale}")
-            # logger.info(f"permuted_indice_map:{permuted_indice_map}")
-            # logger.info(f"token_nums_per_expert:{token_nums_per_expert}")
-
-            # permute_input shape: [num_local_experts * max_token_num, hidden_size] (token-major, 2D)
-            # flashinfer_cutedsl_moe_masked standard path expects [num_experts, m, k] (expert-major, 3D)
             max_token_num = layer.ep_size * max_tokens_per_rank
             permute_input = permute_input.reshape([layer.num_local_experts, max_token_num, recv_x_value.shape[-1]])
-
-            # print(f"up_gate_proj_input_scale_quant: {layer.up_gate_proj_input_scale_quant}")
-            # print(f"down_proj_input_scale_quant: {layer.down_proj_input_scale_quant}")
 
             # ffn_out: [num_local_experts, m, hidden_size]
             # NVFP4 dispatch returns BF16 (no pre-quantized scale), so permute_scale is empty.
             # Use per-expert 1/input_scale (up_gate_proj_input_scale_quant) as input_global_scale,
             # consistent with apply_ep_decode which also uses this value directly.
-            logger.info(f"permute_input:{permute_input}")
-            logger.info(f"layer.up_gate_proj_input_scale_quant:{layer.up_gate_proj_input_scale_quant}")
-            logger.info(f"layer.up_gate_proj_weight:{layer.up_gate_proj_weight}")
-            logger.info(f"layer.up_gate_proj_blockscale_swiizled:{layer.up_gate_proj_blockscale_swizzled}")
-            logger.info(f"layer.g1_alpha:{layer.g1_alphas}")
-            logger.info(f"layer.down_proj_weight:{layer.down_proj_weight}")
-            logger.info(f"layer.down_proj_input_scale_quant:{layer.down_proj_input_scale_quant}")
-            logger.info(f"layer.down_proj_blockscale_swizzled:{layer.down_proj_blockscale_swizzled}")
-            logger.info(f"g2_alpha:{layer.g2_alphas}")
-            logger.info(f"tokens_num_per_expert:{token_nums_per_expert}")
             ffn_out = flashinfer_cutedsl_moe_masked(
                 hidden_states=(permute_input, None),
                 input_global_scale=layer.up_gate_proj_input_scale_quant.expand([layer.num_local_experts]),
@@ -778,7 +748,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                 w2_alpha=layer.g2_alphas,
                 masked_m=token_nums_per_expert.squeeze(-1).cast(paddle.int32),
             )
-            logger.info(f"ffn_out:{ffn_out}")
 
             tmp_ffn_out = call_depermute_prefill_combine(
                 x=ffn_out,
@@ -786,7 +755,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                 topk_weights=recv_topk_weights,
                 num_worst_tokens=recv_x_value.shape[0],
             )
-            logger.info(f"tmp_ffn_out:{tmp_ffn_out}")
 
         elif token_all_num > 0:
             raise NotImplementedError(
@@ -818,15 +786,10 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
-        if layer.fd_config.parallel_config.use_internode_ll_two_stage:
-            raise NotImplementedError("NVFP4 CuteDSL EP decode does not support DeepEP two-stage low-latency.")
 
         gate_out = gate(x.cast("float32"))
-        logger.info(f"x:{x}")
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
-        logger.info(f"topk_idx:{topk_idx}")
-        logger.info(f"topk_weights:{topk_weights}")
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
 
@@ -836,18 +799,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             topk_weights,
             use_fp8=False,
         )
-        logger.info(f"recv_x:{recv_x}")
-        logger.info(f"token_nums_per_expert:{token_nums_per_expert}")
 
-        logger.info(f"layer.up_gate_proj_input_scale_quant:{layer.up_gate_proj_input_scale_quant}")
-        logger.info(f"layer.up_gate_proj_weight:{layer.up_gate_proj_weight}")
-        logger.info(f"layer.up_gate_proj_blockscale_swizzled:{layer.up_gate_proj_blockscale_swizzled}")
-        logger.info(f"layer.g1_alphas:{layer.g1_alphas}")
-        logger.info(f"layer.down_proj_weight:{layer.down_proj_weight}")
-        logger.info(f"layer.down_proj_input_scale_quant:{layer.down_proj_input_scale_quant}")
-        logger.info(f"layer.down_proj_blockscale_swizzled:{layer.down_proj_blockscale_swizzled}")
-        logger.info(f"layer.g2_alphas:{layer.g2_alphas}")
-        logger.info(f"tokens_num_per_expert:{token_nums_per_expert}")
         # Compute FFN via CuteDSL masked grouped GEMM
         num_experts = layer.num_local_experts
         ffn_out = flashinfer_cutedsl_moe_masked(
@@ -862,7 +814,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             w2_alpha=layer.g2_alphas,
             masked_m=token_nums_per_expert.cast(paddle.int32),
         )
-        logger.info(f"ffn_out:{ffn_out}")
 
         out = self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
 
@@ -874,20 +825,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
-    ) -> paddle.Tensor:
-        pass
-
-    def apply(
-        self,
-        layer,
-        x,
-        gate,
-        topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
-    ):
-        """
-        flashinfer nvfp4 fusedmoe for Model Optimizer
-        """
+    ) -> paddle.Tensor:
         if self.backend == "flashinfer-cutlass":
             gate_out = gate(x.cast("float32"))
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
@@ -935,18 +874,5 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             )
 
             return output
-
-        elif self.backend == "flashinfer-cutedsl" and layer.ep_size > 1:
-            if layer.fd_config.model_config.moe_phase.phase == "prefill":
-                logger.info("跑到了prefill")
-                return self.apply_ep_prefill(
-                    layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
-                )
-            # else:
-            # logger.info("跑到了decode")
-            # return self.apply_ep_decode(
-            #     layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
-            # )
-
-        # flashinfer-trtllm
-        return paddle.zeros_like(x)
+        else:
+            raise NotImplementedError

@@ -223,7 +223,7 @@ def flashinfer_cutedsl_moe_masked(
             else {}
         ),
     )  # fills out in logical [m, k, l]
-    print("out", out)
+    # print("out", out)
 
     # Return [num_experts, m, k]
     return out.transpose([2, 0, 1])
