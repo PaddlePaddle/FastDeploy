@@ -1028,9 +1028,24 @@ class EngineService:
                     if self.cfg.scheduler_config.splitwise_role == "decode":
                         for task in tasks:
                             if task.task_type == RequestType.PREEMPTED:
-                                self.llm_logger.info(
-                                    f"{task.request_id} decode request is preempted and waiting for reschedule."
-                                )
+                                req = self.resource_manager.requests.get(task.request_id)
+                                if req is not None and req.is_offloaded:
+                                    self.llm_logger.info(
+                                        f"{task.request_id} decode request is preempted and offloaded, waiting for resume."
+                                    )
+                                else:
+                                    msg = f"{task.request_id} decode not enough blocks, need to be rescheduled."
+                                    self.llm_logger.error(msg)
+                                    self.scheduler.put_results(
+                                        [
+                                            RequestOutput(
+                                                request_id=task.request_id,
+                                                finished=True,
+                                                error_code=500,
+                                                error_msg=msg,
+                                            )
+                                        ]
+                                    )
                     self.resource_manager.get_real_bsz()
                     for task in tasks:
                         if task.task_type == RequestType.PREFILL:

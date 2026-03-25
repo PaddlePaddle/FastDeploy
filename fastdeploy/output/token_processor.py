@@ -1012,6 +1012,19 @@ class TokenProcessor:
             llm_logger.debug(f"get response from infer: {result}")
             batch_result.append(result)
 
+        # Reschedule preempted requests whose idx >= batch (not covered by range(batch))
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            batch_id_set = set(range(batch))
+            for request_id in list(self.resource_manager.to_be_rescheduled_request_id_set):
+                if request_id not in self.resource_manager.requests:
+                    continue
+                req = self.resource_manager.requests[request_id]
+                if getattr(req, "idx", None) not in batch_id_set:
+                    llm_logger.debug(
+                        f"reschedule_preempt_task request_id {request_id} at idx {getattr(req, 'idx', None)} (out of batch range {batch})"
+                    )
+                    self.resource_manager.reschedule_preempt_task(request_id)
+
         if self.cfg.speculative_config.method:
             self._record_speculative_decoding_metrics(accept_num)
         self.postprocess(batch_result, mtype)

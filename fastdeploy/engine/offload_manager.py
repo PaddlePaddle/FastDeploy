@@ -46,7 +46,6 @@ class OffloadManager:
         self.min_steps = 20
         self.cpu_offloading_chunk_size = getattr(envs, "FD_CPU_OFFLOAD_CHUNK_SIZE", 8192)
         self.cpu_memory_limit = getattr(envs, "FD_CPU_MEMORY_LIMIT", 50 * 1024 * 1024 * 1024)
-        self.max_resume_retry = 3
 
         self._offloaded_requests: Dict[str, dict] = {}
         self._lock = threading.Lock()
@@ -101,7 +100,13 @@ class OffloadManager:
             self._transfer_events[key] = event
             self._transfer_results.pop(key, None)
         self.cache_manager.cache_task_queue.put_transfer_task((event_type, task))
-        event.wait()
+        event.wait(timeout=30)
+        if not event.is_set():
+            offload_logger.error(f"Transfer task {task.task_id} timed out after 30s")
+            with self._lock:
+                self._transfer_results.pop(key, None)
+                self._transfer_events.pop(key, None)
+            return None
         with self._lock:
             results = self._transfer_results.pop(key, [])
             self._transfer_events.pop(key, None)
@@ -208,11 +213,9 @@ class OffloadManager:
                 "sampling_params": request.sampling_params,
                 "block_tables": original_block_tables,
                 "snapshot_handle": request.request_id,
-                "resume_retry_count": 0,
             }
 
         self.release_gpu_blocks(request)
-        request.status = RequestStatus.PREEMPTED
         request.is_offloaded = True
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         offload_logger.info(
@@ -251,39 +254,45 @@ class OffloadManager:
         offload_logger.warning("[DEBUG: load_from_storage] SSD resume is not implemented in the first version")
         return None
 
-    def resume_decode(self, request: Request) -> Tuple[bool, Optional[int], bool]:
+    def resume_decode(self, request: Request) -> Tuple[bool, Optional[int]]:
         if not self.enable_offload:
-            return False, None, False
+            return False, None
 
         start_time = time.perf_counter()
         with self._lock:
             offloaded_info = self._offloaded_requests.get(request.request_id)
             if offloaded_info is None:
                 offload_logger.warning(f"[DEBUG: resume_decode] Request {request.request_id} is not offloaded")
-                return False, None, True
+                return False, None
 
             num_blocks_needed = offloaded_info["num_blocks_needed"]
             saved_num_computed_tokens = offloaded_info["num_computed_tokens"]
             saved_need_prefill_tokens = offloaded_info["need_prefill_tokens"]
             snapshot_handle = offloaded_info.get("snapshot_handle")
-            resume_retry_count = offloaded_info.get("resume_retry_count", 0)
             output_token_ids = list(offloaded_info.get("output_token_ids", []))
             need_prefill_tokens = offloaded_info.get("need_prefill_tokens")
 
         if saved_num_computed_tokens <= saved_need_prefill_tokens:
-            return False, saved_num_computed_tokens, True
+            offload_logger.warning(
+                f"[DEBUG: resume_decode] Request {request.request_id} has invalid state: "
+                f"num_computed_tokens={saved_num_computed_tokens} <= need_prefill_tokens={saved_need_prefill_tokens}"
+            )
+            return False, saved_num_computed_tokens
         if self.cache_manager is None:
-            return False, saved_num_computed_tokens, True
+            return False, saved_num_computed_tokens
         if not self.cache_manager.can_allocate_gpu_blocks(num_blocks_needed):
-            should_recompute = resume_retry_count + 1 >= self.max_resume_retry
-            with self._lock:
-                if request.request_id in self._offloaded_requests:
-                    self._offloaded_requests[request.request_id]["resume_retry_count"] = resume_retry_count + 1
-            return False, saved_num_computed_tokens, should_recompute
+            offload_logger.debug(
+                f"[DEBUG: resume_decode] Not enough GPU blocks for {request.request_id}, "
+                f"need={num_blocks_needed}, will retry later"
+            )
+            return False, saved_num_computed_tokens
 
         try:
             if snapshot_handle is None:
-                return False, saved_num_computed_tokens, True
+                offload_logger.warning(
+                    f"[DEBUG: resume_decode] Request {request.request_id} has no snapshot handle"
+                )
+                return False, saved_num_computed_tokens
 
             new_block_ids = self.cache_manager.allocate_gpu_blocks(num_blocks_needed, request.request_id)
             request.block_tables = new_block_ids
@@ -293,15 +302,11 @@ class OffloadManager:
                 elapsed_ms = (time.perf_counter() - start_time) * 1000
                 self.cache_manager.recycle_gpu_blocks(new_block_ids, request.request_id)
                 request.block_tables = []
-                should_recompute = resume_retry_count + 1 >= self.max_resume_retry
-                with self._lock:
-                    if request.request_id in self._offloaded_requests:
-                        self._offloaded_requests[request.request_id]["resume_retry_count"] = resume_retry_count + 1
                 offload_logger.warning(
                     f"[DEBUG: resume_decode] Resume transfer failed for {request.request_id}, "
-                    f"elapsed_ms={elapsed_ms:.2f}, should_recompute={should_recompute}, result={resume_result}"
+                    f"elapsed_ms={elapsed_ms:.2f}, result={resume_result}"
                 )
-                return False, saved_num_computed_tokens, should_recompute
+                return False, saved_num_computed_tokens
 
             request.output_token_ids = output_token_ids
             request.num_computed_tokens = saved_num_computed_tokens
@@ -317,20 +322,14 @@ class OffloadManager:
                 f"[DEBUG: resume_decode] Request {request.request_id} resumed successfully, "
                 f"resume_time_ms={elapsed_ms:.2f}"
             )
-            return True, saved_num_computed_tokens, False
+            return True, saved_num_computed_tokens
         except Exception as e:
-            should_recompute = False
             elapsed_ms = (time.perf_counter() - start_time) * 1000
             offload_logger.error(
                 f"[DEBUG: resume_decode] Failed to resume request {request.request_id}, "
                 f"elapsed_ms={elapsed_ms:.2f}: {e}"
             )
-            with self._lock:
-                if request.request_id in self._offloaded_requests:
-                    retries = self._offloaded_requests[request.request_id].get("resume_retry_count", 0) + 1
-                    self._offloaded_requests[request.request_id]["resume_retry_count"] = retries
-                    should_recompute = retries >= self.max_resume_retry
-            return False, saved_num_computed_tokens, should_recompute
+            return False, saved_num_computed_tokens
 
     def cleanup_offloaded_request(self, request_id: str) -> None:
         with self._lock:

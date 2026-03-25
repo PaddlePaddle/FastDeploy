@@ -131,7 +131,7 @@ class TestResourceManagerV1(unittest.TestCase):
 
         def _resume(req):
             req.block_tables = [11, 12]
-            return True, req.num_computed_tokens, False
+            return True, req.num_computed_tokens
 
         manager.offload_manager.resume_decode.side_effect = _resume
         manager.requests[request.request_id] = request

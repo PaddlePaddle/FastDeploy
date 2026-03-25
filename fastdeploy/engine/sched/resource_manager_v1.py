@@ -378,7 +378,8 @@ class ResourceManagerV1(ResourceManager):
                         )
 
                 preempted_req.status = RequestStatus.PREEMPTED
-                preempted_req.num_computed_tokens = 0
+                if not offloaded:
+                    preempted_req.num_computed_tokens = 0
                 if self.config.scheduler_config.splitwise_role == "decode":
                     self.tasks_list[preempted_req.idx] = None
                     self.stop_flags[preempted_req.idx] = True
@@ -1022,7 +1023,23 @@ class ResourceManagerV1(ResourceManager):
                     elif request.status == RequestStatus.PREEMPTED:
                         # Try to resume offloaded request first
                         if request.is_offloaded and self.offload_manager is not None:
-                            resume_success, _, should_recompute = self.offload_manager.resume_decode(request)
+                            # Only attempt resume when running requests have finished
+                            # or there are enough free blocks to sustain all requests.
+                            # This prevents thrashing (immediate re-preempt after resume).
+                            if len(self.running) > 0:
+                                offloaded_info = self.offload_manager._offloaded_requests.get(request.request_id)
+                                num_blocks_for_resume = offloaded_info["num_blocks_needed"] if offloaded_info else 0
+                                block_size = self.cache_manager.cache_config.block_size
+                                min_steps = self.offload_manager.min_steps
+                                blocks_per_step = (min_steps + block_size - 1) // block_size
+                                total_running_after_resume = len(self.running) + 1
+                                total_blocks_needed = num_blocks_for_resume + total_running_after_resume * blocks_per_step
+                                free_blocks = len(getattr(self.cache_manager, "gpu_free_block_list", []))
+                                if free_blocks < total_blocks_needed:
+                                    # Not enough blocks to resume without thrashing, wait for running to finish
+                                    break
+
+                            resume_success, _ = self.offload_manager.resume_decode(request)
                             if resume_success:
                                 offload_logger.info(f"Resumed offloaded request {request.request_id}")
                                 self.waiting.popleft()
@@ -1030,20 +1047,11 @@ class ResourceManagerV1(ResourceManager):
                                 self.running.append(request)
                                 scheduled_reqs.append(self._prepare_decode_task(request))
                                 continue
-                            if should_recompute:
-                                offload_logger.info(
-                                    f"Resume retry limit reached or snapshot invalid for {request.request_id}, "
-                                    "fallback to recompute"
-                                )
-                                request.is_offloaded = False
-                                self.offload_manager.cleanup_offloaded_request(request.request_id)
                             else:
                                 offload_logger.debug(
                                     f"Failed to resume offloaded request {request.request_id}, will retry"
                                 )
-                                skip_requests.append(request)
-                                self.waiting.popleft()
-                                continue
+                                break
 
                         request.need_prefill_tokens = (
                             request.num_total_tokens
