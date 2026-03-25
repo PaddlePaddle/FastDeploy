@@ -1,17 +1,5 @@
 """
-# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+BlockPool implementations for GPU and CPU memory management.
 """
 
 import threading
@@ -65,20 +53,33 @@ class BlockPool(ABC):
             List of allocated block indices if successful, None if not enough blocks
         """
         with self._lock:
-            if num_blocks == 0:
-                return []
+            # DEBUG LOG: allocate 前 pool 状态
+            logger.debug(
+                f"[DEBUG] BlockPool.allocate request_num={num_blocks}, "
+                f"free_blocks_count={len(self._free_blocks)}, "
+                f"used_blocks_count={len(self._used_blocks)}, "
+                f"free_blocks_preview={self._free_blocks[:10]}..., "
+            )
 
             if num_blocks > len(self._free_blocks):
                 logger.warning(
-                    f"BlockPool.allocate failed: not enough blocks, "
+                    f"[DEBUG] BlockPool.allocate failed: not enough blocks, "
                     f"requested={num_blocks}, available={len(self._free_blocks)}"
                 )
                 return None
 
-            allocated = self._free_blocks[-num_blocks:]
-            del self._free_blocks[-num_blocks:]
-            self._used_blocks.update(allocated)
+            allocated = []
+            for _ in range(num_blocks):
+                block_idx = self._free_blocks.pop(0)
+                self._used_blocks.add(block_idx)
+                allocated.append(block_idx)
 
+            # DEBUG LOG: allocate 后 pool 状态
+            logger.debug(
+                f"[DEBUG] BlockPool.allocate done: allocated={allocated}, "
+                f"free_blocks_count={len(self._free_blocks)}, "
+                f"used_blocks_count={len(self._used_blocks)}"
+            )
             return allocated
 
     def release(self, block_indices: List[int]) -> None:
@@ -89,6 +90,13 @@ class BlockPool(ABC):
             block_indices: List of block indices to release
         """
         with self._lock:
+            # DEBUG LOG: release 前 pool 状态
+            logger.debug(
+                f"[DEBUG] BlockPool.release request_blocks={block_indices}, "
+                f"free_blocks_count={len(self._free_blocks)}, "
+                f"used_blocks_count={len(self._used_blocks)}, "
+            )
+
             for idx in block_indices:
                 if idx in self._used_blocks:
                     self._used_blocks.remove(idx)
@@ -96,13 +104,22 @@ class BlockPool(ABC):
                     # Clear metadata
                     self._metadata.pop(idx, None)
                 else:
+                    # ERROR: block 不在 _used_blocks 中
                     logger.error(
-                        f"BlockPool.release: block_id={idx} NOT in used_blocks! "
+                        f"[ERROR] BlockPool.release: block_id={idx} NOT in used_blocks! "
                         f"request_blocks={block_indices}, "
                         f"is_in_free_blocks={idx in self._free_blocks}, "
                         f"is_valid_block_id={0 <= idx < self.num_blocks}"
                     )
-                    logger.error(f"BlockPool.release callstack:\n{traceback.format_exc()}")
+                    # 打印调用栈
+                    logger.error(f"[ERROR] BlockPool.release callstack:\n{traceback.format_exc()}")
+
+            # DEBUG LOG: release 后 pool 状态
+            logger.debug(
+                f"[DEBUG] BlockPool.release done: "
+                f"free_blocks_count={len(self._free_blocks)}, "
+                f"used_blocks_count={len(self._used_blocks)}"
+            )
 
     def get_metadata(self, block_idx: int) -> Optional[CacheBlockMetadata]:
         """

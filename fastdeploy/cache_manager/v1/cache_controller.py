@@ -22,6 +22,7 @@ from paddleformers.utils.log import logger
 
 class LayerSwapTimeoutError(Exception):
     """Exception raised when layer swap operation times out."""
+
     pass
 
 
@@ -307,9 +308,12 @@ class CacheController(KVCacheBase):
             scales_value_need_to_allocate_bytes = num_host_blocks * scale_bytes * cache_scales_size
             cache_scale_shape = [num_host_blocks, key_cache_shape[1], key_cache_shape[2]]
 
-        total_size_gb = (key_need_to_allocate_bytes + value_need_to_allocate_bytes) / (1024**3)
+        per_layer_size_gb = (key_need_to_allocate_bytes + value_need_to_allocate_bytes) / (1024**3)
+        actual_alloc_gb = per_layer_size_gb * self._num_layers
         logger.info(
-            f"[CacheController] Host swap space size: {total_size_gb:.2f}GB, " f"num_host_blocks: {num_host_blocks}"
+            f"[CacheController] Host swap space allocated: {actual_alloc_gb:.2f}GB "
+            f"({per_layer_size_gb:.2f}GB per layer x {self._num_layers} layers), "
+            f"num_host_blocks: {num_host_blocks}"
         )
 
         logger.info(f"[CacheController] Initializing swap space (Host cache) for {self._num_layers} layers.")
@@ -495,7 +499,9 @@ class CacheController(KVCacheBase):
                         f"src={src_block_ids} dst={dst_block_ids}"
                     )
                 else:
-                    logger.debug(f"[SwapTask] task_id={task_id} starting layer_by_layer transfer, num_layers={len(layers_to_transfer)}")
+                    logger.debug(
+                        f"[SwapTask] task_id={task_id} starting layer_by_layer transfer, num_layers={len(layers_to_transfer)}"
+                    )
                     success = transfer_fn_layer(
                         layers_to_transfer,
                         _on_layer_complete,
@@ -503,7 +509,9 @@ class CacheController(KVCacheBase):
                         dst_block_ids,
                     )
                     elapsed = time.time() - start_time
-                    logger.debug(f"[SwapTask] task_id={task_id} layer_by_layer transfer_fn_layer returned, success={success}, elapsed={elapsed:.3f}s")
+                    logger.debug(
+                        f"[SwapTask] task_id={task_id} layer_by_layer transfer_fn_layer returned, success={success}, elapsed={elapsed:.3f}s"
+                    )
                     result = TransferResult(
                         src_block_ids=src_block_ids,
                         dst_block_ids=dst_block_ids,
@@ -595,10 +603,7 @@ class CacheController(KVCacheBase):
                 on_layer_complete=on_layer_complete,
             ),
         )
-        logger.info(
-            f"[LoadHostToDevice] submitted swap task, "
-            f"total_blocks={len(swap_metadata.src_block_ids)}"
-        )
+        logger.info(f"[LoadHostToDevice] submitted swap task, " f"total_blocks={len(swap_metadata.src_block_ids)}")
 
     def evict_device_to_host(
         self,
@@ -620,9 +625,7 @@ class CacheController(KVCacheBase):
             meta=swap_metadata,
             src_location="device",
             dst_location="host",
-            transfer_fn_all=lambda src_ids, dst_ids: self._transfer_manager.evict_to_host_all_layers(
-                src_ids, dst_ids
-            ),
+            transfer_fn_all=lambda src_ids, dst_ids: self._transfer_manager.evict_to_host_all_layers(src_ids, dst_ids),
             transfer_fn_layer=lambda layer_indices, on_layer_complete, src_ids, dst_ids: self._transfer_manager.evict_layers_to_host(
                 layer_indices=layer_indices,
                 device_block_ids=src_ids,
@@ -630,10 +633,7 @@ class CacheController(KVCacheBase):
                 on_layer_complete=on_layer_complete,
             ),
         )
-        logger.info(
-            f"[EvictDeviceToHost] submitted swap task, "
-            f"total_blocks={len(swap_metadata.src_block_ids)}"
-        )
+        logger.info(f"[EvictDeviceToHost] submitted swap task, " f"total_blocks={len(swap_metadata.src_block_ids)}")
 
     def prefetch_from_storage(
         self,
@@ -922,7 +922,9 @@ class CacheController(KVCacheBase):
                 if timeout is not None:
                     elapsed = time.time() - start_time
                     if elapsed >= timeout:
-                        logger.error(f"[WaitForLayer] task_id={transfer_id}, layer={layer_idx} TIMEOUT after {elapsed:.2f}s")
+                        logger.error(
+                            f"[WaitForLayer] task_id={transfer_id}, layer={layer_idx} TIMEOUT after {elapsed:.2f}s"
+                        )
                         raise LayerSwapTimeoutError(
                             f"Layer swap timeout: transfer_id={transfer_id}, layer={layer_idx}, elapsed={elapsed:.2f}s"
                         )
