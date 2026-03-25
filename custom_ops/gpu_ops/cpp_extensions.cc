@@ -1146,7 +1146,6 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& attn_mask_offsets_full,
-    const paddle::Tensor& attn_mask_offsets_decoder,
     const paddle::Tensor& is_block_step,
     const paddle::Tensor& decode_states,
     const paddle::Tensor& mask_rollback);

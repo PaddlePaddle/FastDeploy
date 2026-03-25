@@ -510,6 +510,7 @@ class MTPProposer(Proposer):
                             inputs["attention_mask_offset"][prefill_start_index:prefill_end_index], dtype="int32"
                         )
                     )
+                    # GPU don't need it
                     self.model_inputs["attn_mask_offsets_decoder"][idx : idx + 1] = (
                         inputs["attention_mask_offset"][prefill_end_index - 1] + 1
                     )
@@ -895,7 +896,6 @@ class MTPProposer(Proposer):
                         self.model_inputs["seq_lens_decoder"],
                         cu_seqlens_q,
                         self.model_inputs["attn_mask_offsets_full"],
-                        self.model_inputs["attn_mask_offsets_decoder"],
                         self.model_inputs["is_block_step"],
                         self.model_inputs["decode_states"],
                         self.model_inputs["mask_rollback"],

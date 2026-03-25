@@ -21,7 +21,6 @@ __global__ void update_attn_mask_offsets_kernel(
     const int* seq_lens_decoder,
     const int* cu_seqlens_q,
     const int* attn_mask_offsets_full,
-    int* attn_mask_offsets_decoder,
     const bool* is_block_step,
     int* decode_states,
     int* mask_rollback,
@@ -55,15 +54,10 @@ __global__ void update_attn_mask_offsets_kernel(
           }
         }
       } else if (seq_len_decoder > 0) {
-        // Status: decoder -- normal or chunk_prefill
-        // TODO: support speculative decoding.
-        attn_mask_offsets_decoder[bid] -= mask_rollback[bid];
-        mask_rollback[bid] = 0;
         for (int i = 0; i < seq_len_this_time; i++) {
           attn_mask_offsets[(query_start_id + i) * 2 + 1] =
-              attn_mask_offsets_decoder[bid] + 1 + i;
+              seq_len_decoder + 1 + i;
         }
-        attn_mask_offsets_decoder[bid] += seq_len_this_time;
 
         // Speculative decoding in text_generation
         for (int i = 0; i < decode_states_len; i++) {
@@ -85,7 +79,6 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& attn_mask_offsets_full,
-    const paddle::Tensor& attn_mask_offsets_decoder,
     const paddle::Tensor& is_block_step,
     const paddle::Tensor& decode_states,
     const paddle::Tensor& mask_rollback) {
@@ -112,7 +105,6 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
       seq_lens_decoder.data<int>(),
       cu_seqlens_q.data<int>(),
       attn_mask_offsets_full.data<int>(),
-      const_cast<int*>(attn_mask_offsets_decoder.data<int>()),
       is_block_step.data<bool>(),
       const_cast<int*>(decode_states.data<int>()),
       const_cast<int*>(mask_rollback.data<int>()),
@@ -130,7 +122,6 @@ PD_BUILD_STATIC_OP(update_attn_mask_offsets)
              "seq_lens_decoder",
              "cu_seqlens_q",
              "attn_mask_offsets_full",
-             "attn_mask_offsets_decoder",
              "is_block_step",
              "decode_states",
              "mask_rollback"})

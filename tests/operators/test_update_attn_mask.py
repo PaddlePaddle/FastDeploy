@@ -31,7 +31,6 @@ def py_update_attn_mask_offsets_op(
     seq_lens_decoder,
     cu_seqlens_q,
     attn_mask_offsets_full,
-    attn_mask_offsets_decoder,
     is_block_step,
     decode_states,
     mask_rollback,
@@ -42,7 +41,6 @@ def py_update_attn_mask_offsets_op(
     - seq_lens_*: 1D numpy int32 arrays (len == bsz)
     - cu_seqlens_q: 1D numpy int32 prefix sums (len == bsz)
     - attn_mask_offsets_full: numpy array shape (bsz, max_model_len)
-    - attn_mask_offsets_decoder: 1D numpy int32 (bsz,)
     - is_block_step: 1D bool array (bsz,)
     - decode_states: numpy int32 array shape (bsz, decode_states_len)
     - mask_rollback: 1D numpy int32 (bsz,) or shape (bsz,1)
@@ -57,7 +55,6 @@ def py_update_attn_mask_offsets_op(
     cu_seqlens_q = np.array(cu_seqlens_q, dtype=np.int32).reshape(-1)
     is_block_step = np.array(is_block_step, dtype=bool).reshape(-1)
     attn_mask_offsets_full = np.array(attn_mask_offsets_full, dtype=np.int32)
-    attn_mask_offsets_decoder = np.array(attn_mask_offsets_decoder, dtype=np.int32).reshape(-1)
     decode_states = np.array(decode_states, dtype=np.int32).copy()
     mask_rollback = np.array(mask_rollback, dtype=np.int32).reshape(-1)
 
@@ -100,16 +97,8 @@ def py_update_attn_mask_offsets_op(
 
         # decoder path (seq_len_decoder > 0)
         if seq_len_dec > 0:
-            # subtract mask rollback
-            rollback = int(mask_rollback[bid]) if bid < mask_rollback.shape[0] else 0
-            attn_mask_offsets_decoder[bid] = int(attn_mask_offsets_decoder[bid]) - rollback
-            start = int(attn_mask_offsets_decoder[bid])
-
             for i in range(seq_len_this):
-                attn_mask_offsets[(query_start + i) * 2 + 1] = start + 1 + i
-
-            # advance decoder offset
-            attn_mask_offsets_decoder[bid] = int(attn_mask_offsets_decoder[bid]) + seq_len_this
+                attn_mask_offsets[(query_start + i) * 2 + 1] = seq_len_dec + 1 + i
 
             # speculative decoding: if seq_len_this > 1 then set decode_states_now[i] accordingly
             for i in range(decode_states_len):
@@ -152,9 +141,6 @@ class UpdateAttnMaskOffsetsTestCase(unittest.TestCase):
         # attn_mask_offsets_full: shape (bsz, max_model_len)
         attn_mask_offsets_full = np.arange(bsz * max_model_len, dtype=np.int32).reshape(bsz, max_model_len)
 
-        # attn_mask_offsets_decoder initial (use seq_lens_decoder as seed for deterministic test)
-        attn_mask_offsets_decoder = np.array(seq_lens_decoder, dtype=np.int32).copy()
-
         # decode_states initial
         decode_states = np.full((bsz, decode_states_len), -1, dtype=np.int32)
         if vision_generate:
@@ -173,7 +159,6 @@ class UpdateAttnMaskOffsetsTestCase(unittest.TestCase):
             paddle.to_tensor(seq_lens_decoder, dtype="int32"),
             paddle.to_tensor(cu_seqlens_q, dtype="int32"),
             paddle.to_tensor(attn_mask_offsets_full, dtype="int32"),
-            paddle.to_tensor(attn_mask_offsets_decoder, dtype="int32"),
             paddle.to_tensor(np.array(is_block_step, dtype=bool).reshape(-1), dtype="bool"),
             decode_states_tensor,
             paddle.to_tensor(mask_rollback, dtype="int32"),
@@ -200,7 +185,6 @@ class UpdateAttnMaskOffsetsTestCase(unittest.TestCase):
             seq_lens_decoder=seq_lens_decoder,
             cu_seqlens_q=cu_seqlens_q,
             attn_mask_offsets_full=attn_mask_offsets_full,
-            attn_mask_offsets_decoder=attn_mask_offsets_decoder.copy(),
             is_block_step=np.array(is_block_step, dtype=bool).reshape(-1),
             decode_states=decode_states.copy(),
             mask_rollback=mask_rollback,
@@ -266,7 +250,7 @@ class UpdateAttnMaskOffsetsTestCase(unittest.TestCase):
         )
 
     def test_decoder_case(self):
-        # decoder path: should write attn_mask_offsets_decoder - rollback + 1 .. +seq_len_this_time-1
+        # decoder path: should write seq_len_decoder + 1 .. + seq_len_this_time - 1
         self._call_and_compare(
             seq_lens_this_time=[2],
             seq_lens_encoder=[0],

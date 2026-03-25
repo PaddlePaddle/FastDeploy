@@ -250,6 +250,9 @@ __global__ void verify_draft_tokens(
   // Initialize step_output_len to 0 for ALL slots
   if (bid < max_bsz) {
     step_output_len[bid] = 0;
+    for (int i = 0; i < max_step_tokens; i++) {
+      step_output_ids[bid * max_step_tokens + i] = -1;
+    };
   } else {
     return;
   }
@@ -307,17 +310,6 @@ __global__ void verify_draft_tokens(
         accepted = verify_one_topp(candidate_ids_now + i * max_candidate_len,
                                    ctx.step_input_ids_now[i + 1],
                                    actual_cand_len);
-        if (!accepted) {
-          bool rejected = false;
-          i = ctx.try_verify_window_fallback(i,
-                                             &rejected,
-                                             candidate_ids_now,
-                                             seq_lens_this_time[bid],
-                                             max_candidate_len,
-                                             verify_window);
-          if (ctx.stopped || rejected) goto phase1_done;
-          continue;  // bulk accept succeeded, continue from new i
-        }
         break;
       }
       case 1:  // GREEDY
@@ -333,7 +325,6 @@ __global__ void verify_draft_tokens(
       break;  // reject
     }
   }
-phase1_done:
 
   // ======== Phase 2: Output token for rejected/last position ========
   if (!ctx.stopped) {
