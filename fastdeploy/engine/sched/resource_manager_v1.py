@@ -271,6 +271,10 @@ class ResourceManagerV1(ResourceManager):
     def _assign_rescheduled_slot(self, request):
         allocated_position = self.get_available_position()
         request.idx = allocated_position
+        allocated_position = request.idx
+        if allocated_position is None:
+            allocated_position = self.get_available_position()
+            request.idx = allocated_position
         self.tasks_list[allocated_position] = request
         self.stop_flags[allocated_position] = False
         self.req_dict[request.request_id] = allocated_position
