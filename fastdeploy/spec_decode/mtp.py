@@ -70,7 +70,7 @@ else:
         set_data_ipc,
         unset_data_ipc,
     )
-    from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
+    from fastdeploy.model_executor.pre_and_post_process import async_set_value, pre_process, rebuild_padding
 
 from fastdeploy.worker.input_batch import (
     ProposerInputBatch,
@@ -536,9 +536,14 @@ class MTPProposer(Proposer):
                 encoder_block_num = len(request.block_tables)
                 self.model_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.model_inputs["block_tables"][idx : idx + 1, :] = -1
-                self.model_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
-                    request.block_tables, dtype="int32"
-                )
+                if current_platform.is_cuda():
+                    async_set_value(
+                        self.model_inputs["block_tables"][idx : idx + 1, :encoder_block_num], request.block_tables
+                    )
+                else:
+                    self.model_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
+                        request.block_tables, dtype="int32"
+                    )
                 # if self.model_inputs["is_block_step"][idx]:  # has tasks to continue to decode
                 #     has_decode_task = True
                 # continue
@@ -847,11 +852,7 @@ class MTPProposer(Proposer):
             )
             mtp_save_first_token(
                 recover_model_output_map["base_model_draft_tokens"],
-                (
-                    self.model_inputs["not_need_stop_device"]
-                    if current_platform.is_cuda()
-                    else self.model_inputs["not_need_stop"]
-                ),
+                self.model_inputs["not_need_stop"],
                 recover_model_output_map["seq_lens_decoder"],
                 recover_model_output_map["prompt_lens"],
                 recover_model_output_map["step_idx"],

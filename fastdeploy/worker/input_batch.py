@@ -438,6 +438,10 @@ class InputBatch:
             swap_data(self.step_seq_lens_this_time, i1, i2)
             swap_data(self.draft_logits, i1, i2)
             swap_data(self.cu_batch_token_offset, i1, i2)
+            swap_data(self.seq_lens_decoder_cpu, i1, i2)
+            swap_data(self.prompt_lens_cpu, i1, i2)
+            swap_data(self.accept_tokens_cpu, i1, i2)
+            swap_data(self.accept_num_cpu, i1, i2)
 
         if self.enable_mm:
             if self.image_features_list is not None:
@@ -1099,6 +1103,7 @@ def _recover_tensor(recover_tensor, index_to_batch_id_list):
     """
     sort_len = len(index_to_batch_id_list)
     if isinstance(recover_tensor.place, paddle.CUDAPinnedPlace):
+        recover_tensor = recover_tensor.cpu()
         recover_res_tensor = paddle.empty_like(recover_tensor, device="cpu")
     else:
         recover_res_tensor = paddle.empty_like(recover_tensor)

@@ -530,21 +530,18 @@ def save_output_specualate(
     save_each_rank: bool = False,
 ):
     if sampler_output.logprobs_tensors is None:
-        recover_model_output_map = recover_batch_index_for_output(
+        recover_share_inputs = recover_batch_index_for_output(
             share_inputs,
             model_output.index_to_batch_id,
             model_output.enable_pd_reorder,
-            ["accept_tokens_cpu", "accept_num_cpu", "seq_lens_decoder_cpu", "prompt_lens_cpu"],
-        )
-        recover_share_inputs = recover_batch_index_for_output(
-            share_inputs, model_output.index_to_batch_id, model_output.enable_pd_reorder, ["last_preempted_idx"]
+            ["accept_tokens_cpu", "accept_num_cpu", "seq_lens_decoder_cpu", "prompt_lens_cpu", "last_preempted_idx"],
         )
         speculate_save_output(
-            recover_model_output_map["accept_tokens_cpu"],
-            recover_model_output_map["accept_num_cpu"],
+            recover_share_inputs["accept_tokens_cpu"],
+            recover_share_inputs["accept_num_cpu"],
             model_output.not_need_stop,
-            recover_model_output_map["seq_lens_decoder_cpu"],
-            recover_model_output_map["prompt_lens_cpu"],
+            recover_share_inputs["seq_lens_decoder_cpu"],
+            recover_share_inputs["prompt_lens_cpu"],
             recover_share_inputs["last_preempted_idx"],
             model_output.mp_rank,
             save_each_rank,
@@ -553,12 +550,6 @@ def save_output_specualate(
     else:
         recover_batch_index_for_sampler_output(
             sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
-        )
-        recover_model_output_map = recover_batch_index_for_output(
-            model_output,
-            model_output.index_to_batch_id,
-            model_output.enable_pd_reorder,
-            ["seq_lens_decoder", "prompt_lens"],
         )
         recover_share_inputs = recover_batch_index_for_output(
             share_inputs,

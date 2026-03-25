@@ -519,6 +519,7 @@ class TestMTPProposer(unittest.TestCase):
 
         # Use num_speculative_tokens=2 to ensure num_model_steps > 1
         self.fd_config.speculative_config.num_speculative_tokens = 2
+        self.fd_config.speculative_config.num_model_steps = 3
         proposer = MTPProposer(
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
