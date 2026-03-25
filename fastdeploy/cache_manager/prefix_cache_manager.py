@@ -217,7 +217,7 @@ class PrefixCacheManager:
             is_server=False,
             num_client=tensor_parallel_size,
             client_id=0,
-            local_data_parallel_id=self.local_data_parallel_id,
+            local_data_parallel_id=0,
         )
 
         current_dir_path = os.path.split(os.path.abspath(__file__))[0]
