@@ -248,7 +248,6 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         Marlin compute Fused MoE.
         """
         gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
         token_num = x.shape[0]
         top_k = layer.top_k
         top_k = layer.top_k
@@ -260,6 +259,9 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         if topk_method == "noaux_tc":
             from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
+            if layer.dynamic_load_weight:
+                gate_out = gate_out.cast("float32")
+            use_fused = not layer.dynamic_load_weight
             _, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -268,8 +270,10 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
+                use_fused_cast=use_fused,
             )
         else:
+            gate_out = gate_out.cast("float32")
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
                 layer.gate_correction_bias,

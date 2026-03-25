@@ -40,16 +40,11 @@ try:
 except:
     logger.warning("import noaux_tc Failed!")
 
-try:
-    from fastdeploy.model_executor.layers.moe.fused_cast_sigmoid_bias import (
-        fused_cast_sigmoid_bias,
-    )
-
-    _FUSED_CAST_SIGMOID_BIAS_AVAILABLE = True
-except Exception:
-    _FUSED_CAST_SIGMOID_BIAS_AVAILABLE = False
-
 import numpy as np
+
+from fastdeploy.model_executor.layers.moe.fused_cast_sigmoid_bias import (
+    fused_cast_sigmoid_bias,
+)
 
 
 def get_moe_method(layer=None):
@@ -107,7 +102,7 @@ def get_moe_scores(
     compute moe scores using e_score_correction_bias.
     """
     assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
-    if use_fused_cast and _FUSED_CAST_SIGMOID_BIAS_AVAILABLE:
+    if use_fused_cast:
         scores, scores_with_bias = fused_cast_sigmoid_bias(gating_output, e_score_correction_bias)
     else:
         scores = paddle.nn.functional.sigmoid(gating_output)
@@ -199,6 +194,7 @@ class FusedMoE(nn.Layer):
         super().__init__()
 
         self.fd_config = fd_config
+        self.dynamic_load_weight = fd_config.load_config.dynamic_load_weight
         self.layer_idx = layer_idx
         self.reduce_results = reduce_results
         self.renormalize = renormalize
