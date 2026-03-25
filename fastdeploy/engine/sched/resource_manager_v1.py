@@ -709,6 +709,7 @@ class ResourceManagerV1(ResourceManager):
         rem_input_tokens,
         *,
         existing_prefill_in_batch: bool = False,
+        ignore_rem_input_budget: bool = False,
     ):
         # SGLang-aligned:
         # - rem_input_tokens is a hard stop only after some prefill has already
@@ -717,14 +718,18 @@ class ResourceManagerV1(ResourceManager):
         if remaining <= 0:
             return 0
 
-        if rem_input_tokens <= 0:
+        if not ignore_rem_input_budget and rem_input_tokens <= 0:
             return 0
 
-        if existing_prefill_in_batch and self._get_paged_prefill_tokens(remaining) >= rem_input_tokens:
+        if (
+            not ignore_rem_input_budget
+            and existing_prefill_in_batch
+            and self._get_paged_prefill_tokens(remaining) >= rem_input_tokens
+        ):
             return 0
 
         block_size = self.config.cache_config.block_size
-        num_new_tokens = min(remaining, rem_input_tokens)
+        num_new_tokens = remaining if ignore_rem_input_budget else min(remaining, rem_input_tokens)
         is_truncated = num_new_tokens < remaining
 
         paged_input_tokens = self._get_paged_prefill_tokens(num_new_tokens)
@@ -741,7 +746,8 @@ class ResourceManagerV1(ResourceManager):
             is_truncated = True
 
         if current_platform.is_intel_hpu():
-            hpu_budget = min(rem_input_tokens, rem_chunk_tokens or rem_input_tokens)
+            hpu_input_budget = num_new_tokens if ignore_rem_input_budget else rem_input_tokens
+            hpu_budget = min(hpu_input_budget, rem_chunk_tokens or hpu_input_budget)
             if is_truncated and hpu_budget > block_size:
                 num_new_tokens = num_new_tokens // block_size * block_size
         elif block_size > 1 and is_truncated:
@@ -1147,7 +1153,12 @@ class ResourceManagerV1(ResourceManager):
                     >= self.config.cache_config.block_size
                     and rem_input_tokens < self.config.cache_config.block_size
                 ) and not get_enough_request(request, scheduled_reqs) and rem_chunk_tokens > 0:
-                    num_new_tokens = self._get_num_new_tokens(request, rem_chunk_tokens, rem_input_tokens)
+                    num_new_tokens = self._get_num_new_tokens(
+                        request,
+                        rem_chunk_tokens,
+                        rem_input_tokens,
+                        ignore_rem_input_budget=True,
+                    )
                     if num_new_tokens > 0:
                         is_last_chunk = self._is_last_prefill_chunk(request, num_new_tokens)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
@@ -1247,8 +1258,6 @@ class ResourceManagerV1(ResourceManager):
                         if num_new_tokens <= 0:
                             break
                         is_last_chunk = self._is_last_prefill_chunk(request, num_new_tokens)
-                        if self.active_chunked_prefill_req is not None and not is_last_chunk:
-                            break
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             request,
@@ -1326,8 +1335,6 @@ class ResourceManagerV1(ResourceManager):
                         if num_new_tokens <= 0:
                             break
                         is_last_chunk = self._is_last_prefill_chunk(request, num_new_tokens)
-                        if self.active_chunked_prefill_req is not None and not is_last_chunk:
-                            break
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             request,
