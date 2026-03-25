@@ -44,8 +44,6 @@ class EngineCacheQueue:
         is_server: bool = False,
         num_client: int = 1,  # tensor parallel size
         client_id: int = -1,  # tensor parallel id
-        local_data_parallel_size: int = 1,  # data parallel size
-        local_data_parallel_id: int = 0,  # local data parallel id
     ) -> None:
         """
         Initialize the cache communication queue.
@@ -56,16 +54,12 @@ class EngineCacheQueue:
             is_server: Whether this instance acts as a server
             num_client: Total number of expected clients
             client_id: Unique identifier for client instances
-            local_data_parallel_size: data parallel size
-            local_data_parallel_id: local data parallel id
         """
         self.address: Tuple[str, int] = address
         self.authkey: bytes = authkey
         self.is_server: bool = is_server
         self.num_client: int = num_client
         self.client_id: int = client_id
-        self.local_data_parallel_size = local_data_parallel_size
-        self.local_data_parallel_id = local_data_parallel_id
 
         class QueueManager(BaseManager):
             """
@@ -75,102 +69,81 @@ class EngineCacheQueue:
             pass
 
         if is_server:
-            # Server-side initialization for shared resources
-            self.transfer_task_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
-            self.tansfer_done_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
-            self.cache_sync_value_init: List[Value] = [Value("i", 0) for _ in range(self.local_data_parallel_size)]
-            self.transfer_task_lock_init: List[threading.Lock] = [
-                threading.Lock() for _ in range(self.local_data_parallel_size)
-            ]
-            self.transfer_task_done_lock_init: List[threading.Lock] = [
-                threading.Lock() for _ in range(self.local_data_parallel_size)
-            ]
+            # Each EngineCacheQueue instance serves a single DP rank.
+            self.transfer_task_queue_init: List[Any] = []
+            self.tansfer_done_queue_init: List[Any] = []
+            self.cache_sync_value_init: Value = Value("i", 0)
+            self.transfer_task_lock_init = threading.Lock()
+            self.transfer_task_done_lock_init = threading.Lock()
 
-            # Initialize barriers
-            self.barrier0_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
-            self.barrier1_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
-            self.barrier2_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
-            self.barrier3_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
-            self.pause_barrier_init = [
-                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
-            ]
-            self.resume_barrier_init = [
-                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
-            ]
-            self.swap_to_cpu_barrier1_init = [
-                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
-            ]
-            self.swap_to_cpu_barrier2_init = [
-                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
-            ]
-            self.swap_to_gpu_barrier1_init = [
-                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
-            ]
-            self.swap_to_gpu_barrier2_init = [
-                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
-            ]
-            self.swap_storage_to_gpu_barrier_init = [
-                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
-            ]
-            self.swap_to_storage_barrier_init = [
-                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
-            ]
+            self.barrier0_init = threading.Barrier(self.num_client)
+            self.barrier1_init = threading.Barrier(self.num_client)
+            self.barrier2_init = threading.Barrier(self.num_client)
+            self.barrier3_init = threading.Barrier(self.num_client)
+            self.pause_barrier_init = threading.Barrier(self.num_client)
+            self.resume_barrier_init = threading.Barrier(self.num_client)
+            self.swap_to_cpu_barrier1_init = threading.Barrier(self.num_client)
+            self.swap_to_cpu_barrier2_init = threading.Barrier(self.num_client)
+            self.swap_to_gpu_barrier1_init = threading.Barrier(self.num_client)
+            self.swap_to_gpu_barrier2_init = threading.Barrier(self.num_client)
+            self.swap_storage_to_gpu_barrier_init = threading.Barrier(self.num_client)
+            self.swap_to_storage_barrier_init = threading.Barrier(self.num_client)
 
             # Register shared objects with proxy types
             QueueManager.register(
                 "get_transfer_task_queue",
-                callable=lambda idx: self.transfer_task_queue_init[idx],
+                callable=lambda: self.transfer_task_queue_init,
                 proxytype=ListProxy,
             )
             QueueManager.register(
                 "get_tansfer_done_queue",
-                callable=lambda idx: self.tansfer_done_queue_init[idx],
+                callable=lambda: self.tansfer_done_queue_init,
                 proxytype=ListProxy,
             )
             QueueManager.register(
                 "get_cache_sync_value",
-                callable=lambda idx: self.cache_sync_value_init[idx],
+                callable=lambda: self.cache_sync_value_init,
                 proxytype=ValueProxy,
             )
             QueueManager.register(
                 "get_transfer_task_lock",
-                callable=lambda idx: self.transfer_task_lock_init[idx],
+                callable=lambda: self.transfer_task_lock_init,
                 proxytype=AcquirerProxy,
             )
             QueueManager.register(
                 "get_transfer_task_done_lock",
-                callable=lambda idx: self.transfer_task_done_lock_init[idx],
+                callable=lambda: self.transfer_task_done_lock_init,
                 proxytype=AcquirerProxy,
             )
-            QueueManager.register("get_barrier0", callable=lambda idx: self.barrier0_init[idx])
-            QueueManager.register("get_barrier1", callable=lambda idx: self.barrier1_init[idx])
-            QueueManager.register("get_barrier2", callable=lambda idx: self.barrier2_init[idx])
-            QueueManager.register("get_barrier3", callable=lambda idx: self.barrier3_init[idx])
-            QueueManager.register("get_pause_barrier", callable=lambda idx: self.pause_barrier_init[idx])
-            QueueManager.register("get_resume_barrier", callable=lambda idx: self.resume_barrier_init[idx])
+            QueueManager.register("get_barrier0", callable=lambda: self.barrier0_init)
+            QueueManager.register("get_barrier1", callable=lambda: self.barrier1_init)
+            QueueManager.register("get_barrier2", callable=lambda: self.barrier2_init)
+            QueueManager.register("get_barrier3", callable=lambda: self.barrier3_init)
+            QueueManager.register("get_pause_barrier", callable=lambda: self.pause_barrier_init)
+            QueueManager.register("get_resume_barrier", callable=lambda: self.resume_barrier_init)
             QueueManager.register(
                 "get_swap_to_cpu_barrier1",
-                callable=lambda idx: self.swap_to_cpu_barrier1_init[idx],
+                callable=lambda: self.swap_to_cpu_barrier1_init,
             )
             QueueManager.register(
                 "get_swap_to_cpu_barrier2",
-                callable=lambda idx: self.swap_to_cpu_barrier2_init[idx],
+                callable=lambda: self.swap_to_cpu_barrier2_init,
             )
             QueueManager.register(
                 "get_swap_to_gpu_barrier1",
-                callable=lambda idx: self.swap_to_gpu_barrier1_init[idx],
+                callable=lambda: self.swap_to_gpu_barrier1_init,
             )
             QueueManager.register(
                 "get_swap_to_gpu_barrier2",
-                callable=lambda idx: self.swap_to_gpu_barrier2_init[idx],
+                callable=lambda: self.swap_to_gpu_barrier2_init,
             )
             QueueManager.register(
                 "get_swap_storage_to_gpu_barrier",
-                callable=lambda idx: self.swap_storage_to_gpu_barrier_init[idx],
+                callable=lambda: self.swap_storage_to_gpu_barrier_init,
             )
             QueueManager.register(
                 "get_swap_to_storage_barrier",
-                callable=lambda idx: self.swap_to_storage_barrier_init[idx],
+                callable=lambda: self.swap_to_storage_barrier_init,
             )
             self.manager: BaseManager = QueueManager(address=self.address, authkey=self.authkey)
             self.manager.start()
@@ -208,25 +181,25 @@ class EngineCacheQueue:
             self._connect_with_retry()
 
         # Get proxy objects for shared resources
-        self.transfer_task_queue = self.manager.get_transfer_task_queue(self.local_data_parallel_id)
-        self.tansfer_done_queue = self.manager.get_tansfer_done_queue(self.local_data_parallel_id)
-        self.task_sync_value = self.manager.get_cache_sync_value(self.local_data_parallel_id)
-        self.task_lock = self.manager.get_transfer_task_lock(self.local_data_parallel_id)
-        self.task_done_lock = self.manager.get_transfer_task_done_lock(self.local_data_parallel_id)
+        self.transfer_task_queue = self.manager.get_transfer_task_queue()
+        self.tansfer_done_queue = self.manager.get_tansfer_done_queue()
+        self.task_sync_value = self.manager.get_cache_sync_value()
+        self.task_lock = self.manager.get_transfer_task_lock()
+        self.task_done_lock = self.manager.get_transfer_task_done_lock()
 
         # Get barrier proxies
-        self.barrier0 = self.manager.get_barrier0(self.local_data_parallel_id)
-        self.barrier1 = self.manager.get_barrier1(self.local_data_parallel_id)
-        self.barrier2 = self.manager.get_barrier2(self.local_data_parallel_id)
-        self.barrier3 = self.manager.get_barrier3(self.local_data_parallel_id)
-        self.pause_barrier = self.manager.get_pause_barrier(self.local_data_parallel_id)
-        self.resume_barrier = self.manager.get_resume_barrier(self.local_data_parallel_id)
-        self.swap_to_cpu_barrier1 = self.manager.get_swap_to_cpu_barrier1(self.local_data_parallel_id)
-        self.swap_to_cpu_barrier2 = self.manager.get_swap_to_cpu_barrier2(self.local_data_parallel_id)
-        self.swap_to_gpu_barrier1 = self.manager.get_swap_to_gpu_barrier1(self.local_data_parallel_id)
-        self.swap_to_gpu_barrier2 = self.manager.get_swap_to_gpu_barrier2(self.local_data_parallel_id)
-        self.swap_storage_to_gpu_barrier = self.manager.get_swap_storage_to_gpu_barrier(self.local_data_parallel_id)
-        self.swap_to_storage_barrier = self.manager.get_swap_to_storage_barrier(self.local_data_parallel_id)
+        self.barrier0 = self.manager.get_barrier0()
+        self.barrier1 = self.manager.get_barrier1()
+        self.barrier2 = self.manager.get_barrier2()
+        self.barrier3 = self.manager.get_barrier3()
+        self.pause_barrier = self.manager.get_pause_barrier()
+        self.resume_barrier = self.manager.get_resume_barrier()
+        self.swap_to_cpu_barrier1 = self.manager.get_swap_to_cpu_barrier1()
+        self.swap_to_cpu_barrier2 = self.manager.get_swap_to_cpu_barrier2()
+        self.swap_to_gpu_barrier1 = self.manager.get_swap_to_gpu_barrier1()
+        self.swap_to_gpu_barrier2 = self.manager.get_swap_to_gpu_barrier2()
+        self.swap_storage_to_gpu_barrier = self.manager.get_swap_storage_to_gpu_barrier()
+        self.swap_to_storage_barrier = self.manager.get_swap_to_storage_barrier()
         self.total_num: int = (1 << self.num_client) - 1
 
         if not is_server:
