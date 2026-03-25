@@ -47,7 +47,12 @@ try:
         prefill_permute_to_masked_gemm,
     )
 
-    logger.info("import flashinfer_cutedsl_moe... please wait")
+    logger.info(
+        "FlashInfer cutedsl is slow to import because it triggers JIT compilation of "
+        "CUDA kernels via TVM/CODEGEN, and cuBLASLt initializes lookup tables and "
+        "compiles GEMM kernels during first load. This may take several minutes. "
+        "The wait is expected and only happens once per process."
+    )
     from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
         flashinfer_cutedsl_moe_masked,
     )
@@ -81,6 +86,11 @@ def call_prefill_permute_to_masked_gemm(
     """
     if topk_ids.dtype != paddle.int64:
         topk_ids = topk_ids.cast(paddle.int64)
+
+    # NVFP4 dispatch returns plain BF16 (no fp8 scale); pass empty tensor so the
+    # C++ op can detect the no-scale path via tensor.numel() == 0.
+    if scale is None:
+        scale = paddle.empty([0], dtype=paddle.float32)
 
     results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num)
 
@@ -633,15 +643,15 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                 weight_scale.dtype == paddle.float8_e4m3fn
             ), f"{name} Weight Blockscale must be represented as FP8-E4M3"
 
-        # up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
-        up_gate_proj_blockscale_swizzled = layer.up_gate_proj_weight_scale
+        up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
+        # up_gate_proj_blockscale_swizzled = layer.up_gate_proj_weight_scale
         free_tensor(layer.up_gate_proj_weight_scale)
         layer.up_gate_proj_weight_scale = None
         create_parameter_and_copy(
             layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
         )
-        # down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
-        down_proj_blockscale_swizzled = layer.down_proj_weight_scale
+        down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
+        # down_proj_blockscale_swizzled = layer.down_proj_weight_scale
         free_tensor(layer.down_proj_weight_scale)
         layer.down_proj_weight_scale = None
         create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
@@ -658,15 +668,15 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         # 1. top experts and weights
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
-        # hidden_size = x.shape[1]
+        hidden_size = x.shape[1]
+        logger.info(f"输入x:{x}")
+        logger.info(f"topk_idx:{topk_idx}")
+        logger.info(f"topk_weights:{topk_weights}")
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
 
         event = deep_ep.Buffer.capture()
-
-        if self.ep_prefill_runner.num_worst_tokens <= 0:
-            let_another_thread_run()
 
         # 2. ep dispatch
         (
@@ -683,6 +693,10 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             expert_alignment=128,
             previous_event=event,
         )
+        logger.info(f"recv_x:{recv_x}")
+        logger.info(f"recv_topk_idx:{recv_topk_idx}")
+        logger.info(f"recv_topk_weights:{recv_topk_weights}")
+        logger.info(f"recv_num_tokens_per_expert_list:{recv_num_tokens_per_expert_list}")
 
         if self.ep_prefill_runner.num_worst_tokens > 0:
             let_another_thread_run()
@@ -701,18 +715,10 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         recv_x_value = recv_x
         recv_x_scale = None
 
-        global_values[thread_name]["x"] = x
-        global_values[thread_name]["topk_idx"] = topk_idx
-        global_values[thread_name]["topk_weights"] = topk_weights
-        global_values[thread_name]["recv_x_scale"] = recv_x_scale
-        global_values[thread_name]["recv_x_value"] = recv_x_value
-        global_values[thread_name]["recv_topk_idx"] = recv_topk_idx
-        global_values[thread_name]["recv_topk_weights"] = recv_topk_weights
-        global_values[thread_name]["handle"] = handle
-        global_values[thread_name]["recv_num_tokens_per_expert_list"] = recv_num_tokens_per_expert_list
-
         # 3. compute ffn
-        # token_all_num = sum(recv_num_tokens_per_expert_list)
+        token_all_num = sum(recv_num_tokens_per_expert_list)
+
+        # logger.info(f"self.ep_prefill_runner.num_worst_tokens:{self.ep_prefill_runner.num_worst_tokens}")
 
         if self.ep_prefill_runner.num_worst_tokens > 0:
             token_split_factor = 2 if int(os.getenv("USE_TBO", "0")) == 1 else 1
@@ -722,48 +728,87 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                 // token_split_factor
             )
 
-            logger.debug(f"max_tokens_per_rank {max_tokens_per_rank}")
+            # logger.debug(f"max_tokens_per_rank {max_tokens_per_rank}")
 
             permute_input, permute_scale, permuted_indice_map, token_nums_per_expert = (
                 call_prefill_permute_to_masked_gemm(
                     x=recv_x_value,
-                    scale=paddle.zeros([recv_x_value.shape[0], 1], dtype=paddle.float32),
+                    scale=recv_x_scale,
                     topk_ids=recv_topk_idx,
                     num_local_experts=layer.num_local_experts,
                     max_token_num=layer.ep_size * max_tokens_per_rank,
                 )
             )
+            # logger.info(f"permute_input:{permute_input}")
+            # logger.info(f"permute_scale:{permute_scale}")
+            # logger.info(f"permuted_indice_map:{permuted_indice_map}")
+            # logger.info(f"token_nums_per_expert:{token_nums_per_expert}")
 
-            # tmp_ffn_out = call_depermute_prefill_combine(
-            #     x=ffn_out,
-            #     indice_map=permuted_indice_map,
-            #     topk_weights=recv_topk_weights,
-            #     num_worst_tokens=recv_x_value.shape[0],
-            # )
+            # permute_input shape: [num_local_experts * max_token_num, hidden_size] (token-major, 2D)
+            # flashinfer_cutedsl_moe_masked standard path expects [num_experts, m, k] (expert-major, 3D)
+            max_token_num = layer.ep_size * max_tokens_per_rank
+            permute_input = permute_input.reshape([layer.num_local_experts, max_token_num, recv_x_value.shape[-1]])
 
-        # elif token_all_num > 0:
-        #     raise NotImplementedError(
-        #         "NVFP4 EP prefill contiguous path (num_worst_tokens <= 0, token_all_num > 0) is not yet implemented."
-        #     )
-        # else:
-        #     tmp_ffn_out = paddle.empty([0, hidden_size], dtype=paddle.bfloat16)
+            # print(f"up_gate_proj_input_scale_quant: {layer.up_gate_proj_input_scale_quant}")
+            # print(f"down_proj_input_scale_quant: {layer.down_proj_input_scale_quant}")
 
-        # # 4. EP combine
-        # event = deep_ep.Buffer.capture()
-        # if self.ep_prefill_runner.num_worst_tokens <= 0:
-        #     let_another_thread_run()
+            # ffn_out: [num_local_experts, m, hidden_size]
+            # NVFP4 dispatch returns BF16 (no pre-quantized scale), so permute_scale is empty.
+            # Use per-expert 1/input_scale (up_gate_proj_input_scale_quant) as input_global_scale,
+            # consistent with apply_ep_decode which also uses this value directly.
+            logger.info(f"permute_input:{permute_input}")
+            logger.info(f"layer.up_gate_proj_input_scale_quant:{layer.up_gate_proj_input_scale_quant}")
+            logger.info(f"layer.up_gate_proj_weight:{layer.up_gate_proj_weight}")
+            logger.info(f"layer.up_gate_proj_blockscale_swiizled:{layer.up_gate_proj_blockscale_swizzled}")
+            logger.info(f"layer.g1_alpha:{layer.g1_alphas}")
+            logger.info(f"layer.down_proj_weight:{layer.down_proj_weight}")
+            logger.info(f"layer.down_proj_input_scale_quant:{layer.down_proj_input_scale_quant}")
+            logger.info(f"layer.down_proj_blockscale_swizzled:{layer.down_proj_blockscale_swizzled}")
+            logger.info(f"g2_alpha:{layer.g2_alphas}")
+            logger.info(f"tokens_num_per_expert:{token_nums_per_expert}")
+            ffn_out = flashinfer_cutedsl_moe_masked(
+                hidden_states=(permute_input, None),
+                input_global_scale=layer.up_gate_proj_input_scale_quant.expand([layer.num_local_experts]),
+                w1=layer.up_gate_proj_weight,
+                w1_blockscale=layer.up_gate_proj_blockscale_swizzled,
+                w1_alpha=layer.g1_alphas,
+                w2=layer.down_proj_weight,
+                a2_global_scale=layer.down_proj_input_scale_quant.expand([layer.num_local_experts]),
+                w2_blockscale=layer.down_proj_blockscale_swizzled,
+                w2_alpha=layer.g2_alphas,
+                masked_m=token_nums_per_expert.squeeze(-1).cast(paddle.int32),
+            )
+            logger.info(f"ffn_out:{ffn_out}")
 
-        # global_values[thread_name]["combine_in"] = tmp_ffn_out
-        # tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
+            tmp_ffn_out = call_depermute_prefill_combine(
+                x=ffn_out,
+                indice_map=permuted_indice_map,
+                topk_weights=recv_topk_weights,
+                num_worst_tokens=recv_x_value.shape[0],
+            )
+            logger.info(f"tmp_ffn_out:{tmp_ffn_out}")
 
-        # if self.ep_prefill_runner.num_worst_tokens > 0:
-        #     let_another_thread_run()
+        elif token_all_num > 0:
+            raise NotImplementedError(
+                "NVFP4 EP prefill contiguous path (num_worst_tokens <= 0, token_all_num > 0) is not yet implemented."
+            )
+        else:
+            tmp_ffn_out = paddle.empty([0, hidden_size], dtype=paddle.bfloat16)
 
-        # if self.ep_prefill_runner.ep_engine.async_finish:
-        #     event.current_stream_wait()
+        # 4. EP combine
+        event = deep_ep.Buffer.capture()
+        if self.ep_prefill_runner.num_worst_tokens <= 0:
+            let_another_thread_run()
 
-        # global_values[thread_name]["combine_out"] = tmp_ffn_out
-        # return tmp_ffn_out
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
+
+        if self.ep_prefill_runner.num_worst_tokens > 0:
+            let_another_thread_run()
+
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+
+        return tmp_ffn_out
 
     def apply_ep_decode(
         self,
@@ -777,8 +822,11 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             raise NotImplementedError("NVFP4 CuteDSL EP decode does not support DeepEP two-stage low-latency.")
 
         gate_out = gate(x.cast("float32"))
+        logger.info(f"x:{x}")
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
+        logger.info(f"topk_idx:{topk_idx}")
+        logger.info(f"topk_weights:{topk_weights}")
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
 
@@ -788,7 +836,18 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             topk_weights,
             use_fp8=False,
         )
+        logger.info(f"recv_x:{recv_x}")
+        logger.info(f"token_nums_per_expert:{token_nums_per_expert}")
 
+        logger.info(f"layer.up_gate_proj_input_scale_quant:{layer.up_gate_proj_input_scale_quant}")
+        logger.info(f"layer.up_gate_proj_weight:{layer.up_gate_proj_weight}")
+        logger.info(f"layer.up_gate_proj_blockscale_swizzled:{layer.up_gate_proj_blockscale_swizzled}")
+        logger.info(f"layer.g1_alphas:{layer.g1_alphas}")
+        logger.info(f"layer.down_proj_weight:{layer.down_proj_weight}")
+        logger.info(f"layer.down_proj_input_scale_quant:{layer.down_proj_input_scale_quant}")
+        logger.info(f"layer.down_proj_blockscale_swizzled:{layer.down_proj_blockscale_swizzled}")
+        logger.info(f"layer.g2_alphas:{layer.g2_alphas}")
+        logger.info(f"tokens_num_per_expert:{token_nums_per_expert}")
         # Compute FFN via CuteDSL masked grouped GEMM
         num_experts = layer.num_local_experts
         ffn_out = flashinfer_cutedsl_moe_masked(
@@ -803,6 +862,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             w2_alpha=layer.g2_alphas,
             masked_m=token_nums_per_expert.cast(paddle.int32),
         )
+        logger.info(f"ffn_out:{ffn_out}")
 
         out = self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
 
@@ -877,16 +937,16 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             return output
 
         elif self.backend == "flashinfer-cutedsl" and layer.ep_size > 1:
-            # if layer.fd_config.model_config.moe_phase.phase == "prefill":
-            #     logger.info(f"跑到了prefill")
-            #     return self.apply_ep_prefill(
-            #         layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
-            #     )
+            if layer.fd_config.model_config.moe_phase.phase == "prefill":
+                logger.info("跑到了prefill")
+                return self.apply_ep_prefill(
+                    layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
+                )
             # else:
-            logger.info("跑到了decode")
-            return self.apply_ep_decode(
-                layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
-            )
+            # logger.info("跑到了decode")
+            # return self.apply_ep_decode(
+            #     layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
+            # )
 
         # flashinfer-trtllm
-        return paddle.empty_like(x)
+        return paddle.zeros_like(x)
