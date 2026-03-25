@@ -1163,3 +1163,117 @@ template void DecoderWriteCacheWithRoPEKernel<paddle::float16, paddle::float16>(
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
     const float rms_norm_eps);
+
+template void DecoderWriteCacheWithRoPEKernel<paddle::bfloat16, int, true>(
+    const AppendAttnMetaData& meta_data,
+    const paddle::Tensor&
+        qkv,  // [token_num, 3, num_head, head_dim] ([token_num, num_head + 2 *
+              // kv_num_heads, head_dim] if GQA)
+    const paddle::Tensor& seq_lens,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::optional<paddle::Tensor>& rotary_embs,
+    const paddle::optional<paddle::Tensor>& qkv_out_scales,
+    const paddle::optional<paddle::Tensor>& qkv_biases,
+    const paddle::optional<paddle::Tensor>& cache_k_scale,
+    const paddle::optional<paddle::Tensor>& cache_v_scale,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& cache_v_zp,
+    const std::string& cache_quant_type_str,
+    const bool use_neox_rotary_style,
+    const bool rope_3d,
+    const int max_seq_len,
+    cudaStream_t& stream,
+    paddle::Tensor* qkv_out,
+    paddle::Tensor* key_cache_out,
+    paddle::Tensor* value_cache_out,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps);
+
+template void
+DecoderWriteCacheWithRoPEKernel<paddle::bfloat16, paddle::bfloat16, true>(
+    const AppendAttnMetaData& meta_data,
+    const paddle::Tensor&
+        qkv,  // [token_num, 3, num_head, head_dim] ([token_num, num_head + 2 *
+              // kv_num_heads, head_dim] if GQA)
+    const paddle::Tensor& seq_lens,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::optional<paddle::Tensor>& rotary_embs,
+    const paddle::optional<paddle::Tensor>& qkv_out_scales,
+    const paddle::optional<paddle::Tensor>& qkv_biases,
+    const paddle::optional<paddle::Tensor>& cache_k_scale,
+    const paddle::optional<paddle::Tensor>& cache_v_scale,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& cache_v_zp,
+    const std::string& cache_quant_type_str,
+    const bool use_neox_rotary_style,
+    const bool rope_3d,
+    const int max_seq_len,
+    cudaStream_t& stream,
+    paddle::Tensor* qkv_out,
+    paddle::Tensor* key_cache_out,
+    paddle::Tensor* value_cache_out,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps);
+
+template void DecoderWriteCacheWithRoPEKernel<paddle::float16, int, true>(
+    const AppendAttnMetaData& meta_data,
+    const paddle::Tensor&
+        qkv,  // [token_num, 3, num_head, head_dim] ([token_num, num_head + 2 *
+              // kv_num_heads, head_dim] if GQA)
+    const paddle::Tensor& seq_lens,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::optional<paddle::Tensor>& rotary_embs,
+    const paddle::optional<paddle::Tensor>& qkv_out_scales,
+    const paddle::optional<paddle::Tensor>& qkv_biases,
+    const paddle::optional<paddle::Tensor>& cache_k_scale,
+    const paddle::optional<paddle::Tensor>& cache_v_scale,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& cache_v_zp,
+    const std::string& cache_quant_type_str,
+    const bool use_neox_rotary_style,
+    const bool rope_3d,
+    const int max_seq_len,
+    cudaStream_t& stream,
+    paddle::Tensor* qkv_out,
+    paddle::Tensor* key_cache_out,
+    paddle::Tensor* value_cache_out,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps);
+
+template void
+DecoderWriteCacheWithRoPEKernel<paddle::float16, paddle::float16, true>(
+    const AppendAttnMetaData& meta_data,
+    const paddle::Tensor&
+        qkv,  // [token_num, 3, num_head, head_dim] ([token_num, num_head + 2 *
+              // kv_num_heads, head_dim] if GQA)
+    const paddle::Tensor& seq_lens,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::optional<paddle::Tensor>& rotary_embs,
+    const paddle::optional<paddle::Tensor>& qkv_out_scales,
+    const paddle::optional<paddle::Tensor>& qkv_biases,
+    const paddle::optional<paddle::Tensor>& cache_k_scale,
+    const paddle::optional<paddle::Tensor>& cache_v_scale,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& cache_v_zp,
+    const std::string& cache_quant_type_str,
+    const bool use_neox_rotary_style,
+    const bool rope_3d,
+    const int max_seq_len,
+    cudaStream_t& stream,
+    paddle::Tensor* qkv_out,
+    paddle::Tensor* key_cache_out,
+    paddle::Tensor* value_cache_out,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps);
