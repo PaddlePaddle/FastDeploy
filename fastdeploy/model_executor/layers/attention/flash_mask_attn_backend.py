@@ -52,8 +52,8 @@ if current_platform.is_cuda():
 else:
     merge_prefill_decode_output = None
 
-
 from fastdeploy.model_executor.utils import get_sm_version
+
 
 @dataclass
 class FlashMaskAttentionMetadata(AttentionMetadata):
