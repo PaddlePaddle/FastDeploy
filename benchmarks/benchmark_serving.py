@@ -383,23 +383,26 @@ async def benchmark(
         response_format=response_format,
         random_flag=random_flag,
         json_data=test_json_data,
+        tokenizer_model=args.tokenizer_model,
+        tokenizer_path=args.tokenizer_path,
     )
 
-    print("test_input:", test_input)
+    if not debug:
+        print("test_input:", test_input)
 
-    test_output = await request_func(request_func_input=test_input)
+        test_output = await request_func(request_func_input=test_input)
 
-    if args.multi_turn:
-        out_list, metrics = test_output
-        test_output = out_list[0]
+        if args.multi_turn:
+            out_list, metrics = test_output
+            test_output = out_list[0]
 
-    if not test_output.success:
-        print("test_output:", test_output, flush=True)
-        raise ValueError(
-            f"Initial test run failed - Please make sure that 1. benchmark arguments are correctly specified and 2. the http_proxy and https_proxy are turned off. Error: {test_output.error}"
-        )
-    else:
-        print("Initial test run completed. Starting main benchmark run...")
+        if not test_output.success:
+            print("test_output:", test_output, flush=True)
+            raise ValueError(
+                f"Initial test run failed - Please make sure that 1. benchmark arguments are correctly specified and 2. the http_proxy and https_proxy are turned off. Error: {test_output.error}"
+            )
+        else:
+            print("Initial test run completed. Starting main benchmark run...")
 
     if lora_modules:
         # For each input request, choose a LoRA module at random.
@@ -490,6 +493,8 @@ async def benchmark(
                 response_format=response_format,
                 random_flag=random_flag,
                 json_data=json_data,
+                tokenizer_model=args.tokenizer_model,
+                tokenizer_path=args.tokenizer_path,
             )
             tasks.append(asyncio.create_task(limited_request_func(request_func_input=request_func_input, pbar=pbar)))
 
@@ -576,6 +581,8 @@ async def benchmark(
                     response_format=response_format,
                     random_flag=random_flag,
                     json_data=json_data,
+                    tokenizer_model=args.tokenizer_model,
+                    tokenizer_path=args.tokenizer_path,
                 )
 
                 tasks.append(asyncio.create_task(limited_request_func_per_ip(req_input, semaphore, pbar)))
@@ -1426,6 +1433,18 @@ if __name__ == "__main__":
         "--multi-turn",
         action="store_true",
         help="按多轮对话方式请求",
+    )
+    parser.add_argument(
+        "--tokenizer-model",
+        default="auto",
+        type=str,
+        help="使用token_ids请求时指定，多轮对话tokenizer模型类型，'eb': ErnieBotTokenizer, 'eb5': Ernie5Tokenizer, 'eb_mm': Ernie4_5Tokenizer",
+    )
+    parser.add_argument(
+        "--tokenizer-path",
+        type=str,
+        default=None,
+        help="使用token_ids请求时指定，模型tokenizer路径",
     )
     parser.add_argument(
         "--drop-ratio",
