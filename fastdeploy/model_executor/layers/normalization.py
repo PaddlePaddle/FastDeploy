@@ -21,6 +21,9 @@ import paddle
 from paddle import nn
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
+    block_wise_cuda_graph_wrap,
+)
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_gcu():
@@ -203,6 +206,7 @@ class RMSNorm(nn.Layer):
         paddle.distributed.all_gather(multi_outs, out, self.tp_group)
         return multi_outs[:token_num, :]
 
+    @block_wise_cuda_graph_wrap(inputs=["x", "residual_input"])
     def forward(
         self,
         x,
@@ -228,6 +232,7 @@ class RMSNorm(nn.Layer):
         """
         x_dtype = x.dtype
         x = x.astype(self.weight.dtype)
+
         if residual_input is not None:
             residual_input_dtype = residual_input.dtype
             residual_input = residual_input.astype(self.weight.dtype)

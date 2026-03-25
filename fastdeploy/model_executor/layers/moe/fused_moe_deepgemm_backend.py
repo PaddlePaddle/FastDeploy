@@ -23,6 +23,9 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 import fastdeploy
+from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
+    block_wise_cuda_graph_wrap,
+)
 from fastdeploy.model_executor.layers.moe.ep import deep_ep
 from fastdeploy.model_executor.layers.quantization.fp8_utils import deep_gemm
 from fastdeploy.model_executor.layers.utils import get_tensor
@@ -314,6 +317,88 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         for name, tensor in name_tensor_map.items():
             getattr(layer, name).data = tensor
 
+    @block_wise_cuda_graph_wrap(
+        inputs=["recv_x_value", "recv_x_scale", "recv_topk_idx", "recv_topk_weights"],
+    )
+    def _prefill_masked_gemm_ffn(
+        self,
+        layer: nn.Layer,
+        recv_x_value: paddle.Tensor,
+        recv_x_scale: paddle.Tensor,
+        recv_topk_idx: paddle.Tensor,
+        recv_topk_weights: paddle.Tensor,
+        max_tokens_per_rank: int,
+        expected_m: int,
+    ) -> paddle.Tensor:
+        permute_input, permute_scale, permuted_indice_map, token_nums_per_expert = call_prefill_permute_to_masked_gemm(
+            x=recv_x_value,
+            scale=recv_x_scale,
+            topk_ids=recv_topk_idx,
+            num_local_experts=layer.num_local_experts,
+            max_token_num=layer.ep_size * max_tokens_per_rank,
+        )
+
+        up_gate_proj_out = paddle.empty(
+            [
+                layer.num_local_experts,
+                layer.ep_size * max_tokens_per_rank,
+                layer.moe_intermediate_size * 2,
+            ],
+            dtype=paddle.bfloat16,
+        )
+
+        m_grouped_fp8_gemm_nt_masked(
+            (permute_input, permute_scale),
+            (
+                getattr(layer, self.added_weight_attrs[0]),
+                getattr(layer, self.added_scale_attrs[0]),
+            ),
+            up_gate_proj_out,
+            token_nums_per_expert,
+            expected_m,
+            disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
+        )
+
+        act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.fused_mask_swiglu_fp8_quant(
+            up_gate_proj_out,
+            token_nums_per_expert,
+            self.quant_config.weight_block_size[0],
+            use_ue8m0=self.quant_config.deepgemm_scale_ue8m0,
+        )
+
+        if layer.hidden_size == layer.moe_intermediate_size * 2:
+            ffn_out = up_gate_proj_out
+        else:
+            ffn_out = paddle.empty(
+                [
+                    layer.num_local_experts,
+                    layer.ep_size * max_tokens_per_rank,
+                    layer.hidden_size,
+                ],
+                dtype=paddle.bfloat16,
+            )
+
+        m_grouped_fp8_gemm_nt_masked(
+            (act_out_fp8, scale),
+            (
+                getattr(layer, self.added_weight_attrs[1]),
+                getattr(layer, self.added_scale_attrs[1]),
+            ),
+            ffn_out,
+            token_nums_per_expert,
+            expected_m,
+            disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
+        )
+
+        tmp_ffn_out = call_depermute_prefill_combine(
+            x=ffn_out,
+            indice_map=permuted_indice_map,
+            topk_weights=recv_topk_weights,
+            num_worst_tokens=recv_x_value.shape[0],
+        )
+
+        return tmp_ffn_out
+
     def apply_ep_prefill(
         self,
         layer: nn.Layer,
@@ -417,73 +502,14 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
             logger.debug(f"max_tokens_per_rank {max_tokens_per_rank}")
 
-            permute_input, permute_scale, permuted_indice_map, token_nums_per_expert = (
-                call_prefill_permute_to_masked_gemm(
-                    x=recv_x_value,
-                    scale=recv_x_scale,
-                    topk_ids=recv_topk_idx,
-                    num_local_experts=layer.num_local_experts,
-                    max_token_num=layer.ep_size * max_tokens_per_rank,
-                )
-            )
-
-            up_gate_proj_out = paddle.empty(
-                [
-                    layer.num_local_experts,
-                    layer.ep_size * max_tokens_per_rank,
-                    layer.moe_intermediate_size * 2,
-                ],
-                dtype=paddle.bfloat16,
-            )
-
-            m_grouped_fp8_gemm_nt_masked(
-                (permute_input, permute_scale),
-                (
-                    getattr(layer, self.added_weight_attrs[0]),
-                    getattr(layer, self.added_scale_attrs[0]),
-                ),
-                up_gate_proj_out,
-                token_nums_per_expert,
-                expected_m,
-                disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
-            )
-
-            act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.fused_mask_swiglu_fp8_quant(
-                up_gate_proj_out,
-                token_nums_per_expert,
-                self.quant_config.weight_block_size[0],
-                use_ue8m0=self.quant_config.deepgemm_scale_ue8m0,
-            )
-
-            if layer.hidden_size == layer.moe_intermediate_size * 2:
-                ffn_out = up_gate_proj_out
-            else:
-                ffn_out = paddle.empty(
-                    [
-                        layer.num_local_experts,
-                        layer.ep_size * max_tokens_per_rank,
-                        layer.hidden_size,
-                    ],
-                    dtype=paddle.bfloat16,
-                )
-
-            m_grouped_fp8_gemm_nt_masked(
-                (act_out_fp8, scale),
-                (
-                    getattr(layer, self.added_weight_attrs[1]),
-                    getattr(layer, self.added_scale_attrs[1]),
-                ),
-                ffn_out,
-                token_nums_per_expert,
-                expected_m,
-                disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
-            )
-
-            tmp_ffn_out = call_depermute_prefill_combine(
-                x=ffn_out,
-                indice_map=permuted_indice_map,
-                topk_weights=recv_topk_weights,
-                num_worst_tokens=recv_x_value.shape[0],
+            tmp_ffn_out = self._prefill_masked_gemm_ffn(
+                layer=layer,
+                recv_x_value=recv_x_value,
+                recv_x_scale=recv_x_scale,
+                recv_topk_idx=recv_topk_idx,
+                recv_topk_weights=recv_topk_weights,
+                max_tokens_per_rank=max_tokens_per_rank,
+                expected_m=expected_m,
             )
 
         elif token_all_num > 0:

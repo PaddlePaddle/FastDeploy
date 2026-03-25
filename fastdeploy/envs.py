@@ -242,6 +242,11 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # has been observed to cause NaN computation errors.
     # Set to 1 to enable the lock; defaults to 0 (disabled).
     "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
+    # Whether to enable block-wise CUDA Graph capture/replay.
+    # When enabled, individual layer forward methods decorated with @block_wise_cuda_graph_wrap
+    # will be captured and replayed as CUDA Graphs for improved performance.
+    # Set to 1 to enable; defaults to 0 (disabled).
+    "FD_USE_BLOCK_WISE_CUDA_GRAPH": lambda: bool(int(os.getenv("FD_USE_BLOCK_WISE_CUDA_GRAPH", "0"))),
 }
 
 
