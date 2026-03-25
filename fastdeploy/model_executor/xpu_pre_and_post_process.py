@@ -121,6 +121,8 @@ def xpu_pre_process(
         ) = speculate_pre_process(
             token_num_cpu, input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, seq_lens_decoder
         )
+        share_inputs["cu_seqlens_q_output"] = cu_seqlens_q_output
+        share_inputs["batch_id_per_token_output"] = batch_id_per_token_output
     else:
         cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
         (

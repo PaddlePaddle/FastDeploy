@@ -802,7 +802,7 @@ class MTPProposer(Proposer):
         """
         PostProcess for generation
         """
-        draft_model_update(
+         (
             sampled_token_ids,
             self.model_inputs["draft_tokens"],
             self.model_inputs["pre_ids"],
@@ -813,11 +813,7 @@ class MTPProposer(Proposer):
             # Note(ZKK):
             # I strongly advise xpu student delete the fuck `output_cum_offsets` name in XPU backend
             # like my pr https://github.com/PaddlePaddle/FastDeploy/pull/6358
-            (
-                self.model_inputs["cu_seqlens_q_output"]
-                if current_platform.is_cuda()
-                else self.model_inputs["output_cum_offsets"]
-            ),
+            self.model_inputs["cu_seqlens_q_output"],
             self.model_inputs["stop_flags"],
             self.model_inputs["not_need_stop"],
             self.model_inputs["max_dec_len"],
