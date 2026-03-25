@@ -126,7 +126,6 @@ class TestFlashMaskAttention(unittest.TestCase):
             v = v_input[cu_seq_k[bi] : cu_seq_k[bi + 1], :, :].transpose([1, 0, 2]).astype("float32").numpy()
             qk = np.matmul(q, np.repeat(k, gqa_group_size, 0))
             qk *= qk_scale
-            # Causal mask: lower triangular
             condition = np.tril(np.ones(qk.shape), q.shape[1] - k.shape[2])
             mask = np.ones(condition.shape).astype("float32") * -1000000
             qk = np.where(condition > 0, qk, mask)
@@ -141,7 +140,7 @@ class TestFlashMaskAttention(unittest.TestCase):
 
     def test_flash_encoder_attn_fwd(self):
         if self.sm_version < 100:
-            self.skipTest("Flash Attention V4 requires SM100+.")
+            self.skipTest("Flash Encoder Attention V4 requires SM100+.")
 
         q_input = paddle.randn([self.q_len, self.num_head, self.head_dim], dtype="bfloat16")
         k_input = paddle.randn([self.q_len, self.num_kv_head, self.head_dim], dtype="bfloat16")
