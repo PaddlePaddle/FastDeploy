@@ -26,7 +26,7 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
-from fastdeploy.envs import FD_FILL_BITMASK_BATCH
+from fastdeploy.envs import FD_FILL_BITMASK_BATCH, FD_SAMPLING_CLASS
 from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
 from fastdeploy.model_executor.layers.sample.early_stopper import (
     get_early_stopper_cls_from_stragegy,
@@ -41,9 +41,75 @@ from fastdeploy.model_executor.layers.sample.ops import (
     speculate_insert_first_token,
     top_k_top_p_sampling,
 )
+from fastdeploy.model_executor.layers.sample.ops.top_k_top_p_triton import (
+    apply_top_k_top_p_triton,
+)
 from fastdeploy.platforms import current_platform
 from fastdeploy.reasoning import ReasoningParser
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
+
+
+def _apply_triton_top_k_top_p(
+    logits: paddle.Tensor,
+    top_p: paddle.Tensor,
+    top_k: Optional[paddle.Tensor] = None,
+    top_k_list: Optional[list] = None,
+    return_mask: bool = False,
+) -> paddle.Tensor | tuple[paddle.Tensor, paddle.Tensor]:
+    """
+    Apply combined top-k/top-p masking on logits using the Triton kernel.
+    Masked positions are set to -inf in-place. Call this BEFORE softmax.
+
+    Args:
+        return_mask: If True, return (logits, mask) where mask is a bool
+            tensor [B, V] computed inside the Triton kernel (zero extra cost).
+
+    Returns:
+        logits if return_mask is False, else (logits, mask).
+    """
+    batch_size = logits.shape[0]
+
+    top_p = top_p[:batch_size].squeeze(axis=-1)
+    if top_k is not None:
+        top_k = top_k[:batch_size].squeeze(axis=-1)
+
+    return apply_top_k_top_p_triton(logits.astype("float32"), k=top_k, p=top_p, return_mask=return_mask)
+
+
+def _random_sample(
+    probs: paddle.Tensor,
+    topp_seed: Optional[paddle.Tensor] = None,
+) -> paddle.Tensor:
+    """
+    Sample from probabilities using the Gumbel-max trick.
+
+    Equivalent to multinomial sampling but avoids CPU-GPU synchronization.
+    When ``topp_seed`` is provided, each row is sampled with its own
+    deterministic seed for reproducibility.
+
+    Args:
+        probs: [batch_size, vocab_size] float32 probabilities.
+        topp_seed: [batch_size, 1] int64 per-request seeds, or None.
+
+    Returns:
+        Token ids of shape [batch_size, 1].
+
+    Reference: vllm/v1/sample/ops/topk_topp_sampler.py::random_sample
+    """
+    # Sample from Exp(1): q = -log(u), u ~ Uniform(0, 1)
+    if topp_seed is not None:
+        # Per-row deterministic sampling using seeds.
+        # Slice topp_seed to match probs batch size (topp_seed may be padded to max_batch).
+        seeds = topp_seed[: probs.shape[0]].reshape([-1]).tolist()
+        q = paddle.empty_like(probs)
+        for i, s in enumerate(seeds):
+            paddle.seed(int(s))
+            q[i] = -paddle.log(paddle.uniform([probs.shape[1]], dtype=probs.dtype, min=0.0, max=1.0).clip(min=1e-10))
+    else:
+        u = paddle.uniform(probs.shape, dtype=probs.dtype, min=0.0, max=1.0)
+        q = -paddle.log(u.clip(min=1e-10))
+    # Gumbel-max: argmax(probs / q) is equivalent to multinomial(probs)
+    return (probs / q).argmax(axis=-1).reshape([-1, 1])
 
 
 def top_p_normalize_probs_paddle(
@@ -92,6 +158,35 @@ def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_le
     topp_seed[:, 0] = (topp_seed[:, 0] + offsets) % MAX_INFER_SEED
 
     return top_p_padding, top_k_padding, topp_seed
+
+
+def _compute_sampling_mask_from_probs(
+    probs: paddle.Tensor,
+    mask: paddle.Tensor,
+) -> tuple[List[np.ndarray], np.ndarray]:
+    """
+    Compute sampling mask using a pre-computed boolean mask from the Triton
+    kernel (derived from logits space, numerically exact).
+
+    Args:
+        probs: [B, V] softmax probabilities (GPU).
+        mask:  [B, V] bool tensor — True = retained by top-k/top-p (GPU).
+               Obtained from logits != -inf BEFORE softmax.
+
+    Returns the same format as _compute_sampling_mask:
+        - sparse_indices: List[np.ndarray], retained vocab indices per request.
+        - logz_per_batch: 1-D numpy array of log(Z_K) per request.
+    """
+    real_bsz = probs.shape[0]
+
+    # Z_K = sum of probs in the candidate set (using the exact mask).
+    z_k = (probs * mask.astype(probs.dtype)).sum(axis=-1)  # [B]
+    logz_per_batch = paddle.log(z_k + 1e-10).cpu().numpy()  # [B]
+
+    # Sparse indices: per-row list of retained token ids.
+    mask_cpu = mask[:real_bsz].cpu().numpy()  # [B, V]
+    sparse_indices = [np.where(mask_cpu[i])[0].astype(np.int64) for i in range(real_bsz)]
+    return sparse_indices, logz_per_batch
 
 
 def _compute_sampling_mask(
@@ -628,6 +723,17 @@ class Sampler(nn.Layer):
             elif self.logprobs_mode == "processed_logits":
                 raw_logprobs = logits.clone()
 
+        # Triton path: mask logits in-place BEFORE softmax (no probs→log round-trip).
+        triton_mask = None
+        if FD_SAMPLING_CLASS.lower() == "triton":
+            logits, triton_mask = _apply_triton_top_k_top_p(
+                logits,
+                sampling_metadata.top_p,
+                top_k=sampling_metadata.top_k,
+                top_k_list=sampling_metadata.top_k_list,
+                return_mask=True,
+            )
+
         probs = F.softmax(logits)
 
         probs = min_p_sampling(probs, sampling_metadata.min_p, sampling_metadata.min_p_list)
@@ -637,20 +743,28 @@ class Sampler(nn.Layer):
         sampling_mask = None
         logz_per_batch = None
         if sampling_metadata.keep_sampling_mask:
-            sampling_mask, logz_per_batch = _compute_sampling_mask(
+            if FD_SAMPLING_CLASS.lower() == "triton":
+                # Triton path: use pre-computed mask from logits space (exact).
+                sampling_mask, logz_per_batch = _compute_sampling_mask_from_probs(probs, triton_mask)
+            else:
+                sampling_mask, logz_per_batch = _compute_sampling_mask(
+                    probs,
+                    sampling_metadata.top_p,
+                    top_k=sampling_metadata.top_k,
+                    top_k_list=sampling_metadata.top_k_list,
+                )
+
+        if FD_SAMPLING_CLASS.lower() == "triton":
+            # top-k/top-p already applied on logits; directly sample.
+            next_tokens = _random_sample(probs, topp_seed=sampling_metadata.seed)
+        else:
+            _, next_tokens = top_k_top_p_sampling(
                 probs,
                 sampling_metadata.top_p,
-                top_k=sampling_metadata.top_k,
-                top_k_list=sampling_metadata.top_k_list,
+                sampling_metadata.top_k,
+                sampling_metadata.top_k_list,
+                topp_seed=sampling_metadata.seed,
             )
-
-        _, next_tokens = top_k_top_p_sampling(
-            probs,
-            sampling_metadata.top_p,
-            sampling_metadata.top_k,
-            sampling_metadata.top_k_list,
-            topp_seed=sampling_metadata.seed,
-        )
 
         logprobs_tensors = (
             None if num_logprobs is None else self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)
@@ -878,8 +992,6 @@ class SpeculativeSampler(nn.Layer):
             max_model_len,
         )
 
-        probs = F.softmax(logits)
-
         top_p, top_k, topp_seed = padding_sampling_params(
             sampling_metadata.top_p,
             sampling_metadata.top_k,
@@ -887,9 +999,23 @@ class SpeculativeSampler(nn.Layer):
             share_inputs["seq_lens_this_time"],
             share_inputs["seq_lens_encoder"],
         )
-        _, sampled_token_ids = top_k_top_p_sampling(
-            probs, top_p=top_p, top_k=top_k, top_k_list=sampling_metadata.top_k_list, topp_seed=topp_seed
-        )
+
+        if FD_SAMPLING_CLASS.lower() == "triton":
+            logits = _apply_triton_top_k_top_p(
+                logits,
+                top_p,
+                top_k=top_k,
+                top_k_list=sampling_metadata.top_k_list,
+            )
+
+        probs = F.softmax(logits)
+
+        if FD_SAMPLING_CLASS.lower() == "triton":
+            sampled_token_ids = _random_sample(probs, topp_seed=topp_seed)
+        else:
+            _, sampled_token_ids = top_k_top_p_sampling(
+                probs, top_p=top_p, top_k=top_k, top_k_list=sampling_metadata.top_k_list, topp_seed=topp_seed
+            )
 
         verify_scores, verify_tokens, actual_candidate_len = top_p_candidates(
             probs,
@@ -964,7 +1090,30 @@ class SpeculativeSampler(nn.Layer):
                 share_inputs["accept_num"],
             )
             if keep_sampling_mask:
-                # Derive target probs from already-extracted target_logits; avoids a second kernel call.
+                # Expand top_p/top_k from [batch, 1] to [total_accepted, 1].
+                accept_top_p = (
+                    sampling_metadata.top_p[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
+                )
+                accept_top_k = None
+                if (
+                    sampling_metadata.top_k is not None
+                    and sampling_metadata.top_k_list
+                    and any(x > 0 for x in sampling_metadata.top_k_list)
+                ):
+                    accept_top_k = (
+                        sampling_metadata.top_k[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
+                    )
+
+                # Triton path: mask target_logits and get mask from kernel directly.
+                spec_triton_mask = None
+                if FD_SAMPLING_CLASS.lower() == "triton":
+                    target_logits, spec_triton_mask = _apply_triton_top_k_top_p(
+                        target_logits,
+                        accept_top_p,
+                        top_k=accept_top_k,
+                        top_k_list=sampling_metadata.top_k_list,
+                        return_mask=True,
+                    )
                 target_probs = F.softmax(target_logits, axis=-1)
 
         raw_logprobs = None
@@ -987,23 +1136,16 @@ class SpeculativeSampler(nn.Layer):
         sampling_mask = None
         logz_per_batch = None
         if keep_sampling_mask:
-            # Expand top_p from [batch, 1] to [total_accepted, 1].
-            accept_top_p = sampling_metadata.top_p[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
-            accept_top_k = None
-            if (
-                sampling_metadata.top_k is not None
-                and sampling_metadata.top_k_list
-                and any(x > 0 for x in sampling_metadata.top_k_list)
-            ):
-                accept_top_k = (
-                    sampling_metadata.top_k[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
+            if FD_SAMPLING_CLASS.lower() == "triton":
+                # Triton path: use pre-computed mask from kernel (exact).
+                sampling_mask, logz_per_batch = _compute_sampling_mask_from_probs(target_probs, spec_triton_mask)
+            else:
+                sampling_mask, logz_per_batch = _compute_sampling_mask(
+                    target_probs,
+                    accept_top_p,
+                    top_k=accept_top_k,
+                    top_k_list=sampling_metadata.top_k_list,
                 )
-            sampling_mask, logz_per_batch = _compute_sampling_mask(
-                target_probs,
-                accept_top_p,
-                top_k=accept_top_k,
-                top_k_list=sampling_metadata.top_k_list,
-            )
 
         sampler_output = SamplerOutput(
             sampled_token_ids=share_inputs["accept_tokens"],
@@ -1316,11 +1458,22 @@ class MTPSampler(nn.Layer):
             share_inputs["output_cum_offsets"],
             max_model_len,
         )
+        if FD_SAMPLING_CLASS.lower() == "triton":
+            logits = _apply_triton_top_k_top_p(
+                logits,
+                sampling_metadata.top_p,
+                top_k=sampling_metadata.top_k,
+                top_k_list=sampling_metadata.top_k_list,
+            )
+
         probs = F.softmax(logits)
 
-        _, next_tokens = top_k_top_p_sampling(
-            probs, sampling_metadata.top_p, sampling_metadata.top_k, sampling_metadata.top_k_list
-        )
+        if FD_SAMPLING_CLASS.lower() == "triton":
+            next_tokens = _random_sample(probs, topp_seed=sampling_metadata.seed)
+        else:
+            _, next_tokens = top_k_top_p_sampling(
+                probs, sampling_metadata.top_p, sampling_metadata.top_k, sampling_metadata.top_k_list
+            )
         # TODO(chenhuan09): add support for logprobs
         token_ids = None
         logprobs_tensors = None
