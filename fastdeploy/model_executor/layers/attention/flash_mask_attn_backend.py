@@ -55,9 +55,6 @@ else:
 
 from fastdeploy.model_executor.utils import get_sm_version
 
-sm_version = get_sm_version()
-
-
 @dataclass
 class FlashMaskAttentionMetadata(AttentionMetadata):
     """
@@ -130,6 +127,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
         if fd_config.speculative_config.model_type != "main":
             self.rope_3d = False
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", "32768"))
+        self.sm_version = get_sm_version()
 
     def get_kv_cache_shape(
         self,
@@ -284,7 +282,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 self.rope_3d,
             )
 
-            if sm_version >= 100:
+            if self.sm_version >= 100:
                 flash_attn_v4(
                     q,
                     k,
