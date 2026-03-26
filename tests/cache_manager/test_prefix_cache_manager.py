@@ -427,7 +427,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertEqual(manager.get_required_block_num(8, 4), 2)
 
     def test_launch_cache_manager_initializes_processes(self):
-        manager = _create_manager()
+        manager = _create_manager(num_cpu_blocks=1)
         manager.cache_config.enable_hierarchical_cache = False
 
         with (
@@ -637,7 +637,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertIsNone(processes)
 
     def test_launch_cache_manager_formats_value_cache_shape(self):
-        manager = _create_manager()
+        manager = _create_manager(num_cpu_blocks=1)
 
         captured = {}
 

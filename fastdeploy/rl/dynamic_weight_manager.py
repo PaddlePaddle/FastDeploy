@@ -201,6 +201,39 @@ class DynamicWeightManager:
         # step5: recapture cuda_graph
         # step6: update weight status signal
 
+    def restart_communication_group(self):
+        if not self.first_load:
+            start_time = time.perf_counter()
+            paddle.distributed.restart_process_group()
+            paddle.distributed.restart_process_group(self.parallel_config.tp_group)
+            if self.parallel_config.enable_expert_parallel:
+                paddle.distributed.restart_process_group(self.parallel_config.ep_group)
+            logger.info(f"finish restarting communication groups! time cost: {time.perf_counter()-start_time:.3f}s")
+
+    def recreate_deepep_buffer(self):
+        if not self.first_load:
+            start_time = time.perf_counter()
+            from fastdeploy.model_executor.layers.moe.ep import DeepEPBufferManager
+
+            DeepEPBufferManager.recreate_buffer()
+            # ep barrier
+            paddle.distributed.barrier(self.parallel_config.ep_group)
+            logger.info(f"finish recreating deepep buffer! time cost: {time.perf_counter()-start_time:.3f}s")
+
+    def reload_model_weights(self):
+        if not self.first_load:
+            start_time = time.perf_counter()
+            strategy_handlers = {
+                "ipc_snapshot": self._update_ipc_snapshot,
+                "ipc": self._update_ipc,
+            }
+
+            if handler := strategy_handlers.get(self.load_config.load_strategy):
+                handler()
+            else:
+                raise ValueError(f"Unsupported strategy: {self.load_config.load_strategy}")
+            logger.info(f"finish reload model weights! time cost: {time.perf_counter()-start_time:.3f}s")
+
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery.
 
@@ -328,6 +361,30 @@ class DynamicWeightManager:
         if shutdown_process_group:
             paddle.distributed.shutdown_process_group()
         self._update_shared_status(pid, ModelWeightsStatus.CLEARED)
+
+    def clear_deepep_buffer(self):
+        start_time = time.perf_counter()
+        from fastdeploy.model_executor.layers.moe.ep import DeepEPBufferManager
+
+        DeepEPBufferManager.clear_buffer()
+        logger.info(f"finish clearing deepep buffer! time cost: {time.perf_counter()-start_time:.3f}s")
+
+    def clear_model_weight(self):
+        start_time = time.perf_counter()
+        for model in self.model_list:
+            for param in model.state_dict().values():
+                param._clear_data()
+        logger.info(f"finish clearing model weight! time cost: {time.perf_counter()-start_time:.3f}s")
+
+    def clear_communication_group(self):
+        start_time = time.perf_counter()
+        if self.parallel_config.enable_expert_parallel:
+            paddle.distributed.barrier(self.parallel_config.ep_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
+        if self.parallel_config.tensor_parallel_size > 1:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
+        logger.info(f"finish clearing communication groups! time cost: {time.perf_counter()-start_time:.3f}s")
 
     def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
         """Update model parameters from given state dictionary."""

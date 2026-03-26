@@ -129,51 +129,10 @@ struct VerifyContext {
     output_len_now++;
   }
 
-  // TOPP-only: verify_window bulk-accept fallback.
-  //
-  // When draft token is NOT in top-p set but IS the top-2 token,
-  // check verify_window consecutive positions for top-1 match.
-  // If all match, bulk-accept from position i through ii.
-  //
-  // Returns the new loop position (i) after handling.
-  // Sets *rejected=true if fallback was not triggered (caller should break).
-  __device__ __forceinline__ int try_verify_window_fallback(
-      int i,
-      bool *rejected,
-      const int64_t *verify_tokens_now,
-      int seq_len_this_time,
-      int max_candidate_len,
-      int verify_window) {
-    int ii = i;
-    if (max_candidate_len >= 2 &&
-        verify_tokens_now[ii * max_candidate_len + 1] ==
-            step_input_ids_now[ii + 1]) {
-      // top-2 matches — scan verify_window consecutive top-1 matches
-      int j = 0;
-      ii += 1;
-      for (; j < verify_window && ii < seq_len_this_time - 1; j++, ii++) {
-        if (verify_tokens_now[ii * max_candidate_len] !=
-            step_input_ids_now[ii + 1]) {
-          break;
-        }
-      }
-      if (j >= verify_window) {
-        // Bulk accept all tokens from i to ii
-        for (; i < ii; i++) {
-          if (emit_token(i, step_input_ids_now[i + 1])) return i;
-        }
-        return i;  // continue outer loop from position ii
-      }
-    }
-    // Fallback not triggered or insufficient window — reject
-    *rejected = true;
-    return i;
-  }
+  // ============================================================
+  // Phase 2 helpers — sample token for rejected/last position
+  // ============================================================
 };
-
-// ============================================================
-// Phase 2 helpers — sample token for rejected/last position
-// ============================================================
 
 __device__ inline int64_t topp_sampling_kernel(const int64_t *candidate_ids,
                                                const float *candidate_scores,
@@ -193,7 +152,6 @@ __device__ inline int64_t topp_sampling_kernel(const int64_t *candidate_ids,
   }
   return candidate_ids[0];
 }
-
 // ============================================================
 // Main verification kernel
 // ============================================================
@@ -201,8 +159,8 @@ __device__ inline int64_t topp_sampling_kernel(const int64_t *candidate_ids,
 // Input parameter groups by strategy:
 //   - target_tokens:        GREEDY=argmax, TARGET_MATCH=sampled, TOPP=unused
 //   (None)
-//   - candidate_ids/scores: TOPP=full candidate set, GREEDY/TARGET_MATCH=unused
-//   (None)
+//   - candidate_ids/scores: TOPP=full candidate set,
+//   GREEDY/TARGET_MATCH=unused (None)
 //   - candidate_lens:       TOPP=actual length per position,
 //   GREEDY/TARGET_MATCH=unused (None)
 //
@@ -250,6 +208,9 @@ __global__ void verify_draft_tokens(
   // Initialize step_output_len to 0 for ALL slots
   if (bid < max_bsz) {
     step_output_len[bid] = 0;
+    for (int i = 0; i < max_step_tokens; i++) {
+      step_output_ids[bid * max_step_tokens + i] = -1;
+    }
   } else {
     return;
   }
@@ -307,17 +268,6 @@ __global__ void verify_draft_tokens(
         accepted = verify_one_topp(candidate_ids_now + i * max_candidate_len,
                                    ctx.step_input_ids_now[i + 1],
                                    actual_cand_len);
-        if (!accepted) {
-          bool rejected = false;
-          i = ctx.try_verify_window_fallback(i,
-                                             &rejected,
-                                             candidate_ids_now,
-                                             seq_lens_this_time[bid],
-                                             max_candidate_len,
-                                             verify_window);
-          if (ctx.stopped || rejected) goto phase1_done;
-          continue;  // bulk accept succeeded, continue from new i
-        }
         break;
       }
       case 1:  // GREEDY
@@ -333,7 +283,6 @@ __global__ void verify_draft_tokens(
       break;  // reject
     }
   }
-phase1_done:
 
   // ======== Phase 2: Output token for rejected/last position ========
   if (!ctx.stopped) {

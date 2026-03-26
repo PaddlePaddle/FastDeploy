@@ -106,7 +106,11 @@ class TestCacheTransferManager(unittest.TestCase):
         # --------------------------
         # mock IPCSignal
         # --------------------------
-        patcher2 = patch("fastdeploy.cache_manager.cache_transfer_manager.IPCSignal", new=MagicMock())
+        class DummyIPCSignal:
+            def __init__(self, name, array, dtype, suffix, create=False):
+                self.value = array
+
+        patcher2 = patch("fastdeploy.cache_manager.cache_transfer_manager.IPCSignal", new=DummyIPCSignal)
         patcher2.start()
         self.addCleanup(patcher2.stop)
 
@@ -122,8 +126,8 @@ class TestCacheTransferManager(unittest.TestCase):
         # --------------------------
         self._orig_init_cpu_cache = CacheTransferManager._init_cpu_cache
         self._orig_init_gpu_cache = CacheTransferManager._init_gpu_cache
-        patcher3 = patch.object(CacheTransferManager, "_init_cpu_cache", lambda self, args: None)
-        patcher4 = patch.object(CacheTransferManager, "_init_gpu_cache", lambda self, args: None)
+        patcher3 = patch.object(CacheTransferManager, "_init_cpu_cache", lambda self: None)
+        patcher4 = patch.object(CacheTransferManager, "_init_gpu_cache", lambda self: None)
         patcher3.start()
         patcher4.start()
         self.addCleanup(patcher3.stop)
@@ -193,8 +197,8 @@ class TestCacheTransferManager(unittest.TestCase):
             kvcache_storage_backend = "unknown"
 
         with (
-            patch.object(CacheTransferManager, "_init_cpu_cache", lambda self, args: None),
-            patch.object(CacheTransferManager, "_init_gpu_cache", lambda self, args: None),
+            patch.object(CacheTransferManager, "_init_cpu_cache", lambda self: None),
+            patch.object(CacheTransferManager, "_init_gpu_cache", lambda self: None),
             patch("fastdeploy.cache_manager.cache_transfer_manager.console_logger") as mock_console,
         ):
             with self.assertRaises(NotImplementedError):
@@ -209,8 +213,8 @@ class TestCacheTransferManager(unittest.TestCase):
             kvcache_storage_backend = "file"
 
         with (
-            patch.object(CacheTransferManager, "_init_cpu_cache", lambda self, args: None),
-            patch.object(CacheTransferManager, "_init_gpu_cache", lambda self, args: None),
+            patch.object(CacheTransferManager, "_init_cpu_cache", lambda self: None),
+            patch.object(CacheTransferManager, "_init_gpu_cache", lambda self: None),
         ):
             with self.assertRaises(ValueError):
                 CacheTransferManager(LocalArgs())
@@ -221,8 +225,8 @@ class TestCacheTransferManager(unittest.TestCase):
             version_path = os.path.join(tmpdir, "version.yaml")
             with open(version_path, "w", encoding="utf-8") as handle:
                 handle.write("version: RL-STEP03-20250101-uuid\n")
-            args.model_path = tmpdir
-            args.kvcache_storage_backend = None
+            self.manager.model_path = tmpdir
+            self.manager.kvcache_storage_backend = None
             self.manager._init_storage(args)
 
         self.assertEqual(self.manager.key_prefix, "RL-STEP03")
@@ -465,23 +469,21 @@ class TestCacheTransferManager(unittest.TestCase):
             def __init__(self):
                 self.value = [0]
 
-        args = Args()
-        args.num_cpu_blocks = 0
+        self.manager.num_cpu_blocks = 0
         self.manager.swap_space_ready_signal = DummySignal()
 
-        self._orig_init_cpu_cache(self.manager, args)
+        self._orig_init_cpu_cache(self.manager)
 
-        self.assertEqual(self.manager.swap_space_ready_signal.value[0], 1)
+        self.assertEqual(self.manager.swap_space_ready_signal.value[0], 0)
 
     def test_init_cpu_cache_allocates_block_wise_fp8(self):
         class DummySignal:
             def __init__(self):
                 self.value = [0]
 
-        args = Args()
-        args.num_cpu_blocks = 2
-        args.cache_dtype = "block_wise_fp8"
-        args.value_cache_shape = "2,1,1,1"
+        self.manager.num_cpu_blocks = 2
+        self.manager.cache_dtype = "block_wise_fp8"
+        self.manager.has_cache_scale = True
         self.manager.swap_space_ready_signal = DummySignal()
         self.manager.value_cache_shape = [2, 1, 1, 1]
 
@@ -492,7 +494,7 @@ class TestCacheTransferManager(unittest.TestCase):
             ),
             patch("fastdeploy.cache_manager.cache_transfer_manager.paddle.set_device"),
         ):
-            self._orig_init_cpu_cache(self.manager, args)
+            self._orig_init_cpu_cache(self.manager)
 
         self.assertEqual(self.manager.swap_space_ready_signal.value[0], 1)
 
@@ -510,8 +512,8 @@ class TestCacheTransferManager(unittest.TestCase):
             value_cache_shape = "2,1,1,1"
 
         with (
-            patch.object(CacheTransferManager, "_init_cpu_cache", lambda self, args: None),
-            patch.object(CacheTransferManager, "_init_gpu_cache", lambda self, args: None),
+            patch.object(CacheTransferManager, "_init_cpu_cache", lambda self: None),
+            patch.object(CacheTransferManager, "_init_gpu_cache", lambda self: None),
             patch("fastdeploy.cache_manager.cache_transfer_manager.MooncakeStore"),
             patch.object(CacheTransferManager, "_init_storage_buffer"),
         ):
@@ -527,9 +529,8 @@ class TestCacheTransferManager(unittest.TestCase):
         with (
             patch("fastdeploy.cache_manager.cache_transfer_manager.set_device"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.set_data_ipc") as mock_set_ipc,
-            patch("fastdeploy.cache_manager.cache_transfer_manager.memory_allocated", return_value=0),
         ):
-            self._orig_init_gpu_cache(manager, LocalArgs())
+            self._orig_init_gpu_cache(manager)
 
         self.assertEqual(mock_set_ipc.call_count, 4)
         self.assertIn("key_caches_0_rank0.device0", manager.gpu_cache_kvs)
@@ -548,8 +549,8 @@ class TestCacheTransferManager(unittest.TestCase):
             value_cache_shape = "2,1,1,1"
 
         with (
-            patch.object(CacheTransferManager, "_init_cpu_cache", lambda self, args: None),
-            patch.object(CacheTransferManager, "_init_gpu_cache", lambda self, args: None),
+            patch.object(CacheTransferManager, "_init_cpu_cache", lambda self: None),
+            patch.object(CacheTransferManager, "_init_gpu_cache", lambda self: None),
             patch("fastdeploy.cache_manager.cache_transfer_manager.MooncakeStore"),
             patch.object(CacheTransferManager, "_init_storage_buffer"),
         ):
@@ -568,9 +569,8 @@ class TestCacheTransferManager(unittest.TestCase):
         with (
             patch("fastdeploy.cache_manager.cache_transfer_manager.set_device"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.share_external_data_", side_effect=fake_share),
-            patch("fastdeploy.cache_manager.cache_transfer_manager.memory_allocated", return_value=0),
         ):
-            self._orig_init_gpu_cache(manager, LocalArgs())
+            self._orig_init_gpu_cache(manager)
 
         self.assertIn("key_cache_scales_0_rank0.device0", manager.gpu_cache_kvs)
 
@@ -583,8 +583,8 @@ class TestCacheTransferManager(unittest.TestCase):
             value_cache_shape = "1,1,1,1"
 
         with (
-            patch.object(CacheTransferManager, "_init_cpu_cache", lambda self, args: None),
-            patch.object(CacheTransferManager, "_init_gpu_cache", lambda self, args: None),
+            patch.object(CacheTransferManager, "_init_cpu_cache", lambda self: None),
+            patch.object(CacheTransferManager, "_init_gpu_cache", lambda self: None),
         ):
             manager = CacheTransferManager(LocalArgs())
 
@@ -607,9 +607,8 @@ class TestCacheTransferManager(unittest.TestCase):
             patch("fastdeploy.cache_manager.cache_transfer_manager.time.sleep", side_effect=fake_sleep),
             patch("fastdeploy.cache_manager.cache_transfer_manager.set_device"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.share_external_data_", side_effect=fake_share),
-            patch("fastdeploy.cache_manager.cache_transfer_manager.memory_allocated", return_value=0),
         ):
-            self._orig_init_gpu_cache(manager, LocalArgs())
+            self._orig_init_gpu_cache(manager)
 
         self.assertIn("key_caches_0_rank0.device0", manager.gpu_cache_kvs)
 
@@ -1160,6 +1159,14 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.inflight = 1
         self.manager.cache_task_is_paused_signal = DummySignal(0)
         self.manager.cache_task_inflight_signal = DummySignal(1)
+        self.manager.cache_task_broadcast_signal = DummySignal(0)
+        self.manager.cache_task_queue.empty.return_value = False
+        self.manager.cache_task_queue.get_transfer_task.return_value = (
+            (cache_transfer_manager.CacheStatus.CTRL, MagicMock()),
+            True,
+        )
+        self.manager.control_task_thread_pool = MagicMock()
+        self.manager.control_task_thread_pool.submit.side_effect = SystemExit
 
         call_count = {"count": 0}
 
@@ -1168,7 +1175,6 @@ class TestCacheTransferManager(unittest.TestCase):
             if call_count["count"] == 1:
                 self.manager.inflight = 0
                 return None
-            raise SystemExit
 
         with patch("fastdeploy.cache_manager.cache_transfer_manager.time.sleep", side_effect=fake_sleep):
             with self.assertRaises(SystemExit):
@@ -1273,6 +1279,7 @@ class TestCacheTransferManager(unittest.TestCase):
         args = Args()
         args.splitwise_role = "mixed"
         args.create_cache_tensor = True
+        self.manager.create_cache_tensor = True
         self.manager.kv_cache_status_signal = DummySignal(cache_transfer_manager.KVCacheStatus.CLEARING)
         self.manager.cache_ready_signal = DummySignal(0)
         self.manager.swap_space_ready_signal = DummySignal(0)
@@ -1293,7 +1300,10 @@ class TestCacheTransferManager(unittest.TestCase):
             patch("paddle.device.cuda.empty_cache") as mock_empty,
             patch("paddle.set_device"),
             patch.object(self.manager, "_log_memory"),
-            patch("time.sleep", side_effect=maybe_stop_cleared_with_tensor),
+            patch(
+                "fastdeploy.cache_manager.cache_transfer_manager.time.sleep",
+                side_effect=maybe_stop_cleared_with_tensor,
+            ),
         ):
             with self.assertRaises(StopIteration):
                 self.manager.check_cache_status(args)
@@ -1427,6 +1437,7 @@ class TestCacheTransferManager(unittest.TestCase):
         args = Args()
         args.splitwise_role = "mixed"
         args.mp_num = 2
+        self.manager.n_ranks = 2
         self.manager.kv_cache_status_signal = DummySignal([cache_transfer_manager.KVCacheStatus.UPDATING])
         self.manager.cache_ready_signal = DummySignal([0, 1])
         self.manager.swap_space_ready_signal = DummySignal([0, 1])
@@ -1455,6 +1466,7 @@ class TestCacheTransferManager(unittest.TestCase):
                 patch.object(self.manager, "_init_cpu_cache"),
                 patch.object(self.manager, "_init_gpu_cache"),
                 patch.object(self.manager, "resume"),
+                patch.object(self.manager, "_update_key_prefix"),
                 patch("fastdeploy.cache_manager.cache_transfer_manager.envs.FD_ENABLE_SWAP_SPACE_CLEARING", True),
                 patch.object(self.manager, "_log_memory"),
                 patch("fastdeploy.cache_manager.cache_transfer_manager.time.sleep", side_effect=fake_sleep),
@@ -1465,7 +1477,7 @@ class TestCacheTransferManager(unittest.TestCase):
         self.assertEqual(self.manager.kv_cache_status_signal.value[0], cache_transfer_manager.KVCacheStatus.NORMAL)
 
     def test_log_memory_records_gpu_stats(self):
-        with patch.object(cache_transfer_manager.logger, "warning") as mock_warning:
+        with patch.object(cache_transfer_manager.logger, "info") as mock_info:
             with (
                 patch("paddle.device.cuda.max_memory_allocated", return_value=1024**3),
                 patch("paddle.device.cuda.max_memory_reserved", return_value=2 * 1024**3),
@@ -1474,7 +1486,7 @@ class TestCacheTransferManager(unittest.TestCase):
             ):
                 self.manager._log_memory("test")
 
-        mock_warning.assert_called_once()
+        mock_info.assert_called_once()
 
     def test_pause_and_resume_wait_for_signals(self):
         class DummySignal:
@@ -1503,7 +1515,7 @@ class TestCacheTransferManager(unittest.TestCase):
 
         self.assertFalse(self.manager.is_paused)
 
-    def test_submit_task_decrements_inflight(self):
+    def test_submit_task_decrements_inflight_on_task_error(self):
         class DummyPool:
             def submit(self, fn, *args):
                 try:
@@ -1514,8 +1526,24 @@ class TestCacheTransferManager(unittest.TestCase):
         def raise_task():
             raise RuntimeError("boom")
 
-        self.manager.inflight = 1
+        self.manager.inflight = 0
         self.manager.submit_task(DummyPool(), raise_task)
+        self.assertEqual(self.manager.inflight, 0)
+
+    def test_submit_task_decrements_inflight_on_success(self):
+        class DummyPool:
+            def submit(self, fn, *args):
+                return fn(*args)
+
+        task_called = {"value": False}
+
+        def ok_task():
+            task_called["value"] = True
+
+        self.manager.inflight = 0
+        self.manager.submit_task(DummyPool(), ok_task)
+
+        self.assertTrue(task_called["value"])
         self.assertEqual(self.manager.inflight, 0)
 
     def test_main_invokes_manager(self):
