@@ -268,12 +268,8 @@ class DataProcessor(BaseTextProcessor):
             )
             self.generation_config = None
 
-        self.decode_status = dict()
-        self.model_status_dict = dict()
-        self.tool_parser_dict = dict()
+        super().__init__()
         self.tokenizer = self._load_tokenizer()
-        self._tokenize_cache = OrderedDict()
-        self._tokenize_cache_capacity = 128
         data_processor_logger.info(
             f"tokenizer information: bos_token is {self.tokenizer.bos_token}, {self.tokenizer.bos_token_id}, \
                                 eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
@@ -290,10 +286,7 @@ class DataProcessor(BaseTextProcessor):
         )
         self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
-        self.reasoning_parser = None
-        self.tool_parser_obj = tool_parser_obj
-        if reasoning_parser_obj:
-            self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
+        self._init_parsers(reasoning_parser_obj, tool_parser_obj)
         self.tokenizer.pad_token_id = self.pad_token_id
 
     def process_logprob_response(self, token_ids, **kwargs):
@@ -461,17 +454,11 @@ class TextProcessor(BaseTextProcessor):
             )
             self.generation_config = None
 
-        # Response-handling state (normally set by BaseTextProcessor.__init__)
-        self.decode_status = dict()
-        self.model_status_dict = dict()
-        self.tool_parser_dict = dict()
-        if tokenizer_type == "ernie4_5":
-            self.thinking_parser_dict = dict()
+        # Response-handling state — delegated to BaseTextProcessor.__init__
+        super().__init__()
 
         # Tokenizer
         self.tokenizer = self._load_tokenizer()
-        self._tokenize_cache = OrderedDict()
-        self._tokenize_cache_capacity = 128
         data_processor_logger.info(
             f"tokenizer information: bos_token is {self.tokenizer.bos_token}, "
             f"{self.tokenizer.bos_token_id}, "
@@ -491,11 +478,7 @@ class TextProcessor(BaseTextProcessor):
         self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
         self.tokenizer.pad_token_id = self.pad_token_id
-
-        self.reasoning_parser = None
-        self.tool_parser_obj = tool_parser_obj
-        if reasoning_parser_obj:
-            self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
+        self._init_parsers(reasoning_parser_obj, tool_parser_obj)
 
     # ------------------------------------------------------------------
     # Abstract method implementations

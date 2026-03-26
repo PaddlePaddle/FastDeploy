@@ -73,6 +73,9 @@ class BaseTextProcessor(ABC):
         self.decode_status: Dict[str, list] = {}
         self.model_status_dict: Dict[str, dict] = {}
         self.tool_parser_dict: Dict = {}
+        # Token-encode cache shared by all subclasses.
+        self._tokenize_cache: OrderedDict = OrderedDict()
+        self._tokenize_cache_capacity: int = 128
 
     # ------------------------------------------------------------------
     # Abstract interface
@@ -86,6 +89,20 @@ class BaseTextProcessor(ABC):
 
     @abstractmethod
     def messages2ids(self, request, **kwargs): ...  # noqa: E704
+
+    # ------------------------------------------------------------------
+    # Parser initialisation helper
+    # ------------------------------------------------------------------
+
+    def _init_parsers(self, reasoning_parser_obj, tool_parser_obj):
+        """Initialise reasoning / tool parser attributes.
+
+        Must be called *after* ``self.tokenizer`` has been set by the subclass.
+        """
+        self.reasoning_parser = None
+        self.tool_parser_obj = tool_parser_obj
+        if reasoning_parser_obj:
+            self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
 
     # ------------------------------------------------------------------
     # ids2tokens
@@ -410,9 +427,6 @@ class BaseTextProcessor(ABC):
         return request
 
     def _encode_literal_text_with_cache(self, text):
-        if not hasattr(self, "_tokenize_cache"):
-            self._tokenize_cache = OrderedDict()
-            self._tokenize_cache_capacity = getattr(self, "_tokenize_cache_capacity", 128)
         key = ("literal_text", text)
         cached = self._tokenize_cache.get(key)
         if cached is not None:
@@ -550,3 +564,10 @@ class BaseTextProcessor(ABC):
                 seq_len = np.array(seq_len, dtype=np.int64).reshape(-1, 1)
             return padded_insts, seq_len
         return padded_insts
+
+    def get_mm_max_tokens_per_item(self, seq_len: int):
+        """Return the maximum number of tokens per item for each modality.
+
+        Text-only processors return None; multimodal processors override this.
+        """
+        return None
