@@ -131,13 +131,6 @@ class MTPProposer(Proposer):
         self.model_inputs = ProposerInputBatch(self.fd_config, self.target_model_inputs)
         self.model_inputs.init_share_inputs()
 
-        if current_platform.is_cuda() or current_platform.is_maca():
-            self._mtp_input_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
-            self._mtp_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
-
-            self._mtp_input_token_num_event = paddle.device.cuda.Event()
-            self._draft_output_token_num_event = paddle.device.cuda.Event()
-
         # CUDA Graph
         self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
@@ -746,7 +739,7 @@ class MTPProposer(Proposer):
             self.role == "prefill",  # is_splitwise_prefill
         )
 
-        target_hidden_states, output_token_num = eagle_get_hidden_states(
+        target_hidden_states, _ = eagle_get_hidden_states(
             full_hidden_states,
             self.model_inputs["seq_lens_this_time"],
             self.model_inputs["seq_lens_encoder"],
@@ -757,8 +750,6 @@ class MTPProposer(Proposer):
             self.target_model_inputs["seq_lens_encoder"],
             self.num_model_steps,
         )
-        self._mtp_input_token_num_host.copy_(output_token_num, False)
-        self._mtp_input_token_num_event.record()
 
         self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
@@ -917,9 +908,6 @@ class MTPProposer(Proposer):
                 # For speculative decoding
                 self.model_inputs["cu_seqlens_q_output"].copy_(cu_seqlens_q_output, False)
                 self.model_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
-                # TODO(yaohuicong): not need this copy in future
-                self._mtp_output_token_num_host.copy_(real_output_token_num, False)
-                self._draft_output_token_num_event.record()
 
                 # Initialize forward meta data
                 self._initialize_forward_meta(
@@ -953,11 +941,6 @@ class MTPProposer(Proposer):
                     top_p_normalized_logprobs=self.model_inputs["top_p_normalized_logprobs"],
                     share_inputs=self.model_inputs,
                 )
-                # Note(liuzichang):
-                # paddle.clone would raise error 700 in cudaGraph mode
-                if self.num_model_steps > 1:
-                    self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
-                    self.model_inputs.last_seq_lens_encoder.copy_(self.model_inputs["seq_lens_encoder"], False)
 
                 real_num = self.model_inputs["ids_remove_padding"].shape[0]
                 target_hidden_states = self.model_inputs["target_hidden_states"][:real_num]

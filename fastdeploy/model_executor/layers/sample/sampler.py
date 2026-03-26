@@ -1290,13 +1290,6 @@ class MTPSampler(nn.Layer):
             elif self.logprobs_mode == "raw_logits":
                 raw_logprobs = share_inputs["draft_logits"][:real_token_num, :].clone()
 
-        if sampling_metadata.token_ids_all is not None:
-            _ = sampling_metadata.token_ids_all
-            _ = sampling_metadata.prompt_lens
-        else:
-            _ = sampling_metadata.pre_token_ids
-            _ = sampling_metadata.fake_prompt_lens
-
         next_tokens = paddle.argmax(logits, axis=-1)
 
         token_ids = None

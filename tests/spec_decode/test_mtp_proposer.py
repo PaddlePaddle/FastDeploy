@@ -526,10 +526,6 @@ class TestMTPProposer(unittest.TestCase):
     #     proposer.model_inputs.last_seq_lens_this_time = paddle.zeros([2, 1], dtype="int32")
     #     proposer.model_inputs["step_idx"] = paddle.ones([2, 1], dtype="int64")
     #
-    #     # Create mock for _mtp_input_token_num_host and _mtp_input_token_num_event
-    #     proposer._mtp_input_token_num_host = Mock()
-    #     proposer._mtp_input_token_num_event = Mock()
-    #
     #     hidden_states = paddle.zeros([2, 768], dtype="bfloat16")
     #
     #     # Test _get_self_hidden_states_cuda directly (covers lines 1140-1148)
@@ -537,9 +533,6 @@ class TestMTPProposer(unittest.TestCase):
     #
     #     # Verify eagle_get_self_hidden_states was called
     #     mock_eagle_self_hidden.assert_called_once()
-    #     # Verify copy_ and record were called
-    #     proposer._mtp_input_token_num_host.copy_.assert_called_once()
-    #     proposer._mtp_input_token_num_event.record.assert_called_once()
 
     @patch("fastdeploy.spec_decode.mtp.eagle_get_self_hidden_states")
     @patch("fastdeploy.spec_decode.mtp.current_platform")

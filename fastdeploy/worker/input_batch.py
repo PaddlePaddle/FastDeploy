@@ -804,9 +804,6 @@ class ProposerInputBatch(InputBatch):
             self.last_seq_lens_this_time = paddle.full_like(
                 self.target_model_input_batch["seq_lens_this_time"], fill_value=-1, dtype="int32"
             )
-            self.last_seq_lens_encoder = paddle.full_like(
-                self.target_model_input_batch["seq_lens_encoder"], fill_value=0, dtype="int32"
-            )
         self.input_ids_len = paddle.zeros(shape=[self.scheduler_config.max_num_seqs, 1], dtype="int64", device="cpu")
         self.temp_scaled_logprobs = self.target_model_input_batch["temp_scaled_logprobs"]
         self.top_p_normalized_logprobs = self.target_model_input_batch["top_p_normalized_logprobs"]
