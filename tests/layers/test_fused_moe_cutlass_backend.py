@@ -89,6 +89,7 @@ class DummyLayer(paddle.nn.Layer):
         self.routed_scaling_factor = 1.0
         self.gate_correction_bias = None
         self.is_quantized = False
+        self.dynamic_load_weight = False
         self.moe_quant_config = types.SimpleNamespace(moe_dynamic_quant=False, hadamard_block_size=128)
         self.weight_key_map = {
             "up_gate_proj_expert_weight_key": "up_gate_{}",

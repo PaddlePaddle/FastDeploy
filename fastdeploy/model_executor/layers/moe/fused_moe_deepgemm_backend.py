@@ -762,20 +762,34 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         gate_out = gate(x)
         if layer.topk_method == "noaux_tc":
-            use_fused = not layer.dynamic_load_weight and current_platform.is_cuda()
-            if not use_fused:
+
+            if not fastdeploy.envs.FD_USE_PHI_MOE_TOPK:
+                use_fused = not layer.dynamic_load_weight and current_platform.is_cuda()
+                if not use_fused:
+                    gate_out = gate_out.cast("float32")
+                _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(
+                    gate_out,
+                    layer.n_group,
+                    layer.topk_group,
+                    layer.top_k,
+                    layer.routed_scaling_factor,
+                    layer.gate_correction_bias,
+                    getattr(layer, "renormalize", True),
+                    use_fused_cast=use_fused,
+                )
+            else:
                 gate_out = gate_out.cast("float32")
-            _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(
-                gate_out,
-                layer.n_group,
-                layer.topk_group,
-                layer.top_k,
-                layer.routed_scaling_factor,
-                layer.gate_correction_bias,
-                getattr(layer, "renormalize", True),
-                topk_reduce_func=getattr(layer, "topk_reduce_func", None),
-                use_fused_cast=use_fused,
-            )
+                _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(
+                    gate_out,
+                    layer.n_group,
+                    layer.topk_group,
+                    layer.top_k,
+                    layer.routed_scaling_factor,
+                    layer.gate_correction_bias,
+                    getattr(layer, "renormalize", True),
+                    topk_reduce_func=getattr(layer, "topk_reduce_func", None),
+                    use_fused_cast=use_fused,
+                )
         else:
             gate_out = gate_out.cast("float32")
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(

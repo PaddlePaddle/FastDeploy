@@ -418,9 +418,9 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             return fused_moe_out
 
         if layer.topk_method == "noaux_tc":
-            if layer.dynamic_load_weight:
+            use_fused = not layer.dynamic_load_weight and current_platform.is_cuda()
+            if not use_fused:
                 gate_out = gate_out.cast("float32")
-            use_fused = not layer.dynamic_load_weight
             gate_out, topk_weights, topk_idx = get_moe_scores(
                 gate_out,
                 layer.n_group,

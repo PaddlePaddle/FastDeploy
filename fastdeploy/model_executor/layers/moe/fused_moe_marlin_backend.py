@@ -20,6 +20,7 @@ import paddle
 from paddle import nn
 
 import fastdeploy
+from fastdeploy.platforms import current_platform
 from fastdeploy.model_executor.ops.gpu import (
     MoeWna16MarlinGemmApi,
     tritonmoe_preprocess_func,
@@ -258,10 +259,9 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
 
         if topk_method == "noaux_tc":
             from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
-
-            if layer.dynamic_load_weight:
+            use_fused = not layer.dynamic_load_weight and current_platform.is_cuda()
+            if not use_fused:
                 gate_out = gate_out.cast("float32")
-            use_fused = not layer.dynamic_load_weight
             _, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
                 layer.n_group,

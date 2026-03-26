@@ -21,6 +21,7 @@ from paddle import nn
 
 import fastdeploy
 from fastdeploy import envs
+from fastdeploy.platforms import current_platform
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import (
     TensorTracker,
@@ -309,9 +310,9 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         hidden_size = layer.hidden_size
 
         if layer.topk_method == "noaux_tc":
-            if layer.dynamic_load_weight:
+            use_fused = not layer.dynamic_load_weight and current_platform.is_cuda()
+            if not use_fused:
                 gate_out = gate_out.cast("float32")
-            use_fused = not layer.dynamic_load_weight
             gate_out, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
                 layer.n_group,
