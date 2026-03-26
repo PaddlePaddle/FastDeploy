@@ -189,6 +189,10 @@ def _import_text_processor(use_hf_tokenizer=False):
         sys.modules[name] = module
 
     try:
+        # Must reload base_processor first since text_processor imports it
+        # and base_processor uses envs.FD_USE_HF_TOKENIZER at module level
+        base_processor_module = importlib.import_module("fastdeploy.input.base_processor")
+        importlib.reload(base_processor_module)
         text_processor_module = importlib.import_module("fastdeploy.input.text_processor")
         importlib.reload(text_processor_module)
     except Exception:
@@ -201,6 +205,7 @@ def _import_text_processor(use_hf_tokenizer=False):
 
     def cleanup():
         sys.modules.pop("fastdeploy.input.text_processor", None)
+        sys.modules.pop("fastdeploy.input.base_processor", None)
         for name, original in previous_modules.items():
             if original is None:
                 sys.modules.pop(name, None)

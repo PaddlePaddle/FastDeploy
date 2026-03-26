@@ -336,6 +336,8 @@ class DataProcessor(BaseTextProcessor):
         Returns:
             List[int]: ID sequences
         """
+        if self.tokenizer.chat_template is None:
+            raise ValueError("This model does not support chat_template.")
 
         if "add_generation_prompt" not in kwargs:
             kwargs["add_generation_prompt"] = request.get("add_generation_prompt", True)
