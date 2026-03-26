@@ -2093,6 +2093,7 @@ class EngineService:
             "use_internode_ll_two_stage": self.cfg.parallel_config.use_internode_ll_two_stage,
             "disable_sequence_parallel_moe": self.cfg.parallel_config.disable_sequence_parallel_moe,
             "enable_logprob": self.cfg.model_config.enable_logprob,
+            "compute_logits_stats": self.cfg.model_config.compute_logits_stats,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
             "moe_gate_fp32": self.cfg.model_config.moe_gate_fp32,
             "enable_entropy": self.cfg.model_config.enable_entropy,
