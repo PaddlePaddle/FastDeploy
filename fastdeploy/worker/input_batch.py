@@ -978,7 +978,6 @@ class ProposerInputBatch(InputBatch):
             # Reset last sequence lengths if applicable
             if self.num_model_steps > 1:
                 fill_paddle_tensor(self, "last_seq_lens_this_time", -1)
-                fill_paddle_tensor(self, "last_seq_lens_encoder", 0)
 
             # Reset input IDs length
             fill_paddle_tensor(self, "input_ids_len", 0)
