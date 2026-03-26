@@ -175,7 +175,7 @@ __forceinline__ __device__ void scale_apply_exp2(
   CUTE_STATIC_ASSERT_V(size<0>(max) == size<0>(tensor));
 #pragma unroll
   for (int mi = 0; mi < size<0>(tensor); ++mi) {
-    const float max_scaled = max(mi) * scale;
+    const float max_scaled = max(mi) == -INFINITY ? 0.f : max(mi) * scale;
 #pragma unroll
     for (int ni = 0; ni < size<1>(tensor); ++ni) {
       tensor(mi, ni) = exp2f(tensor(mi, ni) * scale - max_scaled);
@@ -207,8 +207,9 @@ struct Softmax {
 #pragma unroll
       for (int mi = 0; mi < size(row_max); ++mi) {
         float scores_max_cur = row_max(mi);
-        scores_scale(mi) =
-            exp2f((scores_max_prev(mi) - scores_max_cur) * softmax_scale_log2);
+        scores_scale(mi) = (scores_max_prev(mi) == -INFINITY && scores_max_cur == -INFINITY)
+            ? 1.f
+            : exp2f((scores_max_prev(mi) - scores_max_cur) * softmax_scale_log2);
         row_sum(mi) *= scores_scale(mi);
       }
     }
