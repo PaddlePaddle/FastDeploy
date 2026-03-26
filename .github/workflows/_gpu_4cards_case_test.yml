@@ -217,7 +217,7 @@ jobs:
 
       - name: Upload run_4_cards_tests_error_logs
         if: ${{ always() && env.TEST_EXIT_CODE == 8 }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: run_4_cards_tests_error_logs
           path: FastDeploy/run_4_cards_tests_error_logs
