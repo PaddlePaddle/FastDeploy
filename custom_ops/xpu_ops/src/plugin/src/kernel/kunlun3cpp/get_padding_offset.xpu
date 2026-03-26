@@ -1,50 +1,123 @@
 #include "xpu/kernel/cluster.h"
 #include "xpu/kernel/cluster_partition.h"
 #include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/cluster_simd.h"
 
 namespace fd_xpu3 {
 
-__global__ void get_padding_offset(int *batch_id_per_token,
-                                   int *cum_offsets_out,
-                                   int *cu_seqlens_q,
-                                   int *cu_seqlens_k,
-                                   const int *cum_offsets,
-                                   const int *seq_lens,
+#define MAX_BATCH_SIZE 1024
+
+static inline __device__ int v_reduce_sum_int32(int32x16_t& v0) {
+  auto v1 = vsrlp_int32x16(1 << 8, v0);
+  v0 = vvadd_int32x16(v0, v1);
+  v1 = vsrlp_int32x16(1 << 7, v0);
+  v0 = vvadd_int32x16(v0, v1);
+  v1 = vsrlp_int32x16(1 << 6, v0);
+  v0 = vvadd_int32x16(v0, v1);
+  v1 = vsrlp_int32x16(1 << 5, v0);
+  v0 = vvadd_int32x16(v0, v1);
+  return vextract_int32x16(v0, 1);
+}
+
+inline __device__ int primitive_reduce_sum_sm(__shared_ptr__ const int* x,
+                                              int64_t len) {
+  int32x16_t x_l, x_h;
+  int32x16_t sum = vset_zero_int();
+  const auto rounddown_len = rounddown32(len);
+
+  for (int64_t i = 0; i < rounddown_len; i += 32) {
+    vload2_sm(x + i, x_l, x_h);
+    sum = vvadd_int32x16(sum, x_l);
+    sum = vvadd_int32x16(sum, x_h);
+  }
+
+  if (rounddown_len < len) {
+    const auto mask = ~(-1 << (len - rounddown_len));
+    vload2_sm_mz(x + rounddown_len, x_l, x_h, mask);
+    sum = vvadd_int32x16(sum, x_l);
+    sum = vvadd_int32x16(sum, x_h);
+  }
+  return v_reduce_sum_int32(sum);
+}
+
+__global__ void get_padding_offset(int64_t* ids_remove_padding,
+                                   int* batch_id_per_token,
+                                   int* cum_offsets_out,
+                                   int* cu_seqlens_q,
+                                   int* cu_seqlens_k,
+                                   const int64_t* input_data,
+                                   const int* seq_lens,
                                    const int max_seq_len,
                                    const int bs) {
   int cid = core_id();
   int ncores = core_num();
   int clusterid = cluster_id();
   int nclusters = cluster_num();
-  int tid = clusterid * ncores + cid;
 
-  int buf_len = 32;
-  __simd__ int batch_id_per_token_lm[buf_len];
-  __simd__ int cum_offsets_lm[16];
-  int seq_len_lm;
-  for (int i = clusterid; i < bs; i += nclusters) {
-    GM2LM_ASYNC(seq_lens + i, &seq_len_lm, sizeof(int));
-    GM2LM(cum_offsets + i - 1, cum_offsets_lm, 2 * sizeof(int));
-    if (i == 0) {
-      cum_offsets_lm[0] = 0;
+  __shared__ int sm_seq_lens[MAX_BATCH_SIZE];
+  __shared__ int sm_cum_seq_len;
+  __simd__ __shared__ int buffer_cu_seqlens[64];
+
+  if (cid == 0) {
+    GM2SM(seq_lens, sm_seq_lens, sizeof(int) * bs);
+  }
+  sync_all();
+
+  for (int bi = clusterid; bi < bs; bi += nclusters) {
+    int cum_seq_len = 0;
+    for (int i = cid; i <= bi; i += ncores) {
+      cum_seq_len += sm_seq_lens[i];
     }
-    for (int j = cid * buf_len; j < seq_len_lm; j += ncores * buf_len) {
-      int cur_len = min(seq_len_lm - j, buf_len);
-      for (int k = 0; k < cur_len; k++) {
-        batch_id_per_token_lm[k] = i;
-      }
-      mfence_lm();
-      LM2GM(batch_id_per_token_lm,
-            batch_id_per_token + i * max_seq_len - cum_offsets_lm[0] + j,
-            cur_len * sizeof(int));
-    }
+    buffer_cu_seqlens[cid] = cum_seq_len;
+    mfence();
+    sync_all();
+
     if (cid == 0) {
-      int cum_seq_len = (i + 1) * max_seq_len - cum_offsets_lm[1];
-      mfence_lm();
-      LM2GM_ASYNC(cum_offsets_lm, cum_offsets_out + i, sizeof(int));
-      LM2GM_ASYNC(&cum_seq_len, cu_seqlens_q + i + 1, sizeof(int));
-      LM2GM(&cum_seq_len, cu_seqlens_k + i + 1, sizeof(int));
+      cum_seq_len =
+          primitive_reduce_sum_sm(buffer_cu_seqlens, min(bi + 1, ncores));
+
+      LM2GM_ASYNC(&cum_seq_len, cu_seqlens_q + bi + 1, sizeof(int));
+      LM2GM_ASYNC(&cum_seq_len, cu_seqlens_k + bi + 1, sizeof(int));
+
+      int cum_offset = bi * max_seq_len - (cum_seq_len - sm_seq_lens[bi]);
+      LM2GM(&cum_offset, cum_offsets_out + bi, sizeof(int));
+
+      sm_cum_seq_len = cum_seq_len;
     }
+    mfence();
+    sync_all();
+
+    const int lm_seq_lens = sm_seq_lens[bi];
+    const int tgt_offset = sm_cum_seq_len - lm_seq_lens;
+    const int buf_len = 32;
+    __simd__ int64_t input_lm[buf_len];
+    __simd__ int batch_id_lm[buf_len];
+
+    for (int k = 0; k < buf_len; k++) {
+      batch_id_lm[k] = bi;
+    }
+    mfence_lm();
+
+    for (int j = cid * buf_len; j < lm_seq_lens; j += ncores * buf_len) {
+      int cur_len = min(lm_seq_lens - j, buf_len);
+      GM2LM(input_data + bi * max_seq_len + j,
+            input_lm,
+            sizeof(int64_t) * cur_len);
+      LM2GM(input_lm,
+            ids_remove_padding + tgt_offset + j,
+            sizeof(int64_t) * cur_len);
+      LM2GM(batch_id_lm,
+            batch_id_per_token + tgt_offset + j,
+            sizeof(int) * cur_len);
+    }
+    mfence();
+    sync_all();
+  }
+
+  if (cid == 0 && clusterid == 0) {
+    const int lm_zero = 0;
+    LM2GM_ASYNC(&lm_zero, cu_seqlens_q, sizeof(int));
+    LM2GM(&lm_zero, cu_seqlens_k, sizeof(int));
   }
 }
 

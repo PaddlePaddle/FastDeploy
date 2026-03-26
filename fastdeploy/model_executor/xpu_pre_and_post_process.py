@@ -131,7 +131,7 @@ def xpu_pre_process(
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = get_padding_offset(input_ids, cum_offsets_now, token_num_cpu, seq_lens_this_time)
+        ) = get_padding_offset(input_ids, seq_lens_this_time, token_num_cpu)
 
     share_inputs["batch_id_per_token"] = batch_id_per_token
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
