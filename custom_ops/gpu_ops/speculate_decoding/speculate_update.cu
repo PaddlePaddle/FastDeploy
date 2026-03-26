@@ -36,7 +36,7 @@ __global__ void speculate_update(int *seq_lens_encoder,
         if (preempted_idx[bid] == 1) {
             stop_flags[bid] = true;
             accept_num[bid] = 1;
-            accept_tokens[0] = end_ids[0];
+            accept_tokens[bid*max_draft_tokens] = end_ids[0];
         }
     }
     const int accept_num_now = accept_num[bid];
