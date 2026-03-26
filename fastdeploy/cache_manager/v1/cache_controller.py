@@ -111,7 +111,116 @@ class CacheController(KVCacheBase):
         # Active async handlers
         self._async_handlers: Dict[str, AsyncTaskHandler] = {}
 
+        # Pending handlers for tracking swap operations
+        self._pending_evict_handlers: List[AsyncTaskHandler] = []
+        self._pending_swap_in_handlers: List[AsyncTaskHandler] = []
+
         self._initialized = True
+
+    @property
+    def write_policy(self) -> Optional[str]:
+        """Get the write policy for cache operations."""
+        if self.cache_config and hasattr(self.cache_config, "write_policy"):
+            return self.cache_config.write_policy
+        return None
+
+    def _should_wait_for_swap_out(self) -> bool:
+        """
+        Determine if swap-out operations should wait synchronously.
+
+        Returns:
+            True if write_policy is 'write_back', otherwise False.
+        """
+        return self.write_policy == "write_back"
+
+    def wait_for_swap_in_handlers(self) -> None:
+        """
+        Wait for all pending swap-in handlers to complete.
+
+        This method handles waiting for host-to-device cache swap-in operations.
+        """
+        if not self._pending_swap_in_handlers:
+            return
+
+        swap_in_wait_start = time.time()
+        swap_in_length = len(self._pending_swap_in_handlers)
+
+        for handler in self._pending_swap_in_handlers:
+            if not handler.is_completed:
+                result = handler.get_result()
+            else:
+                result = handler.result
+            logger.info(f"cache swap in result: {result}")
+
+        self._pending_swap_in_handlers.clear()
+        swap_in_wait_ms = (time.time() - swap_in_wait_start) * 1000
+        if swap_in_wait_ms > 0.1:
+            logger.info(f"cache swap in wait time: {swap_in_wait_ms:.2f}ms, {swap_in_length} pending swap-ins")
+
+    @property
+    def pending_swap_in_handlers(self) -> List["AsyncTaskHandler"]:
+        """Get the list of pending swap-in handlers for external access (e.g., layer swap)."""
+        return self._pending_swap_in_handlers
+
+    def submit_swap_tasks(
+        self,
+        evict_metadata: Optional["CacheSwapMetadata"],
+        swap_in_metadata: Optional["CacheSwapMetadata"],
+    ) -> Optional["AsyncTaskHandler"]:
+        """
+        Submit evict and swap-in tasks with proper synchronization.
+
+        Logic:
+        1. Before submitting evict, wait for existing pending evict handlers to complete
+        2. write_back: Wait for evict to complete before submitting swap-in
+        3. Other policies: Submit both evict and swap-in immediately
+
+        Args:
+            evict_metadata: CacheSwapMetadata for device-to-host eviction (can be None)
+            swap_in_metadata: CacheSwapMetadata for host-to-device swap-in (can be None)
+        """
+        # Step 1: Wait for existing pending evict handlers before submitting new evict
+        self._wait_for_pending_evict_handlers()
+
+        # Step 2: Submit evict task if provided
+        if evict_metadata is not None:
+            logger.info(f"cache_evict_metadata: {evict_metadata}")
+            self.evict_device_to_host(evict_metadata)
+            self._pending_evict_handlers.append(evict_metadata.async_handler)
+
+            # Step 3: For write_back, wait for evict to complete before submitting swap-in
+            if self._should_wait_for_swap_out():
+                self._wait_for_pending_evict_handlers()
+
+        # Step 4: Submit swap-in task if provided
+        if swap_in_metadata is not None:
+            logger.info(f"cache_swap_metadata: {swap_in_metadata}")
+            self.load_host_to_device(swap_in_metadata)
+            self._pending_swap_in_handlers.append(swap_in_metadata.async_handler)
+
+    def _wait_for_pending_evict_handlers(self) -> None:
+        """
+        Wait for all pending evict handlers to complete.
+
+        This is called before submitting new evict tasks to ensure proper ordering.
+        """
+        if not self._pending_evict_handlers:
+            return
+
+        evict_wait_start = time.time()
+        evict_length = len(self._pending_evict_handlers)
+
+        for handler in self._pending_evict_handlers:
+            if not handler.is_completed:
+                result = handler.get_result()
+            else:
+                result = handler.result
+            logger.info(f"cache evict result: {result}")
+
+        self._pending_evict_handlers.clear()
+        evict_wait_ms = (time.time() - evict_wait_start) * 1000
+        if evict_wait_ms > 0.1:
+            logger.info(f"cache evict wait time: {evict_wait_ms:.2f}ms, {evict_length} pending evictions")
 
     # ============ Properties ============
 
