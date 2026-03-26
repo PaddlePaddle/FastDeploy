@@ -278,10 +278,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.local_rank,
                 self.device_id,
             )
-            # Pending async handlers for cache transfer operations.
-            # Swap-in handlers are reset each batch; evict handlers accumulate across batches.
-            self._pending_swap_in_handlers = []
-            self._pending_evict_handlers = []
 
         # for overlap
         self._cached_model_output_data = None
@@ -754,29 +750,11 @@ class GPUModelRunner(ModelRunnerBase):
             "max_tokens_lst": [],
         }
         if self.enable_cache_manager_v1:
-            if req_dicts.cache_evict_metadata:
-                logger.info(f"cache_evict_metadata: {req_dicts.cache_evict_metadata}")
-                self.cache_controller.evict_device_to_host(req_dicts.cache_evict_metadata)
-                self._pending_evict_handlers.append(req_dicts.cache_evict_metadata.async_handler)
-
-            # Wait for all pending evictions (may accumulate across batches)
-            evict_wait_start = time.time()
-            evict_length = len(self._pending_evict_handlers)
-            for handler in self._pending_evict_handlers:
-                if not handler.is_completed:
-                    result = handler.get_result()
-                else:
-                    result = handler.result
-                logger.info(f"cache evict result: {result}")
-            self._pending_evict_handlers.clear()
-            evict_wait_ms = (time.time() - evict_wait_start) * 1000
-            if evict_wait_ms > 0.1:
-                logger.info(f"cache evict wait time: {evict_wait_ms:.2f}ms, " f"{evict_length} pending evictions")
-
-            if req_dicts.cache_swap_metadata:
-                logger.info(f"cache_swap_metadata: {req_dicts.cache_swap_metadata}")
-                self.cache_controller.load_host_to_device(req_dicts.cache_swap_metadata)
-                self._pending_swap_in_handlers.append(req_dicts.cache_swap_metadata.async_handler)
+            # submit_swap_tasks handles:
+            # 1. Waiting for pending evict handlers before submitting new evict
+            # 2. write_back policy: waiting for evict to complete before submitting swap-in
+            # 3. Adding handlers to pending lists appropriately
+            self.cache_controller.submit_swap_tasks(req_dicts.cache_evict_metadata, req_dicts.cache_swap_metadata)
 
         for i in range(req_len):
             request = req_dicts[i]
@@ -1436,12 +1414,13 @@ class GPUModelRunner(ModelRunnerBase):
         if self.enable_cache_manager_v1:
             swap_all_layers = self.cache_config.swap_all_layers
             self.forward_meta.cache_controller = self.cache_controller
-            # Simplified: directly get task_ids from _pending_swap_in_handlers
-            if not swap_all_layers and self._pending_swap_in_handlers:
-                self.forward_meta.swap_in_task_ids = [h.task_id for h in self._pending_swap_in_handlers]
+            # Get task_ids from pending_swap_in_handlers for layer swap
+            pending_handlers = self.cache_controller.pending_swap_in_handlers
+            if not swap_all_layers and pending_handlers:
+                self.forward_meta.swap_in_task_ids = [h.task_id for h in pending_handlers]
             else:
                 self.forward_meta.swap_in_task_ids = []
-            self.forward_meta.enable_layer_swap_wait = not swap_all_layers and len(self._pending_swap_in_handlers) > 0
+            self.forward_meta.enable_layer_swap_wait = not swap_all_layers and len(pending_handlers) > 0
         else:
             self.forward_meta.cache_controller = None
             self.forward_meta.swap_in_task_ids = []
@@ -2272,21 +2251,8 @@ class GPUModelRunner(ModelRunnerBase):
 
             if swap_all_layers:
                 # Original behavior: wait for all swap-in to complete before forward
-                swap_in_wait_start = time.time()
-                for handler in self._pending_swap_in_handlers:
-                    if not handler.is_completed:
-                        result = handler.get_result()
-                    else:
-                        result = handler.result
-                    logger.info(f"cache swap in result: {result}")
-                swap_in_handler_count = len(self._pending_swap_in_handlers)
-                self._pending_swap_in_handlers.clear()
-                swap_in_wait_ms = (time.time() - swap_in_wait_start) * 1000
-                if swap_in_wait_ms > 0.1:
-                    logger.info(
-                        f"cache swap in wait time: {swap_in_wait_ms:.2f}ms, "
-                        f"handler count: {swap_in_handler_count} (all-layers mode)"
-                    )
+                # Note: In write_back mode, pending handlers should be empty since swap-in is sync
+                self.cache_controller.wait_for_swap_in_handlers()
 
         model_output = None
         if model_inputs is not None and len(model_inputs) > 0:
@@ -2298,7 +2264,7 @@ class GPUModelRunner(ModelRunnerBase):
             # ============ Clear pending swap handlers after forward completes ============
             if self.enable_cache_manager_v1 and not swap_all_layers:
                 logger.info("cache swap in wait begin")
-                self._pending_swap_in_handlers.clear()
+                self.cache_controller.pending_swap_in_handlers.clear()
 
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]

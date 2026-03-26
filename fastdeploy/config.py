@@ -1611,7 +1611,7 @@ class CacheConfig:
         self.enable_output_caching = False
         self.disable_chunked_mm_input = False
         self.kvcache_storage_backend = None
-        self.write_policy = None
+        self.write_policy = "write_through_selective"
         self.write_through_threshold = 2
         self.num_cpu_blocks = None
         self.use_mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
@@ -1676,6 +1676,12 @@ class CacheConfig:
         if self.kv_cache_ratio > 1.0:
             raise ValueError("KV cache ratio must be less than 1.0. Got " f"{self.kv_cache_ratio}.")
 
+        allowed_write_policies = ["write_through_selective", "write_back", "write_through"]
+        if self.write_policy not in allowed_write_policies:
+            raise ValueError(
+                f"Invalid write_policy: {self.write_policy!r}. " f"Expected one of {allowed_write_policies}."
+            )
+
     def postprocess(self, num_total_tokens, number_of_tasks):
         """
         calculate block num
@@ -1698,6 +1704,11 @@ class CacheConfig:
             self.total_block_num = block_num * number_of_tasks
             self.prefill_kvcache_block_num = self.total_block_num
             logger.info(f"Doing profile, the total_block_num:{self.total_block_num}")
+
+        # Normalize write_policy: "write_through" is a special case of "write_through_selective" with threshold=1
+        if self.write_policy == "write_through":
+            self.write_through_threshold = 1
+            self.write_policy = "write_through_selective"
 
     def reset(self, num_gpu_blocks):
         """
@@ -2141,6 +2152,22 @@ class FDConfig:
             self.graph_opt_config.graph_opt_level = 0
             logger.info(
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
+            )
+
+        # When using layer-by-layer swap (swap_all_layers=False), CUDA Graph cannot be used
+        # for prefill because swap operations (cudaStreamSynchronize) conflict with CUDA Graph
+        # capture. Force only decode to use CUDA Graph.
+        if (
+            self.cache_config is not None
+            and not self.cache_config.swap_all_layers
+            and self.graph_opt_config.cudagraph_only_prefill
+        ):
+            original_value = self.graph_opt_config.cudagraph_only_prefill
+            self.graph_opt_config.cudagraph_only_prefill = False
+            logger.warning(
+                f"[CacheConfig] Layer-by-layer swap (swap_all_layers=False) is incompatible "
+                f"with CUDA Graph prefill capture. Forcing cudagraph_only_prefill=False "
+                f"(only decode will use CUDA Graph). Original cudagraph_only_prefill={original_value}"
             )
 
         if (
