@@ -259,15 +259,48 @@ def _compute_sampling_mask(
 
     # ------------------------------------------------------------------
     # Stage 3: top-p mask on already-sorted renormed probs (no re-sort).
+    #
+    # The sampling mask must be a *superset* of the tokens that the
+    # actual sampling kernel (Paddle's top_p_sampling) might choose.
+    # Two sources of divergence make an exact match impossible:
+    #
+    #   (a) Cumsum precision: the kernel uses CUB BlockScan (parallel
+    #       prefix-sum) while we use paddle.cumsum (sequential).
+    #       Float rounding differs by ~1e-7, shifting the boundary.
+    #       Fix: use  <=  instead of  <  to include 1 extra token.
+    #
+    #   (b) Sort tie-breaking: when multiple tokens share the same
+    #       probability, CUB RadixSort and paddle.argsort (Thrust)
+    #       order them differently.  This reshuffles which equal-prob
+    #       tokens sit at the boundary, altering the cumsum path.
+    #       Fix: after computing the mask, extend it to include ALL
+    #       tokens with prob >= the boundary token's probability.
+    #
+    # Since the mask is only used for *reporting* (not for actual
+    # sampling), the slight over-inclusion is harmless.
     # ------------------------------------------------------------------
     cum_probs = paddle.cumsum(renorm_sorted_probs, axis=-1)  # [B, V]
-    topp_mask = (cum_probs - renorm_sorted_probs) < top_p  # [B, V]
+    topp_mask = (cum_probs - renorm_sorted_probs) <= top_p  # [B, V]
     # When top_p[i] >= 1.0, keep the entire row.
     topp_mask = paddle.where(
         (top_p >= 1.0).expand_as(topp_mask),
         paddle.ones_like(topp_mask),
         topp_mask,
     )
+
+    # Extend mask to cover sort tie-breaking: include all tokens whose
+    # probability >= the boundary token's probability (last retained
+    # in sorted order).  In descending-sorted probs this just extends
+    # the contiguous True block by the run of equal-prob tokens.
+    k_per_row = topp_mask.astype("int32").sum(axis=-1, keepdim=True)  # [B,1]
+    # boundary_idx = last True position (k-1), clamp for safety
+    boundary_idx = (k_per_row - 1).clip(min=0)  # [B, 1]
+    boundary_prob = paddle.take_along_axis(
+        renorm_sorted_probs,
+        boundary_idx,
+        axis=-1,
+    )  # [B, 1]
+    topp_mask = topp_mask | (renorm_sorted_probs >= boundary_prob)
 
     # ------------------------------------------------------------------
     # Stage 4: intersect on GPU, then minimal D2H.
