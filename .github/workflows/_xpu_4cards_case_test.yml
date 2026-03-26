@@ -212,7 +212,7 @@ jobs:
 
       - name: Upload case logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: xpu-4cards-case-logs
           path: FastDeploy/case_logs/
