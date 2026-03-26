@@ -250,6 +250,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
         os.getenv("FD_CONFIG_ROOT", os.path.join(os.path.expanduser("~"), ".config", "fastdeploy"))
     ),
     # Whether to force the inference engine to synchronize token_ids sampled by TP groups.
-    "FD_SYNC_TOKEN_IDS_ACROSS_TP": lambda: bool(int(os.getenv("FD_SYNC_TOKEN_IDS_ACROSS_TP", "0"))),
+    "FD_SYNC_TOKEN_IDS_ACROSS_TP": lambda: bool(int(os.getenv("FD_SYNC_TOKEN_IDS_ACROSS_TP", "1"))),
 }
 ```
