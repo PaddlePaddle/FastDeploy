@@ -217,7 +217,7 @@ class PrefixCacheManager:
             is_server=False,
             num_client=tensor_parallel_size,
             client_id=0,
-            local_data_parallel_id=self.local_data_parallel_id,
+            local_data_parallel_id=0,
         )
 
         current_dir_path = os.path.split(os.path.abspath(__file__))[0]
@@ -293,7 +293,7 @@ class PrefixCacheManager:
         else:
             storage_arg_str = " "
 
-        if self.cache_config.swap_space or self.cache_config.kvcache_storage_backend:
+        if self.cache_config.num_cpu_blocks > 0 or self.cache_config.kvcache_storage_backend:
             for i in range(tensor_parallel_size):
                 launch_cmd = (
                     "FLAGS_allocator_strategy=auto_growth "
@@ -314,7 +314,6 @@ class PrefixCacheManager:
                     + f" --pod_ip {pod_ip}"
                     + f" --engine_worker_queue_port {engine_worker_queue_port}"
                     + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
-                    + f" --ipc_suffix {ipc_suffix}"
                     + f" --protocol {cache_config.cache_transfer_protocol}"
                     + f" --local_data_parallel_id {self.local_data_parallel_id}"
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
@@ -353,9 +352,8 @@ class PrefixCacheManager:
 
         # Start additional threads
         if cache_config.kvcache_storage_backend or self.num_cpu_blocks > 0:
-            logger.info("Enable hierarchical cache.")
             threading.Thread(target=self.recv_data_transfer_result, daemon=True).start()
-        if cache_config.enable_prefix_caching:
+        if cache_config.enable_prefix_caching and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
             threading.Thread(target=self.clear_prefix_cache, daemon=True).start()
 
         all_cache_processes = cache_messager_processes + cache_manager_processes

@@ -48,22 +48,18 @@ from paddleformers.utils.log import logger as pf_logger
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.utils import (
+    _is_package_installed,
     console_logger,
     current_package_version,
     envs,
     get_version_info,
 )
 
-paddle.compat.enable_torch_proxy(scope={"triton"})
-# paddle.compat.enable_torch_proxy(scope={"triton"}) enables the torch proxy
-# specifically for the 'triton' module. This means `import torch` inside 'triton'
-# will actually import paddle's compatibility layer (acting as torch).
-#
-# 'scope' acts as an allowlist. To add other modules, you can do:
-# paddle.compat.enable_torch_proxy(scope={"triton", "new_module"})
-#
-# Note: Ensure that any torch APIs used in 'new_module' are already implemented in Paddle.
-
+# We can use enable_compat only when torch is not installed, otherwise it will
+# cause some unexpected issues in triton kernels. We use enable_compat_on_triton_kernel
+# for these cases.
+if not _is_package_installed("torch"):
+    paddle.enable_compat(scope={"triton"})
 
 if envs.FD_DEBUG != 1:
     import logging

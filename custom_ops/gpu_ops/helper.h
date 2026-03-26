@@ -189,6 +189,17 @@ inline int GetGPUComputeCapability(int id) {
   }
 #endif
 
+#ifndef DISPATCH_BOOL_DTYPE
+#define DISPATCH_BOOL_DTYPE(runtime_flag, STATIC_FLAG, ...) \
+  if (runtime_flag) {                                       \
+    constexpr bool STATIC_FLAG = true;                      \
+    __VA_ARGS__                                             \
+  } else {                                                  \
+    constexpr bool STATIC_FLAG = false;                     \
+    __VA_ARGS__                                             \
+  }
+#endif
+
 inline constexpr uint32_t next_pow_2(uint32_t const num) {
   if (num <= 1) return num;
   return 1 << (CHAR_BIT * sizeof(num) - __builtin_clz(num - 1));
@@ -723,7 +734,15 @@ inline bool getBoolEnv(char const *name) {
   return env && env[0] == '1' && env[1] == '\0';
 }
 
+template <const bool EnforceRN = false>
+__device__ __forceinline__ float fmul_func(float a, float b) {
+  // Use __fmul_rn for IEEE-754 compliant rounding when EnforceRN is enabled
+  float res = EnforceRN ? __fmul_rn(a, b) : a * b;
+  return res;
+}
+
 bool getEnvEnablePDL();
+bool getEnvEnableRL();
 
 #ifndef PADDLE_WITH_COREX
 template <typename KernelFn, typename... Args>

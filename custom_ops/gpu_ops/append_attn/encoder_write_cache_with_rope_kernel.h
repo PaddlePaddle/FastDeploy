@@ -16,7 +16,7 @@
 #include "encoder_write_cache_with_rope_impl.cuh"
 #include "remote_cache_kv_ipc.h"
 
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void EncoderWriteCacheWithRopeKernel(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor&
@@ -56,50 +56,57 @@ void EncoderWriteCacheWithRopeKernel(
   auto head_dim = meta_data.head_dims;
   bool is_scale_channel_wise = false;
   int rotary_dim = head_dim;
-  if (cache_k_scale && cache_k_scale.get().dims()[0] == head_dim * kv_num_heads) {
+  if (cache_k_scale &&
+      cache_k_scale.get().dims()[0] == head_dim * kv_num_heads) {
     is_scale_channel_wise = true;
   }
-  if (rotary_embs){
-    rotary_dim = rotary_embs.get().dims()[rotary_embs.get().dims().size()-1] * 2;
-    if(rotary_dim < head_dim){
-      if (!use_neox_style || q_norm_weight || k_norm_weight || num_heads == kv_num_heads || is_scale_channel_wise){
+  if (rotary_embs) {
+    rotary_dim =
+        rotary_embs.get().dims()[rotary_embs.get().dims().size() - 1] * 2;
+    if (rotary_dim < head_dim) {
+      if (!use_neox_style || q_norm_weight || k_norm_weight ||
+          num_heads == kv_num_heads || is_scale_channel_wise) {
         PADDLE_THROW(phi::errors::Fatal(
-          "partial_rotary_factor < 1.0 only supports use_neox_rotary_style=True, q_norm_weight/k_norm_weight) is None, GQA and is_scale_channel_wise=false."));
+            "partial_rotary_factor < 1.0 only supports "
+            "use_neox_rotary_style=True, q_norm_weight/k_norm_weight) is None, "
+            "GQA and is_scale_channel_wise=false."));
       }
     }
   }
 
   if (q_norm_weight && k_norm_weight) {
-    if (num_heads != kv_num_heads && !is_scale_channel_wise && !use_neox_style) {
-      gqa_rotary_qk_norm_variable(
-        qkv_out->data<T>(),
-        qkv.data<QKV_TYPE>(),
-        qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-        qkv_biases ? qkv_biases.get().data<T>() : nullptr,
-        rotary_embs.get().data<float>(),
-        batch_id_per_token.data<int>(),
-        cu_seqlens_q.data<int>(),
-        seq_lens_encoder.data<int>(),
-        seq_lens_decoder.data<int>(),
-        token_num,
-        num_heads,
-        kv_num_heads,
-        max_seq_len,
-        rope_3d ? rotary_embs.get().dims()[3] : rotary_embs.get().dims()[2],
-        head_dim,
-        stream,
-        use_neox_style,
-        rope_3d,
-        q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
-        k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
-        rms_norm_eps);
+    if (num_heads != kv_num_heads && !is_scale_channel_wise &&
+        !use_neox_style) {
+      gqa_rotary_qk_norm_variable<T, QKV_TYPE, EnforceFmulRN>(
+          qkv_out->data<T>(),
+          qkv.data<QKV_TYPE>(),
+          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+          qkv_biases ? qkv_biases.get().data<T>() : nullptr,
+          rotary_embs.get().data<float>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens_encoder.data<int>(),
+          seq_lens_decoder.data<int>(),
+          token_num,
+          num_heads,
+          kv_num_heads,
+          max_seq_len,
+          rope_3d ? rotary_embs.get().dims()[3] : rotary_embs.get().dims()[2],
+          head_dim,
+          stream,
+          use_neox_style,
+          rope_3d,
+          q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
+          k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
+          rms_norm_eps);
     } else {
       PD_THROW(
-          "gqa_rotary_qk_norm_variable only support gqa mode. channel wise scale and neox style are not supported");
+          "gqa_rotary_qk_norm_variable only support gqa mode. channel wise "
+          "scale and neox style are not supported");
     }
   } else {
     if (num_heads == kv_num_heads) {
-      rotary_qk_variable(
+      rotary_qk_variable<T, QKV_TYPE, EnforceFmulRN>(
           qkv_out->data<T>(),
           qkv.data<QKV_TYPE>(),
           qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
@@ -119,50 +126,49 @@ void EncoderWriteCacheWithRopeKernel(
           rope_3d);
     } else {
       if (!is_scale_channel_wise) {
-        gqa_rotary_qk_variable(
-          qkv_out->data<T>(),
-          qkv.data<QKV_TYPE>(),
-          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-          qkv_biases ? qkv_biases.get().data<T>() : nullptr,
-          rotary_embs.get().data<float>(),
-          batch_id_per_token.data<int>(),
-          cu_seqlens_q.data<int>(),
-          seq_lens_encoder.data<int>(),
-          seq_lens_decoder.data<int>(),
-          token_num,
-          num_heads,
-          kv_num_heads,
-          max_seq_len,
-          rope_3d ? rotary_embs.get().dims()[3] : rotary_embs.get().dims()[2],
-          head_dim,
-          rotary_dim,
-          stream,
-          use_neox_style,
-          rope_3d);
+        gqa_rotary_qk_variable<T, QKV_TYPE, EnforceFmulRN>(
+            qkv_out->data<T>(),
+            qkv.data<QKV_TYPE>(),
+            qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+            qkv_biases ? qkv_biases.get().data<T>() : nullptr,
+            rotary_embs.get().data<float>(),
+            batch_id_per_token.data<int>(),
+            cu_seqlens_q.data<int>(),
+            seq_lens_encoder.data<int>(),
+            seq_lens_decoder.data<int>(),
+            token_num,
+            num_heads,
+            kv_num_heads,
+            max_seq_len,
+            rope_3d ? rotary_embs.get().dims()[3] : rotary_embs.get().dims()[2],
+            head_dim,
+            rotary_dim,
+            stream,
+            use_neox_style,
+            rope_3d);
       } else {
-        gqa_rotary_qk_quant_variable(
-          qkv_out->data<T>(),
-          qkv.data<QKV_TYPE>(),
-          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-          qkv_biases ? qkv_biases.get().data<T>() : nullptr,
-          cache_k_scale ? cache_k_scale.get().data<T>() : nullptr,
-          cache_v_scale ? cache_v_scale.get().data<T>() : nullptr,
-          rotary_embs.get().data<float>(),
-          batch_id_per_token.data<int>(),
-          cu_seqlens_q.data<int>(),
-          seq_lens_encoder.data<int>(),
-          seq_lens_decoder.data<int>(),
-          token_num,
-          num_heads,
-          kv_num_heads,
-          max_seq_len,
-          rotary_embs.get().dims()[2],
-          head_dim,
-          stream,
-          use_neox_style,
-          rope_3d);
+        gqa_rotary_qk_quant_variable<T, QKV_TYPE, EnforceFmulRN>(
+            qkv_out->data<T>(),
+            qkv.data<QKV_TYPE>(),
+            qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+            qkv_biases ? qkv_biases.get().data<T>() : nullptr,
+            cache_k_scale ? cache_k_scale.get().data<T>() : nullptr,
+            cache_v_scale ? cache_v_scale.get().data<T>() : nullptr,
+            rotary_embs.get().data<float>(),
+            batch_id_per_token.data<int>(),
+            cu_seqlens_q.data<int>(),
+            seq_lens_encoder.data<int>(),
+            seq_lens_decoder.data<int>(),
+            token_num,
+            num_heads,
+            kv_num_heads,
+            max_seq_len,
+            rotary_embs.get().dims()[2],
+            head_dim,
+            stream,
+            use_neox_style,
+            rope_3d);
       }
-
     }
   }
   const uint32_t block_size = meta_data.block_size;
@@ -178,7 +184,9 @@ void EncoderWriteCacheWithRopeKernel(
                                     stream,
                                     key_cache_out,
                                     value_cache_out);
-  } else if (cache_quant_type_str == "cache_int8" or cache_quant_type_str == "cache_fp8" or cache_quant_type_str == "block_wise_fp8") {
+  } else if (cache_quant_type_str == "cache_int8" or
+             cache_quant_type_str == "cache_fp8" or
+             cache_quant_type_str == "block_wise_fp8") {
     DISPATCH_HEAD_DIM(
         head_dim, HEAD_DIM, {DISPATCH_BLOCK_SIZE(block_size, BLOCK_SIZE, {
           CascadeAppendWriteCacheKVC8QKV<T, HEAD_DIM, BLOCK_SIZE>(
@@ -234,23 +242,29 @@ void EncoderWriteCacheWithRopeKernel(
         "cache_int4_zp]");
   }
 
-  const char* fmt_write_cache_completed_signal_str = std::getenv("FLAGS_fmt_write_cache_completed_signal");
-  const char* FLAGS_use_pd_disaggregation_per_chunk = std::getenv("FLAGS_use_pd_disaggregation_per_chunk");
+  const char* fmt_write_cache_completed_signal_str =
+      std::getenv("FLAGS_fmt_write_cache_completed_signal");
+  const char* FLAGS_use_pd_disaggregation_per_chunk =
+      std::getenv("FLAGS_use_pd_disaggregation_per_chunk");
   if (fmt_write_cache_completed_signal_str &&
       (std::strcmp(fmt_write_cache_completed_signal_str, "true") == 0 ||
        std::strcmp(fmt_write_cache_completed_signal_str, "1") == 0)) {
-      if (FLAGS_use_pd_disaggregation_per_chunk &&
-          (std::strcmp(FLAGS_use_pd_disaggregation_per_chunk, "true") == 0 ||
-           std::strcmp(FLAGS_use_pd_disaggregation_per_chunk, "1") == 0)) {
-        cudaLaunchHostFunc(qkv.stream(),
-                           &(RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise_per_query),
-                           (void*)nullptr);
-      } else {
-        if (kv_signal_data) {
-          cudaLaunchHostFunc(qkv.stream(),
-                            &RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise,
-                            (void*)(const_cast<int64_t*>(kv_signal_data.get().data<int64_t>())));
-        }
+    if (FLAGS_use_pd_disaggregation_per_chunk &&
+        (std::strcmp(FLAGS_use_pd_disaggregation_per_chunk, "true") == 0 ||
+         std::strcmp(FLAGS_use_pd_disaggregation_per_chunk, "1") == 0)) {
+      cudaLaunchHostFunc(
+          qkv.stream(),
+          &(RemoteCacheKvIpc::
+                save_cache_kv_complete_signal_layerwise_per_query),
+          (void*)nullptr);
+    } else {
+      if (kv_signal_data) {
+        cudaLaunchHostFunc(
+            qkv.stream(),
+            &RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise,
+            (void*)(const_cast<int64_t*>(
+                kv_signal_data.get().data<int64_t>())));
       }
+    }
   }
 }
