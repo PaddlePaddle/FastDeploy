@@ -531,32 +531,11 @@ class TextProcessor(BaseTextProcessor):
         return tokens["input_ids"][0]
 
     def messages2ids(self, request, **kwargs):
-        if self.tokenizer_type == "ernie4_5":
-            return self._ernie_messages2ids(request, **kwargs)
-        return self._auto_messages2ids(request, **kwargs)
-
-    def _auto_messages2ids(self, request, **kwargs):
-        if "add_generation_prompt" not in kwargs:
-            kwargs["add_generation_prompt"] = request.get("add_generation_prompt", True)
-        spliced_message = self.tokenizer.apply_chat_template(
-            request,
-            tokenize=False,
-            split_special_tokens=False,
-            add_special_tokens=False,
-            **kwargs,
-        )
-        request["prompt_tokens"] = spliced_message
-        req_id = None
-        tokens = self.tokenizer.tokenize(spliced_message)
-        if isinstance(request, dict):
-            req_id = request.get("request_id", None)
-        token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-        data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
-        return token_ids
-
-    def _ernie_messages2ids(self, request, **kwargs):
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat_template.")
+        if self.tokenizer_type != "ernie4_5":
+            if "add_generation_prompt" not in kwargs:
+                kwargs["add_generation_prompt"] = request.get("add_generation_prompt", True)
         spliced_message = self.tokenizer.apply_chat_template(
             request,
             tokenize=False,
