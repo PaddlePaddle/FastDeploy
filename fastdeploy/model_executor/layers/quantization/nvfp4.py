@@ -618,15 +618,19 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                 weight_scale.dtype == paddle.float8_e4m3fn
             ), f"{name} Weight Blockscale must be represented as FP8-E4M3"
 
-        up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
-        # up_gate_proj_blockscale_swizzled = layer.up_gate_proj_weight_scale
+        if envs.FD_NVFP4_LOAD_BLOCKSCALE_LEAVE:
+            up_gate_proj_blockscale_swizzled = layer.up_gate_proj_weight_scale
+        else:
+            up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
         free_tensor(layer.up_gate_proj_weight_scale)
         layer.up_gate_proj_weight_scale = None
         create_parameter_and_copy(
             layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
         )
-        down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
-        # down_proj_blockscale_swizzled = layer.down_proj_weight_scale
+        if envs.FD_NVFP4_LOAD_BLOCKSCALE_LEAVE:
+            down_proj_blockscale_swizzled = layer.down_proj_weight_scale
+        else:
+            down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
         free_tensor(layer.down_proj_weight_scale)
         layer.down_proj_weight_scale = None
         create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
