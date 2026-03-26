@@ -604,7 +604,7 @@ class PaddleDisWorkerProc:
                     self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
 
             # Let the ep group run control method synchronically
-            if self.parallel_config.use_ep:
+            if envs.FD_ENABLE_V1_UPDATE_WEIGHTS and self.parallel_config.use_ep:
                 pendings = all_gather_values(len(self.cached_control_reqs), self.parallel_config.ep_group)
                 if all([p > 0 for p in pendings]):
                     logger.info(f"Rank: {self.local_rank} Detected all ep ranks have pending control tasks.")
