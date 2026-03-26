@@ -522,9 +522,16 @@ class OpenAIServingCompletion:
                         num_image_tokens[idx] += output.get("num_image_tokens")
                     reasoning_tokens[idx] += output.get("reasoning_token_num", 0)
                     output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
+
+                    if output["tool_calls"] is not None:
+                        tool_called[idx] = True
+
+                    if output["skipped"] and not request.return_token_ids:
+                        continue
+
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
-                        text=output["text"],
+                        text="" if output["skipped"] else (output["text"] or ""),
                         prompt_token_ids=None,
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
                         tool_calls=output["tool_calls"],
@@ -536,12 +543,6 @@ class OpenAIServingCompletion:
                         draft_logprobs=draft_logprobs_res,
                         speculate_metrics=output_speculate_metrics,
                     )
-
-                    if output["tool_calls"] is not None:
-                        tool_called[idx] = True
-
-                    if output["skipped"]:
-                        continue
 
                     choices.append(delta_message)
 
