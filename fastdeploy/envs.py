@@ -249,6 +249,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
     # Whether to use batch send data in zmq
     "ZMQ_SEND_BATCH_DATA": lambda: int(os.getenv("ZMQ_SEND_BATCH_DATA", "1")),
+    "FD_SYNC_TOKEN_IDS_ACROSS_TP": lambda: bool(int(os.getenv("FD_SYNC_TOKEN_IDS_ACROSS_TP", "0"))),
 }
 
 
