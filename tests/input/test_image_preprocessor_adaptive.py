@@ -22,14 +22,16 @@ from PIL import Image
 
 from fastdeploy.input.ernie4_5_vl_processor.image_preprocessor.image_preprocessor_adaptive import (
     AdaptiveImageProcessor,
+    make_batched_images,
+    make_batched_videos,
+)
+from fastdeploy.input.image_processors.common import (
     ceil_by_factor,
     floor_by_factor,
     is_scaled_image,
-    make_batched_images,
-    make_batched_videos,
     round_by_factor,
-    smart_resize,
 )
+from fastdeploy.input.image_processors.common import smart_resize_qwen as smart_resize
 
 
 class TestImagePreprocessorAdaptive(unittest.TestCase):
