@@ -23,6 +23,7 @@ try:
 except:
     assert False, "fused_cast_sigmoid_bias not support!"
 
+
 def fused_cast_sigmoid_bias(
     gate_out: paddle.Tensor,
     e_score_correction_bias: paddle.Tensor,

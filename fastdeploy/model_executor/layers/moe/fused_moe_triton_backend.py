@@ -30,6 +30,7 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
     weight_fully_copied,
 )
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import ceil_div, register_custom_python_op
 
 from ..quantization.quant_base import QuantMethodBase
