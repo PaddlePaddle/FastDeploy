@@ -169,9 +169,8 @@ __global__ void fused_swiglu_fp8_quant_kernel(
         float x1 = static_cast<float>(x1_vec[i]);
         float x2 = static_cast<float>(x2_vec[i]);
 
-        // SwiGLU: x2 * silu(x1) = x2 * x1 * sigmoid(x1)
-        float sigmoid_x1 = __frcp_rn(1.f + __expf(-x1));
-        float y = x2 * x1 * sigmoid_x1;
+        // SwiGLU: x2 * silu(x1) = x2 * x1 / (1 + exp(-x1))
+        float y = x2 * x1 / (1.f + expf(-x1));
         float y_r = static_cast<float>(
             static_cast<T>(y));  // bf16 round-trip to match reference
         v[i] = y_r;
@@ -301,8 +300,7 @@ __global__ void fused_swiglu_fp8_quant_kernel(
           for (int i = 0; i < 4; ++i) {
             float x1 = static_cast<float>(rx1[i]);
             float x2 = static_cast<float>(rx2[i]);
-            float sigmoid_x1 = __frcp_rn(1.f + __expf(-x1));
-            float y = x2 * x1 * sigmoid_x1;
+            float y = x2 * x1 / (1.f + expf(-x1));
             float y_r = static_cast<float>(
                 static_cast<T>(y));  // bf16 round-trip to match reference
             rv[i] = y_r;
