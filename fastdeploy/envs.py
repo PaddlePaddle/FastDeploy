@@ -225,10 +225,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
     # File path for file storage backend
     "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
-    # Custom all-reduce max buffer size in MB (default 64MB).
+    # Custom all-reduce max buffer size in MB (default 8MB).
     # Increase this to avoid NCCL fallback for large tensors in deterministic mode.
     # E.g. FD_CUSTOM_AR_MAX_SIZE_MB=128 for 128MB.
-    "FD_CUSTOM_AR_MAX_SIZE_MB": lambda: int(os.getenv("FD_CUSTOM_AR_MAX_SIZE_MB", "64")),
+    "FD_CUSTOM_AR_MAX_SIZE_MB": lambda: int(os.getenv("FD_CUSTOM_AR_MAX_SIZE_MB", "8")),
     # Enable deterministic inference mode for chunked prefill alignment
     "FD_DETERMINISTIC_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_MODE", "0"))),
     # Split KV block size for deterministic alignment (must be power of 2 and > 0, default 16)
@@ -250,6 +250,11 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use batch send data in zmq
     "ZMQ_SEND_BATCH_DATA": lambda: int(os.getenv("ZMQ_SEND_BATCH_DATA", "1")),
     "FD_SYNC_TOKEN_IDS_ACROSS_TP": lambda: bool(int(os.getenv("FD_SYNC_TOKEN_IDS_ACROSS_TP", "0"))),
+    # Whether to enable v1 weight updating, which utilizes ZMQ/EngineWorkerQueue/EngineCacheQueue/FMQs
+    # to pass control requests and responses.
+    # When v1 is enabled, the legacy /clear_load_weight and /update_model_weight
+    # will adopt this new communication pattern.
+    "FD_ENABLE_V1_UPDATE_WEIGHTS": lambda: bool(int(os.getenv("FD_ENABLE_V1_UPDATE_WEIGHTS", "0"))),
 }
 
 

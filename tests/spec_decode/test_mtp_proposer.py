@@ -294,7 +294,6 @@ class TestMTPProposer(unittest.TestCase):
         proposer.enable_mm = True
         request1.multimodal_inputs = {"attention_mask_offset": [0, 1, 2, 3, 4]}
         proposer.model_inputs["attn_mask_offsets_full"] = paddle.zeros([2, 2048], dtype="int32")
-        proposer.model_inputs["attn_mask_offsets_decoder"] = paddle.zeros([2, 1], dtype="int32")
         proposer.insert_tasks_v1([request1], 1)
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
@@ -612,7 +611,6 @@ class TestMTPProposer(unittest.TestCase):
         )
         self.assertIn("attn_mask_offsets", proposer.model_inputs)
         self.assertIn("attn_mask_offsets_full", proposer.model_inputs)
-        self.assertIn("attn_mask_offsets_decoder", proposer.model_inputs)
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")

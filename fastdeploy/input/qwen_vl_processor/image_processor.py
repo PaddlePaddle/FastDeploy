@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import math
 from typing import List, Optional, Union
 
 import numpy as np
@@ -41,6 +40,7 @@ from paddleformers.transformers.image_utils import (
 from paddleformers.transformers.legacy.tokenizer_utils_base import TensorType
 from PIL import Image
 
+from fastdeploy.input.image_processors.common import is_scaled_image, smart_resize
 from fastdeploy.utils import data_processor_logger
 
 OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
@@ -60,116 +60,6 @@ VideoInput = Union[
     List[List["np.ndarray"]],
     List[List["paddle.Tensor"]],
 ]
-
-
-def round_by_factor(number: int, factor: int) -> int:
-    """
-    Round number to nearest multiple of factor.
-
-    Args:
-        number: Input number to round
-        factor: Rounding factor
-
-    Returns:
-        int: Rounded number
-    """
-    return round(number / factor) * factor
-
-
-def ceil_by_factor(number: int, factor: int) -> int:
-    """
-    Round number up to nearest multiple of factor.
-
-    Args:
-        number: Input number to round
-        factor: Rounding factor
-
-    Returns:
-        int: Rounded number
-    """
-    return math.ceil(number / factor) * factor
-
-
-def floor_by_factor(number: int, factor: int) -> int:
-    """
-    Round number down to nearest multiple of factor.
-
-    Args:
-        number: Input number to round
-        factor: Rounding factor
-
-    Returns:
-        int: Rounded number
-    """
-    return math.floor(number / factor) * factor
-
-
-def smart_resize(height: int, width: int, factor: int, min_pixels: int, max_pixels: int, max_ratio: int = 200):
-    """
-    Smart image resizing that maintains aspect ratio and respects constraints.
-
-    Args:
-        height: Original image height
-        width: Original image width
-        factor: Patch size factor
-        min_pixels: Minimum allowed pixels
-        max_pixels: Maximum allowed pixels
-        max_ratio: Maximum allowed aspect ratio
-
-    Returns:
-        tuple: (new_height, new_width)
-
-    Raises:
-        ValueError: If calculated dimensions are invalid
-    """
-    if max(height, width) / min(height, width) > max_ratio:
-        if height > width:
-            new_width = max(factor, round_by_factor(width, factor))
-            new_height = floor_by_factor(new_width * max_ratio, factor)
-        else:
-            new_height = max(factor, round_by_factor(height, factor))
-            new_width = floor_by_factor(new_height * max_ratio, factor)
-
-        data_processor_logger.info(
-            f"absolute aspect ratio must be smaller than {max_ratio}, got {max(height, width) / min(height, width)},\
-              resize to {max(new_height, new_width) / min(new_height, new_width)}"
-        )
-
-        height = new_height
-        width = new_width
-
-    h_bar = max(factor, round_by_factor(height, factor))
-    w_bar = max(factor, round_by_factor(width, factor))
-    if h_bar * w_bar > max_pixels:
-        beta = math.sqrt((height * width) / max_pixels)
-        h_bar = floor_by_factor(height / beta, factor)
-        w_bar = floor_by_factor(width / beta, factor)
-    elif h_bar * w_bar < min_pixels:
-        beta = math.sqrt(min_pixels / (height * width))
-        h_bar = ceil_by_factor(height * beta, factor)
-        w_bar = ceil_by_factor(width * beta, factor)
-
-    if min_pixels > h_bar * w_bar or h_bar * w_bar > max_pixels:
-        raise ValueError(f"encounter invalid h_bar: {h_bar}, w_bar: {w_bar}")
-
-    return h_bar, w_bar
-
-
-def is_scaled_image(image: np.ndarray) -> bool:
-    """
-    Check if image pixel values are already normalized to [0, 1] range.
-
-    Args:
-        image: Input image array
-
-    Returns:
-        bool: True if image is already scaled
-    """
-    if image.dtype == np.uint8:
-        return False
-
-    # It's possible the image has pixel values in [0, 255] but is of floating type
-    return np.min(image) >= 0 and np.max(image) <= 1
 
 
 class ImageProcessor(BaseImageProcessor):
