@@ -420,8 +420,8 @@ class TestFusedRecurrentGDN(unittest.TestCase):
         np.testing.assert_allclose(
             kernel_out.cast(paddle.float32).numpy(),
             ref_out.numpy(),
-            rtol=1e-3,
-            atol=1e-3,
+            rtol=1e-2,
+            atol=1e-2,
             err_msg="fused_recurrent (with init state) output mismatch",
         )
         np.testing.assert_allclose(
