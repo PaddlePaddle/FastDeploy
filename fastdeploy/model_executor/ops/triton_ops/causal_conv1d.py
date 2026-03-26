@@ -2,42 +2,29 @@
 # Original: Copyright (c) 2024, Tri Dao (Apache License 2.0)
 # Adapted for FastDeploy (PaddlePaddle) by PaddlePaddle Authors, 2025.
 """
-Causal Conv1d Triton Kernels — FastDeploy 版（GDN Prefill/Decode 路径）。
+Causal Conv1d Triton Kernels — FastDeploy edition (GDN Prefill/Decode path).
 
-移植说明:
-  - Triton kernel 代码完全不变
-  - Python wrapper: torch → paddle
-    * torch.empty_like → paddle.empty_like
-    * tensor.stride() → tensor.strides  (list, 通过下标取值)
-    * .size(0) → .shape[0]
-    * torch.empty(x) → paddle.empty([...])
-  - 仅保留 GDN 需要的两个接口:
-    * causal_conv1d_fn     — Prefill varlen 路径（pool + slot_ids + has_initial_state）
-    * causal_conv1d_update — Decode 单 token 路径（pool + slot_ids）
-  - 移除 speculative decoding / Eagle tree attention 相关参数（GDN 不需要）
-  - 移除 @torch.compiler.disable
-
-公开 API:
+Public API:
     causal_conv1d_fn(x, weight, bias, conv_states, query_start_loc,
                      seq_lens_cpu, cache_indices, has_initial_state, activation)
-        x: (dim, cu_seqlen) - 所有序列拼接
+        x: (dim, cu_seqlen) - all sequences concatenated
         weight: (dim, width)
         bias: (dim,) or None
-        conv_states: [max_seqs, dim, width-1]  (pool, in-place 更新)
+        conv_states: [max_seqs, dim, width-1]  (pool, in-place update)
         query_start_loc: [N+1] int32
         seq_lens_cpu: List[int]
-        cache_indices: [N] int32 (slot 索引)
+        cache_indices: [N] int32 (slot index)
         has_initial_state: [N] bool
         activation: "silu" or None
         → out: (dim, cu_seqlen)
 
     causal_conv1d_update(x, conv_state, weight, bias, activation, conv_state_indices)
         x: (batch, dim)
-        conv_state: [max_seqs, dim, state_len]  (pool, in-place 更新)
+        conv_state: [max_seqs, dim, state_len]  (pool, in-place update)
         weight: (dim, width)
         bias: (dim,) or None
         activation: "silu" or None
-        conv_state_indices: [batch] int32 (slot 索引)
+        conv_state_indices: [batch] int32 (slot index)
         → out: (batch, dim)
 """
 
@@ -448,7 +435,7 @@ def _causal_conv1d_update_kernel(
 
 
 # ============================================================
-# Python Wrappers (paddle 版)
+# Python Wrappers (paddle edition)
 # ============================================================
 
 
@@ -465,19 +452,19 @@ def causal_conv1d_fn(
     pad_slot_id: int = PAD_SLOT_ID,
 ) -> paddle.Tensor:
     """
-    Causal conv1d 前向（Prefill varlen 路径）。
+    Causal conv1d forward (Prefill varlen path).
 
     Args:
-        x: (dim, cu_seqlen) — 所有序列拼接
-        weight: (dim, width) — 卷积核
+        x: (dim, cu_seqlen) — all sequences concatenated
+        weight: (dim, width) — convolution kernel
         bias: (dim,) or None
-        conv_states: [max_seqs, dim, width-1] — conv 状态池（in-place 更新）
-        query_start_loc: [N+1] int32 — 每个序列在 x 中的起始位置
-        seq_lens_cpu: List[int] — 每个序列的长度（host side）
-        cache_indices: [N] int32 — 每个序列对应的 pool slot 索引
-        has_initial_state: [N] bool — 是否有初始状态（从 pool 读取）
+        conv_states: [max_seqs, dim, width-1] — conv state pool (in-place update)
+        query_start_loc: [N+1] int32 — start position of each sequence in x
+        seq_lens_cpu: List[int] — length of each sequence (host side)
+        cache_indices: [N] int32 — pool slot index for each sequence
+        has_initial_state: [N] bool — whether initial state exists (read from pool)
         activation: "silu" or None
-        pad_slot_id: padding slot 标记（跳过处理）
+        pad_slot_id: padding slot sentinel (skipped during processing)
 
     Returns:
         out: (dim, cu_seqlen)
@@ -567,16 +554,16 @@ def causal_conv1d_update(
     pad_slot_id: int = PAD_SLOT_ID,
 ) -> paddle.Tensor:
     """
-    Causal conv1d 单 token 更新（Decode 路径）。
+    Causal conv1d single-token update (Decode path).
 
     Args:
-        x: (batch, dim) — 当前 token
-        conv_state: [max_seqs, dim, state_len] — conv 状态池（in-place 更新）
-        weight: (dim, width) — 卷积核
+        x: (batch, dim) — current token
+        conv_state: [max_seqs, dim, state_len] — conv state pool (in-place update)
+        weight: (dim, width) — convolution kernel
         bias: (dim,) or None
         activation: "silu" or None
-        conv_state_indices: [batch] int32 — pool slot 索引
-        pad_slot_id: padding slot 标记
+        conv_state_indices: [batch] int32 — pool slot index
+        pad_slot_id: padding slot sentinel
 
     Returns:
         out: (batch, dim)

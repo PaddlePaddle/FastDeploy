@@ -12,25 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-GDN (Gated Delta Network) Triton Kernel 单元测试。
+GDN (Gated Delta Network) Triton Kernel unit tests.
 
-测试覆盖:
-  1. TestFusedRecurrentGDN  — fused_recurrent_gated_delta_rule (Decode 路径)
-  2. TestChunkGDN           — chunk_gated_delta_rule (Prefill 路径)
+Test coverage:
+  1. TestFusedRecurrentGDN  — fused_recurrent_gated_delta_rule (Decode path)
+  2. TestChunkGDN           — chunk_gated_delta_rule (Prefill path)
   3. TestCausalConv1dUpdate — causal_conv1d_update (Decode conv)
   4. TestCausalConv1dFn     — causal_conv1d_fn (Prefill conv, varlen)
 
-参考基准:
-  - GDN: Transformers 动态图中的 torch_recurrent_gated_delta_rule /
-         torch_chunk_gated_delta_rule（Pure PyTorch 实现，与 FLA 论文对齐）
-         移植为纯 paddle 实现后作为 baseline。
-  - Conv1d: torch_causal_conv1d_update（来自 Transformers 的 F.conv1d 参考）
-            移植为纯 paddle 实现后作为 baseline。
+Reference baselines:
+  - GDN: torch_recurrent_gated_delta_rule / torch_chunk_gated_delta_rule
+         from Transformers eager mode (Pure PyTorch, aligned with FLA paper),
+         ported to pure paddle as baseline.
+  - Conv1d: torch_causal_conv1d_update (F.conv1d reference from Transformers),
+            ported to pure paddle as baseline.
 
-运行方法:
+How to run:
   cd /root/.../FastDeploy
   python -m pytest tests/model_executor/ops/triton_ops/test_gdn_kernels.py -v
-  # 或
+  # or
   python tests/model_executor/ops/triton_ops/test_gdn_kernels.py
 """
 
@@ -99,7 +99,7 @@ def paddle_recurrent_gated_delta_rule_ref(
     use_qk_l2norm_in_kernel: bool = False,
 ) -> tuple:
     """
-    Pure-Paddle reference for fused recurrent GDN (Decode 路径).
+    Pure-Paddle reference for fused recurrent GDN (Decode path).
 
     Args:
         query, key: [B, T, H, K]
@@ -168,7 +168,7 @@ def paddle_chunk_gated_delta_rule_ref(
     use_qk_l2norm_in_kernel: bool = False,
 ) -> tuple:
     """
-    Pure-Paddle reference for chunk GDN (Prefill 路径).
+    Pure-Paddle reference for chunk GDN (Prefill path).
 
     Closely mirrors Transformers' torch_chunk_gated_delta_rule.
     """
@@ -261,7 +261,7 @@ def paddle_chunk_gated_delta_rule_ref(
 
 
 class TestFusedRecurrentGDN(unittest.TestCase):
-    """测试 fused_recurrent_gated_delta_rule (Decode 路径 SSM kernel)."""
+    """Test fused_recurrent_gated_delta_rule (Decode path SSM kernel)."""
 
     def setUp(self):
         paddle.seed(42)
@@ -281,7 +281,7 @@ class TestFusedRecurrentGDN(unittest.TestCase):
         return q, k, v, g, beta
 
     def test_fused_recurrent_no_state(self):
-        """不带初始状态，kernel 输出应与 baseline 一致。"""
+        """Without initial state, kernel output should match baseline."""
         from fastdeploy.model_executor.ops.triton_ops.fla import (
             fused_recurrent_gated_delta_rule,
         )
@@ -317,7 +317,7 @@ class TestFusedRecurrentGDN(unittest.TestCase):
         )
 
     def test_fused_recurrent_with_l2norm(self):
-        """带 L2 norm，kernel 输出应与 baseline 一致。"""
+        """With L2 norm, kernel output should match baseline."""
         from fastdeploy.model_executor.ops.triton_ops.fla import (
             fused_recurrent_gated_delta_rule,
         )
@@ -353,7 +353,7 @@ class TestFusedRecurrentGDN(unittest.TestCase):
         )
 
     def test_fused_recurrent_output_final_state(self):
-        """output_final_state=True 时，验证最终状态形状与数值正确。"""
+        """When output_final_state=True, verify final state shape and values."""
         from fastdeploy.model_executor.ops.triton_ops.fla import (
             fused_recurrent_gated_delta_rule,
         )
@@ -390,7 +390,7 @@ class TestFusedRecurrentGDN(unittest.TestCase):
         )
 
     def test_fused_recurrent_with_initial_state(self):
-        """带初始 SSM 状态，验证状态传播正确。"""
+        """With initial SSM state, verify state propagation is correct."""
         from fastdeploy.model_executor.ops.triton_ops.fla import (
             fused_recurrent_gated_delta_rule,
         )
@@ -434,7 +434,7 @@ class TestFusedRecurrentGDN(unittest.TestCase):
 
 
 class TestChunkGDN(unittest.TestCase):
-    """测试 chunk_gated_delta_rule (Prefill 路径 SSM kernel)."""
+    """Test chunk_gated_delta_rule (Prefill path SSM kernel)."""
 
     def setUp(self):
         paddle.seed(42)
@@ -455,7 +455,7 @@ class TestChunkGDN(unittest.TestCase):
         return q, k, v, g, beta
 
     def test_chunk_gdn_no_state(self):
-        """不带初始状态，chunk kernel 输出应与 baseline 一致（使用 l2norm 保证数值稳定）。"""
+        """Without initial state, chunk kernel output should match baseline (l2norm ensures numerical stability)."""
         from fastdeploy.model_executor.ops.triton_ops.fla import chunk_gated_delta_rule
 
         q, k, v, g, beta = self._make_inputs()
@@ -468,7 +468,7 @@ class TestChunkGDN(unittest.TestCase):
             beta.cast(paddle.float32),
             chunk_size=64,
             output_final_state=False,
-            use_qk_l2norm_in_kernel=True,  # l2norm 保证数值不溢出 bf16
+            use_qk_l2norm_in_kernel=True,  # l2norm prevents bf16 overflow
         )
 
         kernel_out, _ = chunk_gated_delta_rule(
@@ -489,7 +489,7 @@ class TestChunkGDN(unittest.TestCase):
         )
 
     def test_chunk_gdn_with_l2norm(self):
-        """带 L2 norm，chunk kernel 输出应与 baseline 一致。"""
+        """With L2 norm, chunk kernel output should match baseline."""
         from fastdeploy.model_executor.ops.triton_ops.fla import chunk_gated_delta_rule
 
         q, k, v, g, beta = self._make_inputs()
@@ -523,7 +523,7 @@ class TestChunkGDN(unittest.TestCase):
         )
 
     def test_chunk_recurrent_consistency(self):
-        """chunk 和 recurrent 在相同输入下输出应接近（数值等价性验证）。"""
+        """Chunk and recurrent outputs should be close on the same input (numerical equivalence check)."""
         from fastdeploy.model_executor.ops.triton_ops.fla import (
             chunk_gated_delta_rule,
             fused_recurrent_gated_delta_rule,
@@ -560,7 +560,7 @@ class TestChunkGDN(unittest.TestCase):
 
 
 class TestCausalConv1dUpdate(unittest.TestCase):
-    """测试 causal_conv1d_update (Decode 单 token conv)."""
+    """Test causal_conv1d_update (Decode single-token conv)."""
 
     def setUp(self):
         paddle.seed(42)
@@ -605,7 +605,7 @@ class TestCausalConv1dUpdate(unittest.TestCase):
         return paddle.concat(outs, axis=0)  # [batch, dim]
 
     def test_causal_conv1d_update_no_bias(self):
-        """无 bias，causal_conv1d_update 与纯 Paddle 基准对齐。"""
+        """Without bias, causal_conv1d_update should align with pure Paddle baseline."""
         from fastdeploy.model_executor.ops.triton_ops.causal_conv1d import (
             causal_conv1d_update,
         )
@@ -642,7 +642,7 @@ class TestCausalConv1dUpdate(unittest.TestCase):
         )
 
     def test_causal_conv1d_update_with_bias(self):
-        """有 bias，causal_conv1d_update 与纯 Paddle 基准对齐。"""
+        """With bias, causal_conv1d_update should align with pure Paddle baseline."""
         from fastdeploy.model_executor.ops.triton_ops.causal_conv1d import (
             causal_conv1d_update,
         )
@@ -677,7 +677,7 @@ class TestCausalConv1dUpdate(unittest.TestCase):
         )
 
     def test_causal_conv1d_update_state_inplace(self):
-        """验证 conv_state pool 被正确 in-place 更新（滑窗移位）。"""
+        """Verify conv_state pool is correctly updated in-place (sliding window shift)."""
         from fastdeploy.model_executor.ops.triton_ops.causal_conv1d import (
             causal_conv1d_update,
         )
@@ -715,7 +715,7 @@ class TestCausalConv1dUpdate(unittest.TestCase):
 
 
 class TestCausalConv1dFn(unittest.TestCase):
-    """测试 causal_conv1d_fn (Prefill varlen conv)."""
+    """Test causal_conv1d_fn (Prefill varlen conv)."""
 
     def setUp(self):
         paddle.seed(42)
@@ -726,7 +726,7 @@ class TestCausalConv1dFn(unittest.TestCase):
 
     def _make_varlen_inputs(self, seq_lens):
         """
-        构造 varlen 输入。
+        Construct varlen inputs.
 
         Returns:
             x: [dim, total_tokens] (channel-last layout)
@@ -785,7 +785,7 @@ class TestCausalConv1dFn(unittest.TestCase):
         return paddle.concat(out_parts, axis=-1)  # [dim, total_tokens]
 
     def test_causal_conv1d_fn_no_initial_state(self):
-        """无初始状态（全零）的 prefill varlen conv。"""
+        """No initial state (all zeros) prefill varlen conv."""
         from fastdeploy.model_executor.ops.triton_ops.causal_conv1d import (
             causal_conv1d_fn,
         )
