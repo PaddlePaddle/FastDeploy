@@ -73,6 +73,7 @@ def allocate_launch_related_buffer(
     num_heads,
     kv_num_heads,
     block_size,
+    head_dim,
 ):
     # Initialize AttentionBackend buffers
     assert num_heads % kv_num_heads == 0
@@ -107,6 +108,16 @@ def allocate_launch_related_buffer(
     res["kv_batch_ids"] = paddle.full([kv_max_tile_size], 0, dtype="int32")
     res["kv_tile_ids_per_batch"] = paddle.full([kv_max_tile_size], 0, dtype="int32")
     res["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+
+    max_partition_size = int(os.getenv("FLAGS_max_partition_size", 1024))
+    max_num_chunk = (max_model_len + max_partition_size - 1) // max_partition_size
+    res["tmp_workspace"] = paddle.full(
+        [max_batch_size * decoder_step_token_num, max_num_chunk, num_heads * head_dim],
+        0,
+        dtype=paddle.get_default_dtype(),
+    )
+    res["tmp_m"] = paddle.full([max_batch_size * decoder_step_token_num, max_num_chunk, num_heads], 0, dtype="float32")
+    res["tmp_d"] = paddle.full([max_batch_size * decoder_step_token_num, max_num_chunk, num_heads], 0, dtype="float32")
     return res
 
 
@@ -387,6 +398,9 @@ class AppendAttentionBackend(AttentionBackend):
                 qkv,
                 cache_k,
                 cache_v,
+                forward_meta.tmp_workspace,
+                forward_meta.tmp_m,
+                forward_meta.tmp_d,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,
@@ -444,6 +458,9 @@ class AppendAttentionBackend(AttentionBackend):
                 qkv,
                 cache_k,
                 cache_v,
+                forward_meta.tmp_workspace,
+                forward_meta.tmp_m,
+                forward_meta.tmp_d,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,

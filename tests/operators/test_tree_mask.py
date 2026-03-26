@@ -245,6 +245,15 @@ class TestTreeMask(unittest.TestCase):
         kv_batch_ids = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
         kv_tile_ids_per_batch = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
         kv_num_blocks_x_cpu = paddle.full([1], 0, dtype="int32").cpu()
+
+        max_num_chunk = (self.max_seq_len + self.max_partition_size - 1) // self.max_partition_size
+        tmp_workspace = paddle.full(
+            [self.bsz * decoder_step_token_num, max_num_chunk, self.num_q_head * self.head_dim],
+            0,
+            dtype=paddle.get_default_dtype(),
+        )
+        tmp_m = paddle.full([self.bsz * decoder_step_token_num, max_num_chunk, self.num_q_head], 0, dtype="float32")
+        tmp_d = paddle.full([self.bsz * decoder_step_token_num, max_num_chunk, self.num_q_head], 0, dtype="float32")
         q_norm_weight = np.ones([self.head_dim])
         k_norm_weight = np.ones([self.head_dim])
         self.q_norm_weight_tensor = paddle.to_tensor(q_norm_weight, dtype="float32")
@@ -279,6 +288,9 @@ class TestTreeMask(unittest.TestCase):
                 qkv,
                 self.cache_k,
                 self.cache_v,
+                tmp_workspace,
+                tmp_m,
+                tmp_d,
                 seq_lens_encoder,
                 seq_lens_decoder,
                 seq_lens_this_time,

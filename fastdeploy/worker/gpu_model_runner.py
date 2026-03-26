@@ -1301,6 +1301,9 @@ class GPUModelRunner(ModelRunnerBase):
             kv_batch_ids=self.share_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
+            tmp_workspace=self.share_inputs["tmp_workspace"],
+            tmp_m=self.share_inputs["tmp_m"],
+            tmp_d=self.share_inputs["tmp_d"],
             routing_replay_table=routing_replay_table,
         )
 
@@ -1530,6 +1533,7 @@ class GPUModelRunner(ModelRunnerBase):
             num_heads=num_heads,
             kv_num_heads=self.model_config.kv_num_heads,
             block_size=self.fd_config.cache_config.block_size,
+            head_dim=head_dim,
         )
         self.share_inputs.update(res_buffer)
 

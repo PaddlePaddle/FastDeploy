@@ -400,6 +400,21 @@ class MTPProposer(Proposer):
         self.model_inputs["kv_num_blocks_x_cpu"] = paddle.zeros_like(
             self.target_model_inputs["kv_num_blocks_x_cpu"]
         ).cpu()
+        self.model_inputs["tmp_workspace"] = (
+            paddle.zeros_like(self.target_model_inputs["tmp_workspace"])
+            if self.target_model_inputs["tmp_workspace"] is not None
+            else None
+        )
+        self.model_inputs["tmp_m"] = (
+            paddle.zeros_like(self.target_model_inputs["tmp_m"])
+            if self.target_model_inputs["tmp_m"] is not None
+            else None
+        )
+        self.model_inputs["tmp_d"] = (
+            paddle.zeros_like(self.target_model_inputs["tmp_d"])
+            if self.target_model_inputs["tmp_d"] is not None
+            else None
+        )
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -662,6 +677,9 @@ class MTPProposer(Proposer):
             kv_batch_ids=self.model_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
+            tmp_workspace=self.model_inputs["tmp_workspace"],
+            tmp_m=self.model_inputs["tmp_m"],
+            tmp_d=self.model_inputs["tmp_d"],
             attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.enable_mm else None,
         )
 

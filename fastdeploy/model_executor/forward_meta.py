@@ -122,6 +122,10 @@ class ForwardMeta:
     # The number of CUDA blocks to launch in the x-dimension for the append_write_cache_kv kernel, defining its grids.x.
     kv_num_blocks_x_cpu: Optional[paddle.Tensor] = None
 
+    tmp_workspace: Optional[paddle.Tensor] = None
+    tmp_m: Optional[paddle.Tensor] = None
+    tmp_d: Optional[paddle.Tensor] = None
+
     decoder_chunk_size_device: Optional[paddle.Tensor] = None
 
     # Sequence length of encoder for ever batch

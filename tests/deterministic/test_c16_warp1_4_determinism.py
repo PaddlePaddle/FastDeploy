@@ -265,6 +265,16 @@ def run_c16_warp14_decoder_test(
     kv_tile_ids = paddle.full([kv_tile_size], 0, dtype="int32")
     kv_nblocks_cpu = paddle.full([1], 0, dtype="int32").cpu()
 
+    decoder_step_token_num = 2
+    max_num_chunk = (max_seq_len + decoder_max_partition_size - 1) // decoder_max_partition_size
+    tmp_workspace = paddle.full(
+        [batch_size * decoder_step_token_num, max_num_chunk, q_num_head * dim_head],
+        0,
+        dtype=paddle.get_default_dtype(),
+    )
+    tmp_m = paddle.full([batch_size * decoder_step_token_num, max_num_chunk, q_num_head], 0, dtype="float32")
+    tmp_d = paddle.full([batch_size * decoder_step_token_num, max_num_chunk, q_num_head], 0, dtype="float32")
+
     # ===== Encoder phase =====
     seq_enc = paddle.full([batch_size], prefill_seq_len, dtype="int32")
     seq_dec = paddle.full([batch_size], 0, dtype="int32")
@@ -317,6 +327,9 @@ def run_c16_warp14_decoder_test(
         qkv,
         cache_k,
         cache_v,
+        tmp_workspace,
+        tmp_m,
+        tmp_d,
         seq_enc,
         seq_dec,
         seq_this,
@@ -361,7 +374,7 @@ def run_c16_warp14_decoder_test(
         -1,
         ENCODER_BLOCK_SHAPE_Q,
         DECODER_BLOCK_SHAPE_Q,
-        encoder_partition_size,
+        decoder_max_partition_size,
         encoder_partition_size,
         2,
         True,
@@ -427,6 +440,9 @@ def run_c16_warp14_decoder_test(
         dec_qkv.clone(),
         cache_k.clone(),
         cache_v.clone(),
+        tmp_workspace,
+        tmp_m,
+        tmp_d,
         seq_enc_d,
         seq_dec_d,
         seq_this_d,
@@ -512,6 +528,9 @@ def run_c16_warp14_decoder_test(
             qkv_c,
             cache_k_c,
             cache_v_c,
+            tmp_workspace,
+            tmp_m,
+            tmp_d,
             seq_enc_d,
             seq_dec_d,
             seq_this_d,

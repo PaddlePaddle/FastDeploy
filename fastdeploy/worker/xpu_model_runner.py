@@ -1339,6 +1339,9 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["kv_tile_ids_per_batch"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
             self.share_inputs["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
             self.share_inputs["max_len_kv_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+            self.share_inputs["tmp_workspace"] = None
+            self.share_inputs["tmp_m"] = None
+            self.share_inputs["tmp_d"] = None
 
         # Get the attention backend
         attn_cls = get_attention_backend()

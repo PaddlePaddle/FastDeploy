@@ -197,6 +197,7 @@ class TestAttentionPerformance(unittest.TestCase):
             num_heads=fd_config.model_config.num_attention_heads // tp_size,
             kv_num_heads=fd_config.model_config.num_key_value_heads // tp_size,
             block_size=fd_config.cache_config.block_size,
+            head_dim=fd_config.model_config.head_dim,
         )
 
         block_size = fd_config.cache_config.block_size
