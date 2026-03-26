@@ -59,10 +59,6 @@ class LogprobsLists(NamedTuple):
             [row[start:end] for row in self.logprob_token_ids],
             [row[start:end] for row in self.logprobs],
             self.sampled_token_ranks,  # unchanged
-            # [row[start:end] for row in self.logits_min],
-            # [row[start:end] for row in self.logits_max],
-            # [row[start:end] for row in self.logits_mean],
-            # [row[start:end] for row in self.logits_std],
             self.logits_min,  # unchanged
             self.logits_max,  # unchanged
             self.logits_mean,  # unchanged
