@@ -36,26 +36,12 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
 try:
-    # FlashInfer cutedsl blockscaled gemm kernels
-
-    from fastdeploy.model_executor.layers.moe.ep import deep_ep
     from fastdeploy.model_executor.ops.gpu import (
         depermute_prefill_combine,
         prefill_permute_to_masked_gemm,
     )
-
-    logger.info(
-        "FlashInfer cutedsl is slow to import because it triggers JIT compilation of "
-        "CUDA kernels via TVM/CODEGEN, and cuBLASLt initializes lookup tables and "
-        "compiles GEMM kernels during first load. This may take several minutes. "
-        "The wait is expected and only happens once per process."
-    )
-    from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
-        flashinfer_cutedsl_moe_masked,
-    )
-
 except ImportError:
-    raise ImportError("flashinfer_cutedsl_moe_masked not found, flashinfer kernel may not be enabled.")
+    raise ImportError("premute and depermute kernels may not be enabled.")
 
 
 def call_prefill_permute_to_masked_gemm(
@@ -644,6 +630,18 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
 
+        from fastdeploy.model_executor.layers.moe.ep import deep_ep
+
+        logger.info(
+            "FlashInfer cutedsl is slow to import because it triggers JIT compilation of "
+            "CUDA kernels via TVM/CODEGEN, and cuBLASLt initializes lookup tables and "
+            "compiles GEMM kernels during first load. This may take several minutes. "
+            "The wait is expected and only happens once per process."
+        )
+        from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
+            flashinfer_cutedsl_moe_masked,
+        )
+
         # 1. top experts and weights
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
@@ -751,6 +749,16 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
+
+        logger.info(
+            "FlashInfer cutedsl is slow to import because it triggers JIT compilation of "
+            "CUDA kernels via TVM/CODEGEN, and cuBLASLt initializes lookup tables and "
+            "compiles GEMM kernels during first load. This may take several minutes. "
+            "The wait is expected and only happens once per process."
+        )
+        from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
+            flashinfer_cutedsl_moe_masked,
+        )
 
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)

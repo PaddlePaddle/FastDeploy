@@ -17,6 +17,9 @@
 from typing import Any, Optional
 
 import paddle
+from paddleformers.utils.log import logger
+
+paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
 
 def _dtype_str(dtype) -> str:
@@ -85,6 +88,12 @@ def flashinfer_cutedsl_moe_masked(
     Returns:
         paddle.Tensor: [num_experts, m, k] bf16
     """
+    logger.info(
+        "FlashInfer cutedsl is slow to import because it triggers JIT compilation of "
+        "CUDA kernels via TVM/CODEGEN, and cuBLASLt initializes lookup tables and "
+        "compiles GEMM kernels during first load. This may take several minutes. "
+        "The wait is expected and only happens once per process."
+    )
     from flashinfer import (
         scaled_fp4_grouped_quantize,
         silu_and_mul_scaled_nvfp4_experts_quantize,
