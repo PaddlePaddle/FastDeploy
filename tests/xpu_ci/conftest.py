@@ -485,8 +485,6 @@ def _archive_case_logs(test_name):
         shutil.copy2("server.log", os.path.join(dest_dir, "server.log"))
 
 
-
-
 @pytest.hookimpl(hookwrapper=True, trylast=True)
 def pytest_runtest_makereport(item, call):
     """每个测试阶段结束后归档日志（仅在 call 阶段后执行）"""
