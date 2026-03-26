@@ -865,6 +865,7 @@ class RequestMetrics:
 
     llm_engine_recv_req_timestamp: Optional[float] = None
     llm_engine_send_req_to_engine_timestamp: Optional[float] = None
+    llm_engine_send_req_to_decoder_engine_timestamp: Optional[float] = None
     llm_engine_recv_latest_token_timestamp: Optional[float] = None
     llm_engine_recv_token_timestamp: Optional[float] = None
 
@@ -951,6 +952,10 @@ class RequestMetrics:
 
     def __setitem__(self, key, value):
         setattr(self, key, value)
+
+    # Set engine time for decoder-node
+    def update_decoder_start_time(self):
+        self.llm_engine_send_req_to_decoder_engine_timestamp = self.decode_inference_start_time
 
 
 class RequestOutput:
