@@ -16,14 +16,18 @@
 
 import asyncio
 import os
+import sys
 import threading
 import time
 import types
 import unittest
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+
 import numpy as np
 import paddle
+from e2e.utils.serving_utils import clean_ports
 
 if not hasattr(paddle, "compat"):
 
@@ -82,6 +86,10 @@ class TestCommonEngine(unittest.TestCase):
     def setUpClass(cls):
         """Set up EngineService for testing"""
         try:
+            # Clean ports before starting the engine
+            print("Pre-test port cleanup...")
+            clean_ports()
+
             # Create engine args for testing
             engine_args = EngineArgs(
                 model=MODEL_NAME,
