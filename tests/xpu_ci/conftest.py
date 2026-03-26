@@ -484,12 +484,7 @@ def _archive_case_logs(test_name):
     if os.path.exists("server.log") and not os.path.exists(os.path.join(dest_dir, "server.log")):
         shutil.copy2("server.log", os.path.join(dest_dir, "server.log"))
 
-    print(f"\n日志已归档到: {dest_dir}")
-    # 列出归档内容
-    for root, dirs, files in os.walk(dest_dir):
-        for f in files:
-            rel = os.path.relpath(os.path.join(root, f), dest_dir)
-            print(f"  归档文件: {rel}")
+
 
 
 @pytest.hookimpl(hookwrapper=True, trylast=True)
@@ -504,5 +499,5 @@ def pytest_runtest_makereport(item, call):
         test_name = os.path.splitext(test_file)[0]
         try:
             _archive_case_logs(test_name)
-        except Exception as e:
-            print(f"\n警告: 日志归档失败: {e}")
+        except Exception:
+            pass
