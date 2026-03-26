@@ -16,6 +16,9 @@
 
 import warnings
 
+from fastdeploy.input.base_processor import (  # backward compat  # noqa: F401
+    _SAMPLING_EPS,
+)
 from fastdeploy.input.text_processor import (  # backward compat  # noqa: F401
     BaseDataProcessor,
     TextProcessor,

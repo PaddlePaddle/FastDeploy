@@ -427,6 +427,9 @@ class BaseTextProcessor(ABC):
         return request
 
     def _encode_literal_text_with_cache(self, text):
+        if not hasattr(self, "_tokenize_cache"):
+            self._tokenize_cache = OrderedDict()
+            self._tokenize_cache_capacity = 128
         key = ("literal_text", text)
         cached = self._tokenize_cache.get(key)
         if cached is not None:
