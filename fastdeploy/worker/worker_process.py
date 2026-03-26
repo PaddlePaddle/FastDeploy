@@ -34,6 +34,7 @@ with intercept_paddle_loggers():
 from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
+    DeployModality,
     DeviceConfig,
     EarlyStopConfig,
     EPLBConfig,
@@ -1118,6 +1119,14 @@ def parse_args():
         help="enable to avoid cpu sync",
     )
 
+    parser.add_argument(
+        "--deploy_modality",
+        type=str,
+        default="mixed",
+        choices=["mixed", "text"],
+        help="Deploy modality: 'mixed' for multimodal, 'text' for text-only.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -1248,6 +1257,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         structured_outputs_config=structured_outputs_config,
         eplb_config=eplb_config,
         routing_replay_config=routing_replay_config,
+        deploy_modality=DeployModality.from_str(getattr(args, "deploy_modality", "mixed")),
     )
     logger.info(f"parallel_config.local_engine_worker_queue_port {parallel_config.local_engine_worker_queue_port}")
 

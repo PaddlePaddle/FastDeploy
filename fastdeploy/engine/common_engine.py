@@ -2279,6 +2279,7 @@ class EngineService:
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
             f" --num_cpu_blocks {self.cfg.cache_config.num_cpu_blocks}"
+            f" --deploy_modality {self.cfg.deploy_modality.value}"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
