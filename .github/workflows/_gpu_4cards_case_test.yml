@@ -198,6 +198,28 @@ jobs:
           python -m pip install ${fd_wheel_url} --no-deps --target=/workspace/FastDeploy
           export PYTHONPATH=/workspace/FastDeploy/
 
+          mkdir -p /workspace/FastDeploy/run_4_cards_tests_error_logs
+
+          chmod -R a+rX run_4_cards_tests_error_logs/ 2>/dev/null || true
+
           export CUDA_VISIBLE_DEVICES=0,1,2,3
-          bash scripts/run_gpu_4cards.sh
+          TEST_EXIT_CODE=0
+          bash scripts/run_gpu_4cards.sh || TEST_EXIT_CODE=8
+          echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> exit_code.env
           '
+          if [ -f FastDeploy/exit_code.env ]; then
+            cat FastDeploy/exit_code.env >> $GITHUB_ENV
+          fi
+
+          if [ "${TEST_EXIT_CODE}" -eq 8 ]; then
+            exit 1
+          fi
+
+      - name: Upload run_4_cards_tests_error_logs
+        if: ${{ always() && env.TEST_EXIT_CODE == 8 }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: run_4_cards_tests_error_logs
+          path: FastDeploy/run_4_cards_tests_error_logs
+          retention-days: 7
+          if-no-files-found: ignore

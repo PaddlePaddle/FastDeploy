@@ -336,9 +336,9 @@ def test_text_diff(api_url):
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "21b_tp1_dp4_text_baseline.txt")
+        base_file = os.path.join(base_path, "21b_tp1_dp4_text_baseline_debug.txt")
     else:
-        base_file = "21b_tp1_dp4_text_baseline.txt"
+        base_file = "21b_tp1_dp4_text_baseline_debug.txt"
 
     with open(base_file, "r", encoding="utf-8") as f:
         baseline = f.read()
