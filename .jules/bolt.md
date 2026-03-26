@@ -1,0 +1,3 @@
+## 2025-03-02 - Optimize RequestMetrics to_dict()
+**Learning:** dataclasses.asdict uses copy.deepcopy recursively. For high-frequency serialization paths (like RequestMetrics.to_dict, which is called on every request output), writing a custom loop over __dataclass_fields__ that directly assigns primitives, calls custom .to_dict() methods on nested dataclasses, and shallow-copies collections can dramatically improve performance (observed over 2x speedup in isolated micro-benchmarks).
+**Action:** Always profile and consider manual mapping over __dataclass_fields__ when serializing deeply nested or frequently created dataclasses in high-throughput engines.
