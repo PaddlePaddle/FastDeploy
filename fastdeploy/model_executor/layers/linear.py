@@ -1171,15 +1171,22 @@ class QKVGateParallelLinear(ColumnParallelLinear):
         return shard_size_mapping.get(loaded_shard_id)
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        assert loaded_shard_id in [
-            "qkv",
-            "gate",
-        ], f"loaded_shard_id must be one of ['qkv', 'gate'], but got {loaded_shard_id}"
-
+        # Support loading individual shards: "q", "k", "v", "gate"
+        # Also support "qkv" for fused qkv weights and "gate" for gate weights
+        # "split_q_gate" for Qwen3.5: split q_proj into query and gate parts
+        valid_shard_ids = ["qkv", "gate", "q", "k", "v", "split_q_gate"]
+        assert (
+            loaded_shard_id in valid_shard_ids
+        ), f"loaded_shard_id must be one of {valid_shard_ids}, but got {loaded_shard_id}"
         if loaded_shard_id == "qkv":
             self.qkv_weight_loader(param, loaded_weight, None)
-        else:
+        elif loaded_shard_id == "gate":
             self.gate_weight_loader(param, loaded_weight)
+        elif loaded_shard_id == "split_q_gate":
+            self.split_q_gate_weight_loader(param, loaded_weight)
+        else:
+            # "q", "k", "v" - load individual shard
+            self.qkv_weight_loader(param, loaded_weight, loaded_shard_id)
 
     def qkv_weight_loader(self, param, loaded_weight, loaded_shard_id):
         output_dim = getattr(param, "output_dim", None)
@@ -1288,6 +1295,34 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
         h2d_copy(param, loaded_weight)
+
+    def split_q_gate_weight_loader(self, param, loaded_weight):
+        output_dim = getattr(param, "output_dim", None)
+        assert output_dim is not None
+        dim = -1 if output_dim else 0
+
+        weight_need_transpose = getattr(param, "weight_need_transpose", False)
+        if weight_need_transpose:
+            loaded_weight = get_tensor(loaded_weight)
+            loaded_weight = loaded_weight.transpose([1, 0])
+            # Avoid redundant transpose of fused weights when weight_loader is called iteratively
+            param.weight_need_transpose = False
+
+        # Qwen3.5: q_proj contains query and gate in PACKED layout per head
+        assert loaded_weight.shape[dim] == self.num_heads * self.head_dim * 2, (
+            f"split_q_gate_weight_loader: expected output dim {self.num_heads * self.head_dim * 2}, "
+            f"got {loaded_weight.shape[dim]}. Check head_dim ({self.head_dim}) and num_heads ({self.num_heads})."
+        )
+
+        # Weight layout: [q0_0,...,q0_{hd-1}, g0_0,...,g0_{hd-1}, q1_0,...] where qi/gi each have head_dim elements
+        input_shape = loaded_weight.shape[:-1]
+        query_weight, gate_weight = paddle.chunk(
+            loaded_weight.reshape([*input_shape, -1, self.head_dim * 2]), 2, axis=-1
+        )
+
+        # Load query and gate weights
+        self.qkv_weight_loader(param, query_weight.reshape([*input_shape, -1]), "q")
+        self.gate_weight_loader(param, gate_weight.reshape([*input_shape, -1]))
 
     def load_weight(self, state_dict: dict):
         """

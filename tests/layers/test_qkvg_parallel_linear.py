@@ -290,6 +290,18 @@ class TestQKVGateParallelLinear(unittest.TestCase):
             if "loaded_shard_id must be one of" in str(e):
                 self.fail("weight_loader should accept 'gate' as a valid shard_id")
 
+        try:
+            layer.weight_loader(param_mock, weight_mock, "split_q_gate")
+        except AssertionError as e:
+            if "loaded_shard_id must be one of" in str(e):
+                self.fail("weight_loader should accept 'split_q_gate' as a valid shard_id")
+
+        try:
+            layer.weight_loader(param_mock, weight_mock, "k")
+        except AssertionError as e:
+            if "loaded_shard_id must be one of" in str(e):
+                self.fail("weight_loader should accept 'k' as a valid shard_id")
+
     def test_weight_loader_invalid_shard_id(self):
         """Test weight_loader with invalid shard IDs."""
         fd_config = self.create_fd_config()
@@ -306,6 +318,120 @@ class TestQKVGateParallelLinear(unittest.TestCase):
             layer.weight_loader(param_mock, weight_mock, "invalid")
 
         self.assertIn("loaded_shard_id must be one of", str(context.exception))
+
+    def test_weight_loader_success(self):
+        """Test split_q_gate weight_loader correctly splits and places query/gate weights."""
+        # --- Config constants (tp=1) ---
+        # num_heads=16, kv_num_heads=4, head_dim=64, input_size=1024
+        # output_size = (2*16 + 2*4)*64 = 2560
+        # param layout (dim=-1): [q: 0..1024) | [k: 1024..1280) | [v: 1280..1536) | [gate: 1536..2560)
+        fd_config = self.create_fd_config()
+        layer = QKVGateParallelLinear(fd_config=fd_config, prefix="test.qkvg_proj")
+
+        num_heads = layer.num_heads  # 16
+        head_dim = layer.head_dim  # 64
+        input_size = layer.input_size  # 1024
+        kv_heads_per_rank = layer.kv_num_heads_per_rank  # 4 (tp=1)
+        num_heads_per_rank = layer.num_heads_per_rank  # 16 (tp=1)
+
+        q_size = num_heads_per_rank * head_dim  # 1024
+        gate_size = num_heads_per_rank * head_dim  # 1024
+        gate_offset = (num_heads_per_rank + 2 * kv_heads_per_rank) * head_dim  # 1536
+
+        # --- Case 1: paddle (non-torch) format, loaded_weight shape [input_size, num_heads*head_dim*2] ---
+        param = layer.weight
+        # Build a packed weight: per head, first head_dim = query, next head_dim = gate
+        # Shape: [input_size, num_heads * head_dim * 2]
+        q_values = paddle.ones([input_size, num_heads * head_dim], dtype=param.dtype)  # all 1.0
+        g_values = paddle.full([input_size, num_heads * head_dim], 2.0, dtype=param.dtype)  # all 2.0
+        # interleave per-head: reshape to [input_size, num_heads, head_dim*2] then cat
+        packed = paddle.concat(
+            [q_values.reshape([input_size, num_heads, head_dim]), g_values.reshape([input_size, num_heads, head_dim])],
+            axis=-1,
+        ).reshape(
+            [input_size, num_heads * head_dim * 2]
+        )  # [1024, 2048]
+
+        layer.weight_loader(param, packed, "split_q_gate")
+
+        # q region in param should be all 1.0
+        q_region = layer.weight[:, :q_size].cast("float32")
+        self.assertTrue(
+            paddle.allclose(q_region, paddle.ones_like(q_region)).item(),
+            "Query weights not correctly written to param q-region",
+        )
+        # gate region in param should be all 2.0
+        gate_region = layer.weight[:, gate_offset : gate_offset + gate_size].cast("float32")
+        self.assertTrue(
+            paddle.allclose(gate_region, paddle.full_like(gate_region, 2.0)).item(),
+            "Gate weights not correctly written to param gate-region",
+        )
+
+        # --- Case 2: torch format (weight_need_transpose=True), loaded_weight shape [num_heads*head_dim*2, input_size] ---
+        layer2 = QKVGateParallelLinear(fd_config=fd_config, prefix="test.qkvg_proj")
+        param2 = layer2.weight
+        # Simulate torch format: transpose of packed
+        packed_torch = packed.transpose([1, 0])  # [2048, 1024]
+        setattr(param2, "weight_need_transpose", True)
+
+        layer2.weight_loader(param2, packed_torch, "split_q_gate")
+
+        q_region2 = layer2.weight[:, :q_size].cast("float32")
+        self.assertTrue(
+            paddle.allclose(q_region2, paddle.ones_like(q_region2)).item(),
+            "Query weights not correctly written after transpose (torch format)",
+        )
+        gate_region2 = layer2.weight[:, gate_offset : gate_offset + gate_size].cast("float32")
+        self.assertTrue(
+            paddle.allclose(gate_region2, paddle.full_like(gate_region2, 2.0)).item(),
+            "Gate weights not correctly written after transpose (torch format)",
+        )
+        # weight_need_transpose should be reset to False after loading
+        self.assertFalse(
+            getattr(param2, "weight_need_transpose", False),
+            "weight_need_transpose should be reset to False after split_q_gate loading",
+        )
+
+        # --- Case 3: TP=2, rank=0 — only first half of heads loaded ---
+        fd_config_tp2 = self.create_fd_config(tp_size=2, tp_rank=0)
+        layer_tp = QKVGateParallelLinear(fd_config=fd_config_tp2, prefix="test.qkvg_proj")
+        # tp=2: num_heads_per_rank=8, kv_num_heads_per_rank=2
+        # output_size per rank = (2*8 + 2*2)*64 = 1280
+        tp_num_heads_per_rank = layer_tp.num_heads_per_rank  # 8
+        tp_kv_per_rank = layer_tp.kv_num_heads_per_rank  # 2
+        tp_q_size = tp_num_heads_per_rank * head_dim  # 512
+        tp_gate_offset = (tp_num_heads_per_rank + 2 * tp_kv_per_rank) * head_dim  # 768
+
+        param_tp = layer_tp.weight
+        q_tp = paddle.ones([input_size, num_heads * head_dim], dtype=param_tp.dtype)
+        g_tp = paddle.full([input_size, num_heads * head_dim], 3.0, dtype=param_tp.dtype)
+        packed_tp = paddle.concat(
+            [q_tp.reshape([input_size, num_heads, head_dim]), g_tp.reshape([input_size, num_heads, head_dim])],
+            axis=-1,
+        ).reshape([input_size, num_heads * head_dim * 2])
+
+        layer_tp.weight_loader(param_tp, packed_tp, "split_q_gate")
+
+        # rank=0 takes first 8 heads → q values should be 1.0
+        q_region_tp = layer_tp.weight[:, :tp_q_size].cast("float32")
+        self.assertTrue(
+            paddle.allclose(q_region_tp, paddle.ones_like(q_region_tp)).item(),
+            "TP rank-0 query weights not correctly written",
+        )
+        gate_region_tp = layer_tp.weight[:, tp_gate_offset : tp_gate_offset + tp_num_heads_per_rank * head_dim].cast(
+            "float32"
+        )
+        self.assertTrue(
+            paddle.allclose(gate_region_tp, paddle.full_like(gate_region_tp, 3.0)).item(),
+            "TP rank-0 gate weights not correctly written",
+        )
+
+        # --- Case 4: wrong shape triggers assert ---
+        layer4 = QKVGateParallelLinear(fd_config=fd_config, prefix="test.qkvg_proj")
+        bad_weight = paddle.zeros([input_size, num_heads * head_dim], dtype=layer4.weight.dtype)  # missing gate half
+        with self.assertRaises(AssertionError) as ctx:
+            layer4.weight_loader(layer4.weight, bad_weight, "split_q_gate")
+        self.assertIn("split_q_gate_weight_loader", str(ctx.exception))
 
     def test_load_state_dict_success(self):
         """Test loading state_dict with valid qkv and gate weights."""
