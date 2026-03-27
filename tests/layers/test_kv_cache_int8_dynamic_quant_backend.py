@@ -861,35 +861,5 @@ class TestAppendCacheKVC8KernelConfig(unittest.TestCase):
         self.assertIsNotNone(np.ones(4))  # dequant_scales
 
 
-# ---------------------------------------------------------------------------
-# Cross-backend consistency tests
-# ---------------------------------------------------------------------------
-
-
-class TestCacheRoutingConsistency(unittest.TestCase):
-    """Verify identical cache routing logic across all backends."""
-
-    def test_block_wise_fp8_selection(self):
-        caches = [f"c{i}" for i in range(8)]
-        k, v, ks, vs = caches[4], caches[5], caches[6], caches[7]
-        self.assertEqual(k, "c4")
-        self.assertEqual(v, "c5")
-        self.assertEqual(ks, "c6")
-        self.assertEqual(vs, "c7")
-
-    def test_normal_quant_selection(self):
-        for qt in ["none", "cache_int8", "cache_fp8", "cache_int4_zp"]:
-            caches = [f"c{i}" for i in range(4)]
-            k = caches[2 * 1]
-            v = caches[2 * 1 + 1]
-            self.assertEqual(k, "c2", f"Failed for {qt}")
-            self.assertEqual(v, "c3", f"Failed for {qt}")
-
-    def test_only_block_wise_fp8_triggers_4x(self):
-        all_types = ["none", "cache_int8", "cache_fp8", "cache_int4_zp", "block_wise_fp8"]
-        for qt in all_types:
-            self.assertEqual(qt == "block_wise_fp8", qt == "block_wise_fp8")
-
-
 if __name__ == "__main__":
     unittest.main()
