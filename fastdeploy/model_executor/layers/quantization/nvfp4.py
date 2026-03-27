@@ -35,70 +35,68 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 
 paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
-try:
+from fastdeploy.platforms import current_platform
+
+if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
         depermute_prefill_combine,
         prefill_permute_to_masked_gemm,
     )
-except ImportError:
-    raise ImportError("premute and depermute kernels may not be enabled.")
 
+    def call_prefill_permute_to_masked_gemm(
+        x: paddle.Tensor,
+        scale: paddle.Tensor,
+        topk_ids: paddle.Tensor,
+        num_local_experts: int,
+        max_token_num: int,
+    ):
+        """
+        Permute input tokens and scales from token-major to expert-major layout
+        for MoE masked GEMM operations.
 
-def call_prefill_permute_to_masked_gemm(
-    x: paddle.Tensor,
-    scale: paddle.Tensor,
-    topk_ids: paddle.Tensor,
-    num_local_experts: int,
-    max_token_num: int,
-):
-    """
-    Permute input tokens and scales from token-major to expert-major layout
-    for MoE masked GEMM operations.
+        Args:
+            x: Input hidden states [num_tokens, hidden].
+            scale: Input scales [num_tokens, hidden_scale].
+            topk_ids: Expert routing indices [num_tokens, topk] (int64 or int32).
+            num_local_experts: Number of local experts on this device.
+            max_token_num: Maximum tokens per expert buffer.
 
-    Args:
-        x: Input hidden states [num_tokens, hidden].
-        scale: Input scales [num_tokens, hidden_scale].
-        topk_ids: Expert routing indices [num_tokens, topk] (int64 or int32).
-        num_local_experts: Number of local experts on this device.
-        max_token_num: Maximum tokens per expert buffer.
+        Returns:
+            tuple: (permute_x, permute_scale, permuted_indice_map, token_nums_per_expert)
+        """
+        if topk_ids.dtype != paddle.int64:
+            topk_ids = topk_ids.cast(paddle.int64)
 
-    Returns:
-        tuple: (permute_x, permute_scale, permuted_indice_map, token_nums_per_expert)
-    """
-    if topk_ids.dtype != paddle.int64:
-        topk_ids = topk_ids.cast(paddle.int64)
+        # NVFP4 dispatch returns plain BF16 (no fp8 scale); pass empty tensor so the
+        # C++ op can detect the no-scale path via tensor.numel() == 0.
+        if scale is None:
+            scale = paddle.empty([0], dtype=paddle.float32)
 
-    # NVFP4 dispatch returns plain BF16 (no fp8 scale); pass empty tensor so the
-    # C++ op can detect the no-scale path via tensor.numel() == 0.
-    if scale is None:
-        scale = paddle.empty([0], dtype=paddle.float32)
+        results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num)
 
-    results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num)
+        return results[0], results[1], results[2], results[3]
 
-    return results[0], results[1], results[2], results[3]
+    def call_depermute_prefill_combine(
+        x: paddle.Tensor,
+        indice_map: paddle.Tensor,
+        topk_weights: paddle.Tensor,
+        num_worst_tokens: int,
+    ):
+        """
+        Depermute and combine expert outputs back to token-major layout.
 
+        Args:
+            x: Expert outputs [num_local_experts, max_tokens_per_expert, hidden].
+            indice_map: Flat index tensor [num_worst_tokens, topk] (int32).
+            topk_weights: Combination weights [num_worst_tokens, topk] (float32).
+            num_worst_tokens: Number of output tokens to produce.
 
-def call_depermute_prefill_combine(
-    x: paddle.Tensor,
-    indice_map: paddle.Tensor,
-    topk_weights: paddle.Tensor,
-    num_worst_tokens: int,
-):
-    """
-    Depermute and combine expert outputs back to token-major layout.
+        Returns:
+            depermuted_x: Combined output [num_worst_tokens, hidden].
+        """
+        results = depermute_prefill_combine(x, indice_map, topk_weights, num_worst_tokens)
 
-    Args:
-        x: Expert outputs [num_local_experts, max_tokens_per_expert, hidden].
-        indice_map: Flat index tensor [num_worst_tokens, topk] (int32).
-        topk_weights: Combination weights [num_worst_tokens, topk] (float32).
-        num_worst_tokens: Number of output tokens to produce.
-
-    Returns:
-        depermuted_x: Combined output [num_worst_tokens, hidden].
-    """
-    results = depermute_prefill_combine(x, indice_map, topk_weights, num_worst_tokens)
-
-    return results
+        return results
 
 
 def next_power_of_2(n: int):
@@ -847,5 +845,4 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             )
 
             return output
-        else:
-            raise NotImplementedError
+        return paddle.empty_like(x)
