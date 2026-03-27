@@ -43,6 +43,7 @@ from fastdeploy.model_executor.layers.sample.ops import (
 )
 from fastdeploy.model_executor.layers.sample.ops.top_k_top_p_triton import (
     apply_top_k_top_p_triton,
+    seeded_gumbel_noise,
 )
 from fastdeploy.platforms import current_platform
 from fastdeploy.reasoning import ReasoningParser
@@ -70,8 +71,12 @@ def _apply_triton_top_k_top_p(
     batch_size = logits.shape[0]
 
     top_p = top_p[:batch_size].squeeze(axis=-1)
-    if top_k is not None:
+
+    has_top_k = top_k is not None and top_k_list and any(x > 0 for x in top_k_list)
+    if has_top_k:
         top_k = top_k[:batch_size].squeeze(axis=-1)
+    else:
+        top_k = None
 
     return apply_top_k_top_p_triton(logits.astype("float32"), k=top_k, p=top_p, return_mask=return_mask)
 
@@ -84,8 +89,9 @@ def _random_sample(
     Sample from probabilities using the Gumbel-max trick.
 
     Equivalent to multinomial sampling but avoids CPU-GPU synchronization.
-    When ``topp_seed`` is provided, each row is sampled with its own
-    deterministic seed for reproducibility.
+    When ``topp_seed`` is provided and Triton is available, a Triton kernel
+    generates per-row deterministic Gumbel noise using Philox PRNG entirely
+    on GPU, eliminating the Python for-loop and CPU-GPU sync overhead.
 
     Args:
         probs: [batch_size, vocab_size] float32 probabilities.
@@ -98,13 +104,10 @@ def _random_sample(
     """
     # Sample from Exp(1): q = -log(u), u ~ Uniform(0, 1)
     if topp_seed is not None:
-        # Per-row deterministic sampling using seeds.
-        # Slice topp_seed to match probs batch size (topp_seed may be padded to max_batch).
-        seeds = topp_seed[: probs.shape[0]].reshape([-1]).tolist()
-        q = paddle.empty_like(probs)
-        for i, s in enumerate(seeds):
-            paddle.seed(int(s))
-            q[i] = -paddle.log(paddle.uniform([probs.shape[1]], dtype=probs.dtype, min=0.0, max=1.0).clip(min=1e-10))
+        seeds = topp_seed[: probs.shape[0]].reshape([-1])
+        if not seeds.place.is_gpu_place():
+            seeds = seeds.cuda()
+        q = seeded_gumbel_noise(probs, seeds)
     else:
         u = paddle.uniform(probs.shape, dtype=probs.dtype, min=0.0, max=1.0)
         q = -paddle.log(u.clip(min=1e-10))
@@ -160,32 +163,50 @@ def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_le
     return top_p_padding, top_k_padding, topp_seed
 
 
+@paddle.no_grad()
 def _compute_sampling_mask_from_probs(
     probs: paddle.Tensor,
     mask: paddle.Tensor,
-) -> tuple[List[np.ndarray], np.ndarray]:
+) -> tuple[List[np.ndarray], None]:
     """
     Compute sampling mask using a pre-computed boolean mask from the Triton
     kernel (derived from logits space, numerically exact).
 
+    Uses topk instead of nonzero to avoid dynamic allocation and multi-pass
+    scanning.  For typical top-k/top-p masks (~50 True per row out of 151 K
+    vocab), this is ~4x faster than the nonzero + bincount approach.
+
     Args:
         probs: [B, V] softmax probabilities (GPU).
+               Only used to determine real_bsz for API compatibility.
         mask:  [B, V] bool tensor — True = retained by top-k/top-p (GPU).
                Obtained from logits != -inf BEFORE softmax.
 
-    Returns the same format as _compute_sampling_mask:
+    Returns:
         - sparse_indices: List[np.ndarray], retained vocab indices per request.
-        - logz_per_batch: 1-D numpy array of log(Z_K) per request.
+        - logz_per_batch: None
     """
     real_bsz = probs.shape[0]
+    mask = mask[:real_bsz]
 
-    # # Z_K = sum of probs in the candidate set (using the exact mask).
-    # z_k = (probs * mask.astype(probs.dtype)).sum(axis=-1)  # [B]
-    # logz_per_batch = paddle.log(z_k + 1e-10).cpu().numpy()  # [B]
+    # 单次 reduction：在 bool 上 sum（自动提升 int64，不会溢出；
+    # 不能用 float16 sum，V>65504 时会溢出为 inf）
+    counts = mask.sum(axis=-1).astype("int32")  # [B]
 
-    # Sparse indices: per-row list of retained token ids.
-    mask_cpu = mask[:real_bsz].cpu().numpy()  # [B, V]
-    sparse_indices = [np.where(mask_cpu[i])[0].astype(np.int64) for i in range(real_bsz)]
+    # float16: topk 不支持 bool，float16 比 int32 省一半显存且同样正确 (值仅 0/1)
+    mask_fp16 = mask.astype("float16")
+    max_k = int(counts.max().item())  # 1 个标量 D2H
+
+    # topk 对 0/1 张量：所有 1 排在前面，输出固定形状 [B, max_k]，无动态分配
+    _, indices = paddle.topk(mask_fp16, k=max_k, axis=-1)  # [B, max_k]
+
+    # 批量 D2H
+    indices_cpu = indices.numpy()  # [B, max_k]
+    counts_cpu = counts.numpy()  # [B]
+
+    # 按每行实际 count 截取
+    sparse_indices = [indices_cpu[i, : counts_cpu[i]] for i in range(real_bsz)]
+
     return sparse_indices, None
 
 

@@ -9,9 +9,19 @@ using Pivot-based Truncation and Selection" By Park et al.
 
 """
 
+import warnings
+
 import paddle
-import triton
-import triton.language as tl
+from paddle.utils.deprecated import VisibleDeprecationWarning
+
+# Suppress the VisibleDeprecationWarning from use_triton_in_paddle that fires
+# on every Triton kernel launch (paddle.device.cuda.current_stream /
+# synchronize).  In serving hot-paths this produces thousands of log lines per
+# second and the I/O overhead alone can cause client-visible timeouts.
+warnings.filterwarnings("ignore", category=VisibleDeprecationWarning)
+
+import triton  # noqa: E402
+import triton.language as tl  # noqa: E402
 
 _TRITON_TABLE_CACHE: dict[tuple[paddle.device], tuple[paddle.Tensor, paddle.Tensor]] = {}
 _TRITON_BUFFER_CACHE: dict[tuple[paddle.device, paddle.dtype, int], paddle.Tensor] = {}
@@ -876,6 +886,51 @@ def apply_top_k_top_p_triton(
     if return_mask:
         return logits, mask_out.astype(paddle.bool)
     return logits
+
+
+@triton.jit
+def _seeded_gumbel_kernel(
+    OUT_ptr,
+    SEEDS_ptr,
+    stride_out_batch,
+    VOCAB_SIZE: tl.constexpr,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """Generate -log(u) with per-row Philox seeds, fully on GPU."""
+    pid = tl.program_id(0)
+    seed = tl.load(SEEDS_ptr + pid)
+    seed = seed.to(tl.int32)
+    for start in tl.range(0, VOCAB_SIZE, BLOCK_SIZE):
+        offsets = start + tl.arange(0, BLOCK_SIZE)
+        mask = offsets < VOCAB_SIZE
+        u = tl.rand(seed, offsets)
+        u = tl.maximum(u, 1e-10)
+        q = -tl.log(u)
+        tl.store(OUT_ptr + pid * stride_out_batch + offsets, q, mask=mask)
+
+
+def seeded_gumbel_noise(probs: paddle.Tensor, seeds: paddle.Tensor) -> paddle.Tensor:
+    """
+    Generate Gumbel noise q = -log(u) with per-row Philox seeds on GPU.
+
+    Args:
+        probs: [batch_size, vocab_size] — used only for shape/dtype.
+        seeds: [batch_size] int64 per-request seeds (GPU).
+
+    Returns:
+        q: [batch_size, vocab_size] float tensor of Gumbel noise.
+    """
+    batch_size, vocab_size = probs.shape
+    q = paddle.empty_like(probs)
+    BLOCK_SIZE = min(triton.next_power_of_2(vocab_size), 4096)
+    _seeded_gumbel_kernel[(batch_size,)](
+        q,
+        seeds,
+        q.strides[0],
+        VOCAB_SIZE=vocab_size,
+        BLOCK_SIZE=BLOCK_SIZE,
+    )
+    return q
 
 
 def reset_buffer_cache():
