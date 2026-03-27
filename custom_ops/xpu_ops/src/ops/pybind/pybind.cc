@@ -540,6 +540,12 @@ void MTPStepPaddle(
     const int block_size,
     const int max_draft_tokens);
 
+void NaiveUpdateModelStatus(const paddle::Tensor& accept_tokens,
+                            const paddle::Tensor& accept_num,
+                            const paddle::Tensor& seq_lens_this_time,
+                            const paddle::Tensor& next_tokens,
+                            const paddle::Tensor& cu_seqlens_q_output);
+
 void SpeculateStepPaddle(
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& seq_lens_this_time,
@@ -1001,6 +1007,15 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("enable_softmax_top_k_fused"),
         py::arg("redundant_ep_rank_num_plus_one"),
         "moe export RedundantTopKSelect function");
+
+  m.def("naive_update_model_status",
+        &NaiveUpdateModelStatus,
+        py::arg("accept_tokens"),
+        py::arg("accept_num"),
+        py::arg("seq_lens_this_time"),
+        py::arg("next_tokens"),
+        py::arg("cu_seqlens_q_output"),
+        "Naive update model status");
 
   m.def("mtp_step_paddle",
         &MTPStepPaddle,

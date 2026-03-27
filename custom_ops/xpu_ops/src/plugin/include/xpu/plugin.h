@@ -555,11 +555,20 @@ DLL_EXPORT int speculate_set_value_by_flag_and_id(api::Context* ctx,
                                                   int* accept_num,
                                                   const bool* stop_flags,
                                                   const int* seq_lens_encoder,
-                                                  int* seq_lens_decoder,
+                                                  const int* seq_lens_decoder,
                                                   const int64_t* step_idx,
                                                   int bs,
                                                   int length,
                                                   int max_draft_tokens);
+
+DLL_EXPORT int naive_update_model_status(api::Context* ctx,
+                                         int64_t* accept_tokens,
+                                         int* accept_num,
+                                         int* seq_lens_this_time,
+                                         const int64_t* next_tokens,
+                                         const int* cu_seqlens_q_output,
+                                         int real_bsz,
+                                         int max_step_tokens);
 
 DLL_EXPORT int speculate_get_output_padding_offset(
     api::Context* ctx,
