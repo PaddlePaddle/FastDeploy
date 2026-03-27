@@ -14,8 +14,11 @@
 # limitations under the License.
 """
 
+import gc
+import glob
 import io
 import os
+import re
 import time
 from multiprocessing.shared_memory import SharedMemory
 from typing import Any, Dict, List
@@ -198,21 +201,122 @@ class DynamicWeightManager:
         # step5: recapture cuda_graph
         # step6: update weight status signal
 
+    def restart_communication_group(self):
+        if not self.first_load:
+            start_time = time.perf_counter()
+            paddle.distributed.restart_process_group()
+            paddle.distributed.restart_process_group(self.parallel_config.tp_group)
+            if self.parallel_config.enable_expert_parallel:
+                paddle.distributed.restart_process_group(self.parallel_config.ep_group)
+            logger.info(f"finish restarting communication groups! time cost: {time.perf_counter()-start_time:.3f}s")
+
+    def recreate_deepep_buffer(self):
+        if not self.first_load:
+            start_time = time.perf_counter()
+            from fastdeploy.model_executor.layers.moe.ep import DeepEPBufferManager
+
+            DeepEPBufferManager.recreate_buffer()
+            # ep barrier
+            paddle.distributed.barrier(self.parallel_config.ep_group)
+            logger.info(f"finish recreating deepep buffer! time cost: {time.perf_counter()-start_time:.3f}s")
+
+    def reload_model_weights(self):
+        if not self.first_load:
+            start_time = time.perf_counter()
+            strategy_handlers = {
+                "ipc_snapshot": self._update_ipc_snapshot,
+                "ipc": self._update_ipc,
+            }
+
+            if handler := strategy_handlers.get(self.load_config.load_strategy):
+                handler()
+            else:
+                raise ValueError(f"Unsupported strategy: {self.load_config.load_strategy}")
+            logger.info(f"finish reload model weights! time cost: {time.perf_counter()-start_time:.3f}s")
+
     def _update_ipc_snapshot(self):
-        """Update using IPC snapshot strategy for elastic recovery."""
-        model_path = os.path.join(
-            self.fd_config.model_config.model,
-            f"model_state.tp0{self.meta_src_id}.pdparams",
-        )
+        """Update using IPC snapshot strategy for elastic recovery.
 
-        try:
+        Loading priority:
+          1. Chunked part files  (model_state.tp{rank}.{id}.part{N}.pdparams)
+          2. Single full file    (model_state.tp{rank}.{id}.pdparams)
+          3. Legacy format       (model_state.tp0{id}.pdparams)
+          4. Shared fallback dir (/shared_ipc_meta/...)
+        """
+        model_dir = self.fd_config.model_config.model
+        base_name = f"model_state.tp{paddle.distributed.get_rank()}.{self.meta_src_id}"
+        legacy_base_name = f"model_state.tp0{self.meta_src_id}"
+
+        # --- Priority 1: load from chunked part files to avoid memory spike ---
+        part_pattern = os.path.join(model_dir, f"{base_name}.part*.pdparams")
+        all_part_files = glob.glob(part_pattern)
+
+        valid_part_files = []
+        invalid_part_files = []
+        part_regex = re.compile(r"\.part(\d+)\.")
+
+        for path in all_part_files:
+            match = part_regex.search(path)
+            if not match:
+                invalid_part_files.append(os.path.basename(path))
+                continue
+            try:
+                part_idx = int(match.group(1))
+            except (TypeError, ValueError):
+                invalid_part_files.append(os.path.basename(path))
+                continue
+            valid_part_files.append((part_idx, path))
+
+        if invalid_part_files:
+            logger.warning(
+                "Found snapshot part files with invalid naming pattern under %s: %s. "
+                "These files will be ignored when loading IPC snapshot parts.",
+                model_dir,
+                ", ".join(invalid_part_files),
+            )
+
+        part_files = [p for _, p in sorted(valid_part_files, key=lambda item: item[0])]
+
+        if part_files:
+            logger.info(f"Found {len(part_files)} snapshot part files for {base_name}")
+            for load_idx, part_path in enumerate(part_files):
+                match = re.search(r"\.part(\d+)\.", part_path)
+                # Use part index parsed from filename to keep logs and src_type consistent with file naming
+                part_index = int(match.group(1)) if match else load_idx
+                logger.info(f"Loading snapshot part {part_index+1}/{len(part_files)} from {part_path}")
+                ipc_state_dict = paddle.load(part_path, safetensors=True)
+                self._update_model_from_state(ipc_state_dict, f"snapshot-part{part_index}")
+                del ipc_state_dict
+                gc.collect()
+            logger.info(f"IPC snapshot update completed from {len(part_files)} part files under {model_dir}")
+            return
+
+        # --- Priority 2: single full pdparams file ---
+        model_path = os.path.join(model_dir, f"{base_name}.pdparams")
+        if os.path.exists(model_path):
             ipc_state_dict = paddle.load(model_path, safetensors=True)
-        except FileNotFoundError:
-            fallback_path = f"/shared_ipc_meta/model_state.tp0{self.meta_src_id}.pdparams"
-            ipc_state_dict = paddle.load(fallback_path)
+            self._update_model_from_state(ipc_state_dict, "snapshot")
+            logger.info(f"IPC snapshot update completed from {model_path}")
+            return
 
+        # --- Priority 3: legacy format (model_state.tp0{id}.pdparams) ---
+        legacy_path = os.path.join(model_dir, f"{legacy_base_name}.pdparams")
+        if os.path.exists(legacy_path):
+            ipc_state_dict = paddle.load(legacy_path, safetensors=True)
+            self._update_model_from_state(ipc_state_dict, "snapshot")
+            logger.info(f"IPC snapshot update completed from legacy format {legacy_path}")
+            return
+
+        # --- Priority 4: shared directory fallback ---
+        fallback_path = f"/shared_ipc_meta/{base_name}.pdparams"
+        if not os.path.exists(fallback_path):
+            raise FileNotFoundError(
+                f"No snapshot found for {base_name}: " f"checked {model_dir} (new/legacy) and {fallback_path}"
+            )
+        logger.info(f"No local snapshot in {model_dir}, fallback to {fallback_path}")
+        ipc_state_dict = paddle.load(fallback_path)
         self._update_model_from_state(ipc_state_dict, "snapshot")
-        logger.info(f"IPC snapshot update parameters completed from {model_path}")
+        logger.info(f"IPC snapshot update completed from {fallback_path}")
 
     def _update_ipc(self):
         """Update using standard IPC strategy (requires Training Worker)."""
@@ -257,6 +361,30 @@ class DynamicWeightManager:
         if shutdown_process_group:
             paddle.distributed.shutdown_process_group()
         self._update_shared_status(pid, ModelWeightsStatus.CLEARED)
+
+    def clear_deepep_buffer(self):
+        start_time = time.perf_counter()
+        from fastdeploy.model_executor.layers.moe.ep import DeepEPBufferManager
+
+        DeepEPBufferManager.clear_buffer()
+        logger.info(f"finish clearing deepep buffer! time cost: {time.perf_counter()-start_time:.3f}s")
+
+    def clear_model_weight(self):
+        start_time = time.perf_counter()
+        for model in self.model_list:
+            for param in model.state_dict().values():
+                param._clear_data()
+        logger.info(f"finish clearing model weight! time cost: {time.perf_counter()-start_time:.3f}s")
+
+    def clear_communication_group(self):
+        start_time = time.perf_counter()
+        if self.parallel_config.enable_expert_parallel:
+            paddle.distributed.barrier(self.parallel_config.ep_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
+        if self.parallel_config.tensor_parallel_size > 1:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
+        logger.info(f"finish clearing communication groups! time cost: {time.perf_counter()-start_time:.3f}s")
 
     def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
         """Update model parameters from given state dictionary."""

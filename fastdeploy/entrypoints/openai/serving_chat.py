@@ -258,9 +258,10 @@ class OpenAIServingChat:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
-            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
-            for rid in request_ids:
-                dealer.write([b"", rid.encode("utf-8")])
+            if not envs.ZMQ_SEND_BATCH_DATA:
+                request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+                for rid in request_ids:
+                    dealer.write([b"", rid.encode("utf-8")])
             choices = []
             current_waiting_time = 0
             response_processor = ChatResponseProcessor(
@@ -274,6 +275,9 @@ class OpenAIServingChat:
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
+                except asyncio.CancelledError:
+                    # Client disconnected, propagate to outer handler
+                    raise
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
@@ -405,26 +409,29 @@ class OpenAIServingChat:
 
                     output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
 
-                    delta_message = DeltaMessage(
-                        reasoning_content=output["reasoning_content"],
-                        prompt_token_ids=None,
-                        tool_calls=output["tool_calls"],
-                        completion_token_ids=None,
-                    )
-
                     if output["tool_calls"] is not None:
                         tool_called[idx] = True
 
+                    if output["skipped"] and not request.return_token_ids:
+                        continue
+
+                    delta_message = DeltaMessage(
+                        reasoning_content=output["reasoning_content"],
+                        tool_calls=output["tool_calls"],
+                        prompt_token_ids=None,
+                        completion_token_ids=None,
+                        completion_tokens=None,
+                    )
+
                     if response_processor.enable_multimodal_content():
-                        delta_message.multimodal_content = output["multipart"]
+                        delta_message.multimodal_content = (
+                            [{"type": "text", "text": ""}] if output["skipped"] else output["multipart"]
+                        )
                     else:
-                        delta_message.content = output["text"]
+                        delta_message.content = "" if output["skipped"] else (output["text"] or "")
 
                     if output.get("audio_content", None) is not None:
                         delta_message.audio_content = output["audio_content"]
-
-                    if output["skipped"]:
-                        continue
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=idx,
@@ -552,10 +559,10 @@ class OpenAIServingChat:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
-            # dealer.write([b"", request_id.encode("utf-8")])
-            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
-            for rid in request_ids:
-                dealer.write([b"", rid.encode("utf-8")])
+            if not envs.ZMQ_SEND_BATCH_DATA:
+                request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+                for rid in request_ids:
+                    dealer.write([b"", rid.encode("utf-8")])
             previous_num_tokens = [0] * num_choices
             reasoning_num_tokens = [0] * num_choices
             current_waiting_time = 0
@@ -912,23 +919,30 @@ class OpenAIServingChat:
 
         token_ids, logprobs, ranks = prompt_logprobs_tensors
 
+        # Normalize to plain Python lists (support both Tensor and list inputs)
+        if hasattr(token_ids, "tolist"):
+            token_ids = token_ids.tolist()
+            logprobs = logprobs.tolist()
+            ranks = ranks.tolist()
+
         # Detokenize non-incrementally.
         # Output is flat: [num_tok, num_lps] -> [num_tok * num_lps]
         if include_logprobs_decode_token:
             decoded_tokens = [
                 self.engine_client.data_processor.process_logprob_response(token_id)
-                for token_id in token_ids.flatten().tolist()
+                for row in token_ids
+                for token_id in row
             ]
         else:
             decoded_tokens = None
 
         # Recover shapes.
-        num_prompt_tokens, num_logprobs = logprobs.shape
+        num_prompt_tokens = len(logprobs)
+        num_logprobs = len(logprobs[0]) if num_prompt_tokens > 0 else 0
 
-        # Pythonize the paddle tensors.
-        prompt_token_ranks = ranks.tolist()
-        prompt_logprobs = logprobs.tolist()
-        token_ids = token_ids.tolist()
+        # Build result.
+        prompt_token_ranks = ranks
+        prompt_logprobs = logprobs
         result: Optional[PromptLogprobs] = [None]
         # Make Logprob for each position.
         for pos in range(num_prompt_tokens):

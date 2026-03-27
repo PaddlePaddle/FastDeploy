@@ -129,6 +129,7 @@ class Request:
         top_logprobs: Optional[int] = None,
         # from PoolingRequest
         add_special_tokens: Optional[bool] = False,
+        zmq_worker_pid: Optional[int] = None,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -217,6 +218,7 @@ class Request:
         self.top_logprobs = top_logprobs
         # from PoolingRequest
         self.add_special_tokens = add_special_tokens
+        self.zmq_worker_pid = zmq_worker_pid
 
     @classmethod
     def _process_guided_json(cls, r: T):
@@ -458,13 +460,12 @@ class Request:
             "ic_req_data": self.ic_req_data,
         }
 
-        # During multimodal PD separation, position_ids are required
         if isinstance(self.multimodal_inputs, dict):
             # Optimize multimodal data transfer during PD separation:
-            # - V1 mode (ENABLE_V1_KVCACHE_SCHEDULER=1): Only position_ids needed for decode nodes
+            # - V1 mode (ENABLE_V1_KVCACHE_SCHEDULER=1): position_ids, mm_positions and mm_hashes needed for decode nodes
             # - V0 mode (ENABLE_V1_KVCACHE_SCHEDULER=0): Full field set required for compatibility
             # This filtering significantly reduces serialized data size for large numpy arrays
-            allowed_keys = {"position_ids"}
+            allowed_keys = {"position_ids", "mm_positions", "mm_hashes"}
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 allowed_keys.update(["input_ids", "token_type_ids", "images", "image_type_ids", "grid_thw"])
 
@@ -726,7 +727,6 @@ class CompletionOutput:
     delta_message: Optional[DeltaMessage] = None
     multipart: Optional[list[Any]] = None
     num_image_tokens: Optional[int] = None
-    enable_parser: bool = False
 
     def to_dict(self):
         """
@@ -865,6 +865,7 @@ class RequestMetrics:
 
     llm_engine_recv_req_timestamp: Optional[float] = None
     llm_engine_send_req_to_engine_timestamp: Optional[float] = None
+    llm_engine_send_req_to_decoder_engine_timestamp: Optional[float] = None
     llm_engine_recv_latest_token_timestamp: Optional[float] = None
     llm_engine_recv_token_timestamp: Optional[float] = None
 
@@ -951,6 +952,10 @@ class RequestMetrics:
 
     def __setitem__(self, key, value):
         setattr(self, key, value)
+
+    # Set engine time for decoder-node
+    def update_decoder_start_time(self):
+        self.llm_engine_send_req_to_decoder_engine_timestamp = self.decode_inference_start_time
 
 
 class RequestOutput:
