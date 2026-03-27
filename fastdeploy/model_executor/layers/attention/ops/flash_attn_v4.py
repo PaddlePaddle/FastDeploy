@@ -18,6 +18,7 @@ from typing import Optional
 
 import paddle
 
+from fastdeploy.model_executor.utils import get_sm_version
 from fastdeploy.platforms import current_platform
 
 
@@ -30,7 +31,7 @@ def flash_attn_v4(
     attn_out: paddle.Tensor,
     attn_mask_offsets: Optional[paddle.Tensor] = None,
 ):
-    if current_platform.is_cuda():
+    if current_platform.is_cuda() and get_sm_version() >= 100:
         from blackwell_ops import flash_encoder_attn_fwd
 
         flash_encoder_attn_fwd(q, k, v, cu_seqlens_q, cu_seqlens_k, attn_out, attn_mask_offsets)
