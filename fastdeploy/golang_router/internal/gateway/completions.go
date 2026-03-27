@@ -308,7 +308,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 	if err != nil {
 		logger.Error(ctx, "Failed to read request body: %v", err)
 		c.Writer.WriteHeader(http.StatusBadRequest)
-		c.Writer.Write([]byte(`{"error": "Invalid request body"}`))
+		c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Invalid request body: %v"}`, err)))
 		return
 	}
 
@@ -316,7 +316,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 	if err := json.Unmarshal(bodyBytes, &rawReq); err != nil {
 		logger.Error(ctx, "Failed to unmarshal request JSON: %v", err)
 		c.Writer.WriteHeader(http.StatusBadRequest)
-		c.Writer.Write([]byte(`{"error": "Invalid JSON format"}`))
+		c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Invalid JSON format: %v"}`, err)))
 		return
 	}
 
@@ -349,7 +349,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		if err != nil {
 			logger.Error(ctx, "Failed to select worker pair: %v", err)
 			c.Writer.WriteHeader(http.StatusBadGateway)
-			c.Writer.Write([]byte(`{"error": "Failed to select worker pair"}`))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to select worker pair: %v"}`, err)))
 			return
 		}
 		if prefillURL == "" || decodeURL == "" {
@@ -379,7 +379,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		if err != nil {
 			logger.Error(ctx, "Failed to build disaggregate_info: %v", err)
 			c.Writer.WriteHeader(http.StatusInternalServerError)
-			c.Writer.Write([]byte(`{"error": "Failed to build disaggregate_info"}`))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to build disaggregate_info: %v"}`, err)))
 			return
 		}
 
@@ -390,7 +390,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		if err != nil {
 			logger.Error(ctx, "Failed to encode modified request: %v", err)
 			c.Writer.WriteHeader(http.StatusInternalServerError)
-			c.Writer.Write([]byte(`{"error": "Failed to encode modified request"}`))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to encode modified request: %v"}`, err)))
 			return
 		}
 
@@ -406,7 +406,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		if err != nil {
 			logger.Error(ctx, "Failed to select worker: %v", err)
 			c.Writer.WriteHeader(http.StatusBadGateway)
-			c.Writer.Write([]byte(`{"error": "Failed to select worker"}`))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to select worker: %v"}`, err)))
 			return
 		}
 		destURL = dest
@@ -439,7 +439,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 
 	if err != nil {
 		c.Writer.WriteHeader(http.StatusBadGateway)
-		c.Writer.Write([]byte(`{"error": "Failed to connect to backend service"}`))
+		c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to connect to backend service: %v"}`, err)))
 		logger.Error(ctx, "Failed to connect to backend service: %v", err)
 		return
 	}

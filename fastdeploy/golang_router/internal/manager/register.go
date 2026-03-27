@@ -225,7 +225,7 @@ func RegisterInstance(c *gin.Context) {
 		logger.Error(c.Request.Context(), "Failed to read register request body: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
-			"msg":  "Invalid request body",
+			"msg":  fmt.Sprintf("Invalid request body: %v", err),
 		})
 		return
 	}
