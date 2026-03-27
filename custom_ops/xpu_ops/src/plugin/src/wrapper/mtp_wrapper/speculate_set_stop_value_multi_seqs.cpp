@@ -18,8 +18,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 __attribute__((global)) void speculate_set_stop_value_multi_seqs(
     bool* stop_flags,
     int64_t* accept_tokens,
@@ -36,15 +35,12 @@ __attribute__((global)) void speculate_set_stop_value_multi_seqs(
     const int stop_seqs_bs,
     const int stop_seqs_max_len,
     const int pre_ids_len);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        bool* stop_flags,
                        int64_t* accept_tokens,
                        int* accept_nums,
@@ -120,27 +116,27 @@ static int cpu_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-static int xpu2or3_wrapper(Context* ctx,
-                           bool* stop_flags,
-                           int64_t* accept_tokens,
-                           int* accept_nums,
-                           const int64_t* pre_ids,
-                           const int64_t* step_idx,
-                           const int64_t* stop_seqs,
-                           const int* stop_seqs_len,
-                           const int* seq_lens,
-                           const int64_t* end_ids,
-                           const int64_t* min_tokens,
-                           const int bs,
-                           const int accept_tokens_len,
-                           const int stop_seqs_bs,
-                           const int stop_seqs_max_len,
-                           const int pre_ids_len) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
+static int xpu3_wrapper(api::Context* ctx,
+                        bool* stop_flags,
+                        int64_t* accept_tokens,
+                        int* accept_nums,
+                        const int64_t* pre_ids,
+                        const int64_t* step_idx,
+                        const int64_t* stop_seqs,
+                        const int* stop_seqs_len,
+                        const int* seq_lens,
+                        const int64_t* end_ids,
+                        const int64_t* min_tokens,
+                        const int bs,
+                        const int accept_tokens_len,
+                        const int stop_seqs_bs,
+                        const int stop_seqs_max_len,
+                        const int pre_ids_len) {
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
   int32_t ret_xre =
-      xpu3::plugin::speculate_set_stop_value_multi_seqs<<<ctx->ncluster(),
-                                                          64,
-                                                          ctx->xpu_stream>>>(
+      fd_xpu3::speculate_set_stop_value_multi_seqs<<<ctx->ncluster(),
+                                                     64,
+                                                     ctx->xpu_stream>>>(
           stop_flags,
           reinterpret_cast<XPU_INT64*>(accept_tokens),
           accept_nums,
@@ -160,7 +156,7 @@ static int xpu2or3_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-int speculate_set_stop_value_multi_seqs(Context* ctx,
+int speculate_set_stop_value_multi_seqs(api::Context* ctx,
                                         bool* stop_flags,
                                         int64_t* accept_tokens,
                                         int* accept_nums,
@@ -211,27 +207,25 @@ int speculate_set_stop_value_multi_seqs(Context* ctx,
                        pre_ids_len);
   }
   if (ctx->dev().type() == api::kXPU3) {
-    return xpu2or3_wrapper(ctx,
-                           stop_flags,
-                           accept_tokens,
-                           accept_nums,
-                           pre_ids,
-                           step_idx,
-                           stop_seqs,
-                           stop_seqs_len,
-                           seq_lens,
-                           end_ids,
-                           min_tokens,
-                           bs_now,
-                           accept_tokens_len,
-                           stop_seqs_bs,
-                           stop_seqs_max_len,
-                           pre_ids_len);
+    return xpu3_wrapper(ctx,
+                        stop_flags,
+                        accept_tokens,
+                        accept_nums,
+                        pre_ids,
+                        step_idx,
+                        stop_seqs,
+                        stop_seqs_len,
+                        seq_lens,
+                        end_ids,
+                        min_tokens,
+                        bs_now,
+                        accept_tokens_len,
+                        stop_seqs_bs,
+                        stop_seqs_max_len,
+                        pre_ids_len);
   }
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import importlib
+
 import paddle
 import triton
 from paddleformers.utils.log import logger
@@ -21,7 +23,37 @@ from paddleformers.utils.log import logger
 from fastdeploy.model_executor.ops.triton_ops import _per_token_group_quant_fp8
 from fastdeploy.platforms import current_platform
 
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import per_token_group_fp8_quant
+
 from ..utils import get_sm_version
+
+
+def try_import(modules, name=None, fail_msg=None):
+    """
+    try_import
+    """
+    if not isinstance(modules, (list, tuple)):
+        modules = [modules]
+
+    for m in modules:
+        assert isinstance(m, str), m
+        try:
+            m = importlib.import_module(m)
+        except ImportError:
+            m = None
+
+        if m is not None:
+            if name is None:
+                return m
+            elif hasattr(m, name):
+                return getattr(m, name)
+
+    if fail_msg is not None:
+        logger.warning(fail_msg)
+
+
+paddlefleet_ops = try_import(["paddlefleet.ops"])
 
 
 def load_deep_gemm():
@@ -162,6 +194,7 @@ def per_token_group_quant_fp8(
     """
 
     dtype = paddle.float8_e4m3fn  # current_platform.fp8_dtype() if dtype is None else dtype
+    assert x.ndim == 2, f"per_token_group_fp8_quant only supports ndim == 2, but got shape {tuple(x.shape)}"
     assert x.shape[-1] % group_size == 0, (
         f"the last dimension of `x` {x.shape[-1]} must be divisible " f"by `group_size` {group_size}"
     )
@@ -177,30 +210,52 @@ def per_token_group_quant_fp8(
     shape = x.shape[:-1] + (x.shape[-1] // group_size,)
     x_s = paddle.empty(shape, dtype=paddle.float32)
 
-    # torch.ops._C.per_token_group_fp8_quant(
-    #     x.contiguous(), x_q, x_s, group_size, eps, fp8_min, fp8_max, use_ue8m0
-    # )
-    # return x_q, x_s
-    M = x.numel() // group_size
-    N = group_size
-    BLOCK = triton.next_power_of_2(N)
-    # heuristics for number of warps
-    num_warps = min(max(BLOCK // 256, 1), 8)
-    num_stages = 1
-    _per_token_group_quant_fp8[(M,)](
-        x,
-        x_q,
-        x_s,
-        group_size,
-        x.shape[1],
-        x.stride(0),
-        eps,
-        fp8_min=fp8_min,
-        fp8_max=fp8_max,
-        use_ue8m0=use_ue8m0,
-        BLOCK=BLOCK,
-        num_warps=num_warps,
-        num_stages=num_stages,
-    )
+    if current_platform.is_cuda():
+        per_token_group_fp8_quant(x.contiguous(), x_q, x_s, group_size, eps, fp8_min, fp8_max, use_ue8m0)
+
+    else:
+        M = x.numel() // group_size
+        # N: int = group_size
+        BLOCK = triton.next_power_of_2
+        # heuristics for number of warps
+        num_warps = min(max(BLOCK // 256, 1), 8)
+        num_stages = 1
+        _per_token_group_quant_fp8[(M,)](
+            x.contiguous(),
+            x_q,
+            x_s,
+            group_size,
+            x.shape[1],
+            x.stride(0),
+            eps,
+            fp8_min=fp8_min,
+            fp8_max=fp8_max,
+            use_ue8m0=use_ue8m0,
+            BLOCK=BLOCK,
+            num_warps=num_warps,
+            num_stages=num_stages,
+        )
 
     return x_q, x_s
+
+
+def fused_stack_transpose_quant(expert_weight_list, use_ue8m0=False):
+    """fused_stack_transpose_quant"""
+    if hasattr(paddlefleet_ops, "fuse_stack_transpose_fp8_quant"):
+        # Blackwell (SM100) GPUs require pow2_scale quantization.
+        # Guard with is_cuda() so non-CUDA environments do not call into
+        # paddle.device.cuda.* and cause a crash.
+        use_pow2_scale = current_platform.is_cuda() and get_sm_version() == 100
+
+        w, scale = paddlefleet_ops.fuse_stack_transpose_fp8_quant(
+            expert_weight_list,
+            use_pow2_scale,
+            use_ue8m0,
+            use_ue8m0,
+        )
+        if use_ue8m0:
+            scale = scale.T
+    else:
+        raise RuntimeError("'fuse_stack_transpose_fp8_quant' is not available in the current paddlefleet_ops.")
+
+    return w, scale

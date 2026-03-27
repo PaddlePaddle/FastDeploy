@@ -42,7 +42,7 @@ void RecoverDecodeTask(
   int r = 0;
   if (draft_tokens) {
     const int draft_tokens_len = draft_tokens.get_ptr()->shape()[1];
-    r = baidu::xpu::api::plugin::recover_spec_decode_task(
+    r = fastdeploy::plugin::recover_spec_decode_task(
         xpu_ctx->x_context(),
         const_cast<bool *>(stop_flags.data<bool>()),
         const_cast<int *>(seq_lens_this_time.data<int>()),
@@ -60,7 +60,7 @@ void RecoverDecodeTask(
         draft_tokens_len,
         max_draft_tokens * 2 + 1);
   } else {
-    r = baidu::xpu::api::plugin::recover_decode_task(
+    r = fastdeploy::plugin::recover_decode_task(
         xpu_ctx->x_context(),
         const_cast<bool *>(stop_flags.data<bool>()),
         const_cast<int *>(seq_lens_this_time.data<int>()),
@@ -73,7 +73,7 @@ void RecoverDecodeTask(
         block_num_per_seq,
         block_size);
   }
-  PD_CHECK(r == 0, "baidu::xpu::api::plugin::recover_decode_task failed.");
+  PD_CHECK(r == 0, "fastdeploy::plugin::recover_decode_task failed.");
 }
 
 PD_BUILD_STATIC_OP(recover_decode_task)

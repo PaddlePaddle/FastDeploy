@@ -33,6 +33,7 @@ import time
 import traceback
 from datetime import datetime
 from enum import Enum
+from functools import cache
 from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, distribution
 from logging.handlers import BaseRotatingHandler
@@ -701,12 +702,15 @@ def singleton(cls):
     return get_instance
 
 
-def print_gpu_memory_use(gpu_id: int, title: str) -> None:
+def print_gpu_memory_use(title: str, gpu_id: int, device_id: int | None = None) -> None:
     """Print memory usage"""
     import pynvml
 
+    if device_id is None:
+        device_id = gpu_id
+
     pynvml.nvmlInit()
-    handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_id)
+    handle = pynvml.nvmlDeviceGetHandleByIndex(device_id)
     meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
     pynvml.nvmlShutdown()
 
@@ -723,7 +727,7 @@ def print_gpu_memory_use(gpu_id: int, title: str) -> None:
         f"\n\tPaddle max memory Reserved(GiB): {paddle_max_reserved / 1024.0 / 1024.0 / 1024.0}",
         f"\n\tPaddle max memory Allocated(GiB): {paddle_max_allocated / 1024.0 / 1024.0 / 1024.0}",
         f"\n\tPaddle memory Reserved(GiB): {paddle_reserved / 1024.0 / 1024.0 / 1024.0}",
-        f"\n\tPaddle memory Allocated(GiB): {paddle_allocated / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle memory Allocated(GiB): {paddle_allocated / 1024.0 / 1024.0 / 1024.0}\n",
     )
 
 
@@ -1163,6 +1167,7 @@ trace_logger = FastDeployLogger().get_trace_logger("trace", "trace.log")
 router_logger = get_logger("router", "router.log")
 fmq_logger = get_logger("fmq", "fmq.log")
 obj_logger = get_logger("obj", "obj.log")  # debug内存问题
+register_manager_logger = get_logger("register_manager", "register_manager.log")
 
 
 def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:
@@ -1309,9 +1314,27 @@ def do_nothing(*args, **kwargs):
     return decorator
 
 
+@cache
+def _is_package_installed(dist_name: str) -> bool:
+    try:
+        distribution(dist_name)
+        return True
+    except PackageNotFoundError:
+        return False
+
+
 if hasattr(paddle.static, "register_op"):
     from paddle.static import register_op
 else:
     register_op = do_nothing
 
 register_custom_python_op = register_op
+
+
+def all_gather_values(value: int | float | bool, group: paddle.distributed.communication.group.Group) -> list:
+    _type = type(value)
+    _local = paddle.to_tensor([value], dtype="float32")
+    _global = [paddle.zeros_like(_local) for _ in range(group.world_size)]
+    paddle.distributed.all_gather(_global, _local, group)
+    _results = [_type(t.item()) for t in _global]
+    return _results

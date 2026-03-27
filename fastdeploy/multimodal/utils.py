@@ -42,7 +42,7 @@ def process_transparency(image):
         if _is_transparent(image):  # Check and fix transparent images
             data_processor_logger.info("Image has transparent background, adding white background.")
             image = _convert_transparent_paste(image)
-    except:
-        pass
+    except Exception as e:
+        data_processor_logger.warning(f"Failed to process image transparency: {e}")
 
     return ImageOps.exif_transpose(image)

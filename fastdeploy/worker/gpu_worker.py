@@ -36,7 +36,8 @@ logger = get_logger("gpu_worker", "gpu_worker.log")
 
 try:
     ModelRunner = load_model_runner_plugins()
-except:
+except Exception as e:
+    logger.info(f"Plugin ModelRunner not available ({e}), using default GPUModelRunner")
     from fastdeploy.worker.gpu_model_runner import GPUModelRunner as ModelRunner
 
 
@@ -194,6 +195,14 @@ class GpuWorker(WorkerBase):
     def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
         """update weights in place"""
         return self.model_runner.update_weights(version, rsync_config)
+
+    def sleep(self, **kwargs) -> None:
+        """Offload memory from GPU"""
+        return self.model_runner.sleep(**kwargs)
+
+    def wakeup(self, **kwargs) -> None:
+        """Reload memory into GPU"""
+        return self.model_runner.wakeup(**kwargs)
 
     def execute_model(
         self,

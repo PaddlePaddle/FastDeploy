@@ -42,3 +42,4 @@ partial_json_parser
 msgspec
 safetensors>=0.7.0
 py-cpuinfo
+transformers>=4.55.1,<5.0.0

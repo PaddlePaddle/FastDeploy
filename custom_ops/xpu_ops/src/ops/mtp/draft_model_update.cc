@@ -63,7 +63,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
     }
   }
 
-  int r = baidu::xpu::api::plugin::draft_model_update(
+  int r = fastdeploy::plugin::draft_model_update(
       ctx,
       inter_next_tokens.data<int64_t>(),
       const_cast<int64_t*>(draft_tokens.data<int64_t>()),
