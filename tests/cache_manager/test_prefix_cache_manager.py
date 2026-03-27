@@ -1251,26 +1251,26 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
             num_total_tokens=16,
         )
 
-        # ---- Block [0,4): img0 跨越右边界 [2,5) ∩ [0,4) ----
-        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=0, end_idx=4, mm_idx=0)
-        self.assertIn("hash-0", hash_keys)
-        self.assertNotIn("hash-1", hash_keys)
-        self.assertNotIn("hash-2", hash_keys)
+        # 模拟真实调用循环：每次用上一次返回的 mm_idx 作为下一次入参
+        mm_idx = 0
 
-        # ---- Block [4,8): img0 跨越左边界 [2,5) ∩ [4,8), 恰好 end==start(5==4 无交集，已修复) ----
-        # 修复前: img0[2,5) 误判为与 [4,8) 有重叠; 修复后: 5<=4? No, 但 2<4 且 5<=8 走 else 仍返回 hash-0
-        # 注: img0 虽然不与新 block 重叠，但由于它跨越了前一个 block 的边界，
-        #     调用者已经跳过了该 image 的 mm_idx，所以这里不会重复处理
-        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=4, end_idx=8, mm_idx=1)
-        self.assertEqual(hash_keys, [])  # img1[8,12) 在 block 之后，无重叠
+        # ---- Block [0,4): img0[2,5) 跨越右边界，返回 mm_idx=0（img0 未完全消费）----
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=0, end_idx=4, mm_idx=mm_idx)
+        self.assertEqual((mm_idx, hash_keys), (0, ["hash-0"]))
 
-        # ---- Block [8,12): img1 恰好填满整个 block [8,12) ----
-        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=8, end_idx=12, mm_idx=1)
-        self.assertEqual(hash_keys, ["hash-1"])
+        # ---- Block [4,8): 沿用返回的 mm_idx=0，img0 的 tail token 4 在本 block 内 ----
+        # img0[2,5): 5 > start_idx=4，不走 continue；5<=end_idx=8，走 else → 包含 hash-0
+        # img1[8,12): image_offset=8 >= end_idx=8 → 结束，返回 mm_idx=1
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=4, end_idx=8, mm_idx=mm_idx)
+        self.assertEqual((mm_idx, hash_keys), (1, ["hash-0"]))
 
-        # ---- Block [12,16): img2 完全在 block 内部 [14,16) ⊂ [12,16) ----
-        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=12, end_idx=16, mm_idx=2)
-        self.assertEqual(hash_keys, ["hash-2"])
+        # ---- Block [8,12): 沿用返回的 mm_idx=1，img1 恰好填满整个 block ----
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=8, end_idx=12, mm_idx=mm_idx)
+        self.assertEqual((mm_idx, hash_keys), (2, ["hash-1"]))
+
+        # ---- Block [12,16): 沿用返回的 mm_idx，img2 完全在 block 内部 [14,16) ⊂ [12,16) ----
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=12, end_idx=16, mm_idx=mm_idx)
+        self.assertEqual((mm_idx, hash_keys), (2, ["hash-2"]))
 
     def test_get_block_hash_extra_keys_no_overlap_at_boundaries(self):
         """image 与 block 恰好相接时不应有重叠。"""
@@ -1285,7 +1285,7 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
             num_total_tokens=8,
         )
         mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=4, end_idx=8, mm_idx=0)
-        self.assertEqual(hash_keys, [])
+        self.assertEqual((mm_idx, hash_keys), (0, []))
 
         # image 恰好在 block 之后: img[8,10), block[4,8)
         request = SimpleNamespace(
@@ -1295,8 +1295,8 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
             },
             num_total_tokens=12,
         )
-        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=4, end_idx=8, mm_idx=1)
-        self.assertEqual(hash_keys, [])
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=4, end_idx=8, mm_idx=0)
+        self.assertEqual((mm_idx, hash_keys), (1, []))
 
     def test_get_block_hash_extra_keys_image_crosses_block_boundary(self):
         """image 跨越 block 边界时 hash 应被包含。"""
@@ -1311,7 +1311,7 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
             num_total_tokens=12,
         )
         mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=4, end_idx=8, mm_idx=0)
-        self.assertEqual(hash_keys, ["hash-cross"])
+        self.assertEqual((mm_idx, hash_keys), (0, ["hash-cross"]))
 
         # image 跨越整个 block: img[3,9), block[4,8)
         request = SimpleNamespace(
@@ -1322,14 +1322,14 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
             num_total_tokens=12,
         )
         mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=4, end_idx=8, mm_idx=0)
-        self.assertEqual(hash_keys, ["hash-span"])
+        self.assertEqual((mm_idx, hash_keys), (0, ["hash-span"]))
 
     def test_get_block_hash_extra_keys_no_mm_inputs(self):
         """无多模态输入时应返回空。"""
         manager = _create_manager()
         request = SimpleNamespace(multimodal_inputs=None, num_total_tokens=12)
         mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=0, end_idx=4, mm_idx=0)
-        self.assertEqual(hash_keys, [])
+        self.assertEqual((mm_idx, hash_keys), (0, []))
 
     def test_get_block_hash_extra_keys_handles_multimodal_segments(self):
         manager = _create_manager()
@@ -1344,10 +1344,10 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
         self.assertEqual((mm_idx, hash_keys), (0, []))
 
         mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=2, end_idx=6, mm_idx=0)
-        self.assertEqual(hash_keys, ["img-a"])
+        self.assertEqual((mm_idx, hash_keys), (1, ["img-a"]))
 
         mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, start_idx=7, end_idx=10, mm_idx=1)
-        self.assertEqual(hash_keys, ["img-b"])
+        self.assertEqual((mm_idx, hash_keys), (1, ["img-b"]))
 
     def test_cache_output_blocks_updates_leaf_and_recycles_redundant_block(self):
         manager = _create_manager(num_gpu_blocks=6, num_cpu_blocks=1)
