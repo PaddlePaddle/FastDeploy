@@ -34,6 +34,7 @@ with intercept_paddle_loggers():
 from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
+    DeployModality,
     DeviceConfig,
     EarlyStopConfig,
     EPLBConfig,
@@ -605,7 +606,7 @@ class PaddleDisWorkerProc:
                     self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
 
             # Let the ep group run control method synchronically
-            if self.parallel_config.use_ep:
+            if envs.FD_ENABLE_V1_UPDATE_WEIGHTS and self.parallel_config.use_ep:
                 pendings = all_gather_values(len(self.cached_control_reqs), self.parallel_config.ep_group)
                 if all([p > 0 for p in pendings]):
                     logger.info(f"Rank: {self.local_rank} Detected all ep ranks have pending control tasks.")
@@ -1118,6 +1119,14 @@ def parse_args():
         help="enable to avoid cpu sync",
     )
 
+    parser.add_argument(
+        "--deploy_modality",
+        type=str,
+        default="mixed",
+        choices=["mixed", "text"],
+        help="Deploy modality: 'mixed' for multimodal, 'text' for text-only.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -1248,6 +1257,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         structured_outputs_config=structured_outputs_config,
         eplb_config=eplb_config,
         routing_replay_config=routing_replay_config,
+        deploy_modality=DeployModality.from_str(getattr(args, "deploy_modality", "mixed")),
     )
     logger.info(f"parallel_config.local_engine_worker_queue_port {parallel_config.local_engine_worker_queue_port}")
 

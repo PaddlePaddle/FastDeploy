@@ -420,6 +420,7 @@ class OpenAIServingChat:
                         tool_calls=output["tool_calls"],
                         prompt_token_ids=None,
                         completion_token_ids=None,
+                        completion_tokens=None,
                     )
 
                     if response_processor.enable_multimodal_content():

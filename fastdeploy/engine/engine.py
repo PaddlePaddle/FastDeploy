@@ -622,6 +622,7 @@ class LLMEngine:
             f" --routing_replay_config '{self.cfg.routing_replay_config.to_json_string()}'"
             f" --model-impl {self.cfg.model_config.model_impl}"
             f" --num_cpu_blocks {self.cfg.cache_config.num_cpu_blocks}"
+            f" --deploy_modality {self.cfg.deploy_modality.value}"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"

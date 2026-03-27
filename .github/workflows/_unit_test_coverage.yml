@@ -172,7 +172,7 @@ jobs:
 
           export RDMA_DEVICES=$(find /dev/infiniband/uverbs* -maxdepth 1 -not -type d | xargs -I{} echo '--device {}:{}')
 
-          docker run --rm --net=host \
+          docker run --rm --ipc=host --net=host \
           --name ${runner_name} \
           --cap-add=SYS_PTRACE --cap-add=IPC_LOCK \
           --shm-size=64G \
