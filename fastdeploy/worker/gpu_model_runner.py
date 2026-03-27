@@ -1421,7 +1421,6 @@ class GPUModelRunner(ModelRunnerBase):
                 not swap_all_layers and self.cache_controller.swap_layer_done_counter is not None
             )
         else:
-            self.forward_meta.cache_controller = None
             self.forward_meta.layer_done_counter = None
             self.forward_meta.enable_layer_swap_wait = False
 

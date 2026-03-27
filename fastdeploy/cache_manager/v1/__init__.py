@@ -16,9 +16,9 @@ Key components:
 """
 
 from .base import KVCacheBase
-from .cache_controller import CacheController, LayerSwapTimeoutError
+from .cache_controller import CacheController
 from .cache_manager import CacheManager
-from .cache_utils import LayerDoneCounter
+from .cache_utils import LayerDoneCounter, LayerSwapTimeoutError
 from .metadata import (
     AsyncTaskHandler,
     BlockNode,

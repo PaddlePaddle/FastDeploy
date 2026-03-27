@@ -150,8 +150,6 @@ class ForwardMeta:
     routing_replay_table: Optional[paddle.Tensor] = None
 
     # ============ V1 KVCACHE Manager: Swap-in waiting info ============
-    # CacheController instance for write_back waiting
-    cache_controller: Optional[Any] = None
     # LayerDoneCounter for layer-by-layer swap waiting (set by submit_swap_tasks return value)
     layer_done_counter: Optional[Any] = None
     # Whether to enable layer-by-layer swap waiting (vs wait all before forward)
