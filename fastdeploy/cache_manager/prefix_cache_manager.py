@@ -1141,17 +1141,20 @@ class PrefixCacheManager:
         if self.kvcache_storage_backend is None:
             return
 
-        if len(task.keys) != len(task.gpu_block_ids):
-            err_msg = (
-                f"write_back_storage error: hash_keys({len(task.keys)}) != gpu_block_ids({len(task.gpu_block_ids)})"
-            )
-            logger.error(err_msg)
-            raise ValueError(err_msg)
+        assert is_sync, "Only support is_sync=True for now."
+        self._acquire_kvcache_lock()
+        try:
+            if len(task.keys) != len(task.gpu_block_ids):
+                err_msg = f"write_back_storage error: hash_keys({len(task.keys)}) != gpu_block_ids({len(task.gpu_block_ids)})"
+                logger.error(err_msg)
+                raise ValueError(err_msg)
 
-        self.task_write_back_event[task.task_id] = Event()
-        self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task))
-        if is_sync:
-            self.wait_write_storage_task(task.task_id)
+            self.task_write_back_event[task.task_id] = Event()
+            self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task))
+            if is_sync:
+                self.wait_write_storage_task(task.task_id)
+        finally:
+            self._release_kvcache_lock()
 
     def wait_write_storage_task(self, req_id):
         """
@@ -1168,12 +1171,18 @@ class PrefixCacheManager:
         if self.kvcache_storage_backend is None:
             return []
 
-        storage_block_ids = []
-        self.task_prefetch_event[task.task_id] = Event()
-        # issue task to cache_transfer_manager
-        self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, task))
-        if is_sync:
-            storage_block_ids = self.wait_prefetch_storage_task(task.task_id)
+        assert is_sync, "Only support is_sync=True for now."
+        self._acquire_kvcache_lock()
+
+        try:
+            storage_block_ids = []
+            self.task_prefetch_event[task.task_id] = Event()
+            # issue task to cache_transfer_manager
+            self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, task))
+            if is_sync:
+                storage_block_ids = self.wait_prefetch_storage_task(task.task_id)
+        finally:
+            self._release_kvcache_lock()
         return storage_block_ids
 
     def wait_prefetch_storage_task(self, req_id):
