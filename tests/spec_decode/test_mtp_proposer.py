@@ -403,7 +403,7 @@ class TestMTPProposer(unittest.TestCase):
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
         mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
-        mock_eagle.return_value = paddle.zeros([2, 768], dtype="bfloat16")
+        mock_eagle.return_value = (paddle.zeros([2, 768], dtype="bfloat16"), paddle.to_tensor([2], dtype="int32"))
         mock_preprocess.return_value = None
 
         proposer = MTPProposer(
@@ -421,6 +421,44 @@ class TestMTPProposer(unittest.TestCase):
         proposer.role = "prefill"
         sampled_token_ids = paddle.ones([2, 1], dtype="int64")
         proposer._post_process(sampled_token_ids)
+
+    @patch("fastdeploy.spec_decode.mtp.current_platform")
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.worker.input_batch.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.draft_model_preprocess")
+    @patch("fastdeploy.spec_decode.mtp.eagle_get_hidden_states")
+    def test_prepare_inputs_xpu_branch(
+        self, mock_eagle, mock_preprocess, mock_rope, mock_attn_backend, mock_model_loader, mock_platform
+    ):
+        """Test _prepare_inputs XPU branch (line 754)"""
+        mock_platform.is_cuda.return_value = False
+        mock_platform.is_maca.return_value = False
+        mock_platform.is_xpu.return_value = True
+
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+        # XPU branch returns only target_hidden_states, not tuple
+        mock_eagle.return_value = paddle.zeros([2, 768], dtype="bfloat16")
+        mock_preprocess.return_value = None
+
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+        full_hidden_states = paddle.zeros([2, 768], dtype="bfloat16")
+        proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
+
+        # Test _prepare_inputs with XPU platform (covers line 754)
+        proposer._prepare_inputs(full_hidden_states)
+        mock_preprocess.assert_called()
+        mock_eagle.assert_called()
+        # Verify eagle_get_hidden_states was called without returning output_token_num
+        self.assertEqual(mock_eagle.call_count, 1)
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
@@ -457,6 +495,83 @@ class TestMTPProposer(unittest.TestCase):
         # Test last prefill
         task.chunk_idx = 2
         proposer.update_task_chunk_prefill(task)
+
+    # NOTE: Temporarily skipped - _get_self_hidden_states_cuda method does not exist
+    # @patch("fastdeploy.spec_decode.mtp.eagle_get_self_hidden_states")
+    # @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    # @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    # @patch("fastdeploy.worker.input_batch.get_rope")
+    # def test_get_self_hidden_states_cuda(
+    #     self, mock_rope, mock_attn_backend, mock_model_loader, mock_eagle_self_hidden
+    # ):
+    #     """Test _get_self_hidden_states_cuda method (lines 1140-1148)"""
+    #     mock_model = Mock()
+    #     mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+    #     mock_model_loader.return_value.load_model.return_value = mock_model
+    #     mock_attn = Mock()
+    #     mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+    #     mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+    #     mock_rope.return_value = paddle.zeros([1, 2048, 64])
+    #     mock_eagle_self_hidden.return_value = (
+    #         paddle.zeros([2, 768], dtype="bfloat16"),
+    #         paddle.to_tensor([2], dtype="int32"),
+    #     )
+    #
+    #     # Use num_speculative_tokens=2 to ensure num_model_steps > 1
+    #     self.fd_config.speculative_config.num_speculative_tokens = 2
+    #     proposer = MTPProposer(
+    #         self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+    #     )
+    #     proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
+    #     proposer.model_inputs.last_seq_lens_this_time = paddle.zeros([2, 1], dtype="int32")
+    #     proposer.model_inputs["step_idx"] = paddle.ones([2, 1], dtype="int64")
+    #
+    #     hidden_states = paddle.zeros([2, 768], dtype="bfloat16")
+    #
+    #     # Test _get_self_hidden_states_cuda directly (covers lines 1140-1148)
+    #     proposer._get_self_hidden_states_cuda(hidden_states)
+    #
+    #     # Verify eagle_get_self_hidden_states was called
+    #     mock_eagle_self_hidden.assert_called_once()
+
+    @patch("fastdeploy.spec_decode.mtp.eagle_get_self_hidden_states")
+    @patch("fastdeploy.spec_decode.mtp.current_platform")
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.worker.input_batch.get_rope")
+    def test_get_self_hidden_states_xpu(
+        self, mock_rope, mock_attn_backend, mock_model_loader, mock_platform, mock_eagle_self_hidden
+    ):
+        """Test _get_self_hidden_states_xpu method (lines 1130-1137, 1125)"""
+        mock_platform.is_cuda.return_value = False
+        mock_platform.is_maca.return_value = False
+        mock_platform.is_xpu.return_value = True
+
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_eagle_self_hidden.return_value = paddle.zeros([2, 768], dtype="bfloat16")
+
+        # Use num_speculative_tokens=2 to ensure num_model_steps > 1
+        self.fd_config.speculative_config.num_speculative_tokens = 2
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+        proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
+        proposer.model_inputs.last_seq_lens_this_time = paddle.zeros([2, 1], dtype="int32")
+        proposer.model_inputs["step_idx"] = paddle.ones([2, 1], dtype="int64")
+
+        hidden_states = paddle.zeros([2, 768], dtype="bfloat16")
+
+        # Test _get_self_hidden_states_xpu directly (covers lines 1130-1137)
+        proposer._get_self_hidden_states_xpu(hidden_states)
+
+        # Verify eagle_get_self_hidden_states was called
+        mock_eagle_self_hidden.assert_called_once()
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
