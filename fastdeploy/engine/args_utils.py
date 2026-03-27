@@ -25,6 +25,7 @@ from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     ConvertOption,
+    DeployModality,
     EarlyStopConfig,
     EPLBConfig,
     FDConfig,
@@ -551,6 +552,11 @@ class EngineArgs:
     Flag to enable prefill_use_worst_num_tokens. Default is False (disabled).
     """
 
+    deploy_modality: str = "mixed"
+    """
+    Deployment modality for the serving engine. Options: mixed, text. Default is mixed.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -558,8 +564,6 @@ class EngineArgs:
 
         if not self.tokenizer:
             self.tokenizer = self.model
-        if self.splitwise_role == "decode":
-            self.enable_prefix_caching = False
         if (
             not current_platform.is_cuda()
             and not current_platform.is_xpu()
@@ -1353,6 +1357,14 @@ class EngineArgs:
             help="Enable overlapping schedule.",
         )
 
+        model_group.add_argument(
+            "--deploy-modality",
+            type=str,
+            choices=["mixed", "text"],
+            default=EngineArgs.deploy_modality,
+            help="Deployment modality. 'mixed' for multimodal (text+image+audio), 'text' for text-only. Default is mixed.",
+        )
+
         return parser
 
     @classmethod
@@ -1514,4 +1526,5 @@ class EngineArgs:
             plas_attention_config=plas_attention_config,
             early_stop_config=early_stop_cfg,
             routing_replay_config=routing_replay_config,
+            deploy_modality=DeployModality.from_str(self.deploy_modality),
         )

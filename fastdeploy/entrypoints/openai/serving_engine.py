@@ -25,6 +25,7 @@ from typing import Any, ClassVar, Generic, Optional, TypeVar, Union
 from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import override
 
+import fastdeploy.envs as envs
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ErrorInfo,
@@ -276,10 +277,9 @@ class ZmqOpenAIServing(OpenAIServing):
             dealer, request_output_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
-            for pr in ctx.preprocess_requests:
-                dealer.write([b"", pr["request_id"].encode("utf-8")])
-            # if self.engine_client.check_model_weight_status():
-            #     raise ValueError("Engine is clearing model weight")
+            if not envs.ZMQ_SEND_BATCH_DATA:
+                for pr in ctx.preprocess_requests:
+                    dealer.write([b"", pr["request_id"].encode("utf-8")])
             while num_choices > 0:
                 request_output_dicts = await asyncio.wait_for(request_output_queue.get(), timeout=60)
                 for request_output_dict in request_output_dicts:

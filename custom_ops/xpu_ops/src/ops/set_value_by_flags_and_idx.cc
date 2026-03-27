@@ -30,7 +30,7 @@ void SetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
   int bs = seq_lens_this_time.shape()[0];
   int length = pre_ids_all.shape()[1];
   int length_input_ids = input_ids.shape()[1];
-  int r = baidu::xpu::api::plugin::set_value_by_flags_and_idx(
+  int r = fastdeploy::plugin::set_value_by_flags_and_idx(
       xpu_ctx->x_context(),
       stop_flags.data<bool>(),
       const_cast<int64_t *>(pre_ids_all.data<int64_t>()),
@@ -41,7 +41,7 @@ void SetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
       bs,
       length,
       length_input_ids);
-  PD_CHECK(r == 0, "xpu::plugin::set_value_by_flags_and_idx failed.");
+  PD_CHECK(r == 0, "fastdeploy::plugin::set_value_by_flags_and_idx failed.");
 }
 
 PD_BUILD_OP(set_value_by_flags_and_idx)

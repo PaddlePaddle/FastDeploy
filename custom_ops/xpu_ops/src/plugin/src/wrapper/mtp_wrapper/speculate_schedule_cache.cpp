@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 __attribute__((global)) void speculate_schedule_cache(
     const int64_t *draft_tokens,
     int *block_tables,
@@ -42,15 +41,12 @@ __attribute__((global)) void speculate_schedule_cache(
     const int block_size,
     const int block_num_per_seq,
     const bool prefill_one_step_stop);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context *ctx,
+static int cpu_wrapper(api::Context *ctx,
                        const int64_t *draft_tokens,
                        int *block_tables,
                        bool *stop_flags,
@@ -133,7 +129,7 @@ static int cpu_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context *ctx,
+static int xpu3_wrapper(api::Context *ctx,
                         const int64_t *draft_tokens,
                         int *block_tables,
                         bool *stop_flags,
@@ -156,10 +152,10 @@ static int xpu3_wrapper(Context *ctx,
                         const int block_size,
                         const int block_num_per_seq,
                         const bool prefill_one_step_stop) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  using XPU_TI = typename XPUIndexType<int64_t>::type;
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  using XPU_TI = typename api::XPUIndexType<int64_t>::type;
   int32_t ret_xre =
-      xpu3::plugin::speculate_schedule_cache<<<1, 64, ctx->xpu_stream>>>(
+      fd_xpu3::speculate_schedule_cache<<<1, 64, ctx->xpu_stream>>>(
           (const XPU_TI *)draft_tokens,
           block_tables,
           stop_flags,
@@ -186,7 +182,7 @@ static int xpu3_wrapper(Context *ctx,
   return api::SUCCESS;
 }
 
-int speculate_schedule_cache(Context *ctx,
+int speculate_schedule_cache(api::Context *ctx,
                              const int64_t *draft_tokens,
                              int *block_tables,
                              bool *stop_flags,
@@ -308,6 +304,4 @@ int speculate_schedule_cache(Context *ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

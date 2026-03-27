@@ -16,6 +16,8 @@ Environment variables used by FastDeploy.
 """
 
 import os
+import sys
+from types import ModuleType
 from typing import Any, Callable
 
 
@@ -169,6 +171,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_FILL_BITMASK_BATCH": lambda: int(os.getenv("FD_FILL_BITMASK_BATCH", "4")),
     "FD_ENABLE_PDL": lambda: int(os.getenv("FD_ENABLE_PDL", "1")),
     "FD_ENABLE_ASYNC_LLM": lambda: int(os.getenv("FD_ENABLE_ASYNC_LLM", "0")),
+    # Enable early RDMA connection for PD disaggregation
+    "FD_ENABLE_PD_RDMA_EAGER_CONNECT": lambda: bool(int(os.getenv("FD_ENABLE_PD_RDMA_EAGER_CONNECT", "0"))),
     "FD_GUIDANCE_DISABLE_ADDITIONAL": lambda: bool(int(os.getenv("FD_GUIDANCE_DISABLE_ADDITIONAL", "1"))),
     "FD_LLGUIDANCE_LOG_LEVEL": lambda: int(os.getenv("FD_LLGUIDANCE_LOG_LEVEL", "0")),
     # "Number of tokens in the group for Mixture of Experts (MoE) computation processing on HPU"
@@ -194,14 +198,17 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FMQ_CONFIG_JSON": lambda: os.getenv("FMQ_CONFIG_JSON", None),
     "FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS": lambda: int(os.getenv("FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS", "500")),
     "FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE": lambda: int(os.getenv("FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE", "64")),
-    "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT": lambda: int(os.getenv("FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", "120")),
+    "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT": lambda: float(os.getenv("FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", "120")),
     "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
     # Whether to enable low latency in mixed scenario
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
     # Whether to use phi FP8 quantization,if 1,use paddle default.
     "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
-    # Whether to use phi MOE permute,if 1,use paddle default.
-    "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))),
+    # Enables the Paddle/phi combined TopK operator only when topk_method == noaux_tc,
+    # intended for training alignment. Defaults to 0 (disabled).
+    "FD_USE_PHI_MOE_TOPK": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_TOPK", "0"))),
+    # Whether to use phi MOE permute,if 1,use paddle op.
+    "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))),
     # Control class SiluAndMul to use swiglu or fusid_bias_act operator in the forward_cuda function
     "FD_SiluAndMul_USE_PHI_SWIGLU": lambda: bool(int(os.getenv("FD_SiluAndMul_USE_PHI_SWIGLU", "0"))),
     # Reserve output blocks for decoding requests when schedule new prefill requests
@@ -238,14 +245,16 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # has been observed to cause NaN computation errors.
     # Set to 1 to enable the lock; defaults to 0 (disabled).
     "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
+    # Whether to probe MoE routing probabilities and use Fleet's fused SwiGLU kernel.
+    "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
+    # Whether to use batch send data in zmq
+    "ZMQ_SEND_BATCH_DATA": lambda: int(os.getenv("ZMQ_SEND_BATCH_DATA", "1")),
+    # Whether to enable v1 weight updating, which utilizes ZMQ/EngineWorkerQueue/EngineCacheQueue/FMQs
+    # to pass control requests and responses.
+    # When v1 is enabled, the legacy /clear_load_weight and /update_model_weight
+    # will adopt this new communication pattern.
+    "FD_ENABLE_V1_UPDATE_WEIGHTS": lambda: bool(int(os.getenv("FD_ENABLE_V1_UPDATE_WEIGHTS", "0"))),
 }
-
-
-def __getattr__(name: str):
-    # lazy evaluation of environment variables
-    if name in environment_variables:
-        return environment_variables[name]()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def get_unique_name(self, name):
@@ -256,10 +265,39 @@ def get_unique_name(self, name):
     return name + f"_{shm_uuid}"
 
 
-def __setattr__(name: str, value: Any):
-    assert name in environment_variables
-    environment_variables[name] = lambda: value
+class _EnvsModule(ModuleType):
+    """Custom module class to support __setattr__ for environment variables."""
+
+    def __getattr__(self, name: str):
+        if name in environment_variables:
+            return environment_variables[name]()
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    def __setattr__(self, name: str, value: Any):
+        if name in environment_variables:
+            # Convert bool to "1"/"0" so int(os.getenv(...)) works correctly
+            if isinstance(value, bool):
+                value = int(value)
+            os.environ[name] = str(value)
+        elif name.startswith("_"):
+            # Allow Python-internal attrs (__spec__, __loader__, etc.)
+            super().__setattr__(name, value)
+        else:
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    def __delattr__(self, name: str):
+        # Support unittest.mock.patch cleanup which calls delattr to restore original state
+        if name in environment_variables:
+            os.environ.pop(name, None)
+        elif name.startswith("_"):
+            super().__delattr__(name)
+        else:
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    def __dir__(self):
+        return list(environment_variables.keys())
 
 
-def __dir__():
-    return list(environment_variables.keys())
+# Replace the module with our custom class
+_current_module = sys.modules[__name__]
+_current_module.__class__ = _EnvsModule

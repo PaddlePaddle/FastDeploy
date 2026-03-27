@@ -6,6 +6,9 @@ from collections import namedtuple
 from collections.abc import Callable
 from typing import Any, Dict
 
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
 from fastdeploy.utils import get_logger
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -37,6 +40,7 @@ def _matmul_launch_metadata(grid: Callable[..., Any], kernel: Any, args: Dict[st
     return ret
 
 
+@enable_compat_on_triton_kernel
 @triton.jit
 def _compute_pid(tile_id, num_pid_in_group, num_pid_m, GROUP_SIZE_M, NUM_SMS):
     group_id = tile_id // num_pid_in_group
@@ -47,6 +51,7 @@ def _compute_pid(tile_id, num_pid_in_group, num_pid_m, GROUP_SIZE_M, NUM_SMS):
     return pid_m, pid_n
 
 
+@enable_compat_on_triton_kernel
 @triton.jit(launch_metadata=_matmul_launch_metadata)
 def matmul_kernel_persistent(
     a_ptr,
@@ -140,8 +145,8 @@ def get_compute_units():
             paddle.device.get_device()  # Triton + Paddle may can't get the device
             device_properties = paddle.cuda.get_device_properties(0)
             NUM_SMS = device_properties.multi_processor_count
-        except Exception:
-            logger.warning("Could not get CUDA device properties. Falling back to CPU threads.")
+        except Exception as e:
+            logger.warning(f"Could not get CUDA device properties ({e}), falling back to CPU core count")
             # TODO(liujundong): Paddle lacks a torch.get_num_threads() equivalent for the *configured* thread count.
             # Using os.cpu_count() (total logical cores) as a fallback, which may not be correct.
             # Must check downstream logic to determine if this impacts correctness.
@@ -226,6 +231,7 @@ def matmul_persistent(a: paddle.Tensor, b: paddle.Tensor, bias: paddle.Tensor | 
     return c
 
 
+@enable_compat_on_triton_kernel
 @triton.jit
 def _log_softmax_kernel(
     input_ptr,
@@ -330,6 +336,7 @@ def log_softmax(input: paddle.Tensor, axis: int = -1) -> paddle.Tensor:
     return output.reshape(original_shape)
 
 
+@enable_compat_on_triton_kernel
 @triton.jit
 def mean_kernel(
     input_ptr,
@@ -475,6 +482,7 @@ def mean_dim(
 # We thank the SGLang authors and the Thinking Machines Lab for their contributions.
 
 
+@enable_compat_on_triton_kernel
 @triton.jit  # pragma: no cover
 def bmm_kernel_persistent(
     a_ptr,
@@ -660,6 +668,9 @@ def mm_batch_invariant(a, b, transpose_x=False, transpose_y=False, out=None):
     if transpose_y:
         b = b.T
     result = matmul_persistent(a, b)
+    if out is not None:
+        out.copy_(result, False)
+        return out
     return result
 
 
@@ -679,8 +690,13 @@ def addmm_batch_invariant(
     return result
 
 
-def _log_softmax_batch_invariant(x: paddle.Tensor, axis: int = -1) -> paddle.Tensor:
-    return log_softmax(input=x, axis=axis)
+def _log_softmax_batch_invariant(x: paddle.Tensor, axis: int = -1, out=None) -> paddle.Tensor:
+    result = log_softmax(input=x, axis=axis)
+    # Handle out parameter if provided
+    if out is not None:
+        out.copy_(result)
+        return out
+    return result
 
 
 def mean_batch_invariant(
@@ -709,6 +725,70 @@ def mean_batch_invariant(
         out.copy_(result)
         return out
     return result
+
+
+# ---------------------------------------------------------------------------
+# Batch-invariant RMSNorm (Triton): one program per row, fixed reduction order
+# ---------------------------------------------------------------------------
+
+
+@enable_compat_on_triton_kernel
+@triton.jit
+def _rms_norm_kernel(  # pragma: no cover
+    input_ptr,
+    weight_ptr,
+    output_ptr,
+    input_row_stride: tl.constexpr,
+    output_row_stride: tl.constexpr,
+    n_cols: tl.constexpr,
+    eps,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """Per-row RMSNorm: y = x * rsqrt(mean(x^2) + eps) * weight.
+    Each program handles exactly one row → M-invariant."""
+    row_idx = tl.program_id(0).to(tl.int64)
+    row_start = input_ptr + row_idx * input_row_stride
+    out_start = output_ptr + row_idx * output_row_stride
+
+    # Pass 1: sum of squares in float32
+    sum_sq = tl.zeros([1], dtype=tl.float32)
+    for off in range(0, n_cols, BLOCK_SIZE):
+        cols = off + tl.arange(0, BLOCK_SIZE)
+        mask = cols < n_cols
+        x = tl.load(row_start + cols, mask=mask, other=0.0).to(tl.float32)
+        sum_sq += tl.sum(tl.where(mask, x * x, 0.0))
+
+    inv_rms = 1.0 / tl.sqrt(sum_sq / n_cols + eps)
+
+    # Pass 2: normalize and scale
+    for off in range(0, n_cols, BLOCK_SIZE):
+        cols = off + tl.arange(0, BLOCK_SIZE)
+        mask = cols < n_cols
+        x = tl.load(row_start + cols, mask=mask, other=0.0).to(tl.float32)
+        w = tl.load(weight_ptr + cols, mask=mask, other=1.0).to(tl.float32)
+        y = x * inv_rms * w
+        tl.store(out_start + cols, y.to(out_start.dtype.element_ty), mask=mask)
+
+
+def rms_norm_batch_invariant(x: paddle.Tensor, weight: paddle.Tensor, eps: float = 1e-6) -> paddle.Tensor:
+    """M-invariant RMSNorm: each row computed independently via Triton."""
+    orig_shape = x.shape
+    x_2d = x.reshape([-1, x.shape[-1]]).contiguous()
+    weight = weight.contiguous()
+    n_rows, n_cols = x_2d.shape
+    out = paddle.empty_like(x_2d)
+    BLOCK_SIZE = 1024
+    _rms_norm_kernel[(n_rows,)](
+        x_2d,
+        weight,
+        out,
+        x_2d.stride(0),
+        out.stride(0),
+        n_cols,
+        eps,
+        BLOCK_SIZE=BLOCK_SIZE,
+    )
+    return out.reshape(orig_shape)
 
 
 _original_ops = {"mm": None, "addmm": None, "_log_softmax": None, "mean_dim": None, "bmm": None}

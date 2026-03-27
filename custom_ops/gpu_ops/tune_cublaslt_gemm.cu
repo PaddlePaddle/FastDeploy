@@ -734,10 +734,12 @@ void TuneCublasltGemm(const paddle::Tensor& K,
                       const bool is_test,
                       const bool is_read_from_file,
                       const std::string& path) {
-  assert(M_end >= M_start);
-  assert(M_start >= 1);
-  assert(K.dims().size() == 1 && N.dims().size() == 1);
-  assert(is_test != is_read_from_file);
+  assert(M_end >= M_start && "M_end must be >= M_start");
+  assert(M_start >= 1 && "M_start must be >= 1");
+  assert(K.dims().size() == 1 && N.dims().size() == 1 &&
+         "K and N must be 1D tensors");
+  assert(is_test != is_read_from_file &&
+         "Exactly one of is_test or is_read_from_file must be true");
 
   auto K_cpu = K.copy_to(paddle::CPUPlace(), false);
   auto N_cpu = N.copy_to(paddle::CPUPlace(), false);
@@ -746,7 +748,7 @@ void TuneCublasltGemm(const paddle::Tensor& K,
 
   int K_size = K.numel();
   int N_size = N.numel();
-  assert(K_size == N_size);
+  assert(K_size == N_size && "K and N must have the same number of elements");
 
   std::vector<int> mm;
   int m = M_start, step = 1;
@@ -796,7 +798,7 @@ void TuneCublasltGemm(const paddle::Tensor& K,
                  path);
       } else {
         // other dtype
-        throw std::runtime_error(dtype + "not currently supported");
+        throw std::runtime_error(dtype + " is not currently supported");
       }
     }
   }

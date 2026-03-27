@@ -7,3 +7,4 @@ tensor_parallel_size: 8
 quantization: wint4
 limit_mm_per_prompt: '{"image": 100, "video": 100}'
 reasoning_parser: ernie-45-vl
+max_num_batched_tokens: 4096

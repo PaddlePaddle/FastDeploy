@@ -18,7 +18,7 @@
 #include "mma_tensor_op.cuh"
 #include "utils.cuh"
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void IntVariableLengthRotaryKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
@@ -97,9 +97,11 @@ __global__ void IntVariableLengthRotaryKernel(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         bias_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         bias_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         bias_vec[2 * i] = static_cast<T>(input_left);
         bias_vec[2 * i + 1] = static_cast<T>(input_right);
@@ -112,7 +114,7 @@ __global__ void IntVariableLengthRotaryKernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void VariableLengthRotaryKernel(
     const T *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
@@ -171,9 +173,11 @@ __global__ void VariableLengthRotaryKernel(
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
       src_vec[2 * i] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
       src_vec[2 * i + 1] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     }
     Store<T, VecSize>(src_vec, &qkv_out[base_idx]);
   }
@@ -182,7 +186,7 @@ __global__ void VariableLengthRotaryKernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void IntNeoxVariableLengthRotaryKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
@@ -271,9 +275,11 @@ __global__ void IntNeoxVariableLengthRotaryKernel(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         left_bias_vec[i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         right_bias_vec[i] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         left_bias_vec[i] = static_cast<T>(input_left);
         right_bias_vec[i] = static_cast<T>(input_right);
@@ -287,7 +293,7 @@ __global__ void IntNeoxVariableLengthRotaryKernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void NeoxVariableLengthRotaryKernel(
     const T *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
@@ -352,9 +358,11 @@ __global__ void NeoxVariableLengthRotaryKernel(
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
       left_vec[i] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
       right_vec[i] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     }
     Store<T, VecSize>(left_vec, &qkv_out[base_idx_left]);
     Store<T, VecSize>(right_vec, &qkv_out[base_idx_right]);
@@ -364,7 +372,7 @@ __global__ void NeoxVariableLengthRotaryKernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void IntGQAVariableLengthRotaryKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
@@ -442,9 +450,11 @@ __global__ void IntGQAVariableLengthRotaryKernel(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         bias_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         bias_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         bias_vec[2 * i] = static_cast<T>(input_left);
         bias_vec[2 * i + 1] = static_cast<T>(input_right);
@@ -457,7 +467,7 @@ __global__ void IntGQAVariableLengthRotaryKernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void GQAVariableLengthRotaryQKNormKernel(
     const T *qkv,
     const float *cos_emb,
@@ -525,8 +535,10 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
       const float input_right = static_cast<float>(src_vec[2 * i + 1]);
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
-      float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
-      float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
+      float tmp1 = fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                   fmul_func<EnforceFmulRN>(input_right, sin_tmp);
+      float tmp2 = fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                   fmul_func<EnforceFmulRN>(input_left, sin_tmp);
       tmp_vec[2 * i] = tmp1;
       tmp_vec[2 * i + 1] = tmp2;
       thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
@@ -554,7 +566,7 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void GQAVariableLengthRotaryKernel(const T *qkv,
                                               const float *cos_emb,
                                               const float *sin_emb,
@@ -614,9 +626,11 @@ __global__ void GQAVariableLengthRotaryKernel(const T *qkv,
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
       src_vec[2 * i] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
       src_vec[2 * i + 1] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     }
     Store<T, VecSize>(src_vec, &qkv_out[base_idx]);
   }
@@ -625,7 +639,7 @@ __global__ void GQAVariableLengthRotaryKernel(const T *qkv,
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void IntGQAVariableLengthRotaryQuantKVKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
@@ -703,19 +717,23 @@ __global__ void IntGQAVariableLengthRotaryQuantKVKernel(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         bias_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         bias_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else if (hi < q_num_head + kv_num_head) {
         int k_hi = hi - q_num_head;
         const int scale_idx = k_hi * last_dim + h_bias;
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         bias_vec[2 * i] =
-            static_cast<T>((input_left * cos_tmp - input_right * sin_tmp) *
+            static_cast<T>((fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                            fmul_func<EnforceFmulRN>(input_right, sin_tmp)) *
                            float(cache_k_scales[scale_idx + 2 * i]));
         bias_vec[2 * i + 1] =
-            static_cast<T>((input_right * cos_tmp + input_left * sin_tmp) *
+            static_cast<T>((fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                            fmul_func<EnforceFmulRN>(input_left, sin_tmp)) *
                            float(cache_k_scales[scale_idx + 2 * i + 1]));
       } else {
         int v_hi = hi - q_num_head - kv_num_head;
@@ -733,7 +751,7 @@ __global__ void IntGQAVariableLengthRotaryQuantKVKernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void GQAVariableLengthRotaryQuantKVKernel(
     const T *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
@@ -803,26 +821,31 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(
               : static_cast<float>(src_vec[2 * i + 1]);
       // const float cos_tmp = cos_emb_vec[i];
       // const float sin_tmp = sin_emb_vec[i];
-      // src_vec[2 * i] = static_cast<T>(input_left * cos_tmp - input_right *
-      // sin_tmp); src_vec[2 * i + 1] = static_cast<T>(input_right * cos_tmp +
-      // input_left * sin_tmp);
+      // src_vec[2 * i] = static_cast<T>(fmul_func<EnforceFmulRN>(input_left,
+      // cos_tmp) - input_right * sin_tmp); src_vec[2 * i + 1] =
+      // static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+      // fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       if (hi < q_num_head) {  // qk rope
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         src_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         src_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else if (hi < q_num_head + kv_num_head) {
         int k_hi = hi - q_num_head;
         const int scale_idx = k_hi * last_dim + h_bias;
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         src_vec[2 * i] =
-            static_cast<T>((input_left * cos_tmp - input_right * sin_tmp) *
+            static_cast<T>((fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                            fmul_func<EnforceFmulRN>(input_right, sin_tmp)) *
                            float(cache_k_scales[scale_idx + 2 * i]));
         src_vec[2 * i + 1] =
-            static_cast<T>((input_right * cos_tmp + input_left * sin_tmp) *
+            static_cast<T>((fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                            fmul_func<EnforceFmulRN>(input_left, sin_tmp)) *
                            float(cache_k_scales[scale_idx + 2 * i + 1]));
       } else {
         int v_hi = hi - q_num_head - kv_num_head;
@@ -840,7 +863,7 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void IntGQANeoxVariableLengthRotaryKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
@@ -926,9 +949,11 @@ __global__ void IntGQANeoxVariableLengthRotaryKernel(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         left_bias_vec[i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         right_bias_vec[i] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       } else {
         left_bias_vec[i] = static_cast<T>(input_left);
         right_bias_vec[i] = static_cast<T>(input_right);
@@ -942,7 +967,7 @@ __global__ void IntGQANeoxVariableLengthRotaryKernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void GQANeoxVariableLengthRotaryKernel(const T *qkv,
                                                   const float *cos_emb,
                                                   const float *sin_emb,
@@ -1005,9 +1030,11 @@ __global__ void GQANeoxVariableLengthRotaryKernel(const T *qkv,
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
       left_vec[i] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
       right_vec[i] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     }
     Store<T, VecSize>(left_vec, &qkv_out[base_idx_left]);
     Store<T, VecSize>(right_vec, &qkv_out[base_idx_right]);
@@ -1017,7 +1044,7 @@ __global__ void GQANeoxVariableLengthRotaryKernel(const T *qkv,
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void GQANeoxVariableLengthPartialRotaryKernel(
     const T *qkv,
     const float *cos_emb,
@@ -1082,9 +1109,11 @@ __global__ void GQANeoxVariableLengthPartialRotaryKernel(
       const float cos_tmp = cos_emb_vec[i];
       const float sin_tmp = sin_emb_vec[i];
       left_vec[i] =
-          static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                         fmul_func<EnforceFmulRN>(input_right, sin_tmp));
       right_vec[i] =
-          static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+          static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                         fmul_func<EnforceFmulRN>(input_left, sin_tmp));
     }
     Store<T, VecSize>(left_vec, &qkv_out[base_idx_left]);
     Store<T, VecSize>(right_vec, &qkv_out[base_idx_right]);
@@ -1094,7 +1123,7 @@ __global__ void GQANeoxVariableLengthPartialRotaryKernel(
 #endif
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void cache_kernel(
     const T *__restrict__ qkv,    // [num_tokens, num_heads + 2 * kv_num_heads,
                                   // head_size]
@@ -2199,7 +2228,7 @@ __global__ void append_write_cache_kv_c4_qkv(
 #endif
 }
 
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void rotary_qk_variable(
     T *qkv_out,                   // [token_num, 3, num_head, dim_head]
     const QKV_TYPE *qkv_input,    // qkv
@@ -2233,94 +2262,98 @@ void rotary_qk_variable(
     const float *cos_emb = rotary_emb;
     const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
     if (qkv_out_scales) {
-      launchWithPdlWhenEnabled(IntVariableLengthRotaryKernel<T, PackSize>,
-                               grid_size,
-                               blocksize,
-                               0,
-                               stream,
-                               reinterpret_cast<const int *>(qkv_input),
-                               cos_emb,
-                               sin_emb,
-                               batch_id_per_token,
-                               cu_seqlens_q,
-                               seq_lens,
-                               seq_lens_decoder,
-                               qkv_out_scales,
-                               qkv_bias,
-                               qkv_out,
-                               elem_nums,
-                               head_num,
-                               seq_len,
-                               dim_head,
-                               rope_3d);
+      launchWithPdlWhenEnabled(
+          IntVariableLengthRotaryKernel<T, PackSize, EnforceFmulRN>,
+          grid_size,
+          blocksize,
+          0,
+          stream,
+          reinterpret_cast<const int *>(qkv_input),
+          cos_emb,
+          sin_emb,
+          batch_id_per_token,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_decoder,
+          qkv_out_scales,
+          qkv_bias,
+          qkv_out,
+          elem_nums,
+          head_num,
+          seq_len,
+          dim_head,
+          rope_3d);
     } else {
-      launchWithPdlWhenEnabled(VariableLengthRotaryKernel<T, PackSize>,
-                               grid_size,
-                               blocksize,
-                               0,
-                               stream,
-                               reinterpret_cast<const T *>(qkv_input),
-                               cos_emb,
-                               sin_emb,
-                               batch_id_per_token,
-                               cu_seqlens_q,
-                               seq_lens,
-                               seq_lens_decoder,
-                               qkv_out,
-                               elem_nums,
-                               head_num,
-                               seq_len,
-                               dim_head,
-                               rope_3d);
+      launchWithPdlWhenEnabled(
+          VariableLengthRotaryKernel<T, PackSize, EnforceFmulRN>,
+          grid_size,
+          blocksize,
+          0,
+          stream,
+          reinterpret_cast<const T *>(qkv_input),
+          cos_emb,
+          sin_emb,
+          batch_id_per_token,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_decoder,
+          qkv_out,
+          elem_nums,
+          head_num,
+          seq_len,
+          dim_head,
+          rope_3d);
     }
   } else {
     const float *cos_emb = rotary_emb;
     const float *sin_emb = rotary_emb + input_output_len * dim_head;
     if (qkv_out_scales) {
-      launchWithPdlWhenEnabled(IntNeoxVariableLengthRotaryKernel<T, PackSize>,
-                               grid_size,
-                               blocksize,
-                               0,
-                               stream,
-                               reinterpret_cast<const int *>(qkv_input),
-                               cos_emb,
-                               sin_emb,
-                               batch_id_per_token,
-                               cu_seqlens_q,
-                               seq_lens,
-                               seq_lens_decoder,
-                               qkv_out_scales,
-                               qkv_bias,
-                               qkv_out,
-                               elem_nums,
-                               head_num,
-                               seq_len,
-                               dim_head,
-                               rope_3d);
+      launchWithPdlWhenEnabled(
+          IntNeoxVariableLengthRotaryKernel<T, PackSize, EnforceFmulRN>,
+          grid_size,
+          blocksize,
+          0,
+          stream,
+          reinterpret_cast<const int *>(qkv_input),
+          cos_emb,
+          sin_emb,
+          batch_id_per_token,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_decoder,
+          qkv_out_scales,
+          qkv_bias,
+          qkv_out,
+          elem_nums,
+          head_num,
+          seq_len,
+          dim_head,
+          rope_3d);
     } else {
-      launchWithPdlWhenEnabled(NeoxVariableLengthRotaryKernel<T, PackSize>,
-                               grid_size,
-                               blocksize,
-                               0,
-                               stream,
-                               reinterpret_cast<const T *>(qkv_input),
-                               cos_emb,
-                               sin_emb,
-                               batch_id_per_token,
-                               cu_seqlens_q,
-                               seq_lens,
-                               seq_lens_decoder,
-                               qkv_out,
-                               elem_nums,
-                               head_num,
-                               seq_len,
-                               dim_head,
-                               rope_3d);
+      launchWithPdlWhenEnabled(
+          NeoxVariableLengthRotaryKernel<T, PackSize, EnforceFmulRN>,
+          grid_size,
+          blocksize,
+          0,
+          stream,
+          reinterpret_cast<const T *>(qkv_input),
+          cos_emb,
+          sin_emb,
+          batch_id_per_token,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_decoder,
+          qkv_out,
+          elem_nums,
+          head_num,
+          seq_len,
+          dim_head,
+          rope_3d);
     }
   }
 }
 
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void gqa_rotary_qk_norm_variable(
     T *qkv_out,                   // [token_num, 3, num_head, dim_head]
     const QKV_TYPE *qkv_input,    // qkv
@@ -2362,31 +2395,32 @@ void gqa_rotary_qk_norm_variable(
 
   const float *cos_emb = rotary_emb;
   const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
-  launchWithPdlWhenEnabled(GQAVariableLengthRotaryQKNormKernel<T, PackSize>,
-                           grid_size,
-                           Block_Size,
-                           0,
-                           stream,
-                           reinterpret_cast<const T *>(qkv_input),
-                           cos_emb,
-                           sin_emb,
-                           batch_id_per_token,
-                           cu_seqlens_q,
-                           seq_lens,
-                           seq_lens_decoder,
-                           qkv_out,
-                           elem_nums,
-                           num_heads,
-                           kv_num_heads,
-                           seq_len,
-                           dim_head,
-                           rope_3d,
-                           q_norm_weight,
-                           k_norm_weight,
-                           rms_norm_eps);
+  launchWithPdlWhenEnabled(
+      GQAVariableLengthRotaryQKNormKernel<T, PackSize, EnforceFmulRN>,
+      grid_size,
+      Block_Size,
+      0,
+      stream,
+      reinterpret_cast<const T *>(qkv_input),
+      cos_emb,
+      sin_emb,
+      batch_id_per_token,
+      cu_seqlens_q,
+      seq_lens,
+      seq_lens_decoder,
+      qkv_out,
+      elem_nums,
+      num_heads,
+      kv_num_heads,
+      seq_len,
+      dim_head,
+      rope_3d,
+      q_norm_weight,
+      k_norm_weight,
+      rms_norm_eps);
 }
 
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void gqa_rotary_qk_variable(
     T *qkv_out,                   // [token_num, 3, num_head, dim_head]
     const QKV_TYPE *qkv_input,    // qkv
@@ -2425,29 +2459,31 @@ void gqa_rotary_qk_variable(
     const float *cos_emb = rotary_emb;
     const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
     if (qkv_out_scales) {
-      launchWithPdlWhenEnabled(IntGQAVariableLengthRotaryKernel<T, PackSize>,
-                               grid_size,
-                               blocksize,
-                               0,
-                               stream,
-                               reinterpret_cast<const int *>(qkv_input),
-                               cos_emb,
-                               sin_emb,
-                               batch_id_per_token,
-                               cu_seqlens_q,
-                               seq_lens,
-                               seq_lens_decoder,
-                               qkv_out_scales,
-                               qkv_bias,
-                               qkv_out,
-                               elem_nums,
-                               num_heads,
-                               kv_num_heads,
-                               seq_len,
-                               dim_head,
-                               rope_3d);
+      launchWithPdlWhenEnabled(
+          IntGQAVariableLengthRotaryKernel<T, PackSize, EnforceFmulRN>,
+          grid_size,
+          blocksize,
+          0,
+          stream,
+          reinterpret_cast<const int *>(qkv_input),
+          cos_emb,
+          sin_emb,
+          batch_id_per_token,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_decoder,
+          qkv_out_scales,
+          qkv_bias,
+          qkv_out,
+          elem_nums,
+          num_heads,
+          kv_num_heads,
+          seq_len,
+          dim_head,
+          rope_3d);
     } else {
-      auto *kernelFn = GQAVariableLengthRotaryKernel<T, PackSize>;
+      auto *kernelFn =
+          GQAVariableLengthRotaryKernel<T, PackSize, EnforceFmulRN>;
       launchWithPdlWhenEnabled(kernelFn,
                                grid_size,
                                blocksize,
@@ -2473,7 +2509,7 @@ void gqa_rotary_qk_variable(
     const float *sin_emb = rotary_emb + input_output_len * dim_head;
     if (qkv_out_scales) {
       launchWithPdlWhenEnabled(
-          IntGQANeoxVariableLengthRotaryKernel<T, PackSize>,
+          IntGQANeoxVariableLengthRotaryKernel<T, PackSize, EnforceFmulRN>,
           grid_size,
           blocksize,
           0,
@@ -2507,7 +2543,10 @@ void gqa_rotary_qk_variable(
         }
         const int pack_num_new = elem_nums / PackSize;
         GetNumBlocks<128>(pack_num_new, &grid_size);
-        auto *kernelFn = GQANeoxVariableLengthPartialRotaryKernel<T, PackSize>;
+        auto *kernelFn =
+            GQANeoxVariableLengthPartialRotaryKernel<T,
+                                                     PackSize,
+                                                     EnforceFmulRN>;
         launchWithPdlWhenEnabled(kernelFn,
                                  grid_size,
                                  blocksize,
@@ -2531,7 +2570,8 @@ void gqa_rotary_qk_variable(
                                  rotary_dim,
                                  rope_3d);
       } else {
-        auto *kernelFn = GQANeoxVariableLengthRotaryKernel<T, PackSize>;
+        auto *kernelFn =
+            GQANeoxVariableLengthRotaryKernel<T, PackSize, EnforceFmulRN>;
         launchWithPdlWhenEnabled(kernelFn,
                                  grid_size,
                                  blocksize,
@@ -2558,7 +2598,7 @@ void gqa_rotary_qk_variable(
   }
 }
 
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void gqa_rotary_qk_quant_variable(
     T *qkv_out,                   // [token_num, 3, num_head, dim_head]
     const QKV_TYPE *qkv_input,    // qkv
@@ -2595,7 +2635,7 @@ void gqa_rotary_qk_quant_variable(
   if (!use_neox_style) {
     if (qkv_out_scales) {
       launchWithPdlWhenEnabled(
-          IntGQAVariableLengthRotaryQuantKVKernel<T, PackSize>,
+          IntGQAVariableLengthRotaryQuantKVKernel<T, PackSize, EnforceFmulRN>,
           grid_size,
           blocksize,
           0,
@@ -2620,7 +2660,7 @@ void gqa_rotary_qk_quant_variable(
           rope_3d);
     } else {
       launchWithPdlWhenEnabled(
-          GQAVariableLengthRotaryQuantKVKernel<T, PackSize>,
+          GQAVariableLengthRotaryQuantKVKernel<T, PackSize, EnforceFmulRN>,
           grid_size,
           blocksize,
           0,

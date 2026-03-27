@@ -5,8 +5,7 @@
 // TODO()
 // #include "xpu/quant_xpu.h"
 // #include "xpu_plugin.h"
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 #define MAX_SM_SIZE 32768
 // One core has 32KB LM（group LM), MAX_LM_SIZE = (32 - 4)KB / 2 = 30720, 4KB is
 // the stack space
@@ -1065,5 +1064,4 @@ _XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(float, float, int8_t, 64);
 _XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(float16, float, int8_t, 128);
 _XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(bfloat16, float, int8_t, 128);
 _XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(float, float, int8_t, 128);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

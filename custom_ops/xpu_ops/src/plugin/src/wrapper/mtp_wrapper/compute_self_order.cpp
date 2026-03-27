@@ -15,8 +15,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 __attribute__((global)) void ComputeSelfOrderKernel(
     const int* last_seq_lens_this_time,
     const int* seq_lens_this_time,
@@ -24,15 +23,12 @@ __attribute__((global)) void ComputeSelfOrderKernel(
     int* src_map,
     int* output_token_num,
     int bsz);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        const int* last_seq_lens_this_time,
                        const int* seq_lens_this_time,
                        const int64_t* step_idx,
@@ -68,27 +64,26 @@ static int cpu_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         const int* last_seq_lens_this_time,
                         const int* seq_lens_this_time,
                         const int64_t* step_idx,
                         int* src_map,
                         int* output_token_num,
                         int bsz) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  int32_t ret_xre =
-      xpu3::plugin::ComputeSelfOrderKernel<<<1, 1, ctx->xpu_stream>>>(
-          last_seq_lens_this_time,
-          seq_lens_this_time,
-          reinterpret_cast<const XPU_INT64*>(step_idx),
-          src_map,
-          output_token_num,
-          bsz);
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  int32_t ret_xre = fd_xpu3::ComputeSelfOrderKernel<<<1, 1, ctx->xpu_stream>>>(
+      last_seq_lens_this_time,
+      seq_lens_this_time,
+      reinterpret_cast<const XPU_INT64*>(step_idx),
+      src_map,
+      output_token_num,
+      bsz);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
 
-int compute_self_order(Context* ctx,
+int compute_self_order(api::Context* ctx,
                        const int* last_seq_lens_this_time,
                        const int* seq_lens_this_time,
                        const int64_t* step_idx,
@@ -130,6 +125,4 @@ int compute_self_order(Context* ctx,
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

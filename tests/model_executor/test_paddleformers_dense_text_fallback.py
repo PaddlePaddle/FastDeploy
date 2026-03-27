@@ -58,7 +58,7 @@ class MockPretrainedConfig:
 
 
 class MockLinearLayer(paddle.nn.Layer):
-    """Mock for ColumnParallelLinear/RowParallelLinear to avoid Fleet."""
+    """Mock for TP linear layers in fallback tests to avoid Fleet initialization."""
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -100,6 +100,9 @@ def mock_distributed_layers(monkeypatch):
     # Mock on base module (where the imports are used)
     monkeypatch.setattr("fastdeploy.model_executor.models.paddleformers.base.ColumnParallelLinear", MockLinearLayer)
     monkeypatch.setattr("fastdeploy.model_executor.models.paddleformers.base.RowParallelLinear", MockLinearLayer)
+    monkeypatch.setattr(
+        "fastdeploy.model_executor.models.paddleformers.base.PaddleFormersQKVParallelLinear", MockLinearLayer
+    )
     monkeypatch.setattr(
         "fastdeploy.model_executor.models.paddleformers.base.MergedColumnParallelLinear", MockLinearLayer
     )
