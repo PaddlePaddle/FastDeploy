@@ -1222,8 +1222,9 @@ __global__ void append_write_cache_kv_c8_qkv(
   const uint32_t start_token_idx = cu_seqlens_q[batch_id];
   const uint32_t kv_batch_stride = (num_heads + 2 * kv_num_heads) * HEAD_DIM;
   const uint32_t kv_h_stride = HEAD_DIM;
-  __shared__ T k_smem_ori[num_rows_per_block * HEAD_DIM];
-  __shared__ T v_smem_ori[num_rows_per_block * HEAD_DIM];
+  extern __shared__ char dyn_smem_buf_c8_qkv[];
+  T *k_smem_ori = reinterpret_cast<T *>(dyn_smem_buf_c8_qkv);
+  T *v_smem_ori = k_smem_ori + num_rows_per_block * HEAD_DIM;
   if (tile_start >= start_len) {
     constexpr int KV_VEC_SIZE = 16 / sizeof(uint8_t);  // 16
     using LoadPadKVT = AlignedVector<uint8_t, KV_VEC_SIZE>;
@@ -1497,9 +1498,10 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
   const uint32_t start_token_idx = cu_seqlens_q[batch_id];
   const uint32_t kv_batch_stride = (num_heads + 2 * kv_num_heads) * HEAD_DIM;
   const uint32_t kv_h_stride = HEAD_DIM;
-  __shared__ T k_smem_ori[num_rows_per_block * HEAD_DIM];
-  __shared__ T v_smem_ori[num_rows_per_block * HEAD_DIM];
-  __shared__ T v_scale_smem[BLOCK_SIZE];
+  extern __shared__ char dyn_smem_buf_c8_dyn[];
+  T *k_smem_ori = reinterpret_cast<T *>(dyn_smem_buf_c8_dyn);
+  T *v_smem_ori = k_smem_ori + num_rows_per_block * HEAD_DIM;
+  T *v_scale_smem = v_smem_ori + num_rows_per_block * HEAD_DIM;
   if (tile_start >= start_len) {
     constexpr int KV_VEC_SIZE = 16 / sizeof(uint8_t);  // 16
     using LoadPadKVT = AlignedVector<uint8_t, KV_VEC_SIZE>;
@@ -1955,12 +1957,13 @@ __global__ void append_write_cache_kv_c4_qkv(
     }
   }
 
-  __shared__ T k_smem_ori[num_rows_per_block * HEAD_DIM];
-  __shared__ T v_smem_ori[num_rows_per_block * HEAD_DIM];
-  __shared__ T k_scale_smem[HEAD_DIM];
-  __shared__ T v_scale_smem[HEAD_DIM];
-  __shared__ T k_zero_point_smem[HEAD_DIM];
-  __shared__ T v_zero_point_smem[HEAD_DIM];
+  extern __shared__ char dyn_smem_buf_c4[];
+  T *k_smem_ori = reinterpret_cast<T *>(dyn_smem_buf_c4);
+  T *v_smem_ori = k_smem_ori + num_rows_per_block * HEAD_DIM;
+  T *k_scale_smem = v_smem_ori + num_rows_per_block * HEAD_DIM;
+  T *v_scale_smem = k_scale_smem + HEAD_DIM;
+  T *k_zero_point_smem = v_scale_smem + HEAD_DIM;
+  T *v_zero_point_smem = k_zero_point_smem + HEAD_DIM;
   const T *cache_k_scale_now = cache_k_scales + kv_head_idx * HEAD_DIM;
   const T *cache_k_zp_now = cache_k_zero_points + kv_head_idx * HEAD_DIM;
   const T *cache_v_scale_now = cache_v_scales + kv_head_idx * HEAD_DIM;
@@ -2774,7 +2777,7 @@ void CascadeAppendWriteCacheKVC8QKV(
     launchWithPdlWhenEnabled(kernel_fn,
                              grids,
                              blocks,
-                             0,
+                             smem_size,
                              stream,
                              cache_k_out->data<uint8_t>(),
                              cache_v_out->data<uint8_t>(),
@@ -2801,13 +2804,14 @@ void CascadeAppendWriteCacheKVC8QKV(
                                                           num_warps,
                                                           true,
                                                           true>;
+    const uint32_t smem_size_dynamic = smem_size + BLOCK_SIZE * sizeof(T);
     cudaFuncSetAttribute(
-        kernel_fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
+        kernel_fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size_dynamic);
     launchWithPdlWhenEnabled(
         kernel_fn,
         grids,
         blocks,
-        0,
+        smem_size_dynamic,
         stream,
         cache_k_out->data<uint8_t>(),
         cache_v_out->data<uint8_t>(),
@@ -2883,7 +2887,7 @@ void CascadeAppendWriteCacheKVC4QKV(
   launchWithPdlWhenEnabled(kernel_fn,
                            grids,
                            blocks,
-                           0,
+                           smem_size,
                            stream,
                            cache_k_out->data<uint8_t>(),
                            cache_v_out->data<uint8_t>(),

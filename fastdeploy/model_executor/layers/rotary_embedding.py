@@ -100,15 +100,64 @@ class GlmRotaryEmbedding:
 
 
 class QwenRotaryEmbedding:
-    def __init__(self, rotary_dim, base, partial_rotary_factor):
+    def __init__(self, rotary_dim, base, partial_rotary_factor, mrope_section=None):
         """
         Pre-calculate rotary position embedding for position_ids.
         """
         self.rotary_dim = rotary_dim
         self.base = base
         self.partial_rotary_factor = partial_rotary_factor
+        if partial_rotary_factor < 1.0:
+            self.rotary_dim = int(self.rotary_dim * partial_rotary_factor)
+        self.mrope_section = mrope_section
+
+    def apply_interleaved_mrope(self, freqs):
+        """Apply interleaved MRoPE to 3D rotary embeddings.
+        Reorganizes frequency layout from chunked [TTT...HHH...WWW] to
+        interleaved [THWTHWTHW...TT], preserving frequency continuity.
+
+        Args:
+            freqs: (3, bsz, seq_len, rotary_dim // 2)
+
+        Returns:
+            freqs_t: (bsz, seq_len, rotary_dim // 2)
+        """
+        assert sum(self.mrope_section) == self.rotary_dim // 2, (
+            f"mrope_section sum {sum(self.mrope_section)} must equal rotary_dim//2 {self.rotary_dim // 2}"
+        )
+        freqs_t = freqs[0].clone()  # start from T dimension, overwrite H/W positions in-place
+        for dim, offset in enumerate((1, 2), start=1):  # H, W
+            length = self.mrope_section[dim] * 3
+            idx = slice(offset, length, 3)
+            freqs_t[..., idx] = freqs[dim, ..., idx]
+        return freqs_t
 
     def __call__(self, position_ids):
+        # support mrope for qwen3.5 model
+        # mrope: position_ids shape is (3, bsz, seq_len) or (bsz, seq_len) when mrope_section is set
+        if self.mrope_section is not None:
+            if position_ids.ndim == 2:
+                position_ids = position_ids[None, :, :].expand((3, position_ids.shape[0], -1))
+            num_sections, bsz, max_seq_len = position_ids.shape
+            rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
+            inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+
+            # freqs: (3, bsz, seq_len, rotary_dim // 2)
+            freqs = paddle.einsum("nij,k->nijk", position_ids.cast("float32"), inv_freq)
+
+            # apply interleaved mrope: (3, bsz, seq_len, rotary_dim // 2) -> (bsz, seq_len, rotary_dim // 2)
+            freqs = self.apply_interleaved_mrope(freqs)
+
+            if current_platform.is_gcu():
+                rot_emb = paddle.concat([freqs.cos(), freqs.sin()], axis=-1)
+                return rot_emb
+
+            # shape: [B, S, 1, D]
+            emb = paddle.concat([freqs, freqs], axis=-1).reshape((bsz, max_seq_len, 1, self.rotary_dim))
+            rot_emb[0] = paddle.cos(emb)
+            rot_emb[1] = paddle.sin(emb)
+            return rot_emb
+
         bsz, max_seq_len = position_ids.shape[:2]
         rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
         inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
@@ -331,7 +380,9 @@ def get_rope_impl(
 
     architecture = model_config.architectures[0]
     if architecture.startswith("Qwen"):
-        rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+        rope_parameters = getattr(model_config, "rope_parameters", None)
+        mrope_section = rope_parameters.get("mrope_section", None) if isinstance(rope_parameters, dict) else None
+        rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor, mrope_section=mrope_section)
         rotary_emb = rotary_emb_layer(position_ids)
     elif architecture.startswith("Glm"):
         rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
