@@ -26,7 +26,7 @@ import numpy as np
 
 import fastdeploy.envs as envs
 import fastdeploy.metrics.trace as tracing
-from fastdeploy.engine.request import Request, RequestOutput
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -145,10 +145,7 @@ class OpenAIServingChat:
             prompt_tokens = None
             max_tokens = None
             try:
-                if not envs.ENABLE_V1_DATA_PROCESSOR:
-                    current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
-                else:
-                    current_req_dict = Request.from_generic_request(request, request_id=f"{request_id}_0")
+                current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["metrics"]["arrival_time"] = time.time()
