@@ -184,12 +184,6 @@ class EngineArgs:
     """
     Flags to enable multi-modal model
     """
-    skip_mm_profiling: bool = False
-    """
-    Skip multimodal token overhead when calculating max chunk tokens for profiling.
-    When enabled, get_max_chunk_tokens will not add extra mm tokens,
-    which avoids reserving extra GPU memory for multimodal inputs during profiling.
-    """
     speculative_config: Optional[Dict[str, Any]] = None
     """
     Configuration for speculative execution.
@@ -803,12 +797,6 @@ class EngineArgs:
             action=DeprecatedOptionWarning,
             default=EngineArgs.enable_mm,
             help="Flag to enable multi-modal model.",
-        )
-        model_group.add_argument(
-            "--skip-mm-profiling",
-            action="store_true",
-            default=EngineArgs.skip_mm_profiling,
-            help="Skip multimodal token overhead when calculating max chunk tokens for profiling.",
         )
         model_group.add_argument(
             "--reasoning-parser",

@@ -233,7 +233,6 @@ class ModelConfig:
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
         self.mm_max_tokens_per_item = None
-        self.skip_mm_profiling = False
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
@@ -2393,7 +2392,7 @@ class FDConfig:
                 num_tokens = self.scheduler_config.max_num_seqs
         else:
             num_tokens = self.scheduler_config.max_num_batched_tokens
-            if mm_max_tokens_per_item is not None and not self.model_config.skip_mm_profiling:
+            if mm_max_tokens_per_item is not None and self.deploy_modality != DeployModality.TEXT:
                 max_mm_tokens = max(
                     mm_max_tokens_per_item.get("image", 0),
                     mm_max_tokens_per_item.get("video", 0),
