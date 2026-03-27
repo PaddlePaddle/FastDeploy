@@ -18,8 +18,6 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from collections.abc import Mapping
 
-from paddleformers.generation import GenerationConfig
-
 from fastdeploy import envs
 from fastdeploy.input.base_processor import BaseTextProcessor
 from fastdeploy.utils import data_processor_logger
@@ -242,89 +240,19 @@ class BaseDataProcessor(ABC):
 
 
 class DataProcessor(BaseTextProcessor):
+    """Legacy text processor, kept for backward compatibility.
+
+    New code should use ``TextProcessor`` instead.
+    """
+
     def __init__(self, model_name_or_path, reasoning_parser_obj=None, tool_parser_obj=None):
-        """
-            Initializes the DecodeStatus object.
-
-        Args:
-            model_name_or_path (str): The name or path of the pre-trained model to be loaded.
-                Can also be a path to a directory containing the pre-trained model file.
-
-        Returns:
-            None.
-
-        Raises:
-            None.
-        """
-
-        self.model_name_or_path = model_name_or_path
-
-        # Generation config
-        try:
-            self.generation_config = GenerationConfig.from_pretrained(self.model_name_or_path)
-        except Exception as e:
-            data_processor_logger.warning(
-                f"Can't find generation config: {e}, so it will not use generation_config field in the model config"
-            )
-            self.generation_config = None
-
-        super().__init__()
-        self.tokenizer = self._load_tokenizer()
-        data_processor_logger.info(
-            f"tokenizer information: bos_token is {self.tokenizer.bos_token}, {self.tokenizer.bos_token_id}, \
-                                eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
+        super().__init__(
+            model_name_or_path, reasoning_parser_obj=reasoning_parser_obj, tool_parser_obj=tool_parser_obj
         )
-
-        try:
-            from paddleformers.trl.llm_utils import get_eos_token_id
-        except Exception:
-            from paddleformers.cli.utils.llm_utils import get_eos_token_id
-
-        self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
-        data_processor_logger.info(
-            f"The eos_token_ids obtained by merging tokenizer and generation_config is {self.eos_token_ids}"
-        )
-        self.eos_token_id_len = len(self.eos_token_ids)
-        self.pad_token_id = self.get_pad_id()
-        self._init_parsers(reasoning_parser_obj, tool_parser_obj)
-        self.tokenizer.pad_token_id = self.pad_token_id
 
     def process_logprob_response(self, token_ids, **kwargs):
         full_text = self.tokenizer.decode(token_ids, **kwargs)
         return full_text
-
-    def text2ids(self, text, max_model_len, **kwargs):
-        """
-        text to token ids
-
-        Args:
-            text (str): text
-
-        Returns:
-            List[int]: token ids list
-        """
-
-        add_special_tokens = kwargs.get("add_special_tokens", False)
-        if envs.FD_USE_HF_TOKENIZER:
-            tokens = self.tokenizer(
-                text,
-                return_tensors="np",
-                padding=True,
-                truncation=True,
-            )
-        else:
-            text = [text] if isinstance(text, str) else text
-
-            tokens = self.tokenizer(
-                text,
-                return_tensors="np",
-                padding=True,
-                truncation=True,
-                max_length=max_model_len,
-                add_special_tokens=add_special_tokens,
-            )
-
-        return tokens["input_ids"][0]
 
     def _load_tokenizer(self):
         """
@@ -363,43 +291,7 @@ class TextProcessor(BaseTextProcessor):
         reasoning_parser_obj=None,
         tool_parser_obj=None,
     ):
-        self.model_name_or_path = model_name_or_path
-        self.tokenizer_type = tokenizer_type
-
-        # Generation config — both types use the same API
-        try:
-            self.generation_config = GenerationConfig.from_pretrained(self.model_name_or_path)
-        except Exception as e:
-            data_processor_logger.warning(
-                f"Can't find generation config: {e}, so it will not use generation_config field in the model config"
-            )
-            self.generation_config = None
-
-        # Response-handling state — delegated to BaseTextProcessor.__init__
-        super().__init__()
-
-        # Tokenizer
-        self.tokenizer = self._load_tokenizer()
-        data_processor_logger.info(
-            f"tokenizer information: bos_token is {self.tokenizer.bos_token}, "
-            f"{self.tokenizer.bos_token_id}, "
-            f"eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id}"
-        )
-
-        # EOS tokens — both types use the same paddleformers utility
-        try:
-            from paddleformers.trl.llm_utils import get_eos_token_id
-        except Exception:
-            from paddleformers.cli.utils.llm_utils import get_eos_token_id
-
-        self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
-        data_processor_logger.info(
-            f"The eos_token_ids obtained by merging tokenizer and generation_config is {self.eos_token_ids}"
-        )
-        self.eos_token_id_len = len(self.eos_token_ids)
-        self.pad_token_id = self.get_pad_id()
-        self.tokenizer.pad_token_id = self.pad_token_id
-        self._init_parsers(reasoning_parser_obj, tool_parser_obj)
+        super().__init__(model_name_or_path, tokenizer_type, reasoning_parser_obj, tool_parser_obj)
 
     # ------------------------------------------------------------------
     # Abstract method implementations
@@ -435,21 +327,7 @@ class TextProcessor(BaseTextProcessor):
     def text2ids(self, text, max_model_len=None, **kwargs):
         if self.tokenizer_type == "ernie4_5":
             return self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(text))
-        # auto path
-        add_special_tokens = kwargs.get("add_special_tokens", False)
-        if envs.FD_USE_HF_TOKENIZER:
-            tokens = self.tokenizer(text, return_tensors="np", padding=True, truncation=True)
-        else:
-            text_input = [text] if isinstance(text, str) else text
-            tokens = self.tokenizer(
-                text_input,
-                return_tensors="np",
-                padding=True,
-                truncation=True,
-                max_length=max_model_len,
-                add_special_tokens=add_special_tokens,
-            )
-        return tokens["input_ids"][0]
+        return super().text2ids(text, max_model_len, **kwargs)
 
     def process_logprob_response(self, token_ids, **kwargs):
         return self.tokenizer.decode(token_ids, **kwargs)

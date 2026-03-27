@@ -50,6 +50,7 @@ from collections import OrderedDict
 from typing import Dict
 
 import numpy as np
+from paddleformers.generation import GenerationConfig
 from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 
 from fastdeploy import envs
@@ -62,20 +63,55 @@ _SAMPLING_EPS = 1e-5
 class BaseTextProcessor(ABC):
     """Abstract base class shared by all text / VL processors.
 
-    Only the response-processing state is initialised here.  Tokeniser
-    attributes (``tokenizer``, ``eos_token_ids``, ``reasoning_parser``,
-    ``tool_parser_obj``) must be set by the concrete subclass before any
-    response-processing method is called.
+    Handles the full initialisation sequence: generation config, tokeniser
+    loading (via the abstract ``_load_tokenizer`` hook), EOS / pad token
+    setup, and parser initialisation.  Concrete subclasses only need to
+    implement ``_load_tokenizer`` and ``text2ids``.
     """
 
-    def __init__(self):
-        # Response-handling state only – no tokeniser references.
+    def __init__(self, model_name_or_path, tokenizer_type="auto", reasoning_parser_obj=None, tool_parser_obj=None):
+        self.model_name_or_path = model_name_or_path
+        self.tokenizer_type = tokenizer_type
+
+        # Response-handling state.
         self.decode_status: Dict[str, list] = {}
         self.model_status_dict: Dict[str, dict] = {}
         self.tool_parser_dict: Dict = {}
         # Token-encode cache shared by all subclasses.
         self._tokenize_cache: OrderedDict = OrderedDict()
         self._tokenize_cache_capacity: int = 128
+
+        # Generation config
+        try:
+            self.generation_config = GenerationConfig.from_pretrained(self.model_name_or_path)
+        except Exception as e:
+            data_processor_logger.warning(
+                f"Can't find generation config: {e}, so it will not use generation_config field in the model config"
+            )
+            self.generation_config = None
+
+        # Tokenizer (delegated to concrete subclass via @abstractmethod)
+        self.tokenizer = self._load_tokenizer()
+        data_processor_logger.info(
+            f"tokenizer information: bos_token is {self.tokenizer.bos_token}, "
+            f"{self.tokenizer.bos_token_id}, "
+            f"eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id}"
+        )
+
+        # EOS tokens
+        try:
+            from paddleformers.trl.llm_utils import get_eos_token_id
+        except Exception:
+            from paddleformers.cli.utils.llm_utils import get_eos_token_id
+
+        self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
+        data_processor_logger.info(
+            f"The eos_token_ids obtained by merging tokenizer and generation_config is {self.eos_token_ids}"
+        )
+        self.eos_token_id_len = len(self.eos_token_ids)
+        self.pad_token_id = self.get_pad_id()
+        self.tokenizer.pad_token_id = self.pad_token_id
+        self._init_parsers(reasoning_parser_obj, tool_parser_obj)
 
     # ------------------------------------------------------------------
     # Abstract interface
@@ -84,8 +120,26 @@ class BaseTextProcessor(ABC):
     @abstractmethod
     def _load_tokenizer(self): ...  # noqa: E704
 
-    @abstractmethod
-    def text2ids(self, text, max_model_len=None, **kwargs): ...  # noqa: E704
+    def text2ids(self, text, max_model_len=None, **kwargs):
+        """Convert text to token IDs (auto tokenizer path).
+
+        Subclasses with non-standard tokenizers (e.g. ernie4_5, multimodal)
+        should override this method.
+        """
+        add_special_tokens = kwargs.get("add_special_tokens", False)
+        if envs.FD_USE_HF_TOKENIZER:
+            tokens = self.tokenizer(text, return_tensors="np", padding=True, truncation=True)
+        else:
+            text_input = [text] if isinstance(text, str) else text
+            tokens = self.tokenizer(
+                text_input,
+                return_tensors="np",
+                padding=True,
+                truncation=True,
+                max_length=max_model_len,
+                add_special_tokens=add_special_tokens,
+            )
+        return tokens["input_ids"][0]
 
     def messages2ids(self, request, **kwargs):
         """Convert a chat-template request into a token-ID list.
@@ -96,7 +150,7 @@ class BaseTextProcessor(ABC):
         """
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat_template.")
-        if getattr(self, "tokenizer_type", "auto") != "ernie4_5":
+        if self.tokenizer_type != "ernie4_5":
             if "add_generation_prompt" not in kwargs:
                 kwargs["add_generation_prompt"] = request.get("add_generation_prompt", True)
         spliced_message = self.tokenizer.apply_chat_template(
