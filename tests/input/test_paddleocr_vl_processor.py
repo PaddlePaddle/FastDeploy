@@ -30,7 +30,7 @@ from fastdeploy.input.paddleocr_vl_processor.paddleocr_vl_processor import (
     PaddleOCRVLProcessor,
 )
 from fastdeploy.input.paddleocr_vl_processor.process import DataProcessor
-from fastdeploy.input.paddleocr_vl_processor.process_video import sample_frames
+from fastdeploy.input.video_utils import sample_frames_paddleocr as sample_frames
 
 MODULE_PATH = "fastdeploy.input.paddleocr_vl_processor.process"
 
@@ -86,7 +86,7 @@ class TestProcessVideo(unittest.TestCase):
 
     def test_error_fps_without_metadata(self):
         """新增：测试 fps > 0 但 metadata 为 None"""
-        with self.assertRaises(TypeError) as context:
+        with self.assertRaises(ValueError) as context:
             sample_frames(
                 frame_factor=self.frame_factor,
                 min_frames=self.min_frames,
@@ -95,8 +95,7 @@ class TestProcessVideo(unittest.TestCase):
                 fps=10,
                 metadata=None,  # 缺失
             )
-        # 验证是预期的 TypeError
-        self.assertIn("'NoneType' object is not subscriptable", str(context.exception))
+        self.assertIn("metadata is required", str(context.exception))
 
     def test_num_frames_rounding(self):
         """新增：测试 num_frames 向 frame_factor 舍入"""
