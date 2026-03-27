@@ -25,6 +25,7 @@ import fastdeploy
 
 def block_wise_cuda_graph_wrap(
     inputs: Sequence[str],
+    self_attrs: Sequence[str] = (),
     key_fn: Optional[Callable[..., tuple]] = None,
 ):
     """
@@ -34,19 +35,39 @@ def block_wise_cuda_graph_wrap(
     the decorated method is captured into a CUDA Graph. Subsequent calls with the
     same key will replay the graph after updating input data pointers.
 
+    When ``self_attrs`` is provided, the named tensor attributes of ``self``
+    (e.g. ``weight``) are also tracked for pointer replacement, and the graph
+    cache is **shared across all instances** (closure-level). This allows layers
+    with identical computation but different weights to share a single captured
+    graph, dramatically reducing the total number of graphs from O(num_layers)
+    to O(num_unique_shapes).
+
+    When ``self_attrs`` is empty (default), graphs are cached per instance.
+
+    Output tensors from the capture phase are reused across replays — the graph
+    always writes to the same output memory. This avoids per-replay allocation
+    overhead. Callers must consume the output before the next replay of the same
+    graph (which is naturally satisfied in sequential layer-by-layer forward).
+
     Args:
         inputs: Names of parameters that are input tensors to be tracked for
             CUDA Graph pointer replacement. These must be parameter names of the
             decorated method. Only non-None tensor arguments are tracked.
+        self_attrs: Attribute names on ``self`` that are tensor parameters to be
+            replaced via pointer replacement (e.g. ``["weight"]``). When non-empty,
+            enables cross-instance graph sharing.
         key_fn: Optional callable to generate the cache key from method arguments.
             Signature: key_fn(arg0, arg1, ...) with args in declaration order
             (excluding self). Defaults to a key based on tensor shapes/dtypes.
 
     Example:
-        class MyLayer(nn.Layer):
-            @cuda_graph_wrap(inputs=["x", "residual"])
+        class MyNorm(nn.Layer):
+            @block_wise_cuda_graph_wrap(
+                inputs=["x", "residual"],
+                self_attrs=["weight"],  # all layers share one graph
+            )
             def forward(self, x, residual=None):
-                return some_op(x, residual)
+                return rms_norm(x, self.weight), residual
     """
 
     def decorator(method: Callable) -> Callable:
@@ -72,12 +93,23 @@ def block_wise_cuda_graph_wrap(
         # For each declared input tensor: (name, args_index)
         _input_info = tuple((name, params.index(name) - 1) for name in inputs)
 
-        # Instance attribute names (short to save getattr overhead)
+        _self_attr_names = tuple(self_attrs)
+        _shared = len(_self_attr_names) > 0
+
+        _use_custom_key = key_fn is not None
+
+        # --- Cache storage ---
+        # When self_attrs is provided: closure-level (shared across all instances)
+        # When not: per-instance (stored in self.__dict__)
+        if _shared:
+            _shared_graphs = {}
+            _shared_cinputs = {}
+            _shared_coutputs = {}  # stores actual result tensors (reused across replays)
+
+        # Per-instance attribute key names
         _g = f"_cg_{method.__name__}_g"
         _ci = f"_cg_{method.__name__}_ci"
         _co = f"_cg_{method.__name__}_co"
-
-        _use_custom_key = key_fn is not None
 
         @functools.wraps(method)
         def wrapper(self, *args, **kwargs):
@@ -124,21 +156,33 @@ def block_wise_cuda_graph_wrap(
                         _kp.append(None)
                     elif callable(v):
                         _kp.append(True)
+                # Include self_attrs shapes/dtypes in key
+                for attr_name in _self_attr_names:
+                    attr = getattr(self, attr_name, None)
+                    if attr is not None and isinstance(attr, _Tensor):
+                        _kp.append((attr_name, tuple(attr.shape), attr.dtype))
+                    else:
+                        _kp.append((attr_name, None))
                 key = tuple(_kp)
 
-            # === Lazy init via __dict__ (bypass nn.Layer.__getattr__) ===
-            _d = self.__dict__
-            try:
-                graphs = _d[_g]
-                cinputs = _d[_ci]
-                coutputs = _d[_co]
-            except KeyError:
-                graphs = {}
-                cinputs = {}
-                coutputs = {}
-                _d[_g] = graphs
-                _d[_ci] = cinputs
-                _d[_co] = coutputs
+            # === Get cache (shared or per-instance) ===
+            if _shared:
+                graphs = _shared_graphs
+                cinputs = _shared_cinputs
+                coutputs = _shared_coutputs
+            else:
+                _d = self.__dict__
+                try:
+                    graphs = _d[_g]
+                    cinputs = _d[_ci]
+                    coutputs = _d[_co]
+                except KeyError:
+                    graphs = {}
+                    cinputs = {}
+                    coutputs = {}
+                    _d[_g] = graphs
+                    _d[_ci] = cinputs
+                    _d[_co] = coutputs
 
             if key not in graphs:
                 # === First encounter: capture ===
@@ -149,7 +193,14 @@ def block_wise_cuda_graph_wrap(
                 for name, aidx in _input_info:
                     v = kwargs[name] if name in kwargs else (args[aidx] if aidx < nargs else None)
                     if v is not None and isinstance(v, _Tensor):
-                        ci[name] = v
+                        ci[name] = v.data_ptr()
+
+                # Record self_attrs pointers for cross-instance replacement
+                for attr_name in _self_attr_names:
+                    attr = getattr(self, attr_name, None)
+                    if attr is not None and isinstance(attr, _Tensor):
+                        ci[f"__attr_{attr_name}"] = attr.data_ptr()
+
                 cinputs[key] = ci
 
                 graph.capture_begin()
@@ -158,6 +209,8 @@ def block_wise_cuda_graph_wrap(
 
                 graph.replay()
 
+                # Store the actual result for reuse. The graph always writes to
+                # the same output memory, so we return the same tensors on replay.
                 coutputs[key] = result
                 return result
             else:
@@ -169,14 +222,28 @@ def block_wise_cuda_graph_wrap(
                 for name, aidx in _input_info:
                     v = kwargs[name] if name in kwargs else (args[aidx] if aidx < nargs else None)
                     if v is not None and name in ci:
-                        old_ptrs.append(ci[name].data_ptr())
-                        new_ptrs.append(v.data_ptr())
-                        ci[name] = v
+                        old_ptrs.append(ci[name])
+                        new_ptr = v.data_ptr()
+                        new_ptrs.append(new_ptr)
+                        ci[name] = new_ptr
+
+                # Replace self_attrs pointers (e.g. weight)
+                for attr_name in _self_attr_names:
+                    attr_key = f"__attr_{attr_name}"
+                    if attr_key in ci:
+                        attr = getattr(self, attr_name, None)
+                        if attr is not None:
+                            old_ptrs.append(ci[attr_key])
+                            new_ptr = attr.data_ptr()
+                            new_ptrs.append(new_ptr)
+                            ci[attr_key] = new_ptr
 
                 if old_ptrs:
                     graphs[key].replace_input_ptrs(old_ptrs, new_ptrs)
                 graphs[key].replay()
 
+                # Reuse the output tensors from capture — graph wrote fresh
+                # data to the same memory, no allocation needed.
                 return coutputs[key]
 
         return wrapper

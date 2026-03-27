@@ -206,7 +206,7 @@ class RMSNorm(nn.Layer):
         paddle.distributed.all_gather(multi_outs, out, self.tp_group)
         return multi_outs[:token_num, :]
 
-    @block_wise_cuda_graph_wrap(inputs=["x", "residual_input"])
+    @block_wise_cuda_graph_wrap(inputs=["x", "residual_input"], self_attrs=["weight"])
     def forward(
         self,
         x,
