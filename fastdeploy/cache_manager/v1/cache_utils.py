@@ -3,29 +3,34 @@ Utility classes and functions for cache management.
 """
 
 import hashlib
-import logging
 import pickle
 import threading
 import time
-from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set
 
-logger = logging.getLogger("cache_utils_debug")
+from paddleformers.utils.log import logger
 
 
 class LayerDoneCounter:
     """
-    Counter for tracking layer-by-layer transfer completion using CUDA events.
+    独立的同步原语，追踪单次传输的 layer 完成状态。
 
-    Used in CacheController to synchronize layer transfers during
-    multi-level cache operations. Each layer must complete before
-    the next layer can be processed.
+    用于计算与传输重叠（Compute-Transfer Overlap）场景：
+    - 每个 LayerDoneCounter 实例追踪一次传输任务的所有 layer 完成状态
+    - 使用 CUDA Event 实现高效等待（无轮询）
+    - 线程安全
 
-    Thread-safe implementation for use in async environments.
-    Uses CUDA events for efficient waiting (no polling).
+    Attributes:
+        _num_layers: 总 layer 数
+        _lock: 线程锁
+        _completed_layers: 已完成的 layer 集合
+        _callbacks: layer 完成回调列表
+        _cuda_events: 每个 layer 的 CUDA event
+        _layer_complete_times: layer -> 完成时间
+        _wait_count: 活跃 waiter 计数
     """
 
-    def __init__(self, num_layers: int = 0):
+    def __init__(self, num_layers: int):
         """
         Initialize the layer done counter.
 
@@ -34,51 +39,40 @@ class LayerDoneCounter:
         """
         self._num_layers = num_layers
         self._lock = threading.RLock()
-        self._completed_layers: Dict[str, Set[int]] = defaultdict(set)
-        self._callbacks: Dict[str, List[Callable[[int], None]]] = defaultdict(list)
-        self._start_times: Dict[str, float] = {}
+        self._completed_layers: Set[int] = set()
+        self._callbacks: List[Callable[[int], None]] = []
+        self._start_time: float = time.time()
 
         # ============ CUDA Events for efficient waiting (no polling) ============
-        self._cuda_events: Dict[str, List[Any]] = {}  # transfer_id -> list of events per layer
-        self._layer_complete_times: Dict[str, Dict[int, float]] = {}  # transfer_id -> {layer_idx: complete_time}
+        self._cuda_events: List[Any] = []  # list of events per layer
+        self._layer_complete_times: Dict[int, float] = {}
 
-        # ============ Reference count for active waiters (prevents premature clear) ============
-        # Tracks how many wait_for_layer calls are actively waiting for each transfer
-        self._wait_counts: Dict[str, int] = defaultdict(int)
+        # ============ Reference count for active waiters (prevents premature cleanup) ============
+        self._wait_count: int = 0
+
+        # Create CUDA events for each layer
+        try:
+            import paddle
+
+            if paddle.is_compiled_with_cuda():
+                self._cuda_events = [paddle.device.cuda.Event() for _ in range(num_layers)]
+            else:
+                self._cuda_events = [None] * num_layers
+        except Exception as e:
+            logger.warning(f"Failed to create CUDA events: {e}")
+            self._cuda_events = [None] * num_layers
 
     def get_num_layers(self) -> int:
         """Get the total number of layers."""
         return self._num_layers
 
-    def start_transfer(self, transfer_id: str) -> None:
-        """
-        Mark the start of a transfer.
+    # ============ Mark Methods (called by transfer thread) ============
 
-        Args:
-            transfer_id: Unique identifier for the transfer
-        """
-        with self._lock:
-            self._completed_layers[transfer_id] = set()
-            self._start_times[transfer_id] = time.time()
-            self._layer_complete_times[transfer_id] = {}
-
-            # Create CUDA events for each layer
-            try:
-                import paddle
-                self._cuda_events[transfer_id] = [
-                    paddle.device.cuda.Event() if paddle.is_compiled_with_cuda() else None
-                    for _ in range(self._num_layers)
-                ]
-            except Exception as e:
-                logger.warning(f"Failed to create CUDA events for transfer {transfer_id}: {e}")
-                self._cuda_events[transfer_id] = [None] * self._num_layers
-
-    def mark_layer_done(self, transfer_id: str, layer_idx: int, cuda_event: Any = None) -> bool:
+    def mark_layer_done(self, layer_idx: int, cuda_event: Any = None) -> bool:
         """
         Mark a layer as completed.
 
         Args:
-            transfer_id: Unique identifier for the transfer
             layer_idx: Index of the completed layer
             cuda_event: Optional CUDA event to record completion
 
@@ -86,282 +80,295 @@ class LayerDoneCounter:
             True if this was the last layer, False otherwise
         """
         with self._lock:
-            if transfer_id not in self._completed_layers:
-                logger.error(f"[mark_layer_done] FAILED: transfer_id={transfer_id} not in _completed_layers. Available keys: {list(self._completed_layers.keys())}")
-                return False
+            if layer_idx in self._completed_layers:
+                logger.warning(f"[mark_layer_done] layer {layer_idx} already marked done")
+                return len(self._completed_layers) >= self._num_layers
 
-            self._completed_layers[transfer_id].add(layer_idx)
-            self._layer_complete_times[transfer_id][layer_idx] = time.time()
+            self._completed_layers.add(layer_idx)
+            self._layer_complete_times[layer_idx] = time.time()
 
             # Record CUDA event if provided
-            if cuda_event is not None and transfer_id in self._cuda_events:
+            if cuda_event is not None:
                 try:
                     cuda_event.record()
                 except Exception as e:
                     logger.warning(f"Failed to record CUDA event for layer {layer_idx}: {e}")
 
             # Execute callbacks for this layer
-            for callback in self._callbacks.get(transfer_id, []):
+            for callback in self._callbacks:
                 try:
                     callback(layer_idx)
                 except Exception:
-                    pass  # Ignore callback errors
+                    pass
 
-            return len(self._completed_layers[transfer_id]) >= self._num_layers
+            return len(self._completed_layers) >= self._num_layers
 
-    def mark_all_layers_done(self, transfer_id: str, cuda_event: Any = None) -> bool:
+    def mark_all_done(self, cuda_event: Any = None) -> bool:
         """
         Mark all layers as completed at once (optimization for swap_all_layers mode).
 
         Args:
-            transfer_id: Unique identifier for the transfer
             cuda_event: Optional CUDA event to record completion
 
         Returns:
             True (always returns True since all layers are marked done)
         """
         with self._lock:
-            if transfer_id not in self._completed_layers:
-                logger.error(f"[mark_all_layers_done] FAILED: transfer_id={transfer_id} not in _completed_layers. Available keys: {list(self._completed_layers.keys())}")
-                return False
-
             now = time.time()
-            self._completed_layers[transfer_id] = set(range(self._num_layers))
-            self._layer_complete_times[transfer_id] = {i: now for i in range(self._num_layers)}
+            self._completed_layers = set(range(self._num_layers))
+            self._layer_complete_times = {i: now for i in range(self._num_layers)}
 
             # Record CUDA event if provided
-            if cuda_event is not None and transfer_id in self._cuda_events:
+            if cuda_event is not None:
                 try:
                     cuda_event.record()
                 except Exception as e:
-                    logger.warning(f"Failed to record CUDA event for transfer {transfer_id}: {e}")
+                    logger.warning(f"Failed to record CUDA event: {e}")
 
             # Execute all callbacks (call with -1 to indicate all layers done)
-            for callback in self._callbacks.get(transfer_id, []):
+            for callback in self._callbacks:
                 try:
                     callback(-1)
                 except Exception:
-                    pass  # Ignore callback errors
+                    pass
 
             return True
 
-    def is_layer_done(self, transfer_id: str, layer_idx: int) -> bool:
+    # ============ Query Methods ============
+
+    def is_layer_done(self, layer_idx: int) -> bool:
         """
         Check if a specific layer is completed.
 
         Args:
-            transfer_id: Unique identifier for the transfer
             layer_idx: Index of the layer to check
 
         Returns:
             True if the layer is completed, False otherwise
         """
         with self._lock:
-            return layer_idx in self._completed_layers.get(transfer_id, set())
+            return layer_idx in self._completed_layers
 
-    def is_transfer_complete(self, transfer_id: str) -> bool:
+    def is_all_done(self) -> bool:
         """
-        Check if all layers for a transfer are completed.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
+        Check if all layers are completed.
 
         Returns:
             True if all layers are completed, False otherwise
         """
         with self._lock:
-            if transfer_id not in self._completed_layers:
-                return False
-            return len(self._completed_layers[transfer_id]) >= self._num_layers
+            return len(self._completed_layers) >= self._num_layers
 
-    def get_completed_count(self, transfer_id: str) -> int:
+    def get_completed_count(self) -> int:
         """
-        Get the number of completed layers for a transfer.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
+        Get the number of completed layers.
 
         Returns:
             Number of completed layers
         """
         with self._lock:
-            return len(self._completed_layers.get(transfer_id, set()))
+            return len(self._completed_layers)
 
-    def get_pending_layers(self, transfer_id: str) -> List[int]:
+    def get_pending_layers(self) -> List[int]:
         """
-        Get list of pending layer indices for a transfer.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
+        Get list of pending layer indices.
 
         Returns:
             List of pending layer indices
         """
         with self._lock:
-            if transfer_id not in self._completed_layers:
-                return list(range(self._num_layers))
-            completed = self._completed_layers[transfer_id]
-            return [i for i in range(self._num_layers) if i not in completed]
+            return [i for i in range(self._num_layers) if i not in self._completed_layers]
 
-    def register_callback(self, transfer_id: str, callback: Callable[[int], None]) -> None:
+    # ============ Wait Methods (called by forward thread) ============
+
+    def wait_for_layer(self, layer_idx: int, timeout: Optional[float] = None) -> bool:
+        """
+        Wait for a specific layer to complete (CUDA Event synchronization).
+
+        Args:
+            layer_idx: Index of the layer to wait for
+            timeout: Maximum wait time in seconds (default: 300s)
+
+        Returns:
+            True if layer completed
+
+        Raises:
+            LayerSwapTimeoutError: If timeout occurs before layer completes
+        """
+        # First check if already done (fast path)
+        if self.is_layer_done(layer_idx):
+            return True
+
+        logger.debug(f"[WaitForLayer] layer={layer_idx} starting wait")
+
+        # Increment wait count to prevent premature cleanup
+        self._increment_wait_count()
+        try:
+            # Try CUDA event waiting first (most efficient)
+            cuda_event = self._cuda_events[layer_idx] if layer_idx < len(self._cuda_events) else None
+            if cuda_event is not None:
+                try:
+                    # Use CUDA event synchronization
+                    cuda_event.synchronize()
+                    # Double check after synchronize
+                    if self.is_layer_done(layer_idx):
+                        logger.debug(f"[WaitForLayer] layer={layer_idx} done via CUDA event")
+                        return True
+                except Exception as e:
+                    logger.warning(f"CUDA event sync failed for layer {layer_idx}: {e}")
+
+            # Fallback to polling wait
+            start_time = time.time()
+            default_timeout = 1.0  # 300 seconds default timeout
+            timeout = timeout if timeout is not None else default_timeout
+            while True:
+                if self.is_layer_done(layer_idx):
+                    logger.debug(f"[WaitForLayer] layer={layer_idx} done via polling")
+                    return True
+
+                if timeout is not None:
+                    elapsed = time.time() - start_time
+                    if elapsed >= timeout:
+                        logger.error(f"[WaitForLayer] layer={layer_idx} TIMEOUT after {elapsed:.2f}s")
+                        raise LayerSwapTimeoutError(f"Layer swap timeout: layer={layer_idx}, elapsed={elapsed:.2f}s")
+
+                time.sleep(0.001)  # Small sleep to avoid busy waiting
+        finally:
+            self._decrement_wait_count()
+
+    def wait_all(self, timeout: Optional[float] = None) -> bool:
+        """
+        Wait for all layers to complete (used for swap_all_layers=true mode).
+
+        Args:
+            timeout: Maximum wait time in seconds (default: 300s)
+
+        Returns:
+            True if all layers completed
+
+        Raises:
+            LayerSwapTimeoutError: If timeout occurs
+        """
+        if self.is_all_done():
+            return True
+
+        logger.debug("[wait_all] starting wait for all layers")
+
+        self._increment_wait_count()
+        try:
+            # Try CUDA event waiting first (most efficient)
+            # For wait_all, we use the last layer's event
+            if self._cuda_events:
+                last_event = self._cuda_events[-1]
+                if last_event is not None:
+                    try:
+                        last_event.synchronize()
+                        if self.is_all_done():
+                            logger.debug("[wait_all] all layers done via CUDA event")
+                            return True
+                    except Exception as e:
+                        logger.warning(f"CUDA event sync failed for wait_all: {e}")
+
+            # Fallback to polling wait
+            start_time = time.time()
+            default_timeout = 300.0
+            timeout = timeout if timeout is not None else default_timeout
+            while True:
+                if self.is_all_done():
+                    logger.debug("[wait_all] all layers done via polling")
+                    return True
+
+                if timeout is not None:
+                    elapsed = time.time() - start_time
+                    if elapsed >= timeout:
+                        logger.error(f"[wait_all] TIMEOUT after {elapsed:.2f}s")
+                        raise LayerSwapTimeoutError(f"wait_all timeout: elapsed={elapsed:.2f}s")
+
+                time.sleep(0.001)
+        finally:
+            self._decrement_wait_count()
+
+    # ============ Callback Methods ============
+
+    def register_callback(self, callback: Callable[[int], None]) -> None:
         """
         Register a callback to be called when each layer completes.
 
         Args:
-            transfer_id: Unique identifier for the transfer
             callback: Function to call with layer index when completed
         """
         with self._lock:
-            self._callbacks[transfer_id].append(callback)
+            self._callbacks.append(callback)
 
-    def increment_wait_count(self, transfer_id: str) -> None:
-        """
-        Increment the wait count for a transfer.
-        Called when wait_for_layer starts waiting.
+    # ============ Internal Helper Methods ============
 
-        Args:
-            transfer_id: Unique identifier for the transfer
-        """
+    def _increment_wait_count(self) -> None:
+        """Increment the wait count."""
         with self._lock:
-            self._wait_counts[transfer_id] += 1
-            logger.debug(f"[increment_wait_count] transfer_id={transfer_id}, count={self._wait_counts[transfer_id]}")
+            self._wait_count += 1
+            logger.debug(f"[increment_wait_count] count={self._wait_count}")
 
-    def decrement_wait_count(self, transfer_id: str) -> None:
-        """
-        Decrement the wait count for a transfer.
-        Called when wait_for_layer finishes waiting.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-        """
+    def _decrement_wait_count(self) -> None:
+        """Decrement the wait count."""
         with self._lock:
-            if self._wait_counts.get(transfer_id, 0) > 0:
-                self._wait_counts[transfer_id] -= 1
-                logger.debug(f"[decrement_wait_count] transfer_id={transfer_id}, count={self._wait_counts[transfer_id]}")
+            if self._wait_count > 0:
+                self._wait_count -= 1
+                logger.debug(f"[decrement_wait_count] count={self._wait_count}")
 
-                # If count reaches 0, try to clear (in case clear_transfer was deferred)
-                if self._wait_counts[transfer_id] == 0:
-                    self._completed_layers.pop(transfer_id, None)
-                    self._callbacks.pop(transfer_id, None)
-                    self._start_times.pop(transfer_id, None)
-                    self._cuda_events.pop(transfer_id, None)
-                    self._layer_complete_times.pop(transfer_id, None)
-                    self._wait_counts.pop(transfer_id, None)
-                    logger.debug(f"[decrement_wait_count] auto-cleared transfer_id={transfer_id}")
-
-    def clear_transfer(self, transfer_id: str) -> None:
-        """
-        Clear tracking for a transfer.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-        """
+    def _should_cleanup(self) -> bool:
+        """Check if cleanup is safe (no active waiters and all done)."""
         with self._lock:
-            # Check if there are active waiters - if so, defer clearing
-            if self._wait_counts.get(transfer_id, 0) > 0:
-                logger.debug(f"[clear_transfer] deferred for {transfer_id}, wait_count={self._wait_counts[transfer_id]}")
-                return
+            return self._wait_count == 0 and self.is_all_done()
 
-            self._completed_layers.pop(transfer_id, None)
-            self._callbacks.pop(transfer_id, None)
-            self._start_times.pop(transfer_id, None)
-            self._cuda_events.pop(transfer_id, None)
-            self._layer_complete_times.pop(transfer_id, None)
-            self._wait_counts.pop(transfer_id, None)
-            logger.debug(f"[clear_transfer] completed for {transfer_id}")
+    # ============ Time Tracking Methods ============
 
-    # ============ CUDA Event Methods ============
-
-    def get_layer_cuda_event(self, transfer_id: str, layer_idx: int) -> Any:
-        """
-        Get the CUDA event for a specific layer.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-            layer_idx: Index of the layer
-
-        Returns:
-            CUDA event for the layer, or None if not available
-        """
-        with self._lock:
-            if transfer_id not in self._cuda_events:
-                return None
-            events = self._cuda_events[transfer_id]
-            if layer_idx < len(events):
-                return events[layer_idx]
-            return None
-
-    def get_layer_complete_time(self, transfer_id: str, layer_idx: int) -> Optional[float]:
+    def get_layer_complete_time(self, layer_idx: int) -> Optional[float]:
         """
         Get the completion time for a specific layer.
 
         Args:
-            transfer_id: Unique identifier for the transfer
             layer_idx: Index of the layer
 
         Returns:
             Completion time as Unix timestamp, or None if not completed
         """
         with self._lock:
-            if transfer_id not in self._layer_complete_times:
-                return None
-            return self._layer_complete_times[transfer_id].get(layer_idx)
+            return self._layer_complete_times.get(layer_idx)
 
-    def get_layer_wait_time(self, transfer_id: str, layer_idx: int) -> Optional[float]:
+    def get_layer_wait_time(self, layer_idx: int) -> Optional[float]:
         """
         Get the time from transfer start to layer completion.
 
         Args:
-            transfer_id: Unique identifier for the transfer
             layer_idx: Index of the layer
 
         Returns:
-            Time in seconds, or None if transfer not found or layer not completed
+            Time in seconds, or None if not completed
         """
         with self._lock:
-            if transfer_id not in self._start_times:
-                return None
-            complete_time = self._layer_complete_times.get(transfer_id, {}).get(layer_idx)
+            complete_time = self._layer_complete_times.get(layer_idx)
             if complete_time is None:
                 return None
-            return complete_time - self._start_times[transfer_id]
+            return complete_time - self._start_time
 
-    def get_all_layer_times(self, transfer_id: str) -> Dict[int, float]:
+    def get_all_layer_times(self) -> Dict[int, float]:
         """
         Get completion times for all layers.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
 
         Returns:
             Dictionary mapping layer_idx to completion time
         """
         with self._lock:
-            return self._layer_complete_times.get(transfer_id, {}).copy()
+            return self._layer_complete_times.copy()
 
-    def reset(self) -> None:
-        """Reset all tracking state."""
-        with self._lock:
-            self._completed_layers.clear()
-            self._callbacks.clear()
-            self._start_times.clear()
-            self._cuda_events.clear()
-            self._layer_complete_times.clear()
-
-    def get_elapsed_time(self, transfer_id: str) -> Optional[float]:
+    def get_elapsed_time(self) -> float:
         """
-        Get elapsed time for a transfer.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
+        Get elapsed time since transfer start.
 
         Returns:
-            Elapsed time in seconds, or None if transfer not found
+            Elapsed time in seconds
         """
-        with self._lock:
-            if transfer_id not in self._start_times:
-                return None
-            return time.time() - self._start_times[transfer_id]
+        return time.time() - self._start_time
 
     def get_stats(self) -> Dict:
         """
@@ -373,9 +380,46 @@ class LayerDoneCounter:
         with self._lock:
             return {
                 "num_layers": self._num_layers,
-                "active_transfers": len(self._completed_layers),
-                "transfer_ids": list(self._completed_layers.keys()),
+                "completed_layers": len(self._completed_layers),
+                "pending_layers": self._num_layers - len(self._completed_layers),
+                "wait_count": self._wait_count,
             }
+
+    # ============ Cleanup Methods ============
+
+    def cleanup(self) -> None:
+        """
+        Explicit cleanup method to release CUDA events.
+
+        Called when the transfer is complete and no more waiting is needed.
+        """
+        with self._lock:
+            # Check if safe to cleanup
+            if self._wait_count > 0:
+                logger.debug(f"[cleanup] deferred, wait_count={self._wait_count}")
+                return
+
+            # Clear CUDA events
+            self._cuda_events.clear()
+            logger.debug("[cleanup] completed")
+
+    def __del__(self) -> None:
+        """
+        Destructor to ensure CUDA events are released.
+
+        Note: This is a fallback. For explicit cleanup, call cleanup() method.
+        """
+        try:
+            if self._cuda_events:
+                self._cuda_events.clear()
+        except Exception:
+            pass  # Ignore errors during destruction
+
+
+class LayerSwapTimeoutError(Exception):
+    """Exception raised when layer swap operation times out."""
+
+    pass
 
 
 # ============ Block Hash Computation ============

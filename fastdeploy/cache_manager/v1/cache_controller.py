@@ -14,17 +14,10 @@ data transfer operations based on block IDs provided by Scheduler.
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import paddle
 from paddleformers.utils.log import logger
-
-
-class LayerSwapTimeoutError(Exception):
-    """Exception raised when layer swap operation times out."""
-
-    pass
-
 
 if TYPE_CHECKING:
     from fastdeploy.config import FDConfig
@@ -40,8 +33,6 @@ from .metadata import (
     PDTransferMetadata,
     StorageMetadata,
     TransferResult,
-    TransferStatus,
-    TransferTask,
 )
 from .transfer_manager import CacheTransferManager
 
@@ -96,24 +87,19 @@ class CacheController(KVCacheBase):
         self._lock = threading.RLock()
 
         # Thread pool executor for async operations
-        # Used to wrap synchronous transfer operations into async tasks
-        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="cache_transfer")
+        # Each transfer task runs in a single thread to avoid GPU bandwidth contention
+        # max_workers=1 ensures only one transfer task runs at a time
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cache_transfer")
 
         # Initialize transfer manager
         self._transfer_manager = CacheTransferManager(config, local_rank, device_id)
 
-        # Initialize layer done counter
-        self._layer_counter = LayerDoneCounter(self._num_layers)
+        # Note: LayerDoneCounter is no longer a singleton
+        # Each submit_swap_tasks call creates a new LayerDoneCounter instance
+        self._layer_done_counter = None
 
-        # Active transfer tasks
-        self._active_tasks: Dict[str, TransferTask] = {}
-
-        # Active async handlers
-        self._async_handlers: Dict[str, AsyncTaskHandler] = {}
-
-        # Pending handlers for tracking swap operations
-        self._pending_evict_handlers: List[AsyncTaskHandler] = []
-        self._pending_swap_in_handlers: List[AsyncTaskHandler] = []
+        # Pending evict LayerDoneCounters for write_back mode ordering
+        self._pending_evict_counters: List["LayerDoneCounter"] = []
 
         self._initialized = True
 
@@ -133,91 +119,67 @@ class CacheController(KVCacheBase):
         """
         return self.write_policy == "write_back"
 
-    def wait_for_swap_in_handlers(self) -> None:
-        """
-        Wait for all pending swap-in handlers to complete.
-
-        This method handles waiting for host-to-device cache swap-in operations.
-        """
-        if not self._pending_swap_in_handlers:
-            return
-
-        swap_in_wait_start = time.time()
-        swap_in_length = len(self._pending_swap_in_handlers)
-
-        for handler in self._pending_swap_in_handlers:
-            if not handler.is_completed:
-                result = handler.get_result()
-            else:
-                result = handler.result
-            logger.info(f"cache swap in result: {result}")
-
-        self._pending_swap_in_handlers.clear()
-        swap_in_wait_ms = (time.time() - swap_in_wait_start) * 1000
-        if swap_in_wait_ms > 0.1:
-            logger.info(f"cache swap in wait time: {swap_in_wait_ms:.2f}ms, {swap_in_length} pending swap-ins")
-
-    @property
-    def pending_swap_in_handlers(self) -> List["AsyncTaskHandler"]:
-        """Get the list of pending swap-in handlers for external access (e.g., layer swap)."""
-        return self._pending_swap_in_handlers
-
     def submit_swap_tasks(
         self,
         evict_metadata: Optional["CacheSwapMetadata"],
         swap_in_metadata: Optional["CacheSwapMetadata"],
-    ) -> Optional["AsyncTaskHandler"]:
+    ) -> Optional["LayerDoneCounter"]:
         """
         Submit evict and swap-in tasks with proper synchronization.
 
         Logic:
-        1. Before submitting evict, wait for existing pending evict handlers to complete
+        1. Before submitting evict, wait for existing pending evict counters to complete
         2. write_back: Wait for evict to complete before submitting swap-in
         3. Other policies: Submit both evict and swap-in immediately
 
         Args:
             evict_metadata: CacheSwapMetadata for device-to-host eviction (can be None)
             swap_in_metadata: CacheSwapMetadata for host-to-device swap-in (can be None)
+
+        Returns:
+            LayerDoneCounter for swap-in task, or None if no swap-in metadata provided.
         """
-        # Step 1: Wait for existing pending evict handlers before submitting new evict
-        self._wait_for_pending_evict_handlers()
+        # Step 1: Wait for existing pending evict counters before submitting new evict
+        self._wait_for_pending_evict_counters()
 
         # Step 2: Submit evict task if provided
+        # Note: evict returns LayerDoneCounter but we don't wait on it layer-by-layer
+        # (except in write_back mode where we wait synchronously via wait_all)
         if evict_metadata is not None:
             logger.info(f"cache_evict_metadata: {evict_metadata}")
-            self.evict_device_to_host(evict_metadata)
-            self._pending_evict_handlers.append(evict_metadata.async_handler)
+            evict_counter = self.evict_device_to_host(evict_metadata)
+            self._pending_evict_counters.append(evict_counter)
 
             # Step 3: For write_back, wait for evict to complete before submitting swap-in
             if self._should_wait_for_swap_out():
-                self._wait_for_pending_evict_handlers()
+                self._wait_for_pending_evict_counters()
 
         # Step 4: Submit swap-in task if provided
+        # Returns LayerDoneCounter for tracking layer completion
         if swap_in_metadata is not None:
             logger.info(f"cache_swap_metadata: {swap_in_metadata}")
-            self.load_host_to_device(swap_in_metadata)
-            self._pending_swap_in_handlers.append(swap_in_metadata.async_handler)
+            self._layer_done_counter = self.load_host_to_device(swap_in_metadata)
+            return self._layer_done_counter
 
-    def _wait_for_pending_evict_handlers(self) -> None:
+        return None
+
+    def _wait_for_pending_evict_counters(self) -> None:
         """
-        Wait for all pending evict handlers to complete.
+        Wait for all pending evict counters to complete.
 
         This is called before submitting new evict tasks to ensure proper ordering.
+        Uses LayerDoneCounter.wait_all() for efficient waiting.
         """
-        if not self._pending_evict_handlers:
+        if not self._pending_evict_counters:
             return
 
         evict_wait_start = time.time()
-        evict_length = len(self._pending_evict_handlers)
+        evict_length = len(self._pending_evict_counters)
 
-        for handler in self._pending_evict_handlers:
-            if not handler.is_completed:
-                result = handler.get_result()
-            else:
-                result = handler.result
-            logger.info(f"cache evict result: {result}")
+        for counter in self._pending_evict_counters:
+            counter.wait_all()
 
-        self._pending_evict_handlers.clear()
+        self._pending_evict_counters.clear()
         evict_wait_ms = (time.time() - evict_wait_start) * 1000
         if evict_wait_ms > 0.1:
             logger.info(f"cache evict wait time: {evict_wait_ms:.2f}ms, {evict_length} pending evictions")
@@ -230,9 +192,9 @@ class CacheController(KVCacheBase):
         return self._transfer_manager
 
     @property
-    def layer_counter(self) -> LayerDoneCounter:
-        """Get the layer done counter."""
-        return self._layer_counter
+    def swap_layer_done_counter(self) -> Optional["LayerDoneCounter"]:
+        """Get the layer done counter for layer swap."""
+        return self._layer_done_counter
 
     # ============ Helper Methods ============
 
@@ -482,12 +444,12 @@ class CacheController(KVCacheBase):
         dst_location: str,
         transfer_fn_all: callable,
         transfer_fn_layer: callable,
-    ) -> None:
+    ) -> LayerDoneCounter:
         """
         Submit a single swap transfer task (internal method).
 
-        Creates an independent async transfer task for each CacheSwapMetadata.
-        The handler is saved in meta.async_handler for upstream tracking.
+        Creates a LayerDoneCounter for tracking layer completion.
+        The counter is returned to the caller for later waiting.
 
         Transfer mode is determined by global config self.cache_config.swap_all_layers.
 
@@ -497,50 +459,34 @@ class CacheController(KVCacheBase):
             dst_location: Destination location ("device" or "host").
             transfer_fn_all: All-layer transfer function, signature (src_ids, dst_ids) -> bool.
             transfer_fn_layer: Layer-by-layer transfer function, signature (layer_indices, on_layer_complete, src_ids, dst_ids) -> bool.
+
+        Returns:
+            LayerDoneCounter instance for tracking layer completion.
         """
-        handler = AsyncTaskHandler()
-        meta.async_handler = handler
-        task_id = handler.task_id
+        # Create LayerDoneCounter for this transfer (independent sync primitive)
+        layer_counter = LayerDoneCounter(self._num_layers)
 
         src_block_ids = meta.src_block_ids
         dst_block_ids = meta.dst_block_ids
 
         if not src_block_ids or not dst_block_ids:
-            logger.info(
-                f"[SwapTask] task_id={task_id} skip: empty block_ids " f"src={src_block_ids}, dst={dst_block_ids}"
-            )
+            logger.info(f"[SwapTask] skip: empty block_ids src={src_block_ids}, dst={dst_block_ids}")
             meta.success = False
             meta.error_message = "Empty block IDs in CacheSwapMetadata"
-            handler.set_error(meta.error_message)
-            return
+            return layer_counter
 
         layers_to_transfer = list(range(self._num_layers))
         mode = "all_layers" if self.cache_config.swap_all_layers else "layer_by_layer"
 
         logger.info(
-            f"[SwapTask] submit task_id={task_id} {src_location}->{dst_location} "
+            f"[SwapTask] submit {src_location}->{dst_location} "
             f"src_block_ids={src_block_ids} dst_block_ids={dst_block_ids} "
             f"num_blocks={len(src_block_ids)} mode={mode}"
         )
 
-        task = TransferTask(
-            task_id=task_id,
-            src_location=src_location,
-            dst_location=dst_location,
-            block_indices=list(zip(src_block_ids, dst_block_ids)),
-            layer_indices=layers_to_transfer,
-            status=TransferStatus.PENDING,
-        )
-
-        with self._lock:
-            self._active_tasks[task_id] = task
-            self._async_handlers[task_id] = handler
-            self._layer_counter.start_transfer(task_id)
-            task.status = TransferStatus.IN_PROGRESS
-
         def _on_layer_complete(layer_idx: int) -> None:
             """Callback called after each layer transfer completes."""
-            logger.debug(f"[LayerComplete] _on_layer_complete called for task_id={task_id}, layer={layer_idx}")
+            logger.debug(f"[LayerComplete] layer={layer_idx}")
             # Create and record CUDA event for this layer completion
             cuda_event = None
             try:
@@ -550,17 +496,14 @@ class CacheController(KVCacheBase):
                 logger.warning(f"Failed to create CUDA event for layer {layer_idx}: {e}")
 
             # Mark layer done with CUDA event
-            mark_result = self._layer_counter.mark_layer_done(task_id, layer_idx, cuda_event=cuda_event)
-            logger.debug(f"[LayerComplete] mark_layer_done task_id={task_id}, layer={layer_idx}, result={mark_result}")
+            mark_result = layer_counter.mark_layer_done(layer_idx, cuda_event=cuda_event)
+            logger.debug(f"[LayerComplete] mark_layer_done layer={layer_idx}, result={mark_result}")
 
             # Log layer completion time
             try:
-                wait_time = self._layer_counter.get_layer_wait_time(task_id, layer_idx)
+                wait_time = layer_counter.get_layer_wait_time(layer_idx)
                 if wait_time is not None:
-                    logger.debug(
-                        f"[LayerComplete] task_id={task_id}, layer={layer_idx}, "
-                        f"transfer_time={wait_time*1000:.2f}ms"
-                    )
+                    logger.debug(f"[LayerComplete] layer={layer_idx}, transfer_time={wait_time*1000:.2f}ms")
             except Exception:
                 pass
 
@@ -579,16 +522,15 @@ class CacheController(KVCacheBase):
                         except Exception as e:
                             logger.warning(f"Failed to create CUDA event for all layers: {e}")
 
-                        # Mark all layers done at once instead of iterating
-                        self._layer_counter.mark_all_layers_done(task_id, cuda_event=cuda_event)
+                        # Mark all layers done at once
+                        layer_counter.mark_all_done(cuda_event=cuda_event)
 
                         # Log timing for all layers
                         try:
-                            wait_time = self._layer_counter.get_layer_wait_time(task_id, 0)
+                            wait_time = layer_counter.get_layer_wait_time(0)
                             if wait_time is not None:
                                 logger.debug(
-                                    f"[SwapTask] task_id={task_id} all_layers transfer completed, "
-                                    f"elapsed={wait_time*1000:.2f}ms"
+                                    f"[SwapTask] all_layers transfer completed, elapsed={wait_time*1000:.2f}ms"
                                 )
                         except Exception:
                             pass
@@ -602,15 +544,11 @@ class CacheController(KVCacheBase):
                         error_message=None if success else f"All-layer {src_location}→{dst_location} transfer failed",
                     )
                     logger.info(
-                        f"[SwapTask] task_id={task_id} all_layers transfer "
-                        f"{'success' if success else 'FAILED'} "
-                        f"elapsed={elapsed:.3f}s "
-                        f"src={src_block_ids} dst={dst_block_ids}"
+                        f"[SwapTask] all_layers transfer {'success' if success else 'FAILED'} "
+                        f"elapsed={elapsed*1000:.3f}ms src={src_block_ids} dst={dst_block_ids}"
                     )
                 else:
-                    logger.debug(
-                        f"[SwapTask] task_id={task_id} starting layer_by_layer transfer, num_layers={len(layers_to_transfer)}"
-                    )
+                    logger.debug(f"[SwapTask] starting layer_by_layer transfer, num_layers={len(layers_to_transfer)}")
                     success = transfer_fn_layer(
                         layers_to_transfer,
                         _on_layer_complete,
@@ -619,7 +557,7 @@ class CacheController(KVCacheBase):
                     )
                     elapsed = time.time() - start_time
                     logger.debug(
-                        f"[SwapTask] task_id={task_id} layer_by_layer transfer_fn_layer returned, success={success}, elapsed={elapsed:.3f}s"
+                        f"[SwapTask] layer_by_layer transfer_fn_layer returned, success={success}, elapsed={elapsed*1000:.3f}ms"
                     )
                     result = TransferResult(
                         src_block_ids=src_block_ids,
@@ -632,73 +570,54 @@ class CacheController(KVCacheBase):
                         ),
                     )
                     logger.info(
-                        f"[SwapTask] task_id={task_id} layer_by_layer transfer "
-                        f"{'success' if success else 'FAILED'} "
-                        f"elapsed={elapsed:.3f}s "
-                        f"src={src_block_ids} dst={dst_block_ids}"
+                        f"[SwapTask] layer_by_layer transfer {'success' if success else 'FAILED'} "
+                        f"elapsed={elapsed*1000:.3f}ms src={src_block_ids} dst={dst_block_ids}"
                     )
-
-                with self._lock:
-                    task = self._active_tasks.get(task_id)
-                    if task:
-                        task.status = TransferStatus.COMPLETED if result.success else TransferStatus.FAILED
-                        task.completed_time = time.time()
-                        if not result.success:
-                            task.error_message = result.error_message
 
                 # Update metadata with result
                 meta.success = result.success
                 meta.error_message = result.error_message
-                handler.set_result(result)
 
                 total_elapsed = time.time() - start_time
                 logger.info(
-                    f"[SwapTask] task_id={task_id} {src_location}->{dst_location} "
+                    f"[SwapTask] {src_location}->{dst_location} "
                     f"{'SUCCESS' if result.success else 'FAILED'} "
-                    f"num_blocks={len(src_block_ids)} total_elapsed={total_elapsed:.3f}s"
+                    f"num_blocks={len(src_block_ids)} total_elapsed={total_elapsed*1000:.3f}ms"
                 )
 
             except Exception as e:
                 import traceback
 
                 traceback.print_exc()
-                logger.error(
-                    f"[SwapTask] task_id={task_id} {src_location}->{dst_location} "
-                    f"EXCEPTION: {e}\n{traceback.format_exc()}"
-                )
-                with self._lock:
-                    task = self._active_tasks.get(task_id)
-                    if task:
-                        task.status = TransferStatus.FAILED
-                        task.error_message = str(e)
+                logger.error(f"[SwapTask] {src_location}->{dst_location} " f"EXCEPTION: {e}\n{traceback.format_exc()}")
                 meta.success = False
                 meta.error_message = str(e)
-                handler.set_error(str(e))
             finally:
-                self._layer_counter.clear_transfer(task_id)
+                # Cleanup CUDA events when transfer is complete
+                layer_counter.cleanup()
 
         self._executor.submit(_do_transfer)
+        return layer_counter
 
     def load_host_to_device(
         self,
         swap_metadata: CacheSwapMetadata,
-    ) -> None:
+    ) -> LayerDoneCounter:
         """
         Load host cache to device (async).
 
-        Creates an async transfer task for CacheSwapMetadata.
-        The task's AsyncTaskHandler is saved in CacheSwapMetadata.async_handler,
-        allowing caller to track task's execution status.
-
-        Uses layer-by-layer transfer strategy to overlap with forward computation.
-        Each layer's completion is marked via LayerDoneCounter.
+        Creates an async transfer task and returns LayerDoneCounter
+        for tracking layer completion.
 
         Args:
             swap_metadata: CacheSwapMetadata containing:
                 - src_block_ids: Source host block IDs
                 - dst_block_ids: Destination device block IDs
+
+        Returns:
+            LayerDoneCounter for tracking layer completion.
         """
-        self._submit_swap_task(
+        layer_counter = self._submit_swap_task(
             meta=swap_metadata,
             src_location="host",
             dst_location="device",
@@ -712,25 +631,28 @@ class CacheController(KVCacheBase):
                 on_layer_complete=on_layer_complete,
             ),
         )
-        logger.info(f"[LoadHostToDevice] submitted swap task, " f"total_blocks={len(swap_metadata.src_block_ids)}")
+        logger.info(f"[LoadHostToDevice] submitted swap task, total_blocks={len(swap_metadata.src_block_ids)}")
+        return layer_counter
 
     def evict_device_to_host(
         self,
         swap_metadata: CacheSwapMetadata,
-    ) -> None:
+    ) -> LayerDoneCounter:
         """
         Evict device cache to host (async).
 
-        Creates an async transfer task for CacheSwapMetadata.
-        The task's AsyncTaskHandler is saved in CacheSwapMetadata.async_handler,
-        allowing caller to track task's execution status.
+        Creates an async transfer task and returns LayerDoneCounter
+        for tracking layer completion.
 
         Args:
             swap_metadata: CacheSwapMetadata containing:
                 - src_block_ids: Source device block IDs
                 - dst_block_ids: Destination host block IDs
+
+        Returns:
+            LayerDoneCounter for tracking layer completion.
         """
-        self._submit_swap_task(
+        layer_counter = self._submit_swap_task(
             meta=swap_metadata,
             src_location="device",
             dst_location="host",
@@ -742,7 +664,8 @@ class CacheController(KVCacheBase):
                 on_layer_complete=on_layer_complete,
             ),
         )
-        logger.info(f"[EvictDeviceToHost] submitted swap task, " f"total_blocks={len(swap_metadata.src_block_ids)}")
+        logger.info(f"[EvictDeviceToHost] submitted swap task, total_blocks={len(swap_metadata.src_block_ids)}")
+        return layer_counter
 
     def prefetch_from_storage(
         self,
@@ -876,241 +799,6 @@ class CacheController(KVCacheBase):
 
         return handler
 
-    # ============ Transfer Status Methods ============
-
-    def get_transfer_status(self, transfer_id: str) -> Optional[TransferStatus]:
-        """
-        Get the status of a transfer task.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-
-        Returns:
-            Current transfer status or None if not found
-        """
-        with self._lock:
-            if transfer_id not in self._active_tasks:
-                return None
-            return self._active_tasks[transfer_id].status
-
-    def cancel_transfer(self, transfer_id: str) -> bool:
-        """
-        Cancel an active transfer.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-
-        Returns:
-            True if cancellation was successful
-        """
-        with self._lock:
-            if transfer_id not in self._active_tasks:
-                return False
-
-            task = self._active_tasks[transfer_id]
-            if task.status in [TransferStatus.COMPLETED, TransferStatus.FAILED]:
-                return False
-
-            task.status = TransferStatus.CANCELLED
-            self._layer_counter.clear_transfer(transfer_id)
-
-            # Cancel async handler
-            if transfer_id in self._async_handlers:
-                self._async_handlers[transfer_id].cancel()
-
-            return self._transfer_manager.cancel_task(transfer_id)
-
-    def get_async_handler(self, transfer_id: str) -> Optional[AsyncTaskHandler]:
-        """
-        Get the async handler for a transfer.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-
-        Returns:
-            AsyncTaskHandler or None if not found
-        """
-        return self._async_handlers.get(transfer_id)
-
-    # ============ Layer Done Methods ============
-
-    def mark_layer_done(self, transfer_id: str, layer_idx: int) -> bool:
-        """
-        Mark a layer as completed for a transfer.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-            layer_idx: Index of the completed layer
-
-        Returns:
-            True if this was the last layer
-        """
-        return self._layer_counter.mark_layer_done(transfer_id, layer_idx)
-
-    def is_layer_done(self, transfer_id: str, layer_idx: int) -> bool:
-        """
-        Check if a layer is completed.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-            layer_idx: Index of the layer
-
-        Returns:
-            True if the layer is completed
-        """
-        return self._layer_counter.is_layer_done(transfer_id, layer_idx)
-
-    def is_transfer_complete(self, transfer_id: str) -> bool:
-        """
-        Check if all layers are completed for a transfer.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-
-        Returns:
-            True if all layers are completed
-        """
-        return self._layer_counter.is_transfer_complete(transfer_id)
-
-    def wait_for_layer(
-        self,
-        transfer_id: str,
-        layer_idx: int,
-        timeout: Optional[float] = None,
-    ) -> bool:
-        """
-        Wait for a specific layer to complete.
-
-        This is used by the forward computation thread to wait for
-        layer transfer completion before using the cache.
-
-        Uses CUDA events for efficient waiting when available.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-            layer_idx: Index of the layer to wait for
-            timeout: Maximum wait time in seconds (default: 300s)
-
-        Returns:
-            True if layer completed
-
-        Raises:
-            LayerSwapTimeoutError: If timeout occurs before layer completes
-        """
-        # First check if already done (fast path)
-        if self._layer_counter.is_layer_done(transfer_id, layer_idx):
-            return True
-
-        logger.debug(f"[WaitForLayer] task_id={transfer_id}, layer={layer_idx} starting wait")
-
-        # Increment wait count to prevent premature clear_transfer
-        self._layer_counter.increment_wait_count(transfer_id)
-        try:
-            # Try CUDA event waiting first (most efficient)
-            cuda_event = self._layer_counter.get_layer_cuda_event(transfer_id, layer_idx)
-            if cuda_event is not None:
-                try:
-                    # Use CUDA event synchronization
-                    cuda_event.synchronize()
-                    # Double check after synchronize
-                    if self._layer_counter.is_layer_done(transfer_id, layer_idx):
-                        logger.debug(f"[WaitForLayer] task_id={transfer_id}, layer={layer_idx} done via CUDA event")
-                        return True
-                except Exception as e:
-                    logger.warning(f"CUDA event sync failed for layer {layer_idx}: {e}")
-
-            # Fallback to polling wait
-            start_time = time.time()
-            default_timeout = 1.0  # 1 second default timeout
-            timeout = timeout if timeout is not None else default_timeout
-            while True:
-                if self._layer_counter.is_layer_done(transfer_id, layer_idx):
-                    logger.debug(f"[WaitForLayer] task_id={transfer_id}, layer={layer_idx} done via polling")
-                    return True
-
-                if timeout is not None:
-                    elapsed = time.time() - start_time
-                    if elapsed >= timeout:
-                        logger.error(
-                            f"[WaitForLayer] task_id={transfer_id}, layer={layer_idx} TIMEOUT after {elapsed:.2f}s"
-                        )
-                        raise LayerSwapTimeoutError(
-                            f"Layer swap timeout: transfer_id={transfer_id}, layer={layer_idx}, elapsed={elapsed:.2f}s"
-                        )
-
-                time.sleep(0.001)  # Small sleep to avoid busy waiting
-        finally:
-            # Decrement wait count when done waiting
-            self._layer_counter.decrement_wait_count(transfer_id)
-
-    def get_layer_wait_time(self, transfer_id: str, layer_idx: int) -> Optional[float]:
-        """
-        Get the time from transfer start to layer completion.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-            layer_idx: Index of the layer
-
-        Returns:
-            Time in seconds, or None if transfer not found or layer not completed
-        """
-        return self._layer_counter.get_layer_wait_time(transfer_id, layer_idx)
-
-    def get_all_layer_times(self, transfer_id: str) -> Dict[int, float]:
-        """
-        Get completion times for all layers.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-
-        Returns:
-            Dictionary mapping layer_idx to completion time
-        """
-        return self._layer_counter.get_all_layer_times(transfer_id)
-
-    def register_layer_callback(
-        self,
-        transfer_id: str,
-        callback: Callable[[int], None],
-    ) -> None:
-        """
-        Register a callback for layer completion.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-            callback: Function to call when each layer completes
-        """
-        self._layer_counter.register_callback(transfer_id, callback)
-
-    # ============ Progress Methods ============
-
-    def get_progress(self, transfer_id: str) -> Dict[str, Any]:
-        """
-        Get transfer progress.
-
-        Args:
-            transfer_id: Unique identifier for the transfer
-
-        Returns:
-            Dictionary with progress information
-        """
-        with self._lock:
-            if transfer_id not in self._active_tasks:
-                return {"error": "Transfer not found"}
-
-            task = self._active_tasks[transfer_id]
-            completed = self._layer_counter.get_completed_count(transfer_id)
-            total = len(task.layer_indices)
-
-            return {
-                "transfer_id": transfer_id,
-                "status": task.status.value,
-                "completed_layers": completed,
-                "total_layers": total,
-                "progress": completed / total if total > 0 else 0,
-                "elapsed_time": self._layer_counter.get_elapsed_time(transfer_id),
-            }
-
     # ============ Public Interface Implementation ============
 
     def reset_cache(self) -> bool:
@@ -1118,9 +806,7 @@ class CacheController(KVCacheBase):
         Reset cache state (clear content only, do NOT free storage).
 
         This method only clears the transfer state:
-        - Cancels all active transfer tasks
-        - Resets layer counters
-        - Clears active tasks and async handlers
+        - Clears pending evict counters
 
         It does NOT free any storage (GPU memory, CPU pinned memory, or storage).
         Use free_cache() to release storage resources.
@@ -1130,15 +816,8 @@ class CacheController(KVCacheBase):
         """
         try:
             with self._lock:
-                # Cancel all active tasks
-                for task_id, task in self._active_tasks.items():
-                    if task.status in [TransferStatus.PENDING, TransferStatus.IN_PROGRESS]:
-                        task.status = TransferStatus.CANCELLED
-
-                self._layer_counter.reset()
-                self._active_tasks.clear()
-                self._async_handlers.clear()
-
+                # Clear pending evict counters
+                self._pending_evict_counters.clear()
             return True
         except Exception:
             return False
@@ -1201,16 +880,10 @@ class CacheController(KVCacheBase):
     def get_stats(self) -> Dict[str, Any]:
         """Get controller statistics."""
         with self._lock:
-            status_counts = {}
-            for status in TransferStatus:
-                status_counts[status.value] = sum(1 for task in self._active_tasks.values() if task.status == status)
-
             return {
                 "initialized": self._initialized,
                 "num_layers": self._num_layers,
-                "active_transfers": len(self._active_tasks),
-                "status_counts": status_counts,
-                "layer_counter": self._layer_counter.get_stats(),
+                "pending_evict_counters": len(self._pending_evict_counters),
                 "transfer_manager": self._transfer_manager.get_stats(),
             }
 

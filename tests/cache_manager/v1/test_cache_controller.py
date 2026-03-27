@@ -1,4 +1,3 @@
-"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,33 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-Unit tests for CacheController class.
+"""
+Unit tests for CacheController class with the new LayerDoneCounter design.
 
 Tests cover:
 - Initialization
-- load_host_to_device with CacheSwapMetadata list
-- evict_device_to_host with CacheSwapMetadata list
-- Task tracking (status, progress, cancellation)
-- Layer-by-layer transfer and LayerDoneCounter
-- All-layer transfer mode
-- reset_cache / reset_controller_cache
+- load_host_to_device returns LayerDoneCounter
+- evict_device_to_host returns LayerDoneCounter
+- submit_swap_tasks returns LayerDoneCounter
+- LayerDoneCounter methods: wait_for_layer, wait_all, mark_layer_done, mark_all_done
 - Statistics
 - Edge cases (empty metadata, failed transfers)
 """
 
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from utils import get_default_test_fd_config
 
-from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata, TransferStatus
+from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
 
 
 def create_cache_controller(
     enable_prefix_caching: bool = True,
     num_host_blocks: int = 50,
     num_layers: int = 4,
+    swap_all_layers: bool = True,  # Default to True for easier testing
 ):
     """Helper to create CacheController with test config."""
     from fastdeploy.cache_manager.v1.cache_controller import CacheController
@@ -48,7 +47,9 @@ def create_cache_controller(
     config.cache_config.enable_prefix_caching = enable_prefix_caching
     config.cache_config.num_cpu_blocks = num_host_blocks
     config.cache_config.cache_dtype = "bfloat16"
+    config.cache_config.swap_all_layers = swap_all_layers
     config.model_config.num_hidden_layers = num_layers
+    config.model_config.dtype = "bfloat16"
 
     return CacheController(config, local_rank=0, device_id=0)
 
@@ -120,21 +121,23 @@ class TestCacheControllerInit(unittest.TestCase):
         """Test that ThreadPoolExecutor is created on init."""
         controller = create_cache_controller()
         self.assertIsNotNone(controller._executor)
+        self.assertEqual(controller._executor._max_workers, 1)
 
     def test_init_creates_transfer_manager(self):
         """Test that TransferManager is created on init."""
         controller = create_cache_controller()
         self.assertIsNotNone(controller._transfer_manager)
 
-    def test_init_creates_layer_counter(self):
-        """Test that LayerDoneCounter is created on init."""
+    def test_init_no_singleton_layer_counter(self):
+        """Test that LayerDoneCounter is NOT created as singleton on init (per-transfer design)."""
         controller = create_cache_controller(num_layers=4)
-        self.assertIsNotNone(controller._layer_counter)
+        # In the new design, _layer_counter is None initially, set per transfer
+        self.assertIsNone(controller._layer_done_counter)
 
-    def test_init_empty_active_tasks(self):
-        """Test that active tasks dict is empty on init."""
+    def test_init_empty_pending_evict_counters(self):
+        """Test that pending evict counters list is empty on init."""
         controller = create_cache_controller()
-        self.assertEqual(len(controller._active_tasks), 0)
+        self.assertEqual(len(controller._pending_evict_counters), 0)
 
 
 # ============================================================================
@@ -143,22 +146,16 @@ class TestCacheControllerInit(unittest.TestCase):
 
 
 class TestLoadHostToDevice(unittest.TestCase):
-    """Test load_host_to_device with CacheSwapMetadata list."""
+    """Test load_host_to_device returns LayerDoneCounter."""
 
     def setUp(self):
         self.controller = create_cache_controller(num_layers=4)
         setup_transfer_env(self.controller, num_layers=4)
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_single_metadata_creates_handler(self, mock_swap):
-        """Test that single CacheSwapMetadata creates handler on meta."""
-
-        # Use a slow swap to verify handler exists before completion
-        def slow_swap(*args, **kwargs):
-            time.sleep(0.2)
-            return None
-
-        mock_swap.side_effect = slow_swap
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.load_to_device_all_layers")
+    def test_returns_layer_done_counter(self, mock_swap):
+        """Test that load_host_to_device returns LayerDoneCounter."""
+        mock_swap.return_value = None
 
         meta = CacheSwapMetadata(
             src_block_ids=[10, 11, 12],
@@ -166,106 +163,73 @@ class TestLoadHostToDevice(unittest.TestCase):
             src_type="host",
             dst_type="device",
         )
-        self.controller.load_host_to_device([meta])
+        counter = self.controller.load_host_to_device(meta)
 
-        # Handler should be set on metadata
-        self.assertIsNotNone(meta.async_handler)
-        # Task may already be completed in fast environments,
-        # but handler must exist
-        meta.async_handler.wait(timeout=5.0)
-        self.assertTrue(meta.async_handler.is_completed)
-        self.assertTrue(meta.success)
+        self.assertIsNotNone(counter)
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
+        self.assertIsInstance(counter, LayerDoneCounter)
+
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.load_to_device_all_layers")
     def test_single_metadata_completes_successfully(self, mock_swap):
         """Test that single metadata task completes with success."""
-        mock_swap.return_value = None
+        mock_swap.return_value = True
 
         meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
+        counter = self.controller.load_host_to_device(meta)
 
-        meta.async_handler.wait(timeout=5.0)
-
-        self.assertTrue(meta.async_handler.is_completed)
+        # Wait for all layers to complete
+        counter.wait_all(timeout=5.0)
+        self.assertTrue(counter.is_all_done())
         self.assertTrue(meta.success)
-        self.assertIsNone(meta.error_message)
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_single_metadata_result_content(self, mock_swap):
-        """Test TransferResult content after successful load."""
-        mock_swap.return_value = None
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.load_to_device_all_layers")
+    def test_wait_for_layer(self, mock_swap):
+        """Test wait_for_layer returns when layer is done."""
+        mock_swap.return_value = True
 
-        meta = CacheSwapMetadata(src_block_ids=[10, 11], dst_block_ids=[0, 1])
-        self.controller.load_host_to_device([meta])
+        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
+        counter = self.controller.load_host_to_device(meta)
 
-        result = meta.async_handler.get_result()
-        self.assertTrue(result.success)
-        self.assertEqual(result.src_block_ids, [10, 11])
-        self.assertEqual(result.dst_block_ids, [0, 1])
-        self.assertEqual(result.src_type, "host")
-        self.assertEqual(result.dst_type, "device")
+        # Wait for a specific layer
+        result = counter.wait_for_layer(0, timeout=5.0)
+        self.assertTrue(result)
+        self.assertTrue(counter.is_layer_done(0))
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_multiple_metadata_creates_separate_handlers(self, mock_swap):
-        """Test that multiple CacheSwapMetadatas create separate parallel tasks."""
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.load_to_device_all_layers")
+    def test_multiple_metadata_creates_separate_counters(self, mock_swap):
+        """Test that multiple CacheSwapMetadatas create separate counters."""
         mock_swap.return_value = None
 
         meta1 = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
         meta2 = CacheSwapMetadata(src_block_ids=[11], dst_block_ids=[1])
-        meta3 = CacheSwapMetadata(src_block_ids=[12], dst_block_ids=[2])
 
-        self.controller.load_host_to_device([meta1, meta2, meta3])
+        counter1 = self.controller.load_host_to_device(meta1)
+        counter2 = self.controller.load_host_to_device(meta2)
 
-        # Each metadata should have its own handler
-        self.assertIsNotNone(meta1.async_handler)
-        self.assertIsNotNone(meta2.async_handler)
-        self.assertIsNotNone(meta3.async_handler)
+        # Each should have its own counter
+        self.assertIsNot(counter1, counter2)
 
-        # Handlers should have unique task_ids
-        self.assertNotEqual(meta1.async_handler.task_id, meta2.async_handler.task_id)
-        self.assertNotEqual(meta2.async_handler.task_id, meta3.async_handler.task_id)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_multiple_metadata_all_complete(self, mock_swap):
-        """Test that all metadata tasks complete."""
-        mock_swap.return_value = None
-
-        metas = [CacheSwapMetadata(src_block_ids=[10 + i], dst_block_ids=[i]) for i in range(5)]
-        self.controller.load_host_to_device(metas)
-
-        for meta in metas:
-            meta.async_handler.wait(timeout=5.0)
-            self.assertTrue(meta.success)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_empty_metadata_list(self, mock_swap):
-        """Test that empty metadata list doesn't crash."""
-        self.controller.load_host_to_device([])
-        mock_swap.assert_not_called()
-
-    def test_empty_block_ids_sets_error(self):
-        """Test that empty block IDs set error on handler."""
+    def test_empty_src_block_ids_sets_error(self):
+        """Test that empty src block IDs set error."""
         meta = CacheSwapMetadata(src_block_ids=[], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
+        self.controller.load_host_to_device(meta)
 
-        self.assertIsNotNone(meta.async_handler)
         self.assertFalse(meta.success)
         self.assertIsNotNone(meta.error_message)
 
-    def test_dst_empty_block_ids_sets_error(self):
-        """Test that empty dst block IDs set error on handler."""
+    def test_empty_dst_block_ids_sets_error(self):
+        """Test that empty dst block IDs set error."""
         meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[])
-        self.controller.load_host_to_device([meta])
+        self.controller.load_host_to_device(meta)
 
-        self.assertIsNotNone(meta.async_handler)
         self.assertFalse(meta.success)
+        self.assertIsNotNone(meta.error_message)
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.load_to_device_all_layers")
     def test_returns_immediately_non_blocking(self, mock_swap):
         """Test that load_host_to_device returns without blocking."""
-        mock_swap.return_value = None
 
-        # Use a slow transfer to verify non-blocking
         def slow_swap(*args, **kwargs):
             time.sleep(0.5)
             return None
@@ -275,7 +239,7 @@ class TestLoadHostToDevice(unittest.TestCase):
         meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
 
         start = time.time()
-        self.controller.load_host_to_device([meta])
+        self.controller.load_host_to_device(meta)
         elapsed = time.time() - start
 
         # Should return immediately, not wait for 0.5s transfer
@@ -288,378 +252,193 @@ class TestLoadHostToDevice(unittest.TestCase):
 
 
 class TestEvictDeviceToHost(unittest.TestCase):
-    """Test evict_device_to_host with CacheSwapMetadata list."""
+    """Test evict_device_to_host returns LayerDoneCounter."""
 
     def setUp(self):
         self.controller = create_cache_controller(num_layers=4)
         setup_transfer_env(self.controller, num_layers=4)
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_single_metadata_completes(self, mock_swap):
-        """Test that eviction completes successfully."""
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.evict_to_host_all_layers")
+    def test_returns_layer_done_counter(self, mock_swap):
+        """Test that evict_device_to_host returns LayerDoneCounter."""
         mock_swap.return_value = None
 
         meta = CacheSwapMetadata(src_block_ids=[0, 1], dst_block_ids=[10, 11])
-        self.controller.evict_device_to_host([meta])
+        counter = self.controller.evict_device_to_host(meta)
 
-        meta.async_handler.wait(timeout=5.0)
+        self.assertIsNotNone(counter)
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
 
-        self.assertTrue(meta.async_handler.is_completed)
+        self.assertIsInstance(counter, LayerDoneCounter)
+
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.evict_to_host_all_layers")
+    def test_single_metadata_completes(self, mock_swap):
+        """Test that eviction completes successfully."""
+        mock_swap.return_value = True
+
+        meta = CacheSwapMetadata(src_block_ids=[0, 1], dst_block_ids=[10, 11])
+        counter = self.controller.evict_device_to_host(meta)
+
+        counter.wait_all(timeout=5.0)
+        self.assertTrue(counter.is_all_done())
         self.assertTrue(meta.success)
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_evict_result_content(self, mock_swap):
-        """Test TransferResult content after successful eviction."""
-        mock_swap.return_value = None
-
-        meta = CacheSwapMetadata(src_block_ids=[0], dst_block_ids=[10])
-        self.controller.evict_device_to_host([meta])
-
-        result = meta.async_handler.get_result()
-        self.assertEqual(result.src_type, "device")
-        self.assertEqual(result.dst_type, "host")
-        self.assertEqual(result.src_block_ids, [0])
-        self.assertEqual(result.dst_block_ids, [10])
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_multiple_evict_tasks(self, mock_swap):
-        """Test multiple parallel eviction tasks."""
-        mock_swap.return_value = None
-
-        metas = [CacheSwapMetadata(src_block_ids=[i], dst_block_ids=[10 + i]) for i in range(3)]
-        self.controller.evict_device_to_host(metas)
-
-        for meta in metas:
-            meta.async_handler.wait(timeout=5.0)
-            self.assertTrue(meta.success)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_evict_empty_list(self, mock_swap):
-        """Test empty metadata list doesn't crash."""
-        self.controller.evict_device_to_host([])
-        mock_swap.assert_not_called()
-
 
 # ============================================================================
-# Task Tracking Tests
+# submit_swap_tasks Tests
 # ============================================================================
 
 
-class TestTaskTracking(unittest.TestCase):
-    """Test task tracking functionality."""
+class TestSubmitSwapTasks(unittest.TestCase):
+    """Test submit_swap_tasks method returns LayerDoneCounter."""
 
     def setUp(self):
         self.controller = create_cache_controller(num_layers=4)
         setup_transfer_env(self.controller, num_layers=4)
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_task_tracked_in_active_tasks(self, mock_swap):
-        """Test that submitted task appears in _active_tasks."""
-        mock_swap.return_value = None
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.load_to_device_all_layers")
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.evict_to_host_all_layers")
+    def test_submit_swap_tasks_returns_layer_done_counter(self, mock_evict, mock_swap_in):
+        """Test submit_swap_tasks returns LayerDoneCounter for swap_in."""
+        mock_evict.return_value = None
+        mock_swap_in.return_value = None
 
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
+        evict_meta = CacheSwapMetadata(src_block_ids=[0], dst_block_ids=[10])
+        swap_in_meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
 
-        self.assertIn(meta.async_handler.task_id, self.controller._active_tasks)
+        counter = self.controller.submit_swap_tasks(evict_meta, swap_in_meta)
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_task_status_transitions_to_completed(self, mock_swap):
-        """Test task status transitions from IN_PROGRESS to COMPLETED."""
-        mock_swap.return_value = None
+        self.assertIsNotNone(counter)
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
 
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
+        self.assertIsInstance(counter, LayerDoneCounter)
 
-        meta.async_handler.wait(timeout=5.0)
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.evict_to_host_all_layers")
+    def test_submit_swap_tasks_evict_only_returns_none(self, mock_evict):
+        """Test submit_swap_tasks with only evict metadata returns None."""
+        mock_evict.return_value = None
 
-        task = self.controller._active_tasks.get(meta.async_handler.task_id)
-        self.assertEqual(task.status, TransferStatus.COMPLETED)
+        evict_meta = CacheSwapMetadata(src_block_ids=[0], dst_block_ids=[10])
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_get_transfer_status(self, mock_swap):
-        """Test get_transfer_status returns correct status."""
-        mock_swap.return_value = None
+        counter = self.controller.submit_swap_tasks(evict_meta, None)
 
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
+        # Evict-only returns None (no swap-in counter)
+        self.assertIsNone(counter)
 
-        status = self.controller.get_transfer_status(meta.async_handler.task_id)
-        self.assertIsNotNone(status)
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.load_to_device_all_layers")
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.evict_to_host_all_layers")
+    def test_submit_swap_tasks_sets_swap_layer_done_counter(self, mock_evict, mock_swap_in):
+        """Test submit_swap_tasks sets swap_layer_done_counter property."""
+        mock_evict.return_value = None
+        mock_swap_in.return_value = None
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_get_transfer_status_nonexistent(self, mock_swap):
-        """Test get_transfer_status returns None for unknown task."""
-        status = self.controller.get_transfer_status("nonexistent")
-        self.assertIsNone(status)
+        evict_meta = CacheSwapMetadata(src_block_ids=[0], dst_block_ids=[10])
+        swap_in_meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_get_async_handler(self, mock_swap):
-        """Test get_async_handler returns the correct handler."""
-        mock_swap.return_value = None
+        counter = self.controller.submit_swap_tasks(evict_meta, swap_in_meta)
 
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
-
-        retrieved = self.controller.get_async_handler(meta.async_handler.task_id)
-        self.assertIs(retrieved, meta.async_handler)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_get_async_handler_nonexistent(self, mock_swap):
-        """Test get_async_handler returns None for unknown task."""
-        handler = self.controller.get_async_handler("nonexistent")
-        self.assertIsNone(handler)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_get_progress(self, mock_swap):
-        """Test get_progress returns valid progress dict."""
-        mock_swap.return_value = None
-
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
-
-        meta.async_handler.wait(timeout=5.0)
-
-        progress = self.controller.get_progress(meta.async_handler.task_id)
-        self.assertEqual(progress["status"], TransferStatus.COMPLETED.value)
-        self.assertGreaterEqual(progress["total_layers"], 0)
-        self.assertIn("progress", progress)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_get_progress_nonexistent_task(self, mock_swap):
-        """Test get_progress returns error dict for unknown task."""
-        progress = self.controller.get_progress("nonexistent")
-        self.assertIn("error", progress)
+        # swap_layer_done_counter should be set
+        self.assertIs(self.controller.swap_layer_done_counter, counter)
 
 
 # ============================================================================
-# Cancellation Tests
-# ============================================================================
-
-
-class TestCancellation(unittest.TestCase):
-    """Test task cancellation."""
-
-    def setUp(self):
-        self.controller = create_cache_controller(num_layers=4)
-        setup_transfer_env(self.controller, num_layers=4)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_cancel_transfer(self, mock_swap):
-        """Test cancel_transfer on existing task."""
-        mock_swap.return_value = None
-
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
-
-        self.controller.cancel_transfer(meta.async_handler.task_id)
-        # May succeed or fail depending on timing, either is acceptable
-
-    def test_cancel_nonexistent_task(self):
-        """Test cancel_transfer returns False for non-existent task."""
-        result = self.controller.cancel_transfer("nonexistent-task-id")
-        self.assertFalse(result)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_cancel_completed_task(self, mock_swap):
-        """Test cancel_transfer returns False for already completed task."""
-        mock_swap.return_value = None
-
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
-        meta.async_handler.wait(timeout=5.0)
-
-        result = self.controller.cancel_transfer(meta.async_handler.task_id)
-        self.assertFalse(result)
-
-
-# ============================================================================
-# Layer Done Counter Tests
+# LayerDoneCounter Tests
 # ============================================================================
 
 
 class TestLayerDoneCounter(unittest.TestCase):
-    """Test layer-by-layer completion tracking."""
+    """Test LayerDoneCounter independent sync primitive."""
 
-    def setUp(self):
-        self.controller = create_cache_controller(num_layers=4)
-        setup_transfer_env(self.controller, num_layers=4)
+    def test_layer_done_counter_basic(self):
+        """Test basic LayerDoneCounter functionality."""
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_all_layers_marked_complete_after_load(self, mock_swap):
-        """Test all layers marked complete after all-layer load."""
-        mock_swap.return_value = None
+        counter = LayerDoneCounter(num_layers=4)
 
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
-        meta.async_handler.wait(timeout=5.0)
+        # Initially not done
+        self.assertFalse(counter.is_all_done())
+        self.assertEqual(counter.get_completed_count(), 0)
 
-        # Task should complete successfully
-        self.assertTrue(meta.async_handler.is_completed)
-        self.assertTrue(meta.success)
+        # Mark one layer done
+        counter.mark_layer_done(0)
+        self.assertTrue(counter.is_layer_done(0))
+        self.assertFalse(counter.is_layer_done(1))
+        self.assertEqual(counter.get_completed_count(), 1)
+        self.assertFalse(counter.is_all_done())
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_is_transfer_complete(self, mock_swap):
-        """Test is_transfer_complete returns True after all layers done."""
-        mock_swap.return_value = None
+    def test_layer_done_counter_mark_all_done(self):
+        """Test mark_all_done marks all layers."""
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
 
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
-        meta.async_handler.wait(timeout=5.0)
+        counter = LayerDoneCounter(num_layers=4)
 
-        # Task should complete successfully
-        self.assertTrue(meta.success)
-        self.assertTrue(meta.async_handler.is_completed)
+        counter.mark_all_done()
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_wait_for_layer_returns_true(self, mock_swap):
-        """Test wait_for_layer returns True for completed layer."""
-        mock_swap.return_value = None
+        self.assertTrue(counter.is_all_done())
+        self.assertEqual(counter.get_completed_count(), 4)
+        self.assertTrue(counter.is_layer_done(0))
+        self.assertTrue(counter.is_layer_done(3))
 
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
-        meta.async_handler.wait(timeout=5.0)
+    def test_layer_done_counter_wait_for_layer_immediate(self):
+        """Test wait_for_layer returns immediately if done."""
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
 
-        # Task should complete successfully
-        self.assertTrue(meta.success)
+        counter = LayerDoneCounter(num_layers=4)
+        counter.mark_all_done()
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_layer_by_layer_mode(self, mock_swap):
-        """Test layer-by-layer mode uses load_layers_to_device."""
-        mock_swap.return_value = None
-        self.controller._transfer_manager.swap_all_layers = False
-
-        with patch.object(
-            self.controller._transfer_manager,
-            "load_layers_to_device",
-            return_value=True,
-        ) as mock_load:
-            meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-            self.controller.load_host_to_device([meta])
-            meta.async_handler.wait(timeout=5.0)
-
-            mock_load.assert_called_once()
-            call_kwargs = mock_load.call_args[1]
-            # Check layer_indices and on_layer_complete are passed
-            self.assertEqual(len(call_kwargs["layer_indices"]), 4)  # 4 layers
-            self.assertIn("on_layer_complete", call_kwargs)
-            self.assertTrue(meta.success)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_register_layer_callback(self, mock_swap):
-        """Test register_layer_callback for layer completion notifications."""
-
-        def slow_swap(*args, **kwargs):
-            time.sleep(0.1)
-            return None
-
-        mock_swap.side_effect = slow_swap
-
-        callback_results = []
-
-        def on_done(layer_idx):
-            callback_results.append(layer_idx)
-
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
-
-        # Register callback before task completes
-        self.controller.register_layer_callback(meta.async_handler.task_id, on_done)
-
-        meta.async_handler.wait(timeout=5.0)
-
-        # All layers should be in callback results
-        self.assertEqual(sorted(callback_results), [0, 1, 2, 3])
-
-
-# ============================================================================
-# Eviction Layer-by-Layer Tests
-# ============================================================================
-
-
-class TestEvictLayerByLayer(unittest.TestCase):
-    """Test eviction in layer-by-layer mode."""
-
-    def setUp(self):
-        self.controller = create_cache_controller(num_layers=4)
-        setup_transfer_env(self.controller, num_layers=4)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_evict_all_layers_mode(self, mock_swap):
-        """Test eviction in all-layers mode."""
-        mock_swap.return_value = None
-
-        meta = CacheSwapMetadata(src_block_ids=[0], dst_block_ids=[10])
-        self.controller.evict_device_to_host([meta])
-        meta.async_handler.wait(timeout=5.0)
-
-        self.assertTrue(meta.success)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_evict_layer_by_layer_mode(self, mock_swap):
-        """Test eviction in layer-by-layer mode."""
-        self.controller._transfer_manager.swap_all_layers = False
-
-        with patch.object(
-            self.controller._transfer_manager,
-            "evict_layers_to_host",
-            return_value=True,
-        ) as mock_evict:
-            meta = CacheSwapMetadata(src_block_ids=[0], dst_block_ids=[10])
-            self.controller.evict_device_to_host([meta])
-            meta.async_handler.wait(timeout=5.0)
-
-            mock_evict.assert_called_once()
-
-
-# ============================================================================
-# Reset Tests
-# ============================================================================
-
-
-class TestReset(unittest.TestCase):
-    """Test reset_cache and reset_controller_cache."""
-
-    def setUp(self):
-        self.controller = create_cache_controller(num_layers=4)
-        setup_transfer_env(self.controller, num_layers=4)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_reset_cache_clears_tasks(self, mock_swap):
-        """Test reset_cache clears active tasks."""
-        mock_swap.return_value = None
-
-        metas = [CacheSwapMetadata(src_block_ids=[10 + i], dst_block_ids=[i]) for i in range(3)]
-        self.controller.load_host_to_device(metas)
-        for meta in metas:
-            meta.async_handler.wait(timeout=5.0)
-
-        # After reset, active tasks should be cleared
-        result = self.controller.reset_cache()
-        self.assertTrue(result)
-        self.assertEqual(len(self.controller._active_tasks), 0)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_reset_cache_with_running_tasks(self, mock_swap):
-        """Test reset_cache cancels running tasks."""
-
-        def slow_swap(*args, **kwargs):
-            time.sleep(2.0)
-            return None
-
-        mock_swap.side_effect = slow_swap
-
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
-
-        # Give a moment for the task to start
-        time.sleep(0.1)
-
-        result = self.controller.reset_cache()
+        result = counter.wait_for_layer(0, timeout=1.0)
         self.assertTrue(result)
 
-        # Check task was cancelled
-        task = self.controller._active_tasks.get(meta.async_handler.task_id)
-        self.assertIsNone(task)
+    def test_layer_done_counter_wait_all(self):
+        """Test wait_all waits for all layers."""
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
+
+        counter = LayerDoneCounter(num_layers=4)
+
+        # Mark all done
+        counter.mark_all_done()
+
+        result = counter.wait_all(timeout=1.0)
+        self.assertTrue(result)
+        self.assertTrue(counter.is_all_done())
+
+    def test_layer_done_counter_get_pending_layers(self):
+        """Test get_pending_layers returns correct list."""
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
+
+        counter = LayerDoneCounter(num_layers=4)
+        counter.mark_layer_done(1)
+
+        pending = counter.get_pending_layers()
+        self.assertEqual(pending, [0, 2, 3])
+
+    def test_layer_done_counter_callback(self):
+        """Test callback is called on layer complete."""
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
+
+        counter = LayerDoneCounter(num_layers=4)
+        callback_layers = []
+
+        def callback(layer_idx):
+            callback_layers.append(layer_idx)
+
+        counter.register_callback(callback)
+        counter.mark_layer_done(2)
+
+        self.assertEqual(callback_layers, [2])
+
+    def test_layer_done_counter_stats(self):
+        """Test get_stats returns correct stats."""
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
+
+        counter = LayerDoneCounter(num_layers=4)
+        counter.mark_layer_done(0)
+        counter.mark_layer_done(1)
+
+        stats = counter.get_stats()
+        self.assertEqual(stats["num_layers"], 4)
+        self.assertEqual(stats["completed_layers"], 2)
+        self.assertEqual(stats["pending_layers"], 2)
 
 
 # ============================================================================
@@ -677,81 +456,38 @@ class TestStats(unittest.TestCase):
 
         self.assertIn("initialized", stats)
         self.assertIn("num_layers", stats)
-        self.assertIn("active_transfers", stats)
         self.assertTrue(stats["initialized"])
         self.assertEqual(stats["num_layers"], 4)
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_get_stats_active_transfers(self, mock_swap):
-        """Test get_stats reports active transfers."""
-        mock_swap.return_value = None
-
-        controller = create_cache_controller(num_layers=4)
-        setup_transfer_env(controller, num_layers=4)
-
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        controller.load_host_to_device([meta])
-        meta.async_handler.wait(timeout=5.0)
-
-        stats = controller.get_stats()
-        self.assertGreaterEqual(stats["active_transfers"], 0)
-
 
 # ============================================================================
-# Transfer Failure Tests
+# Reset Tests
 # ============================================================================
 
 
-class TestTransferFailure(unittest.TestCase):
-    """Test behavior when transfer fails."""
+class TestReset(unittest.TestCase):
+    """Test reset_cache method."""
 
     def setUp(self):
         self.controller = create_cache_controller(num_layers=4)
         setup_transfer_env(self.controller, num_layers=4)
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_all_layer_transfer_failure(self, mock_swap):
-        """Test that transfer failure is properly reported."""
-        mock_swap.side_effect = RuntimeError("CUDA error")
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.evict_to_host_all_layers")
+    def test_reset_cache_clears_pending_evict_counters(self, mock_evict):
+        """Test reset_cache clears pending evict counters."""
+        mock_evict.return_value = True
 
-        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-        self.controller.load_host_to_device([meta])
-        meta.async_handler.wait(timeout=5.0)
+        evict_meta = CacheSwapMetadata(src_block_ids=[0], dst_block_ids=[10])
+        counter = self.controller.evict_device_to_host(evict_meta)
 
-        self.assertFalse(meta.success)
-        self.assertIsNotNone(meta.error_message)
+        # Manually add counter to pending evict counters (simulating what submit_swap_tasks does)
+        self.controller._pending_evict_counters.append(counter)
 
-        # Task should be marked as failed
-        task = self.controller._active_tasks.get(meta.async_handler.task_id)
-        if task:
-            self.assertEqual(task.status, TransferStatus.FAILED)
+        self.assertEqual(len(self.controller._pending_evict_counters), 1)
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_evict_transfer_failure(self, mock_swap):
-        """Test that eviction failure is properly reported."""
-        mock_swap.side_effect = RuntimeError("Transfer failed")
-
-        meta = CacheSwapMetadata(src_block_ids=[0], dst_block_ids=[10])
-        self.controller.evict_device_to_host([meta])
-        meta.async_handler.wait(timeout=5.0)
-
-        self.assertFalse(meta.success)
-        self.assertIsNotNone(meta.error_message)
-
-    def test_layer_by_layer_transfer_failure(self):
-        """Test layer-by-layer transfer failure."""
-        self.controller._transfer_manager.swap_all_layers = False
-
-        with patch.object(
-            self.controller._transfer_manager,
-            "load_layers_to_device",
-            side_effect=RuntimeError("Layer transfer failed"),
-        ):
-            meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
-            self.controller.load_host_to_device([meta])
-            meta.async_handler.wait(timeout=5.0)
-
-            self.assertFalse(meta.success)
+        result = self.controller.reset_cache()
+        self.assertTrue(result)
+        self.assertEqual(len(self.controller._pending_evict_counters), 0)
 
 
 # ============================================================================
@@ -766,7 +502,6 @@ class TestKVCacheManagement(unittest.TestCase):
         """Test get_kv_caches returns empty dict when not initialized."""
         controller = create_cache_controller()
         result = controller.get_kv_caches()
-        # Should return the (empty) cache_kvs_map
         self.assertIsNotNone(result)
 
     def test_get_host_cache_kvs_map_without_init(self):
@@ -774,6 +509,108 @@ class TestKVCacheManagement(unittest.TestCase):
         controller = create_cache_controller()
         result = controller.get_host_cache_kvs_map()
         self.assertEqual(len(result), 0)
+
+
+# ============================================================================
+# Transfer Failure Tests
+# ============================================================================
+
+
+class TestTransferFailure(unittest.TestCase):
+    """Test behavior when transfer fails."""
+
+    def setUp(self):
+        self.controller = create_cache_controller(num_layers=4)
+        setup_transfer_env(self.controller, num_layers=4)
+
+    @patch("fastdeploy.cache_manager.v1.transfer_manager.CacheTransferManager.load_to_device_all_layers")
+    def test_all_layer_transfer_failure(self, mock_swap):
+        """Test that transfer failure is properly reported."""
+        mock_swap.side_effect = RuntimeError("CUDA error")
+
+        meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
+        self.controller.load_host_to_device(meta)
+
+        # The counter's is_all_done() should return False since the transfer failed
+        # (mark_all_done is not called on failure)
+        # Give the executor a moment to process
+        import time
+
+        time.sleep(0.1)
+
+        # The error should be caught and stored in meta.error_message
+        self.assertFalse(meta.success)
+        self.assertIsNotNone(meta.error_message)
+        self.assertIn("CUDA error", meta.error_message)
+
+
+# ============================================================================
+# Storage Placeholder Tests
+# ============================================================================
+
+
+class TestStoragePlaceholders(unittest.TestCase):
+    """Test storage placeholder methods."""
+
+    def setUp(self):
+        self.controller = create_cache_controller(num_layers=4)
+
+    def test_prefetch_from_storage_returns_error_handler(self):
+        """Test prefetch_from_storage returns error handler (not implemented)."""
+        from fastdeploy.cache_manager.v1.metadata import StorageMetadata
+
+        mock_metadata = MagicMock(spec=StorageMetadata)
+        handler = self.controller.prefetch_from_storage(mock_metadata)
+
+        self.assertIsNotNone(handler)
+        self.assertIsNotNone(handler.error)
+
+    def test_backup_device_to_storage_returns_error_handler(self):
+        """Test backup_device_to_storage returns error handler (not implemented)."""
+        from fastdeploy.cache_manager.v1.metadata import StorageMetadata
+
+        mock_metadata = MagicMock(spec=StorageMetadata)
+        handler = self.controller.backup_device_to_storage([0, 1], mock_metadata)
+
+        self.assertIsNotNone(handler)
+        self.assertIsNotNone(handler.error)
+
+    def test_backup_host_to_storage_returns_error_handler(self):
+        """Test backup_host_to_storage returns error handler (not implemented)."""
+        from fastdeploy.cache_manager.v1.metadata import StorageMetadata
+
+        mock_metadata = MagicMock(spec=StorageMetadata)
+        handler = self.controller.backup_host_to_storage([0, 1], mock_metadata)
+
+        self.assertIsNotNone(handler)
+        self.assertIsNotNone(handler.error)
+
+
+class TestPDTransferPlaceholders(unittest.TestCase):
+    """Test PD transfer placeholder methods."""
+
+    def setUp(self):
+        self.controller = create_cache_controller(num_layers=4)
+
+    def test_send_to_node_returns_error_handler(self):
+        """Test send_to_node returns error handler (not implemented)."""
+        from fastdeploy.cache_manager.v1.metadata import PDTransferMetadata
+
+        mock_metadata = MagicMock(spec=PDTransferMetadata)
+        handler = self.controller.send_to_node(mock_metadata)
+
+        self.assertIsNotNone(handler)
+        self.assertIsNotNone(handler.error)
+
+    def test_wait_for_transfer_from_node_returns_error_handler(self):
+        """Test wait_for_transfer_from_node returns error handler (not implemented)."""
+        from fastdeploy.cache_manager.v1.metadata import PDTransferMetadata
+
+        mock_metadata = MagicMock(spec=PDTransferMetadata)
+        handler = self.controller.wait_for_transfer_from_node(mock_metadata)
+
+        self.assertIsNotNone(handler)
+        self.assertIsNotNone(handler.error)
 
 
 # ============================================================================
