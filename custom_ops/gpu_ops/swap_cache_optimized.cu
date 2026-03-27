@@ -222,6 +222,13 @@ void SwapCachePerLayerImpl(const paddle::Tensor& cache_gpu,
     }
   }
 
+  // For D2H: source is GPU (indexed by swap_block_ids_gpu),
+  //          destination is CPU (indexed by swap_block_ids_cpu).
+  // For H2D: source is CPU (indexed by swap_block_ids_cpu),
+  //          destination is GPU (indexed by swap_block_ids_gpu).
+  const auto& src_block_ids = D2H ? swap_block_ids_gpu : swap_block_ids_cpu;
+  const auto& dst_block_ids = D2H ? swap_block_ids_cpu : swap_block_ids_gpu;
+
   // Allocate and copy block IDs to GPU
   int64_t *d_src_block_ids, *d_dst_block_ids;
   checkCudaErrors(
@@ -229,12 +236,12 @@ void SwapCachePerLayerImpl(const paddle::Tensor& cache_gpu,
   checkCudaErrors(
       cudaMallocAsync(&d_dst_block_ids, num_blocks * sizeof(int64_t), stream));
   checkCudaErrors(cudaMemcpyAsync(d_src_block_ids,
-                                  swap_block_ids_gpu.data(),
+                                  src_block_ids.data(),
                                   num_blocks * sizeof(int64_t),
                                   cudaMemcpyHostToDevice,
                                   stream));
   checkCudaErrors(cudaMemcpyAsync(d_dst_block_ids,
-                                  swap_block_ids_cpu.data(),
+                                  dst_block_ids.data(),
                                   num_blocks * sizeof(int64_t),
                                   cudaMemcpyHostToDevice,
                                   stream));
@@ -358,17 +365,24 @@ void SwapCacheAllLayersBatchImpl(
                                   cudaMemcpyHostToDevice,
                                   stream));
 
+  // For D2H: source is GPU (indexed by swap_block_ids_gpu),
+  //          destination is CPU (indexed by swap_block_ids_cpu).
+  // For H2D: source is CPU (indexed by swap_block_ids_cpu),
+  //          destination is GPU (indexed by swap_block_ids_gpu).
+  const auto& src_block_ids = D2H ? swap_block_ids_gpu : swap_block_ids_cpu;
+  const auto& dst_block_ids = D2H ? swap_block_ids_cpu : swap_block_ids_gpu;
+
   checkCudaErrors(
       cudaMallocAsync(&d_src_block_ids, num_blocks * sizeof(int64_t), stream));
   checkCudaErrors(
       cudaMallocAsync(&d_dst_block_ids, num_blocks * sizeof(int64_t), stream));
   checkCudaErrors(cudaMemcpyAsync(d_src_block_ids,
-                                  swap_block_ids_gpu.data(),
+                                  src_block_ids.data(),
                                   num_blocks * sizeof(int64_t),
                                   cudaMemcpyHostToDevice,
                                   stream));
   checkCudaErrors(cudaMemcpyAsync(d_dst_block_ids,
-                                  swap_block_ids_cpu.data(),
+                                  dst_block_ids.data(),
                                   num_blocks * sizeof(int64_t),
                                   cudaMemcpyHostToDevice,
                                   stream));
