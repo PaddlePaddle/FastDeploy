@@ -164,6 +164,10 @@ class SpeculateMetrics:
     """
     accept_ratio_per_head: list[float]
 
+    def to_dict(self):
+        """Convert SpeculateMetrics into a serializable dict"""
+        return {k: getattr(self, k) for k in self.__dataclass_fields__}
+
 
 @dataclass
 class SamplerOutput:

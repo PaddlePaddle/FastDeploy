@@ -897,7 +897,21 @@ class RequestMetrics:
         """
         Convert the RequestMetrics object to a dictionary.
         """
-        return {k: v for k, v in asdict(self).items()}
+        import dataclasses
+
+        d = {}
+        for k in self.__dataclass_fields__:
+            v = getattr(self, k)
+            if type(v) in (int, float, str, bool, type(None)):
+                d[k] = v
+            elif hasattr(v, "to_dict"):
+                d[k] = v.to_dict()
+            elif type(v) in (list, dict):
+                # RequestMetrics contains only primitive collections
+                d[k] = type(v)(v)
+            else:
+                d[k] = dataclasses.asdict(v) if dataclasses.is_dataclass(v) else v
+        return d
 
     def record_recv_first_token(self):
         cur_time = time.time()
