@@ -2652,6 +2652,7 @@ class GPUModelRunner(ModelRunnerBase):
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
         if self.spec_method == SpecMethod.MTP:
+            self.proposer.model.clear_grpah_opt_backend()
             self.proposer.clear_mtp_cache()
         self.clear_cache()
         paddle.device.cuda.empty_cache()
