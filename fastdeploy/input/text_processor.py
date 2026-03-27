@@ -326,55 +326,6 @@ class DataProcessor(BaseTextProcessor):
 
         return tokens["input_ids"][0]
 
-    def ids2tokens(self, token_id, task_id):
-        """
-        token ids to strings
-
-        Args:
-            token_ids (List[int]): token ids
-                        task_id (str): task id
-
-        Returns:
-            List[str]: strings
-        """
-        if envs.FD_USE_HF_TOKENIZER:
-            if task_id not in self.decode_status:
-                # history token ids & history token strings & befer decode str
-                self.decode_status[task_id] = [[], [], ""]
-
-            status = self.decode_status[task_id]
-            status[0].extend(token_id)
-            decode_str = self.tokenizer.batch_decode(
-                [status[0]],
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=False,
-            )
-            if isinstance(decode_str, list) and len(decode_str):
-                new_str = decode_str[0].replace(status[2], "", 1)
-                status[1].append(new_str)
-                status[2] = decode_str[0]
-            else:
-                new_str = ""
-            return new_str
-        else:
-            if task_id not in self.decode_status:
-                # prefix offset & read offset & history token ids & history token strings
-                self.decode_status[task_id] = [0, 0, [], ""]
-
-            status = self.decode_status[task_id]
-            previous_texts = status[3]
-
-            # Extend in-place first, then pass the full list to decode_token
-            # Avoids creating an O(n) temporary list every token
-            status[2].extend(token_id)
-
-            decode_str, prefix_offset, read_offset = self.tokenizer.decode_token(status[2], status[0], status[1])
-            status[0] = prefix_offset
-            status[1] = read_offset
-            status[3] += decode_str
-
-            return decode_str, status[2], previous_texts
-
     def _load_tokenizer(self):
         """
         load tokenizer
