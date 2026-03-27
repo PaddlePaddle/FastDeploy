@@ -112,7 +112,7 @@ int get_padding_offset(api::Context* ctx,
   WRAPPER_CHECK_PTR(ctx, int, bs, cum_offsets_out);
   WRAPPER_CHECK_PTR(ctx, int, bs + 1, cu_seqlens_q);
   WRAPPER_CHECK_PTR(ctx, int, bs + 1, cu_seqlens_k);
-  WRAPPER_CHECK_PTR(ctx, int64_t, bs* max_seq_len, input_ids);
+  WRAPPER_CHECK_PTR(ctx, int64_t, bs * max_seq_len, input_ids);
   WRAPPER_CHECK_PTR(ctx, int, bs, seq_lens);
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper(ctx,
