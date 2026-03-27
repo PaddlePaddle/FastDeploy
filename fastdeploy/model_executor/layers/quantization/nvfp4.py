@@ -629,13 +629,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
     ) -> paddle.Tensor:
 
         from fastdeploy.model_executor.layers.moe.ep import deep_ep
-
-        logger.info(
-            "FlashInfer cutedsl is slow to import because it triggers JIT compilation of "
-            "CUDA kernels via TVM/CODEGEN, and cuBLASLt initializes lookup tables and "
-            "compiles GEMM kernels during first load. This may take several minutes. "
-            "The wait is expected and only happens once per process."
-        )
         from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
             flashinfer_cutedsl_moe_masked,
         )
@@ -748,12 +741,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
 
-        logger.info(
-            "FlashInfer cutedsl is slow to import because it triggers JIT compilation of "
-            "CUDA kernels via TVM/CODEGEN, and cuBLASLt initializes lookup tables and "
-            "compiles GEMM kernels during first load. This may take several minutes. "
-            "The wait is expected and only happens once per process."
-        )
         from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
             flashinfer_cutedsl_moe_masked,
         )
