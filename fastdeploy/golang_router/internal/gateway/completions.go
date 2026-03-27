@@ -151,10 +151,12 @@ func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte, isSt
 	// Construct two requests
 	decodeReq, err := http.NewRequestWithContext(ctx, "POST", decodeEndpoint, bytes.NewReader(reqBody))
 	if err != nil {
+		logger.Error(ctx, "Failed to create decode request for %s: %v", decodeEndpoint, err)
 		return nil, err
 	}
 	prefillReq, err := http.NewRequestWithContext(ctx, "POST", prefillEndpoint, bytes.NewReader(reqBody))
 	if err != nil {
+		logger.Error(ctx, "Failed to create prefill request for %s: %v", prefillEndpoint, err)
 		return nil, err
 	}
 
@@ -192,6 +194,7 @@ func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte, isSt
 
 	// Prioritize returning Decode errors
 	if decodeRes.err != nil {
+		logger.Error(ctx, "Decode request failed for %s: %v", decodeURL, decodeRes.err)
 		if prefillRes.resp != nil {
 			prefillRes.resp.Body.Close()
 		}
@@ -199,6 +202,7 @@ func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte, isSt
 	}
 	if prefillRes.err != nil {
 		// Prefill errors are also considered failures to avoid inconsistent behavior
+		logger.Error(ctx, "Prefill request failed for %s: %v", prefillURL, prefillRes.err)
 		if decodeRes.resp != nil {
 			decodeRes.resp.Body.Close()
 		}
@@ -302,6 +306,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 
 	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
+		logger.Error(ctx, "Failed to read request body: %v", err)
 		c.Writer.WriteHeader(http.StatusBadRequest)
 		c.Writer.Write([]byte(`{"error": "Invalid request body"}`))
 		return
@@ -309,6 +314,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 
 	var rawReq map[string]any
 	if err := json.Unmarshal(bodyBytes, &rawReq); err != nil {
+		logger.Error(ctx, "Failed to unmarshal request JSON: %v", err)
 		c.Writer.WriteHeader(http.StatusBadRequest)
 		c.Writer.Write([]byte(`{"error": "Invalid JSON format"}`))
 		return
@@ -341,6 +347,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		logger.Info(ctx, "Parsing completed; starting worker selection.")
 		prefillURL, decodeURL, err = manager.SelectWorkerPair(ctx, message)
 		if err != nil {
+			logger.Error(ctx, "Failed to select worker pair: %v", err)
 			c.Writer.WriteHeader(http.StatusBadGateway)
 			c.Writer.Write([]byte(`{"error": "Failed to select worker pair"}`))
 			return
@@ -370,6 +377,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		// Construct disaggregate_info to ensure selected P/D work in pairs within FastDeploy
 		disagg, err := manager.BuildDisaggregateInfo(ctx, prefillURL, decodeURL)
 		if err != nil {
+			logger.Error(ctx, "Failed to build disaggregate_info: %v", err)
 			c.Writer.WriteHeader(http.StatusInternalServerError)
 			c.Writer.Write([]byte(`{"error": "Failed to build disaggregate_info"}`))
 			return
@@ -380,6 +388,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		// Re-encode request body and send to P and D
 		requestBodyData, err = json.Marshal(rawReq)
 		if err != nil {
+			logger.Error(ctx, "Failed to encode modified request: %v", err)
 			c.Writer.WriteHeader(http.StatusInternalServerError)
 			c.Writer.Write([]byte(`{"error": "Failed to encode modified request"}`))
 			return
@@ -395,6 +404,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		// Non-PD mode: use Mixed instance
 		dest, err := manager.SelectWorker(ctx, "")
 		if err != nil {
+			logger.Error(ctx, "Failed to select worker: %v", err)
 			c.Writer.WriteHeader(http.StatusBadGateway)
 			c.Writer.Write([]byte(`{"error": "Failed to select worker"}`))
 			return
@@ -430,7 +440,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 	if err != nil {
 		c.Writer.WriteHeader(http.StatusBadGateway)
 		c.Writer.Write([]byte(`{"error": "Failed to connect to backend service"}`))
-		logger.Info(ctx, "Request completed with an error.")
+		logger.Error(ctx, "Failed to connect to backend service: %v", err)
 		return
 	}
 
@@ -496,7 +506,7 @@ func GetClientWithRetry(c *gin.Context, bodyBytes []byte, destUrl string, comple
 		if err == nil { // Return latest bucketsize
 			return backendResp, nil
 		}
-		logger.Info(c.Request.Context(), "Request failed, retrying...")
+		logger.Error(c.Request.Context(), "Request failed (attempt %d/%d): %v", i+1, maxRetry, err)
 	}
 	return nil, err
 }
@@ -511,6 +521,7 @@ func GetClient(c *gin.Context, address, api string, reqBody []byte) (*http.Respo
 		bytes.NewReader(reqBody),
 	)
 	if err != nil {
+		logger.Error(c.Request.Context(), "Failed to create backend request for %s: %v", backendURL, err)
 		return nil, err
 	}
 	// Copy request headers
@@ -524,6 +535,7 @@ func GetClient(c *gin.Context, address, api string, reqBody []byte) (*http.Respo
 	backendResp, err := client.Do(backendReq)
 
 	if err != nil {
+		logger.Error(c.Request.Context(), "Backend request failed for %s: %v", backendURL, err)
 		return nil, err
 	}
 
