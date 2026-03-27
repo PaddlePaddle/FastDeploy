@@ -87,8 +87,31 @@ class BaseTextProcessor(ABC):
     @abstractmethod
     def text2ids(self, text, max_model_len=None, **kwargs): ...  # noqa: E704
 
-    @abstractmethod
-    def messages2ids(self, request, **kwargs): ...  # noqa: E704
+    def messages2ids(self, request, **kwargs):
+        """Convert a chat-template request into a token-ID list.
+
+        Works for both ``auto`` and ``ernie4_5`` tokeniser types.
+        The ``add_generation_prompt`` kwarg is only injected for non-ernie4_5
+        types because that tokeniser does not recognise the argument.
+        """
+        if self.tokenizer.chat_template is None:
+            raise ValueError("This model does not support chat_template.")
+        if getattr(self, "tokenizer_type", "auto") != "ernie4_5":
+            if "add_generation_prompt" not in kwargs:
+                kwargs["add_generation_prompt"] = request.get("add_generation_prompt", True)
+        spliced_message = self.tokenizer.apply_chat_template(
+            request,
+            tokenize=False,
+            split_special_tokens=False,
+            add_special_tokens=False,
+            **kwargs,
+        )
+        request["prompt_tokens"] = spliced_message
+        req_id = request.get("request_id", None) if isinstance(request, dict) else None
+        tokens = self.tokenizer.tokenize(spliced_message)
+        token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
+        return token_ids
 
     # ------------------------------------------------------------------
     # Parser initialisation helper

@@ -326,38 +326,6 @@ class DataProcessor(BaseTextProcessor):
 
         return tokens["input_ids"][0]
 
-    def messages2ids(self, request, **kwargs):
-        """
-        Convert multi-turn messages into ID sequences.
-
-        Args:
-            messages (List[List[Dict[str, Any]]]): multi-turn messages.
-
-        Returns:
-            List[int]: ID sequences
-        """
-        if self.tokenizer.chat_template is None:
-            raise ValueError("This model does not support chat_template.")
-
-        if "add_generation_prompt" not in kwargs:
-            kwargs["add_generation_prompt"] = request.get("add_generation_prompt", True)
-
-        spliced_message = self.tokenizer.apply_chat_template(
-            request,
-            tokenize=False,
-            split_special_tokens=False,
-            add_special_tokens=False,
-            **kwargs,
-        )
-        request["prompt_tokens"] = spliced_message
-        req_id = None
-        tokens = self.tokenizer.tokenize(spliced_message)
-        if isinstance(request, dict):
-            req_id = request.get("request_id", None)
-        token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-        data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
-        return token_ids
-
     def ids2tokens(self, token_id, task_id):
         """
         token ids to strings
@@ -531,60 +499,6 @@ class TextProcessor(BaseTextProcessor):
                 add_special_tokens=add_special_tokens,
             )
         return tokens["input_ids"][0]
-
-    def messages2ids(self, request, **kwargs):
-        if self.tokenizer.chat_template is None:
-            raise ValueError("This model does not support chat_template.")
-        if self.tokenizer_type != "ernie4_5":
-            if "add_generation_prompt" not in kwargs:
-                kwargs["add_generation_prompt"] = request.get("add_generation_prompt", True)
-        spliced_message = self.tokenizer.apply_chat_template(
-            request,
-            tokenize=False,
-            split_special_tokens=False,
-            add_special_tokens=False,
-            **kwargs,
-        )
-        request["prompt_tokens"] = spliced_message
-        req_id = None
-        if isinstance(request, dict):
-            req_id = request.get("request_id", None)
-        tokens = self.tokenizer.tokenize(spliced_message)
-        token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-        data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
-        return token_ids
-
-    def ids2tokens(self, token_id, task_id):
-        # ernie4_5 only uses the non-HF path
-        if self.tokenizer_type == "ernie4_5" or not envs.FD_USE_HF_TOKENIZER:
-            if task_id not in self.decode_status:
-                self.decode_status[task_id] = [0, 0, [], ""]
-            status = self.decode_status[task_id]
-            previous_texts = status[3]
-            status[2].extend(token_id)
-            decode_str, prefix_offset, read_offset = self.tokenizer.decode_token(status[2], status[0], status[1])
-            status[0] = prefix_offset
-            status[1] = read_offset
-            status[3] += decode_str
-            return decode_str, status[2], previous_texts
-        else:
-            # HF tokenizer path (auto only)
-            if task_id not in self.decode_status:
-                self.decode_status[task_id] = [[], [], ""]
-            status = self.decode_status[task_id]
-            status[0].extend(token_id)
-            decode_str = self.tokenizer.batch_decode(
-                [status[0]],
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=False,
-            )
-            if isinstance(decode_str, list) and len(decode_str):
-                new_str = decode_str[0].replace(status[2], "", 1)
-                status[1].append(new_str)
-                status[2] = decode_str[0]
-            else:
-                new_str = ""
-            return new_str, [], status[2]
 
     def process_logprob_response(self, token_ids, **kwargs):
         return self.tokenizer.decode(token_ids, **kwargs)
