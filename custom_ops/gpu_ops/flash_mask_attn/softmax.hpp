@@ -176,6 +176,7 @@ __forceinline__ __device__ void scale_apply_exp2(
 #pragma unroll
   for (int mi = 0; mi < size<0>(tensor); ++mi) {
     const float max_scaled = max(mi) == -INFINITY ? 0.f : max(mi) * scale;
+
 #pragma unroll
     for (int ni = 0; ni < size<1>(tensor); ++ni) {
       tensor(mi, ni) = exp2f(tensor(mi, ni) * scale - max_scaled);
@@ -188,7 +189,7 @@ struct Softmax {
   using TensorT = decltype(make_tensor<float>(Shape<Int<kNRows>>{}));
   TensorT row_max, row_sum;
 
-  CUTLASS_DEVICE Softmax(){};
+  CUTLASS_DEVICE Softmax() {};
 
   template <bool Is_first, bool Check_inf = false, typename Tensor0>
   __forceinline__ __device__ TensorT max(Tensor0 &acc_s,
@@ -207,9 +208,11 @@ struct Softmax {
 #pragma unroll
       for (int mi = 0; mi < size(row_max); ++mi) {
         float scores_max_cur = row_max(mi);
-        scores_scale(mi) = (scores_max_prev(mi) == -INFINITY && scores_max_cur == -INFINITY)
-            ? 1.f
-            : exp2f((scores_max_prev(mi) - scores_max_cur) * softmax_scale_log2);
+        scores_scale(mi) =
+            (scores_max_prev(mi) == -INFINITY && scores_max_cur == -INFINITY)
+                ? 1.f
+                : exp2f((scores_max_prev(mi) - scores_max_cur) *
+                        softmax_scale_log2);
         row_sum(mi) *= scores_scale(mi);
       }
     }

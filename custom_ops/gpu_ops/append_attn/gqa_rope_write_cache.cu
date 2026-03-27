@@ -660,7 +660,7 @@ __global__ void append_cache_kv_c8(const CacheT *__restrict__ cache_k,
   const T *cur_cache_v_scales;
   T cache_k_scale = 0;
   T cache_v_scale = 0;
-  if (dynamic_quant) {
+  if constexpr (dynamic_quant) {
     cur_cache_k_scales = cache_k_quant_scales +
                          (block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE;
     cur_cache_v_scales = cache_v_quant_scales +
@@ -739,7 +739,7 @@ __global__ void append_cache_kv_c8(const CacheT *__restrict__ cache_k,
         T *k_tile_ptr1 = k_tile_ptr0 + 8 * kv_t_stride;
         T cache_k_scale_0 = cache_k_scale;
         T cache_k_scale_1 = cache_k_scale;
-        if (dynamic_quant) {
+        if constexpr (dynamic_quant) {
           cache_k_scale_0 = cur_cache_k_scales[row_idx];
           cache_k_scale_1 = cur_cache_k_scales[row_idx + 8];
         }
@@ -823,7 +823,7 @@ __global__ void append_cache_kv_c8(const CacheT *__restrict__ cache_k,
         T cache_v_scale_2 = cache_v_scale;
         T cache_v_scale_3 = cache_v_scale;
 
-        if (dynamic_quant) {
+        if constexpr (dynamic_quant) {
           cache_v_scale_0 = cur_cache_v_scales[kv_idx];
           cache_v_scale_1 = cur_cache_v_scales[kv_idx + 1];
           cache_v_scale_2 = cur_cache_v_scales[kv_idx + 2];
@@ -1185,27 +1185,28 @@ __global__ void append_cache_kv_c4(const CacheT *__restrict__ cache_k,
 }
 
 template <typename T, uint32_t HEAD_DIM, uint32_t BLOCK_SIZE>
-void AppendCacheKV(const paddle::Tensor &cache_k,
-                   const paddle::Tensor &cache_v,
-                   const paddle::optional<paddle::Tensor> &cache_k_quant_scales,
-                   const paddle::optional<paddle::Tensor> &cache_v_quant_scales,
-                   const paddle::optional<paddle::Tensor> &cache_k_dequant_scales,
-                   const paddle::optional<paddle::Tensor> &cache_v_dequant_scales,
-                   const paddle::Tensor &cache_k_zp,
-                   const paddle::Tensor &cache_v_zp,
-                   const paddle::Tensor &seq_lens_this_time,
-                   const paddle::Tensor &seq_lens_decoder,
-                   const paddle::Tensor &cu_seqlens_k,
-                   const paddle::Tensor &block_tables,
-                   const paddle::Tensor &cache_batch_ids,
-                   const paddle::Tensor &cache_tile_ids_per_batch,
-                   const paddle::Tensor &cache_num_blocks_x,
-                   const int max_blocks_per_seq,
-                   const int kv_num_heads,
-                   const std::string &cache_quant_type,
-                   paddle::Tensor *k_out,
-                   paddle::Tensor *v_out,
-                   const cudaStream_t &stream) {
+void AppendCacheKV(
+    const paddle::Tensor &cache_k,
+    const paddle::Tensor &cache_v,
+    const paddle::optional<paddle::Tensor> &cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor> &cache_v_quant_scales,
+    const paddle::optional<paddle::Tensor> &cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor> &cache_v_dequant_scales,
+    const paddle::Tensor &cache_k_zp,
+    const paddle::Tensor &cache_v_zp,
+    const paddle::Tensor &seq_lens_this_time,
+    const paddle::Tensor &seq_lens_decoder,
+    const paddle::Tensor &cu_seqlens_k,
+    const paddle::Tensor &block_tables,
+    const paddle::Tensor &cache_batch_ids,
+    const paddle::Tensor &cache_tile_ids_per_batch,
+    const paddle::Tensor &cache_num_blocks_x,
+    const int max_blocks_per_seq,
+    const int kv_num_heads,
+    const std::string &cache_quant_type,
+    paddle::Tensor *k_out,
+    paddle::Tensor *v_out,
+    const cudaStream_t &stream) {
   using NV_TYPE = typename cascade_attn_type_traits<T>::type;
   constexpr int NUM_WARPS = 4;
   int block_num = cache_num_blocks_x.data<int>()[0];
@@ -1281,14 +1282,18 @@ void AppendCacheKV(const paddle::Tensor &cache_k,
         cache_v.data<uint8_t>(),
         reinterpret_cast<NV_TYPE *>(k_out->data<T>()),
         reinterpret_cast<NV_TYPE *>(v_out->data<T>()),
-        cache_k_quant_scales ? reinterpret_cast<NV_TYPE *>(
-            const_cast<T *>(cache_k_quant_scales.get().data<T>())) : nullptr,
-        cache_v_quant_scales ? reinterpret_cast<NV_TYPE *>(
-            const_cast<T *>(cache_v_quant_scales.get().data<T>())) : nullptr,
-        cache_k_dequant_scales ? reinterpret_cast<NV_TYPE *>(
-            const_cast<T *>(cache_k_dequant_scales.get().data<T>())) : nullptr,
-        cache_v_dequant_scales ? reinterpret_cast<NV_TYPE *>(
-            const_cast<T *>(cache_v_dequant_scales.get().data<T>())) : nullptr,
+        cache_k_quant_scales ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
+                                   cache_k_quant_scales.get().data<T>()))
+                             : nullptr,
+        cache_v_quant_scales ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
+                                   cache_v_quant_scales.get().data<T>()))
+                             : nullptr,
+        cache_k_dequant_scales ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
+                                     cache_k_dequant_scales.get().data<T>()))
+                               : nullptr,
+        cache_v_dequant_scales ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
+                                     cache_v_dequant_scales.get().data<T>()))
+                               : nullptr,
         seq_lens_this_time.data<int>(),
         seq_lens_decoder.data<int>(),
         cu_seqlens_k.data<int>(),
