@@ -72,7 +72,6 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
 
   int bid_start_core, bid_end_core;
   partition(cid, nthreads, max_bsz, 1, &bid_start_core, &bid_end_core);
-                                        
 
   const int max_draft_tokens = 6;
 
@@ -110,7 +109,9 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
       if (seq_lens_decoder_lm >= prompt_len_lm) {
         const int max_possible_block_idx =
             (seq_lens_decoder_lm + max_next_step_tokens) / block_size;
-        GM2LM(block_tables + bid * block_num_per_seq + max_possible_block_idx, &block_table_lm,sizeof(int));
+        GM2LM(block_tables + bid * block_num_per_seq + max_possible_block_idx,
+              &block_table_lm,
+              sizeof(int));
         if (prefill_one_step_stop) {
           LM2GM_ASYNC(&value_true, stop_flags + bid, sizeof(bool));
           LM2GM_ASYNC(&value_zero, seq_lens_this_time + bid, sizeof(int));
