@@ -196,6 +196,14 @@ class GpuWorker(WorkerBase):
         """update weights in place"""
         return self.model_runner.update_weights(version, rsync_config)
 
+    def sleep(self, **kwargs) -> None:
+        """Offload memory from GPU"""
+        return self.model_runner.sleep(**kwargs)
+
+    def wakeup(self, **kwargs) -> None:
+        """Reload memory into GPU"""
+        return self.model_runner.wakeup(**kwargs)
+
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,

@@ -32,6 +32,7 @@ class CacheStatus(Enum):
     CPU = 3
     GPU2STORAGE = 4
     STORAGE2GPU = 5
+    CTRL = -1
 
 
 class BlockNode:

@@ -1439,7 +1439,9 @@ class ResourceManagerV1(ResourceManager):
 
             request_output.metrics.decode_recv_req_time = request.metrics.decode_recv_req_time
             request_output.metrics.decode_preallocate_req_time = request.metrics.decode_preallocate_req_time
-            request.metrics = request_output.metrics
+            request.metrics = copy.deepcopy(request_output.metrics)
+            request.metrics.decode_inference_start_time = time.time()
+            request.metrics.update_decoder_start_time()
             self.running.append(request)
 
     def _free_blocks(self, request: Request):

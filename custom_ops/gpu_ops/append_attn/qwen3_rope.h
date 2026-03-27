@@ -25,7 +25,8 @@
                    head_dim);                                               \
   }
 
-template <typename T, int VecSize = 1>
+
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
     const T *qkv,
     const float *cos_emb,
@@ -119,9 +120,11 @@ __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         src_vec0[i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         src_vec1[i] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       }
     }
     Store<T, VecSize>(src_vec0, &qkv_out[read_idx]);
@@ -149,7 +152,7 @@ __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
 //   shape = (2, 1, max_seq_len, 1, rotary_dim)
 //   cos_emb = rotary_emb[0],  sin_emb starts at offset max_seq_len*rotary_dim
 //   emb_idx = ori_seq_id * rotary_dim + h_bias  (h_bias < rotary_dim)
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
     const T *qkv,
     const float *cos_emb,
@@ -260,7 +263,8 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
         for (int i = 0; i < VecSize; i++) {
           const float x_l = static_cast<float>(src_vec[i]);       // q[h]
           const float x_r = static_cast<float>(src_vec_pair[i]);  // q[h + half_rotary_dim]
-          src_vec[i] = static_cast<T>(x_l * cos_emb_vec[i] - x_r * sin_emb_vec[i]);
+          src_vec[i] = static_cast<T>(fmul_func<EnforceFmulRN>(x_l, cos_emb_vec[i]) -
+                                      fmul_func<EnforceFmulRN>(x_r, sin_emb_vec[i]));
         }
 
       } else if (h_bias < rotary_dim) {
@@ -274,7 +278,8 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
         for (int i = 0; i < VecSize; i++) {
           const float x_r = static_cast<float>(src_vec[i]);
           const float x_l = static_cast<float>(src_vec_pair[i]);
-          src_vec[i] = static_cast<T>(x_r * cos_emb_vec[i] + x_l * sin_emb_vec[i]);
+          src_vec[i] = static_cast<T>(fmul_func<EnforceFmulRN>(x_r, cos_emb_vec[i]) +
+                                      fmul_func<EnforceFmulRN>(x_l, sin_emb_vec[i]));
         }
 
       }
@@ -289,7 +294,7 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
 // Launcher for GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5 (head_dim=256).
 // Differs from the GLM/head_dim=128 variant in: PackSize=8, sin_emb offset uses
 // rotary_dim (not head_dim), and a 2D block where each warp owns one full head.
-template <typename T>
+template <typename T, bool EnforceFmulRN = false>
 void gqa_neox_partial_rotary_qk_split_variable_qwen3_5(
     T *qkv_out,
     T *q,
@@ -335,7 +340,7 @@ void gqa_neox_partial_rotary_qk_split_variable_qwen3_5(
   const float *sin_emb = rotary_emb + max_model_len * rotary_dim;
 
   launchWithPdlWhenEnabled(
-      GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5<T, PackSize>,
+      GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5<T, PackSize, EnforceFmulRN>,
       grid_size,
       block_size,
       0,
@@ -360,7 +365,7 @@ void gqa_neox_partial_rotary_qk_split_variable_qwen3_5(
       rotary_dim);
 }
 
-template <typename T>
+template <typename T, bool EnforceFmulRN = false>
 void gqa_rotary_qk_split_variable_qwen3(T *qkv_out,
                                         T *q,
                                         T *k,
@@ -394,7 +399,7 @@ void gqa_rotary_qk_split_variable_qwen3(T *qkv_out,
   const float *cos_emb = rotary_emb;
   const float *sin_emb = rotary_emb + max_model_len * head_dim;
   launchWithPdlWhenEnabled(
-      GQAVariableLengthRotarySplitKernel_Qwen3<T, PackSize>,
+      GQAVariableLengthRotarySplitKernel_Qwen3<T, PackSize, EnforceFmulRN>,
       grid_size,
       block_size,
       0,

@@ -26,6 +26,8 @@ cudaError_t DispatchTopK(paddle::Tensor& input,
                          uint32_t num_rows,
                          const int32_t* seq_len_decoder,
                          const int32_t* batch_id_per_token,
+                         const int32_t* block_tables,
+                         uint32_t max_block_num,
                          uint32_t top_k,
                          uint32_t q_num_heads,
                          uint32_t max_len,
@@ -45,6 +47,8 @@ cudaError_t DispatchTopK(paddle::Tensor& input,
           num_rows,
           seq_len_decoder,
           batch_id_per_token,
+          block_tables,
+          static_cast<uint32_t>(max_block_num),
           static_cast<uint32_t>(top_k),
           static_cast<uint32_t>(q_num_heads),
           max_len,
@@ -60,7 +64,9 @@ void RadixTopkRaggedTransform(
     paddle::Tensor& lengths,
     paddle::optional<paddle::Tensor>& seq_len_decoder,
     paddle::optional<paddle::Tensor>& batch_id_per_token,
+    paddle::optional<paddle::Tensor>& block_tables,
     paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
+    int max_block_num,
     int top_k,
     int q_num_heads = 0) {
   //   CHECK_INPUT(input);
@@ -102,6 +108,11 @@ void RadixTopkRaggedTransform(
     batch_id_per_token_ptr =
         static_cast<const int32_t*>(tensor_ptr.data<int32_t>());
   }
+  const int32_t* block_tables_ptr = nullptr;
+  if (block_tables) {
+    auto& tensor_ptr = block_tables.get();
+    block_tables_ptr = static_cast<const int32_t*>(tensor_ptr.data<int32_t>());
+  }
 
   if (input_dtype == paddle::DataType::BFLOAT16) {
     status = DispatchTopK<paddle::DataType::BFLOAT16>(input,
@@ -111,6 +122,8 @@ void RadixTopkRaggedTransform(
                                                       num_rows,
                                                       seq_len_ptr,
                                                       batch_id_per_token_ptr,
+                                                      block_tables_ptr,
+                                                      max_block_num,
                                                       top_k,
                                                       q_num_heads,
                                                       max_len,
@@ -124,6 +137,8 @@ void RadixTopkRaggedTransform(
                                                      num_rows,
                                                      seq_len_ptr,
                                                      batch_id_per_token_ptr,
+                                                     block_tables_ptr,
+                                                     max_block_num,
                                                      top_k,
                                                      q_num_heads,
                                                      max_len,
@@ -141,6 +156,7 @@ PD_BUILD_STATIC_OP(radix_topk_ragged_transform)
              "lengths",
              paddle::Optional("seq_len_decoder"),
              paddle::Optional("batch_id_per_token"),
+             paddle::Optional("block_tables"),
              paddle::Optional("maybe_row_states_buffer")})
-    .Attrs({"top_k : int", "q_num_heads : int"})
+    .Attrs({"top_k : int", "q_num_heads : int", "max_block_num : int"})
     .SetKernelFn(PD_KERNEL(RadixTopkRaggedTransform));

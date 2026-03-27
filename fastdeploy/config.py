@@ -687,6 +687,9 @@ class ParallelConfig:
         if self.shutdown_comm_group_if_worker_idle is None:
             self.shutdown_comm_group_if_worker_idle = not self.use_ep
 
+        if self.shutdown_comm_group_if_worker_idle and envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
+            raise RuntimeError("shutdown_comm_group_if_worker_idle cannot be True when FD_ENABLE_V1_UPDATE_WEIGHTS=1")
+
         # pd_disaggregation
         use_pd_disaggregation: int = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
         use_pd_disaggregation_per_chunk: int = int(os.getenv("FLAGS_use_pd_disaggregation_per_chunk", 0))
@@ -1351,6 +1354,37 @@ class EarlyStopConfig:
             argument = self.enable_early_stop
 
 
+class DeployModality(str, Enum):
+    """Modality mode for the serving engine deployment.
+
+    Determines which input modalities the serving engine should handle:
+      - TEXT:  Text-only deployment. The engine only processes text inputs,
+               skipping multimodal preprocessing (e.g., vision encoder, audio
+               encoder). This reduces GPU memory usage and startup time when
+               multimodal capabilities are not needed.
+      - MIXED: Multimodal deployment (default). The engine handles mixed-modality
+               inputs including text, images, audio, and video. All modality-specific
+               encoders and preprocessing pipelines are initialized at startup.
+
+    Usage:
+      --deploy-modality text    # text-only, lower resource footprint
+      --deploy-modality mixed   # full multimodal support (default)
+    """
+
+    TEXT = "text"
+    MIXED = "mixed"
+
+    @classmethod
+    def from_str(cls, value: str) -> "DeployModality":
+        """Parse a string into a DeployModality enum, with validation."""
+        value = value.strip().lower()
+        try:
+            return cls(value)
+        except ValueError:
+            valid = ", ".join(f"'{m.value}'" for m in cls)
+            raise ValueError(f"Invalid deploy_modality '{value}'. Must be one of: {valid}")
+
+
 class LoadChoices(str, Enum):
     """LoadChoices"""
 
@@ -1827,6 +1861,7 @@ class FDConfig:
         tool_parser: str = None,
         test_mode=False,
         routing_replay_config: Optional[RoutingReplayConfig] = None,
+        deploy_modality: DeployModality = DeployModality.MIXED,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1843,7 +1878,7 @@ class FDConfig:
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
         self.routing_replay_config = routing_replay_config
-
+        self.deploy_modality: DeployModality = deploy_modality
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
         if self.speculative_config is not None and self.speculative_config.method in [

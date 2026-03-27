@@ -51,7 +51,10 @@ from fastdeploy.spec_decode import SpecMethod, VerifyStrategy
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import build_sampling_params
+    from fastdeploy.model_executor.ops.gpu import (
+        build_sampling_params,
+        naive_update_model_status,
+    )
 
 
 def top_p_normalize_probs_paddle(
@@ -892,7 +895,8 @@ class SpeculativeSampler(nn.Layer):
         Normal sampling without draft token verification.
 
         Used by NAIVE mode: directly samples from target model output
-        and writes results to share_inputs["accept_tokens"]/["accept_num"].
+        and writes results to share_inputs["accept_tokens"]/["accept_num"]
+        via naive_update_model_status (scatter by cu_seqlens_q_output).
 
         Args:
             probs: Target model softmax output
@@ -915,8 +919,15 @@ class SpeculativeSampler(nn.Layer):
             topp_seed=sampling_metadata.seed,
         )
 
-        # For NAIVE mode: write directly to accept_tokens/accept_num
-        share_inputs["accept_tokens"][: next_tokens.shape[0], 0] = next_tokens.squeeze(-1)
+        # Scatter sampled tokens into accept_tokens using cu_seqlens_q_output to
+        # correctly handle mixed prefill+decode batches where token index != batch index.
+        naive_update_model_status(
+            share_inputs["accept_tokens"],
+            share_inputs["accept_num"],
+            share_inputs["seq_lens_this_time"],
+            next_tokens.squeeze(-1),
+            share_inputs["cu_seqlens_q_output"],
+        )
 
         return SamplerOutput(
             sampled_token_ids=share_inputs["accept_tokens"],
@@ -1279,35 +1290,7 @@ class MTPSampler(nn.Layer):
             elif self.logprobs_mode == "raw_logits":
                 raw_logprobs = share_inputs["draft_logits"][:real_token_num, :].clone()
 
-        if sampling_metadata.token_ids_all is not None:
-            token_ids_all = sampling_metadata.token_ids_all
-            prompt_lens = sampling_metadata.prompt_lens
-        else:
-            token_ids_all = sampling_metadata.pre_token_ids
-            prompt_lens = sampling_metadata.fake_prompt_lens
-
-        logits = apply_speculative_penalty_multi_scores(
-            token_ids_all,
-            prompt_lens,
-            logits,
-            sampling_metadata.repetition_penalties,
-            sampling_metadata.frequency_penalties,
-            sampling_metadata.presence_penalties,
-            sampling_metadata.temperature,
-            sampling_metadata.bad_words_token_ids,
-            sampling_metadata.bad_words_token_len,
-            sampling_metadata.step_idx,
-            sampling_metadata.min_dec_lens,
-            sampling_metadata.eos_token_ids,
-            share_inputs["seq_lens_this_time"],
-            share_inputs["batch_id_per_token_output"],
-            share_inputs["cu_seqlens_q_output"],
-            max_model_len,
-            sampling_metadata.pre_token_ids,
-        )
-        probs = F.softmax(logits)
-
-        next_tokens = paddle.argmax(probs, axis=-1)
+        next_tokens = paddle.argmax(logits, axis=-1)
 
         token_ids = None
         logprobs_tensors = None
