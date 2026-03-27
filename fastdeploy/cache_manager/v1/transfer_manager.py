@@ -10,15 +10,17 @@ Async operations are handled by CacheController, not here.
 
 import os
 import threading
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+import paddle
 from paddleformers.utils.log import logger
 
 # Import ops for cache swap
 from fastdeploy.cache_manager.ops import (
-    swap_cache_all_layers,
-    swap_cache_per_layer,        # 新增：单层 KV cache 换入算子
-    swap_cache_all_layers_batch, # 新增：多层批量 KV cache 换入算子
+    swap_cache_all_layers_batch,  # 新增：多层批量 KV cache 换入算子
 )
+from fastdeploy.cache_manager.ops import swap_cache_per_layer  # 新增：单层 KV cache 换入算子
+from fastdeploy.cache_manager.ops import swap_cache_all_layers
 from fastdeploy.cache_manager.v1.storage import create_storage_connector
 from fastdeploy.cache_manager.v1.transfer import create_transfer_connector
 
@@ -67,8 +69,16 @@ class CacheTransferManager:
         self._num_host_blocks = self.cache_config.num_cpu_blocks or 0
 
         self.swap_all_layers = self.cache_config.swap_all_layers
-        self.use_swap_all_layers_batch = os.getenv('FD_USE_OPTIMIZED_SWAP', '0') == '1'  # 新增：是否使用优化批量算子
+        self.use_swap_all_layers_batch = os.getenv("FD_USE_OPTIMIZED_SWAP", "1") == "1"  # 新增：是否使用优化批量算子
         self._lock = threading.RLock()
+
+        # ============ Async Transfer Streams ============
+        # Two independent CUDA streams for fully async transfer
+        # _input_stream: H2D transfer (load to device)
+        # _output_stream: D2H transfer (evict to host)
+        # They run in parallel without waiting for each other
+        self._input_stream = paddle.device.cuda.Stream()
+        self._output_stream = paddle.device.cuda.Stream()
 
         # ============ KV Cache Data Storage ============
         # Name-indexed storage (for single-layer access)
@@ -791,3 +801,259 @@ class CacheTransferManager:
             "has_host_cache": len(self._host_key_ptrs) > 0,
             "is_fp8": self._is_fp8_quantization(),
         }
+
+    # ============ Async Transfer Methods ============
+    # Fully async transfer using independent streams
+    # input_stream and output_stream run in parallel without waiting for each other
+
+    def _swap_all_layers_async(
+        self,
+        device_block_ids: List[int],
+        host_block_ids: List[int],
+        mode: int,
+    ) -> bool:
+        """
+        Async all-layer transfer on dedicated stream.
+
+        Args:
+            device_block_ids: Device block IDs to swap.
+            host_block_ids: Host block IDs to swap.
+            mode: Transfer mode, 0=Device→Host (evict), 1=Host→Device (load).
+
+        Returns:
+            True if transfer submitted successfully.
+        """
+        if self._num_host_blocks <= 0:
+            return False
+
+        try:
+            with paddle.device.cuda.stream(self._output_stream if mode == 0 else self._input_stream):
+                if self.use_swap_all_layers_batch:
+                    swap_cache_all_layers_batch(
+                        self._device_key_caches,
+                        self._host_key_ptrs,
+                        self._num_host_blocks,
+                        device_block_ids,
+                        host_block_ids,
+                        self._device_id,
+                        mode,
+                    )
+                    swap_cache_all_layers_batch(
+                        self._device_value_caches,
+                        self._host_value_ptrs,
+                        self._num_host_blocks,
+                        device_block_ids,
+                        host_block_ids,
+                        self._device_id,
+                        mode,
+                    )
+                    if self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
+                        swap_cache_all_layers_batch(
+                            self._device_key_scales,
+                            self._host_key_scales_ptrs,
+                            self._num_host_blocks,
+                            device_block_ids,
+                            host_block_ids,
+                            self._device_id,
+                            mode,
+                        )
+                        swap_cache_all_layers_batch(
+                            self._device_value_scales,
+                            self._host_value_scales_ptrs,
+                            self._num_host_blocks,
+                            device_block_ids,
+                            host_block_ids,
+                            self._device_id,
+                            mode,
+                        )
+                else:
+                    swap_cache_all_layers(
+                        self._device_key_caches,
+                        self._host_key_ptrs,
+                        self._num_host_blocks,
+                        device_block_ids,
+                        host_block_ids,
+                        self._device_id,
+                        mode,
+                    )
+                    swap_cache_all_layers(
+                        self._device_value_caches,
+                        self._host_value_ptrs,
+                        self._num_host_blocks,
+                        device_block_ids,
+                        host_block_ids,
+                        self._device_id,
+                        mode,
+                    )
+                    if self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
+                        swap_cache_all_layers(
+                            self._device_key_scales,
+                            self._host_key_scales_ptrs,
+                            self._num_host_blocks,
+                            device_block_ids,
+                            host_block_ids,
+                            self._device_id,
+                            mode,
+                        )
+                        swap_cache_all_layers(
+                            self._device_value_scales,
+                            self._host_value_scales_ptrs,
+                            self._num_host_blocks,
+                            device_block_ids,
+                            host_block_ids,
+                            self._device_id,
+                            mode,
+                        )
+            return True
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            return False
+
+    def _swap_single_layer_async(
+        self,
+        layer_idx: int,
+        device_block_ids: List[int],
+        host_block_ids: List[int],
+        mode: int,
+    ) -> bool:
+        """
+        Async single-layer transfer on dedicated stream.
+
+        Args:
+            layer_idx: Layer index to transfer.
+            device_block_ids: Device block IDs to swap.
+            host_block_ids: Host block IDs to swap.
+            mode: Transfer mode, 0=Device→Host (evict), 1=Host→Device (load).
+
+        Returns:
+            True if transfer submitted successfully.
+        """
+        if self._num_host_blocks <= 0:
+            return False
+
+        key_cache = self.get_device_key_cache(layer_idx)
+        value_cache = self.get_device_value_cache(layer_idx)
+        if key_cache is None or value_cache is None:
+            return False
+
+        key_ptr = self.get_host_key_ptr(layer_idx)
+        value_ptr = self.get_host_value_ptr(layer_idx)
+        if key_ptr == 0 or value_ptr == 0:
+            return False
+
+        try:
+            with paddle.device.cuda.stream(self._output_stream if mode == 0 else self._input_stream):
+                swap_cache_per_layer(
+                    key_cache,
+                    key_ptr,
+                    self._num_host_blocks,
+                    device_block_ids,
+                    host_block_ids,
+                    self._device_id,
+                    mode,
+                )
+                swap_cache_per_layer(
+                    value_cache,
+                    value_ptr,
+                    self._num_host_blocks,
+                    device_block_ids,
+                    host_block_ids,
+                    self._device_id,
+                    mode,
+                )
+            return True
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            return False
+
+    def load_to_device_async(
+        self,
+        host_block_ids: List[int],
+        device_block_ids: List[int],
+    ) -> bool:
+        """
+        Async load KV Cache from Host to Device (H2D).
+
+        Transfer runs on _input_stream, fully async from other operations.
+
+        Args:
+            host_block_ids: Host block IDs to load from.
+            device_block_ids: Device block IDs to receive.
+
+        Returns:
+            True if transfer submitted successfully.
+        """
+        return self._swap_all_layers_async(device_block_ids, host_block_ids, mode=1)
+
+    def evict_to_host_async(
+        self,
+        device_block_ids: List[int],
+        host_block_ids: List[int],
+    ) -> bool:
+        """
+        Async evict KV Cache from Device to Host (D2H).
+
+        Transfer runs on _output_stream, fully async from other operations.
+
+        Args:
+            device_block_ids: Device block IDs to evict.
+            host_block_ids: Host block IDs to receive.
+
+        Returns:
+            True if transfer submitted successfully.
+        """
+        return self._swap_all_layers_async(device_block_ids, host_block_ids, mode=0)
+
+    def load_layer_to_device_async(
+        self,
+        layer_idx: int,
+        host_block_ids: List[int],
+        device_block_ids: List[int],
+    ) -> bool:
+        """
+        Async load single layer KV Cache from Host to Device (H2D).
+
+        Transfer runs on _input_stream, fully async from other operations.
+
+        Args:
+            layer_idx: Layer index to load.
+            host_block_ids: Host block IDs to load from.
+            device_block_ids: Device block IDs to receive.
+
+        Returns:
+            True if transfer submitted successfully.
+        """
+        return self._swap_single_layer_async(layer_idx, device_block_ids, host_block_ids, mode=1)
+
+    def evict_layer_to_host_async(
+        self,
+        layer_idx: int,
+        device_block_ids: List[int],
+        host_block_ids: List[int],
+    ) -> bool:
+        """
+        Async evict single layer KV Cache from Device to Host (D2H).
+
+        Transfer runs on _output_stream, fully async from other operations.
+
+        Args:
+            layer_idx: Layer index to evict.
+            device_block_ids: Device block IDs to evict.
+            host_block_ids: Host block IDs to receive.
+
+        Returns:
+            True if transfer submitted successfully.
+        """
+        return self._swap_single_layer_async(layer_idx, device_block_ids, host_block_ids, mode=0)
+
+    def sync_input_stream(self):
+        """Wait for all pending input_stream (H2D) transfers to complete."""
+        paddle.device.cuda.current_stream().wait_stream(self._input_stream)
+
+    def sync_output_stream(self):
+        """Wait for all pending output_stream (D2H) transfers to complete."""
+        paddle.device.cuda.current_stream().wait_stream(self._output_stream)
