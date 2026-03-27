@@ -10,7 +10,7 @@ tqdm
 pynvml
 uvicorn>=0.38.0
 fastapi
-paddleformers @ https://paddle-qa.bj.bcebos.com/ernie/paddleformers-0.4.0.post20251222-py3-none-any.whl
+paddleformers==1.0.0
 redis
 etcd3
 httpx
@@ -49,3 +49,4 @@ py-cpuinfo
 flashinfer-python-paddle
 flash_mask @ https://paddle-qa.bj.bcebos.com/ernie/flash_mask-4.0.post20260128-py3-none-any.whl
 arctic_inference @ https://paddle-qa.bj.bcebos.com/ernie/arctic_inference-0.1.3-cp310-cp310-linux_x86_64.whl
+transformers>=4.55.1,<5.0.0

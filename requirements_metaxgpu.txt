@@ -10,7 +10,7 @@ tqdm
 pynvml
 uvicorn>=0.38.0
 fastapi
-paddleformers==0.4.1
+paddleformers==1.0.0
 redis
 etcd3
 httpx
@@ -46,3 +46,4 @@ einops
 setproctitle
 aistudio_sdk
 py-cpuinfo
+transformers>=4.55.1,<5.0.0

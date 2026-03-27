@@ -22,6 +22,7 @@ from typing import Any, List, Optional
 import paddle
 import torch
 
+paddle.compat.disable_torch_proxy()
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.model_executor.guided_decoding import (
