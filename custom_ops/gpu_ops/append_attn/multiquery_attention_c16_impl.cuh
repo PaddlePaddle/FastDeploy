@@ -157,8 +157,8 @@ __global__ void multi_query_append_attention_kernel(
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
       wid * num_frags_x * 16 + tid % 16, tid / 16);  // 16 * 16
 
-  const uint32_t q_end =
-      min(q_len, div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE));
+  const uint32_t q_end = q_len;
+
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
 #endif
@@ -569,8 +569,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
       tid % 16, tid / 16);  // 16 * 16
 
-  const uint32_t q_end =
-      min(q_len, div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE));
+  const uint32_t q_end = q_len;
 
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
