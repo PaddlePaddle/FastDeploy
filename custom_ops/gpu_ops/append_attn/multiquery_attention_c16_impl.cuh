@@ -588,9 +588,10 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   q_smem_inplace_multiply_sm_scale_multi_warps<num_frags_x, num_frags_y, T>(
       &qo_smem, scale);
 
-  smem_t k_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T)),
-      v_smem(smem + (num_frags_x + NUM_WARP_KV * num_frags_z) * 16 * HEAD_DIM *
-                        sizeof(T));
+  static_assert(num_rows_per_block == num_frags_x * 16);
+  static_assert(BLOCK_SIZE == NUM_WARP_KV * num_frags_z * 16);
+  smem_t k_smem(smem + num_rows_per_block * HEAD_DIM * sizeof(T)),
+      v_smem(smem + (num_rows_per_block + BLOCK_SIZE) * HEAD_DIM * sizeof(T));
 
   const uint32_t num_iterations = div_up(
       CAUSAL
