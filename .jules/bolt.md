@@ -1,0 +1,3 @@
+## 2025-03-29 - Optimize dataclass serialization for metrics
+**Learning:** `dataclasses.asdict()` relies on recursive deepcopying which introduces significant overhead, especially for objects created and serialized frequently on the hot path (like `RequestMetrics` per request).
+**Action:** Replace `asdict()` with manual `to_dict()` methods that iterate over `__dataclass_fields__` using `getattr()`. Explicitly copy primitives, shallow copy lists/dicts, and call `.to_dict()` on nested dataclasses (like `SpeculateMetrics`) to avoid deepcopy overhead while maintaining the correct dictionary structure.

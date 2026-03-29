@@ -164,6 +164,19 @@ class SpeculateMetrics:
     """
     accept_ratio_per_head: list[float]
 
+    def to_dict(self):
+        """
+        convert SpeculateMetrics to a serialized dict
+        """
+        return {
+            "accepted_tokens": self.accepted_tokens,
+            "rejected_tokens": self.rejected_tokens,
+            "accept_ratio": self.accept_ratio,
+            "average_accept_length": self.average_accept_length,
+            "accepted_tokens_per_head": list(self.accepted_tokens_per_head),
+            "accept_ratio_per_head": list(self.accept_ratio_per_head),
+        }
+
 
 @dataclass
 class SamplerOutput:
