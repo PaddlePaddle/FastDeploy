@@ -601,13 +601,13 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                          div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE),
                      chunk_start)))
           : chunk_len,
-      NUM_WARP_KV * num_frags_z * 16);
+      BLOCK_SIZE);
   const uint32_t mask_check_iteration =
       (CAUSAL        ? (min(chunk_len,
                      sub_if_greater_or_zero(kv_len - q_len, chunk_start)))
        : mask_offset ? 0
                      : chunk_len) /
-      (NUM_WARP_KV * num_frags_z * 16);
+      (BLOCK_SIZE);
 
   uint32_t k_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
       wid * num_frags_z * 16 + 8 * (tid / 16) + tid % 8, (tid % 16) / 8);
@@ -694,7 +694,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
         s_frag, o_frag, m_frag, d_frag);
     __syncthreads();
 
-    kv_idx_base += NUM_WARP_KV * num_frags_z * 16;
+    kv_idx_base += BLOCK_SIZE;
     block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
     if (block_id < 0) {
       block_id = 0;
