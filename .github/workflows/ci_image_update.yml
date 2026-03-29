@@ -21,14 +21,14 @@ jobs:
       repo_archive_url: ${{ steps.set_output.outputs.repo_archive_url }}
     steps:
       - name: Clone FastDeploy
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.ref_name }}
           submodules: 'recursive'
           fetch-depth: 1000
 
       - name: Python Setup
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
       - name: Code Info Show and Upload
@@ -37,8 +37,6 @@ jobs:
           AK: ${{ secrets.BOS_AK }}
           SK: ${{ secrets.BOS_SK }}
         run: |
-          git config --unset http.https://github.com/.extraheader
-          git submodule foreach --recursive sh -c "git config --local --unset-all 'http.https://github.com/.extraheader'"
           git submodule foreach --recursive sh -c "git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
           echo "Current HEAD Log:"
           git log --oneline -n 5
@@ -93,7 +91,8 @@ jobs:
       FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
       PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
       PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
-
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   unittest_coverage:
     name: Run FastDeploy Unit Tests and Coverage
@@ -116,6 +115,8 @@ jobs:
       PADDLETEST_ARCHIVE_URL: "https://xly-devops.bj.bcebos.com/PaddleTest/PaddleTest.tar.gz"
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   pre_ce_test:
     name: Extracted partial CE model tasks to run in CI.
@@ -126,6 +127,8 @@ jobs:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   base_test:
     name: Run Base Tests
@@ -136,6 +139,8 @@ jobs:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   stable_test:
     name: Run Stable Tests
@@ -146,6 +151,8 @@ jobs:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   publish_pre_check:
     name: Publish Docker Images Pre Check

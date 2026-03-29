@@ -19,7 +19,7 @@ jobs:
           echo "Current runner name: ${{ runner.name }}"
       # Because the system version is lower than 2.23, the checkout cannot be used.
       # - name: Checkout code
-      #   uses: actions/checkout@v4
+      #   uses: actions/checkout@v6
 
       - name: Code Checkout
         env:

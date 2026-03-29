@@ -52,7 +52,18 @@ on:
       wheel_path:
         description: "Output path of the generated wheel"
         value: ${{ jobs.fd-build.outputs.wheel_path }}
+    secrets:
+      github-token:
+        required: true
+
 jobs:
+  check_bypass:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+    with:
+      workflow-name: build_gpu
+
   fd-build:
     runs-on: [self-hosted, GPU-Build]
     timeout-minutes: 360
