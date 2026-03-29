@@ -405,7 +405,7 @@ jobs:
 
       - name: Upload diff coverage report
         if: always() && hashFiles('python_coverage_all.xml') != ''
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./python_coverage_all.xml
           flags: GPU
