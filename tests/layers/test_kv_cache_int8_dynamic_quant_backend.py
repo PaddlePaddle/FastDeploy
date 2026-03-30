@@ -28,32 +28,12 @@ QUANT_CONFIGS and follow the existing test patterns.
 """
 
 import math
-import sys
-import types
 import unittest
 from dataclasses import dataclass
 from unittest.mock import patch
 
 import numpy as np
 import paddle
-
-# ---------------------------------------------------------------------------
-# Environment setup: mock missing dependencies before import
-# ---------------------------------------------------------------------------
-
-
-def _ensure_mock_module(name, attrs=None):
-    """Ensure a module exists in sys.modules, creating a mock if needed."""
-    if name not in sys.modules:
-        mod = types.ModuleType(name)
-        if attrs:
-            for k, v in attrs.items():
-                setattr(mod, k, v)
-        sys.modules[name] = mod
-    return sys.modules[name]
-
-
-_ensure_mock_module("aistudio_sdk.snapshot_download", {"snapshot_download": lambda *a, **kw: None})
 
 _IMPORT_ERROR = None
 try:
