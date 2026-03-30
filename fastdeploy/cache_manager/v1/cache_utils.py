@@ -439,6 +439,73 @@ def hash_block_tokens(
     return hashlib.sha256(pickle.dumps(value)).hexdigest()
 
 
+def get_block_hash_extra_keys(
+    request: Any,
+    start_idx: int,
+    end_idx: int,
+    mm_idx: int,
+) -> tuple:
+    """
+    Retrieve additional hash keys for a block based on multimodal information.
+
+    Mirrors the logic from prefix_cache_manager.PrefixCacheManager.get_block_hash_extra_keys.
+
+    For each block [start_idx, end_idx), scans the multimodal positions starting
+    from mm_idx and collects hashes of any multimodal items that overlap with the block.
+
+    Args:
+        request: Request object.  Must expose a ``multimodal_inputs`` attribute which
+            is either None or a dict with keys:
+                - ``mm_positions``: list of objects with ``.offset`` and ``.length``
+                - ``mm_hashes``:    list of hash strings, one per multimodal item
+        start_idx: Token index of the block start (inclusive).
+        end_idx:   Token index of the block end (exclusive).
+        mm_idx:    Index into mm_positions / mm_hashes to start scanning from
+                   (avoids re-scanning already-processed items).
+
+    Returns:
+        (next_mm_idx, hash_keys):
+            next_mm_idx – updated mm_idx for the next block.
+            hash_keys   – list of multimodal hash strings that fall within this block.
+    """
+    hash_keys: List[str] = []
+    mm_inputs = getattr(request, "multimodal_inputs", None)
+    if (
+        mm_inputs is None
+        or "mm_positions" not in mm_inputs
+        or "mm_hashes" not in mm_inputs
+        or len(mm_inputs["mm_positions"]) == 0
+    ):
+        return mm_idx, hash_keys
+
+    mm_positions = mm_inputs["mm_positions"]
+    mm_hashes = mm_inputs["mm_hashes"]
+
+    # Fast exit: last multimodal item ends before this block starts
+    if mm_positions[-1].offset + mm_positions[-1].length < start_idx:
+        return mm_idx, hash_keys
+
+    for img_idx in range(mm_idx, len(mm_positions)):
+        image_offset = mm_positions[img_idx].offset
+        image_length = mm_positions[img_idx].length
+
+        if image_offset + image_length < start_idx:
+            # Multimodal item ends before block starts – skip
+            continue
+        elif image_offset >= end_idx:
+            # Multimodal item starts after block ends – stop
+            return img_idx, hash_keys
+        elif image_offset + image_length > end_idx:
+            # Multimodal item spans beyond block end – include hash, stop at this item
+            hash_keys.append(mm_hashes[img_idx])
+            return img_idx, hash_keys
+        else:
+            # Multimodal item is fully contained within the block
+            hash_keys.append(mm_hashes[img_idx])
+
+    return len(mm_positions) - 1, hash_keys
+
+
 def get_request_block_hasher(
     block_size: int,
 ) -> Callable[[Any], List[str]]:
@@ -449,7 +516,7 @@ def get_request_block_hasher(
     Computation logic:
     1. Get all token IDs (prompt + output)
     2. Determine starting position based on existing block_hashes count
-    3. Compute hashes for new complete blocks (chained hash)
+    3. Compute hashes for new complete blocks (chained hash, with multimodal extra_keys)
 
     Usage:
         # Create hasher at service startup
@@ -476,6 +543,8 @@ def get_request_block_hasher(
                 - prompt_token_ids: Input token IDs.
                 - _prompt_hashes: List of existing block hashes (private attr).
                 - output_token_ids: Output token IDs (optional).
+                - multimodal_inputs (optional): Multimodal info dict with
+                  ``mm_positions`` and ``mm_hashes``.
 
         Returns:
             List of newly computed block hashes (only new complete blocks).
@@ -513,6 +582,9 @@ def get_request_block_hasher(
         new_block_hashes: List[str] = []
         prev_block_hash = existing_hashes[-1] if existing_hashes else None
 
+        # mm_idx tracks which multimodal item to scan from, avoiding redundant iteration
+        mm_idx = 0
+
         # Compute hashes for new complete blocks
         while True:
             end_token_idx = start_token_idx + block_size
@@ -522,10 +594,17 @@ def get_request_block_hasher(
             # Get tokens for current block
             block_tokens = all_token_ids[start_token_idx:end_token_idx]
 
-            # TODO: Add extra_keys support (multimodal, LoRA, etc.)
+            # Collect multimodal extra_keys for this block
+            mm_idx, extra_keys = get_block_hash_extra_keys(
+                request=request,
+                start_idx=start_token_idx,
+                end_idx=end_token_idx,
+                mm_idx=mm_idx,
+            )
+            extra_keys_value = tuple(extra_keys) if extra_keys else None
 
             # Compute hash (chained hash)
-            block_hash = hash_block_tokens(block_tokens, prev_block_hash, None)
+            block_hash = hash_block_tokens(block_tokens, prev_block_hash, extra_keys_value)
             new_block_hashes.append(block_hash)
 
             # Update state
