@@ -344,7 +344,10 @@ class GPUModelRunner(ModelRunnerBase):
         seq_lens_this_time_cpu = self.share_inputs["seq_lens_this_time_cpu"].numpy()
         is_block_step_cpu = self.share_inputs["is_block_step_cpu"].numpy()
         next_real_bsz = (seq_lens_this_time_cpu > 0).sum().item() + (is_block_step_cpu > 0).sum().item()
-        next_launch_token_num = seq_lens_this_time_cpu.sum().item() + is_block_step_cpu.sum().item()
+        token_num_one_step = (self.speculative_config.num_speculative_tokens + 1) if self.speculative_decoding else 1
+        next_launch_token_num = (
+            seq_lens_this_time_cpu.sum().item() + is_block_step_cpu.sum().item() * token_num_one_step
+        )
         return next_launch_token_num, next_real_bsz
 
     def only_prefill(self):
@@ -2184,11 +2187,8 @@ class GPUModelRunner(ModelRunnerBase):
     ) -> None:
 
         if self.speculative_decoding:
-            if self.exist_prefill() or not self.enable_overlap_schedule:
-                self.output_token_num_event.synchronize()
-                real_output_token_num = int(self._real_output_token_num_host)
-            else:
-                real_output_token_num = self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
+            self.output_token_num_event.synchronize()
+            real_output_token_num = int(self._real_output_token_num_host)
             real_batch_id_per_token_output = self.share_inputs["batch_id_per_token_output"][:real_output_token_num]
 
         prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
@@ -2463,14 +2463,13 @@ class GPUModelRunner(ModelRunnerBase):
         sampler_output,
     ):
         if self.speculative_decoding:
-            if self.spec_method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill":
-                # skip_save_output
-                return
+            skip_save_output = self.spec_method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill"
             save_output_specualate(
                 sampler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
                 save_each_rank=self.parallel_config.use_ep,
+                skip_save_output=skip_save_output,
             )
         else:
             save_output_normal(
