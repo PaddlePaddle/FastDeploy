@@ -222,13 +222,9 @@ echo "Total tests: $TOTAL_TESTS"
 echo "Step 2: Running multi-GPU tests"
 
 if [ ${#MULTI_GPU_TESTS[@]} -gt 0 ]; then
-    export CUDA_VISIBLE_DEVICES="0,1"
-
     for file in "${MULTI_GPU_TESTS[@]}"; do
         run_test_with_logging "$file" "$failed_tests_file"
     done
-
-    unset CUDA_VISIBLE_DEVICES
 else
     echo "No multi-GPU tests to run."
 fi
