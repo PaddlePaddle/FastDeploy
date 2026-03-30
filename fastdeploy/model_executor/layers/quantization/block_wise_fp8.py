@@ -126,7 +126,7 @@ def deep_gemm_fp8_gemm_nt(
 ):
     # disable_ue8m0_cast is default False for SM100
     if get_sm_version() >= 100:
-        assert x_scale_tensor.dtype == paddle.uint8, f"sm100+ requires ue8m0 scale"
+        assert x_scale_tensor.dtype == paddle.uint8, "sm100+ requires ue8m0 scale"
     fp8_gemm_nt(
         (x, x_scale_tensor),
         (layer_weight, layer_weight_scale_inv),
