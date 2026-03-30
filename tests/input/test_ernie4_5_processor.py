@@ -139,7 +139,9 @@ class TestErnie4_5Processor(unittest.TestCase):
 
     def setUp(self):
         """Patch external dependencies: tokenizer, generation config, eos token resolution."""
-        self.gen_patcher = patch(f"{TEXT_PROCESSOR_PATH}.GenerationConfig.from_pretrained", return_value=MagicMock())
+        self.gen_patcher = patch(
+            "fastdeploy.input.base_processor.GenerationConfig.from_pretrained", return_value=MagicMock()
+        )
         self.tokenizer_patcher = patch(
             "fastdeploy.input.ernie4_5_tokenizer.Ernie4_5Tokenizer.from_pretrained",
             side_effect=lambda path: MockTokenizer(),
@@ -304,7 +306,7 @@ class TestErnie4_5Processor(unittest.TestCase):
 
     def test_init_generation_config_exception(self):
         """Test fallback behavior when GenerationConfig loading fails."""
-        with patch(f"{TEXT_PROCESSOR_PATH}.GenerationConfig.from_pretrained", side_effect=Exception("fail")):
+        with patch("fastdeploy.input.base_processor.GenerationConfig.from_pretrained", side_effect=Exception("fail")):
             proc = self._make_processor()
             self.assertIsNone(proc.generation_config)
 

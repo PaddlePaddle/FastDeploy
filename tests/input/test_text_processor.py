@@ -438,8 +438,9 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertNotIn("task", processor.decode_status)
 
     def test_data_processor_init_handles_missing_generation_config(self):
+        base_processor_module = sys.modules["fastdeploy.input.base_processor"]
         with mock.patch.object(
-            self.text_processor_module.GenerationConfig,
+            base_processor_module.GenerationConfig,
             "from_pretrained",
             side_effect=OSError("missing"),
         ):
