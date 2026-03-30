@@ -1026,18 +1026,17 @@ class EngineService:
                             break
                         else:
                             raise
-                if self.cfg.scheduler_config.splitwise_role != "mixed":
-                    # Continue preprocessing incoming requests and accumulating them in the queue when forward pass not finished.
-                    # Once the forward pass finishes, these accumulated requests can be scheduled in larger,
-                    # more efficient batches.
-                    if self.engine_worker_queue.exist_tasks() or self.engine_forward_signal.value[0] != 0:
-                        time.sleep(0.001)
-                        continue
-                else:
-                    # In mixed, todo: optimze cache swap, to decouple swap from scheduler
-                    if self.engine_worker_queue.exist_tasks():
-                        time.sleep(0.001)
-                        continue
+                # Continue preprocessing incoming requests and accumulating them in the queue when forward pass not finished.
+                # Once the forward pass finishes, these accumulated requests can be scheduled in larger,
+                # more efficient batches.
+                if (self.engine_worker_queue.exist_tasks() or self.engine_forward_signal.value[0] != 0) and (
+                    self.resource_manager.cache_manager.num_cpu_blocks == 0
+                    or self.cfg.scheduler_config.splitwise_role != "mixed"
+                ):
+                    # In mixed, when cpu cache is enabled, cache swapping happens in schedule(). If we call schedule() after forward, ttft will degradation due to not overlaped swapping.
+                    # todo: support cache swapping before inserting into waiting list.
+                    time.sleep(0.001)
+                    continue
 
                 if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
                     self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
