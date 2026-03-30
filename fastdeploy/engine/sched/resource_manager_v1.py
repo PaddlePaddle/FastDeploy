@@ -28,6 +28,7 @@ import numpy as np
 import paddle
 
 from fastdeploy import envs
+from fastdeploy.cache_manager.gdn_state_pool import GDNSlotAllocator
 from fastdeploy.cache_manager.multimodal_cache_manager import (
     EncoderCacheManager,
     ProcessorCacheManager,
@@ -230,6 +231,32 @@ class ResourceManagerV1(ResourceManager):
         self.can_relax_prefill_strategy = True
         # Scheduler-side requests that have not been moved into resource manager waiting queue yet.
         self.scheduler_unhandled_request_num = 0
+
+        # GDN SSM slot allocator (None if model has no GDN layers)
+        self.gdn_slot_allocator = self._init_gdn_slot_allocator()
+
+    def _init_gdn_slot_allocator(self):
+        """Create GDN slot allocator if the model has GDN (linear_attention) layers."""
+        model_config = self.config.model_config
+        layer_types = getattr(model_config, "layer_types", None)
+        if layer_types is None:
+            # Generate from full_attention_interval if not explicit
+            interval = getattr(model_config, "full_attention_interval", None)
+            if interval is None:
+                return None
+            num_layers = model_config.num_hidden_layers
+            layer_types = [
+                "linear_attention" if (i + 1) % interval != 0 else "full_attention" for i in range(num_layers)
+            ]
+        num_gdn_layers = sum(1 for lt in layer_types if lt == "linear_attention")
+        if num_gdn_layers == 0:
+            return None
+        allocator = GDNSlotAllocator(self.config.scheduler_config.max_num_seqs)
+        llm_logger.info(
+            f"GDN slot allocator initialized: {num_gdn_layers} GDN layers, "
+            f"max_num_seqs={self.config.scheduler_config.max_num_seqs}"
+        )
+        return allocator
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -997,6 +1024,9 @@ class ResourceManagerV1(ResourceManager):
                                 request.block_tables.extend(extra_gpu_block_ids)
                             self.waiting.popleft()
                             self.running.append(request)
+                            # Allocate GDN SSM state slot if model has GDN layers
+                            if self.gdn_slot_allocator is not None and request.gdn_slot_id is None:
+                                request.gdn_slot_id = self.gdn_slot_allocator.allocate()
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
@@ -1062,6 +1092,9 @@ class ResourceManagerV1(ResourceManager):
                                 request.block_tables.extend(extra_gpu_block_ids)
                             self.waiting.popleft()
                             self.running.append(request)
+                            # Re-allocate GDN slot for preempted request
+                            if self.gdn_slot_allocator is not None and request.gdn_slot_id is None:
+                                request.gdn_slot_id = self.gdn_slot_allocator.allocate()
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
@@ -1451,6 +1484,11 @@ class ResourceManagerV1(ResourceManager):
         else:
             self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
         request.block_tables = []
+
+        # Free GDN SSM state slot
+        if self.gdn_slot_allocator is not None and request.gdn_slot_id is not None:
+            self.gdn_slot_allocator.free(request.gdn_slot_id)
+            request.gdn_slot_id = None
 
         if request.request_id in self.using_extend_tables_req_id:
             reuse_block_num = self.reuse_block_num_map[request.request_id]

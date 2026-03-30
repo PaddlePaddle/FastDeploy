@@ -17,7 +17,7 @@
 import logging
 from dataclasses import dataclass, fields
 from enum import IntEnum, auto
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import paddle
 
@@ -159,6 +159,19 @@ class ForwardMeta:
     exist_prefill: bool = False
 
     position_ids: Optional[paddle.Tensor] = None
+
+    # ============================================================
+    # GDN (Gated Delta Network) linear attention fields
+    # ============================================================
+    # GDN state pool object (shared across all GDN layers)
+    gdn_state_pool: Optional[Any] = None
+    # Slot indices into the GDN state pool [batch_size], int32.
+    # PAD_SLOT_ID=-1 requests are offset to slot 0 (zero-filled sentinel).
+    gdn_slot_ids: Optional[paddle.Tensor] = None
+    # Whether each request has prior state (False = new request) [batch_size], bool
+    gdn_has_initial_state: Optional[paddle.Tensor] = None
+    # CPU sequence lengths for causal_conv1d_fn varlen [batch_size], int32
+    gdn_seq_lens_cpu: Optional[List[int]] = None
 
     def clear_caches(self):
         """Safely clean up the caches"""

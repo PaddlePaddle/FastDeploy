@@ -232,6 +232,9 @@ class InputBatch:
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
         self.block_tables = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
 
+        # GDN SSM state pool slot IDs (PAD_SLOT_ID=-1 for empty slots)
+        self.gdn_slot_ids = paddle.full([max_num_seqs], -1, dtype="int32")
+
         # Initialize free list
         free_list = list(
             range(
