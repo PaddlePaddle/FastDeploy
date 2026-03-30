@@ -1465,17 +1465,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         # ============ V1 KVCACHE Manager: Swap-in waiting config ============
         if self.enable_cache_manager_v1:
-            swap_all_layers = self.cache_config.swap_all_layers
             self.forward_meta.layer_done_counter = self.cache_controller.swap_layer_done_counter
-            # enable_layer_swap_wait is True when:
-            # 1. swap_all_layers=False (layer-by-layer mode)
-            # 2. We have a layer_done_counter from submit_swap_tasks
-            self.forward_meta.enable_layer_swap_wait = (
-                not swap_all_layers and self.cache_controller.swap_layer_done_counter is not None
-            )
         else:
             self.forward_meta.layer_done_counter = None
-            self.forward_meta.enable_layer_swap_wait = False
 
     def initialize_kv_cache(self, profile: bool = False) -> None:
         """
@@ -2420,20 +2412,6 @@ class GPUModelRunner(ModelRunnerBase):
         return model_inputs, p_done_idxs, token_num_event
 
     def _execute(self, model_inputs: Dict[str, paddle.Tensor]) -> None:
-        # ============ V1 KVCACHE Manager: wait_all for swap_all_layers mode ============
-        # When swap_all_layers=true, wait for all swap-in to complete before forward
-        # This is called BEFORE model forward, not inside Attention layer
-        if self.enable_cache_manager_v1 and self.cache_config.swap_all_layers:
-            layer_counter = self.cache_controller.swap_layer_done_counter
-            if layer_counter is not None:
-                import time
-
-                wait_start = time.time()
-                layer_counter.wait_all()
-                wait_ms = (time.time() - wait_start) * 1000
-                if wait_ms > 0.1:
-                    logger.info(f"[wait_all] swap_all_layers wait completed, wait_ms={wait_ms:.2f}")
-
         model_output = None
         if model_inputs is not None and len(model_inputs) > 0:
             model_output = self.model(

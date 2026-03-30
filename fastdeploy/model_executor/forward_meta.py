@@ -152,8 +152,6 @@ class ForwardMeta:
     # ============ V1 KVCACHE Manager: Swap-in waiting info ============
     # LayerDoneCounter for layer-by-layer swap waiting (set by submit_swap_tasks return value)
     layer_done_counter: Optional[Any] = None
-    # Whether to enable layer-by-layer swap waiting (vs wait all before forward)
-    enable_layer_swap_wait: bool = False
 
     # chunked MoE related
     moe_num_chunk: int = 1

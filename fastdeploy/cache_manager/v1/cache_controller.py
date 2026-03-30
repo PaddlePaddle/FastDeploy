@@ -29,6 +29,7 @@ from .base import KVCacheBase
 from .cache_utils import LayerDoneCounter
 from .metadata import (
     AsyncTaskHandler,
+    CacheLevel,
     CacheSwapMetadata,
     PDTransferMetadata,
     StorageMetadata,
@@ -87,9 +88,7 @@ class CacheController(KVCacheBase):
         self._lock = threading.RLock()
 
         # Thread pool executor for async operations
-        # Each transfer task runs in a single thread to avoid GPU bandwidth contention
-        # max_workers=1 ensures only one transfer task runs at a time
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cache_transfer")
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="cache_transfer")
 
         # Initialize transfer manager
         self._transfer_manager = CacheTransferManager(config, local_rank, device_id)
@@ -146,7 +145,6 @@ class CacheController(KVCacheBase):
         # Note: evict returns LayerDoneCounter but we don't wait on it layer-by-layer
         # (except in write_back mode where we wait synchronously via wait_all)
         if evict_metadata is not None:
-            logger.info(f"cache_evict_metadata: {evict_metadata}")
             evict_counter = self.evict_device_to_host(evict_metadata)
             self._pending_evict_counters.append(evict_counter)
 
@@ -157,7 +155,6 @@ class CacheController(KVCacheBase):
         # Step 4: Submit swap-in task if provided
         # Returns LayerDoneCounter for tracking layer completion
         if swap_in_metadata is not None:
-            logger.info(f"cache_swap_metadata: {swap_in_metadata}")
             self._layer_done_counter = self.load_host_to_device(swap_in_metadata)
             return self._layer_done_counter
 
@@ -440,10 +437,11 @@ class CacheController(KVCacheBase):
     def _submit_swap_task(
         self,
         meta: CacheSwapMetadata,
-        src_location: str,
-        dst_location: str,
+        src_location: CacheLevel,
+        dst_location: CacheLevel,
         transfer_fn_all: callable,
         transfer_fn_layer: callable,
+        force_all_layers: bool = False,
     ) -> LayerDoneCounter:
         """
         Submit a single swap transfer task (internal method).
@@ -451,14 +449,16 @@ class CacheController(KVCacheBase):
         Creates a LayerDoneCounter for tracking layer completion.
         The counter is returned to the caller for later waiting.
 
-        Transfer mode is determined by global config self.cache_config.swap_all_layers.
+        H2D (load) always uses layer-by-layer mode for compute-transfer overlap.
+        D2H (evict) always uses all-layers mode via _output_stream (fire-and-forget).
 
         Args:
             meta: CacheSwapMetadata containing src_block_ids and dst_block_ids.
-            src_location: Source location ("host" or "device").
-            dst_location: Destination location ("device" or "host").
+            src_location: Source cache level (CacheLevel.HOST or CacheLevel.DEVICE).
+            dst_location: Destination cache level (CacheLevel.DEVICE or CacheLevel.HOST).
             transfer_fn_all: All-layer transfer function, signature (src_ids, dst_ids) -> bool.
             transfer_fn_layer: Layer-by-layer transfer function, signature (layer_indices, on_layer_complete, src_ids, dst_ids) -> bool.
+            force_all_layers: If True, always use all-layers mode (used for D2H evict).
 
         Returns:
             LayerDoneCounter instance for tracking layer completion.
@@ -476,89 +476,41 @@ class CacheController(KVCacheBase):
             return layer_counter
 
         layers_to_transfer = list(range(self._num_layers))
-        mode = "all_layers" if self.cache_config.swap_all_layers else "layer_by_layer"
-
-        logger.info(
-            f"[SwapTask] submit {src_location}->{dst_location} "
-            f"src_block_ids={src_block_ids} dst_block_ids={dst_block_ids} "
-            f"num_blocks={len(src_block_ids)} mode={mode}"
-        )
 
         def _on_layer_complete(layer_idx: int) -> None:
-            """Callback called after each layer transfer completes."""
-            logger.debug(f"[LayerComplete] layer={layer_idx}")
-            # Create and record CUDA event for this layer completion
-            cuda_event = None
-            try:
-                cuda_event = paddle.device.cuda.Event()
-                cuda_event.record()
-            except Exception as e:
-                logger.warning(f"Failed to create CUDA event for layer {layer_idx}: {e}")
+            """Callback called after each layer's H2D kernel is submitted to input_stream.
 
-            # Mark layer done with CUDA event
-            mark_result = layer_counter.mark_layer_done(layer_idx, cuda_event=cuda_event)
-            logger.debug(f"[LayerComplete] mark_layer_done layer={layer_idx}, result={mark_result}")
+            Records a CUDA event on input_stream so that wait_for_layer() can
+            synchronize on the actual transfer stream (cross-stream dependency).
+            """
+            # Record event on _input_stream so wait_for_layer() waits for the real H2D transfer.
+            # Must use input_stream (not Paddle default stream) to capture the correct dependency.
+            stream_event = self._transfer_manager.record_input_stream_event()
+            if stream_event is not None:
+                layer_counter.set_layer_event(layer_idx, stream_event)
 
-            # Log layer completion time
-            try:
-                wait_time = layer_counter.get_layer_wait_time(layer_idx)
-                if wait_time is not None:
-                    logger.debug(f"[LayerComplete] layer={layer_idx}, transfer_time={wait_time*1000:.2f}ms")
-            except Exception:
-                pass
+            # Mark layer done (adds to _completed_layers, unblocks polling fallback)
+            layer_counter.mark_layer_done(layer_idx)
 
         def _do_transfer():
             try:
                 start_time = time.time()
-                if self.cache_config.swap_all_layers:
+                if force_all_layers:
                     success = transfer_fn_all(src_block_ids, dst_block_ids)
                     elapsed = time.time() - start_time
                     if success:
-                        # Create a single CUDA event for all layers (optimization)
-                        cuda_event = None
-                        try:
-                            cuda_event = paddle.device.cuda.Event()
-                            cuda_event.record()
-                        except Exception as e:
-                            logger.warning(f"Failed to create CUDA event for all layers: {e}")
+                        # For H2D transfers: record event on _input_stream so that
+                        # wait_all() synchronizes on the actual transfer stream, not
+                        # Paddle's default stream. set_layer_event must be called
+                        # before mark_all_done() so wait_all()'s loop finds the event.
+                        if dst_location == CacheLevel.DEVICE:
+                            stream_event = self._transfer_manager.record_input_stream_event()
+                            if stream_event is not None:
+                                layer_counter.set_layer_event(self._num_layers - 1, stream_event)
 
                         # Mark all layers done at once
-                        layer_counter.mark_all_done(cuda_event=cuda_event)
+                        layer_counter.mark_all_done()
 
-                        # Log timing for all layers
-                        try:
-                            wait_time = layer_counter.get_layer_wait_time(0)
-                            if wait_time is not None:
-                                logger.debug(
-                                    f"[SwapTask] all_layers transfer completed, elapsed={wait_time*1000:.2f}ms"
-                                )
-                        except Exception:
-                            pass
-
-                    result = TransferResult(
-                        src_block_ids=src_block_ids,
-                        dst_block_ids=dst_block_ids,
-                        src_type=src_location,
-                        dst_type=dst_location,
-                        success=success,
-                        error_message=None if success else f"All-layer {src_location}→{dst_location} transfer failed",
-                    )
-                    logger.info(
-                        f"[SwapTask] all_layers transfer {'success' if success else 'FAILED'} "
-                        f"elapsed={elapsed*1000:.3f}ms src={src_block_ids} dst={dst_block_ids}"
-                    )
-                else:
-                    logger.debug(f"[SwapTask] starting layer_by_layer transfer, num_layers={len(layers_to_transfer)}")
-                    success = transfer_fn_layer(
-                        layers_to_transfer,
-                        _on_layer_complete,
-                        src_block_ids,
-                        dst_block_ids,
-                    )
-                    elapsed = time.time() - start_time
-                    logger.debug(
-                        f"[SwapTask] layer_by_layer transfer_fn_layer returned, success={success}, elapsed={elapsed*1000:.3f}ms"
-                    )
                     result = TransferResult(
                         src_block_ids=src_block_ids,
                         dst_block_ids=dst_block_ids,
@@ -566,30 +518,52 @@ class CacheController(KVCacheBase):
                         dst_type=dst_location,
                         success=success,
                         error_message=(
-                            None if success else f"Layer-by-layer {src_location}→{dst_location} transfer failed"
+                            None if success else f"All-layer {src_location.value}→{dst_location.value} transfer failed"
                         ),
                     )
-                    logger.info(
-                        f"[SwapTask] layer_by_layer transfer {'success' if success else 'FAILED'} "
-                        f"elapsed={elapsed*1000:.3f}ms src={src_block_ids} dst={dst_block_ids}"
+                    logger.debug(
+                        f"[SwapTask] all_layers {src_location.value}->{dst_location.value} "
+                        f"{'success' if success else 'FAILED'} "
+                        f"src={src_block_ids} dst={dst_block_ids} elapsed={elapsed*1000:.3f}ms"
+                    )
+                else:
+                    success = transfer_fn_layer(
+                        layers_to_transfer,
+                        _on_layer_complete,
+                        src_block_ids,
+                        dst_block_ids,
+                    )
+                    elapsed = time.time() - start_time
+                    result = TransferResult(
+                        src_block_ids=src_block_ids,
+                        dst_block_ids=dst_block_ids,
+                        src_type=src_location,
+                        dst_type=dst_location,
+                        success=success,
+                        error_message=(
+                            None
+                            if success
+                            else f"Layer-by-layer {src_location.value}→{dst_location.value} transfer failed"
+                        ),
+                    )
+                    logger.debug(
+                        f"[SwapTask] layer_by_layer {src_location.value}->{dst_location.value} "
+                        f"{'success' if success else 'FAILED'} "
+                        f"src={src_block_ids} dst={dst_block_ids} elapsed={elapsed*1000:.3f}ms"
                     )
 
                 # Update metadata with result
                 meta.success = result.success
                 meta.error_message = result.error_message
 
-                total_elapsed = time.time() - start_time
-                logger.info(
-                    f"[SwapTask] {src_location}->{dst_location} "
-                    f"{'SUCCESS' if result.success else 'FAILED'} "
-                    f"num_blocks={len(src_block_ids)} total_elapsed={total_elapsed*1000:.3f}ms"
-                )
-
             except Exception as e:
                 import traceback
 
                 traceback.print_exc()
-                logger.error(f"[SwapTask] {src_location}->{dst_location} " f"EXCEPTION: {e}\n{traceback.format_exc()}")
+                logger.error(
+                    f"[SwapTask] {src_location.value}->{dst_location.value} "
+                    f"EXCEPTION: {e}\n{traceback.format_exc()}"
+                )
                 meta.success = False
                 meta.error_message = str(e)
             finally:
@@ -619,19 +593,16 @@ class CacheController(KVCacheBase):
         """
         layer_counter = self._submit_swap_task(
             meta=swap_metadata,
-            src_location="host",
-            dst_location="device",
-            transfer_fn_all=lambda src_ids, dst_ids: self._transfer_manager.load_to_device_all_layers(
-                src_ids, dst_ids
-            ),
-            transfer_fn_layer=lambda layer_indices, on_layer_complete, src_ids, dst_ids: self._transfer_manager.load_layers_to_device(
+            src_location=CacheLevel.HOST,
+            dst_location=CacheLevel.DEVICE,
+            transfer_fn_all=None,
+            transfer_fn_layer=lambda layer_indices, on_layer_complete, src_ids, dst_ids: self._transfer_manager.load_layers_to_device_async(
                 layer_indices=layer_indices,
                 host_block_ids=src_ids,
                 device_block_ids=dst_ids,
                 on_layer_complete=on_layer_complete,
             ),
         )
-        logger.info(f"[LoadHostToDevice] submitted swap task, total_blocks={len(swap_metadata.src_block_ids)}")
         return layer_counter
 
     def evict_device_to_host(
@@ -654,17 +625,12 @@ class CacheController(KVCacheBase):
         """
         layer_counter = self._submit_swap_task(
             meta=swap_metadata,
-            src_location="device",
-            dst_location="host",
-            transfer_fn_all=lambda src_ids, dst_ids: self._transfer_manager.evict_to_host_all_layers(src_ids, dst_ids),
-            transfer_fn_layer=lambda layer_indices, on_layer_complete, src_ids, dst_ids: self._transfer_manager.evict_layers_to_host(
-                layer_indices=layer_indices,
-                device_block_ids=src_ids,
-                host_block_ids=dst_ids,
-                on_layer_complete=on_layer_complete,
-            ),
+            src_location=CacheLevel.DEVICE,
+            dst_location=CacheLevel.HOST,
+            transfer_fn_all=lambda src_ids, dst_ids: self._transfer_manager.evict_to_host_async(src_ids, dst_ids),
+            transfer_fn_layer=None,
+            force_all_layers=True,  # 驱逐始终使用 output_stream 整体异步换出，不逐层
         )
-        logger.info(f"[EvictDeviceToHost] submitted swap task, total_blocks={len(swap_metadata.src_block_ids)}")
         return layer_counter
 
     def prefetch_from_storage(
@@ -917,7 +883,6 @@ class CacheController(KVCacheBase):
             if ptr != 0:
                 try:
                     cuda_host_free(ptr)
-                    logger.debug(f"[CacheController] Freed host cache: {name}")
                 except Exception as e:
                     logger.warning(f"[CacheController] Failed to free host cache {name}: {e}")
         self.host_cache_kvs_map.clear()

@@ -237,26 +237,12 @@ class RadixTree:
             node = self._root
             for i, block_hash in enumerate(block_hashes):
                 if block_hash not in node.children:
-                    logger.debug(
-                        f"[DEBUG] find_prefix path[{i}]: hash={block_hash[:8]}... "
-                        f"MISMATCH (not in children), total_matched={len(matched_nodes)}"
-                    )
                     break
 
                 node = node.children[block_hash]
                 if node.cache_status in (CacheStatus.DELETING, CacheStatus.SWAP_TO_HOST):
-                    logger.debug(
-                        f"[DEBUG] find_prefix path[{i}]: hash={block_hash[:8]}... "
-                        f"status={node.cache_status.name}, block_id={node.block_id}, "
-                        f"ref={node.ref_count}, SKIP (deleting/swapping)"
-                    )
                     break
 
-                logger.debug(
-                    f"[DEBUG] find_prefix path[{i}]: hash={block_hash[:8]}... "
-                    f"status={node.cache_status.name}, block_id={node.block_id}, "
-                    f"ref={node.ref_count}"
-                )
                 node.touch()
                 matched_nodes.append(node)
 
@@ -361,13 +347,12 @@ class RadixTree:
             evicted_block_ids = []
 
             for node in nodes:
-                logger.debug(
-                    f"[DEBUG] evict_host_nodes: -HOST block_id={node.block_id}, "
-                    f"device={len(self._evictable_device)}, "
-                    f"host={len(self._evictable_host)}"
-                )
                 self._remove_node_from_tree(node)
                 evicted_block_ids.append(node.block_id)
+
+            logger.debug(
+                f"evict_host_nodes: evicted={evicted_block_ids}, " f"remaining_host={len(self._evictable_host)}"
+            )
 
         return evicted_block_ids
 
@@ -426,13 +411,12 @@ class RadixTree:
             evicted_block_ids = []
 
             for node in nodes:
-                logger.debug(
-                    f"[DEBUG] evict_device_nodes: -DEVICE block_id={node.block_id}, "
-                    f"device={len(self._evictable_device)}, "
-                    f"host={len(self._evictable_host)}"
-                )
                 self._remove_node_from_tree(node)
                 evicted_block_ids.append(node.block_id)
+
+            logger.debug(
+                f"evict_device_nodes: evicted={evicted_block_ids}, " f"remaining_device={len(self._evictable_device)}"
+            )
 
         return evicted_block_ids
 
@@ -456,32 +440,16 @@ class RadixTree:
             evictable DEVICE blocks.
         """
         if num_blocks == 0:
-            logger.debug("[DEBUG] evict_device_to_host: num_blocks=0, nothing to do")
             return []
 
         if len(host_block_ids) < num_blocks:
-            logger.debug(
-                f"[DEBUG] evict_device_to_host: not enough host_block_ids, "
-                f"need={num_blocks}, got={len(host_block_ids)}"
-            )
             return None
 
         released_block_ids = []
 
         with self._lock:
             if len(self._evictable_device) < num_blocks:
-                logger.debug(
-                    f"[DEBUG] evict_device_to_host: pre-check failed, "
-                    f"need={num_blocks}, device={len(self._evictable_device)}"
-                )
                 return None
-
-            logger.debug(
-                f"[DEBUG] evict_device_to_host: start, "
-                f"num_blocks={num_blocks}, host_block_ids={host_block_ids}, "
-                f"device={len(self._evictable_device)}, "
-                f"host={len(self._evictable_host)}"
-            )
 
             nodes = self._get_lru_nodes(self._evictable_device, num_blocks)
             released_block_ids = []
@@ -501,17 +469,9 @@ class RadixTree:
 
                 released_block_ids.append(original_block_id)
 
-                logger.debug(
-                    f"[DEBUG] evict_device_to_host: DEVICE block_id={original_block_id} -> HOST block_id={new_host_block_id}, "
-                    f"device={len(self._evictable_device)}, "
-                    f"host={len(self._evictable_host)}"
-                )
-
             logger.debug(
-                f"[DEBUG] evict_device_to_host: done, "
-                f"released_device_block_ids={released_block_ids}, "
-                f"device={len(self._evictable_device)}, "
-                f"host={len(self._evictable_host)}"
+                f"evict_device_to_host: released_device={released_block_ids} -> host={host_block_ids[:len(released_block_ids)]}, "
+                f"evictable_device={len(self._evictable_device)}, evictable_host={len(self._evictable_host)}"
             )
 
         return released_block_ids
@@ -523,19 +483,9 @@ class RadixTree:
         if node.cache_status == CacheStatus.DEVICE:
             if node.node_id not in self._evictable_device:
                 self._evictable_device[node.node_id] = (node.last_access_time, node)
-                logger.debug(
-                    f"[DEBUG] _add_to_evictable: +{node.cache_status.name} block_id={node.block_id}, "
-                    f"device={len(self._evictable_device)}, "
-                    f"host={len(self._evictable_host)}"
-                )
         elif node.cache_status == CacheStatus.HOST:
             if node.node_id not in self._evictable_host:
                 self._evictable_host[node.node_id] = (node.last_access_time, node)
-                logger.debug(
-                    f"[DEBUG] _add_to_evictable: +{node.cache_status.name} block_id={node.block_id}, "
-                    f"device={len(self._evictable_device)}, "
-                    f"host={len(self._evictable_host)}"
-                )
 
     def _remove_from_evictable(self, node: BlockNode) -> None:
         """
@@ -543,18 +493,8 @@ class RadixTree:
         """
         if node.cache_status == CacheStatus.DEVICE and node.node_id in self._evictable_device:
             del self._evictable_device[node.node_id]
-            logger.debug(
-                f"[DEBUG] _remove_from_evictable: -{node.cache_status.name} block_id={node.block_id}, "
-                f"device={len(self._evictable_device)}, "
-                f"host={len(self._evictable_host)}"
-            )
         elif node.cache_status == CacheStatus.HOST and node.node_id in self._evictable_host:
             del self._evictable_host[node.node_id]
-            logger.debug(
-                f"[DEBUG] _remove_from_evictable: -{node.cache_status.name} block_id={node.block_id}, "
-                f"device={len(self._evictable_device)}, "
-                f"host={len(self._evictable_host)}"
-            )
 
     def _remove_node_from_tree(self, node: BlockNode) -> None:
         """
@@ -701,11 +641,6 @@ class RadixTree:
                 node.backuped = True
                 node.host_block_id = host_block_id
                 backed_up_ids.append(node.block_id)
-
-                logger.debug(
-                    f"[DEBUG] backup_blocks: block_id={node.block_id}, "
-                    f"host_block_id={host_block_id}, backuped=True"
-                )
 
         return backed_up_ids
 

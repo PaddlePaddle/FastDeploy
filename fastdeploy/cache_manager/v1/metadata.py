@@ -37,6 +37,14 @@ class TransferType(Enum):
     IPC = "ipc"
 
 
+class CacheLevel(Enum):
+    """Cache hierarchy levels for transfer operations."""
+
+    DEVICE = "device"
+    HOST = "host"
+    STORAGE = "storage"
+
+
 class CacheStatus(Enum):
     """缓存状态枚举，表示 BlockNode 当前的位置和状态。
 
@@ -429,8 +437,8 @@ class CacheSwapMetadata:
     Attributes:
         src_block_ids: 源 block IDs（传输来源）.
         dst_block_ids: 目标 block IDs（传输目的地）.
-        src_type: 源缓存类型（"device", "host", "storage"）.
-        dst_type: 目标缓存类型（"device", "host", "storage"）.
+        src_type: 源缓存层级（CacheLevel.DEVICE/HOST/STORAGE）.
+        dst_type: 目标缓存层级（CacheLevel.DEVICE/HOST/STORAGE）.
         hash_values: 对应的 hash 值列表（storage 相关操作时使用）.
         success: 传输是否成功.
         error_message: 错误信息（如果失败）.
@@ -439,8 +447,8 @@ class CacheSwapMetadata:
 
     src_block_ids: List[int] = field(default_factory=list)
     dst_block_ids: List[int] = field(default_factory=list)
-    src_type: str = ""
-    dst_type: str = ""
+    src_type: Optional[CacheLevel] = None
+    dst_type: Optional[CacheLevel] = None
     hash_values: List[str] = field(default_factory=list)
     success: bool = False
     error_message: Optional[str] = None
@@ -469,16 +477,16 @@ class TransferResult:
     Attributes:
         src_block_ids: 源 block IDs（传输来源）.
         dst_block_ids: 目标 block IDs（传输目的地）.
-        src_type: 源缓存类型（"device", "host", "storage"）.
-        dst_type: 目标缓存类型（"device", "host", "storage"）.
+        src_type: 源缓存层级（CacheLevel.DEVICE/HOST/STORAGE）.
+        dst_type: 目标缓存层级（CacheLevel.DEVICE/HOST/STORAGE）.
         success: 传输是否成功.
         error_message: 错误信息（如果失败）.
     """
 
     src_block_ids: List[int] = field(default_factory=list)
     dst_block_ids: List[int] = field(default_factory=list)
-    src_type: str = ""
-    dst_type: str = ""
+    src_type: Optional[CacheLevel] = None
+    dst_type: Optional[CacheLevel] = None
     success: bool = True
     error_message: Optional[str] = None
 

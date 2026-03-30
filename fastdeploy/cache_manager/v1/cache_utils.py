@@ -44,29 +44,35 @@ class LayerDoneCounter:
         self._start_time: float = time.time()
 
         # ============ CUDA Events for efficient waiting (no polling) ============
-        self._cuda_events: List[Any] = []  # list of events per layer
+        # Initialized to None; set by set_layer_event() after kernel submission to transfer stream.
+        # None means no event recorded yet for that layer (must fall back to polling).
+        self._cuda_events: List[Any] = [None] * num_layers
         self._layer_complete_times: Dict[int, float] = {}
 
         # ============ Reference count for active waiters (prevents premature cleanup) ============
         self._wait_count: int = 0
-
-        # Create CUDA events for each layer
-        try:
-            import paddle
-
-            if paddle.is_compiled_with_cuda():
-                self._cuda_events = [paddle.device.cuda.Event() for _ in range(num_layers)]
-            else:
-                self._cuda_events = [None] * num_layers
-        except Exception as e:
-            logger.warning(f"Failed to create CUDA events: {e}")
-            self._cuda_events = [None] * num_layers
 
     def get_num_layers(self) -> int:
         """Get the total number of layers."""
         return self._num_layers
 
     # ============ Mark Methods (called by transfer thread) ============
+
+    def set_layer_event(self, layer_idx: int, cuda_event: Any) -> None:
+        """
+        Set the CUDA event for a specific layer (used for cross-stream synchronization).
+
+        Called by transfer thread after submitting a layer's kernel to a non-default
+        stream (e.g., input_stream), so that wait_for_layer() can correctly synchronize
+        on the actual stream where the transfer runs.
+
+        Args:
+            layer_idx: Index of the layer
+            cuda_event: CUDA event recorded on the transfer stream after kernel submission
+        """
+        with self._lock:
+            if 0 <= layer_idx < len(self._cuda_events):
+                self._cuda_events[layer_idx] = cuda_event
 
     def mark_layer_done(self, layer_idx: int, cuda_event: Any = None) -> bool:
         """
@@ -105,7 +111,7 @@ class LayerDoneCounter:
 
     def mark_all_done(self, cuda_event: Any = None) -> bool:
         """
-        Mark all layers as completed at once (optimization for swap_all_layers mode).
+        Mark all layers as completed at once (used for D2H all-layers evict mode).
 
         Args:
             cuda_event: Optional CUDA event to record completion
@@ -185,9 +191,15 @@ class LayerDoneCounter:
         """
         Wait for a specific layer to complete (CUDA Event synchronization).
 
+        Always synchronizes the CUDA event before returning to guarantee the GPU
+        transfer has actually completed, not just that the kernel was submitted.
+        The fast path that only checked is_layer_done() was unsafe because
+        mark_layer_done() is called immediately after kernel submission (async),
+        before the GPU has finished the transfer.
+
         Args:
             layer_idx: Index of the layer to wait for
-            timeout: Maximum wait time in seconds (default: 300s)
+            timeout: Maximum wait time in seconds (default: 1s)
 
         Returns:
             True if layer completed
@@ -195,50 +207,42 @@ class LayerDoneCounter:
         Raises:
             LayerSwapTimeoutError: If timeout occurs before layer completes
         """
-        # First check if already done (fast path)
-        if self.is_layer_done(layer_idx):
-            return True
-
-        logger.debug(f"[WaitForLayer] layer={layer_idx} starting wait")
-
-        # Increment wait count to prevent premature cleanup
         self._increment_wait_count()
         try:
-            # Try CUDA event waiting first (most efficient)
-            cuda_event = self._cuda_events[layer_idx] if layer_idx < len(self._cuda_events) else None
-            if cuda_event is not None:
-                try:
-                    # Use CUDA event synchronization
-                    cuda_event.synchronize()
-                    # Double check after synchronize
-                    if self.is_layer_done(layer_idx):
-                        logger.debug(f"[WaitForLayer] layer={layer_idx} done via CUDA event")
-                        return True
-                except Exception as e:
-                    logger.warning(f"CUDA event sync failed for layer {layer_idx}: {e}")
-
-            # Fallback to polling wait
             start_time = time.time()
-            default_timeout = 1.0  # 300 seconds default timeout
-            timeout = timeout if timeout is not None else default_timeout
+            timeout = timeout if timeout is not None else 1.0
             while True:
+                # Always try CUDA event sync first: set_layer_event() is called before
+                # mark_layer_done(), so once is_layer_done() is True the event is present.
+                cuda_event = self._cuda_events[layer_idx] if layer_idx < len(self._cuda_events) else None
+                if cuda_event is not None:
+                    try:
+                        cuda_event.synchronize()
+                        return True
+                    except Exception as e:
+                        logger.warning(f"CUDA event sync failed for layer {layer_idx}: {e}")
+                        # Event sync failed; fall through to is_layer_done check
+
+                # No event yet (or sync failed): check software state as fallback
+                # (covers non-cupy scenarios where events are never set)
                 if self.is_layer_done(layer_idx):
-                    logger.debug(f"[WaitForLayer] layer={layer_idx} done via polling")
                     return True
 
-                if timeout is not None:
-                    elapsed = time.time() - start_time
-                    if elapsed >= timeout:
-                        logger.error(f"[WaitForLayer] layer={layer_idx} TIMEOUT after {elapsed:.2f}s")
-                        raise LayerSwapTimeoutError(f"Layer swap timeout: layer={layer_idx}, elapsed={elapsed:.2f}s")
+                elapsed = time.time() - start_time
+                if elapsed >= timeout:
+                    logger.error(f"[WaitForLayer] layer={layer_idx} TIMEOUT after {elapsed:.2f}s")
+                    raise LayerSwapTimeoutError(f"Layer swap timeout: layer={layer_idx}, elapsed={elapsed:.2f}s")
 
-                time.sleep(0.001)  # Small sleep to avoid busy waiting
+                time.sleep(0.001)
         finally:
             self._decrement_wait_count()
 
     def wait_all(self, timeout: Optional[float] = None) -> bool:
         """
-        Wait for all layers to complete (used for swap_all_layers=true mode).
+        Wait for all layers to complete (used for D2H all-layers evict mode).
+
+        Always synchronizes _cuda_events[-1] (set by set_layer_event for the last layer)
+        before returning, for the same reason as wait_for_layer.
 
         Args:
             timeout: Maximum wait time in seconds (default: 300s)
@@ -249,40 +253,28 @@ class LayerDoneCounter:
         Raises:
             LayerSwapTimeoutError: If timeout occurs
         """
-        if self.is_all_done():
-            return True
-
-        logger.debug("[wait_all] starting wait for all layers")
-
         self._increment_wait_count()
         try:
-            # Try CUDA event waiting first (most efficient)
-            # For wait_all, we use the last layer's event
-            if self._cuda_events:
-                last_event = self._cuda_events[-1]
+            start_time = time.time()
+            timeout = timeout if timeout is not None else 300.0
+            while True:
+                # _cuda_events[-1] is set by set_layer_event(num_layers-1, ...) before mark_all_done()
+                last_event = self._cuda_events[-1] if self._cuda_events else None
                 if last_event is not None:
                     try:
                         last_event.synchronize()
-                        if self.is_all_done():
-                            logger.debug("[wait_all] all layers done via CUDA event")
-                            return True
+                        return True
                     except Exception as e:
                         logger.warning(f"CUDA event sync failed for wait_all: {e}")
 
-            # Fallback to polling wait
-            start_time = time.time()
-            default_timeout = 300.0
-            timeout = timeout if timeout is not None else default_timeout
-            while True:
+                # No event yet (or sync failed): check software state as fallback
                 if self.is_all_done():
-                    logger.debug("[wait_all] all layers done via polling")
                     return True
 
-                if timeout is not None:
-                    elapsed = time.time() - start_time
-                    if elapsed >= timeout:
-                        logger.error(f"[wait_all] TIMEOUT after {elapsed:.2f}s")
-                        raise LayerSwapTimeoutError(f"wait_all timeout: elapsed={elapsed:.2f}s")
+                elapsed = time.time() - start_time
+                if elapsed >= timeout:
+                    logger.error(f"[wait_all] TIMEOUT after {elapsed:.2f}s")
+                    raise LayerSwapTimeoutError(f"wait_all timeout: elapsed={elapsed:.2f}s")
 
                 time.sleep(0.001)
         finally:
@@ -306,14 +298,12 @@ class LayerDoneCounter:
         """Increment the wait count."""
         with self._lock:
             self._wait_count += 1
-            logger.debug(f"[increment_wait_count] count={self._wait_count}")
 
     def _decrement_wait_count(self) -> None:
         """Decrement the wait count."""
         with self._lock:
             if self._wait_count > 0:
                 self._wait_count -= 1
-                logger.debug(f"[decrement_wait_count] count={self._wait_count}")
 
     def _should_cleanup(self) -> bool:
         """Check if cleanup is safe (no active waiters and all done)."""
@@ -396,12 +386,10 @@ class LayerDoneCounter:
         with self._lock:
             # Check if safe to cleanup
             if self._wait_count > 0:
-                logger.debug(f"[cleanup] deferred, wait_count={self._wait_count}")
                 return
 
             # Clear CUDA events
             self._cuda_events.clear()
-            logger.debug("[cleanup] completed")
 
     def __del__(self) -> None:
         """
