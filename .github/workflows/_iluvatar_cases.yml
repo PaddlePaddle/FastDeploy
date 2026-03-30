@@ -22,10 +22,22 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      github-token:
+        required: true
 
 jobs:
+  check_bypass:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+    with:
+      workflow-name: ci_iluvatar
+
   run_iluvatar_cases:
     runs-on: iluvatar-gpu-2
+    needs: check_bypass
+    if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
     timeout-minutes: 60
     container:
       image: ${{ inputs.DOCKER_IMAGE }}

@@ -16,7 +16,6 @@
 
 """image preprocessor adaptive"""
 
-import math
 from typing import List, Optional, Union
 
 import numpy as np
@@ -45,6 +44,8 @@ from paddleformers.transformers.image_utils import (
 from paddleformers.transformers.legacy.tokenizer_utils_base import TensorType
 from PIL import Image
 
+from fastdeploy.input.image_processors.common import is_scaled_image
+from fastdeploy.input.image_processors.common import smart_resize_qwen as smart_resize
 from fastdeploy.utils import data_processor_logger
 
 OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
@@ -73,22 +74,9 @@ __all__ = [
 ]
 
 
-def is_scaled_image(image: np.ndarray) -> bool:
-    """
-    Checks to see whether the pixel values have already been rescaled to [0, 1].
-    """
-    if image.dtype == np.uint8:
-        return False
-
-    # It's possible the image has pixel values in [0, 255] but is of floating type
-    return np.min(image) >= 0 and np.max(image) <= 1
-
-
 def make_batched_images(images) -> List[List[ImageInput]]:
     """
     Accepts images in list or nested list format, and makes a list of images for preprocessing.
-
-    Args:
         images (`Union[List[List[ImageInput]], List[ImageInput], ImageInput]`):
             The input image.
 
@@ -521,67 +509,3 @@ class AdaptiveImageProcessor(BaseImageProcessor):
             }
 
         return BatchFeature(data=data, tensor_type=return_tensors)
-
-
-def round_by_factor(number: int, factor: int) -> int:
-    """Returns the closest integer to 'number' that is divisible by 'factor'."""
-    return round(number / factor) * factor
-
-
-def ceil_by_factor(number: int, factor: int) -> int:
-    """Returns the smallest integer greater than or equal to 'number' that is divisible by 'factor'."""
-    return math.ceil(number / factor) * factor
-
-
-def floor_by_factor(number: int, factor: int) -> int:
-    """Returns the largest integer less than or equal to 'number' that is divisible by 'factor'."""
-    return math.floor(number / factor) * factor
-
-
-def smart_resize(
-    height: int,
-    width: int,
-    factor: int = IMAGE_FACTOR,
-    min_pixels: int = MIN_PIXELS,
-    max_pixels: int = MAX_PIXELS,
-):
-    """
-    Rescales the image so that the following conditions are met:
-
-    1. Both dimensions (height and width) are divisible by 'factor'.
-
-    2. The total number of pixels is within the range ['min_pixels', 'max_pixels'].
-
-    3. The aspect ratio of the image is maintained as closely as possible.
-    """
-    if max(height, width) / min(height, width) > MAX_RATIO:
-        if height > width:
-            new_width = max(factor, round_by_factor(width, factor))
-            new_height = floor_by_factor(new_width * MAX_RATIO, factor)
-        else:
-            new_height = max(factor, round_by_factor(height, factor))
-            new_width = floor_by_factor(new_height * MAX_RATIO, factor)
-
-        data_processor_logger.info(
-            f"absolute aspect ratio must be smaller than {MAX_RATIO}, got {max(height, width) / min(height, width)},\
-              resize to {max(new_height, new_width) / min(new_height, new_width)}"
-        )
-
-        height = new_height
-        width = new_width
-
-    h_bar = max(factor, round_by_factor(height, factor))
-    w_bar = max(factor, round_by_factor(width, factor))
-    if h_bar * w_bar > max_pixels:
-        beta = math.sqrt((height * width) / max_pixels)
-        h_bar = floor_by_factor(height / beta, factor)
-        w_bar = floor_by_factor(width / beta, factor)
-    elif h_bar * w_bar < min_pixels:
-        beta = math.sqrt(min_pixels / (height * width))
-        h_bar = ceil_by_factor(height * beta, factor)
-        w_bar = ceil_by_factor(width * beta, factor)
-
-    if min_pixels > h_bar * w_bar or h_bar * w_bar > max_pixels:
-        raise ValueError(f"encounter invalid h_bar: {h_bar}, w_bar: {w_bar}")
-
-    return h_bar, w_bar

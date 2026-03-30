@@ -54,6 +54,7 @@ from fastdeploy.model_executor.layers.sample.sampler import Sampler, Speculative
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.platforms import current_platform
 from fastdeploy.spec_decode import SpecMethod
+from fastdeploy.utils import print_gpu_memory_use
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
 
 if current_platform.is_iluvatar():
@@ -141,6 +142,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_batch_reqs_list: list[Request] = [None for _ in range(self.scheduler_config.max_num_seqs)]
         self.cache_kvs_map: dict = {}
         self.exist_prefill_flag = False
+
+        self.is_kvcache_sleeping = False
+        self.is_weight_sleeping = False
 
         if self.speculative_decoding:
             self._real_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
@@ -287,6 +291,10 @@ class GPUModelRunner(ModelRunnerBase):
         check whether prefill stage exist
         """
         return self.exist_prefill_flag
+
+    @property
+    def is_sleeping(self):
+        return self.is_weight_sleeping or self.is_kvcache_sleeping
 
     def exist_decode(self):
         """
@@ -982,7 +990,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
         if self.spec_method == SpecMethod.MTP:
-            self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
+            self.proposer.insert_tasks_v1(req_dicts, num_running_requests, self.share_inputs.index_to_batch_id)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         raise NotImplementedError("GPUs only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")
@@ -1091,7 +1099,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
             self.exist_prefill_flag = True
             self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
-            self.share_inputs["prompt_lens"][idx : idx + 1] = 0
+            self.share_inputs["prompt_lens"][idx : idx + 1] = input_length
             self.share_inputs["step_idx"][idx : idx + 1] = 0
             self.share_inputs["max_dec_len"][idx : idx + 1] = max_dec_len
             self.share_inputs["min_dec_len"][idx : idx + 1] = max_dec_len
@@ -1226,7 +1234,7 @@ class GPUModelRunner(ModelRunnerBase):
             reorder_split_prefill_and_decode(input_batch=self.share_inputs)
             if self.speculative_decoding:
                 if self.spec_method == SpecMethod.MTP:
-                    self.proposer.reorder_inputs()
+                    self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
 
     def load_model(self) -> None:
         """load or download model"""
@@ -1265,6 +1273,8 @@ class GPUModelRunner(ModelRunnerBase):
         routing_replay_table = None
         if self.routing_replay_manager is not None:
             routing_replay_table = self.routing_replay_manager.get_routing_table()
+
+        num_running_requests = self.share_inputs["seq_lens_this_time"].shape[0]
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
@@ -1277,13 +1287,13 @@ class GPUModelRunner(ModelRunnerBase):
             decoder_num_blocks_device=self.share_inputs["decoder_num_blocks_device"],
             decoder_chunk_size_device=self.share_inputs["decoder_chunk_size_device"],
             max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
-            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
-            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+            seq_lens_encoder=self.share_inputs["seq_lens_encoder"][:num_running_requests],
+            seq_lens_decoder=self.share_inputs["seq_lens_decoder"][:num_running_requests],
             seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
             batch_id_per_token=self.share_inputs["batch_id_per_token"],
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
-            block_tables=self.share_inputs["block_tables"],
+            block_tables=self.share_inputs["block_tables"][:num_running_requests],
             caches=self.share_inputs["caches"],
             encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
             encoder_tile_ids_per_batch=self.share_inputs["encoder_tile_ids_per_batch"],
@@ -1746,8 +1756,6 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=self.model_config.think_end_id,
             splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
             enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
-            is_naive_mode=(self.speculative_decoding and self.proposer is None),
-            prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
         )
         self.exist_prefill_flag = False
         if self.speculative_decoding:
@@ -1881,7 +1889,7 @@ class GPUModelRunner(ModelRunnerBase):
             elif self.speculative_decoding and self.spec_method == SpecMethod.MTP:
                 # Capture Target Model without bsz 1
                 for capture_size in sorted(capture_sizes, reverse=True):
-                    expected_decode_len = self.speculative_config.num_speculative_tokens * 2 + 1
+                    expected_decode_len = (self.speculative_config.num_speculative_tokens + 1) * 2
                     self._dummy_run(
                         num_tokens=self.fd_config.get_max_chunk_tokens(),
                         batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
@@ -2011,6 +2019,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         return prefill_done_idxs
 
+    def _execute_empty_mtp_input(self, forward_meta) -> None:
+        """
+        run ep inference forward with empty input.
+        """
+        for _ in range(self.fd_config.speculative_config.num_model_steps):
+            self.proposer.model.empty_input_forward(forward_meta)
+
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
@@ -2037,7 +2052,13 @@ class GPUModelRunner(ModelRunnerBase):
     ) -> None:
         model_inputs, p_done_idxs, _ = self._preprocess(model_forward_batch, num_running_requests)
         model_output = self._execute(model_inputs)
-        if model_output is None:
+        if model_output is None or self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item() <= 0:
+            if (
+                self.fd_config.speculative_config.method == SpecMethod.MTP
+                and hasattr(self.proposer.model, "empty_input_forward")
+                and self.parallel_config.use_ep
+            ):
+                self._execute_empty_mtp_input(self.forward_meta)
             return
         model_output_data, sampler_output, post_process_event = self._postprocess(
             model_output, p_done_idxs, model_forward_batch, num_running_requests
@@ -2361,8 +2382,6 @@ class GPUModelRunner(ModelRunnerBase):
                 think_end_id=self.model_config.think_end_id,
                 splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
-                is_naive_mode=(self.speculative_decoding and self.proposer is None),
-                prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
                 routing_replay_manager=self.routing_replay_manager,
             )
 
@@ -2633,6 +2652,7 @@ class GPUModelRunner(ModelRunnerBase):
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
         if self.spec_method == SpecMethod.MTP:
+            self.proposer.model.clear_grpah_opt_backend()
             self.proposer.clear_mtp_cache()
         self.clear_cache()
         paddle.device.cuda.empty_cache()
@@ -2674,6 +2694,83 @@ class GPUModelRunner(ModelRunnerBase):
 
     def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
         return self.dynamic_weight_manager.update_weights_by_rdma(version, rsync_config)
+
+    def sleep(self, tags):
+
+        logger.info(f">>> start offloading memory, tags: {tags}")
+        start_time = time.perf_counter()
+
+        # Clear weights, deepep_buffer, cudagraph, etc.
+        if "weight" in tags.split(","):
+            if self.is_weight_sleeping:
+                logger.info("GPU model runner's weight is already sleeping, no need to sleep again!")
+                return
+            if self.use_cudagraph:
+                self.model.clear_grpah_opt_backend()
+            if self.fd_config.parallel_config.enable_expert_parallel:
+                self.dynamic_weight_manager.clear_deepep_buffer()
+            self.dynamic_weight_manager.clear_model_weight()
+            if self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                self.dynamic_weight_manager.clear_communication_group()
+            self.is_weight_sleeping = True
+
+        # Clear KV cache
+        if "kv_cache" in tags.split(","):
+            if self.is_kvcache_sleeping:
+                logger.info("GPU model runner's kv cache is already sleeping, no need to sleep again!")
+                return
+            if self.spec_method == SpecMethod.MTP:
+                self.proposer.clear_mtp_cache()
+            self.clear_cache()
+            self.is_kvcache_sleeping = True
+
+        paddle.device.cuda.empty_cache()
+        logger.info(f"<<< finish offloading memory! time cost: {time.perf_counter()-start_time:.3f}s")
+        print_gpu_memory_use(f"After offloading memory [{tags}]", self.local_rank, self.device_id)
+
+    def wakeup(self, tags):
+
+        if tags == "weight" and self.use_cudagraph and self.is_kvcache_sleeping:
+            raise RuntimeError(
+                "Waking up [weight] alone is not supported when CUDA Graph is enabled, "
+                "as recapturing the graph requires the KV cache to be rebuilt first. "
+                "Please wake up [kv_cache] first."
+            )
+
+        logger.info(f">>> start reloading memory, tags: {tags}")
+        start_time = time.perf_counter()
+
+        # Reset share_inputs to restore tensor shapes and values
+        if self.spec_method == SpecMethod.MTP:
+            self.proposer.model_inputs.reset_model_inputs()
+        self.share_inputs.reset_share_inputs()
+
+        # Reinitialize KV cache
+        if "kv_cache" in tags.split(","):
+            if not self.is_kvcache_sleeping:
+                logger.info("GPU model runner's kv cache is not sleeping, no need to wakeup!")
+                return
+            if self.spec_method == SpecMethod.MTP:
+                self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
+            self.initialize_kv_cache()
+            self.is_kvcache_sleeping = False
+
+        # Reload weights, deepep_buffer, cudagraph, etc.
+        if "weight" in tags.split(","):
+            if not self.is_weight_sleeping:
+                logger.info("GPU model runner's weight is not sleeping, no need to wakeup!")
+                return
+            if self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                self.dynamic_weight_manager.restart_communication_group()
+            if self.fd_config.parallel_config.enable_expert_parallel:
+                self.dynamic_weight_manager.recreate_deepep_buffer()
+            self.dynamic_weight_manager.reload_model_weights()
+            if self.use_cudagraph:
+                self.capture_model()
+            self.is_weight_sleeping = False
+
+        logger.info(f"<<< finish reloading memory! time cost: {time.perf_counter()-start_time:.3f}s")
+        print_gpu_memory_use(f"After reloading memory [{tags}]", self.local_rank, self.device_id)
 
     def padding_cudagraph_inputs(self) -> None:
         """
