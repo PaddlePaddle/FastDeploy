@@ -150,13 +150,12 @@ class MooncakeStore(KVCacheStorage):
 
     def warmup(self):
         warmup_key = "fastdeploy_mooncake_store_warmup_key" + str(uuid.uuid4())
-        warmup_value = bytes(1 * 1024 * 1024)  # 1 MB
+        warmup_value = bytes(4 * 1024)  # 4 kb
         rc = self.store.put(warmup_key, warmup_value)
         assert rc == 0, f"Failed to put warmup key, key:{warmup_key}, error code: {rc}"
         rc = self.store.is_exist(warmup_key)
         assert rc == 1, f"Failed to check existence, key:{warmup_key}, error code: {rc}"
         self.store.get(warmup_key)
-        self.store.remove(warmup_key)
 
     def register_buffer(self, buffer_ptr, buffer_size) -> None:
         try:
