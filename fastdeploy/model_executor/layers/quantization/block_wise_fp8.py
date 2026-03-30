@@ -125,6 +125,9 @@ def deep_gemm_fp8_gemm_nt(
     layer_output_size: int,
     bias: paddle.Tensor = None,
 ):
+    sm_version = get_sm_version()
+    if sm_version >= 100:
+        assert x_scale_tensor.dtype == paddle.uint8, "For SM100, x_scale_tensor must be uint8 dtype."
     if get_sm_version() == 100 and current_platform.is_cuda():
         # disable_ue8m0_cast is default False for SM100
         fp8_gemm_nt(
@@ -132,13 +135,6 @@ def deep_gemm_fp8_gemm_nt(
             (layer_weight, layer_weight_scale_inv),
             linear_out,
             bias=bias,
-        )
-    elif get_sm_version() > 100 and current_platform.is_cuda():
-        fp8_gemm_nt(
-            (x, x_scale_tensor),
-            (layer_weight, layer_weight_scale_inv),
-            linear_out,
-            disable_ue8m0_cast=False,
         )
     else:
         # disable_ue8m0_cast is default False for SM100
