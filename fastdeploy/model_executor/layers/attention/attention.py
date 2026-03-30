@@ -274,31 +274,8 @@ class Attention(nn.Layer):
         """
         # ============ V1 KVCACHE Manager: Layer-by-layer swap wait ============
         # Wait for swap-in of current layer before using cache
-        if forward_meta.enable_layer_swap_wait and forward_meta.layer_done_counter is not None:
-            import time
-
-            layer_wait_start = time.time()
-            layer_done_counter = forward_meta.layer_done_counter
-            layer_done_counter.wait_for_layer(self.layer_id)
-            layer_wait_ms = (time.time() - layer_wait_start) * 1000
-
-            # Get transfer time from layer_done_counter for logging
-            transfer_time_ms = None
-            try:
-                t = layer_done_counter.get_layer_wait_time(self.layer_id)
-                if t is not None:
-                    transfer_time_ms = t * 1000
-            except Exception:
-                pass
-
-            if transfer_time_ms is not None:
-                logger.info(
-                    f"[LayerWait] layer={self.layer_id}, "
-                    f"wait_ms={layer_wait_ms:.2f}, "
-                    f"transfer_ms={transfer_time_ms:.2f}"
-                )
-            else:
-                logger.info(f"[LayerWait] layer={self.layer_id}, wait_ms={layer_wait_ms:.2f}")
+        if forward_meta.layer_done_counter is not None:
+            forward_meta.layer_done_counter.wait_for_layer(self.layer_id)
 
         return forward_meta.attn_backend.forward(
             q,

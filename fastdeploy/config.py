@@ -1563,8 +1563,6 @@ class CacheConfig:
         prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding.
         enable_prefix_caching (bool): Flag to enable prefix caching.
         enable_output_caching (bool): Flag to enable kv cache output tokens, only works in V1 scheduler.
-        swap_all_layers (bool): Whether to swap all layers at once (True) or layer-by-layer (False).
-            When False, swap-in can overlap with forward computation for better performance. Default is False.
     """
 
     def __init__(self, args):
@@ -1615,7 +1613,6 @@ class CacheConfig:
         self.write_through_threshold = 2
         self.num_cpu_blocks = None
         self.use_mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
-        self.swap_all_layers = True  # Default to layer-by-layer swap for better performance
 
         for key, value in args.items():
             if hasattr(self, key):
@@ -2154,18 +2151,17 @@ class FDConfig:
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
 
-        # When using layer-by-layer swap (swap_all_layers=False), CUDA Graph cannot be used
-        # for prefill because swap operations (cudaStreamSynchronize) conflict with CUDA Graph
-        # capture. Force only decode to use CUDA Graph.
+        # Layer-by-layer swap (H2D) is always incompatible with CUDA Graph prefill capture.
+        # Force only decode to use CUDA Graph when host cache is configured.
         if (
             self.cache_config is not None
-            and not self.cache_config.swap_all_layers
+            and self.cache_config.num_cpu_blocks
             and self.graph_opt_config.cudagraph_only_prefill
         ):
             original_value = self.graph_opt_config.cudagraph_only_prefill
             self.graph_opt_config.cudagraph_only_prefill = False
             logger.warning(
-                f"[CacheConfig] Layer-by-layer swap (swap_all_layers=False) is incompatible "
+                f"[CacheConfig] Layer-by-layer swap-in is incompatible "
                 f"with CUDA Graph prefill capture. Forcing cudagraph_only_prefill=False "
                 f"(only decode will use CUDA Graph). Original cudagraph_only_prefill={original_value}"
             )

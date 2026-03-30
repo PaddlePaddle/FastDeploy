@@ -570,36 +570,6 @@ class TestSwapAllLayers(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(mock_swap.call_count, 2)  # key + value
 
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_evict_to_host_all_layers(self, mock_swap):
-        """Test evict_to_host_all_layers wrapper."""
-        mock_swap.return_value = None
-
-        result = self.manager.evict_to_host_all_layers(
-            device_block_ids=[0, 1, 2],
-            host_block_ids=[10, 11, 12],
-        )
-
-        self.assertTrue(result)
-        # Verify mode=0 was passed (7th positional argument)
-        first_call = mock_swap.call_args
-        self.assertEqual(first_call[0][6], 0)
-
-    @patch("fastdeploy.cache_manager.v1.transfer_manager.swap_cache_all_layers")
-    def test_load_to_device_all_layers(self, mock_swap):
-        """Test load_to_device_all_layers wrapper."""
-        mock_swap.return_value = None
-
-        result = self.manager.load_to_device_all_layers(
-            host_block_ids=[10, 11, 12],
-            device_block_ids=[0, 1, 2],
-        )
-
-        self.assertTrue(result)
-        # Verify mode=1 was passed (7th positional argument)
-        first_call = mock_swap.call_args
-        self.assertEqual(first_call[0][6], 1)
-
 
 # ============================================================================
 # Cache Map Getters Tests

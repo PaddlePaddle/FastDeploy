@@ -53,17 +53,9 @@ class BlockPool(ABC):
             List of allocated block indices if successful, None if not enough blocks
         """
         with self._lock:
-            # DEBUG LOG: allocate 前 pool 状态
-            logger.debug(
-                f"[DEBUG] BlockPool.allocate request_num={num_blocks}, "
-                f"free_blocks_count={len(self._free_blocks)}, "
-                f"used_blocks_count={len(self._used_blocks)}, "
-                f"free_blocks_preview={self._free_blocks[:10]}..., "
-            )
-
             if num_blocks > len(self._free_blocks):
                 logger.warning(
-                    f"[DEBUG] BlockPool.allocate failed: not enough blocks, "
+                    f"BlockPool.allocate failed: not enough blocks, "
                     f"requested={num_blocks}, available={len(self._free_blocks)}"
                 )
                 return None
@@ -74,12 +66,6 @@ class BlockPool(ABC):
                 self._used_blocks.add(block_idx)
                 allocated.append(block_idx)
 
-            # DEBUG LOG: allocate 后 pool 状态
-            logger.debug(
-                f"[DEBUG] BlockPool.allocate done: allocated={allocated}, "
-                f"free_blocks_count={len(self._free_blocks)}, "
-                f"used_blocks_count={len(self._used_blocks)}"
-            )
             return allocated
 
     def release(self, block_indices: List[int]) -> None:
@@ -90,13 +76,6 @@ class BlockPool(ABC):
             block_indices: List of block indices to release
         """
         with self._lock:
-            # DEBUG LOG: release 前 pool 状态
-            logger.debug(
-                f"[DEBUG] BlockPool.release request_blocks={block_indices}, "
-                f"free_blocks_count={len(self._free_blocks)}, "
-                f"used_blocks_count={len(self._used_blocks)}, "
-            )
-
             for idx in block_indices:
                 if idx in self._used_blocks:
                     self._used_blocks.remove(idx)
@@ -106,20 +85,13 @@ class BlockPool(ABC):
                 else:
                     # ERROR: block 不在 _used_blocks 中
                     logger.error(
-                        f"[ERROR] BlockPool.release: block_id={idx} NOT in used_blocks! "
+                        f"BlockPool.release: block_id={idx} NOT in used_blocks! "
                         f"request_blocks={block_indices}, "
                         f"is_in_free_blocks={idx in self._free_blocks}, "
                         f"is_valid_block_id={0 <= idx < self.num_blocks}"
                     )
                     # 打印调用栈
-                    logger.error(f"[ERROR] BlockPool.release callstack:\n{traceback.format_exc()}")
-
-            # DEBUG LOG: release 后 pool 状态
-            logger.debug(
-                f"[DEBUG] BlockPool.release done: "
-                f"free_blocks_count={len(self._free_blocks)}, "
-                f"used_blocks_count={len(self._used_blocks)}"
-            )
+                    logger.error(f"BlockPool.release callstack:\n{traceback.format_exc()}")
 
     def get_metadata(self, block_idx: int) -> Optional[CacheBlockMetadata]:
         """
