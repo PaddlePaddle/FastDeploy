@@ -81,22 +81,15 @@ class InputPreprocessor:
         except Exception as e:
             logger.info(f"Plugin input processor not available ({e}), using built-in processor")
             if not self.model_config.enable_mm:
-                if not ErnieArchitectures.contains_ernie_arch(architecture):
-                    from fastdeploy.input.text_processor import DataProcessor
+                from fastdeploy.input.text_processor import TextProcessor
 
-                    self.processor = DataProcessor(
-                        model_name_or_path=self.model_name_or_path,
-                        reasoning_parser_obj=reasoning_parser_obj,
-                        tool_parser_obj=tool_parser_obj,
-                    )
-                else:
-                    from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
-
-                    self.processor = Ernie4_5Processor(
-                        model_name_or_path=self.model_name_or_path,
-                        reasoning_parser_obj=reasoning_parser_obj,
-                        tool_parser_obj=tool_parser_obj,
-                    )
+                tokenizer_type = "ernie4_5" if ErnieArchitectures.contains_ernie_arch(architecture) else "auto"
+                self.processor = TextProcessor(
+                    model_name_or_path=self.model_name_or_path,
+                    tokenizer_type=tokenizer_type,
+                    reasoning_parser_obj=reasoning_parser_obj,
+                    tool_parser_obj=tool_parser_obj,
+                )
             else:
                 if ErnieArchitectures.contains_ernie_arch(architecture):
                     from fastdeploy.input.ernie4_5_vl_processor import (

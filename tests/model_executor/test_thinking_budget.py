@@ -856,7 +856,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
             "temperature": 1.0,
             "top_p": 0.9,
         }
-        with patch("fastdeploy.input.text_processor.process_stop_token_ids", lambda *args, **kwargs: None):
+        with patch("fastdeploy.input.utils.process_stop_token_ids", lambda *args, **kwargs: None):
             processed = processor.process_request_dict(request, max_model_len=16)
         self.assertEqual(
             processed["logits_processors_args"].get("think_stop_sentence_token_ids"),
@@ -889,7 +889,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
             "response_max_tokens": None,
             "enable_thinking": True,
         }
-        with patch("fastdeploy.input.ernie4_5_processor.process_stop_token_ids", lambda *args, **kwargs: None):
+        with patch("fastdeploy.input.utils.process_stop_token_ids", lambda *args, **kwargs: None):
             processed = processor.process_request_dict(request, max_model_len=16)
 
         self.assertEqual(processed["logits_processors_args"]["think_stop_sentence_token_ids"], [501, 502])
@@ -925,7 +925,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
             "response_max_tokens": None,
         }
         with patch(
-            "fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.process_stop_token_ids",
+            "fastdeploy.input.utils.process_stop_token_ids",
             lambda *args, **kwargs: None,
         ):
             processed = processor.process_request_dict(request, max_model_len=16)

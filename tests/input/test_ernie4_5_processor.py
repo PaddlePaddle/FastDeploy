@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 MODULE_PATH = "fastdeploy.input.ernie4_5_processor"
+TEXT_PROCESSOR_PATH = "fastdeploy.input.text_processor"
 
 from fastdeploy.input.ernie4_5_processor import _SAMPLING_EPS, Ernie4_5Processor
 
@@ -138,9 +139,12 @@ class TestErnie4_5Processor(unittest.TestCase):
 
     def setUp(self):
         """Patch external dependencies: tokenizer, generation config, eos token resolution."""
-        self.gen_patcher = patch(f"{MODULE_PATH}.GenerationConfig.from_pretrained", return_value=MagicMock())
+        self.gen_patcher = patch(
+            "fastdeploy.input.base_processor.GenerationConfig.from_pretrained", return_value=MagicMock()
+        )
         self.tokenizer_patcher = patch(
-            f"{MODULE_PATH}.Ernie4_5Tokenizer.from_pretrained", side_effect=lambda path: MockTokenizer()
+            "fastdeploy.input.ernie4_5_tokenizer.Ernie4_5Tokenizer.from_pretrained",
+            side_effect=lambda path: MockTokenizer(),
         )
         self.eos_patcher = patch(
             "paddleformers.cli.utils.llm_utils.get_eos_token_id",
@@ -302,7 +306,7 @@ class TestErnie4_5Processor(unittest.TestCase):
 
     def test_init_generation_config_exception(self):
         """Test fallback behavior when GenerationConfig loading fails."""
-        with patch(f"{MODULE_PATH}.GenerationConfig.from_pretrained", side_effect=Exception("fail")):
+        with patch("fastdeploy.input.base_processor.GenerationConfig.from_pretrained", side_effect=Exception("fail")):
             proc = self._make_processor()
             self.assertIsNone(proc.generation_config)
 
@@ -314,7 +318,7 @@ class TestErnie4_5Processor(unittest.TestCase):
             "outputs": {"token_ids": [9, proc.tokenizer.eos_token_id], "index": 0},
             "finished": True,
         }
-        result = proc.process_response_dict(resp, False)
+        result = proc.process_response_dict(resp, stream=False)
         assert "tool_calls" in result["outputs"]
         self.assertEqual(result["outputs"]["tool_calls"][0]["name"], "fake_tool")
 
