@@ -337,6 +337,15 @@ class EngineService:
             create=True,
         )
 
+        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
+        self.engine_forward_signal = IPCSignal(
+            name="engine_forward_signal",
+            array=engine_forward_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
         worker_healthy_live_recorded_time_array = np.zeros(
             shape=[min(self.cfg.worker_num_per_node, self.cfg.parallel_config.tensor_parallel_size)], dtype=np.int32
@@ -1006,26 +1015,29 @@ class EngineService:
             with self._pause_cond:
                 self._pause_cond.wait_for(lambda: not self.is_paused)
             try:
-                if self.engine_worker_queue.exist_tasks():
-                    time.sleep(0.001)
-                    continue
-                if self.cfg.scheduler_config.splitwise_role != "mixed":
-                    if not is_fetching:
+                if not is_fetching:
+                    # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
+                    try:
                         is_fetching = True
                         get_request_pool.submit(_fetch_request)
-
+                    except RuntimeError as e:
+                        if "shutdown" in str(e):
+                            self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
+                            break
+                        else:
+                            raise
+                if self.cfg.scheduler_config.splitwise_role != "mixed":
+                    # Continue preprocessing incoming requests and accumulating them in the queue when forward pass not finished.
+                    # Once the forward pass finishes, these accumulated requests can be scheduled in larger,
+                    # more efficient batches.
+                    if self.engine_worker_queue.exist_tasks() or self.engine_forward_signal.value[0] != 0:
+                        time.sleep(0.001)
+                        continue
                 else:
-                    if len(self.resource_manager.waiting) == 0 and (not is_fetching):
-                        # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
-                        try:
-                            is_fetching = True
-                            get_request_pool.submit(_fetch_request)
-                        except RuntimeError as e:
-                            if "shutdown" in str(e):
-                                self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
-                                break
-                            else:
-                                raise
+                    # In mixed, todo: optimze cache swap, to decouple swap from scheduler
+                    if self.engine_worker_queue.exist_tasks():
+                        time.sleep(0.001)
+                        continue
 
                 if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
                     self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
@@ -1086,6 +1098,13 @@ class EngineService:
                             elif not task.has_been_preempted_before:
                                 task.metrics.inference_start_time = time.time()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
+                else:
+                    # When there are no actual tasks to schedule, send an empty task batch to EP workers.
+                    # This helps EP workers barrier for syncing tasks not hang.
+                    if self.cfg.parallel_config.enable_expert_parallel:
+                        self.engine_worker_queue.put_tasks(
+                            ([], self.resource_manager.real_bsz)
+                        )  # Empty (as idle tasks for ep)
 
                 # 4. Response error tasks
                 if error_tasks:
