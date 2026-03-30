@@ -548,6 +548,9 @@ class CompletionRequest(BaseModel):
 
     collect_metrics: Optional[bool] = False
 
+    # NOTE(Wanglongzhi2001): temporary parameter for video understanding benchmark
+    video_fps: Optional[float] = None
+
     def to_dict_for_infer(self, request_id=None, prompt=None):
         """
         Convert the request parameters into a dictionary
@@ -733,6 +736,9 @@ class ChatCompletionRequest(BaseModel):
     trace_context: Optional[str] = None
 
     collect_metrics: Optional[bool] = False
+
+    # NOTE(Wanglongzhi2001): temporary parameter for video understanding benchmark
+    video_fps: Optional[float] = None
 
     def to_dict_for_infer(self, request_id=None):
         """
