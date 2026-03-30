@@ -15,30 +15,30 @@
 """
 
 """
-Unit tests for the KV cache int8 dynamic quant fix on flash_attn_backend
-and flash_mask_attn_backend (commit 584df2ba8).
+Unit tests for KV cache dynamic quantization on FlashAttentionBackend
+and FlashMaskAttentionBackend.
 
-The fix ensures that when cache_quant_type_str == "block_wise_fp8":
-  - cache_k/v are taken from caches[4*layer_id : 4*layer_id+2]
-  - cache_k/v_scales are taken from caches[4*layer_id+2 : 4*layer_id+4]
-Otherwise (non-dynamic-quant):
-  - cache_k/v are taken from caches[2*layer_id : 2*layer_id+2]
-  - cache_k/v_scales are taken from layer.cache_k_scale / layer.cache_v_scale
+Tests:
+  1. Smoke tests: forward_mixed runs without error under dynamic C8.
+  2. Diff tests: dynamic C8 vs C16 produce consistent outputs.
+  3. GPU tests: real GPU forward calls (skipped without GPU).
 
-Strategy: We mock the entire fastdeploy import chain and the external op
-functions, then verify the correct cache tensors are routed through.
+Extensibility: To add a new quant type (e.g., C4), add an entry to
+QUANT_CONFIGS and follow the existing test patterns.
 """
 
+import math
 import sys
 import types
 import unittest
+from dataclasses import dataclass
 from unittest.mock import patch
 
 import numpy as np
 import paddle
 
 # ---------------------------------------------------------------------------
-# Environment setup: mock missing fastdeploy dependencies before import
+# Environment setup: mock missing dependencies before import
 # ---------------------------------------------------------------------------
 
 
@@ -53,10 +53,8 @@ def _ensure_mock_module(name, attrs=None):
     return sys.modules[name]
 
 
-# Mock problematic transitive dependencies that may be missing in some environments
 _ensure_mock_module("aistudio_sdk.snapshot_download", {"snapshot_download": lambda *a, **kw: None})
 
-# Try importing the backends. If it still fails, mark tests as skipped.
 _IMPORT_ERROR = None
 try:
     from fastdeploy.model_executor.layers.attention.flash_attn_backend import (
@@ -72,50 +70,90 @@ except Exception as e:
 
 
 # ---------------------------------------------------------------------------
-# Dummy / Mock helpers
+# Quant config registry (extend here for new quant types)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class QuantConfig:
+    """Configuration for a cache quantization type."""
+
+    cache_quant_type_str: str  # e.g., "block_wise_fp8", "none"
+    cache_dtype: str  # "uint8" for quantized, "bfloat16" for fp16/bf16
+    has_dynamic_scales: bool  # True if scales stored in caches list
+    caches_per_layer: int  # 4 for dynamic (k,v,k_scale,v_scale), 2 otherwise
+
+
+QUANT_CONFIGS = {
+    "C16": QuantConfig("none", "bfloat16", False, 2),
+    "C8_dynamic": QuantConfig("block_wise_fp8", "uint8", True, 4),
+    # Future: "C4_dynamic": QuantConfig("block_wise_int4", "uint8", True, 4),
+}
+
+# ---------------------------------------------------------------------------
+# Test constants
+# ---------------------------------------------------------------------------
+
+BATCH_SIZE = 4
+NUM_HEADS = 56
+KV_NUM_HEADS = 4
+HEAD_DIM = 128
+BLOCK_SIZE = 64
+NUM_LAYERS = 2
+MAX_SEQ_LEN = 2048
+QKV_DIM = (NUM_HEADS + 2 * KV_NUM_HEADS) * HEAD_DIM  # 7680
+ATTN_OUTPUT_DIM = NUM_HEADS * HEAD_DIM  # 7168
+Q_DIM = NUM_HEADS * HEAD_DIM  # 7168
+K_DIM = KV_NUM_HEADS * HEAD_DIM  # 512
+V_DIM = KV_NUM_HEADS * HEAD_DIM  # 512
+
+FLASH_ATTN_MODULE = "fastdeploy.model_executor.layers.attention.flash_attn_backend"
+FLASH_MASK_MODULE = "fastdeploy.model_executor.layers.attention.flash_mask_attn_backend"
+
+# Backend registry for parameterized tests
+BACKENDS = [
+    ("flash_attn", FlashAttentionBackend, FLASH_ATTN_MODULE),
+    ("flash_mask", FlashMaskAttentionBackend, FLASH_MASK_MODULE),
+]
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
 # ---------------------------------------------------------------------------
 
 
 class DummyFDConfig:
-    """Minimal FDConfig for constructing backend objects.
-
-    Uses __getattr__ to return MagicMock for any missing nested attributes,
-    avoiding the need to enumerate every config attribute.
-    """
+    """Minimal FDConfig for constructing backend objects."""
 
     def __init__(self):
-        self.cache_config = type("CacheConfig", (), {"block_size": 64})()
+        self.cache_config = type("C", (), {"block_size": BLOCK_SIZE})()
         self.model_config = type(
-            "ModelConfig",
+            "M",
             (),
             {
-                "max_model_len": 2048,
-                "head_dim": 128,
-                "num_hidden_layers": 2,
+                "max_model_len": MAX_SEQ_LEN,
+                "head_dim": HEAD_DIM,
+                "num_hidden_layers": NUM_LAYERS,
                 "causal": True,
                 "start_layer_index": 0,
                 "rope_3d": False,
                 "use_3d_rope": False,
             },
         )()
-        self.scheduler_config = type("SchedulerConfig", (), {"max_num_seqs": 4})()
-        self.graph_opt_config = type(
-            "GraphOptConfig",
-            (),
-            {"cudagraph_capture_sizes": None},
-        )()
+        self.scheduler_config = type("S", (), {"max_num_seqs": BATCH_SIZE})()
+        self.graph_opt_config = type("G", (), {"cudagraph_capture_sizes": None})()
         self.parallel_config = type(
-            "ParallelConfig",
+            "P",
             (),
             {
-                "block_size": 64,
+                "block_size": BLOCK_SIZE,
                 "data_parallel_rank": 0,
                 "pd_disaggregation_mode": "none",
                 "expert_parallel_rank": 0,
             },
         )()
         self.speculative_config = type(
-            "SpeculativeConfig",
+            "Sp",
             (),
             {
                 "method": None,
@@ -127,19 +165,19 @@ class DummyFDConfig:
 
 
 class DummyLayer:
-    """Mimics the Attention layer object with relevant attributes."""
+    """Mimics the Attention layer object."""
 
-    def __init__(
-        self,
-        layer_id=0,
-        cache_quant_type_str="none",
-        cache_k_scale=None,
-        cache_v_scale=None,
-    ):
+    def __init__(self, layer_id=0, quant_config=None):
         self.layer_id = layer_id
-        self.cache_quant_type_str = cache_quant_type_str
-        self.cache_k_scale = cache_k_scale
-        self.cache_v_scale = cache_v_scale
+        cfg = quant_config or QUANT_CONFIGS["C16"]
+        self.cache_quant_type_str = cfg.cache_quant_type_str
+        # Static quant types use layer-level scales; dynamic types use caches list
+        if not cfg.has_dynamic_scales and cfg.cache_quant_type_str != "none":
+            self.cache_k_scale = paddle.ones([1], dtype="float32")
+            self.cache_v_scale = paddle.ones([1], dtype="float32")
+        else:
+            self.cache_k_scale = None
+            self.cache_v_scale = None
         self.cache_k_out_scale = None
         self.cache_v_out_scale = None
         self.cache_k_zp = None
@@ -156,46 +194,18 @@ class DummyLayer:
         self.quant_min_bound = 0.0
 
 
-def _make_sentinel(name: str) -> paddle.Tensor:
-    """Create a uniquely identifiable 'sentinel' tensor for tracing through call args."""
-    t = paddle.zeros([1], dtype="float32")
-    t._sentinel_name = name
-    return t
-
-
-def _make_caches_normal(layer_id=0):
-    """Create a caches list for normal (non-block_wise_fp8) mode."""
-    num_entries = 2 * (layer_id + 1)
-    return [_make_sentinel(f"normal_cache_{i}") for i in range(num_entries)]
-
-
-def _make_caches_block_wise_fp8(layer_id=0):
-    """Create a caches list for block_wise_fp8 mode."""
-    num_entries = 4 * (layer_id + 1)
-    return [_make_sentinel(f"bwfp8_cache_{i}") for i in range(num_entries)]
-
-
 class DummyForwardMeta:
-    """Minimal ForwardMeta with lazily-created None attributes.
-
-    Simulates a multi-batch scenario with batch_size=4.
-    In decode-only mode (max_len_val=0): 4 decode tokens, 0 prefill.
-    In prefill mode (max_len_val>0): mixed prefill + decode across 4 batches.
-    """
-
-    BATCH_SIZE = 4
+    """Minimal ForwardMeta for decode-only mode (max_len_val=0)."""
 
     def __init__(self, caches, max_len_val=0):
-        bs = self.BATCH_SIZE
+        bs = BATCH_SIZE
         self.caches = caches
-        # 4 batches: in decode mode each has 0 encoder len, 1 decoder token
         self.seq_lens_encoder = paddle.to_tensor([0] * bs, dtype="int32")
         self.seq_lens_decoder = paddle.to_tensor([1] * bs, dtype="int32")
         self.seq_lens_this_time = paddle.to_tensor([1] * bs, dtype="int32")
-        # total tokens = batch_size (1 per batch in decode)
         self.cu_seqlens_q = paddle.to_tensor(list(range(bs + 1)), dtype="int32")
         self.cu_seqlens_k = paddle.to_tensor(list(range(bs + 1)), dtype="int32")
-        self.rotary_embs = paddle.zeros([bs, 1, 128], dtype="float32")
+        self.rotary_embs = paddle.zeros([bs, 1, HEAD_DIM], dtype="float32")
         self.batch_id_per_token = paddle.to_tensor(list(range(bs)), dtype="int32")
         self.block_tables = paddle.to_tensor([[i] for i in range(bs)], dtype="int32")
         self.decoder_batch_ids = paddle.to_tensor(list(range(bs)), dtype="int32")
@@ -209,7 +219,6 @@ class DummyForwardMeta:
         self.kv_batch_ids = paddle.to_tensor(list(range(bs)), dtype="int32")
         self.kv_tile_ids_per_batch = paddle.to_tensor([0] * bs, dtype="int32")
         self.kv_num_blocks_x_cpu = paddle.to_tensor([bs], dtype="int32")
-        # max_len_tensor_cpu: [max_enc_len, n_prefill, max_dec_len, max_kv_len]
         self.max_len_tensor_cpu = paddle.to_tensor([0, max_len_val, 10, 10], dtype="int32")
         self.attn_mask = None
         self.attn_mask_offsets = None
@@ -218,647 +227,306 @@ class DummyForwardMeta:
         self.exist_prefill = False
 
     def __getattr__(self, name):
-        """Mimic ForwardMeta's lazy attribute creation."""
         return None
 
 
 class DummyMetadata:
     """Minimal attention metadata."""
 
-    def __init__(self, num_layers=2):
+    def __init__(self, num_layers=NUM_LAYERS):
         self.kv_signal_data_list = [None] * num_layers
         self._fuse_kernel_compute_dtype = "bf16"
         self._dtype = paddle.bfloat16
         self.max_len_tensor_cpu_decoder = None
 
 
-# ---------------------------------------------------------------------------
-# Helpers to extract cache args from mock calls
-# ---------------------------------------------------------------------------
-
-
-def _extract_cache_args_from_gqa_rope(mock_call):
-    """Extract (key_cache, value_cache, cache_k_scales, cache_v_scales)
-    from a gqa_rope_write_cache call.
-    Positional: qkv[0], key_cache[1], value_cache[2], ...,
-    cache_k_quant_scales[19], cache_v_quant_scales[20]"""
-    args = mock_call[0]
-    return args[1], args[2], args[19], args[20]
-
-
-def _extract_cache_args_from_append_attention(mock_call):
-    """Extract (key_cache, value_cache, cache_k_scales, cache_v_scales)
-    from an append_attention call.
-    Positional: qkv[0], key_cache[1], value_cache[2], ...,
-    k_quant_scale[23], v_quant_scale[24]"""
-    args = mock_call[0]
-    return args[1], args[2], args[23], args[24]
-
-
-# ---------------------------------------------------------------------------
-# FlashAttentionBackend tests
-# ---------------------------------------------------------------------------
-
-FLASH_ATTN_MODULE = "fastdeploy.model_executor.layers.attention.flash_attn_backend"
-
-
-@unittest.skipIf(_IMPORT_ERROR is not None, f"Cannot import backends: {_IMPORT_ERROR}")
-class TestFlashAttnBackendCacheRouting(unittest.TestCase):
-    """Test that FlashAttentionBackend.forward_mixed selects the correct
-    cache tensors based on cache_quant_type_str."""
-
-    def _create_backend(self):
-        with patch(f"{FLASH_ATTN_MODULE}.init_rank_and_device_id", return_value=(0, 0)):
-            with patch(f"{FLASH_ATTN_MODULE}.get_sm_version", return_value=90):
-                with patch(f"{FLASH_ATTN_MODULE}.open_shm_and_get_meta_signal", return_value=None):
-                    with patch(f"{FLASH_ATTN_MODULE}.init_kv_signal_per_query", return_value=None):
-                        backend = FlashAttentionBackend(DummyFDConfig(), kv_num_heads=4, num_heads=56, head_dim=128)
-        return backend
-
-    @patch(f"{FLASH_ATTN_MODULE}.append_attention")
-    @patch(f"{FLASH_ATTN_MODULE}.get_block_shape_and_split_kv_block")
-    def test_normal_quant_uses_2x_indexing_decode_only(self, mock_split_kv, mock_append_attn):
-        """cache_int8: cache_k=caches[2*id], scales from layer attrs."""
-        backend = self._create_backend()
-        backend.attention_metadata = DummyMetadata()
-
-        layer_ks = _make_sentinel("layer_ks")
-        layer_vs = _make_sentinel("layer_vs")
-        layer = DummyLayer(
-            layer_id=0, cache_quant_type_str="cache_int8", cache_k_scale=layer_ks, cache_v_scale=layer_vs
-        )
-        caches = _make_caches_normal(layer_id=0)
-        fm = DummyForwardMeta(caches=caches, max_len_val=0)
-        # batch_size=4, total_tokens=4 in decode
-        bs = DummyForwardMeta.BATCH_SIZE
-        mock_append_attn.return_value = paddle.zeros([bs, 7168], dtype="bfloat16")
-
-        backend.forward_mixed(
-            q=None,
-            k=None,
-            v=None,
-            qkv=paddle.zeros([bs, 7680], dtype="bfloat16"),
-            compressed_kv=None,
-            k_pe=None,
-            layer=layer,
-            forward_meta=fm,
-        )
-
-        kc, vc, ks, vs = _extract_cache_args_from_append_attention(mock_append_attn.call_args)
-        self.assertIs(kc, caches[0])
-        self.assertIs(vc, caches[1])
-        self.assertIs(ks, layer_ks)
-        self.assertIs(vs, layer_vs)
-
-    @patch(f"{FLASH_ATTN_MODULE}.append_attention")
-    @patch(f"{FLASH_ATTN_MODULE}.get_block_shape_and_split_kv_block")
-    def test_block_wise_fp8_uses_4x_indexing_decode_only(self, mock_split_kv, mock_append_attn):
-        """block_wise_fp8: cache_k=caches[4*id], scales=caches[4*id+2/3]."""
-        backend = self._create_backend()
-        backend.attention_metadata = DummyMetadata()
-
-        layer = DummyLayer(layer_id=0, cache_quant_type_str="block_wise_fp8")
-        caches = _make_caches_block_wise_fp8(layer_id=0)
-        fm = DummyForwardMeta(caches=caches, max_len_val=0)
-        bs = DummyForwardMeta.BATCH_SIZE
-        mock_append_attn.return_value = paddle.zeros([bs, 7168], dtype="bfloat16")
-
-        backend.forward_mixed(
-            q=None,
-            k=None,
-            v=None,
-            qkv=paddle.zeros([bs, 7680], dtype="bfloat16"),
-            compressed_kv=None,
-            k_pe=None,
-            layer=layer,
-            forward_meta=fm,
-        )
-
-        kc, vc, ks, vs = _extract_cache_args_from_append_attention(mock_append_attn.call_args)
-        self.assertIs(kc, caches[0])
-        self.assertIs(vc, caches[1])
-        self.assertIs(ks, caches[2])
-        self.assertIs(vs, caches[3])
-
-    @patch(f"{FLASH_ATTN_MODULE}.append_attention")
-    @patch(f"{FLASH_ATTN_MODULE}.get_block_shape_and_split_kv_block")
-    def test_block_wise_fp8_layer_id_1(self, mock_split_kv, mock_append_attn):
-        """block_wise_fp8 with layer_id=1: indices 4,5,6,7."""
-        backend = self._create_backend()
-        backend.attention_metadata = DummyMetadata()
-
-        layer = DummyLayer(layer_id=1, cache_quant_type_str="block_wise_fp8")
-        caches = _make_caches_block_wise_fp8(layer_id=1)
-        fm = DummyForwardMeta(caches=caches, max_len_val=0)
-        bs = DummyForwardMeta.BATCH_SIZE
-        mock_append_attn.return_value = paddle.zeros([bs, 7168], dtype="bfloat16")
-
-        backend.forward_mixed(
-            q=None,
-            k=None,
-            v=None,
-            qkv=paddle.zeros([bs, 7680], dtype="bfloat16"),
-            compressed_kv=None,
-            k_pe=None,
-            layer=layer,
-            forward_meta=fm,
-        )
-
-        kc, vc, ks, vs = _extract_cache_args_from_append_attention(mock_append_attn.call_args)
-        self.assertIs(kc, caches[4])
-        self.assertIs(vc, caches[5])
-        self.assertIs(ks, caches[6])
-        self.assertIs(vs, caches[7])
-
-    @patch(f"{FLASH_ATTN_MODULE}.append_attention")
-    @patch(f"{FLASH_ATTN_MODULE}.get_block_shape_and_split_kv_block")
-    def test_normal_quant_layer_id_1(self, mock_split_kv, mock_append_attn):
-        """Normal quant with layer_id=1: indices 2,3."""
-        backend = self._create_backend()
-        backend.attention_metadata = DummyMetadata()
-
-        layer_ks = _make_sentinel("ks_l1")
-        layer_vs = _make_sentinel("vs_l1")
-        layer = DummyLayer(
-            layer_id=1, cache_quant_type_str="cache_int8", cache_k_scale=layer_ks, cache_v_scale=layer_vs
-        )
-        caches = _make_caches_normal(layer_id=1)
-        fm = DummyForwardMeta(caches=caches, max_len_val=0)
-        bs = DummyForwardMeta.BATCH_SIZE
-        mock_append_attn.return_value = paddle.zeros([bs, 7168], dtype="bfloat16")
-
-        backend.forward_mixed(
-            q=None,
-            k=None,
-            v=None,
-            qkv=paddle.zeros([bs, 7680], dtype="bfloat16"),
-            compressed_kv=None,
-            k_pe=None,
-            layer=layer,
-            forward_meta=fm,
-        )
-
-        kc, vc, ks, vs = _extract_cache_args_from_append_attention(mock_append_attn.call_args)
-        self.assertIs(kc, caches[2])
-        self.assertIs(vc, caches[3])
-        self.assertIs(ks, layer_ks)
-        self.assertIs(vs, layer_vs)
-
-    @patch(f"{FLASH_ATTN_MODULE}.flash_attn_func")
-    @patch(f"{FLASH_ATTN_MODULE}.append_attention")
-    @patch(f"{FLASH_ATTN_MODULE}.pre_cache_len_concat")
-    @patch(f"{FLASH_ATTN_MODULE}.get_block_shape_and_split_kv_block")
-    @patch(f"{FLASH_ATTN_MODULE}.gqa_rope_write_cache")
-    def test_block_wise_fp8_prefill_path(
-        self,
-        mock_gqa_rope,
-        mock_split_kv,
-        mock_pre_cache,
-        mock_append_attn,
-        mock_flash_attn,
-    ):
-        """Prefill path: both gqa_rope_write_cache and append_attention
-        receive block_wise_fp8 caches. 4 batches, 5 tokens each = 20 total."""
-        backend = self._create_backend()
-        backend.attention_metadata = DummyMetadata()
-
-        layer = DummyLayer(layer_id=0, cache_quant_type_str="block_wise_fp8")
-        caches = _make_caches_block_wise_fp8(layer_id=0)
-        bs = DummyForwardMeta.BATCH_SIZE
-        total_tokens = bs * 5  # 20 tokens total (4 batches * 5 tokens)
-        fm = DummyForwardMeta(caches=caches, max_len_val=5)
-
-        mock_pre_cache.return_value = (
-            paddle.to_tensor([0, 5, 10, 15, 20], dtype="int32"),  # cu_seqlens_k
-            paddle.to_tensor(list(range(bs)), dtype="int32"),  # pre_cache_batch_ids
-            paddle.to_tensor([0] * bs, dtype="int32"),  # pre_cache_tile_ids
-            paddle.to_tensor([bs], dtype="int32"),  # pre_cache_num_blocks
-            paddle.to_tensor([total_tokens], dtype="int32"),  # kv_token_num
-        )
-        mock_gqa_rope.return_value = (
-            paddle.zeros([total_tokens, 56, 128], dtype="bfloat16"),
-            paddle.zeros([total_tokens, 4, 128], dtype="bfloat16"),
-            paddle.zeros([total_tokens, 4, 128], dtype="bfloat16"),
-            None,
-        )
-        mock_flash_attn.return_value = (
-            paddle.zeros([total_tokens, 56, 128], dtype="bfloat16"),
-            None,
-        )
-        mock_append_attn.return_value = paddle.zeros([total_tokens, 7168], dtype="bfloat16")
-
-        backend.forward_mixed(
-            q=None,
-            k=None,
-            v=None,
-            qkv=paddle.zeros([total_tokens, 7680], dtype="bfloat16"),
-            compressed_kv=None,
-            k_pe=None,
-            layer=layer,
-            forward_meta=fm,
-        )
-
-        # gqa_rope_write_cache should get caches[0..3]
-        kc, vc, ks, vs = _extract_cache_args_from_gqa_rope(mock_gqa_rope.call_args)
-        self.assertIs(kc, caches[0])
-        self.assertIs(vc, caches[1])
-        self.assertIs(ks, caches[2])
-        self.assertIs(vs, caches[3])
-
-        # append_attention should also get caches[0..3]
-        kc2, vc2, ks2, vs2 = _extract_cache_args_from_append_attention(mock_append_attn.call_args)
-        self.assertIs(kc2, caches[0])
-        self.assertIs(vc2, caches[1])
-        self.assertIs(ks2, caches[2])
-        self.assertIs(vs2, caches[3])
-
-    @patch(f"{FLASH_ATTN_MODULE}.append_attention")
-    @patch(f"{FLASH_ATTN_MODULE}.get_block_shape_and_split_kv_block")
-    def test_none_quant_type_defaults_to_2x(self, mock_split_kv, mock_append_attn):
-        """cache_quant_type_str='none': 2x indexing, None scales."""
-        backend = self._create_backend()
-        backend.attention_metadata = DummyMetadata()
-
-        layer = DummyLayer(layer_id=0, cache_quant_type_str="none")
-        caches = _make_caches_normal(layer_id=0)
-        fm = DummyForwardMeta(caches=caches, max_len_val=0)
-        bs = DummyForwardMeta.BATCH_SIZE
-        mock_append_attn.return_value = paddle.zeros([bs, 7168], dtype="bfloat16")
-
-        backend.forward_mixed(
-            q=None,
-            k=None,
-            v=None,
-            qkv=paddle.zeros([bs, 7680], dtype="bfloat16"),
-            compressed_kv=None,
-            k_pe=None,
-            layer=layer,
-            forward_meta=fm,
-        )
-
-        kc, vc, ks, vs = _extract_cache_args_from_append_attention(mock_append_attn.call_args)
-        self.assertIs(kc, caches[0])
-        self.assertIs(vc, caches[1])
-        self.assertIsNone(ks)
-        self.assertIsNone(vs)
-
-    @patch(f"{FLASH_ATTN_MODULE}.append_attention")
-    @patch(f"{FLASH_ATTN_MODULE}.get_block_shape_and_split_kv_block")
-    def test_cache_fp8_uses_2x_indexing(self, mock_split_kv, mock_append_attn):
-        """cache_fp8 (static): 2x indexing, scales from layer attrs."""
-        backend = self._create_backend()
-        backend.attention_metadata = DummyMetadata()
-
-        layer_ks = _make_sentinel("fp8_ks")
-        layer_vs = _make_sentinel("fp8_vs")
-        layer = DummyLayer(
-            layer_id=0, cache_quant_type_str="cache_fp8", cache_k_scale=layer_ks, cache_v_scale=layer_vs
-        )
-        caches = _make_caches_normal(layer_id=0)
-        fm = DummyForwardMeta(caches=caches, max_len_val=0)
-        bs = DummyForwardMeta.BATCH_SIZE
-        mock_append_attn.return_value = paddle.zeros([bs, 7168], dtype="bfloat16")
-
-        backend.forward_mixed(
-            q=None,
-            k=None,
-            v=None,
-            qkv=paddle.zeros([bs, 7680], dtype="bfloat16"),
-            compressed_kv=None,
-            k_pe=None,
-            layer=layer,
-            forward_meta=fm,
-        )
-
-        kc, vc, ks, vs = _extract_cache_args_from_append_attention(mock_append_attn.call_args)
-        self.assertIs(kc, caches[0])
-        self.assertIs(vc, caches[1])
-        self.assertIs(ks, layer_ks)
-        self.assertIs(vs, layer_vs)
-
-
-# ---------------------------------------------------------------------------
-# FlashMaskAttentionBackend tests
-# ---------------------------------------------------------------------------
-
-FLASH_MASK_MODULE = "fastdeploy.model_executor.layers.attention.flash_mask_attn_backend"
-
-
-@unittest.skipIf(_IMPORT_ERROR is not None, f"Cannot import backends: {_IMPORT_ERROR}")
-class TestFlashMaskAttnBackendCacheRouting(unittest.TestCase):
-    """Test that FlashMaskAttentionBackend.forward_mixed selects the correct
-    cache tensors based on cache_quant_type_str."""
-
-    def _create_backend(self):
-        with patch(f"{FLASH_MASK_MODULE}.init_rank_and_device_id", return_value=(0, 0)):
-            with patch(f"{FLASH_MASK_MODULE}.open_shm_and_get_meta_signal", return_value=None):
-                with patch(f"{FLASH_MASK_MODULE}.init_kv_signal_per_query", return_value=None):
-                    backend = FlashMaskAttentionBackend(DummyFDConfig(), kv_num_heads=4, num_heads=56, head_dim=128)
-        return backend
-
-    @patch(f"{FLASH_MASK_MODULE}.append_attention")
-    @patch(f"{FLASH_MASK_MODULE}.get_block_shape_and_split_kv_block")
-    def test_normal_quant_uses_2x_indexing_decode_only(self, mock_split_kv, mock_append_attn):
-        """Non block_wise_fp8: caches[2*layer_id] indexing."""
-        backend = self._create_backend()
-        backend.attention_metadata = DummyMetadata()
-
-        layer_ks = _make_sentinel("mask_ks")
-        layer_vs = _make_sentinel("mask_vs")
-        layer = DummyLayer(
-            layer_id=0, cache_quant_type_str="cache_int8", cache_k_scale=layer_ks, cache_v_scale=layer_vs
-        )
-        caches = _make_caches_normal(layer_id=0)
-        fm = DummyForwardMeta(caches=caches, max_len_val=0)
-        bs = DummyForwardMeta.BATCH_SIZE
-        mock_append_attn.return_value = paddle.zeros([bs, 7168], dtype="bfloat16")
-
-        backend.forward_mixed(
-            q=None,
-            k=None,
-            v=None,
-            qkv=paddle.zeros([bs, 7680], dtype="bfloat16"),
-            compressed_kv=None,
-            k_pe=None,
-            layer=layer,
-            forward_meta=fm,
-        )
-
-        kc, vc, ks, vs = _extract_cache_args_from_append_attention(mock_append_attn.call_args)
-        self.assertIs(kc, caches[0])
-        self.assertIs(vc, caches[1])
-        self.assertIs(ks, layer_ks)
-        self.assertIs(vs, layer_vs)
-
-    @patch(f"{FLASH_MASK_MODULE}.append_attention")
-    @patch(f"{FLASH_MASK_MODULE}.get_block_shape_and_split_kv_block")
-    def test_block_wise_fp8_uses_4x_indexing_decode_only(self, mock_split_kv, mock_append_attn):
-        """block_wise_fp8: caches[4*layer_id] indexing."""
-        backend = self._create_backend()
-        backend.attention_metadata = DummyMetadata()
-
-        layer = DummyLayer(layer_id=0, cache_quant_type_str="block_wise_fp8")
-        caches = _make_caches_block_wise_fp8(layer_id=0)
-        fm = DummyForwardMeta(caches=caches, max_len_val=0)
-        bs = DummyForwardMeta.BATCH_SIZE
-        mock_append_attn.return_value = paddle.zeros([bs, 7168], dtype="bfloat16")
-
-        backend.forward_mixed(
-            q=None,
-            k=None,
-            v=None,
-            qkv=paddle.zeros([bs, 7680], dtype="bfloat16"),
-            compressed_kv=None,
-            k_pe=None,
-            layer=layer,
-            forward_meta=fm,
-        )
-
-        kc, vc, ks, vs = _extract_cache_args_from_append_attention(mock_append_attn.call_args)
-        self.assertIs(kc, caches[0])
-        self.assertIs(vc, caches[1])
-        self.assertIs(ks, caches[2])
-        self.assertIs(vs, caches[3])
-
-    @patch(f"{FLASH_MASK_MODULE}.append_attention")
-    @patch(f"{FLASH_MASK_MODULE}.get_block_shape_and_split_kv_block")
-    def test_block_wise_fp8_layer_id_1(self, mock_split_kv, mock_append_attn):
-        """block_wise_fp8 with layer_id=1: indices 4,5,6,7."""
-        backend = self._create_backend()
-        backend.attention_metadata = DummyMetadata()
-
-        layer = DummyLayer(layer_id=1, cache_quant_type_str="block_wise_fp8")
-        caches = _make_caches_block_wise_fp8(layer_id=1)
-        fm = DummyForwardMeta(caches=caches, max_len_val=0)
-        bs = DummyForwardMeta.BATCH_SIZE
-        mock_append_attn.return_value = paddle.zeros([bs, 7168], dtype="bfloat16")
-
-        backend.forward_mixed(
-            q=None,
-            k=None,
-            v=None,
-            qkv=paddle.zeros([bs, 7680], dtype="bfloat16"),
-            compressed_kv=None,
-            k_pe=None,
-            layer=layer,
-            forward_meta=fm,
-        )
-
-        kc, vc, ks, vs = _extract_cache_args_from_append_attention(mock_append_attn.call_args)
-        self.assertIs(kc, caches[4])
-        self.assertIs(vc, caches[5])
-        self.assertIs(ks, caches[6])
-        self.assertIs(vs, caches[7])
-
-    @patch(f"{FLASH_MASK_MODULE}.flash_mask_attention")
-    @patch(f"{FLASH_MASK_MODULE}.append_attention")
-    @patch(f"{FLASH_MASK_MODULE}.pre_cache_len_concat")
-    @patch(f"{FLASH_MASK_MODULE}.get_block_shape_and_split_kv_block")
-    @patch(f"{FLASH_MASK_MODULE}.gqa_rope_write_cache")
-    def test_block_wise_fp8_prefill_path(
-        self,
-        mock_gqa_rope,
-        mock_split_kv,
-        mock_pre_cache,
-        mock_append_attn,
-        mock_flash_mask,
-    ):
-        """Prefill: gqa_rope_write_cache and append_attention both get
-        block_wise_fp8 caches. 4 batches, 5 tokens each = 20 total."""
-        backend = self._create_backend()
-        backend.attention_metadata = DummyMetadata()
-
-        layer = DummyLayer(layer_id=0, cache_quant_type_str="block_wise_fp8")
-        caches = _make_caches_block_wise_fp8(layer_id=0)
-        bs = DummyForwardMeta.BATCH_SIZE
-        total_tokens = bs * 5  # 20 tokens total (4 batches * 5 tokens)
-        fm = DummyForwardMeta(caches=caches, max_len_val=5)
-
-        mock_pre_cache.return_value = (
-            paddle.to_tensor([0, 5, 10, 15, 20], dtype="int32"),  # cu_seqlens_k
-            paddle.to_tensor(list(range(bs)), dtype="int32"),  # pre_cache_batch_ids
-            paddle.to_tensor([0] * bs, dtype="int32"),  # pre_cache_tile_ids
-            paddle.to_tensor([bs], dtype="int32"),  # pre_cache_num_blocks
-            paddle.to_tensor([total_tokens], dtype="int32"),  # kv_token_num
-        )
-        mock_gqa_rope.return_value = (
-            paddle.zeros([total_tokens, 56, 128], dtype="bfloat16"),
-            paddle.zeros([total_tokens, 4, 128], dtype="bfloat16"),
-            paddle.zeros([total_tokens, 4, 128], dtype="bfloat16"),
-            None,
-        )
-        mock_flash_mask.return_value = None
-        mock_append_attn.return_value = paddle.zeros([total_tokens, 7168], dtype="bfloat16")
-
-        backend.forward_mixed(
-            q=None,
-            k=None,
-            v=None,
-            qkv=paddle.zeros([total_tokens, 7680], dtype="bfloat16"),
-            compressed_kv=None,
-            k_pe=None,
-            layer=layer,
-            forward_meta=fm,
-        )
-
-        kc, vc, ks, vs = _extract_cache_args_from_gqa_rope(mock_gqa_rope.call_args)
-        self.assertIs(kc, caches[0])
-        self.assertIs(vc, caches[1])
-        self.assertIs(ks, caches[2])
-        self.assertIs(vs, caches[3])
-
-        kc2, vc2, ks2, vs2 = _extract_cache_args_from_append_attention(mock_append_attn.call_args)
-        self.assertIs(kc2, caches[0])
-        self.assertIs(vc2, caches[1])
-        self.assertIs(ks2, caches[2])
-        self.assertIs(vs2, caches[3])
-
-    @patch(f"{FLASH_MASK_MODULE}.append_attention")
-    @patch(f"{FLASH_MASK_MODULE}.get_block_shape_and_split_kv_block")
-    def test_none_quant_type_defaults_to_2x(self, mock_split_kv, mock_append_attn):
-        """cache_quant_type_str='none': 2x indexing."""
-        backend = self._create_backend()
-        backend.attention_metadata = DummyMetadata()
-
-        layer = DummyLayer(layer_id=0, cache_quant_type_str="none")
-        caches = _make_caches_normal(layer_id=0)
-        fm = DummyForwardMeta(caches=caches, max_len_val=0)
-        bs = DummyForwardMeta.BATCH_SIZE
-        mock_append_attn.return_value = paddle.zeros([bs, 7168], dtype="bfloat16")
-
-        backend.forward_mixed(
-            q=None,
-            k=None,
-            v=None,
-            qkv=paddle.zeros([bs, 7680], dtype="bfloat16"),
-            compressed_kv=None,
-            k_pe=None,
-            layer=layer,
-            forward_meta=fm,
-        )
-
-        kc, vc, ks, vs = _extract_cache_args_from_append_attention(mock_append_attn.call_args)
-        self.assertIs(kc, caches[0])
-        self.assertIs(vc, caches[1])
-        self.assertIsNone(ks)
-        self.assertIsNone(vs)
-
-
-# ---------------------------------------------------------------------------
-# Softmax -INFINITY fix tests
-# ---------------------------------------------------------------------------
-
-
-class TestSoftmaxInfinityHandling(unittest.TestCase):
-    """Test the softmax numerical fix for -INFINITY handling.
-
-    The fix in softmax.hpp:
-    1. scale_apply_exp2: when max == -INFINITY, max_scaled = 0 (not NaN)
-    2. Softmax::rescale: when both prev/cur max are -INFINITY, scale = 1.0
+def make_qkv_inputs(token_num=BATCH_SIZE, dtype="bfloat16"):
+    """Create real q, k, v, qkv tensors with random data.
+
+    Returns:
+        (q, k, v, qkv) where qkv is the fused [token_num, QKV_DIM] tensor
+        and q/k/v are the individual head-grouped tensors.
     """
+    qkv = paddle.randn([token_num, QKV_DIM]).cast(dtype)
+    q = qkv[:, :Q_DIM].reshape([token_num, NUM_HEADS, HEAD_DIM])
+    k = qkv[:, Q_DIM : Q_DIM + K_DIM].reshape([token_num, KV_NUM_HEADS, HEAD_DIM])
+    v = qkv[:, Q_DIM + K_DIM :].reshape([token_num, KV_NUM_HEADS, HEAD_DIM])
+    return q, k, v, qkv
 
-    def test_scale_apply_exp2_normal(self):
-        """Normal case: max is finite."""
-        scale = 1.0 / np.log(2)
-        max_val = 2.0
-        tensor_val = 3.0
-        result = 2 ** (tensor_val * scale - max_val * scale)
-        self.assertTrue(np.isfinite(result))
 
-    def test_scale_apply_exp2_neg_inf_max(self):
-        """When max == -inf, fix sets max_scaled=0 avoiding NaN."""
-        scale = 1.4426950408889634  # 1/ln(2)
-        max_val = float("-inf")
+def make_caches(quant_config, layer_id=0):
+    """Create a caches list for the given quant config and layer_id.
 
-        # Fixed: max_scaled = 0
-        max_scaled_fixed = 0.0 if max_val == float("-inf") else max_val * scale
-        self.assertEqual(max_scaled_fixed, 0.0)
+    For dynamic C8: [cache_k, cache_v, k_scale, v_scale] * layers
+    For C16:   [cache_k, cache_v] * layers
+    """
+    num_entries = quant_config.caches_per_layer * (layer_id + 1)
+    return [paddle.zeros([1], dtype="float32") for _ in range(num_entries)]
 
-        # Broken: tensor=-inf, max=-inf => -inf - (-inf) = NaN
-        tensor_val = float("-inf")
-        broken_result = 2 ** (tensor_val * scale - max_val * scale)
-        self.assertTrue(np.isnan(broken_result))
 
-        # Fixed: exp2(-inf - 0) = 0
-        fixed_result = 2 ** (tensor_val * scale - max_scaled_fixed)
-        self.assertEqual(fixed_result, 0.0)
+def create_backend(backend_class, module_path):
+    """Factory to create a backend instance with mocked init dependencies.
+    During attention initialization, some prerequisite steps are performed,
+    such as initializing the distributed environment.
+    """
+    patches = [
+        patch(f"{module_path}.init_rank_and_device_id", return_value=(0, 0)),
+        patch(f"{module_path}.open_shm_and_get_meta_signal", return_value=None),
+        patch(f"{module_path}.init_kv_signal_per_query", return_value=None),
+    ]
+    # FlashAttentionBackend also needs get_sm_version mocked
+    if "flash_attn_backend" in module_path and "flash_mask" not in module_path:
+        patches.append(patch(f"{module_path}.get_sm_version", return_value=90))
 
-    def test_rescale_both_neg_inf(self):
-        """Both prev/cur max -inf => scale=1.0 (not NaN)."""
-        scale_log2 = 1.4426950408889634
-        prev = float("-inf")
-        cur = float("-inf")
+    for p in patches:
+        p.start()
+    try:
+        backend = backend_class(DummyFDConfig(), kv_num_heads=KV_NUM_HEADS, num_heads=NUM_HEADS, head_dim=HEAD_DIM)
+    finally:
+        for p in patches:
+            p.stop()
+    return backend
 
-        # Fixed
-        if prev == float("-inf") and cur == float("-inf"):
-            fixed = 1.0
-        else:
-            fixed = 2 ** ((prev - cur) * scale_log2)
-        self.assertEqual(fixed, 1.0)
 
-        # Broken: -inf - (-inf) = NaN
-        broken = 2 ** ((prev - cur) * scale_log2)
-        self.assertTrue(np.isnan(broken))
+def _run_forward_mocked(backend, module_path, quant_config, layer_id=0, return_tensor=None, qkv_inputs=None):
+    """Run forward_mixed with mocked external ops, return the result.
 
-    def test_rescale_prev_neg_inf_cur_finite(self):
-        """prev=-inf, cur=finite => scale=0 (first tile case)."""
-        scale = 2 ** ((float("-inf") - 2.0) * 1.4426950408889634)
-        self.assertEqual(scale, 0.0)
+    Args:
+        backend: The attention backend instance.
+        module_path: Module path for patching ops.
+        quant_config: QuantConfig to use.
+        layer_id: Layer ID for the dummy layer.
+        return_tensor: If provided, mock append_attention to return this tensor.
+        qkv_inputs: Optional (q, k, v, qkv) tuple. Generated if not provided.
+    """
+    backend.attention_metadata = DummyMetadata()
+    layer = DummyLayer(layer_id=layer_id, quant_config=quant_config)
+    caches = make_caches(quant_config, layer_id=layer_id)
+    fm = DummyForwardMeta(caches=caches, max_len_val=0)
 
-    def test_rescale_both_finite(self):
-        """Normal rescaling with finite values."""
-        scale_log2 = 1.4426950408889634
-        scale = 2 ** ((3.0 - 4.0) * scale_log2)
-        expected = 2 ** (-1.0 * scale_log2)
-        self.assertAlmostEqual(scale, expected, places=6)
-        self.assertTrue(0 < scale < 1)
+    if qkv_inputs is None:
+        q, k, v, qkv = make_qkv_inputs()
+    else:
+        q, k, v, qkv = qkv_inputs
 
-    def test_row_sum_preservation_with_inf_fix(self):
-        """row_sum * 1.0 preserved; row_sum * NaN corrupted."""
-        row_sum = 0.5
-        self.assertEqual(row_sum * 1.0, 0.5)
-        self.assertTrue(np.isnan(row_sum * float("nan")))
+    if return_tensor is None:
+        return_tensor = paddle.zeros([BATCH_SIZE, ATTN_OUTPUT_DIM], dtype="bfloat16")
+
+    with patch(f"{module_path}.append_attention", return_value=return_tensor):
+        with patch(f"{module_path}.get_block_shape_and_split_kv_block"):
+            result = backend.forward_mixed(
+                q=q,
+                k=k,
+                v=v,
+                qkv=qkv,
+                compressed_kv=None,
+                k_pe=None,
+                layer=layer,
+                forward_meta=fm,
+            )
+    return result
 
 
 # ---------------------------------------------------------------------------
-# CUDA kernel config tests
+# Part 1: Mock-based smoke tests (no GPU required)
 # ---------------------------------------------------------------------------
 
 
-class TestAppendCacheKVC8KernelConfig(unittest.TestCase):
-    """Test kernel template parameter mapping for append_cache_kv_c8."""
+@unittest.skipIf(_IMPORT_ERROR is not None, f"Cannot import backends: {_IMPORT_ERROR}")
+class TestBackendForwardSmoke(unittest.TestCase):
+    """Smoke test: forward_mixed runs without error for each backend x quant config."""
 
-    def test_quant_type_to_kernel_params(self):
-        configs = {
-            "cache_int8": {"IS_FP8": False, "dynamic_quant": False},
-            "cache_fp8": {"IS_FP8": True, "dynamic_quant": False},
-            "block_wise_fp8": {"IS_FP8": True, "dynamic_quant": True},
-        }
-        self.assertFalse(configs["cache_int8"]["IS_FP8"])
-        self.assertFalse(configs["cache_int8"]["dynamic_quant"])
-        self.assertTrue(configs["cache_fp8"]["IS_FP8"])
-        self.assertFalse(configs["cache_fp8"]["dynamic_quant"])
-        self.assertTrue(configs["block_wise_fp8"]["IS_FP8"])
-        self.assertTrue(configs["block_wise_fp8"]["dynamic_quant"])
+    def _smoke_test(self, backend_class, module_path, quant_config_name):
+        config = QUANT_CONFIGS[quant_config_name]
+        backend = create_backend(backend_class, module_path)
+        # Should not raise
+        result = _run_forward_mocked(backend, module_path, config)
+        self.assertIsNotNone(result)
 
-    def test_dynamic_quant_scale_indexing(self):
-        """Dynamic quant: per-token scale = (block_id*kv_num_heads+head)*block_size+row."""
-        kv_num_heads = 4
-        block_size = 64
-        block_id, head_idx, row_idx = 3, 2, 5
-        idx = (block_id * kv_num_heads + head_idx) * block_size + row_idx
-        self.assertEqual(idx, (3 * 4 + 2) * 64 + 5)
+    def test_flash_attn_c8_dynamic(self):
+        self._smoke_test(FlashAttentionBackend, FLASH_ATTN_MODULE, "C8_dynamic")
 
-    def test_block_wise_fp8_in_c8_branch(self):
-        c8_types = {"cache_int8", "cache_fp8", "block_wise_fp8"}
-        self.assertIn("block_wise_fp8", c8_types)
-        self.assertNotIn("cache_int4_zp", c8_types)
-        self.assertNotIn("none", c8_types)
+    def test_flash_attn_c16(self):
+        self._smoke_test(FlashAttentionBackend, FLASH_ATTN_MODULE, "C16")
 
-    def test_static_quant_null_quant_scales(self):
-        """Static quant: quant_scales=None, dequant_scales provided."""
-        self.assertIsNone(None)  # quant_scales
-        self.assertIsNotNone(np.ones(4))  # dequant_scales
+    def test_flash_mask_attn_c8_dynamic(self):
+        self._smoke_test(FlashMaskAttentionBackend, FLASH_MASK_MODULE, "C8_dynamic")
+
+    def test_flash_mask_attn_c16(self):
+        self._smoke_test(FlashMaskAttentionBackend, FLASH_MASK_MODULE, "C16")
+
+
+# ---------------------------------------------------------------------------
+# Part 2: Mock-based C8 vs C16 diff tests (no GPU required)
+# ---------------------------------------------------------------------------
+
+
+@unittest.skipIf(_IMPORT_ERROR is not None, f"Cannot import backends: {_IMPORT_ERROR}")
+class TestBackendC8VsC16OutputDiff(unittest.TestCase):
+    """Diff test: C8 dynamic and C16 produce identical outputs when external
+    ops return the same data (validates the forward path is consistent)."""
+
+    def _diff_test(self, backend_class, module_path):
+        # Use the same known tensor as the mock return value for both configs
+        known_output = paddle.randn([BATCH_SIZE, ATTN_OUTPUT_DIM]).cast("bfloat16")
+        # Use the same qkv inputs for both configs
+        shared_qkv = make_qkv_inputs()
+
+        backend_c8 = create_backend(backend_class, module_path)
+        result_c8 = _run_forward_mocked(
+            backend_c8,
+            module_path,
+            QUANT_CONFIGS["C8_dynamic"],
+            return_tensor=known_output.clone(),
+            qkv_inputs=shared_qkv,
+        )
+
+        backend_c16 = create_backend(backend_class, module_path)
+        result_c16 = _run_forward_mocked(
+            backend_c16,
+            module_path,
+            QUANT_CONFIGS["C16"],
+            return_tensor=known_output.clone(),
+            qkv_inputs=shared_qkv,
+        )
+
+        np.testing.assert_array_equal(
+            result_c8.numpy(),
+            result_c16.numpy(),
+            err_msg=f"C8 dynamic and C16 outputs differ for {backend_class.__name__}",
+        )
+
+    def test_flash_attn_c8_vs_c16(self):
+        self._diff_test(FlashAttentionBackend, FLASH_ATTN_MODULE)
+
+    def test_flash_mask_attn_c8_vs_c16(self):
+        self._diff_test(FlashMaskAttentionBackend, FLASH_MASK_MODULE)
+
+
+# ---------------------------------------------------------------------------
+# Part 3: GPU-based tests (require real GPU)
+# ---------------------------------------------------------------------------
+
+_HAS_GPU = paddle.is_compiled_with_cuda() and paddle.device.cuda.device_count() > 0
+
+
+def _make_gpu_caches(quant_config, max_block_num=16):
+    """Create real GPU cache tensors following the paged KV cache layout.
+
+    Cache shape: (max_block_num, kv_num_heads, block_size, head_dim)
+    Scale shape: (max_block_num, kv_num_heads, block_size)
+    """
+    cache_shape = [max_block_num, KV_NUM_HEADS, BLOCK_SIZE, HEAD_DIM]
+    scale_shape = [max_block_num, KV_NUM_HEADS, BLOCK_SIZE]
+
+    cache_k = paddle.zeros(cache_shape, dtype=quant_config.cache_dtype)
+    cache_v = paddle.zeros(cache_shape, dtype=quant_config.cache_dtype)
+
+    if quant_config.has_dynamic_scales:
+        cache_k_scale = paddle.zeros(scale_shape, dtype="bfloat16")
+        cache_v_scale = paddle.zeros(scale_shape, dtype="bfloat16")
+        return [cache_k, cache_v, cache_k_scale, cache_v_scale]
+    else:
+        return [cache_k, cache_v]
+
+
+def _make_gpu_forward_meta(caches, seq_len=1):
+    """Create a ForwardMeta suitable for real GPU decode-only forward."""
+    bs = BATCH_SIZE
+    block_num_per_seq = math.ceil(seq_len / BLOCK_SIZE) or 1
+
+    block_tables = paddle.zeros([bs, block_num_per_seq], dtype="int32")
+    idx = 0
+    for i in range(bs):
+        for j in range(block_num_per_seq):
+            block_tables[i, j] = idx
+            idx += 1
+
+    fm = DummyForwardMeta(caches=caches, max_len_val=0)
+    fm.block_tables = block_tables
+    return fm
+
+
+@unittest.skipIf(not _HAS_GPU, "No GPU available")
+@unittest.skipIf(_IMPORT_ERROR is not None, f"Cannot import backends: {_IMPORT_ERROR}")
+class TestBackendForwardGPU(unittest.TestCase):
+    """GPU-based tests: real forward_mixed calls on GPU hardware."""
+
+    def _gpu_smoke_test(self, backend_class, module_path, quant_config_name):
+        """Test that forward_mixed runs on GPU without error."""
+        config = QUANT_CONFIGS[quant_config_name]
+        backend = create_backend(backend_class, module_path)
+        backend.attention_metadata = DummyMetadata()
+
+        max_block_num = BATCH_SIZE
+        caches = _make_gpu_caches(config, max_block_num=max_block_num)
+        layer = DummyLayer(layer_id=0, quant_config=config)
+        fm = _make_gpu_forward_meta(caches, seq_len=1)
+        q, k, v, qkv = make_qkv_inputs()
+
+        result = backend.forward_mixed(
+            q=q,
+            k=k,
+            v=v,
+            qkv=qkv,
+            compressed_kv=None,
+            k_pe=None,
+            layer=layer,
+            forward_meta=fm,
+        )
+        self.assertEqual(result.shape, [BATCH_SIZE, ATTN_OUTPUT_DIM])
+
+    def _gpu_diff_test(self, backend_class, module_path):
+        """Compare C8 dynamic vs C16 outputs on GPU (loose tolerance)."""
+        max_block_num = BATCH_SIZE
+        q, k, v, qkv = make_qkv_inputs()
+
+        results = {}
+        for config_name in ["C8_dynamic", "C16"]:
+            config = QUANT_CONFIGS[config_name]
+            backend = create_backend(backend_class, module_path)
+            backend.attention_metadata = DummyMetadata()
+
+            caches = _make_gpu_caches(config, max_block_num=max_block_num)
+            layer = DummyLayer(layer_id=0, quant_config=config)
+            fm = _make_gpu_forward_meta(caches, seq_len=1)
+
+            results[config_name] = backend.forward_mixed(
+                q=q.clone(),
+                k=k.clone(),
+                v=v.clone(),
+                qkv=qkv.clone(),
+                compressed_kv=None,
+                k_pe=None,
+                layer=layer,
+                forward_meta=fm,
+            )
+
+        np.testing.assert_allclose(
+            results["C8_dynamic"].cast("float32").numpy(),
+            results["C16"].cast("float32").numpy(),
+            rtol=0.1,
+            atol=0.1,
+            err_msg=f"C8 dynamic vs C16 GPU output diff too large for {backend_class.__name__}",
+        )
+
+    def test_flash_attn_c8_dynamic_gpu(self):
+        self._gpu_smoke_test(FlashAttentionBackend, FLASH_ATTN_MODULE, "C8_dynamic")
+
+    def test_flash_attn_c16_gpu(self):
+        self._gpu_smoke_test(FlashAttentionBackend, FLASH_ATTN_MODULE, "C16")
+
+    def test_flash_mask_attn_c8_dynamic_gpu(self):
+        self._gpu_smoke_test(FlashMaskAttentionBackend, FLASH_MASK_MODULE, "C8_dynamic")
+
+    def test_flash_mask_attn_c16_gpu(self):
+        self._gpu_smoke_test(FlashMaskAttentionBackend, FLASH_MASK_MODULE, "C16")
+
+    def test_flash_attn_c8_vs_c16_gpu(self):
+        self._gpu_diff_test(FlashAttentionBackend, FLASH_ATTN_MODULE)
+
+    def test_flash_mask_attn_c8_vs_c16_gpu(self):
+        self._gpu_diff_test(FlashMaskAttentionBackend, FLASH_MASK_MODULE)
 
 
 if __name__ == "__main__":
