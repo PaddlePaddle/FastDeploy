@@ -413,6 +413,150 @@ class TestNgramMatchKernel(unittest.TestCase):
                 np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
                 np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
 
+    def test_large_batch_long_seq(self):
+        """bsz=256, seq_len=128k — scale the reviewer demanded.
+
+        Uses high threshold to ensure all batches exercise the parallel search
+        path (default threshold=128 would skip all batches at bsz=256).
+        """
+        high_threshold = 100000
+        data = _make_ngram_test_data(batch_size=256, input_len=131072, max_model_len=131072 + 64, seed=77)
+        cpu_draft = data["draft_tokens"].copy()
+        cpu_slt = data["seq_lens_this_time"].copy()
+        _cpu_ngram_match(
+            data["input_ids"],
+            data["input_ids_len"],
+            data["token_ids_all"],
+            data["prompt_lens"],
+            data["step_idx"],
+            data["draft_token_num"],
+            cpu_draft,
+            cpu_slt,
+            data["seq_lens_encoder"],
+            data["seq_lens_decoder"],
+            data["max_dec_len"],
+            3,
+            10,
+            threshold=high_threshold,
+        )
+        gpu_data = _to_gpu(data)
+        old_env = os.environ.get("INFER_WITH_REFERENCE_TOKENUM_THRESHOLD")
+        os.environ["INFER_WITH_REFERENCE_TOKENUM_THRESHOLD"] = str(high_threshold)
+        try:
+            self.ngram_match(
+                gpu_data["input_ids"],
+                gpu_data["input_ids_len"],
+                gpu_data["token_ids_all"],
+                gpu_data["prompt_lens"],
+                gpu_data["step_idx"],
+                gpu_data["draft_token_num"],
+                gpu_data["draft_tokens"],
+                gpu_data["seq_lens_this_time"],
+                gpu_data["seq_lens_encoder"],
+                gpu_data["seq_lens_decoder"],
+                gpu_data["max_dec_len"],
+                3,
+                10,
+            )
+            paddle.device.synchronize()
+        finally:
+            if old_env is None:
+                os.environ.pop("INFER_WITH_REFERENCE_TOKENUM_THRESHOLD", None)
+            else:
+                os.environ["INFER_WITH_REFERENCE_TOKENUM_THRESHOLD"] = old_env
+        np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
+        np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
+
+    def test_single_batch_long_seq(self):
+        """bsz=1, seq_len=128k — single long sequence."""
+        data = _make_ngram_test_data(batch_size=1, input_len=131072, max_model_len=131072 + 64, seed=88)
+        cpu_draft = data["draft_tokens"].copy()
+        cpu_slt = data["seq_lens_this_time"].copy()
+        _cpu_ngram_match(
+            data["input_ids"],
+            data["input_ids_len"],
+            data["token_ids_all"],
+            data["prompt_lens"],
+            data["step_idx"],
+            data["draft_token_num"],
+            cpu_draft,
+            cpu_slt,
+            data["seq_lens_encoder"],
+            data["seq_lens_decoder"],
+            data["max_dec_len"],
+            3,
+            10,
+        )
+        gpu_data = _to_gpu(data)
+        self.ngram_match(
+            gpu_data["input_ids"],
+            gpu_data["input_ids_len"],
+            gpu_data["token_ids_all"],
+            gpu_data["prompt_lens"],
+            gpu_data["step_idx"],
+            gpu_data["draft_token_num"],
+            gpu_data["draft_tokens"],
+            gpu_data["seq_lens_this_time"],
+            gpu_data["seq_lens_encoder"],
+            gpu_data["seq_lens_decoder"],
+            gpu_data["max_dec_len"],
+            3,
+            10,
+        )
+        paddle.device.synchronize()
+        np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
+        np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
+
+    def test_many_short_seqs(self):
+        """bsz=256, seq_len=1k — many short sequences."""
+        high_threshold = 100000
+        data = _make_ngram_test_data(batch_size=256, input_len=1024, seed=55)
+        cpu_draft = data["draft_tokens"].copy()
+        cpu_slt = data["seq_lens_this_time"].copy()
+        _cpu_ngram_match(
+            data["input_ids"],
+            data["input_ids_len"],
+            data["token_ids_all"],
+            data["prompt_lens"],
+            data["step_idx"],
+            data["draft_token_num"],
+            cpu_draft,
+            cpu_slt,
+            data["seq_lens_encoder"],
+            data["seq_lens_decoder"],
+            data["max_dec_len"],
+            3,
+            10,
+            threshold=high_threshold,
+        )
+        gpu_data = _to_gpu(data)
+        old_env = os.environ.get("INFER_WITH_REFERENCE_TOKENUM_THRESHOLD")
+        os.environ["INFER_WITH_REFERENCE_TOKENUM_THRESHOLD"] = str(high_threshold)
+        try:
+            self.ngram_match(
+                gpu_data["input_ids"],
+                gpu_data["input_ids_len"],
+                gpu_data["token_ids_all"],
+                gpu_data["prompt_lens"],
+                gpu_data["step_idx"],
+                gpu_data["draft_token_num"],
+                gpu_data["draft_tokens"],
+                gpu_data["seq_lens_this_time"],
+                gpu_data["seq_lens_encoder"],
+                gpu_data["seq_lens_decoder"],
+                gpu_data["max_dec_len"],
+                3,
+                10,
+            )
+            paddle.device.synchronize()
+        finally:
+            if old_env is None:
+                os.environ.pop("INFER_WITH_REFERENCE_TOKENUM_THRESHOLD", None)
+            else:
+                os.environ["INFER_WITH_REFERENCE_TOKENUM_THRESHOLD"] = old_env
+        np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
+        np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
+
     def test_latency(self):
         """Benchmark: GPU kernel latency vs CPU transfer overhead."""
         # Warmup
@@ -583,6 +727,144 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                 paddle.device.synchronize()
                 np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
                 np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
+
+    def test_large_batch_long_seq(self):
+        """bsz=256, seq_len=128k — scale the reviewer demanded.
+
+        Uses high threshold to ensure all batches exercise the parallel search
+        path (default threshold=1024 would skip many batches at bsz=256).
+        """
+        high_threshold = 100000
+        data = _make_mixed_test_data(batch_size=256, input_len=131072, pre_ids_len=131072 + 64, seed=77)
+        cpu_draft = data["draft_tokens"].copy()
+        cpu_slt = data["seq_lens_this_time"].copy()
+        _cpu_hybrid_mtp_ngram(
+            data["input_ids"],
+            data["input_ids_len"],
+            data["pre_ids"],
+            data["step_idx"],
+            data["draft_token_num"],
+            cpu_draft,
+            cpu_slt,
+            data["seq_lens_decoder"],
+            data["max_dec_len"],
+            3,
+            1,
+            10,
+            threshold=high_threshold,
+        )
+        gpu_data = _to_gpu(data)
+        old_env = os.environ.get("SPEC_TOKENUM_THRESHOLD")
+        os.environ["SPEC_TOKENUM_THRESHOLD"] = str(high_threshold)
+        try:
+            self.hybrid_mtp_ngram(
+                gpu_data["input_ids"],
+                gpu_data["input_ids_len"],
+                gpu_data["pre_ids"],
+                gpu_data["step_idx"],
+                gpu_data["draft_token_num"],
+                gpu_data["draft_tokens"],
+                gpu_data["seq_lens_this_time"],
+                gpu_data["seq_lens_decoder"],
+                gpu_data["max_dec_len"],
+                3,
+                1,
+                10,
+            )
+            paddle.device.synchronize()
+        finally:
+            if old_env is None:
+                os.environ.pop("SPEC_TOKENUM_THRESHOLD", None)
+            else:
+                os.environ["SPEC_TOKENUM_THRESHOLD"] = old_env
+        np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
+        np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
+
+    def test_single_batch_long_seq(self):
+        """bsz=1, seq_len=128k — single long sequence."""
+        data = _make_mixed_test_data(batch_size=1, input_len=131072, pre_ids_len=131072 + 64, seed=88)
+        cpu_draft = data["draft_tokens"].copy()
+        cpu_slt = data["seq_lens_this_time"].copy()
+        _cpu_hybrid_mtp_ngram(
+            data["input_ids"],
+            data["input_ids_len"],
+            data["pre_ids"],
+            data["step_idx"],
+            data["draft_token_num"],
+            cpu_draft,
+            cpu_slt,
+            data["seq_lens_decoder"],
+            data["max_dec_len"],
+            3,
+            1,
+            10,
+        )
+        gpu_data = _to_gpu(data)
+        self.hybrid_mtp_ngram(
+            gpu_data["input_ids"],
+            gpu_data["input_ids_len"],
+            gpu_data["pre_ids"],
+            gpu_data["step_idx"],
+            gpu_data["draft_token_num"],
+            gpu_data["draft_tokens"],
+            gpu_data["seq_lens_this_time"],
+            gpu_data["seq_lens_decoder"],
+            gpu_data["max_dec_len"],
+            3,
+            1,
+            10,
+        )
+        paddle.device.synchronize()
+        np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
+        np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
+
+    def test_many_short_seqs(self):
+        """bsz=256, seq_len=1k — many short sequences."""
+        high_threshold = 100000
+        data = _make_mixed_test_data(batch_size=256, input_len=1024, seed=55)
+        cpu_draft = data["draft_tokens"].copy()
+        cpu_slt = data["seq_lens_this_time"].copy()
+        _cpu_hybrid_mtp_ngram(
+            data["input_ids"],
+            data["input_ids_len"],
+            data["pre_ids"],
+            data["step_idx"],
+            data["draft_token_num"],
+            cpu_draft,
+            cpu_slt,
+            data["seq_lens_decoder"],
+            data["max_dec_len"],
+            3,
+            1,
+            10,
+            threshold=high_threshold,
+        )
+        gpu_data = _to_gpu(data)
+        old_env = os.environ.get("SPEC_TOKENUM_THRESHOLD")
+        os.environ["SPEC_TOKENUM_THRESHOLD"] = str(high_threshold)
+        try:
+            self.hybrid_mtp_ngram(
+                gpu_data["input_ids"],
+                gpu_data["input_ids_len"],
+                gpu_data["pre_ids"],
+                gpu_data["step_idx"],
+                gpu_data["draft_token_num"],
+                gpu_data["draft_tokens"],
+                gpu_data["seq_lens_this_time"],
+                gpu_data["seq_lens_decoder"],
+                gpu_data["max_dec_len"],
+                3,
+                1,
+                10,
+            )
+            paddle.device.synchronize()
+        finally:
+            if old_env is None:
+                os.environ.pop("SPEC_TOKENUM_THRESHOLD", None)
+            else:
+                os.environ["SPEC_TOKENUM_THRESHOLD"] = old_env
+        np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
+        np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
 
 
 if __name__ == "__main__":

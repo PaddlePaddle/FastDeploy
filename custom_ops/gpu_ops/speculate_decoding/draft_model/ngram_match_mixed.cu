@@ -158,90 +158,13 @@ static void find_candidate_pred_tokens_mixed(const int64_t *input_ids,
 }
 
 // ============================================================
-// GPU path — CUDA kernel for zero-copy ngram matching.
+// GPU path — Two-phase parallel CUDA kernels for hybrid ngram matching.
+//
+// Phase 1: <<<bsz, NGRAM_BLOCK_THREADS>>> — parallel sliding-window
+//          search within each batch item (256 threads per batch).
+// Phase 2: <<<1, 1>>> — serial threshold + token copy (inter-batch
+//          dependency via running sum of seq_lens_this_time).
 // ============================================================
-
-// GPU kernel for hybrid MTP ngram matching — eliminates CPU↔GPU data copies.
-// Single-thread execution preserves sequential threshold semantics.
-// Key differences from ngram_match_kernel:
-//   - Writes at offset ori_seq_len_this_time (appends to existing drafts)
-//   - Supports configurable min_ngram_size
-//   - Uses pre_ids directly (not token_ids_all + prompt_lens)
-//   - No seq_lens_encoder input
-__global__ void ngram_match_mixed_kernel(const int64_t *input_ids,
-                                         const int64_t *input_ids_len,
-                                         const int64_t *pre_ids,
-                                         const int64_t *step_idx,
-                                         const int *draft_token_num,
-                                         int64_t *draft_tokens,
-                                         int32_t *seq_lens_this_time,
-                                         const int32_t *seq_lens_decoder,
-                                         const int64_t *max_dec_len,
-                                         int64_t input_ids_stride,
-                                         int64_t pre_ids_stride,
-                                         int64_t draft_tokens_stride,
-                                         int64_t max_batch_size,
-                                         int max_ngram_size,
-                                         int min_ngram_size,
-                                         int max_draft_tokens_param,
-                                         int threshold) {
-  int unprocessed_batch_size = 0;
-  for (int batch_idx = 0; batch_idx < max_batch_size; batch_idx++) {
-    if (seq_lens_decoder[batch_idx] > 0) {
-      unprocessed_batch_size++;
-    }
-  }
-
-  for (int batch_idx = 0; batch_idx < max_batch_size; batch_idx++) {
-    const int ori_seq_len_this_time = seq_lens_this_time[batch_idx];
-    int64_t remaining = max_dec_len[batch_idx] - step_idx[batch_idx] - 1;
-    int64_t max_query_64 = min(static_cast<int64_t>(max_draft_tokens_param -
-                                                    ori_seq_len_this_time + 1),
-                               remaining);
-    int max_draft_tokens_query = static_cast<int>(max_query_64);
-
-    if (ori_seq_len_this_time == 0 || max_draft_tokens_query <= 0) {
-      continue;
-    }
-
-    const int64_t *cur_input_ids = input_ids + batch_idx * input_ids_stride;
-    int64_t *cur_draft_tokens = draft_tokens + batch_idx * draft_tokens_stride;
-    const int64_t *cur_pre_ids = pre_ids + batch_idx * pre_ids_stride;
-    const int64_t cur_step_idx = step_idx[batch_idx];
-    const int64_t cur_input_ids_len = input_ids_len[batch_idx];
-    unprocessed_batch_size--;
-
-    // Running sum of seq_lens_this_time[0..batch_idx]
-    int sum_token_num = 0;
-    for (int i = 0; i <= batch_idx; i++) {
-      sum_token_num += seq_lens_this_time[i];
-    }
-    int left_min_token_num = unprocessed_batch_size;
-
-    if (sum_token_num + max_draft_tokens_query + left_min_token_num >
-        threshold) {
-      int tmp = threshold - sum_token_num - left_min_token_num;
-      max_draft_tokens_query = min(max_draft_tokens_query, tmp);
-    }
-
-    if (sum_token_num + left_min_token_num >= threshold - 1) {
-      continue;
-    }
-
-    // Shared ngram search: write_offset=ori_seq_len_this_time (append to
-    // existing MTP draft tokens), min_ngram_size is configurable.
-    ngram_search_batch_item(cur_input_ids,
-                            cur_input_ids_len,
-                            cur_pre_ids,
-                            cur_step_idx,
-                            cur_draft_tokens,
-                            &seq_lens_this_time[batch_idx],
-                            max_ngram_size,
-                            min_ngram_size,
-                            max_draft_tokens_query,
-                            /*write_offset=*/ori_seq_len_this_time);
-  }
-}
 
 void HybridMtpNgram(const paddle::Tensor &input_ids,
                     const paddle::Tensor &input_ids_len,
@@ -273,7 +196,35 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
   }
 
   if (input_ids.is_gpu()) {
-    ngram_match_mixed_kernel<<<1, 1, 0, input_ids.stream()>>>(
+    auto stream = input_ids.stream();
+
+    // Allocate scratch buffer for Phase 1 → Phase 2 communication
+    auto match_buf = paddle::empty(
+        {max_batch_size * static_cast<int64_t>(sizeof(NgramMatchResult))},
+        paddle::DataType::UINT8,
+        input_ids.place());
+    auto *match_results =
+        reinterpret_cast<NgramMatchResult *>(match_buf.data<uint8_t>());
+
+    // Phase 1: parallel search — one block per batch, 256 threads per block
+    ngram_match_mixed_search_kernel<<<max_batch_size,
+                                      NGRAM_BLOCK_THREADS,
+                                      0,
+                                      stream>>>(
+        input_ids.data<int64_t>(),
+        input_ids_len.data<int64_t>(),
+        pre_ids.data<int64_t>(),
+        step_idx.data<int64_t>(),
+        seq_lens_this_time.data<int32_t>(),
+        input_ids_stride,
+        pre_ids_stride,
+        max_batch_size,
+        max_ngram_size,
+        min_ngram_size,
+        match_results);
+
+    // Phase 2: serial threshold + token copy (same stream = ordered)
+    ngram_match_mixed_gather_kernel<<<1, 1, 0, stream>>>(
         input_ids.data<int64_t>(),
         input_ids_len.data<int64_t>(),
         pre_ids.data<int64_t>(),
@@ -287,10 +238,9 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
         pre_ids_stride,
         draft_tokens_stride,
         max_batch_size,
-        max_ngram_size,
-        min_ngram_size,
         max_draft_tokens,
-        threshold);
+        threshold,
+        match_results);
   } else {
     find_candidate_pred_tokens_mixed(
         input_ids.data<int64_t>(),
