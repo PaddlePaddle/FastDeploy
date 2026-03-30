@@ -1033,7 +1033,7 @@ class EngineService:
                     self.resource_manager.cache_manager.num_cpu_blocks == 0
                     or self.cfg.scheduler_config.splitwise_role != "mixed"
                 ):
-                    # In mixed, when cpu cache is enabled, cache swapping happens in schedule(). If we call schedule() after forward, ttft will degradation due to not overlaped swapping.
+                    # In mixed, when cpu cache is enabled, cache swapping happens in schedule(). If we call schedule() after forward, ttft will degradation due to non-overlaped swapping.
                     # todo: support cache swapping before inserting into waiting list.
                     time.sleep(0.001)
                     continue
