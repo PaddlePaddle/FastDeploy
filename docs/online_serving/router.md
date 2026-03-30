@@ -151,6 +151,7 @@ The Router exposes a set of HTTP services to provide unified request scheduling,
 |----------|------|------|
 | POST | `/v1/chat/completions` | Provide scheduling services for inference requests based on the Chat Completions API |
 | POST | `/v1/completions` | Provide scheduling services for general text completion inference requests |
+| POST | `/v1/abort_requests` | Abort inference requests to release GPU memory and compute resources. Accepts `req_ids` or `abort_all=true`. Returns aborted requests with their generated token counts |
 | POST | `/register` | Allow inference instances to register their metadata with the Router for scheduling |
 | GET | `/registered` | Query the list of currently registered inference instances |
 | GET | `/registered_number` | Query the number of currently registered inference instances |
@@ -192,7 +193,7 @@ server:
 scheduler:
   policy: "power_of_two" # Scheduling policy (optional): random, power_of_two, round_robin, process_tokens, request_num, cache_aware, remote_cache_aware, fd_metrics_score, fd_remote_metrics_score
   prefill-policy: "cache_aware" # Prefill scheduling policy in PD mode
-  decode-policy: "fd_metrics_score" # Decode scheduling policy in PD mode
+  decode-policy: "request_num" # Decode scheduling policy in PD mode
   eviction-interval-secs: 60 # Cache eviction interval for CacheAware scheduling
   balance-abs-threshold: 1 # Absolute threshold for CacheAware balancing
   balance-rel-threshold: 0.2 # Relative threshold for CacheAware balancing

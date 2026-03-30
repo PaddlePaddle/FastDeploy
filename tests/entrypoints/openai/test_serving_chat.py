@@ -1502,6 +1502,194 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             self.chat_completion_handler.engine_client.connection_manager.cleanup_request.assert_called_once()
             self.chat_completion_handler.engine_client.abort.assert_called_once()
 
+    async def test_chat_completion_stream_generator_dealer_mode_writes(self):
+        """Cover lines 261-264: dealer.write in non-batch mode for stream generator."""
+        request = ChatCompletionRequest(
+            messages=[{"role": "user", "content": "Hello"}],
+            stream=True,
+        )
+
+        request_id = "test_dealer_stream"
+        model_name = "test_model"
+        prompt_token_ids = [1, 2, 3]
+        prompt_tokens = "Hello world"
+
+        mock_dealer = MagicMock()
+        mock_response_queue = AsyncMock()
+
+        mock_response = {
+            "request_id": f"{request_id}_0",
+            "error_code": 200,
+            "metrics": {
+                "first_token_time": 1234567890,
+                "inference_start_time": 1234567880,
+                "arrival_time": 1234567890,
+                "request_start_time": 1234567870,
+            },
+            "prompt_logprobs": None,
+            "outputs": {
+                "token_ids": [5],
+                "text": "Hi",
+                "top_logprobs": None,
+                "draft_top_logprobs": None,
+                "multipart": [{"type": "text", "text": "Hi"}],
+                "skipped": False,
+            },
+            "finished": True,
+            "num_cached_tokens": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+        }
+
+        mock_response_queue.get.return_value = mock_response
+        self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
+            return_value=(mock_dealer, mock_response_queue)
+        )
+        self.chat_completion_handler.engine_client.semaphore = MagicMock()
+        self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=True)
+        self.chat_completion_handler.engine_client.semaphore.release = MagicMock()
+        self.chat_completion_handler.engine_client.check_model_weight_status = Mock(return_value=False)
+        self.chat_completion_handler.engine_client.connection_manager.cleanup_request = AsyncMock()
+
+        mock_response_processor = MagicMock()
+        mock_response_processor.enable_multimodal_content.return_value = False
+
+        async def mock_async_generator():
+            yield mock_response
+
+        mock_response_processor.process_response_chat.return_value = mock_async_generator()
+
+        with (
+            patch(
+                "fastdeploy.entrypoints.openai.serving_chat.ChatResponseProcessor",
+                return_value=mock_response_processor,
+            ),
+            patch.object(envs, "ZMQ_SEND_BATCH_DATA", False),
+        ):
+            results = []
+            async for chunk in self.chat_completion_handler.chat_completion_stream_generator(
+                request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
+            ):
+                results.append(chunk)
+
+        # Lines 262-264: dealer.write should be called for each request_id
+        mock_dealer.write.assert_called_once_with([b"", f"{request_id}_0".encode("utf-8")])
+        self.assertGreater(len(results), 0)
+
+    async def test_chat_completion_stream_generator_cancelled_error_in_wait(self):
+        """Cover lines 278, 280: CancelledError during response_queue.get propagates."""
+        request = ChatCompletionRequest(
+            messages=[{"role": "user", "content": "Hello"}],
+            stream=True,
+        )
+
+        request_id = "test_cancel_wait"
+        model_name = "test_model"
+        prompt_token_ids = [1, 2, 3]
+        prompt_tokens = "Hello world"
+
+        mock_dealer = MagicMock()
+        mock_response_queue = AsyncMock()
+        # Simulate CancelledError during wait_for(response_queue.get())
+        mock_response_queue.get.side_effect = asyncio.CancelledError()
+
+        self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
+            return_value=(mock_dealer, mock_response_queue)
+        )
+        self.chat_completion_handler.engine_client.semaphore = MagicMock()
+        self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=True)
+        self.chat_completion_handler.engine_client.semaphore.release = MagicMock()
+        self.chat_completion_handler.engine_client.check_model_weight_status = Mock(return_value=False)
+        self.chat_completion_handler.engine_client.connection_manager.cleanup_request = AsyncMock()
+        self.chat_completion_handler.engine_client.abort = AsyncMock()
+
+        with patch.object(envs, "ZMQ_SEND_BATCH_DATA", True):
+            chunks = []
+            try:
+                async for chunk in self.chat_completion_handler.chat_completion_stream_generator(
+                    request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
+                ):
+                    chunks.append(chunk)
+            except asyncio.CancelledError:
+                pass
+
+        # Cleanup should still be called
+        self.chat_completion_handler.engine_client.connection_manager.cleanup_request.assert_called_once()
+
+    async def test_chat_completion_full_generator_dealer_mode_writes(self):
+        """Cover lines 558-561: dealer.write in non-batch mode for full generator."""
+        request = ChatCompletionRequest(
+            messages=[{"role": "user", "content": "Hello"}],
+            stream=False,
+        )
+
+        request_id = "test_dealer_full"
+        model_name = "test_model"
+        prompt_token_ids = [1, 2, 3]
+        prompt_tokens = "Hello world"
+
+        mock_dealer = MagicMock()
+        mock_response_queue = AsyncMock()
+
+        mock_response = {
+            "request_id": f"{request_id}_0",
+            "error_code": 200,
+            "metrics": {
+                "first_token_time": 1234567890,
+                "inference_start_time": 1234567880,
+                "arrival_time": 1234567890,
+                "request_start_time": 1234567870,
+            },
+            "prompt_logprobs": None,
+            "outputs": {
+                "text": "Hello there",
+                "metrics": {"request_start_time": 1.0},
+                "reasoning_content": "",
+                "tool_calls": None,
+                "completion_tokens": "2",
+                "token_ids": [5, 6],
+                "top_logprobs": None,
+                "draft_top_logprobs": None,
+                "multipart": [{"type": "text", "text": "Hello there"}],
+            },
+            "finished": True,
+            "num_cached_tokens": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+        }
+
+        mock_response_queue.get.return_value = mock_response
+        self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
+            return_value=(mock_dealer, mock_response_queue)
+        )
+        self.chat_completion_handler.engine_client.semaphore = MagicMock()
+        self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=True)
+        self.chat_completion_handler.engine_client.semaphore.release = MagicMock()
+        self.chat_completion_handler.engine_client.check_model_weight_status = Mock(return_value=False)
+        self.chat_completion_handler.engine_client.connection_manager.cleanup_request = AsyncMock()
+
+        mock_response_processor = MagicMock()
+        mock_response_processor.enable_multimodal_content.return_value = False
+
+        async def mock_async_generator():
+            yield mock_response
+
+        mock_response_processor.process_response_chat.return_value = mock_async_generator()
+
+        with (
+            patch(
+                "fastdeploy.entrypoints.openai.serving_chat.ChatResponseProcessor",
+                return_value=mock_response_processor,
+            ),
+            patch.object(envs, "ZMQ_SEND_BATCH_DATA", False),
+        ):
+            await self.chat_completion_handler.chat_completion_full_generator(
+                request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
+            )
+
+        # Lines 559-561: dealer.write should be called for each request_id
+        mock_dealer.write.assert_called_once_with([b"", f"{request_id}_0".encode("utf-8")])
+
 
 if __name__ == "__main__":
     unittest.main()

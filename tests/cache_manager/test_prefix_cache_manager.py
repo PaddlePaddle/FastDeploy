@@ -427,7 +427,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertEqual(manager.get_required_block_num(8, 4), 2)
 
     def test_launch_cache_manager_initializes_processes(self):
-        manager = _create_manager()
+        manager = _create_manager(num_cpu_blocks=1)
         manager.cache_config.enable_hierarchical_cache = False
 
         with (
@@ -637,7 +637,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertIsNone(processes)
 
     def test_launch_cache_manager_formats_value_cache_shape(self):
-        manager = _create_manager()
+        manager = _create_manager(num_cpu_blocks=1)
 
         captured = {}
 
@@ -1294,7 +1294,12 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
         manager = _create_manager(num_gpu_blocks=6)
         manager.kvcache_storage_backend = "memory"
         manager.prefix_tree_status_signal = SimpleNamespace(value=np.array([PrefixTreeStatus.NORMAL]))
-        task = SimpleNamespace(prompt_token_ids=[1, 2, 3, 4, 5, 6], output_token_ids=[], request_id="storage-req")
+        task = SimpleNamespace(
+            prompt_token_ids=[1, 2, 3, 4, 5, 6],
+            output_token_ids=[],
+            request_id="storage-req",
+            multimodal_inputs=None,
+        )
 
         with (
             patch.object(manager, "mm_match_block", return_value=([], [], [], manager.radix_tree_root, 0, 0)),
