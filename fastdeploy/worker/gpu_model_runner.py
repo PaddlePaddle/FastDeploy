@@ -1426,6 +1426,17 @@ class GPUModelRunner(ModelRunnerBase):
                 num_gpu_blocks=self.num_gpu_blocks,
             )
             self.cache_kvs_map = self.cache_controller.get_kv_caches()
+            if self.spec_method == SpecMethod.MTP:
+                mtp_num_blocks = int(self.num_gpu_blocks * self.proposer.speculative_config.num_gpu_block_expand_ratio)
+                mtp_cache_list = self.cache_controller.initialize_mtp_kv_cache(
+                    attn_backend=self.proposer.attn_backends[0],
+                    num_gpu_blocks=mtp_num_blocks,
+                    num_mtp_layers=self.proposer.model_config.num_hidden_layers,
+                    layer_offset=self.proposer.num_main_model_layers,
+                )
+                self.proposer.num_gpu_blocks = mtp_num_blocks
+                self.proposer.cache_kvs_map = self.cache_controller.get_kv_caches()
+                self.proposer.model_inputs["caches"] = mtp_cache_list
             return
 
         # cache_kvs = {}
@@ -2626,7 +2637,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache(profile=True)
         if self.spec_method == SpecMethod.MTP:
-            self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
+            if not self.enable_cache_manager_v1:
+                self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
 
         # 1. Profile with multimodal encoder & encoder cache
 
@@ -2673,7 +2685,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         if self.spec_method == SpecMethod.MTP:
-            self.proposer.update_mtp_block_num(num_gpu_blocks)
+            self.proposer.update_mtp_block_num(num_gpu_blocks, skip_cache_init=self.enable_cache_manager_v1)
 
     def cal_theortical_kvcache(self):
         """
@@ -2736,17 +2748,21 @@ class GPUModelRunner(ModelRunnerBase):
 
     def clear_cache(self, profile=False):
         """Clear cached data from shared inputs and forward metadata"""
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0
-            or self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
-        )
-        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        if self.enable_cache_manager_v1:
+            self.cache_controller.free_gpu_cache()
+        else:
+            create_cache_tensor = profile or not (
+                self.fd_config.cache_config.num_cpu_blocks > 0
+                or self.fd_config.cache_config.kvcache_storage_backend
+                or self.fd_config.scheduler_config.splitwise_role != "mixed"
+            )
+            local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not create_cache_tensor:
-            for name, tensor in self.cache_kvs_map.items():
-                unset_data_ipc(tensor, name, True, False)
-            self.cache_ready_signal.value[local_rank] = 0
+            if not create_cache_tensor:
+                for name, tensor in self.cache_kvs_map.items():
+                    unset_data_ipc(tensor, name, True, False)
+                self.cache_ready_signal.value[local_rank] = 0
+
         self.cache_kvs_map.clear()
         self.share_inputs.pop("caches", None)
         if self.forward_meta is not None:
@@ -2793,7 +2809,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs.reset_share_inputs()
         if self.spec_method == SpecMethod.MTP:
             self.proposer.model_inputs.reset_model_inputs()
-            self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
+            if not self.enable_cache_manager_v1:
+                self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
         # Recapture CUDAGraph
         if self.use_cudagraph:
@@ -2862,7 +2879,8 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info("GPU model runner's kv cache is not sleeping, no need to wakeup!")
                 return
             if self.spec_method == SpecMethod.MTP:
-                self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
+                if not self.enable_cache_manager_v1:
+                    self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
             self.initialize_kv_cache()
             self.is_kvcache_sleeping = False
 

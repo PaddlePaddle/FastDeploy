@@ -317,6 +317,76 @@ class CacheController(KVCacheBase):
 
         return cache_kvs_list
 
+    def initialize_mtp_kv_cache(
+        self,
+        attn_backend: Any,
+        num_gpu_blocks: int,
+        num_mtp_layers: int,
+        layer_offset: int,
+    ) -> List[Any]:
+        """
+        Initialize MTP (speculative decode) KV Cache tensors.
+
+        MTP cache layers use indices [layer_offset, layer_offset + num_mtp_layers),
+        so they share the same cache_kvs_map namespace as the main model cache but
+        with non-overlapping layer indices.  All subsequent transfer operations
+        via CacheController automatically cover MTP layers as well because they
+        live in the same cache_kvs_map.
+
+        Args:
+            attn_backend: MTP attention backend instance (proposer.attn_backends[0]).
+            num_gpu_blocks: Number of GPU blocks for MTP (already expanded by ratio).
+            num_mtp_layers: Number of MTP model layers (proposer.model_config.num_hidden_layers).
+            layer_offset: Starting layer index, equals main model num_hidden_layers.
+
+        Returns:
+            cache_kvs_list: KV Cache tensor list in [key_layer0, val_layer0, ...] order.
+        """
+        kv_cache_quant_type = self._get_kv_cache_quant_type()
+
+        key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
+            max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
+        )
+
+        kv_cache_scale_shape = None
+        if self._is_fp8_quantization(kv_cache_quant_type):
+            kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
+
+        logger.info(
+            f"[CacheController] Initializing MTP kv cache for {num_mtp_layers} layers "
+            f"(layer_offset={layer_offset}, num_gpu_blocks={num_gpu_blocks})."
+        )
+        cache_kvs_list = []
+
+        for i in range(layer_offset, layer_offset + num_mtp_layers):
+            cache_names = self._get_cache_names(i)
+
+            key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=self.model_config.dtype)
+            self.cache_kvs_map[cache_names["key"]] = key_cache
+
+            val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=self.model_config.dtype)
+            self.cache_kvs_map[cache_names["value"]] = val_cache
+            cache_kvs_list.extend([key_cache, val_cache])
+
+            if self._is_fp8_quantization(kv_cache_quant_type) and kv_cache_scale_shape:
+                key_cache_scales = paddle.full(
+                    shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
+                )
+                val_cache_scales = paddle.full(
+                    shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
+                )
+                self.cache_kvs_map[cache_names["key_scale"]] = key_cache_scales
+                self.cache_kvs_map[cache_names["value_scale"]] = val_cache_scales
+                cache_kvs_list.extend([key_cache_scales, val_cache_scales])
+
+        paddle.device.cuda.empty_cache()
+        logger.info("[CacheController] MTP kv cache initialized!")
+
+        # Refresh transfer manager so it sees the full map (main + MTP layers)
+        self._transfer_manager.set_cache_kvs_map(self.cache_kvs_map)
+
+        return cache_kvs_list
+
     def initialize_host_cache(
         self,
         attn_backend: Any,
@@ -376,18 +446,20 @@ class CacheController(KVCacheBase):
             scales_value_need_to_allocate_bytes = num_host_blocks * scale_bytes * cache_scales_size
             cache_scale_shape = [num_host_blocks, key_cache_shape[1], key_cache_shape[2]]
 
+        num_layers = self._num_layers + self.config.speculative_config.num_extra_cache_layer
+
         per_layer_size_gb = (key_need_to_allocate_bytes + value_need_to_allocate_bytes) / (1024**3)
-        actual_alloc_gb = per_layer_size_gb * self._num_layers
+        actual_alloc_gb = per_layer_size_gb * num_layers
         logger.info(
             f"[CacheController] Host swap space allocated: {actual_alloc_gb:.2f}GB "
-            f"({per_layer_size_gb:.2f}GB per layer x {self._num_layers} layers), "
+            f"({per_layer_size_gb:.2f}GB per layer x {num_layers} layers), "
             f"num_host_blocks: {num_host_blocks}"
         )
 
-        logger.info(f"[CacheController] Initializing swap space (Host cache) for {self._num_layers} layers.")
+        logger.info(f"[CacheController] Initializing swap space (Host cache) for {num_layers} layers.")
 
         # Allocate Host cache for each layer
-        for i in range(self._num_layers):
+        for i in range(num_layers):
             # Generate cache names
             cache_names = self._get_cache_names(i)
 
@@ -412,7 +484,7 @@ class CacheController(KVCacheBase):
                         scales_value_need_to_allocate_bytes
                     )
 
-        logger.info(f"[CacheController] Swap space (Host cache) is ready for {self._num_layers} layers!")
+        logger.info(f"[CacheController] Swap space (Host cache) is ready for {num_layers} layers!")
 
         # Store shapes for later use
         self._host_key_cache_shape = [num_host_blocks] + list(key_cache_shape[1:])
@@ -803,7 +875,7 @@ class CacheController(KVCacheBase):
             self.reset_cache()
 
             # Free GPU cache
-            self._free_gpu_cache()
+            self.free_gpu_cache()
 
             # Free CPU cache (pinned memory)
             self._free_host_cache()
@@ -815,7 +887,7 @@ class CacheController(KVCacheBase):
         except Exception:
             return False
 
-    def _free_gpu_cache(self) -> None:
+    def free_gpu_cache(self) -> None:
         """Free GPU cache tensors stored in cache_kvs_map."""
         if not hasattr(self, "cache_kvs_map") or not self.cache_kvs_map:
             return
