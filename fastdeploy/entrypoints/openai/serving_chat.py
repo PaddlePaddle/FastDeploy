@@ -463,6 +463,9 @@ class OpenAIServingChat:
                         if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                             choice.finish_reason = "recover_stop"
 
+                        if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
+                            choice.finish_reason = "abort"
+
                         inference_start_time[idx] = 0
 
                     if request.collect_metrics:
@@ -795,6 +798,8 @@ class OpenAIServingChat:
         if data.get("error_msg", None) is not None and "Recover" in data["error_msg"]:
             finish_reason = "recover_stop"
 
+        if data.get("error_msg", None) is not None and "Aborted" in data["error_msg"]:
+            finish_reason = "abort"
         return ChatCompletionResponseChoice(
             index=idx,
             message=message,

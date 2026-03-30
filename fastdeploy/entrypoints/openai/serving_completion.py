@@ -582,6 +582,8 @@ class OpenAIServingCompletion:
                             output,
                             tool_called[idx],
                         )
+                        if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
+                            choices[-1].finish_reason = "abort"
                         inference_start_time[idx] = 0
 
                     send_idx = output.get("send_idx")
@@ -724,6 +726,8 @@ class OpenAIServingCompletion:
                 output,
                 False,
             )
+            if final_res.get("error_msg", None) is not None and "Aborted" in final_res["error_msg"]:
+                finish_reason = "abort"
 
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,

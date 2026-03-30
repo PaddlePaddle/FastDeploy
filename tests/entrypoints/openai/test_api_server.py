@@ -809,3 +809,80 @@ def test_config_info():
         api_server = _reload_api_server(args)
         api_server.llm_engine = None
     assert api_server.config_info().status_code == 500
+
+
+# ── /v1/abort_requests ──────────────────────────────────────────────
+
+
+def _mock_abort_control_response(api_server, result, status_code=200):
+    mock_resp = MagicMock()
+    mock_resp.to_api_json_response.return_value = api_server.JSONResponse(
+        content={"request_id": "control-test", "status": "success", "error_message": None, "result": result},
+        status_code=status_code,
+    )
+    api_server.app.state.engine_client = MagicMock()
+    api_server.app.state.engine_client.run_control_method = AsyncMock(return_value=mock_resp)
+
+
+@pytest.mark.asyncio
+async def test_abort_requests_with_req_ids():
+    args = _build_args()
+    api_server = _reload_api_server(args)
+    _mock_abort_control_response(
+        api_server,
+        {
+            "aborted": [{"request_id": "req-1_0", "output_token_count": 10}],
+            "not_found": ["req-999"],
+        },
+    )
+    req = MagicMock()
+    req.json = AsyncMock(return_value={"req_ids": ["req-1", "req-999"]})
+    resp = await api_server.abort_requests(req)
+    assert resp.status_code == 200
+    control_req = api_server.app.state.engine_client.run_control_method.await_args.args[0]
+    assert control_req.method == "abort_requests"
+    assert control_req.args["req_ids"] == ["req-1", "req-999"]
+    assert control_req.args["abort_all"] is False
+
+
+@pytest.mark.asyncio
+async def test_abort_requests_with_abort_all():
+    args = _build_args()
+    api_server = _reload_api_server(args)
+    _mock_abort_control_response(
+        api_server,
+        {
+            "aborted": [
+                {"request_id": "req-1_0", "output_token_count": 5},
+                {"request_id": "req-2_0", "output_token_count": 12},
+            ],
+            "not_found": [],
+        },
+    )
+    req = MagicMock()
+    req.json = AsyncMock(return_value={"abort_all": True})
+    resp = await api_server.abort_requests(req)
+    assert resp.status_code == 200
+    control_req = api_server.app.state.engine_client.run_control_method.await_args.args[0]
+    assert control_req.args["abort_all"] is True
+    assert control_req.args["req_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_abort_requests_missing_params():
+    args = _build_args()
+    api_server = _reload_api_server(args)
+    req = MagicMock()
+    req.json = AsyncMock(return_value={})
+    resp = await api_server.abort_requests(req)
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_abort_requests_empty_req_ids():
+    args = _build_args()
+    api_server = _reload_api_server(args)
+    req = MagicMock()
+    req.json = AsyncMock(return_value={"req_ids": []})
+    resp = await api_server.abort_requests(req)
+    assert resp.status_code == 400
