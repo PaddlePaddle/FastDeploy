@@ -21,9 +21,6 @@ import paddle
 import triton
 import triton.language as tl
 
-from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
-    enable_compat_on_triton_kernel,
-)
 from fastdeploy.utils import ceil_div
 
 # Maximum rows per Triton block for layernorm gated kernel
@@ -51,7 +48,6 @@ def calc_rows_per_block(M: int, BLOCK_N: int, num_warps: int) -> int:
     return min(rows, MAX_ROWS_PER_BLOCK, max(1, M))
 
 
-@enable_compat_on_triton_kernel
 @triton.jit
 def rms_norm_gated_fwd_kernel(
     x_ptr,  # pointer to the input

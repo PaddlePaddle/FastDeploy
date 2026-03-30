@@ -61,7 +61,7 @@ class TestRMSNormGated(unittest.TestCase):
         self.assertEqual(layer.eps, 1e-5)
         self.assertEqual(layer.activation, "swish")
 
-    def naive_rmsnorm_gated(self, x, gate, weight, eps=1e-5, activation="swish"):
+    def naive_rmsnorm_gated(self, x, gate, weight, eps=1e-5, activation="swish", bias=None):
         """naive RMSNormGated for comparison."""
         input_dtype = x.dtype
         x = x.cast("float32")
@@ -69,6 +69,8 @@ class TestRMSNormGated(unittest.TestCase):
         variance = paddle.mean(x**2, axis=-1, keepdim=True)
         # Norm before gate
         x = x * paddle.rsqrt(variance + eps)
+        if bias is not None:
+            x = x + bias.cast("float32")
         x = weight * x
         if gate is not None:
             gate = gate.cast("float32")
@@ -94,7 +96,7 @@ class TestRMSNormGated(unittest.TestCase):
         self.assertEqual(output_triton.shape, x.shape)
         self.assertEqual(output_triton.dtype, x.dtype)
 
-        output_naive = self.naive_rmsnorm_gated(x, None, layer.weight, 1e-5, "swish")
+        output_naive = self.naive_rmsnorm_gated(x, None, layer.weight, eps=1e-5, activation="swish")
 
         assert (output_triton - output_naive).abs().max() < 1e-3
 
@@ -257,6 +259,141 @@ class TestRMSNormGated(unittest.TestCase):
         self.assertEqual(out.shape, x.shape)
 
         ref = rmsnorm_gated(x=x, weight=weight, bias=None, eps=1e-5, z=z)
+        assert (out - ref).abs().max() < 1e-3
+
+    def test_kernel_with_bias(self):
+        """Test rmsnorm_gated kernel with HAS_BIAS=True path."""
+        hidden_size = self.hidden_size
+        M = self.batch_size * self.seq_len
+        x = paddle.randn([M, hidden_size], dtype="float16")
+        z = paddle.randn([M, hidden_size], dtype="float16")
+        weight = paddle.ones([hidden_size], dtype="float16")
+        bias = paddle.zeros([hidden_size], dtype="float16")
+
+        out = rmsnorm_gated(x=x, weight=weight, bias=bias, eps=1e-5, z=z)
+
+        self.assertEqual(out.shape, x.shape)
+        self.assertEqual(out.dtype, x.dtype)
+
+        # Compare with naive: bias=0 so result should match no-bias case
+        ref = rmsnorm_gated(x=x, weight=weight, bias=None, eps=1e-5, z=z)
+        assert (out - ref).abs().max() < 1e-3
+
+    def test_kernel_runtime_error_large_N(self):
+        """Test that a feature dim >= 64KB raises RuntimeError."""
+        # Construct x with N just above MAX_FUSED_SIZE for float16 (65536/2=32768)
+        M = 2
+        N = 32769  # > 65536 // 2 (element_size=2 for float16)
+        x = paddle.randn([M, N], dtype="float16")
+        weight = paddle.ones([N], dtype="float16")
+
+        with self.assertRaises(RuntimeError):
+            rmsnorm_gated(x=x, weight=weight, bias=None, eps=1e-5)
+
+    def test_kernel_unknown_activation_defaults_to_swish(self):
+        """Test that an unknown activation string falls back to swish (value 0)."""
+        hidden_size = self.hidden_size
+        M = self.batch_size * self.seq_len
+        x = paddle.randn([M, hidden_size], dtype="float16")
+        z = paddle.randn([M, hidden_size], dtype="float16")
+        weight = paddle.ones([hidden_size], dtype="float16")
+
+        # Unknown activation should map to 0 (swish) via .get(..., 0)
+        out_unknown = rmsnorm_gated(x=x, weight=weight, bias=None, eps=1e-5, z=z, activation="unknown_act")
+        out_swish = rmsnorm_gated(x=x, weight=weight, bias=None, eps=1e-5, z=z, activation="swish")
+
+        assert (out_unknown - out_swish).abs().max() < 1e-6
+
+    def test_forward_no_gate_no_triton(self):
+        """Test forward pass without gate and without Triton kernel (fallback path)."""
+        layer = RMSNormGated(
+            fd_config=self.fd_config,
+            hidden_size=self.hidden_size,
+            eps=1e-5,
+            prefix="test_layer",
+            activation="swish",
+        )
+        # Force disable triton kernel to exercise the else branch
+        layer.use_triton_kernel = False
+
+        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float16")
+        output = layer(x)
+
+        self.assertEqual(output.shape, x.shape)
+        self.assertEqual(output.dtype, x.dtype)
+
+        output_naive = self.naive_rmsnorm_gated(x, None, layer.weight, 1e-5, "swish")
+        assert (output - output_naive).abs().max() < 1e-3
+
+    def test_forward_with_gate_no_triton_swish(self):
+        """Test forward with swish gate when Triton is disabled (fallback path)."""
+        layer = RMSNormGated(
+            fd_config=self.fd_config,
+            hidden_size=self.hidden_size,
+            eps=1e-5,
+            prefix="test_layer",
+            activation="swish",
+        )
+        layer.use_triton_kernel = False
+
+        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float16")
+        z = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float16")
+
+        output = layer(x, z=z)
+
+        self.assertEqual(output.shape, x.shape)
+        self.assertEqual(output.dtype, x.dtype)
+
+        output_naive = self.naive_rmsnorm_gated(x, z, layer.weight, 1e-5, "swish")
+        assert (output - output_naive).abs().max() < 1e-3
+
+    def test_forward_with_gate_no_triton_sigmoid(self):
+        """Test forward with sigmoid gate when Triton is disabled (fallback path)."""
+        layer = RMSNormGated(
+            fd_config=self.fd_config,
+            hidden_size=self.hidden_size,
+            eps=1e-5,
+            prefix="test_layer",
+            activation="sigmoid",
+        )
+        layer.use_triton_kernel = False
+
+        x = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float16")
+        z = paddle.randn([self.batch_size * self.seq_len, self.hidden_size], dtype="float16")
+
+        output = layer(x, z=z)
+
+        self.assertEqual(output.shape, x.shape)
+        self.assertEqual(output.dtype, x.dtype)
+
+        output_naive = self.naive_rmsnorm_gated(x, z, layer.weight, 1e-5, "sigmoid")
+        assert (output - output_naive).abs().max() < 1e-3
+
+    def test_invalid_activation_raises(self):
+        """Test that an invalid activation string raises AssertionError on init."""
+        with self.assertRaises(AssertionError):
+            RMSNormGated(
+                fd_config=self.fd_config,
+                hidden_size=self.hidden_size,
+                eps=1e-5,
+                prefix="test_layer",
+                activation="relu",
+            )
+
+    def test_kernel_no_gate_no_bias(self):
+        """Test rmsnorm_gated kernel without gate (HAS_Z=False) and without bias."""
+        hidden_size = self.hidden_size
+        M = self.batch_size * self.seq_len
+        x = paddle.randn([M, hidden_size], dtype="float16")
+        weight = paddle.ones([hidden_size], dtype="float16")
+
+        out = rmsnorm_gated(x=x, weight=weight, bias=None, eps=1e-5, z=None)
+
+        self.assertEqual(out.shape, x.shape)
+        self.assertEqual(out.dtype, x.dtype)
+
+        # Compare with naive RMSNorm (no gate)
+        ref = self.naive_rmsnorm_gated(x, None, weight, eps=1e-5, activation="swish")
         assert (out - ref).abs().max() < 1e-3
 
 
