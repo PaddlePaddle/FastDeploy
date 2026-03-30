@@ -2033,12 +2033,13 @@ std::vector<paddle::Tensor> BlockAttn(
           const_cast<int32_t*>(decoder_context_len_cpu.data<int32_t>()),
           dec_batch,
           const_cast<int32_t*>(decoder_context_len.data<int32_t>())};
-      // vsl.slot_mapping_vp = {
-      //     const_cast<int32_t*>(decoder_batch_map_cpu.data<int32_t>()),
-      //     dec_batch,
-      //     const_cast<int32_t*>(
-      //         decoder_batch_map.data<int32_t>())};  // real batch
-      vsl.slot_mapping_vp = {nullptr, 0, nullptr};  // real batch
+      vsl.slot_mapping_vp = {
+          const_cast<int32_t*>(decoder_batch_map_cpu.data<int32_t>()),
+          dec_batch,
+          const_cast<int32_t*>(
+              decoder_batch_map.data<int32_t>())};  // real batch
+      // can not set to nullptr and 0, which will cause inference interrupt
+      //   vsl.slot_mapping_vp = {nullptr, 0, nullptr};  // real batch
 
       xftblock::Tensor block_table_tensor(
           reinterpret_cast<void*>(
