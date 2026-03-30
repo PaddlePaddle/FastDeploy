@@ -271,6 +271,11 @@ class XPUForwardMeta(ForwardMeta):
     hidden_states: Optional[paddle.Tensor] = None
 
     is_draft: bool = False
+    # for block_attn splice
+    slot_mapping_enc: Optional[paddle.Tensor] = None
+    slot_mapping_dec: Optional[paddle.Tensor] = None
+    non_mtp_decoder_seq_lod_cpu: Optional[paddle.Tensor] = None
+    non_mtp_decoder_seq_lod: Optional[paddle.Tensor] = None
 
     def copy_from(self, other: "XPUForwardMeta", skip_keys: Optional[list] = None):
         """

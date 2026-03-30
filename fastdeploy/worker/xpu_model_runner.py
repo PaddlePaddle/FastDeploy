@@ -1496,6 +1496,9 @@ class XPUModelRunner(ModelRunnerBase):
 
         try:
             for batch_size in sorted(capture_sizes, reverse=True):
+                # mark debug
+                # if batch_size > 1:
+                #     continue
                 self._dummy_run(
                     num_tokens=self.scheduler_config.max_num_batched_tokens,
                     batch_size=batch_size,
@@ -1577,6 +1580,10 @@ class XPUModelRunner(ModelRunnerBase):
             )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
+
+            # mark debug
+            # print(f"mark debug: model_output: {model_output}")
+
             hidden_states = xpu_process_output(
                 model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs
             )
