@@ -147,9 +147,9 @@ def process_weight_transpose(layer, weight_name):
         return
 
     if len(weight.shape) == 2:
-        weight_transpose = weight.transpose([1, 0])
+        weight_transpose = weight.transpose([1, 0]).contiguous()
     elif len(weight.shape) == 3:
-        weight_transpose = weight.transpose([0, 2, 1])
+        weight_transpose = weight.transpose([0, 2, 1]).contiguous()
     weight_tmp.copy_(weight_transpose, False)
     free_tensor(weight)
     setattr(layer, weight_name, weight_tmp)
@@ -183,7 +183,7 @@ def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
             else:
                 unquant_moe_cls = type(unquant_moe_layer)
             if type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls:
-                # skip unquantized linear
+                # skip unquantized moe
                 return
             if not hasattr(quant_method, "process_weights_after_loading"):
                 return
@@ -539,11 +539,12 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         if fd_config.quant_config is None or fd_config.quant_config.is_checkpoint_bf16:
             return loaded_weight_name
         # Can be extended to other offline quantization suffixes if needed.
+        current_fd_suffix_map = {}  # Default empty map
         if (is_moe and moe_quant_type == "block_wise_fp8") or (not is_moe and dense_quant_type == "block_wise_fp8"):
-            fd_suffix_map = fp8_suffix_map
+            current_fd_suffix_map = fp8_suffix_map
         if (is_moe and moe_quant_type == "tensor_wise_fp8") or (not is_moe and dense_quant_type == "tensor_wise_fp8"):
-            fd_suffix_map = tensor_wise_fp8_suffix_map
-        for ckpt_suffix, fd_suffix in fd_suffix_map.items():
+            current_fd_suffix_map = tensor_wise_fp8_suffix_map
+        for ckpt_suffix, fd_suffix in current_fd_suffix_map.items():
             if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
                 loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)
                 return loaded_weight_name
