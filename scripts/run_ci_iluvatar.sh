@@ -34,8 +34,7 @@ function pip_install_with_retry() {
 echo "pip requirements"
 pip_install_with_retry -r requirements_iluvatar.txt
 echo "install paddle cpu and custom device"
-pip_install_with_retry --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-pip_install_with_retry --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+pip_install_with_retry --pre paddlepaddle-iluvatar -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
 
 echo "Run paddle.utils.run_check()"
 python -c "import paddle; paddle.utils.run_check()"
@@ -101,6 +100,7 @@ export FD_SAMPLING_CLASS=rejection
 offline_ci_list=(
     ${CI_PATH}/run_ernie_21b.py
     ${CI_PATH}/run_ernie_vl_28B.py
+    ${CI_PATH}/run_ernie_vl_28B_wint4.py
 )
 echo "test offline ci files: ${offline_ci_list[@]}"
 for cur_test_file in ${offline_ci_list[@]}
