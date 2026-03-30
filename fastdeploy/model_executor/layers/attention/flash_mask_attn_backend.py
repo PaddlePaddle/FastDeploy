@@ -30,6 +30,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 from fastdeploy.model_executor.layers.attention.ops import (
     append_attention,
+    flash_attn_v4,
     flash_mask_attention,
     get_block_shape_and_split_kv_block,
     gqa_rope_write_cache,
@@ -50,6 +51,8 @@ if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import merge_prefill_decode_output
 else:
     merge_prefill_decode_output = None
+
+from fastdeploy.model_executor.utils import get_sm_version
 
 
 @dataclass
@@ -124,6 +127,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
         if fd_config.speculative_config.model_type != "main":
             self.rope_3d = False
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", "32768"))
+        self.sm_version = get_sm_version()
 
     def get_kv_cache_shape(
         self,
@@ -278,19 +282,30 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 self.rope_3d,
             )
 
-            flash_mask_attention(
-                q,
-                k,
-                v,
-                forward_meta.cu_seqlens_q,
-                forward_meta.attn_cu_seqlens_k,
-                forward_meta.seq_lens_encoder,
-                res_encoder,
-                forward_meta.attn_mask_offsets,
-                self.num_heads,
-                self.kv_num_heads,
-                self.head_dim,
-            )
+            if self.sm_version >= 100:
+                flash_attn_v4(
+                    q,
+                    k,
+                    v,
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.attn_cu_seqlens_k,
+                    res_encoder,
+                    forward_meta.attn_mask_offsets,
+                )
+            else:
+                flash_mask_attention(
+                    q,
+                    k,
+                    v,
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.attn_cu_seqlens_k,
+                    forward_meta.seq_lens_encoder,
+                    res_encoder,
+                    forward_meta.attn_mask_offsets,
+                    self.num_heads,
+                    self.kv_num_heads,
+                    self.head_dim,
+                )
 
         res_decoder = append_attention(
             qkv,
