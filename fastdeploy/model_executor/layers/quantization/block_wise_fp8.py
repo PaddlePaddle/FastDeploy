@@ -133,6 +133,13 @@ def deep_gemm_fp8_gemm_nt(
             linear_out,
             bias=bias,
         )
+    elif get_sm_version() > 100 and current_platform.is_cuda():
+        fp8_gemm_nt(
+            (x, x_scale_tensor),
+            (layer_weight, layer_weight_scale_inv),
+            linear_out,
+            disable_ue8m0_cast=False,
+        )
     else:
         # disable_ue8m0_cast is default False for SM100
         fp8_gemm_nt(
