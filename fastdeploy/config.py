@@ -1435,9 +1435,9 @@ class CacheConfig:
             f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"
         )
         assert self.prefill_kvcache_block_num >= self.max_block_num_per_seq + self.enc_dec_block_num, (
-            f"prefill_kvcache_block_num: {self.prefill_kvcache_block_num} should be larger "
-            f"than or equal to {self.max_block_num_per_seq + self.enc_dec_block_num}, please reduce "
-            "the max_model_len or increase num_gpu_blocks_override"
+            f"current device block num: {self.prefill_kvcache_block_num} "
+            f"should be larger than or equal to {self.max_block_num_per_seq + self.enc_dec_block_num}, please reduce "
+            "the max_model_len or replace the machine with larger GPU cards"
         )
 
     def print(self):
