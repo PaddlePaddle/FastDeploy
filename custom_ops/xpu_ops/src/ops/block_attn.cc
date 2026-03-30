@@ -879,6 +879,7 @@ void split_rope_kvcache_splice_decoder(
   // write to cache
   auto slot_mapping =
       paddle::empty({token_num}, block_tables.dtype(), block_tables.place());
+  // lod_to_slot_mapping_nonmtp_decode<TID>(
   lod_to_slot_mapping_nonmtp_decode_debug<TID>(
       xpu_ctx,
       place,
