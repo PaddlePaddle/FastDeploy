@@ -12,181 +12,146 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include "../helper.h"
 #include "swigluoai.h"
-#include "helper.h"
 
-#pragma once
 
 // dim3 grid(256)
 // dim3 block(512)
 template <typename T, int VecSize>
 __global__ void swigluoai_interleave_kernel(T* act_out,
-                                            const T* input,
-                                            const float alpha,
-                                            const float limit,
-                                            const int64_t seq_len,
-                                            const int64_t hidden_dim) {
-  int64_t tid = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-  const int64_t num = seq_len * hidden_dim;
-  using LoadT = AlignedVector<T, VecSize>;
-  LoadT src_vec0, src_vec1;
-  LoadT res_vec;
+                                 const T* input,
+                                 const float alpha,
+                                 const float limit,
+                                 const int64_t seq_len,
+                                 const int64_t hidden_dim) {
+    int64_t tid = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    const int64_t num = seq_len * hidden_dim;
+    using LoadT = AlignedVector<T, VecSize>;
+    LoadT src_vec0, src_vec1;
+    LoadT res_vec;
 
-  int64_t vec_num = hidden_dim / VecSize * seq_len;
-  int64_t col_size = hidden_dim / VecSize;
-  int64_t times = (vec_num - 1) / (gridDim.x * blockDim.x) + 1;
+    int64_t vec_num = hidden_dim / VecSize * seq_len;
+    int64_t col_size = hidden_dim / VecSize;
+    int64_t times = (vec_num - 1) / (gridDim.x * blockDim.x) + 1;
 
-  for (int i = 0; i < times; i++) {
-    int64_t index = tid + i * gridDim.x * blockDim.x;
-    int64_t row = index / col_size;
-    int64_t col = index % col_size;
+    for(int i = 0; i < times; i++)
+    {
+        int64_t index = tid + i * gridDim.x * blockDim.x ;
+        int64_t row = index / col_size;
+        int64_t col = index % col_size;
 
-    if (row < seq_len && col < col_size) {
-      Load<T, VecSize>(&input[row * hidden_dim * 2 + col * VecSize * 2],
-                       &src_vec0);
-      Load<T, VecSize>(
-          &input[row * hidden_dim * 2 + col * VecSize * 2 + VecSize],
-          &src_vec1);
+        if(row < seq_len && col < col_size)
+        {
+            Load<T, VecSize>(&input[row*hidden_dim*2 + col*VecSize*2], &src_vec0);
+            Load<T, VecSize>(&input[row*hidden_dim*2 + col*VecSize*2 + VecSize], &src_vec1);
 
-      for (int j = 0; j < VecSize / 2; ++j) {
-        float a = static_cast<float>(src_vec0[2 * j]);
-        float b = static_cast<float>(src_vec0[2 * j + 1]);
-        a = fminf(a, limit);
-        b = fminf(fmaxf(b, -limit), limit);
-        float res = (b + 1) * a / (1.f + expf(-a * alpha));
-        res_vec[j] = static_cast<T>(res);
-      }
-      for (int j = 0; j < VecSize / 2; ++j) {
-        float a = static_cast<float>(src_vec1[2 * j]);
-        float b = static_cast<float>(src_vec1[2 * j + 1]);
-        a = fminf(a, limit);
-        b = fminf(fmaxf(b, -limit), limit);
-        float res = (b + 1) * a / (1.f + expf(-a * alpha));
-        res_vec[j + VecSize / 2] = static_cast<T>(res);
-      }
+            for (int j = 0; j < VecSize/2; ++j) {
+                float a = static_cast<float>(src_vec0[2*j]);
+                float b = static_cast<float>(src_vec0[2*j + 1]);
+                a = fminf(a, limit);
+                b = fminf(fmaxf(b,-limit), limit);
+                float res = (b + 1) * a / (1.f + expf(-a * alpha));
+                res_vec[j] = static_cast<T>(res);
+            }
+            for (int j = 0; j < VecSize/2; ++j) {
+                float a = static_cast<float>(src_vec1[2*j]);
+                float b = static_cast<float>(src_vec1[2*j + 1]);
+                a = fminf(a, limit);
+                b = fminf(fmaxf(b,-limit), limit);
+                float res = (b + 1) * a / (1.f + expf(-a * alpha));
+                res_vec[j + VecSize/2] = static_cast<T>(res);
+            }
 
-      Store<T, VecSize>(res_vec, &act_out[row * hidden_dim + col * VecSize]);
+            Store<T, VecSize>(res_vec, &act_out[row*hidden_dim + col*VecSize]);
+        }
     }
-  }
 }
+
 
 // dim3 grid(256)
 // dim3 block(512)
 template <typename T, int VecSize>
 __global__ void swigluoai_norm_kernel(T* act_out,
-                                      const T* input,
-                                      const float alpha,
-                                      const float limit,
-                                      const int64_t seq_len,
-                                      const int64_t hidden_dim) {
-  int64_t tid = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-  const int64_t num = seq_len * hidden_dim;
-  using LoadT = AlignedVector<T, VecSize>;
-  LoadT src_vec0, src_vec1;
-  LoadT res_vec;
+                                 const T* input,
+                                 const float alpha,
+                                 const float limit,
+                                 const int64_t seq_len,
+                                 const int64_t hidden_dim) {
+    int64_t tid = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    const int64_t num = seq_len * hidden_dim;
+    using LoadT = AlignedVector<T, VecSize>;
+    LoadT src_vec0, src_vec1;
+    LoadT res_vec;
 
-  int64_t vec_num = hidden_dim / VecSize * seq_len;
-  int64_t col_size = hidden_dim / VecSize;
-  int64_t times = (vec_num - 1) / (gridDim.x * blockDim.x) + 1;
+    int64_t vec_num = hidden_dim / VecSize * seq_len;
+    int64_t col_size = hidden_dim / VecSize;
+    int64_t times = (vec_num - 1) / (gridDim.x * blockDim.x) + 1;
 
-  for (int i = 0; i < times; i++) {
-    int64_t index = tid + i * gridDim.x * blockDim.x;
-    int64_t row = index / col_size;
-    int64_t col = index % col_size;
+    for(int i = 0; i < times; i++)
+    {
+        int64_t index = tid + i * gridDim.x * blockDim.x ;
+        int64_t row = index / col_size;
+        int64_t col = index % col_size;
 
-    if (row < seq_len && col < col_size) {
-      Load<T, VecSize>(&input[row * hidden_dim * 2 + col * VecSize], &src_vec0);
-      Load<T, VecSize>(
-          &input[row * hidden_dim * 2 + hidden_dim + col * VecSize], &src_vec1);
+        if(row < seq_len && col < col_size)
+        {
+            Load<T, VecSize>(&input[row*hidden_dim*2 + col*VecSize], &src_vec0);
+            Load<T, VecSize>(&input[row*hidden_dim*2 + hidden_dim + col*VecSize], &src_vec1);
 
-      for (int j = 0; j < VecSize; ++j) {
-        float a = static_cast<float>(src_vec0[j]);
-        float b = static_cast<float>(src_vec1[j]);
-        float z = fminf(fmaxf(a * alpha, -limit), limit);
-        float res = b * a / (1.f + expf(-z));
-        res_vec[j] = static_cast<T>(res);
-      }
+            for (int j = 0; j < VecSize; ++j) {
+                float a = static_cast<float>(src_vec0[j]);
+                float b = static_cast<float>(src_vec1[j]);
+                float z = fminf(fmaxf(a * alpha, -limit), limit);
+                float res = b * a / (1.f + expf(-z));
+                res_vec[j] = static_cast<T>(res);
+            }
 
-      Store<T, VecSize>(res_vec, &act_out[row * hidden_dim + col * VecSize]);
+            Store<T, VecSize>(res_vec, &act_out[row*hidden_dim + col*VecSize]);
+        }
     }
-  }
 }
 
-paddle::Tensor SwigluOAI(const paddle::Tensor& fc1_out_tensor,
-                         const float alpha,
-                         const float limit,
-                         const std::string& type) {
-  // const int64_t group_size = fc1_out_tensor.shape()[1];
-  const int64_t seq_len = fc1_out_tensor.shape()[0];
-  const int64_t hidden_dim = fc1_out_tensor.shape()[1] / 2;
-  auto act_out_tensor = GetEmptyTensor(
-      {seq_len, hidden_dim}, fc1_out_tensor.dtype(), fc1_out_tensor.place());
+paddle::Tensor SwigluOAI(const paddle::Tensor &fc1_out_tensor, const float alpha, const float limit, const std::string& type)
+{
+    // const int64_t group_size = fc1_out_tensor.shape()[1];
+    const int64_t seq_len = fc1_out_tensor.shape()[0];
+    const int64_t hidden_dim = fc1_out_tensor.shape()[1] / 2;
+    auto act_out_tensor = GetEmptyTensor({seq_len, hidden_dim}, fc1_out_tensor.dtype(), fc1_out_tensor.place());
 
-  constexpr int VecSize = 8;
-  PD_CHECK(fc1_out_tensor.dtype() == paddle::DataType::BFLOAT16 ||
-               fc1_out_tensor.dtype() == paddle::DataType::FLOAT16,
-           "SwigluOAI only supports BF16 and FP16, got ",
-           fc1_out_tensor.dtype());
-  PD_CHECK(hidden_dim % VecSize == 0);
+    constexpr int VecSize = 8;
+    // Support both FP16 and BF16 for V100 compatibility
+    PD_CHECK(fc1_out_tensor.dtype() == paddle::DataType::BFLOAT16 ||
+             fc1_out_tensor.dtype() == paddle::DataType::FLOAT16,
+             "SwigluOAI only supports BFLOAT16 or FLOAT16, but got ",
+             fc1_out_tensor.dtype());
+    PD_CHECK(hidden_dim % VecSize == 0);
 
-  const int block_size = 512;
-  const int grid_size = 256;
+    const int block_size = 512;
+    const int grid_size = 256;
 
-#define LAUNCH_SWIGLU_KERNEL(D)                                        \
-  do {                                                                 \
-    typedef PDTraits<D> traits_;                                       \
-    typedef typename traits_::DataType DataType_;                      \
-    typedef typename traits_::data_t data_t;                           \
-    if (type == "interleave") {                                        \
-      swigluoai_interleave_kernel<DataType_, VecSize>                  \
-          <<<grid_size, block_size, 0, fc1_out_tensor.stream()>>>(     \
-              reinterpret_cast<DataType_*>(                            \
-                  const_cast<data_t*>(act_out_tensor.data<data_t>())), \
-              reinterpret_cast<const DataType_*>(                      \
-                  fc1_out_tensor.data<data_t>()),                      \
-              alpha,                                                   \
-              limit,                                                   \
-              seq_len,                                                 \
-              hidden_dim);                                             \
-    } else {                                                           \
-      swigluoai_norm_kernel<DataType_, VecSize>                        \
-          <<<grid_size, block_size, 0, fc1_out_tensor.stream()>>>(     \
-              reinterpret_cast<DataType_*>(                            \
-                  const_cast<data_t*>(act_out_tensor.data<data_t>())), \
-              reinterpret_cast<const DataType_*>(                      \
-                  fc1_out_tensor.data<data_t>()),                      \
-              alpha,                                                   \
-              limit,                                                   \
-              seq_len,                                                 \
-              hidden_dim);                                             \
-    }                                                                  \
-  } while (0)
+    PD_DISPATCH_FLOATING_AND_HALF_TYPES(
+        fc1_out_tensor.dtype(), "swigluoai", [&] {
+            swigluoai_norm_kernel<data_t, VecSize><<<grid_size, block_size, 0, fc1_out_tensor.stream()>>>(
+                act_out_tensor.data<data_t>(),
+                fc1_out_tensor.data<data_t>(),
+                alpha,
+                limit,
+                seq_len,
+                hidden_dim
+            );
+        });
 
-  if (fc1_out_tensor.dtype() == paddle::DataType::BFLOAT16) {
-    LAUNCH_SWIGLU_KERNEL(paddle::DataType::BFLOAT16);
-  } else {
-    LAUNCH_SWIGLU_KERNEL(paddle::DataType::FLOAT16);
-  }
-
-#undef LAUNCH_SWIGLU_KERNEL
-  // if (token_nums_per_expert.dtype() == paddle::DataType::INT64) {
-  //     dispatch_by_index(int64_t);
-  // } else if(token_nums_per_expert.dtype() == paddle::DataType::INT32) {
-  //     dispatch_by_index(int32_t);
-  // } else {
-  //     PD_THROW("Unsupported token_nums_per_expert's data dtype.");
-  // }
-
-  return act_out_tensor;
+    return act_out_tensor;
 }
+
 
 std::vector<paddle::Tensor> SwigluOAIWrapper(
     const paddle::Tensor& fc1_out_tensor,
     const float alpha,
     const float limit,
     const std::string& type) {
-  return {SwigluOAI(fc1_out_tensor, alpha, limit, type)};
+     return {SwigluOAI(fc1_out_tensor, alpha, limit, type)};
 }
 
 PD_BUILD_STATIC_OP(swigluoai)

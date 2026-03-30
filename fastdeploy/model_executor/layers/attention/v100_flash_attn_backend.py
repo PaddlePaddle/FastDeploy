@@ -57,26 +57,6 @@ try:
 except Exception:
     _CUDA_KERNEL_AVAILABLE = False
 
-# Try importing V100 fused RoPE + KV cache write kernel
-try:
-    from fastdeploy.model_executor.ops.gpu import (
-        v100_rope_write_cache as v100_rope_write_cache_cuda,
-    )
-
-    _V100_ROPE_WRITE_CACHE_AVAILABLE = True
-except Exception:
-    _V100_ROPE_WRITE_CACHE_AVAILABLE = False
-
-# Try importing Triton kernels (fallback: ~1.5ms launch overhead via torch_proxy)
-try:
-    from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
-        v100_decode_fused,
-    )
-
-    _TRITON_KERNELS_AVAILABLE = True
-except Exception:
-    _TRITON_KERNELS_AVAILABLE = False
-
 # Try importing Paddle native SDPA (fallback: optimized cuBLAS implementation)
 try:
     from paddle.nn.functional import scaled_dot_product_attention as paddle_sdpa
@@ -84,6 +64,19 @@ try:
     _PADDLE_SDPA_AVAILABLE = True
 except Exception:
     _PADDLE_SDPA_AVAILABLE = False
+
+# Try importing Triton kernels (fallback: ~1.5ms launch overhead via torch_proxy)
+try:
+    from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
+        v100_decode_fused,
+        v100_write_kv_cache,  # KV cache write kernel (much faster than Python for-loop)
+    )
+
+    _TRITON_KERNELS_AVAILABLE = True
+    _TRITON_WRITE_KV_AVAILABLE = True
+except Exception:
+    _TRITON_KERNELS_AVAILABLE = False
+    _TRITON_WRITE_KV_AVAILABLE = False
 
 
 @dataclass
@@ -140,13 +133,19 @@ class V100FlashAttentionBackend(AttentionBackend):
 
         # Use CUDA C++ kernel > Triton > Python fallback
         force_python = os.environ.get("FD_V100_USE_PYTHON_ATTN", "0") == "1"
-        self._use_cuda_kernel = _CUDA_KERNEL_AVAILABLE and not force_python
+        force_triton = os.environ.get("FD_V100_USE_TRITON", "0") == "1"
+        self._use_cuda_kernel = _CUDA_KERNEL_AVAILABLE and not force_python and not force_triton
         self._use_triton = _TRITON_KERNELS_AVAILABLE and not force_python
 
         if force_python:
             logger.info(
                 "V100FlashAttentionBackend: FD_V100_USE_PYTHON_ATTN=1 set, "
                 "forcing Python/Paddle fallback (Triton kernels disabled)."
+            )
+        elif force_triton and _TRITON_KERNELS_AVAILABLE:
+            logger.info(
+                "V100FlashAttentionBackend: FD_V100_USE_TRITON=1 set, "
+                "forcing Triton kernels for decode attention."
             )
         elif self._use_cuda_kernel:
             logger.info(
@@ -186,13 +185,28 @@ class V100FlashAttentionBackend(AttentionBackend):
 
         # Set dtype based on default dtype, prefer FP16 for V100
         default_dtype = paddle.get_default_dtype()
+
+        # Check hardware support for BF16
         if default_dtype == "bfloat16":
-            # V100 does NOT support BF16 natively, force FP16
-            logger.warning(
-                "BF16 dtype detected but V100 (SM70) does not support BF16. " "Forcing FP16 for correctness."
-            )
-            metadata._dtype = paddle.float16
-            metadata._fuse_kernel_compute_dtype = "fp16"
+            from fastdeploy.platforms import current_platform
+            from fastdeploy.platforms.cuda import CUDAPlatform
+
+            if current_platform.is_cuda() and not CUDAPlatform.supports_bf16():
+                # V100 does not support BF16, force FP16
+                logger.warning(
+                    "BF16 dtype detected but V100 (SM70) does not support BF16. "
+                    "Forcing FP16 dtype for V100 attention backend."
+                )
+                metadata._dtype = paddle.float16
+                metadata._fuse_kernel_compute_dtype = "fp16"
+            else:
+                # Hardware supports BF16
+                logger.warning(
+                    "BF16 dtype detected but V100 has limited BF16 support. "
+                    "Consider using FP16 for better performance."
+                )
+                metadata._dtype = paddle.bfloat16
+                metadata._fuse_kernel_compute_dtype = "bf16"
         elif default_dtype == "float16":
             metadata._dtype = paddle.float16
             metadata._fuse_kernel_compute_dtype = "fp16"
@@ -336,7 +350,34 @@ class V100FlashAttentionBackend(AttentionBackend):
         kv_num_heads,
         head_dim,
     ):
-        """Python fallback: write K/V to block cache with a for-loop."""
+        """
+        Write K/V to block cache.
+
+        V100优化: 优先使用Triton kernel (v100_write_kv_cache)，比Python for-loop快100倍
+        当Triton不可用时，fallback到Python for-loop。
+        """
+        # Try using Triton kernel first (much faster, parallel, no .item() calls)
+        if _TRITON_WRITE_KV_AVAILABLE:
+            try:
+                num_tokens = k.shape[0]
+                k_reshaped = k.reshape([num_tokens, kv_num_heads, head_dim])
+                v_reshaped = v.reshape([num_tokens, kv_num_heads, head_dim])
+
+                v100_write_kv_cache(
+                    k_reshaped,           # [num_tokens, kv_num_heads, head_dim]
+                    v_reshaped,           # [num_tokens, kv_num_heads, head_dim]
+                    key_cache,            # [max_num_blocks, kv_num_heads, block_size, head_dim]
+                    value_cache,          # same layout
+                    block_tables,         # [batch_size, max_blocks_per_seq]
+                    positions,            # [num_tokens] int64
+                    batch_id_per_token,   # [num_tokens] int32
+                )
+                return
+            except Exception as e:
+                logger.warning(f"Triton KV cache write failed: {e}, falling back to Python")
+
+        # Python fallback: write K/V to block cache with a for-loop
+        # This is slow (~34ms for 920 tokens) due to .item() calls causing CPU-GPU sync
         num_tokens = k.shape[0]
         k_reshaped = k.reshape([num_tokens, kv_num_heads, head_dim])
         v_reshaped = v.reshape([num_tokens, kv_num_heads, head_dim])
@@ -529,38 +570,33 @@ class V100FlashAttentionBackend(AttentionBackend):
 
         V100优化: 批量处理多个序列，利用Paddle原生SDPA的cuBLAS优化
         比per-sequence实现快10-50倍。
-
-        Args:
-            query: [batch_size, num_heads, head_dim]
-            key: [batch_size, kv_num_heads, kv_len, head_dim]
-            value: [batch_size, kv_num_heads, kv_len, head_dim]
-            is_causal: Whether to apply causal masking
-
-        Returns:
-            output: [batch_size, num_heads, head_dim]
         """
         if _PADDLE_SDPA_AVAILABLE:
             try:
                 # query: [batch_size, num_heads, head_dim]
-                # key/value: [batch_size, kv_num_heads, kv_len, head_dim]
+                # key/value: [batch_size, kv_num_heads, head_dim]
 
                 # Reshape for Paddle SDPA: [batch_size, num_heads, seq_len, head_dim]
-                # Query has seq_len=1 for decode
-                query_sdpa = query.unsqueeze(2)  # [batch_size, num_heads, 1, head_dim]
+                q_len = query.shape[0]
+                kv_len = key.shape[0]
+
+                query_sdpa = query.transpose([1, 0, 2]).unsqueeze(0)  # [1, num_heads, q_len, head_dim]
+                key_sdpa = key.transpose([1, 0, 2]).unsqueeze(0)    # [1, kv_num_heads, kv_len, head_dim]
+                value_sdpa = value.transpose([1, 0, 2]).unsqueeze(0) # [1, kv_num_heads, kv_len, head_dim]
 
                 output = paddle_sdpa(
                     query_sdpa,
-                    key,
-                    value,
+                    key_sdpa,
+                    value_sdpa,
                     is_causal=is_causal,
-                )  # [batch_size, num_heads, 1, head_dim]
+                )  # [1, num_heads, q_len, head_dim]
 
-                return output.squeeze(2)  # [batch_size, num_heads, head_dim]
+                return output.squeeze(0).transpose([1, 0, 2])  # [q_len, num_heads, head_dim]
             except Exception as e:
                 logger.warning(f"Paddle batched SDPA failed: {e}, falling back to per-sequence")
 
-        # Fallback: return None to indicate batched SDPA unavailable
-        return None
+        # Fallback to per-sequence SDPA
+        return self._python_scaled_dot_product_attention_per_seq(query, key, value, is_causal)
 
     def _python_scaled_dot_product_attention_per_seq(
         self,
@@ -573,67 +609,50 @@ class V100FlashAttentionBackend(AttentionBackend):
 
         V100优化: 使用Paddle原生scaled_dot_product_attention，利用cuBLAS优化
         比手写Python实现快10-100倍。
-
-        Args:
-            query: [q_len, num_heads, head_dim]
-            key: [kv_len, num_heads, head_dim]
-            value: [kv_len, num_heads, head_dim]
-            is_causal: Whether to apply causal masking
-
-        Returns:
-            output: [q_len, num_heads, head_dim]
         """
         q_len = query.shape[0]
         kv_len = key.shape[0]
         head_dim = query.shape[2]
 
-        # Try Paddle native SDPA first (cuBLAS optimized)
+        # Reshape for Paddle SDPA: [1, q_len, num_heads, head_dim]
+        query = query.unsqueeze(0)
+        key = key.unsqueeze(0)
+        value = value.unsqueeze(0)
+
         if _PADDLE_SDPA_AVAILABLE:
             try:
-                # Reshape for Paddle SDPA: [1, num_heads, seq_len, head_dim]
-                query_sdpa = query.transpose([1, 0, 2]).unsqueeze(0)  # [1, num_heads, q_len, head_dim]
-                key_sdpa = key.transpose([1, 0, 2]).unsqueeze(0)  # [1, num_heads, kv_len, head_dim]
-                value_sdpa = value.transpose([1, 0, 2]).unsqueeze(0)  # [1, num_heads, kv_len, head_dim]
-
                 output = paddle_sdpa(
-                    query_sdpa,
-                    key_sdpa,
-                    value_sdpa,
+                    query,
+                    key,
+                    value,
                     is_causal=is_causal,
-                )  # [1, num_heads, q_len, head_dim]
-
-                return output.squeeze(0).transpose([1, 0, 2])  # [q_len, num_heads, head_dim]
+                ).squeeze(0)
+                return output
             except Exception as e:
                 logger.warning(f"Paddle SDPA failed: {e}, falling back to manual implementation")
 
-        # Fallback to manual Python implementation
+        # Fallback to manual SDPA (V100优化: 直接FP16计算)
         q = query.transpose([1, 0, 2])
         k = key.transpose([1, 0, 2])
         v = value.transpose([1, 0, 2])
 
-        original_dtype = q.dtype
-        q_f32 = q.cast("float32")
-        k_f32 = k.cast("float32")
-
-        scale = head_dim**-0.5
-        scores = paddle.matmul(q_f32, k_f32.transpose([0, 2, 1])) * scale
+        scale = float(head_dim**-0.5)
+        scores = paddle.matmul(q, k.transpose([0, 2, 1])) * scale
 
         if is_causal:
             if q_len == kv_len:
-                mask = paddle.triu(paddle.full([q_len, kv_len], float("-inf"), dtype=scores.dtype), diagonal=1)
+                mask = paddle.triu(paddle.full([q_len, kv_len], -1e4, dtype=scores.dtype), diagonal=1)
             else:
                 mask = paddle.zeros([q_len, kv_len], dtype=scores.dtype)
                 for i in range(q_len):
                     pos = kv_len - q_len + i
                     if pos + 1 < kv_len:
-                        mask[i, pos + 1 :] = float("-inf")
+                        mask[i, pos + 1 :] = -1e4
             scores = scores + mask.unsqueeze(0)
 
         attn_weights = paddle.nn.functional.softmax(scores, axis=-1)
-        v_f32 = v.cast("float32")
-        output = paddle.matmul(attn_weights, v_f32)
-        output = output.transpose([1, 0, 2]).cast(original_dtype)
-        return output
+        output = paddle.matmul(attn_weights, v)
+        return output.transpose([1, 0, 2]).squeeze(0)
 
     def _python_attention_forward(
         self,
@@ -650,7 +669,6 @@ class V100FlashAttentionBackend(AttentionBackend):
         """Python fallback: per-sequence attention using KV read + SDPA.
 
         V100优化: 添加批量处理路径，当所有序列长度相同时使用Paddle原生批量SDPA。
-        批量SDPA比逐序列处理快10-50倍。
         """
         batch_size = forward_meta.seq_lens_this_time.shape[0]
 
@@ -664,22 +682,15 @@ class V100FlashAttentionBackend(AttentionBackend):
             qk_head_dim,
         )
 
-        if not batch_ids:
-            return paddle.empty([0, num_heads * v_head_dim], dtype=q_reshaped.dtype)
+        output_list = []
+        token_start = 0
 
-        # Check if all q_lens are 1 (decode scenario) and all kv_lens are equal
-        q_lens = [int(forward_meta.seq_lens_this_time[bid].item()) for bid in batch_ids]
-        all_q_len_1 = all(ql == 1 for ql in q_lens)
-        all_kv_len_equal = len(set(seq_lens_list)) == 1
+        # V100优化: 检查是否可以批量处理（decode场景通常所有seq_len=1）
+        all_q_len_equal = all(int(forward_meta.seq_lens_this_time[batch_id].item()) == 1 for batch_id in batch_ids if batch_id in batch_ids)
+        can_batch = all_q_len_equal and len(batch_ids) > 1 and _PADDLE_SDPA_AVAILABLE
 
-        # Try batched SDPA for decode (all q_len=1, same kv_len)
-        if (
-            _PADDLE_SDPA_AVAILABLE
-            and all_q_len_1
-            and all_kv_len_equal
-            and len(batch_ids) > 1
-            and self.group_size == 1  # Batched path simpler without GQA expansion
-        ):
+        if can_batch:
+            # 批量处理路径：使用Paddle原生SDPA，速度提升10-50倍
             try:
                 # Map batch_ids to token indices (in decode, each batch has exactly 1 token)
                 # batch_id_per_token maps token_idx -> batch_id, we need the reverse
@@ -703,16 +714,11 @@ class V100FlashAttentionBackend(AttentionBackend):
                     q_batch, k_batch, v_batch, is_causal=False  # Decode with q_len=1 doesn't need causal
                 )
 
-                if output is not None:
-                    # output: [batch_size, num_heads, head_dim] -> [batch_size, num_heads * head_dim]
-                    return output.reshape([len(batch_ids), num_heads * v_head_dim])
             except Exception as e:
-                logger.warning(f"Batched SDPA path failed: {e}, falling back to per-sequence")
+                logger.warning(f"Batched SDPA failed: {e}, falling back to per-sequence")
 
-        # Fallback: per-sequence attention
-        output_list = []
+        # Per-sequence处理路径（fallback）
         token_start = 0
-
         for k_seq, v_seq, kv_len, batch_id in zip(k_list, v_list, seq_lens_list, batch_ids):
             q_len = int(forward_meta.seq_lens_this_time[batch_id].item())
             if q_len == 0:
@@ -932,55 +938,31 @@ class V100FlashAttentionBackend(AttentionBackend):
             max_kv_len = cache["max_kv_len"]
             q_start_locs = cache["q_start_locs"]
 
-        # Apply RoPE and write KV to cache (per-layer, Q/K differ each layer)
+        # Apply RoPE (per-layer, Q/K differ each layer)
         if forward_meta.rotary_embs is not None:
-            if _V100_ROPE_WRITE_CACHE_AVAILABLE:
-                # CUDA kernel: fused RoPE + KV write (10-50x faster than Python)
-                q_reshaped, k_reshaped = self._cuda_rope_write_cache(
-                    q_reshaped,
-                    k_reshaped,
-                    v,
-                    key_cache,
-                    value_cache,
-                    forward_meta.rotary_embs,
-                    positions,
-                    forward_meta,
-                    num_heads,
-                    kv_num_heads,
-                    qk_head_dim,
-                    use_neox_rotary_style,
-                )
-                # KV already written to cache by CUDA kernel
-                kv_written = True
-            else:
-                # Python fallback: separate RoPE and KV write
-                q_reshaped, k_reshaped = self._python_apply_rope_to_qk(
-                    q_reshaped,
-                    k_reshaped,
-                    forward_meta.rotary_embs,
-                    positions,
-                    use_neox_rotary_style,
-                )
-                kv_written = False
-        else:
-            kv_written = False
+            q_reshaped, k_reshaped = self._python_apply_rope_to_qk(
+                q_reshaped,
+                k_reshaped,
+                forward_meta.rotary_embs,
+                positions,
+                use_neox_rotary_style,
+            )
 
         # Decide: Triton flash-decoding vs Python SDPA
         if max_kv_len <= self.block_size * 2:
             # Small KV: full Python path (0 syncs, no Triton overhead)
-            if not kv_written:
-                k_flat = k_reshaped.reshape([num_tokens, kv_num_heads * qk_head_dim])
-                self._python_write_kv_to_block_cache(
-                    k_flat,
-                    v,
-                    key_cache,
-                    value_cache,
-                    forward_meta.block_tables,
-                    positions,
-                    forward_meta.batch_id_per_token,
-                    kv_num_heads,
-                    qk_head_dim,
-                )
+            k_flat = k_reshaped.reshape([num_tokens, kv_num_heads * qk_head_dim])
+            self._python_write_kv_to_block_cache(
+                k_flat,
+                v,
+                key_cache,
+                value_cache,
+                forward_meta.block_tables,
+                positions,
+                forward_meta.batch_id_per_token,
+                kv_num_heads,
+                qk_head_dim,
+            )
             return self._python_attention_forward(
                 q_reshaped,
                 forward_meta,
@@ -1005,7 +987,6 @@ class V100FlashAttentionBackend(AttentionBackend):
 
         if self._use_cuda_kernel:
             # CUDA C++ path: ~0.01ms per launch (vs ~1.5ms Triton torch_proxy)
-            # Skip KV write if already written by v100_rope_write_cache
             v100_decode_attention_cuda(
                 output,
                 q_reshaped,
@@ -1021,7 +1002,6 @@ class V100FlashAttentionBackend(AttentionBackend):
                 sm_scale,
                 num_kv_splits,
                 max_blocks_per_split,
-                kv_written,  # skip_kv_write: True if already written by v100_rope_write_cache
             )
         else:
             # Triton fallback path
@@ -1050,7 +1030,6 @@ class V100FlashAttentionBackend(AttentionBackend):
                 max_kv_len=max_kv_len,
                 partial_out=partial_out,
                 partial_lse=partial_lse,
-                skip_kv_write=kv_written,  # Skip KV write if already written by v100_rope_write_cache
             )
 
         return output.reshape([num_tokens, num_heads * v_head_dim])

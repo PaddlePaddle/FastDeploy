@@ -1643,6 +1643,25 @@ class CacheConfig:
             else:
                 self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
 
+        # Adjust cache_dtype based on hardware capabilities
+        # V100 (SM70) does not support BF16, fall back to FP16
+        # Note: This check is placed AFTER model_cfg processing to ensure head_num, head_dim are set
+        if self.model_cfg is not None and current_platform.is_cuda():
+            from fastdeploy.platforms.cuda import CUDAPlatform
+
+            if self.cache_dtype in ("bfloat16", "bf16") and not CUDAPlatform.supports_bf16():
+                logger.warning(
+                    f"KV cache dtype '{self.cache_dtype}' is not supported on SM{CUDAPlatform.get_sm_version()} "
+                    f"(requires SM{CUDAPlatform.SM_BF16_MIN}+). Automatically falling back to FP16."
+                )
+                self.cache_dtype = "float16"
+                # Recalculate byte_size since cache_dtype changed
+                self.byte_size = self.get_cache_bytes(self.cache_dtype)
+                self.bytes_per_token_per_layer = int(self.head_num * self.head_dim * self.byte_size * self.kv_factor)
+                self.bytes_per_block = int(
+                    self.bytes_per_token_per_layer * self.block_size * self.model_cfg.num_hidden_layers
+                )
+
         self._verify_args()
 
     @staticmethod
