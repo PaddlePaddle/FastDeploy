@@ -1597,6 +1597,24 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.resume.assert_called_once()
         self.manager._update_key_prefix.assert_called_once()
 
+    def test_handle_update_weights_updates_key_prefix_for_storage_backend(self):
+        self.manager.storage_backend_type = "mooncake"
+        self.manager._update_key_prefix = MagicMock()
+
+        result = self.manager._handle_update_weights()
+
+        self.assertTrue(result)
+        self.manager._update_key_prefix.assert_called_once()
+
+    def test_handle_update_weights_skips_without_storage_backend(self):
+        self.manager.storage_backend_type = None
+        self.manager._update_key_prefix = MagicMock()
+
+        result = self.manager._handle_update_weights()
+
+        self.assertTrue(result)
+        self.manager._update_key_prefix.assert_not_called()
+
     def test_handle_sleep_and_wakeup_are_idempotent(self):
         self.manager.is_sleeping = True
         self.manager._clear_cpu_cache = MagicMock()
