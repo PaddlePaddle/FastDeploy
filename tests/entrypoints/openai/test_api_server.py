@@ -537,6 +537,39 @@ async def test_reward_embedding_and_weights():
 
 
 @pytest.mark.asyncio
+async def test_update_weights_route_validation():
+    args = _build_args(dynamic_load_weight=True)
+    api_server = _reload_api_server(args)
+    mock_control_response = MagicMock()
+    mock_control_response.to_api_json_response.return_value = api_server.JSONResponse(
+        content={"ok": True}, status_code=200
+    )
+    api_server.app.state.engine_client = MagicMock()
+    api_server.app.state.engine_client.run_control_method = AsyncMock(return_value=mock_control_response)
+
+    valid_req = MagicMock()
+    valid_req.body = AsyncMock(return_value=b'{"version":"v2","verify_checksum":true}')
+    valid_req.json = AsyncMock(return_value={"version": "v2", "verify_checksum": True})
+    valid_resp = await api_server.update_weights(valid_req)
+    assert valid_resp.status_code == 200
+    control_request = api_server.app.state.engine_client.run_control_method.await_args.args[0]
+    assert control_request.method == "update_weights"
+    assert control_request.args == {"version": "v2", "verify_checksum": True}
+
+    invalid_version_req = MagicMock()
+    invalid_version_req.body = AsyncMock(return_value=b'{"version":1}')
+    invalid_version_req.json = AsyncMock(return_value={"version": 1})
+    invalid_version_resp = await api_server.update_weights(invalid_version_req)
+    assert invalid_version_resp.status_code == 400
+
+    invalid_checksum_req = MagicMock()
+    invalid_checksum_req.body = AsyncMock(return_value=b'{"verify_checksum":"true"}')
+    invalid_checksum_req.json = AsyncMock(return_value={"verify_checksum": "true"})
+    invalid_checksum_resp = await api_server.update_weights(invalid_checksum_req)
+    assert invalid_checksum_resp.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_expert_and_stats_routes():
     args = _build_args()
     with _patch_common_imports(args, engine_client_cls=_dummy_engine_client()):
