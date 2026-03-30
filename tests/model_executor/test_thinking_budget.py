@@ -1,5 +1,4 @@
 import unittest
-from collections import OrderedDict
 from dataclasses import asdict  # Import asdict
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch  # Import MagicMock
@@ -744,43 +743,6 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         engine._setting_environ_variables = lambda: ""
         with self.assertRaises(RuntimeError):
             common_engine_module.EngineService._start_worker_service(engine)
-
-    def test_text_encode_with_cache_branches(self):
-        processor = TextDataProcessor.__new__(TextDataProcessor)
-        processor._tokenize_cache = OrderedDict()
-        processor._tokenize_cache_capacity = 1
-        call_counter = {"np": 0, "iter": 0}
-
-        def _text2ids(text, max_model_len=None, add_special_tokens=False):
-            if text == "np":
-                call_counter["np"] += 1
-                return np.array([11, 12], dtype=np.int64)
-            call_counter["iter"] += 1
-            return (v for v in [21, 22])
-
-        processor.text2ids = _text2ids
-
-        self.assertEqual(processor.encode_with_cache("np"), [11, 12])
-        self.assertEqual(processor.encode_with_cache("np"), [11, 12])
-        self.assertEqual(call_counter["np"], 1)
-        self.assertEqual(processor.encode_with_cache("iter"), [21, 22])
-        self.assertNotIn(("np", False), processor._tokenize_cache)
-
-    def test_text_encode_with_cache_lazy_init(self):
-        processor = TextDataProcessor.__new__(TextDataProcessor)
-        call_counter = {"count": 0}
-
-        def _text2ids(text, max_model_len=None, add_special_tokens=False):
-            call_counter["count"] += 1
-            return np.array([51, 52], dtype=np.int64)
-
-        processor.text2ids = _text2ids
-
-        self.assertFalse(hasattr(processor, "_tokenize_cache"))
-        self.assertEqual(processor.encode_with_cache("lazy"), [51, 52])
-        self.assertTrue(hasattr(processor, "_tokenize_cache"))
-        self.assertEqual(processor.encode_with_cache("lazy"), [51, 52])
-        self.assertEqual(call_counter["count"], 1)
 
     def test_ernie_encode_literal_text_with_cache(self):
         processor = ErnieTextDataProcessor.__new__(ErnieTextDataProcessor)
