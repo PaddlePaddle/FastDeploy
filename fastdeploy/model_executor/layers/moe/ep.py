@@ -163,6 +163,7 @@ class DeepEPBuffer:
         if self.deepep_buffer is not None:
             self.clear_buffer()
 
+        num_qps_per_rank = max(24, self.num_experts // self.ep_size)
         if self.splitwise_role == "mixed":
             logger.info("Initializing mixed mode buffer (low latency).")
             self.deepep_buffer = deep_ep.Buffer(
@@ -170,7 +171,7 @@ class DeepEPBuffer:
                 self.num_nvl_bytes,
                 self.num_rdma_bytes,
                 low_latency_mode=True,
-                num_qps_per_rank=24,
+                num_qps_per_rank=num_qps_per_rank,
             )
             self.deepep_buffer.set_num_sms(14)  # TODO: tune in future
         else:
@@ -183,7 +184,7 @@ class DeepEPBuffer:
                     self.num_nvl_bytes,
                     self.num_rdma_bytes,
                     low_latency_mode=True,
-                    num_qps_per_rank=24,
+                    num_qps_per_rank=num_qps_per_rank,
                 )
             else:
                 raise ValueError(f"Unknown generation phase: {self.moe_phase.phase}")
@@ -199,7 +200,7 @@ class DeepEPBuffer:
                 if self.ep_size // 8 > 1:
                     num_qps_per_rank_now = self.ep_size // 8
                 else:
-                    num_qps_per_rank_now = 1
+                    num_qps_per_rank_now = self.num_experts // self.ep_size
             self.deepep_buffer = deep_ep.Buffer(
                 self.group,
                 self.num_nvl_bytes,
@@ -650,9 +651,12 @@ class EPPrefillRunner(EPRunner):
             "expert_alignment": expert_alignment,
             "allocate_on_comm_stream": EPPrefillRunner.allocate_on_comm_stream,
             "previous_event": event,
-            "num_worst_tokens": self.num_worst_tokens,
-            "skip_x_record_stream": self.num_worst_tokens > 0,
         }
+
+        if envs.FD_USE_PFCC_DEEP_EP:
+            dispatch_args["num_worst_tokens"] = self.num_worst_tokens
+            dispatch_args["skip_x_record_stream"] = self.num_worst_tokens > 0
+
         return buffer.dispatch(**dispatch_args)
 
     def combine(
@@ -674,8 +678,11 @@ class EPPrefillRunner(EPRunner):
             "topk_weights": recv_topk_weights,
             "previous_event": event,
             "allocate_on_comm_stream": EPPrefillRunner.allocate_on_comm_stream,
-            "skip_x_record_stream": self.num_worst_tokens > 0,
         }
+
+        if envs.FD_USE_PFCC_DEEP_EP:
+            combine_args["skip_x_record_stream"] = self.num_worst_tokens > 0
+
         fused_moe_out, _, event = buffer.combine(**combine_args)
         return fused_moe_out, event
 

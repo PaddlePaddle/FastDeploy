@@ -217,7 +217,7 @@ class PrefixCacheManager:
             is_server=False,
             num_client=tensor_parallel_size,
             client_id=0,
-            local_data_parallel_id=self.local_data_parallel_id,
+            local_data_parallel_id=0,
         )
 
         current_dir_path = os.path.split(os.path.abspath(__file__))[0]
@@ -293,7 +293,7 @@ class PrefixCacheManager:
         else:
             storage_arg_str = " "
 
-        if self.cache_config.swap_space or self.cache_config.kvcache_storage_backend:
+        if self.cache_config.num_cpu_blocks > 0 or self.cache_config.kvcache_storage_backend:
             for i in range(tensor_parallel_size):
                 launch_cmd = (
                     "FLAGS_allocator_strategy=auto_growth "
@@ -314,7 +314,6 @@ class PrefixCacheManager:
                     + f" --pod_ip {pod_ip}"
                     + f" --engine_worker_queue_port {engine_worker_queue_port}"
                     + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
-                    + f" --ipc_suffix {ipc_suffix}"
                     + f" --protocol {cache_config.cache_transfer_protocol}"
                     + f" --local_data_parallel_id {self.local_data_parallel_id}"
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
@@ -353,9 +352,8 @@ class PrefixCacheManager:
 
         # Start additional threads
         if cache_config.kvcache_storage_backend or self.num_cpu_blocks > 0:
-            logger.info("Enable hierarchical cache.")
             threading.Thread(target=self.recv_data_transfer_result, daemon=True).start()
-        if cache_config.enable_prefix_caching:
+        if cache_config.enable_prefix_caching and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
             threading.Thread(target=self.clear_prefix_cache, daemon=True).start()
 
         all_cache_processes = cache_messager_processes + cache_manager_processes
@@ -860,8 +858,17 @@ class PrefixCacheManager:
                     prefix_block_key = [] if match_block_node.hash_value is None else [match_block_node.hash_value]
                     cur_token_idx = match_token_num
                     no_match_block_keys = []
+                    mm_idx = 0
                     while cur_token_idx <= input_token_num - block_size:
                         cur_block_token_ids = input_token_ids[cur_token_idx : cur_token_idx + block_size]
+                        # Get extra hash keys for multimodal content (images, videos, etc.)
+                        mm_idx, extra_keys = self.get_block_hash_extra_keys(
+                            request=task,
+                            start_idx=cur_token_idx,
+                            end_idx=cur_token_idx + block_size,
+                            mm_idx=mm_idx,
+                        )
+                        prefix_block_key.extend(extra_keys)
                         cur_block_key = get_hash_str(cur_block_token_ids, prefix_block_key)
                         no_match_block_keys.append(cur_block_key)
                         cur_token_idx += block_size
@@ -1103,8 +1110,30 @@ class PrefixCacheManager:
 
     def write_cache_to_storage(self, request: Request):
         """
-        For finished request, write cache to storage.
-        NOTE: this function does not modify the global params
+        Write finished request's KV cache to storage backend (P instance with Radix Tree).
+
+        This method is called after a request finishes generation. It traverses the Radix
+        Tree from leaf node to root to collect cache keys, then issues a write-back task
+        to persist KV cache blocks to the storage backend.
+
+        Args:
+            request: The finished request containing:
+                - prompt_token_ids: Input token sequence
+                - output_token_ids: Generated output tokens (used if enable_output_caching)
+                - block_tables: Mapping of logical to physical block IDs
+                - request_id: Unique request identifier
+
+        Process:
+            1. Get token_ids (prompt tokens + output tokens if output caching enabled)
+            2. Traverse Radix Tree from leaf (req_leaf_map[req_id]) to root, collecting hash keys
+            3. Reverse keys to get root-to-leaf order
+            4. Create WriteStorageTask with keys, token_ids, and gpu_block_ids
+            5. Issue synchronous write-back task to storage backend
+
+        Note:
+            - This function does not modify global params (block_tables, ref counters)
+            - Only called on P instance which maintains the Radix Tree
+            - For D instance, use write_cache_to_storage_decode() instead
         """
         if self.kvcache_storage_backend is None:
             return
@@ -1138,6 +1167,83 @@ class PrefixCacheManager:
         self.issue_write_back_storage_task(write_storage_task, is_sync=True)
         cost_time = time.time() - tic
         logger.info(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
+
+    def write_cache_to_storage_decode(self, request: Request):
+        """
+        D instance (Decode Node) simplified write method, does not rely on Radix Tree.
+
+        D instance does not maintain Radix Tree, so it cannot get keys through req_leaf_map.
+        Need to calculate cache keys directly based on token_ids.
+
+        Key generation algorithm is exactly the same as P instance (chained hash):
+        - Block 0: key_0 = get_hash_str(token_ids[0:block_size], [])
+        - Block 1: key_1 = get_hash_str(token_ids[block_size:2*block_size], [key_0])
+        - Block n: key_n = get_hash_str(token_ids[n*block_size:(n+1)*block_size], [key_{n-1}])
+
+        Incremental write logic is handled by CacheTransferManager.
+        """
+        if self.kvcache_storage_backend is None:
+            return
+
+        # 1. Get complete token_ids
+        token_ids = request.prompt_token_ids
+        if isinstance(token_ids, np.ndarray):
+            token_ids = token_ids.tolist()
+        else:
+            token_ids = list(token_ids)
+
+        if self.config.cache_config.enable_output_caching:
+            token_ids = token_ids + request.output_token_ids
+
+        # 2. Calculate cache keys using chained hash (consistent with P instance)
+        keys = []
+        prefix_block_key = []  # Initial is empty list
+        block_size = self.config.cache_config.block_size
+        mm_idx = 0  # Multimodal index for tracking position in mm_inputs
+
+        for i in range(0, len(token_ids), block_size):
+            block_token_ids = token_ids[i : i + block_size]
+            if len(block_token_ids) < block_size:
+                break  # Do not cache incomplete block
+
+            # Get extra hash keys for multimodal content (images, videos, etc.)
+            mm_idx, extra_keys = self.get_block_hash_extra_keys(
+                request=request,
+                start_idx=i,
+                end_idx=i + block_size,
+                mm_idx=mm_idx,
+            )
+            prefix_block_key.extend(extra_keys)
+
+            # Calculate hash key for current block
+            key = get_hash_str(block_token_ids, prefix_block_key)
+            keys.append(key)
+
+            # Update prefix_block_key to current key (for next block)
+            prefix_block_key = [key]
+
+        if not keys:
+            return
+
+        # 3. Get corresponding gpu_block_ids
+        gpu_block_ids = request.block_tables[: len(keys)]
+
+        # 4. Construct WriteStorageTask and send
+        # Incremental logic is handled by CacheTransferManager.write_back_storage_task()
+        req_id = request.request_id
+        logger.info(f"[D instance] start write cache to storage, req_id: {req_id}, block num: {len(keys)}")
+
+        write_storage_task = WriteStorageTask(
+            task_id=req_id,
+            keys=keys,
+            token_ids=token_ids,
+            gpu_block_ids=gpu_block_ids,
+        )
+
+        tic = time.time()
+        self.issue_write_back_storage_task(write_storage_task, is_sync=True)
+        cost_time = time.time() - tic
+        logger.info(f"[D instance] finish write cache to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
 
     def issue_write_back_storage_task(self, task: WriteStorageTask, is_sync=True):
         if self.kvcache_storage_backend is None:
@@ -1518,7 +1624,7 @@ class PrefixCacheManager:
             mm_inputs["mm_hashes"]
         ), f"mm_idx {mm_idx} out of range {len(mm_inputs['mm_hashes'])}"
 
-        if mm_inputs["mm_positions"][-1].offset + mm_inputs["mm_positions"][-1].length < start_idx:
+        if mm_inputs["mm_positions"][-1].offset + mm_inputs["mm_positions"][-1].length <= start_idx:
             # non images in current block
             return mm_idx, hash_keys
 
@@ -1526,7 +1632,7 @@ class PrefixCacheManager:
             image_offset = mm_inputs["mm_positions"][img_idx].offset
             image_length = mm_inputs["mm_positions"][img_idx].length
 
-            if image_offset + image_length < start_idx:
+            if image_offset + image_length <= start_idx:
                 # image before block
                 continue
             elif image_offset >= end_idx:

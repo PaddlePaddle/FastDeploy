@@ -20,7 +20,6 @@ from collections.abc import Mapping
 import numpy as np
 from paddleformers.generation import GenerationConfig
 
-from fastdeploy.engine.request import Request
 from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
 from fastdeploy.input.utils import IDS_TYPE_FLAG, process_stop_token_ids
 from fastdeploy.utils import data_processor_logger
@@ -60,6 +59,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         self.tool_parser_dict = dict()
         self.decode_status = dict()
         self.model_status_dict = dict()
+        self.tokenizer_type = "ernie4_5"
         self._load_tokenizer()
 
         # Generation config
@@ -118,16 +118,6 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         set_value(request, "repetition_penalty", 1.0)
         set_value(request, "frequency_penalty", 0.0)
         set_value(request, "presence_penalty", 0.0)
-        return request
-
-    def process_request(self, request, max_model_len=None, **kwargs):
-        """process the input data"""
-        task = request.to_dict()
-        task["chat_template_kwargs"] = kwargs.get("chat_template_kwargs")
-        self.process_request_dict(task, max_model_len)
-        request = Request.from_dict(task)
-        request = self._apply_default_parameters(request)
-
         return request
 
     def _parse_processor_kwargs(self, kwargs):
@@ -221,6 +211,11 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
             request["bad_words_token_ids"] = bad_words_token_ids
 
+        logits_processors_args = self._prepare_think_stop_sentence(
+            request.get("logits_processors_args") or {}, max_model_len
+        )
+        request["logits_processors_args"] = logits_processors_args
+
         if request.get("prompt_token_ids"):
             messages = request.get("messages")
             if messages:
@@ -268,6 +263,10 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         # 截断超过长度限制的prompt
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+        logits_processors_args = self._update_thinking_prompt_state(
+            request["prompt_token_ids"], request.get("logits_processors_args") or {}
+        )
+        request["logits_processors_args"] = logits_processors_args
 
         max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
@@ -291,6 +290,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request["enable_thinking"] = model_status == "think_start"
         if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
+            request["top_k"] = 1
         if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
             request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
 

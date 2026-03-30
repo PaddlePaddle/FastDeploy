@@ -106,3 +106,21 @@ def test_model_against_baseline(
             prompts,
         ),
     )
+
+    mtp_model_path = os.path.join(model_path, "mtp")
+    speculative_config = {"method": "mtp", "num_speculative_tokens": 1, "model": mtp_model_path}
+    _ = run_with_timeout(
+        target=form_model_get_output_topp0,
+        kwargs={
+            "fd_runner": fd_runner,
+            "model_path": model_path,
+            "tensor_parallel_size": tensor_parallel_size,
+            "max_num_seqs": max_num_seqs,
+            "max_model_len": max_model_len,
+            "max_tokens": max_tokens,
+            "quantization": quantization,
+            "load_choices": "dummy",
+            "prompts": prompts,
+            "speculative_config": speculative_config,
+        },
+    )

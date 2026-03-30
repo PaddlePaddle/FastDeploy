@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 from functools import partial
+from typing import Dict
 
 import paddle
 from paddle import nn
@@ -274,7 +275,6 @@ class Qwen2Model(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        """ """
 
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
@@ -399,7 +399,7 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         self.qwen2.load_state_dict(state_dict)
         self.lm_head.load_state_dict(state_dict)
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         """ """
         logits = self.lm_head(hidden_states)
         logits = logits.astype(paddle.float32)
@@ -409,10 +409,10 @@ class Qwen2ForCausalLM(ModelForCasualLM):
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
+        inputs: Dict,
         forward_meta: ForwardMeta,
     ):
-        """ """
+        ids_remove_padding = inputs["ids_remove_padding"]
         hidden_states = self.qwen2(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states

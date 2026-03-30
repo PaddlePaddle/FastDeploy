@@ -149,6 +149,22 @@ class WeightOnlyConfig(QuantConfigBase):
             else:
 
                 return GPUWeightOnlyLinearMethod(self)
+        elif current_platform.is_iluvatar():
+            if isinstance(layer, FusedMoE):
+                if layer.use_method == "cutlass":
+                    from fastdeploy.model_executor.layers.backends import (
+                        IluvatarCutlassWeightOnlyMoEMethod,
+                    )
+
+                    return IluvatarCutlassWeightOnlyMoEMethod(self)
+                else:
+                    raise ValueError(f"Unsupported MOE backend {layer.use_method}")
+            else:
+                from fastdeploy.model_executor.layers.backends import (
+                    IluvatarWeightOnlyLinearMethod,
+                )
+
+                return IluvatarWeightOnlyLinearMethod(self)
         else:
             if isinstance(layer, FusedMoE):
                 if layer.use_method == "cutlass":

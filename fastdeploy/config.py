@@ -24,6 +24,7 @@ from typing import Any, Dict, Literal, Optional, Union
 
 import paddle
 import paddle.distributed as dist
+import yaml
 from packaging.version import parse as parse_version
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from typing_extensions import assert_never
@@ -227,6 +228,7 @@ class ModelConfig:
         self.kv_cache_quant_scale_path = ""
         self.enable_entropy = False
         self.model_impl: ModelImpl = "auto"
+        self.version: str = "init"  # will override by the version.yaml in model dir
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
@@ -261,6 +263,15 @@ class ModelConfig:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         # Align external multimodal rope_3d configuration
+        if hasattr(self, "mrope_section"):
+            if (
+                hasattr(self, "rope_scaling")
+                and isinstance(self.rope_scaling, dict)
+                and "mrope_section" not in self.rope_scaling
+            ):
+                self.rope_scaling["mrope_section"] = self.mrope_section
+            elif not hasattr(self, "rope_scaling"):
+                setattr(self, "rope_scaling", {"mrope_section": self.mrope_section})
         if (
             hasattr(self, "rope_scaling")
             and isinstance(self.rope_scaling, dict)
@@ -430,6 +441,17 @@ class ModelConfig:
                     "either 'torch_dtype' (for Hugging Face models) or 'dtype' (for Paddle models) field. "
                     f"Config file path: {config_path}"
                 )
+
+    def read_model_version(self):
+        """
+        Read the version information from a YAML file located at 'version.yaml' within the model directory.
+        If the file exists, it extracts the 'version' field using yaml.safe_load.
+        Raises an assertion error if the file is not found at the specified path.
+        """
+        version_path = os.path.join(self.model, "version.yaml")
+        assert os.path.exists(version_path), f"version.yaml not exist at {version_path}"
+        with open(version_path, "r", encoding="utf-8") as f:
+            self.version = yaml.safe_load(f)["version"]
 
     def _get_default_runner_type(
         self,
@@ -664,6 +686,9 @@ class ParallelConfig:
 
         if self.shutdown_comm_group_if_worker_idle is None:
             self.shutdown_comm_group_if_worker_idle = not self.use_ep
+
+        if self.shutdown_comm_group_if_worker_idle and envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
+            raise RuntimeError("shutdown_comm_group_if_worker_idle cannot be True when FD_ENABLE_V1_UPDATE_WEIGHTS=1")
 
         # pd_disaggregation
         use_pd_disaggregation: int = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
@@ -1329,6 +1354,37 @@ class EarlyStopConfig:
             argument = self.enable_early_stop
 
 
+class DeployModality(str, Enum):
+    """Modality mode for the serving engine deployment.
+
+    Determines which input modalities the serving engine should handle:
+      - TEXT:  Text-only deployment. The engine only processes text inputs,
+               skipping multimodal preprocessing (e.g., vision encoder, audio
+               encoder). This reduces GPU memory usage and startup time when
+               multimodal capabilities are not needed.
+      - MIXED: Multimodal deployment (default). The engine handles mixed-modality
+               inputs including text, images, audio, and video. All modality-specific
+               encoders and preprocessing pipelines are initialized at startup.
+
+    Usage:
+      --deploy-modality text    # text-only, lower resource footprint
+      --deploy-modality mixed   # full multimodal support (default)
+    """
+
+    TEXT = "text"
+    MIXED = "mixed"
+
+    @classmethod
+    def from_str(cls, value: str) -> "DeployModality":
+        """Parse a string into a DeployModality enum, with validation."""
+        value = value.strip().lower()
+        try:
+            return cls(value)
+        except ValueError:
+            valid = ", ".join(f"'{m.value}'" for m in cls)
+            raise ValueError(f"Invalid deploy_modality '{value}'. Must be one of: {valid}")
+
+
 class LoadChoices(str, Enum):
     """LoadChoices"""
 
@@ -1805,6 +1861,7 @@ class FDConfig:
         tool_parser: str = None,
         test_mode=False,
         routing_replay_config: Optional[RoutingReplayConfig] = None,
+        deploy_modality: DeployModality = DeployModality.MIXED,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1821,7 +1878,7 @@ class FDConfig:
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
         self.routing_replay_config = routing_replay_config
-
+        self.deploy_modality: DeployModality = deploy_modality
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
         if self.speculative_config is not None and self.speculative_config.method in [
@@ -1930,7 +1987,7 @@ class FDConfig:
 
         num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        if num_ranks > self.max_chips_per_node and self.load_config.load_strategy != "meta":
+        if num_ranks > self.max_chips_per_node and self.load_config and self.load_config.load_strategy != "meta":
             self.worker_num_per_node = self.max_chips_per_node
             nnode = ceil_div(num_ranks, self.worker_num_per_node)
             assert nnode == self.nnode, f"nnode: {nnode}, but got {self.nnode}"
@@ -1943,6 +2000,16 @@ class FDConfig:
             self.parallel_config.device_ids = os.getenv("XPU_VISIBLE_DEVICES", self.parallel_config.device_ids)
         if current_platform.is_intel_hpu():
             self.parallel_config.device_ids = os.getenv("HPU_VISIBLE_DEVICES", self.parallel_config.device_ids)
+
+        if (
+            self.load_config
+            and self.load_config.dynamic_load_weight
+            and self.router_config
+            and self.router_config.router
+        ):
+            # For RL scenario: version.yaml will be required for models in future releases.
+            # Temporarily enforce use router to be enabled.
+            self.model_config.read_model_version()
 
         self.read_from_config()
         self.postprocess()
@@ -2284,6 +2351,9 @@ class FDConfig:
             "device_ids": self.local_device_ids,
             "transfer_protocol": transfer_protocol,
             "tp_size": self.parallel_config.tensor_parallel_size,
+            "is_paused": False,
+            "version": self.model_config.version,
+            "connected_decodes": [],
         }
         logger.info(f"register_info: {self.register_info}")
 
@@ -2322,7 +2392,7 @@ class FDConfig:
                 num_tokens = self.scheduler_config.max_num_seqs
         else:
             num_tokens = self.scheduler_config.max_num_batched_tokens
-            if mm_max_tokens_per_item is not None:
+            if mm_max_tokens_per_item is not None and self.deploy_modality != DeployModality.TEXT:
                 max_mm_tokens = max(
                     mm_max_tokens_per_item.get("image", 0),
                     mm_max_tokens_per_item.get("video", 0),

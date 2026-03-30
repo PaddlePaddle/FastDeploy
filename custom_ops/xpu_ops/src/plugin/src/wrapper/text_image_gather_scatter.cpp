@@ -15,8 +15,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 template <typename T>
 __attribute__((global)) void text_image_gather_scatter(T* input,
                                                        T* text_input,
@@ -29,17 +28,14 @@ __attribute__((global)) void text_image_gather_scatter(T* input,
                                                        int64_t image_token_num,
                                                        int64_t hidden_size,
                                                        bool is_scatter);
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
 template <typename T>
 static int cpu_wrapper(
-    Context* ctx,
+    api::Context* ctx,
     T* input,             // shape [token_num, hidden_size]
     T* text_input,        // shape [text_token_num, hidden_size]
     T* image_input,       // shape [image_token_num, hidden_size]
@@ -104,7 +100,7 @@ static int cpu_wrapper(
 }
 
 template <typename T>
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         T* input,
                         T* text_input,
                         T* image_input,
@@ -116,7 +112,7 @@ static int xpu3_wrapper(Context* ctx,
                         int64_t image_token_num,
                         int64_t hidden_size,
                         bool is_scatter) {
-  int32_t ret_xre = xpu3::plugin::text_image_gather_scatter<T>
+  int32_t ret_xre = fd_xpu3::text_image_gather_scatter<T>
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(input,
                                                  text_input,
                                                  image_input,
@@ -134,7 +130,7 @@ static int xpu3_wrapper(Context* ctx,
 
 template <typename T>
 int text_image_gather_scatter(
-    Context* ctx,
+    api::Context* ctx,
     T* input,             // shape [token_num, hidden_size]
     T* text_input,        // shape [text_token_num, hidden_size]
     T* image_input,       // shape [image_token_num, hidden_size]
@@ -207,7 +203,7 @@ int text_image_gather_scatter(
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
-template int text_image_gather_scatter(Context*,
+template int text_image_gather_scatter(api::Context*,
                                        bfloat16*,
                                        bfloat16*,
                                        bfloat16*,
@@ -220,6 +216,4 @@ template int text_image_gather_scatter(Context*,
                                        const int64_t,
                                        bool);
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

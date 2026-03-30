@@ -8,6 +8,7 @@ import (
 
 	"github.com/PaddlePaddle/FastDeploy/router/internal/config"
 	scheduler_handler "github.com/PaddlePaddle/FastDeploy/router/internal/scheduler/handler"
+	"github.com/PaddlePaddle/FastDeploy/router/pkg/logger"
 )
 
 type Manager struct {
@@ -27,6 +28,7 @@ type WorkerInfo struct {
 	RdmaPorts             []string `json:"rdma_ports"`
 	DeviceIDs             []string `json:"device_ids"`
 	MetricsPort           string   `json:"metrics_port"`
+	TpSize                int      `json:"tp_size"`
 }
 
 var DefaultManager *Manager
@@ -120,6 +122,7 @@ func SelectWorker(ctx context.Context, message string) (string, error) {
 	workers := WorkerMapToList(ctx, "mixed")
 	selectedWorkerURL, err := scheduler_handler.SelectWorker(ctx, workers, message, "mixed")
 	if err != nil {
+		logger.Error(ctx, "Failed to select mixed worker: %v", err)
 		return "", err
 	}
 	return selectedWorkerURL, nil
@@ -134,13 +137,22 @@ func SelectWorkerPair(ctx context.Context, message string) (string, string, erro
 	if len(prefillWorkers) == 0 || len(decodeWorkers) == 0 {
 		return "", "", nil
 	}
+	logger.Info(ctx,"before SelectWorker prefill. ts_ms=%s", time.Now().Format("2006-01-02 15:04:05.000"))
 	selectedPrefillWorkerURL, err := scheduler_handler.SelectWorker(ctx, prefillWorkers, message, "prefill")
 	if err != nil {
+		logger.Error(ctx, "Failed to select prefill worker: %v", err)
 		return "", "", err
 	}
+	logger.Info(ctx,"before SelectWorker decode, after prefill. ts_ms=%s", time.Now().Format("2006-01-02 15:04:05.000"))
 	selectedDecodeWorkerURL, err := scheduler_handler.SelectWorker(ctx, decodeWorkers, message, "decode")
 	if err != nil {
+		// Prefill counter was already incremented but decode failed;
+		// release prefill counters here since CommonCompletions defer is not yet registered.
+		scheduler_handler.Release(ctx, selectedPrefillWorkerURL)
+		scheduler_handler.ReleasePrefillTokens(ctx, selectedPrefillWorkerURL, message)
+		logger.Info(ctx, "[SelectWorkerPair] decode selection failed, releasing prefill counter url=%s", selectedPrefillWorkerURL)
 		return "", "", err
 	}
+	logger.Info(ctx,"after SelectWorker decode, before return. ts_ms=%s", time.Now().Format("2006-01-02 15:04:05.000"))
 	return selectedPrefillWorkerURL, selectedDecodeWorkerURL, nil
 }

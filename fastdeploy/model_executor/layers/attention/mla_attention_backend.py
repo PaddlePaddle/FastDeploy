@@ -26,10 +26,12 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import paddle
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
+from paddleformers.utils.log import logger
 
 try:
     from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
-except:
+except Exception as e:
+    logger.debug(f"flash_attention_v3_varlen not available: {e}")
     flash_attention_v3_varlen = None
 
 from fastdeploy.model_executor.layers.attention.ops import (
@@ -60,9 +62,13 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
 from fastdeploy.spec_decode import SpecMethod
 
 
+@enable_compat_on_triton_kernel
 @triton.jit()
 def extract_kernel(
     q,
@@ -132,6 +138,7 @@ def extract_decoder_token_from_q(
     return out, cache_seqlens
 
 
+@enable_compat_on_triton_kernel
 @triton.jit()
 def insert_kernel(
     decoder_res,

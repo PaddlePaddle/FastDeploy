@@ -19,7 +19,6 @@ from typing import Any, Dict, List, Optional
 
 from fastdeploy.entrypoints.openai.usage_calculator import count_tokens
 from fastdeploy.input.tokenzier_client import AsyncTokenizerClient, ImageDecodeRequest
-from fastdeploy.utils import api_server_logger
 
 
 class ChatResponseProcessor:
@@ -48,6 +47,7 @@ class ChatResponseProcessor:
             self.decoder_client = AsyncTokenizerClient(base_url=decoder_base_url)
         else:
             self.decoder_client = None
+        self._is_async_processor = inspect.iscoroutinefunction(data_processor.process_response_dict)
         self._mm_buffer: List[Any] = []  # Buffer for accumulating image token_ids
         self._end_image_code_request_output: Optional[Any] = None
         self._audio_buffer: Dict[Any] = {}
@@ -72,7 +72,7 @@ class ChatResponseProcessor:
             else:
                 self._multipart_buffer.append({"decode_type": decode_type, "request_output": request_output})
 
-    async def process_response_chat(self, request_outputs, stream, include_stop_str_in_output):
+    async def process_response_chat(self, request_outputs, stream, include_stop_str_in_output, request):
         """
         Process a list of responses into a generator that yields each processed response as it's generated.
         Args:
@@ -81,7 +81,6 @@ class ChatResponseProcessor:
             include_stop_str_in_output: Whether or not to include stop strings in the output.
         """
         for request_output in request_outputs:
-            api_server_logger.debug(f"request_output {request_output}")
             if not self.enable_mm_output:
                 outputs = request_output.get("outputs", None)
                 token_ids = outputs.get("token_ids", None) if outputs is not None else None
@@ -94,13 +93,14 @@ class ChatResponseProcessor:
                             all_audio_tokens = self._audio_buffer.pop(req_id, [])
                         else:
                             all_audio_tokens = None
-                        if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
+                        if self._is_async_processor:
                             response = await self.data_processor.process_response_dict(
                                 response_dict=request_output,
                                 stream=stream,
                                 include_stop_str_in_output=include_stop_str_in_output,
                                 audio_tokens=all_audio_tokens,
                                 tts=tts,
+                                request=request,
                             )
                         else:
                             response = self.data_processor.process_response_dict(
@@ -109,6 +109,7 @@ class ChatResponseProcessor:
                                 include_stop_str_in_output=include_stop_str_in_output,
                                 audio_tokens=all_audio_tokens,
                                 tts=tts,
+                                request=request,
                             )
                         yield response
                     elif decode_type == 2:  # audio
@@ -121,11 +122,21 @@ class ChatResponseProcessor:
                         else:
                             self._audio_buffer[req_id] = [token_ids]
                 else:
-                    yield self.data_processor.process_response_dict(
-                        response_dict=request_output,
-                        stream=stream,
-                        include_stop_str_in_output=include_stop_str_in_output,
-                    )
+                    if self._is_async_processor:
+                        response = await self.data_processor.process_response_dict(
+                            response_dict=request_output,
+                            stream=stream,
+                            include_stop_str_in_output=include_stop_str_in_output,
+                            request=request,
+                        )
+                    else:
+                        response = self.data_processor.process_response_dict(
+                            response_dict=request_output,
+                            stream=stream,
+                            include_stop_str_in_output=include_stop_str_in_output,
+                            request=request,
+                        )
+                    yield response
             elif stream:
                 decode_type = request_output["outputs"].get("decode_type", 0)
                 token_ids = request_output["outputs"]["token_ids"]
@@ -151,17 +162,19 @@ class ChatResponseProcessor:
                             image_output["outputs"]["num_image_tokens"] = count_tokens(all_tokens)
                             yield image_output
 
-                    if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
+                    if self._is_async_processor:
                         await self.data_processor.process_response_dict(
                             response_dict=request_output,
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
+                            request=request,
                         )
                     else:
                         self.data_processor.process_response_dict(
                             response_dict=request_output,
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
+                            request=request,
                         )
                     text = {"type": "text", "text": request_output["outputs"]["text"]}
                     request_output["outputs"]["multipart"] = [text]
@@ -178,17 +191,19 @@ class ChatResponseProcessor:
                     num_image_tokens = 0
                     for part in self._multipart_buffer:
                         if part["decode_type"] == 0:
-                            if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
+                            if self._is_async_processor:
                                 await self.data_processor.process_response_dict(
                                     response_dict=part["request_output"],
                                     stream=False,
                                     include_stop_str_in_output=include_stop_str_in_output,
+                                    request=request,
                                 )
                             else:
                                 self.data_processor.process_response_dict(
                                     response_dict=request_output,
                                     stream=stream,
                                     include_stop_str_in_output=include_stop_str_in_output,
+                                    request=request,
                                 )
                             text = {"type": "text", "text": part["request_output"]["outputs"]["text"]}
                             multipart.append(text)

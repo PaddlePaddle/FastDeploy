@@ -14,6 +14,8 @@
 // limitations under the License.
 #include <nvml.h>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 #include "fstream"
 #include "helper.h"
 #include "iomanip"
@@ -136,7 +138,9 @@ void sent_key_value_by_remote_ptr(
 #endif
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
-      printf("CUDA Error: %s\n", cudaGetErrorString(err));
+      throw std::runtime_error(
+          std::string("CUDA Error in IPC KV cache transfer: ") +
+          cudaGetErrorString(err));
     }
 #ifdef DEBUG_IPC_SENT_SYNC_AND_PRINT
     cudaDeviceSynchronize();
@@ -325,8 +329,11 @@ void SentKeyValueByRemotePtr(const paddle::Tensor& local_key_tensor,
           reinterpret_cast<dataT*>((void*)remote_value_ptr),
           cuda_stream);
     }
+    default: {
+      PD_THROW("Unsupported dtype for IPC KV cache transfer: ",
+               local_key_tensor.type());
+    }
   }
-  // using dataT=std::remove_pointer<decltype(local_block_ids_ptr)>;
 }
 
 void SentKeyValueByRemotePtrBlockSync(const paddle::Tensor& local_key_tensor,

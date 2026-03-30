@@ -797,7 +797,9 @@ class EngineWorkerQueue:
         if len(self.finished_add_cache_task_list) > 0:
             response = self.finished_add_cache_task_list[0]
         for tmp_response in self.finished_add_cache_task_list:
-            assert tmp_response == response
+            assert (
+                tmp_response == response
+            ), f"Inconsistent responses across workers: expected {response}, got {tmp_response}"
         self.finished_add_cache_task_list[:] = list()
         self.client_get_finished_add_cache_task_flag[:] = [0] * self.num_client
         self.can_put_next_add_task_finished_flag.set(1)

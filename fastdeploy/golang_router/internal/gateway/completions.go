@@ -151,10 +151,12 @@ func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte, isSt
 	// Construct two requests
 	decodeReq, err := http.NewRequestWithContext(ctx, "POST", decodeEndpoint, bytes.NewReader(reqBody))
 	if err != nil {
+		logger.Error(ctx, "Failed to create decode request for %s: %v", decodeEndpoint, err)
 		return nil, err
 	}
 	prefillReq, err := http.NewRequestWithContext(ctx, "POST", prefillEndpoint, bytes.NewReader(reqBody))
 	if err != nil {
+		logger.Error(ctx, "Failed to create prefill request for %s: %v", prefillEndpoint, err)
 		return nil, err
 	}
 
@@ -192,6 +194,7 @@ func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte, isSt
 
 	// Prioritize returning Decode errors
 	if decodeRes.err != nil {
+		logger.Error(ctx, "Decode request failed for %s: %v", decodeURL, decodeRes.err)
 		if prefillRes.resp != nil {
 			prefillRes.resp.Body.Close()
 		}
@@ -199,6 +202,7 @@ func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte, isSt
 	}
 	if prefillRes.err != nil {
 		// Prefill errors are also considered failures to avoid inconsistent behavior
+		logger.Error(ctx, "Prefill request failed for %s: %v", prefillURL, prefillRes.err)
 		if decodeRes.resp != nil {
 			decodeRes.resp.Body.Close()
 		}
@@ -213,7 +217,17 @@ func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte, isSt
 }
 
 func readPrefillRecv(ctx context.Context, url string, isStream bool, message string, backendResp *http.Response) {
+	released := false
+	defer func() {
+		if !released {
+			scheduler_handler.Release(ctx, url)
+			scheduler_handler.ReleasePrefillTokens(ctx, url, message)
+			logger.Info(ctx, "[prefill] release in defer (fallback) url=%s, isStream=%v", url, isStream)
+		}
+	}()
+
 	if backendResp == nil || backendResp.Body == nil {
+		logger.Info(ctx, "[prefill] backendResp is nil or backendResp.Body is nil, url=%s", url)
 		return
 	}
 	defer backendResp.Body.Close()
@@ -226,16 +240,6 @@ func readPrefillRecv(ctx context.Context, url string, isStream bool, message str
 		scanner := bufio.NewScanner(backendResp.Body)
 		scanner.Buffer(buffer.B, maxCapacity)
 
-		released := false
-		defer func() {
-			// Fallback to ensure release
-			if !released {
-				scheduler_handler.Release(ctx, url)
-				scheduler_handler.ReleasePrefillTokens(ctx, url, message)
-				logger.Debug(ctx, "[prefill] release in defer (fallback) url=%s", url)
-			}
-		}()
-
 		for scanner.Scan() {
 			_ = scanner.Text()
 
@@ -244,19 +248,22 @@ func readPrefillRecv(ctx context.Context, url string, isStream bool, message str
 				scheduler_handler.Release(ctx, url)
 				scheduler_handler.ReleasePrefillTokens(ctx, url, message)
 				released = true
-
 				logger.Info(ctx, "[prefill] first chunk received, release counter url=%s", url)
 			}
 		}
 
 		if err := scanner.Err(); err != nil {
-			logger.Debug(ctx, "[prefill] scanner error: %v", err)
+			logger.Error(ctx, "[prefill] scanner error: %v, message=%s", err, message)
 		}
 	} else {
 		_, err := io.Copy(io.Discard, backendResp.Body)
 		if err != nil {
-			logger.Debug(ctx, "[prefill] copy error: %v", err)
+			logger.Error(ctx, "[prefill] copy error: %v, message=%s", err, message)
 		}
+		scheduler_handler.Release(ctx, url)
+		scheduler_handler.ReleasePrefillTokens(ctx, url, message)
+		released = true
+		logger.Info(ctx, "[prefill] non-stream prefill response done, release counter url=%s", url)
 	}
 }
 
@@ -266,6 +273,21 @@ func getRequestID(ctx context.Context, rawReq map[string]any) string {
 		rawReq["request_id"] = newRequestID()
 	}
 	return rawReq["request_id"].(string)
+}
+
+// getSessionID extracts session_id from top-level or extra_body, top-level takes priority
+func getSessionID(rawReq map[string]any) string {
+	// Priority 1: top-level session_id (same level as messages)
+	if sid, ok := rawReq["session_id"].(string); ok && sid != "" {
+		return sid
+	}
+	// Priority 2: extra_body.session_id
+	if extraBody, ok := rawReq["extra_body"].(map[string]any); ok {
+		if sid, ok := extraBody["session_id"].(string); ok && sid != "" {
+			return sid
+		}
+	}
+	return ""
 }
 
 // ChatCompletions implements request forwarding to actual large model inference service
@@ -284,31 +306,48 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 
 	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
+		logger.Error(ctx, "Failed to read request body: %v", err)
 		c.Writer.WriteHeader(http.StatusBadRequest)
-		c.Writer.Write([]byte(`{"error": "Invalid request body"}`))
+		c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Invalid request body: %v"}`, err)))
 		return
 	}
 
 	var rawReq map[string]any
 	if err := json.Unmarshal(bodyBytes, &rawReq); err != nil {
+		logger.Error(ctx, "Failed to unmarshal request JSON: %v", err)
 		c.Writer.WriteHeader(http.StatusBadRequest)
-		c.Writer.Write([]byte(`{"error": "Invalid JSON format"}`))
+		c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Invalid JSON format: %v"}`, err)))
 		return
 	}
 
 	isSplitwise := manager.GetSplitwise(ctx)
 
+	traceID := c.GetHeader("X_BD_LOGID")
+	if traceID != "" {
+		ctx = context.WithValue(ctx, logger.TraceIDKey, traceID)
+	}
+	if reqID, ok := rawReq["req_id"].(string); ok && reqID != "" {
+		ctx = context.WithValue(ctx, logger.ReqIDKey, reqID)
+	}
+	sessionID := getSessionID(rawReq)
+	if sessionID != "" {
+		ctx = context.WithValue(ctx, logger.SessionIDKey, sessionID)
+	}
+	c.Request = c.Request.WithContext(ctx)
+
 	var (
-		destURL         string
-		releaseTargets  []string
-		requestBodyData []byte
-		prefillURL      string
-		decodeURL       string
-		message         string
+		destURL           string
+		releaseTargets    []string
+		requestBodyData   []byte
+		prefillURL        string
+		decodeURL         string
+		message           string
+		requestID         string
+		prefillHandedOff  bool // true once readPrefillRecv goroutine takes ownership of prefill counters
 	)
 
 	if isSplitwise {
-		requestID := getRequestID(ctx, rawReq)
+		requestID = getRequestID(ctx, rawReq)
 		ctx = context.WithValue(ctx, logger.RequestIDKey, requestID)
 		c.Request = c.Request.WithContext(ctx)
 
@@ -318,21 +357,39 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		logger.Info(ctx, "Parsing completed; starting worker selection.")
 		prefillURL, decodeURL, err = manager.SelectWorkerPair(ctx, message)
 		if err != nil {
+			logger.Error(ctx, "Failed to select worker pair: %v", err)
 			c.Writer.WriteHeader(http.StatusBadGateway)
-			c.Writer.Write([]byte(`{"error": "Failed to select worker pair"}`))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to select worker pair: %v", "request_id": "%s"}`, err, requestID)))
 			return
 		}
 		if prefillURL == "" || decodeURL == "" {
 			c.Writer.WriteHeader(http.StatusServiceUnavailable)
-			c.Writer.Write([]byte(`{"error": "No available prefill/decode workers"}`))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "No available prefill/decode workers", "request_id": "%s"}`, requestID)))
 			return
 		}
+
+		// Both prefill and decode counters are now incremented.
+		// Register defer to guarantee release on ALL subsequent paths.
+		releaseTargets = []string{decodeURL}
+		defer func() {
+			// Always release decode request counter
+			for _, url := range releaseTargets {
+				scheduler_handler.Release(ctx, url)
+			}
+			// Release prefill counters only if readPrefillRecv was NOT launched
+			if !prefillHandedOff {
+				scheduler_handler.Release(ctx, prefillURL)
+				scheduler_handler.ReleasePrefillTokens(ctx, prefillURL, message)
+				logger.Info(ctx, "[prefill] release in CommonCompletions defer (error path) url=%s", prefillURL)
+			}
+		}()
 
 		// Construct disaggregate_info to ensure selected P/D work in pairs within FastDeploy
 		disagg, err := manager.BuildDisaggregateInfo(ctx, prefillURL, decodeURL)
 		if err != nil {
+			logger.Error(ctx, "Failed to build disaggregate_info: %v", err)
 			c.Writer.WriteHeader(http.StatusInternalServerError)
-			c.Writer.Write([]byte(`{"error": "Failed to build disaggregate_info"}`))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to build disaggregate_info: %v", "request_id": "%s"}`, err, requestID)))
 			return
 		}
 
@@ -341,13 +398,13 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		// Re-encode request body and send to P and D
 		requestBodyData, err = json.Marshal(rawReq)
 		if err != nil {
+			logger.Error(ctx, "Failed to encode modified request: %v", err)
 			c.Writer.WriteHeader(http.StatusInternalServerError)
-			c.Writer.Write([]byte(`{"error": "Failed to encode modified request"}`))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to encode modified request: %v", "request_id": "%s"}`, err, requestID)))
 			return
 		}
 
 		destURL = decodeURL
-		releaseTargets = []string{decodeURL}
 
 		// Expose scheduling results to caller for debugging/validating scheduling strategy
 		c.Writer.Header().Set("X-Router-Prefill-URL", prefillURL)
@@ -357,21 +414,22 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		// Non-PD mode: use Mixed instance
 		dest, err := manager.SelectWorker(ctx, "")
 		if err != nil {
+			logger.Error(ctx, "Failed to select worker: %v", err)
 			c.Writer.WriteHeader(http.StatusBadGateway)
-			c.Writer.Write([]byte(`{"error": "Failed to select worker"}`))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to select worker: %v"}`, err)))
 			return
 		}
 		destURL = dest
 		releaseTargets = []string{destURL}
 		requestBodyData = bodyBytes
-	}
 
-	// Maintain request_num count for related instances (Inc done in SelectWorker, Release here)
-	defer func() {
-		for _, url := range releaseTargets {
-			scheduler_handler.Release(ctx, url)
-		}
-	}()
+		// Maintain request_num count for mixed instances
+		defer func() {
+			for _, url := range releaseTargets {
+				scheduler_handler.Release(ctx, url)
+			}
+		}()
+	}
 
 	isStream := false
 	if v, ok := rawReq["stream"]; ok {
@@ -391,9 +449,18 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 
 	if err != nil {
 		c.Writer.WriteHeader(http.StatusBadGateway)
-		c.Writer.Write([]byte(`{"error": "Failed to connect to backend service"}`))
-		logger.Info(ctx, "Request completed with an error.")
+		if requestID != "" {
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to connect to backend service: %v", "request_id": "%s"}`, err, requestID)))
+		} else {
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to connect to backend service: %v"}`, err)))
+		}
+		logger.Error(ctx, "Failed to connect to backend service: %v", err)
 		return
+	}
+
+	// PostToPD succeeded: readPrefillRecv goroutine now owns prefill counter release
+	if isSplitwise {
+		prefillHandedOff = true
 	}
 	defer backendResp.Body.Close()
 
@@ -453,7 +520,7 @@ func GetClientWithRetry(c *gin.Context, bodyBytes []byte, destUrl string, comple
 		if err == nil { // Return latest bucketsize
 			return backendResp, nil
 		}
-		logger.Info(c.Request.Context(), "Request failed, retrying...")
+		logger.Error(c.Request.Context(), "Request failed (attempt %d/%d): %v", i+1, maxRetry, err)
 	}
 	return nil, err
 }
@@ -468,6 +535,7 @@ func GetClient(c *gin.Context, address, api string, reqBody []byte) (*http.Respo
 		bytes.NewReader(reqBody),
 	)
 	if err != nil {
+		logger.Error(c.Request.Context(), "Failed to create backend request for %s: %v", backendURL, err)
 		return nil, err
 	}
 	// Copy request headers
@@ -481,6 +549,7 @@ func GetClient(c *gin.Context, address, api string, reqBody []byte) (*http.Respo
 	backendResp, err := client.Do(backendReq)
 
 	if err != nil {
+		logger.Error(c.Request.Context(), "Backend request failed for %s: %v", backendURL, err)
 		return nil, err
 	}
 

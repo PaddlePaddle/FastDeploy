@@ -98,8 +98,12 @@ func SelectWorker(ctx context.Context, workers []string, message string, workerT
 		strategyFunc = RequestNumSelectWorker
 	case "fd_metrics_score":
 		strategyFunc = FDMetricsScoreSelectWorker
+	case "fd_remote_metrics_score":
+		strategyFunc = FDRemoteMetricsScoreSelectWorker
 	case "cache_aware":
 		strategyFunc = CacheAwarePrefillSelectWorker
+	case "remote_cache_aware":
+		strategyFunc = RemoteCacheAwarePrefillSelectWorker
 	default:
 		strategyFunc = RandomSelectWorker
 	}
@@ -135,10 +139,22 @@ func SelectWorker(ctx context.Context, workers []string, message string, workerT
 	return selectWorkerURL, nil
 }
 
-// Release decreases the counter for the specified worker URL
+// Release decreases the counter for the specified worker URL.
+// Uses GetCounter (not GetOrCreateCounter) to avoid creating ghost entries
+// when the counter has already been cleaned up.
 func Release(ctx context.Context, url string) {
-	counter := GetOrCreateCounter(ctx, url)
-	counter.Dec()
+	if DefaultScheduler == nil {
+		return
+	}
+	counter, exists := GetCounter(ctx, url)
+	if !exists {
+		logger.Warn(ctx, "release worker: %s skipped, counter already cleaned up", url)
+		return
+	}
+	if !counter.Dec() {
+		logger.Warn(ctx, "release worker: %s skipped, counter already zero (possible double-release)", url)
+		return
+	}
 	logger.Info(ctx, "release worker: %s, count: %d", url, counter.Get())
 }
 
@@ -167,7 +183,9 @@ func GetOrCreateCounter(ctx context.Context, url string) *scheduler_common.Count
 	return newCounter
 }
 
-// CleanupUnhealthyCounter removes counters for unhealthy worker URLs
+// CleanupUnhealthyCounter removes counters for unhealthy worker URLs only
+// when the counter has reached zero (no inflight requests). If there are
+// still inflight requests, the counter is preserved so Dec() works correctly.
 func CleanupUnhealthyCounter(ctx context.Context, unhealthyRootURL string) {
 	if unhealthyRootURL == "" {
 		return
@@ -180,12 +198,27 @@ func CleanupUnhealthyCounter(ctx context.Context, unhealthyRootURL string) {
 	DefaultScheduler.mu.Lock()
 	defer DefaultScheduler.mu.Unlock()
 
-	delete(DefaultScheduler.IdCounterMap, unhealthyRootURL)
-	delete(DefaultScheduler.tokenMap, unhealthyRootURL)
-	logger.Info(ctx, "cleanup unhealthy worker counter: %s", unhealthyRootURL)
+	if counter, exists := DefaultScheduler.IdCounterMap[unhealthyRootURL]; exists {
+		if counter.Get() > 0 {
+			logger.Info(ctx, "unhealthy worker counter preserved (inflight requests): %s, count: %d", unhealthyRootURL, counter.Get())
+		} else {
+			delete(DefaultScheduler.IdCounterMap, unhealthyRootURL)
+			logger.Info(ctx, "cleanup unhealthy worker counter: %s", unhealthyRootURL)
+		}
+	}
+
+	if tokenCounter, exists := DefaultScheduler.tokenMap[unhealthyRootURL]; exists {
+		if tokenCounter.Get() > 0 {
+			logger.Info(ctx, "unhealthy worker token counter preserved (inflight requests): %s, tokens: %d", unhealthyRootURL, tokenCounter.Get())
+		} else {
+			delete(DefaultScheduler.tokenMap, unhealthyRootURL)
+			logger.Info(ctx, "cleanup unhealthy worker token counter: %s", unhealthyRootURL)
+		}
+	}
 }
 
 // CleanupInvalidCounters removes counters for invalid or unreachable workers
+// only when their counter has reached zero (no inflight requests).
 func CleanupInvalidCounters(ctx context.Context) {
 	if DefaultScheduler == nil {
 		return
@@ -207,21 +240,31 @@ func CleanupInvalidCounters(ctx context.Context) {
 	defer DefaultScheduler.mu.Unlock()
 
 	var removed []string
-	for rootURL := range DefaultScheduler.IdCounterMap {
+	var preserved []string
+	for rootURL, counter := range DefaultScheduler.IdCounterMap {
 		if _, exists := healthyMap[rootURL]; !exists {
-			delete(DefaultScheduler.IdCounterMap, rootURL)
-			removed = append(removed, rootURL)
+			if counter.Get() > 0 {
+				preserved = append(preserved, rootURL)
+			} else {
+				delete(DefaultScheduler.IdCounterMap, rootURL)
+				removed = append(removed, rootURL)
+			}
 		}
 	}
 
-	for rootURL := range DefaultScheduler.tokenMap {
+	for rootURL, tokenCounter := range DefaultScheduler.tokenMap {
 		if _, exists := healthyMap[rootURL]; !exists {
-			delete(DefaultScheduler.tokenMap, rootURL)
+			if tokenCounter.Get() == 0 {
+				delete(DefaultScheduler.tokenMap, rootURL)
+			}
 		}
 	}
 
 	if len(removed) > 0 {
 		logger.Info(ctx, "removed counters for %d unhealthy workers: %v", len(removed), removed)
+	}
+	if len(preserved) > 0 {
+		logger.Info(ctx, "preserved counters for %d workers with inflight requests: %v", len(preserved), preserved)
 	}
 }
 
@@ -275,12 +318,56 @@ func estimateTokens(message string) uint64 {
 	return uint64(runeCount * 2)
 }
 
-// ReleasePrefillTokens releases the corresponding token load when request ends
+// ReleasePrefillTokens releases the corresponding token load when request ends.
+// Uses GetTokenCounter (not GetOrCreateTokenCounter) to avoid creating ghost entries.
 func ReleasePrefillTokens(ctx context.Context, url, message string) {
-	if url == "" || message == "" {
+	if DefaultScheduler == nil || url == "" || message == "" {
 		return
 	}
-	tokenCounter := GetOrCreateTokenCounter(ctx, url)
+	tokenCounter, exists := GetTokenCounter(ctx, url)
+	if !exists {
+		return
+	}
 	tokenCounter.Sub(estimateTokens(message))
 	logger.Info(ctx, "release prefill tokens: %s, tokens: %d", url, tokenCounter.Get())
+}
+
+// StartStatsReporter periodically logs all worker loads and cache hit rate
+func StartStatsReporter(ctx context.Context, interval float64) {
+	ticker := time.NewTicker(time.Duration(interval * float64(time.Second)))
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			reportStats(ctx)
+		}
+	}
+}
+
+func reportStats(ctx context.Context) {
+	if DefaultScheduler == nil || DefaultScheduler.managerAPI == nil {
+		return
+	}
+
+	healthyURLs := DefaultScheduler.managerAPI.GetHealthyURLs(ctx)
+
+	totalRunning := 0
+	var workerLoads []string
+	for _, url := range healthyURLs {
+		running, _, _ := DefaultScheduler.managerAPI.GetMetrics(ctx, url)
+		totalRunning += running
+		workerLoads = append(workerLoads, fmt.Sprintf("%s: running=%d", url, running))
+	}
+
+	// Cache hit stats (periodic reset)
+	hits, total := GetAndResetCacheHitStats()
+	hitRate := 0.0
+	if total > 0 {
+		hitRate = float64(hits) * 100 / float64(total)
+	}
+
+	logger.Info(ctx, "[stats] total_running=%d, workers: [%s], cache_hit_rate=%.2f%% (hits=%d/total=%d)",
+		totalRunning, strings.Join(workerLoads, ", "), hitRate, hits, total)
 }

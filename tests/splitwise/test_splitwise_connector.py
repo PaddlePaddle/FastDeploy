@@ -195,6 +195,9 @@ def test_check_decode_allocated_handles_finished_and_error_states():
 def test_send_cache_info_to_prefill_groups_by_addr_and_skips_error():
     connector = _build_connector()
     connector._send_message = Mock()
+    # Add mock resource_manager with waiting_abort_req_id_set
+    connector.resource_manager = Mock()
+    connector.resource_manager.waiting_abort_req_id_set = set()
 
     tasks = [
         DummyTask(

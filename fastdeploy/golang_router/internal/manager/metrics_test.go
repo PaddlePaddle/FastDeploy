@@ -298,12 +298,19 @@ available_gpu_block_num 5`))
 			t.Logf("GetMetricsByURL succeeded: running=%d, waiting=%d, gpu=%d", running, waiting, gpu)
 		}
 
-		// Now test Manager.GetMetrics
-		running, waiting, gpu = m.GetMetrics(context.Background(), workerURL)
-		t.Logf("Manager.GetMetrics result: running=%d, waiting=%d, gpu=%d", running, waiting, gpu)
+		// Test Manager.GetRemoteMetrics (uses real remote metrics)
+		running, waiting, gpu = m.GetRemoteMetrics(context.Background(), workerURL)
+		t.Logf("Manager.GetRemoteMetrics result: running=%d, waiting=%d, gpu=%d", running, waiting, gpu)
 		assert.Equal(t, 2, running)
 		assert.Equal(t, 1, waiting)
 		assert.Equal(t, 5, gpu)
+
+		// Test Manager.GetMetrics (uses in-memory counting)
+		runningMem, waitingMem, gpuMem := m.GetMetrics(context.Background(), workerURL)
+		t.Logf("Manager.GetMetrics result: running=%d, waiting=%d, gpu=%d", runningMem, waitingMem, gpuMem)
+		assert.Equal(t, 0, runningMem) // in-memory counter, should be 0
+		assert.Equal(t, 0, waitingMem)
+		assert.Equal(t, 0, gpuMem)
 	})
 
 	// Test error case (should fall back to counter)
