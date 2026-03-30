@@ -5,26 +5,26 @@
 #include "paddle/phi/core/memory/memcpy.h"
 #include "remote_cache_kv_ipc.h"
 
-// head_dim dispatch for RoPE/KV-cache write: supports 128 (Qwen3) and 256 (Qwen3.5).
-// Kept separate from DISPATCH_HEAD_DIM in utils.cuh, which only covers 64/128
-// and is shared with attention kernels not validated for head_dim=256.
-#define DISPATCH_GQA_ROPE_HEAD_DIM(head_dim, HEAD_DIM, ...)               \
-  switch (head_dim) {                                                       \
-    case 128: {                                                             \
-      constexpr uint32_t HEAD_DIM = 128;                                   \
-      __VA_ARGS__                                                           \
-      break;                                                                \
-    }                                                                       \
-    case 256: {                                                             \
-      constexpr uint32_t HEAD_DIM = 256;                                   \
-      __VA_ARGS__                                                           \
-      break;                                                                \
-    }                                                                       \
-    default:                                                                \
-      PADDLE_THROW("unsupported head_dim: %d for gqa_rope_write_cache",    \
-                   head_dim);                                               \
+// head_dim dispatch for RoPE/KV-cache write: supports 128 (Qwen3) and 256
+// (Qwen3.5). Kept separate from DISPATCH_HEAD_DIM in utils.cuh, which only
+// covers 64/128 and is shared with attention kernels not validated for
+// head_dim=256.
+#define DISPATCH_GQA_ROPE_HEAD_DIM(head_dim, HEAD_DIM, ...)             \
+  switch (head_dim) {                                                   \
+    case 128: {                                                         \
+      constexpr uint32_t HEAD_DIM = 128;                                \
+      __VA_ARGS__                                                       \
+      break;                                                            \
+    }                                                                   \
+    case 256: {                                                         \
+      constexpr uint32_t HEAD_DIM = 256;                                \
+      __VA_ARGS__                                                       \
+      break;                                                            \
+    }                                                                   \
+    default:                                                            \
+      PADDLE_THROW("unsupported head_dim: %d for gqa_rope_write_cache", \
+                   head_dim);                                           \
   }
-
 
 template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
@@ -142,8 +142,8 @@ __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
 //
 // Rotation formula (same as Python rotate_half):
 //   left  [0, half_rotary_dim):   out = q[h]*cos[h] - q[h+half]*sin[h]
-//   right [half_rotary_dim, rotary_dim): out = q[h]*cos[h-half] + q[h-half]*sin[h-half]
-//   pass  [rotary_dim, head_dim): out = q[h]
+//   right [half_rotary_dim, rotary_dim): out = q[h]*cos[h-half] +
+//   q[h-half]*sin[h-half] pass  [rotary_dim, head_dim): out = q[h]
 //
 // Warp layout: each warp (32 threads) owns one head; VecSize=PackSize=8
 // covers all 256 elements per head (256/32=8 elements per thread).
@@ -175,7 +175,8 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
   using LoadT = AlignedVector<T, VecSize>;
   using LoadEmbT = AlignedVector<float, VecSize>;
 
-  // src_vec: elements at h_bias; src_vec_pair: partner at h_bias ± half_rotary_dim
+  // src_vec: elements at h_bias; src_vec_pair: partner at h_bias ±
+  // half_rotary_dim
   LoadT src_vec;
   LoadT src_vec_pair;
   LoadEmbT cos_emb_vec;
@@ -221,8 +222,8 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
 
     // global read address for this thread's elements
     const int64_t base_idx =
-        token_idx * (q_num_head + 2 * kv_num_head) * head_dim +
-        hi * head_dim + h_bias;
+        token_idx * (q_num_head + 2 * kv_num_head) * head_dim + hi * head_dim +
+        h_bias;
 
     // load VecSize elements at h_bias
     Load<T, VecSize>(&qkv[base_idx], &src_vec);
@@ -234,7 +235,7 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
     int64_t base_split_idx;
     T *out_p = nullptr;
     if (hi < q_num_head) {
-    // Q head: sequential layout
+      // Q head: sequential layout
       base_split_idx =
           token_idx * q_num_head * head_dim + hi * head_dim + h_bias;
       out_p = q;
@@ -261,16 +262,19 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
 
 #pragma unroll
         for (int i = 0; i < VecSize; i++) {
-          const float x_l = static_cast<float>(src_vec[i]);       // q[h]
-          const float x_r = static_cast<float>(src_vec_pair[i]);  // q[h + half_rotary_dim]
-          src_vec[i] = static_cast<T>(fmul_func<EnforceFmulRN>(x_l, cos_emb_vec[i]) -
-                                      fmul_func<EnforceFmulRN>(x_r, sin_emb_vec[i]));
+          const float x_l = static_cast<float>(src_vec[i]);  // q[h]
+          const float x_r =
+              static_cast<float>(src_vec_pair[i]);  // q[h + half_rotary_dim]
+          src_vec[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(x_l, cos_emb_vec[i]) -
+                             fmul_func<EnforceFmulRN>(x_r, sin_emb_vec[i]));
         }
 
       } else if (h_bias < rotary_dim) {
         Load<T, VecSize>(&qkv[base_idx - half_rotary_dim], &src_vec_pair);
 
-        const int64_t emb_idx = ori_seq_id * rotary_dim + h_bias - half_rotary_dim;
+        const int64_t emb_idx =
+            ori_seq_id * rotary_dim + h_bias - half_rotary_dim;
         Load<float, VecSize>(&cos_emb[emb_idx], &cos_emb_vec);
         Load<float, VecSize>(&sin_emb[emb_idx], &sin_emb_vec);
 
@@ -278,10 +282,10 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
         for (int i = 0; i < VecSize; i++) {
           const float x_r = static_cast<float>(src_vec[i]);
           const float x_l = static_cast<float>(src_vec_pair[i]);
-          src_vec[i] = static_cast<T>(fmul_func<EnforceFmulRN>(x_r, cos_emb_vec[i]) +
-                                      fmul_func<EnforceFmulRN>(x_l, sin_emb_vec[i]));
+          src_vec[i] =
+              static_cast<T>(fmul_func<EnforceFmulRN>(x_r, cos_emb_vec[i]) +
+                             fmul_func<EnforceFmulRN>(x_l, sin_emb_vec[i]));
         }
-
       }
       // h_bias ∈ [rotary_dim, head_dim)：pass-through
     }
@@ -291,9 +295,10 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
   }
 }
 
-// Launcher for GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5 (head_dim=256).
-// Differs from the GLM/head_dim=128 variant in: PackSize=8, sin_emb offset uses
-// rotary_dim (not head_dim), and a 2D block where each warp owns one full head.
+// Launcher for GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5
+// (head_dim=256). Differs from the GLM/head_dim=128 variant in: PackSize=8,
+// sin_emb offset uses rotary_dim (not head_dim), and a 2D block where each warp
+// owns one full head.
 template <typename T, bool EnforceFmulRN = false>
 void gqa_neox_partial_rotary_qk_split_variable_qwen3_5(
     T *qkv_out,
@@ -301,7 +306,8 @@ void gqa_neox_partial_rotary_qk_split_variable_qwen3_5(
     T *k,
     T *v,
     const T *qkv_input,
-    const float *rotary_emb,  // [cos: max_model_len*rotary_dim][sin: max_model_len*rotary_dim]
+    const float *rotary_emb,  // [cos: max_model_len*rotary_dim][sin:
+                              // max_model_len*rotary_dim]
     const int *batch_id_per_token,
     const int *seq_lens_encoder,
     const int *seq_lens_decoder,
@@ -319,7 +325,8 @@ void gqa_neox_partial_rotary_qk_split_variable_qwen3_5(
 
   int64_t elem_nums = token_num * (num_heads + 2 * kv_num_heads) * head_dim;
 
-  // PackSize=8: each of 32 warp threads handles 8 elements, covering all 256 per head.
+  // PackSize=8: each of 32 warp threads handles 8 elements, covering all 256
+  // per head.
   constexpr int HEAD_DIM = 256;
   constexpr int PackSize = HEAD_DIM / kWarpSize;  // = 8
   PADDLE_ENFORCE_EQ(rotary_dim / 2 % PackSize,
@@ -340,7 +347,9 @@ void gqa_neox_partial_rotary_qk_split_variable_qwen3_5(
   const float *sin_emb = rotary_emb + max_model_len * rotary_dim;
 
   launchWithPdlWhenEnabled(
-      GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5<T, PackSize, EnforceFmulRN>,
+      GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5<T,
+                                                            PackSize,
+                                                            EnforceFmulRN>,
       grid_size,
       block_size,
       0,

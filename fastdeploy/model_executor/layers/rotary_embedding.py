@@ -122,9 +122,9 @@ class QwenRotaryEmbedding:
         Returns:
             freqs_t: (bsz, seq_len, rotary_dim // 2)
         """
-        assert sum(self.mrope_section) == self.rotary_dim // 2, (
-            f"mrope_section sum {sum(self.mrope_section)} must equal rotary_dim//2 {self.rotary_dim // 2}"
-        )
+        assert (
+            sum(self.mrope_section) == self.rotary_dim // 2
+        ), f"mrope_section sum {sum(self.mrope_section)} must equal rotary_dim//2 {self.rotary_dim // 2}"
         freqs_t = freqs[0].clone()  # start from T dimension, overwrite H/W positions in-place
         for dim, offset in enumerate((1, 2), start=1):  # H, W
             length = self.mrope_section[dim] * 3
@@ -138,6 +138,7 @@ class QwenRotaryEmbedding:
         if self.mrope_section is not None:
             if position_ids.ndim == 2:
                 position_ids = position_ids[None, :, :].expand((3, position_ids.shape[0], -1))
+
             num_sections, bsz, max_seq_len = position_ids.shape
             rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
             inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)

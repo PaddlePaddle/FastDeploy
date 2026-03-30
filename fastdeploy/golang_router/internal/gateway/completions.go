@@ -322,6 +322,19 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 
 	isSplitwise := manager.GetSplitwise(ctx)
 
+	traceID := c.GetHeader("X_BD_LOGID")
+	if traceID != "" {
+		ctx = context.WithValue(ctx, logger.TraceIDKey, traceID)
+	}
+	if reqID, ok := rawReq["req_id"].(string); ok && reqID != "" {
+		ctx = context.WithValue(ctx, logger.ReqIDKey, reqID)
+	}
+	sessionID := getSessionID(rawReq)
+	if sessionID != "" {
+		ctx = context.WithValue(ctx, logger.SessionIDKey, sessionID)
+	}
+	c.Request = c.Request.WithContext(ctx)
+
 	var (
 		destURL           string
 		releaseTargets    []string
@@ -329,16 +342,13 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		prefillURL        string
 		decodeURL         string
 		message           string
+		requestID         string
 		prefillHandedOff  bool // true once readPrefillRecv goroutine takes ownership of prefill counters
 	)
 
 	if isSplitwise {
-		requestID := getRequestID(ctx, rawReq)
+		requestID = getRequestID(ctx, rawReq)
 		ctx = context.WithValue(ctx, logger.RequestIDKey, requestID)
-		sessionID := getSessionID(rawReq)
-		if sessionID != "" {
-			ctx = context.WithValue(ctx, logger.SessionIDKey, sessionID)
-		}
 		c.Request = c.Request.WithContext(ctx)
 
 		// PD mode: select instances for Prefill/Decode separately
@@ -349,12 +359,12 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		if err != nil {
 			logger.Error(ctx, "Failed to select worker pair: %v", err)
 			c.Writer.WriteHeader(http.StatusBadGateway)
-			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to select worker pair: %v"}`, err)))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to select worker pair: %v", "request_id": "%s"}`, err, requestID)))
 			return
 		}
 		if prefillURL == "" || decodeURL == "" {
 			c.Writer.WriteHeader(http.StatusServiceUnavailable)
-			c.Writer.Write([]byte(`{"error": "No available prefill/decode workers"}`))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "No available prefill/decode workers", "request_id": "%s"}`, requestID)))
 			return
 		}
 
@@ -379,7 +389,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		if err != nil {
 			logger.Error(ctx, "Failed to build disaggregate_info: %v", err)
 			c.Writer.WriteHeader(http.StatusInternalServerError)
-			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to build disaggregate_info: %v"}`, err)))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to build disaggregate_info: %v", "request_id": "%s"}`, err, requestID)))
 			return
 		}
 
@@ -390,7 +400,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		if err != nil {
 			logger.Error(ctx, "Failed to encode modified request: %v", err)
 			c.Writer.WriteHeader(http.StatusInternalServerError)
-			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to encode modified request: %v"}`, err)))
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to encode modified request: %v", "request_id": "%s"}`, err, requestID)))
 			return
 		}
 
@@ -439,7 +449,11 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 
 	if err != nil {
 		c.Writer.WriteHeader(http.StatusBadGateway)
-		c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to connect to backend service: %v"}`, err)))
+		if requestID != "" {
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to connect to backend service: %v", "request_id": "%s"}`, err, requestID)))
+		} else {
+			c.Writer.Write([]byte(fmt.Sprintf(`{"error": "Failed to connect to backend service: %v"}`, err)))
+		}
 		logger.Error(ctx, "Failed to connect to backend service: %v", err)
 		return
 	}

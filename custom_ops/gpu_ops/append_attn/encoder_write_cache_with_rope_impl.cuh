@@ -2845,8 +2845,9 @@ void CascadeAppendWriteCacheKVC8QKV(
                                                           true,
                                                           true>;
     const uint32_t smem_size_dynamic = smem_size + BLOCK_SIZE * sizeof(T);
-    cudaFuncSetAttribute(
-        kernel_fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size_dynamic);
+    cudaFuncSetAttribute(kernel_fn,
+                         cudaFuncAttributeMaxDynamicSharedMemorySize,
+                         smem_size_dynamic);
     launchWithPdlWhenEnabled(
         kernel_fn,
         grids,

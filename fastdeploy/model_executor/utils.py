@@ -539,6 +539,7 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         if fd_config.quant_config is None or fd_config.quant_config.is_checkpoint_bf16:
             return loaded_weight_name
         # Can be extended to other offline quantization suffixes if needed.
+        fd_suffix_map = {}
         if (is_moe and moe_quant_type == "block_wise_fp8") or (not is_moe and dense_quant_type == "block_wise_fp8"):
             fd_suffix_map = fp8_suffix_map
         if (is_moe and moe_quant_type == "tensor_wise_fp8") or (not is_moe and dense_quant_type == "tensor_wise_fp8"):

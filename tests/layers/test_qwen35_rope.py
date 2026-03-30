@@ -21,12 +21,14 @@ import unittest
 
 import numpy as np
 import paddle
+
 from fastdeploy.model_executor.layers.rotary_embedding import QwenRotaryEmbedding
 
-paddle.set_default_dtype("float16")
+paddle.set_default_dtype("bfloat16")
 seed = 42
 np.random.seed(seed)
 paddle.seed(seed)
+
 
 def rotate_half(x):
     """Rotates half the hidden dims of the input. Supports both numpy and paddle Tensor."""
@@ -35,6 +37,7 @@ def rotate_half(x):
     if isinstance(x, np.ndarray):
         return np.concatenate([-x2, x1], axis=-1)
     return paddle.concat([-x2, x1], axis=-1)
+
 
 def apply_neox_partial_rope_ref(q, k, cos, sin):
     # Keep half or full tensor for later concatenation
@@ -59,6 +62,7 @@ def apply_neox_partial_rope_ref(q, k, cos, sin):
 # ---------------------------------------------------------------------------
 # Tests for QwenRotaryEmbedding
 # ---------------------------------------------------------------------------
+
 
 class TestQwenRotaryEmbedding(unittest.TestCase):
     """Tests for QwenRotaryEmbedding with partial_rotary_factor and mrope_section."""
@@ -88,8 +92,9 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
         expected_rot_dim = int(rotary_dim * partial_rotary_factor)  # 64
         bsz, seq_len = 2, 16
         position_ids = paddle.arange(seq_len, dtype="int64").unsqueeze(0).expand([bsz, -1])
-        emb = self.QwenRotaryEmbedding(rotary_dim=rotary_dim, base=500000.0,
-                                       partial_rotary_factor=partial_rotary_factor)
+        emb = self.QwenRotaryEmbedding(
+            rotary_dim=rotary_dim, base=500000.0, partial_rotary_factor=partial_rotary_factor
+        )
         rot_emb = emb(position_ids)
         self.assertEqual(list(rot_emb.shape), [2, bsz, seq_len, 1, expected_rot_dim])
 
@@ -108,29 +113,25 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
         partial_rotary_factor = 0.25
         actual_rot_dim = int(rotary_dim * partial_rotary_factor)  # 64
         base = 500000.0
-        bsz, seq_len = 1, 8
+        seq_len = 8
 
         position_ids = paddle.arange(seq_len, dtype="int64").unsqueeze(0)  # [1, S]
-        emb = self.QwenRotaryEmbedding(rotary_dim=rotary_dim, base=base,
-                                       partial_rotary_factor=partial_rotary_factor)
+        emb = self.QwenRotaryEmbedding(rotary_dim=rotary_dim, base=base, partial_rotary_factor=partial_rotary_factor)
         rot_emb = emb(position_ids)  # [2, 1, S, 1, 64]
 
         # Reference via numpy
-        half = actual_rot_dim // 2
         inv_freq = base ** (-np.arange(0, actual_rot_dim, 2, dtype="float32") / actual_rot_dim)
         positions = np.arange(seq_len, dtype="float32")
-        freqs = np.outer(positions, inv_freq)                           # [S, half]
-        emb_np = np.concatenate([freqs, freqs], axis=-1)               # [S, rot_dim]
-        cos_ref = np.cos(emb_np)[np.newaxis, :, np.newaxis, :]         # [1, S, 1, rot_dim]
+        freqs = np.outer(positions, inv_freq)  # [S, half]
+        emb_np = np.concatenate([freqs, freqs], axis=-1)  # [S, rot_dim]
+        cos_ref = np.cos(emb_np)[np.newaxis, :, np.newaxis, :]  # [1, S, 1, rot_dim]
         sin_ref = np.sin(emb_np)[np.newaxis, :, np.newaxis, :]
 
         np.testing.assert_allclose(
-            rot_emb[0].numpy(), cos_ref, rtol=1e-5, atol=1e-5,
-            err_msg="cos values mismatch for partial rotary"
+            rot_emb[0].numpy(), cos_ref, rtol=1e-5, atol=1e-5, err_msg="cos values mismatch for partial rotary"
         )
         np.testing.assert_allclose(
-            rot_emb[1].numpy(), sin_ref, rtol=1e-5, atol=1e-5,
-            err_msg="sin values mismatch for partial rotary"
+            rot_emb[1].numpy(), sin_ref, rtol=1e-5, atol=1e-5, err_msg="sin values mismatch for partial rotary"
         )
 
     # ------------------------------------------------------------------
@@ -141,7 +142,7 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
         """mrope_section path outputs (2, bsz, seq_len, 1, actual_rotary_dim)."""
         rotary_dim = 256
         partial_rotary_factor = 0.25
-        mrope_section = [10, 11, 11]          # sum == rotary_dim // 2 == 32
+        mrope_section = [10, 11, 11]  # sum == rotary_dim // 2 == 32
         bsz, seq_len = 2, 10
         actual_rotary_dim = int(rotary_dim * partial_rotary_factor)  # 64
 
@@ -149,9 +150,12 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
         position_ids = paddle.arange(seq_len, dtype="int64").unsqueeze(0).unsqueeze(0)
         position_ids = position_ids.expand([3, bsz, seq_len])
 
-        emb = self.QwenRotaryEmbedding(rotary_dim=rotary_dim, base=10000.0,
-                                       partial_rotary_factor=partial_rotary_factor,
-                                       mrope_section=mrope_section)
+        emb = self.QwenRotaryEmbedding(
+            rotary_dim=rotary_dim,
+            base=10000.0,
+            partial_rotary_factor=partial_rotary_factor,
+            mrope_section=mrope_section,
+        )
         rot_emb = emb(position_ids)
         self.assertEqual(list(rot_emb.shape), [2, bsz, seq_len, 1, actual_rotary_dim])
 
@@ -164,19 +168,22 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
         actual_rotary_dim = int(rotary_dim * partial_rotary_factor)  # 64
 
         position_ids_2d = paddle.arange(seq_len, dtype="int64").unsqueeze(0).expand([bsz, -1])
-        emb = self.QwenRotaryEmbedding(rotary_dim=rotary_dim, base=10000.0,
-                                       partial_rotary_factor=partial_rotary_factor,
-                                       mrope_section=mrope_section)
+        emb = self.QwenRotaryEmbedding(
+            rotary_dim=rotary_dim,
+            base=10000.0,
+            partial_rotary_factor=partial_rotary_factor,
+            mrope_section=mrope_section,
+        )
         rot_emb = emb(position_ids_2d)
         self.assertEqual(list(rot_emb.shape), [2, bsz, seq_len, 1, actual_rotary_dim])
 
     def test_apply_interleaved_mrope_sum_check(self):
         """apply_interleaved_mrope raises on mismatched mrope_section sum."""
         rotary_dim = 128
-        bad_mrope_section = [10, 10, 10]   # sum=30 != 64
-        emb = self.QwenRotaryEmbedding(rotary_dim=rotary_dim, base=10000.0,
-                                       partial_rotary_factor=1.0,
-                                       mrope_section=bad_mrope_section)
+        bad_mrope_section = [10, 10, 10]  # sum=30 != 64
+        emb = self.QwenRotaryEmbedding(
+            rotary_dim=rotary_dim, base=10000.0, partial_rotary_factor=1.0, mrope_section=bad_mrope_section
+        )
         dummy_freqs = paddle.zeros([3, 1, 4, rotary_dim // 2])
         with self.assertRaises(AssertionError):
             emb.apply_interleaved_mrope(dummy_freqs)
@@ -187,11 +194,12 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
         bsz, seq_len = 1, 8
         position_ids = paddle.arange(seq_len, dtype="int64").unsqueeze(0).expand([bsz, -1])
 
-        emb_std = self.QwenRotaryEmbedding(rotary_dim=rotary_dim, base=10000.0,
-                                           partial_rotary_factor=1.0, mrope_section=None)
-        emb_mrope = self.QwenRotaryEmbedding(rotary_dim=rotary_dim, base=10000.0,
-                                             partial_rotary_factor=1.0,
-                                             mrope_section=[32, 16, 16])
+        emb_std = self.QwenRotaryEmbedding(
+            rotary_dim=rotary_dim, base=10000.0, partial_rotary_factor=1.0, mrope_section=None
+        )
+        emb_mrope = self.QwenRotaryEmbedding(
+            rotary_dim=rotary_dim, base=10000.0, partial_rotary_factor=1.0, mrope_section=[32, 16, 16]
+        )
         rot_std = emb_std(position_ids)
 
         # For mrope: provide identical positions in all 3 dimensions → result equals std
@@ -199,8 +207,11 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
         rot_mrope = emb_mrope(position_ids_3d)
         # With identical T/H/W positions, interleaved mrope == standard embedding
         np.testing.assert_allclose(
-            rot_std.numpy(), rot_mrope.numpy(), rtol=1e-5, atol=1e-5,
-            err_msg="mrope with uniform positions should match standard embedding"
+            rot_std.numpy(),
+            rot_mrope.numpy(),
+            rtol=1e-5,
+            atol=1e-5,
+            err_msg="mrope with uniform positions should match standard embedding",
         )
 
 
@@ -208,19 +219,22 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
 # Tests for gqa_rope_write_cache — Qwen3.5 partial neox path (head_dim=256)
 # ---------------------------------------------------------------------------
 def _build_rotary_emb(max_seq_len, head_dim=256, base=100000.0):
-    if head_dim==256:
+    if head_dim == 256:
         partial_rotary_factor = 0.25
         mrope_section = [10, 11, 11]
     else:
         partial_rotary_factor = 1.0
         mrope_section = None
-    rot_emb = QwenRotaryEmbedding(rotary_dim=head_dim, base=base, partial_rotary_factor=partial_rotary_factor, mrope_section=mrope_section)
+    rot_emb = QwenRotaryEmbedding(
+        rotary_dim=head_dim, base=base, partial_rotary_factor=partial_rotary_factor, mrope_section=mrope_section
+    )
     pos_ids = paddle.arange(max_seq_len, dtype="int64").unsqueeze(0)
     return rot_emb(pos_ids)
-    
+
+
 def _build_gqa_rope_write_cache_inputs(
-    bsz, q_num_head, kv_num_head, seq_len,
-    head_dim, blocksize, max_seq_len, dtype="bfloat16"):
+    bsz, q_num_head, kv_num_head, seq_len, head_dim, blocksize, max_seq_len, dtype="bfloat16"
+):
     """Build all tensors needed by gqa_rope_write_cache for a pure-prefill batch."""
     token_num = bsz * seq_len
 
@@ -242,13 +256,13 @@ def _build_gqa_rope_write_cache_inputs(
         block_tables[i, 0] = i
 
     # KV cache
-    key_cache   = paddle.zeros([num_blocks, kv_num_head, blocksize, head_dim], dtype=dtype)
+    key_cache = paddle.zeros([num_blocks, kv_num_head, blocksize, head_dim], dtype=dtype)
     value_cache = paddle.zeros([num_blocks, kv_num_head, blocksize, head_dim], dtype=dtype)
 
     # Sequence metadata (pure prefill: encoder only)
     seq_lens_this_time = paddle.to_tensor([seq_len] * bsz, dtype="int32")
-    seq_lens_encoder   = paddle.to_tensor([seq_len] * bsz, dtype="int32")
-    seq_lens_decoder   = paddle.zeros([bsz], dtype="int32")
+    seq_lens_encoder = paddle.to_tensor([seq_len] * bsz, dtype="int32")
+    seq_lens_decoder = paddle.zeros([bsz], dtype="int32")
 
     # batch_id_per_token, cu_seqlens_q/k
     batch_id_per_token = paddle.zeros([token_num], dtype="int32")
@@ -264,29 +278,38 @@ def _build_gqa_rope_write_cache_inputs(
     kv_token_num = int(cu_seqlens_k[-1])
 
     # Tile/batch ids for KV cache write (minimal: one tile per seq)
-    kv_batch_ids        = paddle.zeros([bsz], dtype="int32")
-    kv_tile_ids         = paddle.zeros([bsz], dtype="int32")
-    kv_num_blocks       = paddle.to_tensor([1] * bsz, dtype="int32")
-    cache_batch_ids     = paddle.zeros([bsz], dtype="int32")
-    cache_tile_ids      = paddle.zeros([bsz], dtype="int32")
-    cache_num_blocks    = paddle.to_tensor([1] * bsz, dtype="int32")
+    kv_batch_ids = paddle.zeros([bsz], dtype="int32")
+    kv_tile_ids = paddle.zeros([bsz], dtype="int32")
+    kv_num_blocks = paddle.to_tensor([1] * bsz, dtype="int32")
+    cache_batch_ids = paddle.zeros([bsz], dtype="int32")
+    cache_tile_ids = paddle.zeros([bsz], dtype="int32")
+    cache_num_blocks = paddle.to_tensor([1] * bsz, dtype="int32")
 
     return dict(
-        qkv=qkv, key_cache=key_cache, value_cache=value_cache,
+        qkv=qkv,
+        key_cache=key_cache,
+        value_cache=value_cache,
         rotary_embs=rotary_embs,
-        cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k,
+        cu_seqlens_q=cu_seqlens_q,
+        cu_seqlens_k=cu_seqlens_k,
         seq_lens_this_time=seq_lens_this_time,
-        seq_lens_encoder=seq_lens_encoder, seq_lens_decoder=seq_lens_decoder,
+        seq_lens_encoder=seq_lens_encoder,
+        seq_lens_decoder=seq_lens_decoder,
         batch_id_per_token=batch_id_per_token,
         block_tables=block_tables,
-        kv_batch_ids=kv_batch_ids, kv_tile_ids_per_batch=kv_tile_ids,
+        kv_batch_ids=kv_batch_ids,
+        kv_tile_ids_per_batch=kv_tile_ids,
         kv_num_blocks=kv_num_blocks,
-        cache_batch_ids=cache_batch_ids, cache_tile_ids_per_batch=cache_tile_ids,
+        cache_batch_ids=cache_batch_ids,
+        cache_tile_ids_per_batch=cache_tile_ids,
         cache_num_blocks=cache_num_blocks,
         kv_token_num=kv_token_num,
-        head_dim=head_dim, rotary_dim=rotary_dim,
-        q_num_head=q_num_head, kv_num_head=kv_num_head,
-        token_num=token_num, seq_len=seq_len,
+        head_dim=head_dim,
+        rotary_dim=rotary_dim,
+        q_num_head=q_num_head,
+        kv_num_head=kv_num_head,
+        token_num=token_num,
+        seq_len=seq_len,
     )
 
 
@@ -296,6 +319,7 @@ class TestGqaRopeWriteCacheQwen35(unittest.TestCase):
     def setUp(self):
         paddle.set_device("gpu")
         from fastdeploy.model_executor.layers.attention.ops import gqa_rope_write_cache
+
         self.gqa_rope_write_cache = gqa_rope_write_cache
 
     def _run(self, inputs, max_seq_len):
@@ -333,19 +357,18 @@ class TestGqaRopeWriteCacheQwen35(unittest.TestCase):
         bsz, q_num_head, kv_num_head = 1, 4, 2
         seq_len, head_dim = 8, 256
         blocksize, max_seq_len = 64, 128
-        dtype = "float16"
+        dtype = "bfloat16"
 
         inputs = _build_gqa_rope_write_cache_inputs(
-            bsz, q_num_head, kv_num_head, seq_len,
-            head_dim, blocksize, max_seq_len, dtype
+            bsz, q_num_head, kv_num_head, seq_len, head_dim, blocksize, max_seq_len, dtype
         )
         q, k, v, qkv_out = self._run(inputs, max_seq_len)
 
         token_num = inputs["token_num"]
         kv_token_num = inputs["kv_token_num"]
-        self.assertEqual(list(q.shape),     [token_num, q_num_head, head_dim])
-        self.assertEqual(list(k.shape),     [kv_token_num, kv_num_head, head_dim])
-        self.assertEqual(list(v.shape),     [kv_token_num, kv_num_head, head_dim])
+        self.assertEqual(list(q.shape), [token_num, q_num_head, head_dim])
+        self.assertEqual(list(k.shape), [kv_token_num, kv_num_head, head_dim])
+        self.assertEqual(list(v.shape), [kv_token_num, kv_num_head, head_dim])
         self.assertEqual(list(qkv_out.shape), list(inputs["qkv"].shape))
 
     def test_output_shapes_bfloat16(self):
@@ -355,8 +378,7 @@ class TestGqaRopeWriteCacheQwen35(unittest.TestCase):
         blocksize, max_seq_len = 64, 128
 
         inputs = _build_gqa_rope_write_cache_inputs(
-            bsz, q_num_head, kv_num_head, seq_len,
-            head_dim, blocksize, max_seq_len, dtype="bfloat16"
+            bsz, q_num_head, kv_num_head, seq_len, head_dim, blocksize, max_seq_len, dtype="bfloat16"
         )
         q, k, v, qkv_out = self._run(inputs, max_seq_len)
         self.assertEqual(q.dtype, paddle.bfloat16)
@@ -370,17 +392,18 @@ class TestGqaRopeWriteCacheQwen35(unittest.TestCase):
         bsz, q_num_head, kv_num_head = 1, 2, 1
         seq_len, head_dim = 4, 256
         blocksize, max_seq_len = 64, 128
-        dtype = "float16"
+        dtype = "bfloat16"
 
         inputs = _build_gqa_rope_write_cache_inputs(
-            bsz, q_num_head, kv_num_head, seq_len,
-            head_dim, blocksize, max_seq_len, dtype
+            bsz, q_num_head, kv_num_head, seq_len, head_dim, blocksize, max_seq_len, dtype
         )
 
         # Extract original Q before rotation: [token_num, q_num_head, head_dim]
         qkv_np = inputs["qkv"].cast("float32").numpy()
         q_orig = qkv_np.reshape(seq_len, q_num_head + 2 * kv_num_head, head_dim)[:, :q_num_head, :]
-        k_orig = qkv_np.reshape(seq_len, q_num_head + 2 * kv_num_head, head_dim)[:, q_num_head:q_num_head + kv_num_head, :]
+        k_orig = qkv_np.reshape(seq_len, q_num_head + 2 * kv_num_head, head_dim)[
+            :, q_num_head : q_num_head + kv_num_head, :
+        ]
 
         q, k, v, qkv_out = self._run(inputs, max_seq_len)
         q_np = q.cast("float32").numpy()  # [token_num, q_num_head, head_dim]
@@ -395,21 +418,18 @@ class TestGqaRopeWriteCacheQwen35(unittest.TestCase):
         k_ref = k_orig.copy()
         q_ref, k_ref = apply_neox_partial_rope_ref(q_ref, k_ref, cos_np, sin_np)
 
-        np.testing.assert_allclose(q_np, q_ref, rtol=1e-2, atol=1e-2,
-                                   err_msg="Q RoPE output mismatch vs reference")
-        np.testing.assert_allclose(k_np, k_ref, rtol=1e-2, atol=1e-2,
-                                   err_msg="K RoPE output mismatch vs reference")
+        np.testing.assert_allclose(q_np, q_ref, rtol=1e-2, atol=1e-2, err_msg="Q RoPE output mismatch vs reference")
+        np.testing.assert_allclose(k_np, k_ref, rtol=1e-2, atol=1e-2, err_msg="K RoPE output mismatch vs reference")
 
     def test_v_passthrough(self):
         """V is not rotated — output V matches raw V from QKV input."""
         bsz, q_num_head, kv_num_head = 1, 2, 1
         seq_len, head_dim = 4, 256
         blocksize, max_seq_len = 64, 128
-        dtype = "float16"
+        dtype = "bfloat16"
 
         inputs = _build_gqa_rope_write_cache_inputs(
-            bsz, q_num_head, kv_num_head, seq_len,
-            head_dim, blocksize, max_seq_len, dtype
+            bsz, q_num_head, kv_num_head, seq_len, head_dim, blocksize, max_seq_len, dtype
         )
 
         # Extract V directly from packed QKV
@@ -421,19 +441,17 @@ class TestGqaRopeWriteCacheQwen35(unittest.TestCase):
         _, _, v, _ = self._run(inputs, max_seq_len)
         v_np = v.cast("float32").numpy()
 
-        np.testing.assert_allclose(v_np, v_orig, rtol=1e-3, atol=1e-3,
-                                   err_msg="V should be unchanged (no rotation)")
+        np.testing.assert_allclose(v_np, v_orig, rtol=1e-3, atol=1e-3, err_msg="V should be unchanged (no rotation)")
 
     def test_passthrough_region_unchanged(self):
         """head_dim[rotary_dim:] of Q is not modified by partial RoPE."""
         bsz, q_num_head, kv_num_head = 1, 2, 1
         seq_len, head_dim = 4, 256
         blocksize, max_seq_len = 64, 128
-        dtype = "float16"
+        dtype = "bfloat16"
 
         inputs = _build_gqa_rope_write_cache_inputs(
-            bsz, q_num_head, kv_num_head, seq_len,
-            head_dim, blocksize, max_seq_len, dtype
+            bsz, q_num_head, kv_num_head, seq_len, head_dim, blocksize, max_seq_len, dtype
         )
         rotary_dim = inputs["rotary_dim"]
         qkv_np = inputs["qkv"].cast("float32").numpy()
@@ -444,8 +462,9 @@ class TestGqaRopeWriteCacheQwen35(unittest.TestCase):
         q, _, _, _ = self._run(inputs, max_seq_len)
         q_pass = q.cast("float32").numpy()[:, :, rotary_dim:]
 
-        np.testing.assert_allclose(q_pass, q_orig_pass, rtol=1e-3, atol=1e-3,
-                                   err_msg="Pass-through region [rotary_dim:] should be unchanged")
+        np.testing.assert_allclose(
+            q_pass, q_orig_pass, rtol=1e-3, atol=1e-3, err_msg="Pass-through region [rotary_dim:] should be unchanged"
+        )
 
     # ------------------------------------------------------------------
     # Multi-batch test
@@ -458,8 +477,7 @@ class TestGqaRopeWriteCacheQwen35(unittest.TestCase):
         blocksize, max_seq_len = 64, 128
 
         inputs = _build_gqa_rope_write_cache_inputs(
-            bsz, q_num_head, kv_num_head, seq_len,
-            head_dim, blocksize, max_seq_len, "float16"
+            bsz, q_num_head, kv_num_head, seq_len, head_dim, blocksize, max_seq_len, "bfloat16"
         )
         q, k, v, qkv_out = self._run(inputs, max_seq_len)
         token_num = bsz * seq_len
@@ -477,8 +495,7 @@ class TestGqaRopeWriteCacheQwen35(unittest.TestCase):
         blocksize, max_seq_len = 64, 128
 
         inputs = _build_gqa_rope_write_cache_inputs(
-            bsz, q_num_head, kv_num_head, seq_len,
-            head_dim, blocksize, max_seq_len, "float16"
+            bsz, q_num_head, kv_num_head, seq_len, head_dim, blocksize, max_seq_len, "bfloat16"
         )
         q, k, v, _ = self._run(inputs, max_seq_len)
         self.assertEqual(list(q.shape), [seq_len, q_num_head, head_dim])
