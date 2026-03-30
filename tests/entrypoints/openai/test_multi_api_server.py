@@ -180,6 +180,58 @@ class TestMultiApiServer(unittest.TestCase):
         mock_proc1.wait.assert_called_once()
         mock_proc2.wait.assert_called_once()
 
+    @patch("fastdeploy.entrypoints.openai.multi_api_server.subprocess.Popen")
+    @patch("fastdeploy.entrypoints.openai.multi_api_server.is_port_available")
+    def test_prometheus_multiprocess_dir_per_dp(self, mock_is_port_available, mock_popen):
+        """Test that each DP server gets a unique PROMETHEUS_MULTIPROC_DIR"""
+        # Mock port availability check
+        mock_is_port_available.return_value = True
+
+        # Mock subprocess.Popen to capture env passed to each server
+        envs_captured = []
+
+        def capture_popen(*args, **kwargs):
+            envs_captured.append(kwargs.get("env", {}).copy())
+            mock_proc = MagicMock()
+            mock_proc.pid = 1000 + len(envs_captured)
+            return mock_proc
+
+        mock_popen.side_effect = capture_popen
+
+        # Call start_servers with 2 servers
+        processes = start_servers(
+            server_count=2,
+            device_count=2,
+            server_args=self.test_server_args,
+            ports="8000,8001",
+            metrics_ports="8800,8801",
+            controller_ports="-1",
+        )
+
+        # Verify subprocess.Popen was called twice
+        self.assertEqual(mock_popen.call_count, 2)
+        self.assertEqual(len(envs_captured), 2)
+        self.assertEqual(len(processes), 2)
+
+        # Verify each server has a unique PROMETHEUS_MULTIPROC_DIR
+        prom_dirs = []
+        for i, env in enumerate(envs_captured):
+            prom_dir = env.get("PROMETHEUS_MULTIPROC_DIR")
+            print(f"Server {i} PROMETHEUS_MULTIPROC_DIR: {prom_dir}")
+            self.assertIsNotNone(prom_dir, f"Server {i} should have PROMETHEUS_MULTIPROC_DIR set")
+            prom_dirs.append(prom_dir)
+
+        # Verify all PROMETHEUS_MULTIPROC_DIR values are unique
+        self.assertEqual(
+            len(prom_dirs), len(set(prom_dirs)), "Each DP server should have a unique PROMETHEUS_MULTIPROC_DIR"
+        )
+
+        # Verify each directory contains the server index
+        for i, prom_dir in enumerate(prom_dirs):
+            # The directory should contain the server index (0 or 1)
+            # to uniquely identify each server's metrics directory
+            self.assertIn(f"_dp{i}", prom_dir, f"PROMETHEUS_MULTIPROC_DIR for server {i} should contain _dp{i}")
+
 
 if __name__ == "__main__":
     unittest.main()

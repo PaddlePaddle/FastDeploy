@@ -107,6 +107,15 @@ def start_servers(
         env = os.environ.copy()
         env["FD_ENABLE_MULTI_API_SERVER"] = "1"
         env["FD_LOG_DIR"] = env.get("FD_LOG_DIR", "log") + f"/log_{i}"
+        if "PROMETHEUS_MULTIPROC_DIR" in env:
+            prom_dir = env.get("PROMETHEUS_MULTIPROC_DIR")
+            prom_dir_i = os.path.join(os.path.dirname(prom_dir), os.path.basename(prom_dir) + f"_dp{i}")
+            # Create the directory if it doesn't exist
+            if not os.path.exists(prom_dir_i):
+                os.makedirs(prom_dir_i, exist_ok=True)
+            env["PROMETHEUS_MULTIPROC_DIR"] = prom_dir_i
+            logger.info(f"Set PROMETHEUS_MULTIPROC_DIR for DP {i}: {prom_dir_i}")
+
         cmd = [
             sys.executable,
             "-m",
