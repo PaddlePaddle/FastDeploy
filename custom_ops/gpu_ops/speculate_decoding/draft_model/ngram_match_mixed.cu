@@ -31,8 +31,7 @@ __global__ void ngram_match_mixed_search_kernel(
     const int64_t *input_ids_len,
     const int64_t *pre_ids,
     const int64_t *step_idx,
-    const int32_t *seq_lens_encoder,
-    const int32_t *seq_lens_decoder,
+    const int32_t *seq_lens_this_time,
     int64_t input_ids_stride,
     int64_t pre_ids_stride,
     int64_t max_batch_size,
@@ -51,8 +50,8 @@ __global__ void ngram_match_mixed_search_kernel(
   }
   __syncthreads();
 
-  if (seq_lens_encoder[batch_idx] > 0) return;
-  if (seq_lens_decoder[batch_idx] == 0) return;
+  // Skip batch items with no active tokens (matches CPU path logic)
+  if (seq_lens_this_time[batch_idx] == 0) return;
 
   const int64_t *cur_input_ids = input_ids + batch_idx * input_ids_stride;
   const int64_t cur_input_ids_len = input_ids_len[batch_idx];
@@ -100,7 +99,6 @@ __global__ void ngram_match_mixed_gather_kernel(
     const int *draft_token_num,
     int64_t *draft_tokens,
     int32_t *seq_lens_this_time,
-    const int32_t *seq_lens_encoder,
     const int32_t *seq_lens_decoder,
     const int64_t *max_dec_len,
     int64_t input_ids_stride,
@@ -109,24 +107,22 @@ __global__ void ngram_match_mixed_gather_kernel(
     int64_t max_batch_size,
     int max_draft_tokens_param,
     int threshold,
-    int64_t ori_seq_len_this_time,
     const NgramMatchResult *match_results) {
   int unprocessed_batch_size = 0;
   for (int i = 0; i < max_batch_size; i++) {
-    if (seq_lens_encoder[i] > 0 || seq_lens_decoder[i] > 0) {
+    if (seq_lens_decoder[i] > 0) {
       unprocessed_batch_size++;
     }
   }
 
   for (int batch_idx = 0; batch_idx < max_batch_size; batch_idx++) {
-    int64_t remaining = max_dec_len[batch_idx] - step_idx[batch_idx] - 1;
-    int max_draft_tokens = static_cast<int>(
-        min(static_cast<int64_t>(draft_token_num[batch_idx]), remaining));
+    const int ori_seq_len_this_time = seq_lens_this_time[batch_idx];
+    int max_draft_tokens =
+        static_cast<int>(min(static_cast<int64_t>(max_draft_tokens_param -
+                                                  ori_seq_len_this_time + 1),
+                             max_dec_len[batch_idx] - step_idx[batch_idx] - 1));
 
-    if (seq_lens_encoder[batch_idx] > 0) {
-      continue;
-    } else if (seq_lens_decoder[batch_idx] == 0) {
-      seq_lens_this_time[batch_idx] = 0;
+    if (ori_seq_len_this_time == 0 || max_draft_tokens <= 0) {
       continue;
     }
 
