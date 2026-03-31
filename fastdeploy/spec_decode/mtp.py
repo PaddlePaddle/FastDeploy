@@ -747,9 +747,9 @@ class MTPProposer(Proposer):
 
         self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
-    def _post_process(self, sampled_token_ids):
+    def _post_process_pd_reorder(self, sampled_token_ids):
         """
-        PostProcess for generation
+        PostProcess for generation for pd reorder
         """
         draft_model_update(
             sampled_token_ids,
@@ -802,6 +802,98 @@ class MTPProposer(Proposer):
                     self.model_inputs["step_idx"],
                 ),
                 self.model_inputs["step_idx"],
+            )
+
+    def _post_process(self, sampled_token_ids):
+        """
+        PostProcess for generation
+        """
+        draft_model_update(
+            sampled_token_ids,
+            self.model_inputs["draft_tokens"],
+            self.model_inputs["pre_ids"],
+            self.model_inputs["seq_lens_this_time"],
+            self.model_inputs["seq_lens_encoder"],
+            self.model_inputs["seq_lens_decoder"],
+            self.model_inputs["step_idx"],
+            # Note(ZKK):
+            # I strongly advise xpu student delete the fuck `output_cum_offsets` name in XPU backend
+            # like my pr https://github.com/PaddlePaddle/FastDeploy/pull/6358
+            (
+                self.model_inputs["cu_seqlens_q_output"]
+                if current_platform.is_cuda()
+                else self.model_inputs["output_cum_offsets"]
+            ),
+            self.model_inputs["stop_flags"],
+            self.model_inputs["not_need_stop"],
+            self.model_inputs["max_dec_len"],
+            self.model_inputs["eos_token_id"],
+            self.model_inputs["base_model_draft_tokens"],
+            self.max_model_len,
+            self.model_inputs["substep"],
+        )
+
+        if self.role == "prefill" and self.parallel_config.tensor_parallel_rank == 0:
+            skip_save = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
+            mtp_save_first_token(
+                self.model_inputs["base_model_draft_tokens"],
+                self.model_inputs["not_need_stop"],
+                self.model_inputs["seq_lens_decoder"],
+                self.model_inputs["prompt_lens"],
+                self.model_inputs["step_idx"],
+                self.local_rank,
+                self.parallel_config.use_ep,
+                skip_save,
+            )
+            # Ensure only save first token once.
+            paddle.assign(
+                paddle.where(
+                    self.model_inputs["stop_flags"],
+                    paddle.zeros_like(self.model_inputs["step_idx"]),
+                    self.model_inputs["step_idx"],
+                ),
+                self.model_inputs["step_idx"],
+            )
+
+    def _speculate_save_output_for_cuda(self, sampler_output):
+        real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
+        if not self.model_inputs.enable_pd_reorder:
+            speculate_save_output_topk(
+                sampler_output.sampled_token_ids,
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                self.model_inputs["batch_token_num"][:real_bsz],
+                self.model_inputs["cu_batch_token_offset"][:real_bsz],
+                self.model_inputs["not_need_stop"],
+                self.model_inputs["seq_lens_decoder"],
+                self.model_inputs["prompt_lens"],
+                4,  # mtype
+                self.local_rank,
+                self.parallel_config.use_ep,
+            )
+        else:
+            recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
+            recover_model_output_map = recover_batch_index_for_output(
+                self.model_inputs,
+                self.model_inputs.index_to_batch_id,
+                self.model_inputs.enable_pd_reorder[
+                    "batch_token_num", "cu_batch_token_offset", "seq_lens_decoder", "prompt_lens"
+                ],
+            )
+            speculate_save_output_topk(
+                sampler_output.sampled_token_ids,
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                recover_model_output_map["batch_token_num"][:real_bsz],
+                recover_model_output_map["cu_batch_token_offset"][:real_bsz],
+                self.model_inputs["not_need_stop"],
+                recover_model_output_map["seq_lens_decoder"],
+                recover_model_output_map["prompt_lens"],
+                4,  # mtype
+                self.local_rank,
+                self.parallel_config.use_ep,
             )
 
     def _propose_cuda(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
@@ -955,29 +1047,7 @@ class MTPProposer(Proposer):
                     and substep == 0
                     and sampler_output.logprobs_tensors is not None
                 ):
-                    real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
-                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
-                    recover_model_output_map = recover_batch_index_for_output(
-                        self.model_inputs,
-                        self.model_inputs.index_to_batch_id,
-                        self.model_inputs.enable_pd_reorder[
-                            "batch_token_num", "cu_batch_token_offset", "seq_lens_decoder", "prompt_lens"
-                        ],
-                    )
-                    speculate_save_output_topk(
-                        sampler_output.sampled_token_ids,
-                        sampler_output.logprobs_tensors.logprob_token_ids,
-                        sampler_output.logprobs_tensors.logprobs,
-                        sampler_output.logprobs_tensors.selected_token_ranks,
-                        recover_model_output_map["batch_token_num"][:real_bsz],
-                        recover_model_output_map["cu_batch_token_offset"][:real_bsz],
-                        self.model_inputs["not_need_stop"],
-                        recover_model_output_map["seq_lens_decoder"],
-                        recover_model_output_map["prompt_lens"],
-                        4,  # mtype
-                        self.local_rank,
-                        self.parallel_config.use_ep,
-                    )
+                    self._speculate_save_output_for_cuda(sampler_output)
 
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
@@ -985,13 +1055,48 @@ class MTPProposer(Proposer):
                         self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
                         group=self.parallel_config.tp_group,
                     )
-
-                self._post_process(sampled_token_ids)
+                if not self.model_inputs.enable_pd_reorder:
+                    self._post_process(sampled_token_ids)
+                else:
+                    self._post_process_pd_reorder(sampled_token_ids)
                 if substep != self.num_model_steps - 1:
                     self._get_self_hidden_states(hidden_states)
             else:
                 if hasattr(self.model, "empty_input_forward") and not is_dummy_run:
                     self.model.empty_input_forward(forward_meta=self.forward_meta)
+
+    def _speculate_save_output_for_xpu(self, sampler_output):
+        real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
+        if not self.model_inputs.enable_pd_reorder:
+            speculate_save_output_topk(
+                sampler_output.sampled_token_ids,
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                self.model_inputs["batch_token_num"][:real_bsz],
+                self.model_inputs["cu_batch_token_offset"][:real_bsz],
+                self.model_inputs["not_need_stop"],
+                4,  # mtype
+                self.local_rank,
+            )
+        else:
+            recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
+            recover_model_output_map = recover_batch_index_for_output(
+                self.model_inputs,
+                self.model_inputs.index_to_batch_id,
+                self.model_inputs.enable_pd_reorder["batch_token_num", "cu_batch_token_offset"],
+            )
+            speculate_save_output_topk(
+                sampler_output.sampled_token_ids,
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                recover_model_output_map["batch_token_num"][:real_bsz],
+                recover_model_output_map["cu_batch_token_offset"][:real_bsz],
+                self.model_inputs["not_need_stop"],
+                4,  # mtype
+                self.local_rank,
+            )
 
     def _propose_xpu(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
         """
@@ -1074,24 +1179,25 @@ class MTPProposer(Proposer):
                 )
 
                 if substep == 0 and sampler_output.logprobs_tensors is not None:
-                    real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
-                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
-                    recover_model_output_map = recover_batch_index_for_output(
-                        self.model_inputs,
-                        self.model_inputs.index_to_batch_id,
-                        self.model_inputs.enable_pd_reorder["batch_token_num", "cu_batch_token_offset"],
-                    )
-                    speculate_save_output_topk(
-                        sampler_output.sampled_token_ids,
-                        sampler_output.logprobs_tensors.logprob_token_ids,
-                        sampler_output.logprobs_tensors.logprobs,
-                        sampler_output.logprobs_tensors.selected_token_ranks,
-                        recover_model_output_map["batch_token_num"][:real_bsz],
-                        recover_model_output_map["cu_batch_token_offset"][:real_bsz],
-                        self.model_inputs["not_need_stop"],
-                        4,  # mtype
-                        self.local_rank,
-                    )
+                    self._speculate_save_output_for_xpu(sampler_output)
+                    # real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
+                    # recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
+                    # recover_model_output_map = recover_batch_index_for_output(
+                    #     self.model_inputs,
+                    #     self.model_inputs.index_to_batch_id,
+                    #     self.model_inputs.enable_pd_reorder["batch_token_num", "cu_batch_token_offset"],
+                    # )
+                    # speculate_save_output_topk(
+                    #     sampler_output.sampled_token_ids,
+                    #     sampler_output.logprobs_tensors.logprob_token_ids,
+                    #     sampler_output.logprobs_tensors.logprobs,
+                    #     sampler_output.logprobs_tensors.selected_token_ranks,
+                    #     recover_model_output_map["batch_token_num"][:real_bsz],
+                    #     recover_model_output_map["cu_batch_token_offset"][:real_bsz],
+                    #     self.model_inputs["not_need_stop"],
+                    #     4,  # mtype
+                    #     self.local_rank,
+                    # )
 
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
@@ -1100,7 +1206,10 @@ class MTPProposer(Proposer):
                         group=self.parallel_config.tp_group,
                     )
 
-                self._post_process(sampled_token_ids)
+                if not self.model_inputs.enable_pd_reorder:
+                    self._post_process(sampled_token_ids)
+                else:
+                    self._post_process_pd_reorder(sampled_token_ids)
                 if substep != self.num_model_steps - 1:
                     self._get_self_hidden_states(hidden_states)
             else:
