@@ -21,7 +21,6 @@ from unittest.mock import patch
 from prometheus_client import Gauge
 
 from fastdeploy.metrics.metrics import get_filtered_metrics, main_process_metrics
-from fastdeploy.spec_decode import SpecMethod
 
 
 class TestGetFilteredMetrics(unittest.TestCase):
@@ -54,7 +53,7 @@ class TestGetFilteredMetrics(unittest.TestCase):
 
     def test_speculative_gauge_returns_single_value_without_pid(self):
         if not hasattr(main_process_metrics, "spec_decode_draft_acceptance_rate"):
-            main_process_metrics._init_speculative_metrics(SpecMethod.MTP, 2)
+            main_process_metrics._init_speculative_metrics("mtp", 2)
 
         metric = main_process_metrics.spec_decode_draft_acceptance_rate
         metric.set(0.75)
@@ -65,7 +64,7 @@ class TestGetFilteredMetrics(unittest.TestCase):
 
     def test_speculative_single_head_gauge_returns_single_value_without_pid(self):
         if not hasattr(main_process_metrics, "spec_decode_draft_acceptance_rate"):
-            main_process_metrics._init_speculative_metrics(SpecMethod.MTP, 2)
+            main_process_metrics._init_speculative_metrics("mtp", 2)
 
         metric = main_process_metrics.spec_decode_draft_single_head_acceptance_rate[0]
         metric.set(0.6)
