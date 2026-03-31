@@ -418,4 +418,4 @@ def test_non_chat_usage_non_stream(api_url):
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
     assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
     assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] != total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"

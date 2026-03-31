@@ -218,7 +218,7 @@ def setup_and_run_server():
     for k, v in mooncake_env.items():
         env_prefill[k] = v
 
-    prefill_log_path = os.path.join(prefill_log_dir, "nohup")
+    prefill_log_path = os.path.join(prefill_log_dir, "nohup.log")
     prefill_cmd = [
         sys.executable,
         "-m",

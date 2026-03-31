@@ -327,6 +327,19 @@ if [ "$failed_count" -ne 0 ]; then
     echo "Failed test cases are listed in $failed_tests_file"
     cat "$failed_tests_file"
 
+    # clean the empty directories
+    if [ -d "${run_path}/unittest_logs" ]; then
+        echo "Cleaning empty directories..."
+
+        # perform multi-round clean until no more empty directories are found
+        while true; do
+            before=$(find "${run_path}/unittest_logs" -type d | wc -l)
+            find "${run_path}/unittest_logs" -mindepth 1 -type d -empty -delete || true
+            after=$(find "${run_path}/unittest_logs" -type d | wc -l)
+            [ "$before" -eq "$after" ] && break
+        done
+    fi
+
     # Only package logs when there are failures
     echo "===================================="
     echo "Step 5: Packaging logs (only on failure)"
