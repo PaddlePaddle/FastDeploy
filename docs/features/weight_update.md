@@ -50,7 +50,7 @@ In FastDeploy >= 2.6, the underlying control-signal communication path is optimi
 | `/v1/is_paused` | `GET` | none | Return `{"is_paused": bool}`. |
 | `/v1/sleep` | `POST` | `?tags=weight,kv_cache` | Offload selected GPU memory objects. Supported tags are `weight` and `kv_cache`. If omitted, both are used. |
 | `/v1/wakeup` | `POST` | `?tags=weight,kv_cache` | Reload previously offloaded weights and/or KV cache. On success, the engine resumes automatically. |
-| `/v1/update_weights` | `POST` | JSON `{"version":"...", "rsync_config": {...}}` | Refresh weights in place through the worker control path. This API is intended for remote versioned updates, especially `load_strategy=rsync`. |
+| `/v1/update_weights` | `POST` | JSON `{"version":"...", "verify_checksum": false}` | Refresh weights in place through the worker control path. This API is intended for remote versioned updates, especially `load_strategy=rsync`. |
 
 ### Compatibility Notes
 
@@ -114,7 +114,7 @@ After `wakeup` succeeds, FastDeploy automatically calls `resume`.
 Current request fields:
 
 - `version`: optional string. Used to choose a target checkpoint version.
-- `rsync_config`: optional dictionary. Must contain `etcd_server` when provided.
+- `verify_checksum`: optional boolean. Defaults to `false`. Set to `true` to verify data integrity during weight synchronization.
 
 Important semantics:
 
@@ -186,9 +186,7 @@ curl -X POST http://127.0.0.1:8000/v1/update_weights \
   -H "Content-Type: application/json" \
   -d '{
     "version": "global_step_1200",
-    "rsync_config": {
-      "etcd_server": "127.0.0.1:2379"
-    }
+    "verify_checksum": false
   }'
 ```
 
@@ -261,9 +259,7 @@ curl -X POST http://127.0.0.1:8000/v1/update_weights \
   -H "Content-Type: application/json" \
   -d '{
     "version": "global_step_1200",
-    "rsync_config": {
-      "etcd_server": "127.0.0.1:2379"
-    }
+    "verify_checksum": false
   }'
 
 # Resume the service after the update completes

@@ -15,11 +15,12 @@
 #include "helper.h"
 #include "iluvatar_context.h"
 
-std::vector<paddle::Tensor> GroupGemm(const paddle::Tensor& x,
-                                      const paddle::Tensor& weight,
-                                      const paddle::Tensor& weight_scale,
-                                      const paddle::Tensor& prefix_sum,
-                                      const int32_t group_size) {
+std::vector<paddle::Tensor> W8A16GroupGemm(const paddle::Tensor& x,
+                                           const paddle::Tensor& weight,
+                                           const paddle::Tensor& weight_scale,
+                                           const paddle::Tensor& weight_zeros,
+                                           const paddle::Tensor& prefix_sum,
+                                           const int32_t group_size) {
   auto dev_ctx = static_cast<const phi::CustomContext*>(
       paddle::experimental::DeviceContextPool::Instance().Get(x.place()));
   auto stream = static_cast<const cudaStream_t>(dev_ctx->stream());
@@ -174,28 +175,22 @@ std::vector<paddle::Tensor> GroupGemm(const paddle::Tensor& x,
   return {output};
 }
 
-std::vector<std::vector<int64_t>> GroupGemmInferShape(
+std::vector<std::vector<int64_t>> W8A16GroupGemmInferShape(
     const std::vector<int64_t>& x_shape,
-    const std::vector<int64_t>& weight_shape,
-    const std::vector<int64_t>& weight_scale_shape,
-    const std::vector<int64_t>& prefix_sum_shape) {
+    const std::vector<int64_t>& weight_shape) {
   return {{x_shape[0], weight_shape[1]}};
 }
-std::vector<paddle::DataType> GroupGemmInferDtype(
-    const paddle::DataType& input_dtype,
-    const paddle::DataType& weight_output_dtype,
-    const paddle::DataType& weight_scale_dtype,
-    const paddle::DataType& prefix_sum_dtype,
-    const int moe_topk) {
+std::vector<paddle::DataType> W8A16GroupGemmInferDtype(
+    const paddle::DataType& input_dtype) {
   return {input_dtype};
 }
 
 PD_BUILD_STATIC_OP(w8a16_group_gemm)
-    .Inputs({"x", "weight", "weight_scale", "prefix_sum"})
+    .Inputs({"x", "weight", "weight_scale", "weight_zeros", "prefix_sum"})
     .Outputs({"output"})
     .Attrs({
         "group_size:int",
     })
-    .SetKernelFn(PD_KERNEL(GroupGemm))
-    .SetInferShapeFn(PD_INFER_SHAPE(GroupGemmInferShape))
-    .SetInferDtypeFn(PD_INFER_DTYPE(GroupGemmInferDtype));
+    .SetKernelFn(PD_KERNEL(W8A16GroupGemm))
+    .SetInferShapeFn(PD_INFER_SHAPE(W8A16GroupGemmInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(W8A16GroupGemmInferDtype));
