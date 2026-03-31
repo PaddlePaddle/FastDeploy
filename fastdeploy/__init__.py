@@ -69,19 +69,10 @@ from fastdeploy.utils import _is_package_installed, envs
 # Configure root logger
 _configure_logger()
 
-import uuid
-
 # suppress warning log from paddlepaddle
 os.environ["GLOG_minloglevel"] = "2"
 # suppress log from aistudio
 os.environ["AISTUDIO_LOG"] = "critical"
-# set prometheus dir
-if os.getenv("PROMETHEUS_MULTIPROC_DIR", "") == "":
-    prom_dir = f"/tmp/fd_prom_{str(uuid.uuid4())}"
-    os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
-    if os.path.exists(prom_dir):
-        os.rmdir(prom_dir)
-    os.mkdir(prom_dir)
 
 import typing
 
