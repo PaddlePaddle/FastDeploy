@@ -549,6 +549,7 @@ class PaddleDisWorkerProc:
                             f"Rank: {self.local_rank} has updated parameters. {self.model_weights_status.value[0]}"
                         )
                         self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
+                        continue
                     elif self.model_weights_signal[0] == ModelWeightsStatus.CLEARING:
                         logger.info(
                             f"Rank: {self.local_rank} has cleared parameters. {self.model_weights_status.value[0]}"
