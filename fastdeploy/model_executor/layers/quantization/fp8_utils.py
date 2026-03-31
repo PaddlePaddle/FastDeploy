@@ -65,22 +65,16 @@ def load_deep_gemm():
     """
 
     if current_platform.is_cuda():
-        if get_sm_version() == 100:
-            # SM100 should use PFCC DeepGemm
-            paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-            try:
-                import logging
 
-                import paddlefleet.ops.deep_gemm as deep_gemm
+        paddle.enable_compat(scope={"deep_gemm"})
+        try:
+            import logging
 
-                logging.getLogger().handlers.clear()
-                logger.info("Detected sm100, use PaddleFleet DeepGEMM")
-            except:
-                import deep_gemm as deep_gemm
+            import paddlefleet.ops.deep_gemm as deep_gemm
 
-                logger.info("Detected sm100, use PFCC DeepGEMM")
-        else:
-            paddle.enable_compat(scope={"deep_gemm"})
+            logging.getLogger().handlers.clear()
+            logger.info("Detected sm100, use PaddleFleet DeepGEMM")
+        except:
             import deep_gemm as deep_gemm
 
             logger.info("Use PFCC DeepGEMM")
