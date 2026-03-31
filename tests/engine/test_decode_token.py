@@ -76,9 +76,7 @@ class TestDecodeToken(unittest.TestCase):
     def test_undecoded_tokens_on_end(self):
         """Test that tokens which produce no visible text during streaming
         are force-decoded when is_end=True"""
-        with patch.object(
-            envs, "FD_ENABLE_RETURN_TEXT", True
-        ), patch.dict(os.environ, {"DEBUG_DECODE": "1"}):
+        with patch.object(envs, "FD_ENABLE_RETURN_TEXT", True), patch.dict(os.environ, {"DEBUG_DECODE": "1"}):
             all_delta = ""
 
             delta_text, _ = self.engine._decode_token([109584], self.req_id, is_end=False)
