@@ -1,10 +1,15 @@
+import json
+import logging
 import os
+import re
 import signal
 import socket
 import subprocess
 import time
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 # Read ports from environment variables; use default values if not set
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
@@ -169,3 +174,111 @@ def get_registered_number(router_url) -> dict:
         return registered_numbers
     except Exception:
         return {"mixed": 0, "prefill": 0, "decode": 0}
+
+
+def extract_last_entropy(log_path: str, req_id: str):
+    """
+    从日志中提取指定 req_id 的最后一条 entropy 值
+    """
+    pattern = re.compile(rf"req_id:\s*{re.escape(req_id)}_\d+.*entropy:\s*([0-9]*\.?[0-9]+)")
+
+    last_entropy = None
+
+    with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            match = pattern.search(line)
+            if match:
+                last_entropy = float(match.group(1))
+
+    return last_entropy
+
+
+def extract_logprobs(chunks):
+    """提取logprobs"""
+    results = []
+
+    for chunk in chunks:
+        choices = chunk.get("choices")
+        if not choices:
+            continue
+
+        logprobs = choices[0].get("logprobs")
+        if not logprobs:
+            continue
+
+        results.append(logprobs)
+
+    return results
+
+
+def send_request(url, payload, timeout=60):
+    """
+    发送请求到指定的URL，并返回响应结果。
+    """
+    headers = {
+        "Content-Type": "application/json",
+    }
+
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=timeout)
+        print("🟢 接收响应中...\n")
+        return res
+    except requests.exceptions.Timeout:
+        print("请求超时")
+        dump_server_logs()
+    except requests.exceptions.RequestException as e:
+        print(f"请求失败: {e}")
+        dump_server_logs()
+    except Exception as e:
+        print(f"未知异常: {e}")
+        dump_server_logs()
+    return None
+
+
+def get_stream_chunks(response):
+    """解析流式返回，生成chunk List[dict]"""
+    chunks = []
+
+    if response.status_code == 200:
+        for line in response.iter_lines(decode_unicode=True):
+            if line:
+                if line.startswith("data: "):
+                    line = line[len("data: ") :]
+
+                if line.strip() == "[DONE]":
+                    break
+
+                try:
+                    chunk = json.loads(line)
+                    chunks.append(chunk)
+                except Exception as e:
+                    print(f"解析失败: {e}, 行内容: {line}")
+    else:
+        print(f"请求失败，状态码: {response.status_code}")
+        print("返回内容：", response.text)
+
+    return chunks
+
+
+def tail_file(path, n=50):
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+            return "".join(lines[-n:])
+    except Exception as e:
+        return f"[读取失败] {path}, err: {e}\n"
+
+
+def dump_server_logs(tail_lines=50):
+    """打印server日志"""
+    log_files = [
+        "log/workerlog.0",
+        "log/fastdeploy.log",
+        "log/log_0/fastdeploy.log",
+        "log/log_0/workerlog.0",
+    ]
+
+    for path in log_files:
+        if os.path.exists(path):
+            logger.error(f"\n######## {path} (last {tail_lines} lines) ########")
+            logger.error(tail_file(path, tail_lines))
