@@ -20,6 +20,7 @@ import os
 import paddle
 import paddle.nn.functional as F
 
+import fastdeploy  # noqa: F401
 from fastdeploy.config import (
     CacheConfig,
     FDConfig,

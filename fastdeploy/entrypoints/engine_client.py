@@ -549,8 +549,12 @@ class EngineClient:
         return True, ""
 
     async def run_control_method(self, request: ControlRequest):
-        api_server_logger.info(f"Start Run Control Method: {request}")
-        self.zmq_client.send_json(request.to_dict())
+        api_server_logger.info(f"Received control request: {request}")
+        req_dict = request.to_dict()
+        if not self.enable_mm and not envs.ENABLE_V1_DATA_PROCESSOR:
+            self.zmq_client.send_json(req_dict)
+        else:
+            self.zmq_client.send_pyobj(req_dict)
         request_id = request.request_id
         dealer, response_queue = await self.connection_manager.get_connection(request_id)
         dealer.write([b"", request_id.encode("utf-8")])
@@ -558,12 +562,29 @@ class EngineClient:
             # todo: support user specified timeout. default 600s is enough for most control cases
             response = await asyncio.wait_for(response_queue.get(), timeout=600)
             response = ControlResponse.from_dict(response[0])
-            api_server_logger.info(f"End Run Control Method: {response}")
+            api_server_logger.info(f"Return control response: {response}")
             return response
         except asyncio.TimeoutError:
             error_response = ControlResponse(request_id, 500, "Timeout waiting for control method response")
-            api_server_logger.error(f"Error Run Control Method: {error_response}")
+            api_server_logger.error(f"Control request timed out: {error_response}")
             return error_response
+        except Exception as e:
+            import traceback
+
+            api_server_logger.error(f"Unknown error in control method: {str(e)}\n{traceback.format_exc()}")
+            error_response = ControlResponse(request_id, 500, str(e))
+            return error_response
+
+    def run_control_method_sync(self, request: ControlRequest, event_loop):
+        """
+        Support running control methods by a synchronous caller.
+
+        NOTE: Since asyncio.Queue operations must occur in the same event loop,
+        this method bridges synchronous and asynchronous execution by running
+        the async run_control_method in the specified event loop.
+        """
+        future = asyncio.run_coroutine_threadsafe(self.run_control_method(request), event_loop)
+        return future.result()
 
     def is_workers_alive(self):
         """

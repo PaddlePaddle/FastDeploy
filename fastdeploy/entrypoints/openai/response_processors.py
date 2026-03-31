@@ -121,11 +121,19 @@ class ChatResponseProcessor:
                         else:
                             self._audio_buffer[req_id] = [token_ids]
                 else:
-                    yield self.data_processor.process_response_dict(
-                        response_dict=request_output,
-                        stream=stream,
-                        include_stop_str_in_output=include_stop_str_in_output,
-                    )
+                    if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
+                        response = await self.data_processor.process_response_dict(
+                            response_dict=request_output,
+                            stream=stream,
+                            include_stop_str_in_output=include_stop_str_in_output,
+                        )
+                    else:
+                        response = self.data_processor.process_response_dict(
+                            response_dict=request_output,
+                            stream=stream,
+                            include_stop_str_in_output=include_stop_str_in_output,
+                        )
+                    yield response
             elif stream:
                 decode_type = request_output["outputs"].get("decode_type", 0)
                 token_ids = request_output["outputs"]["token_ids"]
