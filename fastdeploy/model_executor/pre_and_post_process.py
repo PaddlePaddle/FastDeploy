@@ -285,10 +285,10 @@ def post_process_normal(
         model_output.step_idx,
     )
     length_cond = paddle.greater_equal(model_output.step_idx, model_output.max_dec_len)
-    paddle.assign(
-        paddle.logical_or(model_output.stop_flags, length_cond),
-        model_output.stop_flags,
-    )
+    # NOTE: Apply length_cond to stop_flags AFTER set_stop_value_multi_ends.
+    # If we set stop_flags=True here first, the CUDA kernel treats it as a
+    # pre-existing stop and replaces the sampled token with EOS — causing
+    # max_tokens=1 to return EOS instead of the actual generated token.
 
     if (
         current_platform.is_cuda()
@@ -319,6 +319,12 @@ def post_process_normal(
             model_output.next_tokens,
             False,
         )
+
+    # Apply length condition now that sampled_token_ids is finalized
+    paddle.assign(
+        paddle.logical_or(model_output.stop_flags, length_cond),
+        model_output.stop_flags,
+    )
 
     if enable_entropy:
         calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
