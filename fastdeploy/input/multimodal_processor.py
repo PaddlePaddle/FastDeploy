@@ -398,7 +398,7 @@ class MultiModalProcessor(BaseTextProcessor):
         if self.model_type == PADDLEOCR_VL:
             metadata = request.get("metadata")
             if metadata and metadata.get("generated_token_ids"):
-                self._append_generated_tokens_qwen(outputs, metadata["generated_token_ids"])
+                self._append_completion_tokens_qwen(outputs, metadata["generated_token_ids"])
         else:
             if request.get("completion_token_ids"):
                 self.append_completion_tokens(outputs, request["completion_token_ids"])
@@ -419,12 +419,10 @@ class MultiModalProcessor(BaseTextProcessor):
 
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):
         """Append completion tokens to existing multimodal outputs."""
-        if self.model_type in (QWEN_VL, QWEN3_VL):
-            self._append_completion_tokens_qwen(multimodal_inputs, completion_token_ids)
-        elif self.model_type == PADDLEOCR_VL:
-            self._append_completion_tokens_qwen(multimodal_inputs, completion_token_ids)
-        elif self.model_type == ERNIE4_5_VL:
+        if self.model_type == ERNIE4_5_VL:
             self._append_completion_tokens_ernie(multimodal_inputs, completion_token_ids)
+        else:
+            self._append_completion_tokens_qwen(multimodal_inputs, completion_token_ids)
 
     def _append_completion_tokens_qwen(self, multimodal_inputs, completion_token_ids):
         """Append completion tokens for qwen_vl / qwen3_vl / paddleocr_vl."""
@@ -435,10 +433,6 @@ class MultiModalProcessor(BaseTextProcessor):
         pos_ids = self.processor._compute_text_positions(multimodal_inputs["cur_position"], num_tokens)
         multimodal_inputs["position_ids"].append(pos_ids)
         multimodal_inputs["cur_position"] += num_tokens
-
-    def _append_generated_tokens_qwen(self, multimodal_inputs, generated_token_ids):
-        """Append generated tokens for paddleocr_vl (uses metadata.generated_token_ids)."""
-        self._append_completion_tokens_qwen(multimodal_inputs, generated_token_ids)
 
     def _append_completion_tokens_ernie(self, multimodal_inputs, completion_token_ids):
         """Append completion tokens for ernie4_5_vl."""
@@ -453,47 +447,26 @@ class MultiModalProcessor(BaseTextProcessor):
 
     def pack_outputs(self, outputs):
         """Convert intermediate processing outputs to final format."""
+        if not outputs["images"]:
+            outputs["images"] = None
+            outputs["grid_thw"] = None
+            outputs["image_type_ids"] = None
+        else:
+            outputs["images"] = np.vstack(outputs["images"])
+            outputs["grid_thw"] = np.vstack(outputs["grid_thw"])
+            outputs["image_type_ids"] = np.array(outputs["image_type_ids"])
+
+        outputs["input_ids"] = np.array(outputs["input_ids"], dtype=np.int64)
+        outputs["token_type_ids"] = np.array(outputs["token_type_ids"], dtype=np.int64)
+        outputs["mm_num_token_func"] = self.processor.mm_num_tokens
+
         if self.model_type in (QWEN_VL, QWEN3_VL, PADDLEOCR_VL):
-            return self._pack_outputs_qwen(outputs)
-        elif self.model_type == ERNIE4_5_VL:
-            return self._pack_outputs_ernie(outputs)
-
-    def _pack_outputs_qwen(self, outputs):
-        """Pack outputs for qwen_vl / qwen3_vl / paddleocr_vl."""
-        if not outputs["images"]:
-            outputs["images"] = None
-            outputs["grid_thw"] = None
-            outputs["image_type_ids"] = None
+            outputs["position_ids"] = np.concatenate(outputs["position_ids"], axis=1, dtype=np.int64)
+            outputs["image_patch_id"] = self.processor.image_token_id
+            outputs["video_patch_id"] = self.processor.video_token_id
+            outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)
         else:
-            outputs["images"] = np.vstack(outputs["images"])
-            outputs["grid_thw"] = np.vstack(outputs["grid_thw"])
-            outputs["image_type_ids"] = np.array(outputs["image_type_ids"])
+            outputs["position_ids"] = np.array(outputs["position_ids"], dtype=np.int64)
+            outputs["image_patch_id"] = self.image_patch_id
 
-        outputs["input_ids"] = np.array(outputs["input_ids"], dtype=np.int64)
-        outputs["token_type_ids"] = np.array(outputs["token_type_ids"], dtype=np.int64)
-        outputs["position_ids"] = np.concatenate(outputs["position_ids"], axis=1, dtype=np.int64)
-
-        outputs["image_patch_id"] = self.processor.image_token_id
-        outputs["video_patch_id"] = self.processor.video_token_id
-        outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)
-
-        outputs["mm_num_token_func"] = self.processor.mm_num_tokens
-        return outputs
-
-    def _pack_outputs_ernie(self, outputs):
-        """Pack outputs for ernie4_5_vl."""
-        if not outputs["images"]:
-            outputs["images"] = None
-            outputs["grid_thw"] = None
-            outputs["image_type_ids"] = None
-        else:
-            outputs["images"] = np.vstack(outputs["images"])
-            outputs["grid_thw"] = np.vstack(outputs["grid_thw"])
-            outputs["image_type_ids"] = np.array(outputs["image_type_ids"])
-
-        outputs["image_patch_id"] = self.image_patch_id
-        outputs["input_ids"] = np.array(outputs["input_ids"], dtype=np.int64)
-        outputs["token_type_ids"] = np.array(outputs["token_type_ids"], dtype=np.int64)
-        outputs["position_ids"] = np.array(outputs["position_ids"], dtype=np.int64)
-        outputs["mm_num_token_func"] = self.processor.mm_num_tokens
         return outputs
