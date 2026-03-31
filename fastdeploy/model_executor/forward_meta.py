@@ -172,6 +172,8 @@ class ForwardMeta:
     gdn_has_initial_state: Optional[paddle.Tensor] = None
     # CPU sequence lengths for causal_conv1d_fn varlen [batch_size], int32
     gdn_seq_lens_cpu: Optional[List[int]] = None
+    # GDN attention backend (GDNAttentionBackend instance, inherits AttentionBackend)
+    gdn_attn_backend: Optional[Any] = None
 
     def clear_caches(self):
         """Safely clean up the caches"""

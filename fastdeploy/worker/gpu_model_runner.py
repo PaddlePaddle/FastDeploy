@@ -1367,6 +1367,9 @@ class GPUModelRunner(ModelRunnerBase):
             # Derive gdn_seq_lens_cpu from seq_lens_this_time
             if self.forward_meta.seq_lens_this_time is not None:
                 self.forward_meta.gdn_seq_lens_cpu = self.forward_meta.seq_lens_this_time.numpy().tolist()
+            # GDN attention backend
+            if getattr(self, "gdn_attn_backend", None) is not None:
+                self.forward_meta.gdn_attn_backend = self.gdn_attn_backend
 
     def initialize_kv_cache(self, profile: bool = False) -> None:
         """
@@ -1575,6 +1578,14 @@ class GPUModelRunner(ModelRunnerBase):
             f"max_num_seqs={max_num_seqs}, conv_dim_local={conv_dim_local}, "
             f"num_v_heads_local={num_v_heads_local}"
         )
+
+        # Initialize GDN attention backend (kernel dispatcher + unified forward)
+        from fastdeploy.model_executor.layers.attention.gdn_backend import (
+            GDNAttentionBackend,
+        )
+
+        self.gdn_attn_backend = GDNAttentionBackend()
+        logger.info("GDN attention backend initialized (GDNKernelDispatcher + GDNAttentionBackend)")
 
     def _initialize_attn_backend(self) -> None:
         """
