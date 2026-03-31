@@ -837,6 +837,10 @@ class EngineWorkerQueue:
         self.lock.acquire()
         self.tasks[:] = list()
         self.client_read_flag[:] = [1] * self.num_client
+        if self.is_single_node:
+            self.exist_tasks_intra_signal.value[0] = 0
+        else:
+            self.exist_tasks_inter_signal.set(0)
         self.lock.release()
         llm_logger.info("clear data for engine worker queue")
 
