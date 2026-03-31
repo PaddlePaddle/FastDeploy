@@ -25,8 +25,7 @@ from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.input.text_processor import DataProcessor
 from fastdeploy.utils import envs
 
-
-MODEL_PATH = "/root/paddlejob/workspace/gzz/ERNIE-4.5-0.3B-Base-PT"
+MODEL_PATH = os.getenv("MODEL_PATH","") + "/ERNIE-4.5-0.3B-Paddle"
 
 
 class TestDecodeToken(unittest.TestCase):
@@ -74,18 +73,15 @@ class TestDecodeToken(unittest.TestCase):
             delta_text, _ = self.engine._decode_token([], self.req_id, is_end=True)
             self._assert_cleaned_up()
 
-   
-
     def test_undecoded_tokens_on_end(self):
         """Test that tokens which produce no visible text during streaming
         are force-decoded when is_end=True"""
         with patch.object(envs, 'FD_ENABLE_RETURN_TEXT', True), \
              patch.dict(os.environ, {'DEBUG_DECODE': '1'}):
-            all_delta=""
-            
+            all_delta = ""
+
             delta_text, _ = self.engine._decode_token([109584], self.req_id, is_end=False)
             all_delta += delta_text
-                
 
             # Now end the stream - force decode should recover any remaining text
             delta_end, _ = self.engine._decode_token([109584], self.req_id, is_end=False)
@@ -98,8 +94,6 @@ class TestDecodeToken(unittest.TestCase):
             # The full text must be recovered either during streaming or at end
             self.assertEqual(token_ids, [109584, 109584, 109584])
             self._assert_cleaned_up()
-
-   
 
 
 if __name__ == "__main__":
