@@ -24,7 +24,7 @@ from paddle import nn
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.engine.request import Request, BatchRequest
+from fastdeploy.engine.request import BatchRequest, Request
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
 from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed

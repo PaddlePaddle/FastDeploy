@@ -295,8 +295,8 @@ class EngineService:
 
         # If block number is specified and model is deployed in splitwise mode, start cache manager first
         if (
-            not self.do_profile 
-            and self.cfg.scheduler_config.splitwise_role != "mixed" 
+            not self.do_profile
+            and self.cfg.scheduler_config.splitwise_role != "mixed"
             and not envs.ENABLE_V1_KVCACHE_MANAGER
         ):
             device_ids = self.cfg.parallel_config.device_ids.split(",")
@@ -331,7 +331,7 @@ class EngineService:
         if self.do_profile:
             self._stop_profile()
         elif (
-            self.cfg.scheduler_config.splitwise_role == "mixed" 
+            self.cfg.scheduler_config.splitwise_role == "mixed"
             and self.cfg.cache_config.enable_prefix_caching
             and not envs.ENABLE_V1_KVCACHE_MANAGER
         ):

@@ -49,7 +49,12 @@ from fastdeploy.config import (
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
-from fastdeploy.engine.request import ControlRequest, ControlResponse, RequestType, BatchRequest
+from fastdeploy.engine.request import (
+    BatchRequest,
+    ControlRequest,
+    ControlResponse,
+    RequestType,
+)
 from fastdeploy.eplb.async_expert_loader import (
     MODEL_MAIN_NAME,
     REARRANGE_EXPERT_MAGIC_NUM,
@@ -1398,7 +1403,9 @@ def run_worker_proc() -> None:
 
 if __name__ == "__main__":
     import sys
+
     from fastdeploy.cache_manager.ops import cuda_host_alloc
+
     print(f"[DEBUG] Worker process sys.path[0] = {sys.path[0]}", flush=True)
     print(f"[DEBUG] Worker process cuda_host_alloc = {cuda_host_alloc}", flush=True)
     run_worker_proc()
