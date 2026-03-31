@@ -252,9 +252,16 @@ __global__ void verify_draft_tokens(
       break;
     }
 
-    // Accept-all override (debug/warmup)
+    // Accept-all override (debug/warmup/CUDA graph capture)
     if (accept_all) {
-      if (ctx.emit_token(i, ctx.step_input_ids_now[i + 1])) break;
+      int64_t token = ctx.step_input_ids_now[i + 1];
+      // During dummy run (accept_all), replace EOS tokens with a safe
+      // non-EOS value to prevent stop_flags being set, which would cause
+      // CUDA graph capture failure due to token count mismatch.
+      if (is_in_end(token, end_tokens, end_length)) {
+        token = 5;
+      }
+      if (ctx.emit_token(i, token)) break;
       continue;
     }
 
