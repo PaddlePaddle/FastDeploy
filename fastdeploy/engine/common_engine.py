@@ -31,6 +31,7 @@ import time
 import traceback
 import weakref
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -81,6 +82,37 @@ try:
     llm_logger.info(f"TokenProcessor plugin {TokenProcessor} loaded")
 except:
     from fastdeploy.output.token_processor import TokenProcessor
+
+
+def _read_latest_worker_traceback(log_dir: str) -> Optional[str]:
+    """读取 workerlog.* 文件中的最新 traceback。"""
+
+    try:
+        candidates = sorted(Path(log_dir).glob("workerlog.*"), key=lambda path: path.stat().st_mtime, reverse=True)
+    except OSError:
+        return None
+
+    for path in candidates:
+        try:
+            content = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+
+        marker = "Traceback (most recent call last):"
+        start = content.rfind(marker)
+        if start != -1:
+            return content[start:].strip()
+
+    return None
+
+
+def _format_worker_launch_failure_message(log_dir: str) -> str:
+    """格式化 worker 启动失败的错误消息，包含 traceback 信息。"""
+    message = "Failed to launch worker processes, check log/workerlog.* for more details."
+    traceback_text = _read_latest_worker_traceback(log_dir)
+    if traceback_text:
+        return f"{message}\n{traceback_text}"
+    return message
 
 
 class EngineService:
@@ -258,7 +290,7 @@ class EngineService:
         def check_worker_initialize_status_func(res: dict):
             res["worker_is_alive"] = True
             if not self.check_worker_initialize_status():
-                self.llm_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
+                self.llm_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
                 res["worker_is_alive"] = False
 
         self.check_worker_initialize_status_func_thread = threading.Thread(
@@ -284,7 +316,7 @@ class EngineService:
         # Worker launched
         self.check_worker_initialize_status_func_thread.join()
         if not result_container["worker_is_alive"]:
-            self.llm_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
+            self.llm_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
             return False
 
         # Start ZMQ service for communication with AsyncLLM

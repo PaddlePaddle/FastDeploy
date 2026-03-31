@@ -36,8 +36,18 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_BUILDING_ARCS": lambda: os.getenv("FD_BUILDING_ARCS", "[]"),
     # Log directory.
     "FD_LOG_DIR": lambda: os.getenv("FD_LOG_DIR", "log"),
+    # Global log level, prefer this over FD_DEBUG. Supports "INFO" and "DEBUG".
+    "FD_LOG_LEVEL": lambda: os.getenv("FD_LOG_LEVEL", None),
     # Whether to use debug mode, can set 0 or 1
     "FD_DEBUG": lambda: int(os.getenv("FD_DEBUG", "0")),
+    # Request logging master switch. Set to 0 to disable request logging.
+    "FD_LOG_REQUESTS": lambda: int(os.getenv("FD_LOG_REQUESTS", "1")),
+    # Request logging detail level (0-3). Higher level means more verbose output.
+    "FD_LOG_REQUESTS_LEVEL": lambda: int(os.getenv("FD_LOG_REQUESTS_LEVEL", "0")),
+    # Max field length for request logging truncation.
+    "FD_LOG_MAX_LEN": lambda: int(os.getenv("FD_LOG_MAX_LEN", "2048")),
+    # Unified trace mode: off, local, otel, all.
+    "FD_TRACE": lambda: os.getenv("FD_TRACE", "off"),
     # Number of days to keep fastdeploy logs.
     "FD_LOG_BACKUP_COUNT": lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),
     # Model download source, can set "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE".
