@@ -42,51 +42,24 @@ from typing import TYPE_CHECKING
 
 import paddle
 
+from fastdeploy.cache_manager.gdn_state_pool import GDNStatePool
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
+)
+from fastdeploy.model_executor.ops.triton_ops.causal_conv1d import (
+    causal_conv1d_fn,
+    causal_conv1d_update,
+)
+from fastdeploy.model_executor.ops.triton_ops.fla import (
+    chunk_gated_delta_rule,
+    fused_gdn_gating,
+    fused_recurrent_gated_delta_rule_update,
 )
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 logger = logging.getLogger(__name__)
-
-
-# ==============================================================================
-# Helper functions (extracted from qwen3_5.py)
-# ==============================================================================
-
-
-def l2norm(x: paddle.Tensor, axis: int = -1, eps: float = 1e-6) -> paddle.Tensor:
-    """L2 normalization, aligns with FLA library."""
-    inv_norm = paddle.rsqrt((x * x).sum(axis=axis, keepdim=True) + eps)
-    return x * inv_norm
-
-
-def fused_gdn_gating(
-    A_log: paddle.Tensor,
-    a: paddle.Tensor,
-    b: paddle.Tensor,
-    dt_bias: paddle.Tensor,
-) -> tuple:
-    """Compute GDN gating values.
-
-    Args:
-        A_log: [num_heads] - log of A matrix
-        a: [num_tokens, num_heads] - alpha values
-        b: [num_tokens, num_heads] - beta values
-        dt_bias: [num_heads] - delta-time bias
-
-    Returns:
-        g: gating values, same shape as a
-        beta: sigmoid(b), same shape as b
-    """
-    x = a.cast(paddle.float32) + dt_bias.cast(paddle.float32)
-    softplus_x = paddle.nn.functional.softplus(x)
-    g = -paddle.exp(A_log.cast(paddle.float32)) * softplus_x
-    beta = paddle.nn.functional.sigmoid(b.cast(paddle.float32))
-    return g, beta
-
 
 # ==============================================================================
 # Kernel Dispatcher (strategy pattern, inspired by SGLang GDNKernelDispatcher)
@@ -122,10 +95,6 @@ class GDNKernelDispatcher:
         Returns:
             [batch, 1, H, DV]
         """
-        from fastdeploy.model_executor.ops.triton_ops.fla import (
-            fused_recurrent_gated_delta_rule_update,
-        )
-
         return fused_recurrent_gated_delta_rule_update(
             q=q,
             k=k,
@@ -161,8 +130,6 @@ class GDNKernelDispatcher:
         Returns:
             [1, total_tokens, H, DV]
         """
-        from fastdeploy.model_executor.ops.triton_ops.fla import chunk_gated_delta_rule
-
         # Clone initial state from pool — chunk kernel updates in-place
         initial_state = ssm_pool[slot_ids].clone()  # [batch, H, K, V]
 
@@ -236,20 +203,19 @@ class GDNAttentionBackend(AttentionBackend):
         Returns:
             [num_tokens, num_v_heads_local, head_v_dim]
         """
-        from fastdeploy.cache_manager.gdn_state_pool import GDNStatePool
-
         num_tokens = mixed_qkv.shape[0]
         is_decode = forward_meta.forward_mode.is_decode()
 
         # Get pool views for this layer
         gdn_pool = forward_meta.gdn_state_pool
-        raw_slot_ids = forward_meta.gdn_slot_ids
+        raw_slot_ids = forward_meta.gdn_slot_ids  # [active_bs] — already truncated
 
         conv_pool = gdn_pool.get_layer_conv_pool(layer.gdn_layer_idx)
         ssm_pool = gdn_pool.get_layer_ssm_pool(layer.gdn_layer_idx)
 
         # Offset slot_ids: PAD_SLOT_ID (-1) → slot 0
         slot_ids = GDNStatePool.offset_slot_ids(raw_slot_ids)
+        batch_size = slot_ids.shape[0]
 
         # ============================================================
         # 1. Causal Conv1d
@@ -257,11 +223,7 @@ class GDNAttentionBackend(AttentionBackend):
         conv_weight_local = layer.conv1d_weight[: layer.conv_dim]
 
         if is_decode:
-            from fastdeploy.model_executor.ops.triton_ops.causal_conv1d import (
-                causal_conv1d_update as triton_conv1d_update,
-            )
-
-            mixed_qkv = triton_conv1d_update(
+            mixed_qkv = causal_conv1d_update(
                 x=mixed_qkv,
                 conv_state=conv_pool,
                 weight=conv_weight_local,
@@ -270,12 +232,9 @@ class GDNAttentionBackend(AttentionBackend):
                 conv_state_indices=slot_ids,
             )
         else:
-            from fastdeploy.model_executor.ops.triton_ops.causal_conv1d import (
-                causal_conv1d_fn as triton_conv1d_fn,
-            )
-
-            cu_seqlens = forward_meta.cu_seqlens_q
-            mixed_qkv = triton_conv1d_fn(
+            # Slice cu_seqlens_q to active batch (it's a shared full buffer)
+            cu_seqlens = forward_meta.cu_seqlens_q[: batch_size + 1]
+            mixed_qkv = causal_conv1d_fn(
                 x=mixed_qkv.T,  # [dim, total_tokens]
                 weight=conv_weight_local,
                 bias=None,
@@ -356,7 +315,7 @@ class GDNAttentionBackend(AttentionBackend):
 
         else:
             # Prefill/extend: chunk (Triton)
-            cu_seqlens = forward_meta.cu_seqlens_q
+            cu_seqlens = forward_meta.cu_seqlens_q[: batch_size + 1]
             q_4d = q.unsqueeze(0)  # [1, total_tokens, H, K]
             k_4d = k.unsqueeze(0)
             v_4d = v.unsqueeze(0)
