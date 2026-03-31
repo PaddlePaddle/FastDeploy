@@ -22,12 +22,12 @@ import time
 import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Generic, Optional
+from typing import TYPE_CHECKING, Any, Dict, Generic, List, Optional
 from typing import TypeVar as TypingTypeVar
 from typing import Union
 
 if TYPE_CHECKING:
-    from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata, MatchResult
+    from fastdeploy.cache_manager.v1.metadata import MatchResult
 
 logger = logging.getLogger("request_debug")
 
@@ -37,6 +37,7 @@ from pydantic import BaseModel
 from typing_extensions import TypeVar
 
 from fastdeploy import envs
+from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import (
@@ -52,7 +53,6 @@ from fastdeploy.worker.output import (
     SampleLogprobs,
     SpeculateMetrics,
 )
-from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
 
 
 class RequestStatus(Enum):
@@ -651,17 +651,14 @@ class BatchRequest:
                     dst_type="host",
                     hash_values=meta.hash_values,
                 )
-    
+
     def __repr__(self):
         requests_repr = repr(self.requests)
         return f"BatchRequest(requests={requests_repr}, swap_metadata={self.cache_swap_metadata}, evict_metadata={self.cache_evict_metadata})"
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state["requests"] = [
-            req.__getstate__() if hasattr(req, "__getstate__") else req
-            for req in state["requests"]
-        ]
+        state["requests"] = [req.__getstate__() if hasattr(req, "__getstate__") else req for req in state["requests"]]
         return state
 
     def __setstate__(self, state):
