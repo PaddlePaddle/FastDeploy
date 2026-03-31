@@ -25,7 +25,7 @@ from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.input.text_processor import DataProcessor
 from fastdeploy.utils import envs
 
-MODEL_PATH = os.getenv("MODEL_PATH","") + "/ERNIE-4.5-0.3B-Paddle"
+MODEL_PATH = os.getenv("MODEL_PATH", "") + "/ERNIE-4.5-0.3B-Paddle"
 
 
 class TestDecodeToken(unittest.TestCase):
@@ -49,14 +49,14 @@ class TestDecodeToken(unittest.TestCase):
         self.data_processor.decode_status[self.req_id] = [0, 0, [], ""]
 
     def _tokenize(self, text):
-        return self.data_processor_obj.tokenizer(text, add_special_tokens=False)['input_ids']
+        return self.data_processor_obj.tokenizer(text, add_special_tokens=False)["input_ids"]
 
     def _assert_cleaned_up(self):
         self.assertNotIn(self.req_id, self.data_processor.decode_status)
 
     def test_empty_end(self):
         """Empty token_ids with is_end=True should return empty and cleanup"""
-        with patch.object(envs, 'FD_ENABLE_RETURN_TEXT', True):
+        with patch.object(envs, "FD_ENABLE_RETURN_TEXT", True):
             delta_text, returned_tokens = self.engine._decode_token([], self.req_id, is_end=True)
             self.assertEqual(delta_text, "")
             self.assertEqual(returned_tokens, [])
@@ -64,7 +64,7 @@ class TestDecodeToken(unittest.TestCase):
 
     def test_incremental_decoding_and_cleanup(self):
         """Tokens added in multiple steps should decode correctly and cleanup at end"""
-        with patch.object(envs, 'FD_ENABLE_RETURN_TEXT', True):
+        with patch.object(envs, "FD_ENABLE_RETURN_TEXT", True):
             for char in ["你", "好"]:
                 tokens = self._tokenize(char)
                 delta_text, _ = self.engine._decode_token(tokens, self.req_id, is_end=False)
@@ -76,8 +76,9 @@ class TestDecodeToken(unittest.TestCase):
     def test_undecoded_tokens_on_end(self):
         """Test that tokens which produce no visible text during streaming
         are force-decoded when is_end=True"""
-        with patch.object(envs, 'FD_ENABLE_RETURN_TEXT', True), \
-             patch.dict(os.environ, {'DEBUG_DECODE': '1'}):
+        with patch.object(
+            envs, "FD_ENABLE_RETURN_TEXT", True
+        ), patch.dict(os.environ, {"DEBUG_DECODE": "1"}):
             all_delta = ""
 
             delta_text, _ = self.engine._decode_token([109584], self.req_id, is_end=False)
