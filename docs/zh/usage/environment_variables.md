@@ -246,4 +246,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_CONFIG_ROOT": lambda: os.path.expanduser(
         os.getenv("FD_CONFIG_ROOT", os.path.join(os.path.expanduser("~"), ".config", "fastdeploy"))
     ),
+
+    # 是否强制推理引擎同步TP组采样到的 token_ids, 默认同步
+    "FD_SYNC_TOKEN_IDS_ACROSS_TP": lambda: bool(int(os.getenv("FD_SYNC_TOKEN_IDS_ACROSS_TP", "1"))),
 }

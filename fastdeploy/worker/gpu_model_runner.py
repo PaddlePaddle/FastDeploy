@@ -1672,7 +1672,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["stop_flags"],
             )
             sampler_output = self.sampler(logits, self.sampling_metadata)
-            if self.parallel_config.tensor_parallel_size > 1:
+            if self.parallel_config.tensor_parallel_size > 1 and envs.FD_SYNC_TOKEN_IDS_ACROSS_TP:
                 paddle.distributed.broadcast(
                     sampler_output.sampled_token_ids,
                     self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
@@ -2293,7 +2293,7 @@ class GPUModelRunner(ModelRunnerBase):
                             [sampler_output.sampled_token_ids.shape[0]], device="cpu", dtype="int64"
                         ),
                     )
-                if self.parallel_config.tensor_parallel_size > 1:
+                if self.parallel_config.tensor_parallel_size > 1 and envs.FD_SYNC_TOKEN_IDS_ACROSS_TP:
                     paddle.distributed.broadcast(
                         sampler_output.sampled_token_ids,
                         self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
