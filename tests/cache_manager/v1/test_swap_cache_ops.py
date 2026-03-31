@@ -32,11 +32,7 @@ import numpy as np
 import paddle
 
 # Import the ops under test
-from fastdeploy.cache_manager.ops import (
-    cuda_host_alloc,
-    swap_cache_all_layers,
-    swap_cache_all_layers_batch,
-)
+from fastdeploy.cache_manager.ops import cuda_host_alloc, swap_cache_all_layers
 
 
 @dataclass
@@ -613,7 +609,7 @@ class TestSwapCacheRandomBlockIndices(unittest.TestCase):
     - Each round picks a different random subset of blocks
     - Block count varies per round (e.g. 4~64 out of 128 total)
     - Verifies both swapped blocks (MD5 + allclose) and non-swapped blocks
-    - Tests both swap_cache_all_layers and swap_cache_all_layers_batch
+    - Tests swap_cache_all_layers
     """
 
     @classmethod
@@ -767,10 +763,6 @@ class TestSwapCacheRandomBlockIndices(unittest.TestCase):
             print("  Non-swap corruption check: PASS")
 
         print(f"\nAll {self.num_rounds} rounds passed ({op_name}).")
-
-    def test_random_indices_multi_round_batch(self):
-        """Multi-round swap with varying random block indices using batch operator."""
-        self._run_multi_round(swap_cache_all_layers_batch, "batch")
 
     def test_random_indices_multi_round_non_batch(self):
         """Multi-round swap with varying random block indices using non-batch operator."""

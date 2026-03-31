@@ -24,9 +24,6 @@ from fastdeploy.utils import llm_logger as logger
 try:
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import (
-            swap_cache_all_layers_batch,  # 多层批量算子（block_ids 只上传一次）
-        )
-        from fastdeploy.model_executor.ops.gpu import (
             swap_cache_per_layer,  # 单层 KV cache 换入算子（同步）
         )
         from fastdeploy.model_executor.ops.gpu import (
@@ -52,9 +49,6 @@ try:
             raise RuntimeError("CUDA no need of get_peer_mem_addr!")
 
     elif current_platform.is_maca():
-        from fastdeploy.model_executor.ops.gpu import (
-            swap_cache_all_layers_batch,  # 多层批量算子（block_ids 只上传一次）
-        )
         from fastdeploy.model_executor.ops.gpu import (
             swap_cache_per_layer,  # 单层 KV cache 换入算子（同步）
         )
@@ -113,9 +107,6 @@ try:
         def swap_cache_per_layer_async(*args, **kwargs):  # 单层 KV cache 换入算子（异步）
             raise RuntimeError("XPU swap_cache_per_layer_async UNIMPLENENTED")
 
-        def swap_cache_all_layers_batch(*args, **kwargs):  # 多层批量算子
-            raise RuntimeError("XPU swap_cache_all_layers_batch UNIMPLENENTED")
-
     else:
         raise RuntimeError("Prefix cache ops only supported CUDA nor XPU platform ")
 
@@ -155,7 +146,6 @@ except Exception as e:
     set_data_ipc = None
     share_external_data_ = None
     swap_cache_all_layers = None
-    swap_cache_all_layers_batch = None  # 多层批量算子
     swap_cache_per_layer = None  # 单层 KV cache 换入算子（同步）
     swap_cache_per_layer_async = None  # 单层 KV cache 换入算子（异步）
     unset_data_ipc = None
@@ -176,7 +166,6 @@ __all__ = [
     "set_data_ipc",
     "share_external_data_",
     "swap_cache_all_layers",
-    "swap_cache_all_layers_batch",  # 多层批量算子（block_ids 只上传一次）
     "swap_cache_per_layer",  # 单层 KV cache 换入算子（同步）
     "swap_cache_per_layer_async",  # 单层 KV cache 换入算子（异步，无强制 sync）
     "unset_data_ipc",  # XPU是 None

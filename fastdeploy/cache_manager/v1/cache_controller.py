@@ -69,12 +69,6 @@ class CacheController(KVCacheBase):
         """
         super().__init__(config)
 
-        # Extract configuration from FDConfig
-        self.model_config = config.model_config
-        self.cache_config = config.cache_config
-        self.quant_config = config.quant_config
-        self.parallel_config = config.parallel_config
-
         self._num_layers = self.model_config.num_hidden_layers
         self._local_rank = local_rank
         self._device_id = device_id
@@ -701,7 +695,7 @@ class CacheController(KVCacheBase):
             dst_location=CacheLevel.HOST,
             transfer_fn_all=lambda src_ids, dst_ids: self._transfer_manager.evict_to_host_async(src_ids, dst_ids),
             transfer_fn_layer=None,
-            force_all_layers=True,  # 驱逐始终使用 output_stream 整体异步换出，不逐层
+            force_all_layers=True,  # Eviction always uses output_stream for all-layers async transfer
         )
         return layer_counter
 

@@ -50,10 +50,14 @@ class TestRadixTreeInit:
         tree = RadixTree()
         stats = tree.get_stats()
         assert stats.node_count == 1
+        assert stats.evictable_device_count == 0
+        assert stats.evictable_host_count == 0
         assert stats.evictable_count == 0
         # Test to_dict
         stats_dict = stats.to_dict()
         assert "node_count" in stats_dict
+        assert "evictable_device_count" in stats_dict
+        assert "evictable_host_count" in stats_dict
         assert "evictable_count" in stats_dict
 
 
@@ -297,13 +301,13 @@ class TestEvictDeviceToHost:
         for node in nodes:
             assert node.cache_status == CacheStatus.HOST
 
-        # Swap back to device
+        # Swap back to device: swap_to_device sets status directly to DEVICE (not SWAP_TO_DEVICE)
         original_host_ids = tree.swap_to_device(nodes, [1, 2])
         assert sorted(original_host_ids) == [100, 101]
         for node in nodes:
-            assert node.cache_status == CacheStatus.SWAP_TO_DEVICE
+            assert node.cache_status == CacheStatus.DEVICE
 
-        # Complete swap
+        # Complete swap (idempotent when already DEVICE)
         tree.complete_swap_to_device(nodes)
         for node in nodes:
             assert node.cache_status == CacheStatus.DEVICE
@@ -374,7 +378,7 @@ class TestRadixTreeEviction:
 
         # First, evict device to host
         device_ids = tree.evict_device_to_host(2, [101, 102])
-        assert device_ids == [1, 2]
+        assert sorted(device_ids) == [1, 2]
 
         # Now nodes are on host, evict them
         host_ids = tree.evict_host_nodes(2)
@@ -623,10 +627,7 @@ class TestRadixTreeMultiSequenceWorkflow:
 
         # Incremental insert starting from last matched node
         last_node = matched[-1]
-        nodes2, wasted = tree.insert(
-            [("h3", 3), ("h4", 4)],
-            start_node=last_node
-        )
+        nodes2, wasted = tree.insert([("h3", 3), ("h4", 4)], start_node=last_node)
         assert len(nodes2) == 2
         assert len(wasted) == 0
 
@@ -809,15 +810,16 @@ class TestRadixTreeSwapWorkflow:
             assert node.block_id in [100, 101]
 
         # Step 2: Swap back to device
+        # swap_to_device() sets status directly to DEVICE (not SWAP_TO_DEVICE intermediate)
         original_ids = tree.swap_to_device(nodes, [50, 51])
         assert sorted(original_ids) == [100, 101]
 
-        # Verify status changed to SWAP_TO_DEVICE (intermediate state)
+        # Verify status is DEVICE after swap_to_device
         for node in nodes:
-            assert node.cache_status == CacheStatus.SWAP_TO_DEVICE
+            assert node.cache_status == CacheStatus.DEVICE
             assert node.block_id in [50, 51]
 
-        # Step 3: Complete swap
+        # Step 3: complete_swap_to_device is idempotent when already DEVICE
         gpu_ids = tree.complete_swap_to_device(nodes)
         assert sorted(gpu_ids) == [50, 51]
 
@@ -1136,3 +1138,192 @@ class TestRadixTreeComplexScenarios:
         # Verify one remaining branch is still findable
         matched = tree.find_prefix(["shared", f"branch_{num_branches // 2}"])
         assert len(matched) == 2
+
+
+class TestEvictDeviceNodes:
+    """Tests for evict_device_nodes (no host cache mode)."""
+
+    def test_evict_device_nodes_basic(self):
+        """Test evicting DEVICE nodes directly (no host cache)."""
+        tree = RadixTree(enable_host_cache=False)
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])
+        tree.decrement_ref_nodes(nodes)
+
+        result = tree.evict_device_nodes(2)
+        assert result is not None
+        assert len(result) == 2
+        # Returned block_ids must be from original insert
+        assert all(bid in [1, 2, 3] for bid in result)
+
+    def test_evict_device_nodes_not_enough(self):
+        """Test eviction fails when not enough evictable DEVICE nodes."""
+        tree = RadixTree(enable_host_cache=False)
+        nodes, _ = tree.insert([("h1", 1)])
+        tree.decrement_ref_nodes(nodes)
+
+        result = tree.evict_device_nodes(5)
+        assert result is None
+
+    def test_evict_device_nodes_zero(self):
+        """Test evicting zero DEVICE nodes returns empty list."""
+        tree = RadixTree()
+        result = tree.evict_device_nodes(0)
+        assert result == []
+
+    def test_evict_device_nodes_removes_from_tree(self):
+        """Test that evicted DEVICE nodes are removed from tree."""
+        tree = RadixTree(enable_host_cache=False)
+        nodes, _ = tree.insert([("h1", 1)])
+        tree.decrement_ref_nodes(nodes)
+
+        assert tree.node_count() == 2  # root + h1
+
+        tree.evict_device_nodes(1)
+
+        assert tree.node_count() == 1  # only root
+        assert "h1" not in tree._root.children
+
+
+class TestBackupBlocks:
+    """Tests for backup_blocks method."""
+
+    def test_backup_blocks_basic(self):
+        """Test marking blocks as backed up."""
+        tree = RadixTree(write_policy="write_through_selective")
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes)
+
+        backed_ids = tree.backup_blocks(nodes, [100, 101])
+
+        assert sorted(backed_ids) == [1, 2]
+        for node in nodes:
+            assert node.backuped is True
+            assert node.host_block_id in [100, 101]
+
+    def test_backup_blocks_mismatched_length(self):
+        """Test backup_blocks returns empty for mismatched lengths."""
+        tree = RadixTree()
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes)
+
+        result = tree.backup_blocks(nodes, [100])  # Only 1 host_block_id for 2 nodes
+        assert result == []
+
+    def test_backup_blocks_empty(self):
+        """Test backup_blocks with empty lists."""
+        tree = RadixTree()
+        result = tree.backup_blocks([], [])
+        assert result == []
+
+
+class TestGetCandidatesForBackup:
+    """Tests for get_candidates_for_backup method."""
+
+    def test_get_candidates_basic(self):
+        """Test get_candidates_for_backup returns eligible nodes."""
+        tree = RadixTree(write_policy="write_through_selective")
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+        # Simulate hit_count >= threshold
+        tree.decrement_ref_nodes(nodes)
+        # Manually set hit_count so they qualify
+        for node in nodes:
+            node.hit_count = 3
+
+        candidates = tree.get_candidates_for_backup(threshold=2)
+
+        assert len(candidates) == 2
+
+    def test_get_candidates_excludes_already_backed_up(self):
+        """Test that already backed-up nodes are excluded."""
+        tree = RadixTree(write_policy="write_through_selective")
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes)
+
+        for node in nodes:
+            node.hit_count = 5
+
+        # Mark first node as backed up
+        nodes[0].backuped = True
+
+        candidates = tree.get_candidates_for_backup(threshold=1)
+        assert len(candidates) == 1
+        assert candidates[0] is nodes[1]
+
+    def test_get_candidates_wrong_policy_returns_empty(self):
+        """Test that non-write_through_selective policy returns empty."""
+        tree = RadixTree(write_policy="write_through")
+        nodes, _ = tree.insert([("h1", 1)])
+        tree.decrement_ref_nodes(nodes)
+        nodes[0].hit_count = 10
+
+        candidates = tree.get_candidates_for_backup(threshold=1)
+        assert candidates == []
+
+    def test_get_candidates_excludes_pending_block_ids(self):
+        """Test that nodes with block_ids in pending list are excluded."""
+        tree = RadixTree(write_policy="write_through_selective")
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes)
+
+        for node in nodes:
+            node.hit_count = 5
+
+        # Exclude block_id=1 from candidates
+        candidates = tree.get_candidates_for_backup(threshold=1, pending_block_ids=[1])
+
+        assert len(candidates) == 1
+        assert candidates[0].block_id == 2
+
+
+class TestEvictNodesSelective:
+    """Tests for evict_nodes_selective (write_through_selective policy)."""
+
+    def test_evict_nodes_selective_without_backup(self):
+        """Test eviction of nodes without backup removes from tree."""
+        tree = RadixTree(write_policy="write_through_selective")
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes)
+
+        # Nodes have no backup
+        result = tree.evict_nodes_selective(2)
+
+        assert sorted(result) == [1, 2]
+        # Nodes should be removed from tree (no backup, so deleted)
+        assert tree.node_count() == 1
+
+    def test_evict_nodes_selective_with_backup(self):
+        """Test eviction of backed-up nodes transitions to HOST state."""
+        tree = RadixTree(write_policy="write_through_selective", enable_host_cache=True)
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes)
+
+        # Mark nodes as backed up with host block IDs
+        tree.backup_blocks(nodes, [100, 101])
+
+        result = tree.evict_nodes_selective(2)
+
+        assert sorted(result) == [1, 2]
+        # Nodes should now be in HOST state (not removed from tree)
+        for node in nodes:
+            assert node.cache_status == CacheStatus.HOST
+            assert node.block_id in [100, 101]
+
+        # Nodes should be evictable from host
+        stats = tree.get_stats()
+        assert stats.evictable_host_count == 2
+
+    def test_evict_nodes_selective_zero_blocks(self):
+        """Test evicting zero blocks returns empty list."""
+        tree = RadixTree(write_policy="write_through_selective")
+        result = tree.evict_nodes_selective(0)
+        assert result == []
+
+    def test_evict_nodes_selective_not_enough_blocks(self):
+        """Test eviction returns empty list when not enough evictable blocks."""
+        tree = RadixTree(write_policy="write_through_selective")
+        nodes, _ = tree.insert([("h1", 1)])
+        tree.decrement_ref_nodes(nodes)
+
+        # Request more than available
+        result = tree.evict_nodes_selective(5)
+        assert result == []

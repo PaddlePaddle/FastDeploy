@@ -39,6 +39,13 @@ class KVCacheBase(ABC):
             config: FDConfig instance containing all fastdeploy configuration
         """
         self.config = config
+
+        # Extract configuration from FDConfig
+        self.model_config = config.model_config
+        self.cache_config = config.cache_config
+        self.quant_config = config.quant_config
+        self.parallel_config = config.parallel_config
+
         self._initialized = False
 
     @abstractmethod

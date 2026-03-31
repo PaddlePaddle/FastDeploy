@@ -21,17 +21,13 @@
  *
  * swap_cache_per_layer:       Single-layer transfer (sync, backward compatible)
  * swap_cache_per_layer_async: Single-layer transfer (async, no cudaStreamSync)
- * swap_cache_all_layers_batch: All-layer batch transfer (block_ids uploaded
- * once)
  *
  * Key optimizations vs original:
  * 1. Consecutive block fast path: detects consecutive block ID runs and uses
  *    cudaMemcpyAsync instead of warp kernel (avoids kernel launch overhead).
  * 2. Async variant: swap_cache_per_layer_async omits cudaStreamSynchronize,
  *    enabling true async pipelining when called on a dedicated cupy stream.
- * 3. Block ID upload amortization: swap_cache_all_layers_batch uploads block
- *    IDs to GPU only once for all layers (O(1) vs O(N_layers) uploads).
- * 4. Warp-level PTX: non-temporal load/store for non-consecutive blocks to
+ * 3. Warp-level PTX: non-temporal load/store for non-consecutive blocks to
  *    avoid L2 cache pollution.
  */
 
@@ -288,168 +284,7 @@ void SwapCachePerLayerImpl(const paddle::Tensor& cache_gpu,
 }
 
 // ============================================================================
-// Implementation: All Layers Batch (block_ids uploaded once)
-// ============================================================================
-
-/**
- * @brief Batch all-layer transfer: uploads block_ids to GPU exactly once.
- *
- * Iterates all layers and launches the per-layer transfer on the shared
- * stream. Block IDs are uploaded once before the layer loop and freed after,
- * reducing H2D memcpy overhead from O(N_layers) to O(1).
- *
- * The consecutive-block fast path is applied per layer for each run.
- *
- * @param do_sync If true, calls cudaStreamSynchronize once at the end.
- */
-template <paddle::DataType D, bool D2H>
-void SwapCacheAllLayersBatchImpl(
-    const std::vector<paddle::Tensor>& cache_gpu_tensors,
-    const std::vector<int64_t>& cache_cpu_ptrs,
-    int64_t max_block_num_cpu,
-    const std::vector<int64_t>& swap_block_ids_gpu,
-    const std::vector<int64_t>& swap_block_ids_cpu,
-    cudaStream_t stream,
-    bool do_sync) {
-  typedef typename PDTraits<D>::DataType DataType_;
-  typedef typename PDTraits<D>::data_t data_t;
-
-  const int64_t num_blocks = swap_block_ids_gpu.size();
-  if (num_blocks == 0) return;
-
-  // D2H: src=GPU, dst=CPU; H2D: src=CPU, dst=GPU
-  const auto& src_block_ids = D2H ? swap_block_ids_gpu : swap_block_ids_cpu;
-  const auto& dst_block_ids = D2H ? swap_block_ids_cpu : swap_block_ids_gpu;
-
-  // Upload block IDs to GPU once for all layers (optimization 3)
-  int64_t *d_src_block_ids, *d_dst_block_ids;
-  checkCudaErrors(
-      cudaMallocAsync(&d_src_block_ids, num_blocks * sizeof(int64_t), stream));
-  checkCudaErrors(
-      cudaMallocAsync(&d_dst_block_ids, num_blocks * sizeof(int64_t), stream));
-  checkCudaErrors(cudaMemcpyAsync(d_src_block_ids,
-                                  src_block_ids.data(),
-                                  num_blocks * sizeof(int64_t),
-                                  cudaMemcpyHostToDevice,
-                                  stream));
-  checkCudaErrors(cudaMemcpyAsync(d_dst_block_ids,
-                                  dst_block_ids.data(),
-                                  num_blocks * sizeof(int64_t),
-                                  cudaMemcpyHostToDevice,
-                                  stream));
-
-  // Build per-layer consecutive/non-consecutive split once (shared across
-  // layers) Classify each block as part of a consecutive run or isolated
-  struct Run {
-    int64_t src_start;
-    int64_t dst_start;
-    int64_t length;
-  };
-  std::vector<Run> consecutive_runs;
-  std::vector<int64_t> nc_src_ids, nc_dst_ids;  // non-consecutive block indices
-
-  {
-    int64_t run_start = 0;
-    for (int64_t i = 1; i <= num_blocks; ++i) {
-      bool end_of_run = (i == num_blocks) ||
-                        (src_block_ids[i] != src_block_ids[i - 1] + 1) ||
-                        (dst_block_ids[i] != dst_block_ids[i - 1] + 1);
-      if (!end_of_run) continue;
-
-      int64_t run_len = i - run_start;
-      if (run_len > 1) {
-        consecutive_runs.push_back(
-            {src_block_ids[run_start], dst_block_ids[run_start], run_len});
-      } else {
-        nc_src_ids.push_back(src_block_ids[run_start]);
-        nc_dst_ids.push_back(dst_block_ids[run_start]);
-      }
-      run_start = i;
-    }
-  }
-
-  const cudaMemcpyKind kind =
-      D2H ? cudaMemcpyDeviceToHost : cudaMemcpyHostToDevice;
-  const int64_t nc_count = static_cast<int64_t>(nc_src_ids.size());
-
-  // Upload non-consecutive block IDs to GPU (reused across all layers)
-  int64_t *d_nc_src = nullptr, *d_nc_dst = nullptr;
-  if (nc_count > 0) {
-    checkCudaErrors(
-        cudaMallocAsync(&d_nc_src, nc_count * sizeof(int64_t), stream));
-    checkCudaErrors(
-        cudaMallocAsync(&d_nc_dst, nc_count * sizeof(int64_t), stream));
-    checkCudaErrors(cudaMemcpyAsync(d_nc_src,
-                                    nc_src_ids.data(),
-                                    nc_count * sizeof(int64_t),
-                                    cudaMemcpyHostToDevice,
-                                    stream));
-    checkCudaErrors(cudaMemcpyAsync(d_nc_dst,
-                                    nc_dst_ids.data(),
-                                    nc_count * sizeof(int64_t),
-                                    cudaMemcpyHostToDevice,
-                                    stream));
-  }
-
-  // Per-layer kernel launches
-  constexpr int kWarpsPerBlock = 4;
-  const int threads_per_block = kWarpsPerBlock * WARP_SIZE;
-  const int nc_grid =
-      nc_count > 0
-          ? (static_cast<int>(nc_count) + kWarpsPerBlock - 1) / kWarpsPerBlock
-          : 0;
-
-  for (size_t layer_idx = 0; layer_idx < cache_gpu_tensors.size();
-       ++layer_idx) {
-    const paddle::Tensor& cache_gpu = cache_gpu_tensors[layer_idx];
-    auto cache_shape = cache_gpu.shape();
-    const int64_t num_heads = cache_shape[1];
-    const int64_t block_size = cache_shape[2];
-    const int64_t head_dim = cache_shape.size() == 4 ? cache_shape[3] : 1;
-    const int64_t item_size_bytes =
-        num_heads * block_size * head_dim * sizeof(DataType_);
-
-    const void* src_ptr;
-    void* dst_ptr;
-    if (D2H) {
-      src_ptr = cache_gpu.data<data_t>();
-      dst_ptr = reinterpret_cast<void*>(cache_cpu_ptrs[layer_idx]);
-    } else {
-      src_ptr = reinterpret_cast<const void*>(cache_cpu_ptrs[layer_idx]);
-      dst_ptr = const_cast<data_t*>(cache_gpu.data<data_t>());
-    }
-
-    // Consecutive runs: cudaMemcpyAsync
-    for (const auto& run : consecutive_runs) {
-      const char* src_run =
-          static_cast<const char*>(src_ptr) + run.src_start * item_size_bytes;
-      char* dst_run =
-          static_cast<char*>(dst_ptr) + run.dst_start * item_size_bytes;
-      checkCudaErrors(cudaMemcpyAsync(
-          dst_run, src_run, run.length * item_size_bytes, kind, stream));
-    }
-
-    // Non-consecutive blocks: warp kernel (block_ids already on GPU)
-    if (nc_count > 0) {
-      swap_cache_per_layer_kernel<D2H>
-          <<<nc_grid, threads_per_block, 0, stream>>>(
-              src_ptr, dst_ptr, d_nc_src, d_nc_dst, nc_count, item_size_bytes);
-    }
-  }
-
-  // Free shared GPU buffers
-  checkCudaErrors(cudaFreeAsync(d_src_block_ids, stream));
-  checkCudaErrors(cudaFreeAsync(d_dst_block_ids, stream));
-  if (nc_count > 0) {
-    checkCudaErrors(cudaFreeAsync(d_nc_src, stream));
-    checkCudaErrors(cudaFreeAsync(d_nc_dst, stream));
-  }
-
-  if (do_sync) {
-    checkCudaErrors(cudaStreamSynchronize(stream));
-  }
-}
-
+// Operator Registration
 // ============================================================================
 // Operator Entry Points
 // ============================================================================
@@ -485,37 +320,6 @@ void SwapCacheAllLayersBatchImpl(
       PD_THROW("Unsupported data type for swap_cache_per_layer.");            \
   }
 
-// Helper macro to dispatch dtype and direction for SwapCacheAllLayersBatchImpl
-#define DISPATCH_ALL_LAYERS_BATCH(DTYPE, MODE, DO_SYNC, ...)              \
-  switch (DTYPE) {                                                        \
-    case paddle::DataType::BFLOAT16:                                      \
-      if ((MODE) == 0)                                                    \
-        SwapCacheAllLayersBatchImpl<paddle::DataType::BFLOAT16, true>(    \
-            __VA_ARGS__, DO_SYNC);                                        \
-      else                                                                \
-        SwapCacheAllLayersBatchImpl<paddle::DataType::BFLOAT16, false>(   \
-            __VA_ARGS__, DO_SYNC);                                        \
-      break;                                                              \
-    case paddle::DataType::FLOAT16:                                       \
-      if ((MODE) == 0)                                                    \
-        SwapCacheAllLayersBatchImpl<paddle::DataType::FLOAT16, true>(     \
-            __VA_ARGS__, DO_SYNC);                                        \
-      else                                                                \
-        SwapCacheAllLayersBatchImpl<paddle::DataType::FLOAT16, false>(    \
-            __VA_ARGS__, DO_SYNC);                                        \
-      break;                                                              \
-    case paddle::DataType::UINT8:                                         \
-      if ((MODE) == 0)                                                    \
-        SwapCacheAllLayersBatchImpl<paddle::DataType::UINT8, true>(       \
-            __VA_ARGS__, DO_SYNC);                                        \
-      else                                                                \
-        SwapCacheAllLayersBatchImpl<paddle::DataType::UINT8, false>(      \
-            __VA_ARGS__, DO_SYNC);                                        \
-      break;                                                              \
-    default:                                                              \
-      PD_THROW("Unsupported data type for swap_cache_all_layers_batch."); \
-  }
-
 /**
  * @brief Single-layer KV cache swap (synchronous, backward compatible).
  */
@@ -526,7 +330,6 @@ void SwapCachePerLayer(const paddle::Tensor& cache_gpu,
                        const std::vector<int64_t>& swap_block_ids_cpu,
                        int rank,
                        int mode) {
-  checkCudaErrors(cudaSetDevice(rank));
   auto stream = cache_gpu.stream();
   DISPATCH_PER_LAYER(cache_gpu.dtype(),
                      mode,
@@ -552,7 +355,6 @@ void SwapCachePerLayerAsync(const paddle::Tensor& cache_gpu,
                             const std::vector<int64_t>& swap_block_ids_cpu,
                             int rank,
                             int mode) {
-  checkCudaErrors(cudaSetDevice(rank));
   auto stream = cache_gpu.stream();
   DISPATCH_PER_LAYER(cache_gpu.dtype(),
                      mode,
@@ -563,36 +365,6 @@ void SwapCachePerLayerAsync(const paddle::Tensor& cache_gpu,
                      swap_block_ids_gpu,
                      swap_block_ids_cpu,
                      stream);
-}
-
-/**
- * @brief All-layer batch KV cache swap.
- *
- * Uploads block_ids to GPU once and reuses them across all layers,
- * reducing H2D memcpy overhead from O(N_layers) to O(1).
- * Synchronizes exactly once at the end.
- */
-void SwapCacheAllLayersBatch(
-    const std::vector<paddle::Tensor>& cache_gpu_tensors,
-    const std::vector<int64_t>& cache_cpu_ptrs,
-    int64_t max_block_num_cpu,
-    const std::vector<int64_t>& swap_block_ids_gpu,
-    const std::vector<int64_t>& swap_block_ids_cpu,
-    int rank,
-    int mode) {
-  checkCudaErrors(cudaSetDevice(rank));
-  assert(cache_gpu_tensors.size() > 0 &&
-         cache_gpu_tensors.size() == cache_cpu_ptrs.size());
-  auto stream = cache_gpu_tensors[0].stream();
-  DISPATCH_ALL_LAYERS_BATCH(cache_gpu_tensors[0].dtype(),
-                            mode,
-                            /*do_sync=*/true,
-                            cache_gpu_tensors,
-                            cache_cpu_ptrs,
-                            max_block_num_cpu,
-                            swap_block_ids_gpu,
-                            swap_block_ids_cpu,
-                            stream);
 }
 
 // ============================================================================
@@ -626,18 +398,3 @@ PD_BUILD_STATIC_OP(swap_cache_per_layer_async)
     .Outputs({"cache_dst_out"})
     .SetInplaceMap({{"cache_gpu", "cache_dst_out"}})
     .SetKernelFn(PD_KERNEL(SwapCachePerLayerAsync));
-
-PD_BUILD_STATIC_OP(swap_cache_all_layers_batch)
-    .Inputs({paddle::Vec("cache_gpu_tensors")})
-    .Attrs({
-        "cache_cpu_ptrs: std::vector<int64_t>",
-        "max_block_num_cpu: int64_t",
-        "swap_block_ids_gpu: std::vector<int64_t>",
-        "swap_block_ids_cpu: std::vector<int64_t>",
-        "rank: int",
-        "mode: int",
-    })
-    .Outputs({paddle::Vec("cache_dst_outs")})
-    .SetInplaceMap({{paddle::Vec("cache_gpu_tensors"),
-                     paddle::Vec("cache_dst_outs")}})
-    .SetKernelFn(PD_KERNEL(SwapCacheAllLayersBatch));
