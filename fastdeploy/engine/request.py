@@ -694,6 +694,37 @@ class BatchRequest:
         for br in batch_requests:
             self.append(br)
 
+    @classmethod
+    def from_tasks(cls, tasks: list) -> tuple["BatchRequest", list, int]:
+        """Classify tasks from the engine worker queue into inference requests and control requests.
+
+        Args:
+            tasks: List of (payload, real_bsz) tuples from task_queue.get_tasks().
+                   payload is one of: BatchRequest, List[Request], or [ControlRequest].
+
+        Returns:
+            (batch_request, control_reqs, max_occupied_batch_index)
+              - batch_request: merged BatchRequest containing all inference requests
+              - control_reqs: list of ControlRequest objects
+              - max_occupied_batch_index: real_bsz of the last inference task batch
+        """
+        batch_request = cls()
+        control_reqs = []
+        max_occupied_batch_index = 0
+
+        for payload, bsz in tasks:
+            if len(payload) > 0 and isinstance(payload[0], ControlRequest):
+                control_reqs.append(payload[0])
+            else:
+                max_occupied_batch_index = int(bsz)
+                if isinstance(payload, cls):
+                    batch_request.append(payload)
+                else:
+                    for req in payload:
+                        batch_request.add_request(req)
+
+        return batch_request, control_reqs, max_occupied_batch_index
+
 
 class ControlRequest:
     """A generic control request that supports method and args for control operations.

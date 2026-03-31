@@ -558,21 +558,8 @@ class PaddleDisWorkerProc:
                     len(tasks) > 0
                 ), f"task_queue.get_tasks() should contain at least one tuple, [([req1, ...] ,real_bsz)], but got len(tasks)={len(tasks)}"
 
-                control_reqs = []
-                req_dicts = BatchRequest()
-                for req_dict, bsz in tasks:
-                    if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
-                        control_reqs.append(req_dict[0])
-                    else:
-                        max_occupied_batch_index = int(bsz)
-                        # req_dict can be either List[Request] or BatchRequest
-                        if isinstance(req_dict, BatchRequest):
-                            req_dicts.append(req_dict)
-                        else:
-                            for req in req_dict:
-                                req_dicts.add_request(req)
+                batch_request, control_reqs, max_occupied_batch_index = BatchRequest.from_tasks(tasks)
 
-                # todo: run control request async
                 if len(control_reqs) > 0:
                     logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
                     for control_req in control_reqs:
@@ -580,25 +567,14 @@ class PaddleDisWorkerProc:
                             self.cached_control_reqs.append(control_req)
                             logger.info(f"Rank: {self.local_rank} cached ep control request: {control_req}")
                         else:
-                            max_occupied_batch_index = int(bsz)
-                            req_dicts.extend(req_dict)
+                            self.run_control_method(control_req)
+                            self._tp_barrier_wait() if tp_size > 1 else None
 
-                    # todo: run control request async
-                    if len(control_reqs) > 0:
-                        logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
-                        for control_req in control_reqs:
-                            if self.parallel_config.use_ep:
-                                self.cached_control_reqs.append(control_req)
-                                logger.info(f"Rank: {self.local_rank} cached ep control request: {control_req}")
-                            else:
-                                self.run_control_method(control_req)
-                                self._tp_barrier_wait() if tp_size > 1 else None
-
-                if len(req_dicts) > 0:
+                if len(batch_request) > 0:
                     # Count prefill requests in current batch
-                    num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
-                    num_scheduled_requests = len(req_dicts)
-                    scheduled_request_ids = [req.request_id for req in req_dicts]
+                    num_prefill_requests = sum(1 for req in batch_request if req.task_type == RequestType.PREFILL)
+                    num_scheduled_requests = len(batch_request)
+                    scheduled_request_ids = [req.request_id for req in batch_request]
                     logger.info(
                         f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
                         f"max_occupied_batch_index: {max_occupied_batch_index}, "
@@ -607,7 +583,7 @@ class PaddleDisWorkerProc:
                     )
 
                     # Process prefill inputs
-                    self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+                    self.worker.preprocess_new_task(batch_request, max_occupied_batch_index)
             else:
                 if self.scheduler_config.splitwise_role == "prefill":
                     if tp_size > 1:
