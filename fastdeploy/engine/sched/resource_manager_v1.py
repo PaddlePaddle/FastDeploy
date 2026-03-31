@@ -366,6 +366,9 @@ class ResourceManagerV1(ResourceManager):
                     self._free_blocks(preempted_req)
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 else:
+                    if envs.FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST:
+                        if self.config.cache_config.kvcache_storage_backend:
+                            self.cache_manager.write_cache_to_storage(preempted_req)
                     self._free_blocks(preempted_req)
                     preempted_req.num_cached_blocks = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)

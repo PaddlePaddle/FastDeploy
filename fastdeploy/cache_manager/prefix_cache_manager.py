@@ -872,7 +872,7 @@ class PrefixCacheManager:
                     read_storage_task = ReadStorageTask(
                         task_id=req_id,
                         keys=no_match_block_keys,
-                        token_ids=input_token_ids,
+                        token_ids=input_token_ids if self.kvcache_storage_backend == "attention_store" else None,
                         gpu_block_ids=gpu_recv_storage_block_ids,
                         start_read_block_idx=match_token_num // block_size,
                     )
@@ -1111,7 +1111,9 @@ class PrefixCacheManager:
         if isinstance(token_ids, np.ndarray):
             token_ids = token_ids.tolist()
         if self.config.cache_config.enable_output_caching:
-            token_ids += request.output_token_ids
+            input_token_ids = token_ids + request.output_token_ids
+        else:
+            input_token_ids = token_ids
 
         req_id = request.request_id
         keys = []
@@ -1128,7 +1130,7 @@ class PrefixCacheManager:
         write_storage_task = WriteStorageTask(
             task_id=req_id,
             keys=keys,
-            token_ids=token_ids,
+            token_ids=input_token_ids if self.kvcache_storage_backend == "attention_store" else None,
             gpu_block_ids=gpu_block_ids,
         )
         logger.debug(f"issue write storage task: {write_storage_task}")
@@ -2067,7 +2069,7 @@ class PrefixCacheManager:
                 event_type = data[0]
 
                 if event_type.value == CacheStatus.STORAGE2GPU.value:
-                    logger.info(f"recv_data_transfer_result: {data}")
+                    logger.debug(f"recv_data_transfer_result: {data}")
                     task_id, hash_keys, block_ids = data[1:]
                     if task_id not in self.storage_prefetch_block_ids:
                         self.storage_prefetch_block_ids[task_id] = []
@@ -2078,7 +2080,7 @@ class PrefixCacheManager:
                         if task_id in self.task_prefetch_event:
                             self.task_prefetch_event[task_id].set()
                 elif event_type.value == CacheStatus.GPU2STORAGE.value:
-                    logger.info(f"recv_data_transfer_result: {data}")
+                    logger.debug(f"recv_data_transfer_result: {data}")
                     task_id, hash_keys, block_ids = data[1:]
                     if task_id in self.task_write_back_event:
                         self.task_write_back_event[task_id].set()
