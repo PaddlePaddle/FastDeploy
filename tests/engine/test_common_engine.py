@@ -16,14 +16,18 @@
 
 import asyncio
 import os
+import sys
 import threading
 import time
 import types
 import unittest
-from unittest.mock import ANY, MagicMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 import numpy as np
 import paddle
+from e2e.utils.serving_utils import clean_ports
 
 if not hasattr(paddle, "compat"):
 
@@ -82,6 +86,10 @@ class TestCommonEngine(unittest.TestCase):
     def setUpClass(cls):
         """Set up EngineService for testing"""
         try:
+            # Clean ports before starting the engine
+            print("Pre-test port cleanup...")
+            clean_ports()
+
             # Create engine args for testing
             engine_args = EngineArgs(
                 model=MODEL_NAME,
@@ -1091,6 +1099,19 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertEqual(result, {"ok": True})
         self._detach_finalizer(eng)
 
+    def test_control_update_weights_updates_cfg_version(self):
+        eng = self._make_mixed_engine()
+        eng.is_paused = True
+        eng._pause_cond = threading.Condition()
+        eng.cfg.model_config.version = "old-version"
+        eng._call_worker = Mock(return_value=[{"version": "new-version"}, {"ok": True}])
+
+        result = eng._control_update_weights(ControlRequest(request_id="ctrl", method="update_weights"))
+
+        self.assertEqual(result, [{"version": "new-version"}, {"ok": True}])
+        self.assertEqual(eng.cfg.model_config.version, "new-version")
+        self._detach_finalizer(eng)
+
     def test_control_pause_and_resume_paths(self):
         eng = self._make_mixed_engine()
         eng.is_paused = False
@@ -1155,10 +1176,48 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             async def get(self, timeout=None):
                 return Mock(payload=ControlResponse(request_id="req", result={"ok": True}, error_code=200))
 
-        eng._ctrl_worker_output_queues = [DummyQueue()]
+        eng._ctrl_output_queues = {"ctrl_w2e_rank0_6778": DummyQueue()}
         result = eng._call_worker(ControlRequest(request_id="req", method="noop"), timeout=1)
         self.assertEqual(result, [{"ok": True}])
         eng.engine_worker_queue.put_tasks.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_control_sleep_defaults_tags_and_dispatches_cache_transfer(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.cfg.cache_config.num_cpu_blocks = 1
+        eng.engine_worker_queue = Mock()
+        eng.cache_task_queue = Mock()
+        eng.resource_manager.cache_manager.reset = Mock()
+        eng._control_pause = Mock()
+        eng._wait_for_control_responses = AsyncMock(return_value=[{"ok": True}])
+
+        result = eng._control_sleep(ControlRequest(request_id="sleep", method="sleep", args={}))
+
+        self.assertEqual(result, [{"ok": True}])
+        eng._control_pause.assert_called_once_with(None)
+        eng.resource_manager.cache_manager.reset.assert_called_once()
+        eng.engine_worker_queue.put_tasks.assert_called_once()
+        eng.cache_task_queue.put_transfer_task.assert_called_once()
+        sleep_req = eng.engine_worker_queue.put_tasks.call_args.args[0][0][0]
+        self.assertEqual(sleep_req.args["tags"], "weight,kv_cache")
+        self._detach_finalizer(eng)
+
+    def test_control_wakeup_resumes_after_wait(self):
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
+        eng = self._make_engine(cfg)
+        eng.cfg.cache_config.num_cpu_blocks = 1
+        eng.engine_worker_queue = Mock()
+        eng.cache_task_queue = Mock()
+        eng._control_resume = Mock()
+        eng._wait_for_control_responses = AsyncMock(return_value=[{"ok": True}])
+
+        result = eng._control_wakeup(ControlRequest(request_id="wakeup", method="wakeup", args={"tags": "kv_cache"}))
+
+        self.assertEqual(result, [{"ok": True}])
+        eng.engine_worker_queue.put_tasks.assert_called_once()
+        eng.cache_task_queue.put_transfer_task.assert_called_once()
+        eng._control_resume.assert_called_once_with(None)
         self._detach_finalizer(eng)
 
     def test_control_update_weights_requires_pause(self):
@@ -1372,7 +1431,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         task.metrics.scheduler_recv_req_time = time.time()
 
         eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
-        eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
+        eng.engine_worker_queue = Mock(
+            exist_tasks=Mock(return_value=False), put_tasks=Mock(), num_tasks=Mock(return_value=0)
+        )
         eng._send_error_response = Mock()
 
         eng.resource_manager = self._make_v1_decode_rm(eng, ([task], [("rid_x", None), ("rid_y", "bad")]))
@@ -1406,7 +1467,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         task.metrics.scheduler_recv_req_time = time.time()
 
         eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
-        eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
+        eng.engine_worker_queue = Mock(
+            exist_tasks=Mock(return_value=False), put_tasks=Mock(), num_tasks=Mock(return_value=0)
+        )
 
         eng.resource_manager = self._make_v1_decode_rm(eng, ([task], []))
 
@@ -1437,7 +1500,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         task.metrics.scheduler_recv_req_time = time.time()
 
         eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
-        eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
+        eng.engine_worker_queue = Mock(
+            exist_tasks=Mock(return_value=False), put_tasks=Mock(), num_tasks=Mock(return_value=0)
+        )
         eng._send_error_response = Mock()
 
         eng.resource_manager = self._make_v1_decode_rm(eng, ([task], [("rid_none", None)]))
@@ -1940,68 +2005,121 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         mock_logger.warning.assert_called()
         self._detach_finalizer(eng)
 
-    def test_wait_all_control_responses_success(self):
+    def test_wait_for_control_responses_success(self):
         eng = self._make_mixed_engine()
 
-        eng._ctrl_worker_output_queues = [
-            self._make_ctrl_queue("q0", Mock(request_id="req", error_code=200, result={"ok": True})),
-            self._make_ctrl_queue("q1", Mock(request_id="req", error_code=200, result={"ok": True})),
-        ]
+        eng._ctrl_output_queues = {
+            "ctrl_w2e_rank0_6778": self._make_ctrl_queue(
+                "q0", Mock(request_id="req", error_code=200, result={"ok": True})
+            ),
+            "ctrl_w2e_rank1_6778": self._make_ctrl_queue(
+                "q1", Mock(request_id="req", error_code=200, result={"ok": True})
+            ),
+        }
 
-        results = asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+        results = asyncio.run(eng._wait_for_control_responses("req", timeout=1))
         self.assertEqual(results, [{"ok": True}, {"ok": True}])
         self._detach_finalizer(eng)
 
-    def test_wait_all_control_responses_ignores_mismatch(self):
+    def test_wait_for_control_responses_filters_executors(self):
         eng = self._make_mixed_engine()
 
-        eng._ctrl_worker_output_queues = [
-            self._make_ctrl_queue("q0", Mock(request_id="old", error_code=200, result={"ok": False})),
-            self._make_ctrl_queue("q1", Mock(request_id="req", error_code=200, result={"ok": True})),
-        ]
+        eng._ctrl_output_queues = {
+            "ctrl_w2e_rank0_6778": self._make_ctrl_queue(
+                "worker", Mock(request_id="req", error_code=200, result={"worker": True})
+            ),
+            "ctrl_c2e_rank0_6779": self._make_ctrl_queue(
+                "cache", Mock(request_id="req", error_code=200, result={"cache": True})
+            ),
+        }
 
-        results = asyncio.run(eng._wait_all_control_responses("req", timeout=1))
-        self.assertEqual(results, [{"ok": True}])
+        worker_results = asyncio.run(eng._wait_for_control_responses("req", timeout=1, executors=["worker"]))
+        cache_results = asyncio.run(eng._wait_for_control_responses("req", timeout=1, executors=["cache_transfer"]))
+
+        self.assertEqual(worker_results, [{"worker": True}])
+        self.assertEqual(cache_results, [{"cache": True}])
         self._detach_finalizer(eng)
 
-    def test_wait_all_control_responses_error_paths(self):
+    def test_wait_for_control_responses_ignores_mismatch(self):
         eng = self._make_mixed_engine()
 
-        eng._ctrl_worker_output_queues = [
-            self._make_ctrl_queue("q0", Exception("boom"), payload_wrapped=False),
-        ]
+        class DummyQueue:
+            def __init__(self, name, payloads):
+                self.name = name
+                self.payloads = list(payloads)
+
+            async def get(self, timeout=None):
+                return Mock(payload=self.payloads.pop(0))
+
+        eng._ctrl_output_queues = {
+            "ctrl_w2e_rank0_6778": DummyQueue(
+                "q0",
+                [
+                    Mock(request_id="old", error_code=200, result={"ok": False}),
+                    Mock(request_id="req", error_code=200, result={"ok": "from-q0"}),
+                ],
+            ),
+            "ctrl_w2e_rank1_6778": self._make_ctrl_queue(
+                "q1", Mock(request_id="req", error_code=200, result={"ok": True})
+            ),
+        }
+
+        results = asyncio.run(eng._wait_for_control_responses("req", timeout=1))
+        self.assertEqual(results, [{"ok": "from-q0"}, {"ok": True}])
+        self.assertEqual(
+            eng._ctrl_response_mailboxes["ctrl_w2e_rank0_6778"]["old"].result,
+            {"ok": False},
+        )
+        self._detach_finalizer(eng)
+
+    def test_wait_for_control_responses_error_paths(self):
+        eng = self._make_mixed_engine()
+
+        eng._ctrl_output_queues = {
+            "ctrl_w2e_rank0_6778": self._make_ctrl_queue("q0", Exception("boom"), payload_wrapped=False)
+        }
 
         with self.assertRaises(Exception):
-            asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+            asyncio.run(eng._wait_for_control_responses("req", timeout=1))
         self._detach_finalizer(eng)
 
-    def test_wait_all_control_responses_none_message(self):
+    def test_wait_for_control_responses_none_message(self):
         eng = self._make_mixed_engine()
 
-        eng._ctrl_worker_output_queues = [self._make_ctrl_queue("q0", None, payload_wrapped=False)]
+        eng._ctrl_output_queues = {"ctrl_w2e_rank0_6778": self._make_ctrl_queue("q0", None, payload_wrapped=False)}
 
         with self.assertRaises(Exception):
-            asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+            asyncio.run(eng._wait_for_control_responses("req", timeout=1))
         self._detach_finalizer(eng)
 
-    def test_wait_all_control_responses_error_code(self):
+    def test_wait_for_control_responses_error_code(self):
         eng = self._make_mixed_engine()
 
-        eng._ctrl_worker_output_queues = [
-            self._make_ctrl_queue("q0", ControlResponse(request_id="req", error_code=500, error_message="bad")),
-        ]
+        eng._ctrl_output_queues = {
+            "ctrl_w2e_rank0_6778": self._make_ctrl_queue(
+                "q0", ControlResponse(request_id="req", error_code=500, error_message="bad")
+            )
+        }
 
         with self.assertRaises(Exception):
-            asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+            asyncio.run(eng._wait_for_control_responses("req", timeout=1))
         self._detach_finalizer(eng)
 
-    def test_wait_all_control_responses_timeout(self):
+    def test_wait_for_control_responses_timeout(self):
         eng = self._make_mixed_engine()
-        eng._ctrl_worker_output_queues = [self._make_ctrl_queue("q0", None, payload_wrapped=False)]
+        eng._ctrl_output_queues = {"ctrl_w2e_rank0_6778": self._make_ctrl_queue("q0", None, payload_wrapped=False)}
 
         with patch("fastdeploy.engine.common_engine.asyncio.wait_for", side_effect=asyncio.TimeoutError):
             with self.assertRaises(Exception):
-                asyncio.run(eng._wait_all_control_responses("req", timeout=1))
+                asyncio.run(eng._wait_for_control_responses("req", timeout=1))
+        self._detach_finalizer(eng)
+
+    def test_wait_for_control_responses_without_matching_queues(self):
+        eng = self._make_mixed_engine()
+        eng._ctrl_output_queues = {"ctrl_w2e_rank0_6778": self._make_ctrl_queue("q0", None, payload_wrapped=False)}
+
+        result = asyncio.run(eng._wait_for_control_responses("req", timeout=1, executors=["cache_transfer"]))
+        self.assertIsNone(result)
         self._detach_finalizer(eng)
 
     def test_insert_tasks_prefill_error_and_success(self):
@@ -3254,7 +3372,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         # Lines 1299-1300: try block start + info logging
         info_msgs = [str(c) for c in mock_logger.info.call_args_list]
-        self.assertTrue(any("START run control method" in m for m in info_msgs))
+        self.assertTrue(any("Start to run control method" in m for m in info_msgs))
         # worker_pid should be popped from the map
         self.assertNotIn("ctrl-log", eng.request_worker_map)
         self._detach_finalizer(eng)
@@ -3391,4 +3509,216 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         # At least one sleep call was made, confirming the inner function executed
         self.assertGreaterEqual(call_count[0], 1)
+        self._detach_finalizer(eng)
+
+    # ── _control_abort_requests / _wait_abort_complete ───────────────
+
+    def _make_abort_engine(self, splitwise_role="mixed"):
+        """Create an engine wired up for abort tests."""
+        extra = {}
+        if splitwise_role != "mixed":
+            extra["router"] = "0.0.0.0:9000"
+        cfg = self._make_cfg(splitwise_role=splitwise_role, num_gpu_blocks_override=4, **extra)
+        eng = self._make_engine(cfg)
+        eng.llm_logger = MagicMock()
+
+        # data_processor with eos token
+        eng.data_processor = MagicMock()
+        eng.data_processor.eos_token_ids = [2]
+
+        # resource_manager with requests dict and abort sets
+        eng.resource_manager = MagicMock()
+        eng.resource_manager.requests = {}
+        eng.resource_manager.waiting_abort_req_id_set = set()
+        eng.resource_manager.to_be_aborted_req_id_set = set()
+        eng.resource_manager.get_reqs_in_aborting = lambda: (
+            eng.resource_manager.waiting_abort_req_id_set | eng.resource_manager.to_be_aborted_req_id_set
+        )
+
+        # scheduler with requests dict and put_results
+        eng.scheduler = MagicMock()
+        eng.scheduler.requests = {}
+        eng.scheduler.put_results = MagicMock()
+
+        return eng
+
+    def _make_fake_request(self, output_token_ids=None):
+        """Create a fake request object for abort tests."""
+        req = MagicMock()
+        req.output_token_ids = output_token_ids or [10, 20, 30]
+        req.metrics = MagicMock()
+        req.metrics.arrival_time = 1000.0
+        req.metrics.inference_start_time = 1000.1
+        req.metrics.engine_recv_first_token_time = 1000.2
+        return req
+
+    def test_control_abort_requests_not_v1_raises(self):
+        """abort_requests raises when ENABLE_V1_KVCACHE_SCHEDULER is off."""
+        eng = self._make_abort_engine()
+        control_req = ControlRequest("ctrl-1", "abort_requests", {"abort_all": True, "req_ids": []})
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0):
+            with self.assertRaises(Exception) as ctx:
+                eng._control_abort_requests(control_req)
+            self.assertIn("only supported", str(ctx.exception))
+        self._detach_finalizer(eng)
+
+    def test_control_abort_requests_abort_all(self):
+        """abort_all=True aborts all requests in resource_manager + scheduler."""
+        eng = self._make_abort_engine()
+        eng.resource_manager.requests = {"req-1_0": self._make_fake_request([10, 20])}
+        eng.scheduler.requests = {"req-2_0": MagicMock(raw=self._make_fake_request([30]))}
+
+        control_req = ControlRequest("ctrl-1", "abort_requests", {"abort_all": True, "req_ids": []})
+
+        def clear_abort_sets(req_id):
+            # Simulate immediate abort completion
+            eng.resource_manager.waiting_abort_req_id_set.discard(req_id)
+
+        eng.resource_manager.add_abort_req_ids = MagicMock(side_effect=clear_abort_sets)
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
+            result = eng._control_abort_requests(control_req)
+
+        self.assertEqual(len(result["aborted"]), 2)
+        self.assertEqual(result["not_found"], [])
+        ids = {a["request_id"] for a in result["aborted"]}
+        self.assertEqual(ids, {"req-1_0", "req-2_0"})
+        # put_results should have been called (not prefill)
+        eng.scheduler.put_results.assert_called_once()
+        self._detach_finalizer(eng)
+
+    def test_control_abort_requests_by_req_ids_with_suffix_match(self):
+        """req_ids match both exact and _0 suffix."""
+        eng = self._make_abort_engine()
+        eng.resource_manager.requests = {
+            "req-A_0": self._make_fake_request([1, 2, 3]),
+            "req-B": self._make_fake_request([4, 5]),
+        }
+
+        control_req = ControlRequest(
+            "ctrl-1",
+            "abort_requests",
+            {
+                "abort_all": False,
+                "req_ids": ["req-A", "req-B", "req-C"],
+            },
+        )
+
+        def clear_abort_sets(req_id):
+            eng.resource_manager.waiting_abort_req_id_set.discard(req_id)
+
+        eng.resource_manager.add_abort_req_ids = MagicMock(side_effect=clear_abort_sets)
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
+            result = eng._control_abort_requests(control_req)
+
+        aborted_ids = {a["request_id"] for a in result["aborted"]}
+        self.assertIn("req-A_0", aborted_ids)  # matched via _0 suffix
+        self.assertIn("req-B", aborted_ids)  # exact match
+        self.assertEqual(result["not_found"], ["req-C"])
+        self._detach_finalizer(eng)
+
+    def test_control_abort_requests_no_match(self):
+        """No requests found returns empty aborted and all in not_found."""
+        eng = self._make_abort_engine()
+        control_req = ControlRequest(
+            "ctrl-1",
+            "abort_requests",
+            {
+                "abort_all": False,
+                "req_ids": ["nonexistent"],
+            },
+        )
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
+            result = eng._control_abort_requests(control_req)
+
+        self.assertEqual(result["aborted"], [])
+        self.assertEqual(result["not_found"], ["nonexistent"])
+        self._detach_finalizer(eng)
+
+    def test_control_abort_requests_prefill_skips_wait_and_put(self):
+        """Prefill role skips _wait_abort_complete and put_results."""
+        eng = self._make_abort_engine(splitwise_role="prefill")
+        eng.resource_manager.requests = {"req-1_0": self._make_fake_request()}
+
+        control_req = ControlRequest("ctrl-1", "abort_requests", {"abort_all": True, "req_ids": []})
+        eng.resource_manager.add_abort_req_ids = MagicMock()
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
+            result = eng._control_abort_requests(control_req)
+
+        self.assertEqual(len(result["aborted"]), 1)
+        eng.scheduler.put_results.assert_not_called()
+        self._detach_finalizer(eng)
+
+    def test_control_abort_requests_output_token_count(self):
+        """output_token_count reflects partial_token_ids length."""
+        eng = self._make_abort_engine()
+        eng.resource_manager.requests = {"req-1_0": self._make_fake_request([10, 20, 30, 40, 50])}
+
+        control_req = ControlRequest("ctrl-1", "abort_requests", {"abort_all": True, "req_ids": []})
+
+        def clear_abort_sets(req_id):
+            eng.resource_manager.waiting_abort_req_id_set.discard(req_id)
+
+        eng.resource_manager.add_abort_req_ids = MagicMock(side_effect=clear_abort_sets)
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
+            result = eng._control_abort_requests(control_req)
+
+        self.assertEqual(result["aborted"][0]["output_token_count"], 5)
+        self._detach_finalizer(eng)
+
+    def test_wait_abort_complete_immediate(self):
+        """_wait_abort_complete returns immediately when all requests already cleaned."""
+        eng = self._make_abort_engine()
+        # Empty abort sets → remaining is empty → returns immediately
+        eng._wait_abort_complete(["req-1_0"])
+        self._detach_finalizer(eng)
+
+    def test_wait_abort_complete_progress(self):
+        """_wait_abort_complete exits when background thread cleans up."""
+        eng = self._make_abort_engine()
+        eng.resource_manager.waiting_abort_req_id_set = {"req-1_0"}
+
+        call_count = [0]
+
+        def fake_sleep(s):
+            call_count[0] += 1
+            # Simulate background thread cleaning up after first sleep
+            eng.resource_manager.waiting_abort_req_id_set.discard("req-1_0")
+
+        with patch("fastdeploy.engine.common_engine.time.sleep", fake_sleep):
+            eng._wait_abort_complete(["req-1_0"])
+
+        self.assertGreaterEqual(call_count[0], 1)
+        self._detach_finalizer(eng)
+
+    def test_wait_abort_complete_force_cleanup_stuck_in_to_be_aborted(self):
+        """Stall timeout triggers force cleanup for requests in to_be_aborted_req_id_set."""
+        eng = self._make_abort_engine()
+        eng.resource_manager.to_be_aborted_req_id_set = {"req-1_0"}
+
+        def mock_recycle(req_id):
+            eng.resource_manager.to_be_aborted_req_id_set.discard(req_id)
+
+        eng.resource_manager.recycle_abort_task = MagicMock(side_effect=mock_recycle)
+
+        # Make time.time() advance past stall_timeout
+        time_values = [100.0, 100.0, 102.0, 102.0, 102.0]
+        time_idx = [0]
+
+        def fake_time():
+            idx = min(time_idx[0], len(time_values) - 1)
+            time_idx[0] += 1
+            return time_values[idx]
+
+        with (
+            patch("fastdeploy.engine.common_engine.time.time", fake_time),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda s: None),
+        ):
+            eng._wait_abort_complete(["req-1_0"], stall_timeout=1)
+
+        eng.resource_manager.recycle_abort_task.assert_called_with("req-1_0")
         self._detach_finalizer(eng)

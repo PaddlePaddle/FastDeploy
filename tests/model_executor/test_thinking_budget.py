@@ -784,7 +784,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
                 presence_penalty=0.0,
             ),
         )
-        with patch("fastdeploy.input.v1.text_processor.process_stop_token_ids", lambda *args, **kwargs: None):
+        with patch("fastdeploy.input.utils.process_stop_token_ids", lambda *args, **kwargs: None):
             processor.process_request(request, max_model_len=8)
 
     def test_engine_line_break_id_from_dict(self):
@@ -814,27 +814,6 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             common_engine_module.EngineService._start_worker_service(engine)
 
-    def test_text_encode_with_cache_branches(self):
-        processor = TextDataProcessor.__new__(TextDataProcessor)
-        processor._tokenize_cache = OrderedDict()
-        processor._tokenize_cache_capacity = 1
-        call_counter = {"np": 0, "iter": 0}
-
-        def _text2ids(text, max_model_len=None, add_special_tokens=False):
-            if text == "np":
-                call_counter["np"] += 1
-                return np.array([11, 12], dtype=np.int64)
-            call_counter["iter"] += 1
-            return (v for v in [21, 22])
-
-        processor.text2ids = _text2ids
-
-        self.assertEqual(processor.encode_with_cache("np"), [11, 12])
-        self.assertEqual(processor.encode_with_cache("np"), [11, 12])
-        self.assertEqual(call_counter["np"], 1)
-        self.assertEqual(processor.encode_with_cache("iter"), [21, 22])
-        self.assertNotIn(("np", False), processor._tokenize_cache)
-
     def test_v1_encode_with_cache_branches(self):
         processor = V1TextDataProcessor.__new__(V1TextDataProcessor)
         processor._tokenize_cache = OrderedDict()
@@ -855,38 +834,6 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         self.assertEqual(call_counter["np"], 1)
         self.assertEqual(processor.encode_with_cache("iter"), [41, 42])
         self.assertNotIn(("np", False), processor._tokenize_cache)
-
-    def test_text_encode_with_cache_lazy_init(self):
-        processor = TextDataProcessor.__new__(TextDataProcessor)
-        call_counter = {"count": 0}
-
-        def _text2ids(text, max_model_len=None, add_special_tokens=False):
-            call_counter["count"] += 1
-            return np.array([51, 52], dtype=np.int64)
-
-        processor.text2ids = _text2ids
-
-        self.assertFalse(hasattr(processor, "_tokenize_cache"))
-        self.assertEqual(processor.encode_with_cache("lazy"), [51, 52])
-        self.assertTrue(hasattr(processor, "_tokenize_cache"))
-        self.assertEqual(processor.encode_with_cache("lazy"), [51, 52])
-        self.assertEqual(call_counter["count"], 1)
-
-    def test_v1_encode_with_cache_lazy_init(self):
-        processor = V1TextDataProcessor.__new__(V1TextDataProcessor)
-        call_counter = {"count": 0}
-
-        def _text2ids(text, max_model_len=None, add_special_tokens=False):
-            call_counter["count"] += 1
-            return np.array([61, 62], dtype=np.int64)
-
-        processor.text2ids = _text2ids
-
-        self.assertFalse(hasattr(processor, "_tokenize_cache"))
-        self.assertEqual(processor.encode_with_cache("lazy"), [61, 62])
-        self.assertTrue(hasattr(processor, "_tokenize_cache"))
-        self.assertEqual(processor.encode_with_cache("lazy"), [61, 62])
-        self.assertEqual(call_counter["count"], 1)
 
     def test_ernie_encode_literal_text_with_cache(self):
         processor = ErnieTextDataProcessor.__new__(ErnieTextDataProcessor)
@@ -995,7 +942,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
             "temperature": 1.0,
             "top_p": 0.9,
         }
-        with patch("fastdeploy.input.text_processor.process_stop_token_ids", lambda *args, **kwargs: None):
+        with patch("fastdeploy.input.utils.process_stop_token_ids", lambda *args, **kwargs: None):
             processed = processor.process_request_dict(request, max_model_len=16)
         self.assertEqual(
             processed["logits_processors_args"].get("think_stop_sentence_token_ids"),
@@ -1026,7 +973,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
             temperature=1.0,
             top_p=0.9,
         )
-        with patch("fastdeploy.input.v1.text_processor.process_stop_token_ids", lambda *args, **kwargs: None):
+        with patch("fastdeploy.input.utils.process_stop_token_ids", lambda *args, **kwargs: None):
             processed = processor.process_request(request, max_model_len=16)
         self.assertEqual(
             processed.logits_processors_args.get("think_stop_sentence_token_ids"),
@@ -1063,7 +1010,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
                 logits_processors_args={"thinking_budget": 20, "think_stop_sentence": "done"},
             ),
         )
-        with patch("fastdeploy.input.v1.text_processor.process_stop_token_ids", lambda *args, **kwargs: None):
+        with patch("fastdeploy.input.utils.process_stop_token_ids", lambda *args, **kwargs: None):
             processed = processor.process_request_dict(request, max_model_len=16)
         self.assertEqual(
             processed.sampling_params.logits_processors_args.get("think_stop_sentence_token_ids"),
@@ -1096,7 +1043,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
             "response_max_tokens": None,
             "enable_thinking": True,
         }
-        with patch("fastdeploy.input.ernie4_5_processor.process_stop_token_ids", lambda *args, **kwargs: None):
+        with patch("fastdeploy.input.utils.process_stop_token_ids", lambda *args, **kwargs: None):
             processed = processor.process_request_dict(request, max_model_len=16)
 
         self.assertEqual(processed["logits_processors_args"]["think_stop_sentence_token_ids"], [501, 502])
@@ -1136,7 +1083,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
                 logits_processors_args={"thinking_budget": 20, "think_stop_sentence": "done"},
             ),
         )
-        with patch("fastdeploy.input.v1.ernie4_5_processor.process_stop_token_ids", lambda *args, **kwargs: None):
+        with patch("fastdeploy.input.utils.process_stop_token_ids", lambda *args, **kwargs: None):
             processed = processor.process_request_dict(request, max_model_len=16)
 
         self.assertEqual(processed.sampling_params.logits_processors_args["think_stop_sentence_token_ids"], [601, 602])
@@ -1172,7 +1119,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
             "response_max_tokens": None,
         }
         with patch(
-            "fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.process_stop_token_ids",
+            "fastdeploy.input.utils.process_stop_token_ids",
             lambda *args, **kwargs: None,
         ):
             processed = processor.process_request_dict(request, max_model_len=16)
@@ -1224,7 +1171,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
             ),
         )
         with patch(
-            "fastdeploy.input.v1.ernie4_5_vl_processor.ernie4_5_vl_processor.process_stop_token_ids",
+            "fastdeploy.input.utils.process_stop_token_ids",
             lambda *args, **kwargs: None,
         ):
             processed = processor.process_request_dict(request, max_model_len=16)

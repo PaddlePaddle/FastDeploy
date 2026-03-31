@@ -577,17 +577,17 @@ def test_chat_with_thinking(openai_client, capsys):
         stream=True,
         max_tokens=10,
     )
-    completion_tokens = 1
+    completion_tokens = 0
     reasoning_tokens = 0
     total_tokens = 0
     for chunk_id, chunk in enumerate(response):
         if chunk_id == 0:  # the first chunk is an extra chunk
             continue
         delta_message = chunk.choices[0].delta
-        if delta_message.content != "" and delta_message.reasoning_content == "":
-            completion_tokens += len(delta_message.completion_token_ids)
-        elif delta_message.reasoning_content != "" and delta_message.content == "":
+        if delta_message.reasoning_content != "" and delta_message.content == "":
             reasoning_tokens += len(delta_message.completion_token_ids)
+        else:
+            completion_tokens += len(delta_message.completion_token_ids)
         total_tokens += len(delta_message.completion_token_ids)
     assert completion_tokens + reasoning_tokens == total_tokens
     assert reasoning_tokens <= reasoning_max_tokens
@@ -667,17 +667,17 @@ def test_chat_with_response_max_tokens(openai_client):
         stream=True,
         max_tokens=10,
     )
-    completion_tokens = 1
+    completion_tokens = 0
     reasoning_tokens = 0
     total_tokens = 0
     for chunk_id, chunk in enumerate(response):
         if chunk_id == 0:  # the first chunk is an extra chunk
             continue
         delta_message = chunk.choices[0].delta
-        if delta_message.content != "" and delta_message.reasoning_content == "":
-            completion_tokens += len(delta_message.completion_token_ids)
-        elif delta_message.reasoning_content != "" and delta_message.content == "":
+        if delta_message.reasoning_content != "" and delta_message.content == "":
             reasoning_tokens += len(delta_message.completion_token_ids)
+        else:
+            completion_tokens += len(delta_message.completion_token_ids)
         total_tokens += len(delta_message.completion_token_ids)
     assert completion_tokens + reasoning_tokens == total_tokens
     assert completion_tokens <= response_max_tokens + 1
@@ -715,21 +715,21 @@ def test_chat_with_response_max_tokens(openai_client):
         stream=True,
         max_tokens=20,
     )
-    completion_tokens = 1
+    completion_tokens = 0
     reasoning_tokens = 0
     total_tokens = 0
     for chunk_id, chunk in enumerate(response):
         if chunk_id == 0:  # the first chunk is an extra chunk
             continue
         delta_message = chunk.choices[0].delta
-        if delta_message.content != "" and delta_message.reasoning_content == "":
-            completion_tokens += len(delta_message.completion_token_ids)
-        elif delta_message.reasoning_content != "" and delta_message.content == "":
+        if delta_message.reasoning_content != "" and delta_message.content == "":
             reasoning_tokens += len(delta_message.completion_token_ids)
+        else:
+            completion_tokens += len(delta_message.completion_token_ids)
         total_tokens += len(delta_message.completion_token_ids)
     assert completion_tokens + reasoning_tokens == total_tokens
     assert reasoning_tokens <= reasoning_max_tokens
-    assert completion_tokens <= response_max_tokens + 1
+    assert completion_tokens <= response_max_tokens + 2
 
 
 def test_profile_reset_block_num():

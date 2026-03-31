@@ -193,13 +193,29 @@ jobs:
           echo "============================开始运行pytest测试============================"
           export PYTHONPATH=/workspace/FastDeploy/
           export PYTHONPATH=$(pwd)/tests/xpu_ci:$PYTHONPATH
+          mkdir -p case_logs
+          set +e
           python -m pytest -v -s --tb=short tests/xpu_ci/4cards_cases/
           exit_code=$?
+          set -e
+
+          # 修改case_logs权限，确保Docker外部的runner用户可以读取并上传
+          chmod -R a+rX case_logs/ 2>/dev/null || true
 
           if [ $exit_code -eq 0 ]; then
               echo "============================4卡cases测试通过!============================"
+              exit $exit_code
           else
               echo "============================4卡cases测试失败,请检查日志!============================"
               exit $exit_code
           fi
           '
+
+      - name: Upload case logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: xpu-4cards-case-logs
+          path: FastDeploy/case_logs/
+          retention-days: 7
+          if-no-files-found: ignore
