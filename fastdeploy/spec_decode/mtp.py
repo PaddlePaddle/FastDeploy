@@ -1180,24 +1180,6 @@ class MTPProposer(Proposer):
 
                 if substep == 0 and sampler_output.logprobs_tensors is not None:
                     self._speculate_save_output_for_xpu(sampler_output)
-                    # real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
-                    # recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
-                    # recover_model_output_map = recover_batch_index_for_output(
-                    #     self.model_inputs,
-                    #     self.model_inputs.index_to_batch_id,
-                    #     self.model_inputs.enable_pd_reorder["batch_token_num", "cu_batch_token_offset"],
-                    # )
-                    # speculate_save_output_topk(
-                    #     sampler_output.sampled_token_ids,
-                    #     sampler_output.logprobs_tensors.logprob_token_ids,
-                    #     sampler_output.logprobs_tensors.logprobs,
-                    #     sampler_output.logprobs_tensors.selected_token_ranks,
-                    #     recover_model_output_map["batch_token_num"][:real_bsz],
-                    #     recover_model_output_map["cu_batch_token_offset"][:real_bsz],
-                    #     self.model_inputs["not_need_stop"],
-                    #     4,  # mtype
-                    #     self.local_rank,
-                    # )
 
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
