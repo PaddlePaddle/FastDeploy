@@ -485,26 +485,8 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
 
   const uint32_t q_len = seq_lens[batch_id];
-  if (q_len <= 0) {
-    return;
-  }
+  const uint32_t kv_len = seq_lens_kv[batch_id] + q_len;
 
-  uint32_t kv_len = seq_lens_kv[batch_id];
-  if (ENABLE_PREFILL) {
-    kv_len += q_len;
-    if (kv_len <= 0) {
-      return;
-    }
-  } else {
-    if (kv_len <= 0) {
-      return;
-    }
-    kv_len += q_len;
-  }
-  const int seq_len_enc = seq_lens_encoder[batch_id];
-  if (seq_len_enc > 0) {
-    return;
-  }
   const uint32_t num_chunks_this_seq = div_up(kv_len, chunk_size);
   if (chunk_idx >= num_chunks_this_seq) {
     return;
