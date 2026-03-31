@@ -265,70 +265,52 @@ class MultiModalProcessor(BaseTextProcessor):
         return None
 
     def process_request_dict(self, request, max_model_len=None):
-        """Process a request dictionary into model inputs."""
-        if self.model_type == QWEN_VL:
-            return self._process_request_qwen_vl(request, max_model_len)
-        elif self.model_type == QWEN3_VL:
-            return self._process_request_qwen3_vl(request, max_model_len)
-        elif self.model_type == PADDLEOCR_VL:
-            return self._process_request_paddleocr_vl(request, max_model_len)
-        elif self.model_type == ERNIE4_5_VL:
-            return self._process_request_ernie4_5_vl(request, max_model_len)
+        """Process a request dictionary into model inputs.
 
-    def _process_request_qwen_vl(self, request, max_model_len):
-        """Process request for qwen_vl model type."""
+        Unified template-method flow for all VL model types.  Per-model
+        differences are handled by small conditional branches rather than
+        duplicating the entire pipeline.
+        """
         request = self._apply_default_parameters(request)
+
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
-        process_stop_token_ids(request, self.update_stop_seq)
+        self._process_stop_tokens(request)
 
-        bad_words = request.get("bad_words")
-        bad_words_token_ids = request.get("bad_words_token_ids")
-        if bad_words:
-            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
-            request["bad_words_token_ids"] = bad_words_token_ids
+        if self.model_type != PADDLEOCR_VL:
+            self._process_bad_words(request)
 
-        if request.get("prompt"):
-            multimodal_data = request.get("multimodal_data")
-            if multimodal_data is None:
-                multimodal_data = {}
-            self._check_mm_limits(multimodal_data)
-            images = multimodal_data.get("image", None)
-            videos = multimodal_data.get("video", None)
-            outputs = self.processor.text2ids(request["prompt"], images, videos)
+        if self.model_type == ERNIE4_5_VL:
+            logits_processors_args = self._prepare_think_stop_sentence(
+                request.get("logits_processors_args") or {}, max_model_len
+            )
+            request["logits_processors_args"] = logits_processors_args
 
-        elif request.get("messages"):
-            messages = request["messages"]
-            self._check_mm_limits(messages)
-            chat_template_kwargs = request.get("chat_template_kwargs")
-            if chat_template_kwargs:
-                if isinstance(chat_template_kwargs, dict):
-                    for k, v in chat_template_kwargs.items():
-                        if k not in request or request[k] is None:
-                            request[k] = v
-                else:
-                    raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-            request.setdefault("enable_thinking", False)
-            outputs = self.processor.request2ids(request)
+        outputs = self._tokenize_request(request)
 
-        else:
-            raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
+        self._process_post_tokens(request, outputs)
 
-        if request.get("completion_token_ids"):
-            self.append_completion_tokens(outputs, request["completion_token_ids"])
-
-        # qwen25_vl not support thinking
-        request["enable_thinking"] = False
+        if self.model_type in (QWEN_VL, QWEN3_VL):
+            request["enable_thinking"] = False
 
         outputs = self.pack_outputs(outputs)
 
-        request["prompt_token_ids"] = outputs["input_ids"].tolist()
+        if self.model_type in (QWEN3_VL, ERNIE4_5_VL) and request.get("prompt_token_ids"):
+            pass  # preserve existing prompt_token_ids
+        else:
+            request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
         request["multimodal_inputs"] = outputs
 
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+
+        if self.model_type == ERNIE4_5_VL:
+            logits_processors_args = self._update_thinking_prompt_state(
+                request["prompt_token_ids"], request.get("logits_processors_args") or {}
+            )
+            request["logits_processors_args"] = logits_processors_args
 
         max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
@@ -336,260 +318,104 @@ class MultiModalProcessor(BaseTextProcessor):
         else:
             request["max_tokens"] = min(max_tokens, request["max_tokens"])
 
-        if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-            parts = request["request_id"].split("_")
-            if len(parts) > 1:
-                real_req_id = parts[0]
-                index = int(parts[1])
-                n = request.get("n", 1)
-                for idx in range(index * n, (index + 1) * n):
-                    self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
-            else:
-                self.model_status_dict[request["request_id"]] = model_status
-            request["enable_thinking"] = model_status == "think_start"
-
-        data_processor_logger.info(f"Processed request {request}")
-        return request
-
-    def _process_request_qwen3_vl(self, request, max_model_len):
-        """Process request for qwen3_vl model type."""
-        request = self._apply_default_parameters(request)
-        if not request.get("eos_token_ids"):
-            request["eos_token_ids"] = self.eos_token_ids
-
-        stop_sequences = request.get("stop", [])
-        if stop_sequences:
-            stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request["stop_token_ids"] = stop_seqs
-            request["stop_seqs_len"] = stop_seqs_len
-
-        bad_words = request.get("bad_words")
-        bad_words_token_ids = request.get("bad_words_token_ids")
-        if bad_words:
-            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
-            request["bad_words_token_ids"] = bad_words_token_ids
-
-        if request.get("prompt_token_ids"):
-            messages = request.get("messages")
-            if messages:
-                self._check_mm_limits(messages)
-            request.setdefault("enable_thinking", False)
-            outputs = self.processor.prompt_token_ids2outputs(request)
-
-        elif request.get("prompt"):
-            multimodal_data = request.get("multimodal_data")
-            if multimodal_data is None:
-                multimodal_data = {}
-            self._check_mm_limits(multimodal_data)
-            images = multimodal_data.get("image", None)
-            videos = multimodal_data.get("video", None)
-            outputs = self.processor.text2ids(request["prompt"], images, videos)
-
-        elif request.get("messages"):
-            messages = request["messages"]
-            self._check_mm_limits(messages)
-            chat_template_kwargs = request.get("chat_template_kwargs")
-            if chat_template_kwargs:
-                if isinstance(chat_template_kwargs, dict):
-                    for k, v in chat_template_kwargs.items():
-                        if k not in request or request[k] is None:
-                            request[k] = v
-                else:
-                    raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-            request.setdefault("enable_thinking", False)
-            outputs = self.processor.request2ids(request)
-
-        else:
-            raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
-
-        if request.get("completion_token_ids"):
-            self.append_completion_tokens(outputs, request["completion_token_ids"])
-
-        # qwen3_vl not support thinking
-        request["enable_thinking"] = False
-
-        outputs = self.pack_outputs(outputs)
-
-        request["prompt_token_ids"] = (
-            outputs["input_ids"].tolist() if not request.get("prompt_token_ids") else request["prompt_token_ids"]
-        )
-        request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
-        request["multimodal_inputs"] = outputs
-
-        if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
-
-        max_tokens = max_model_len - len(request["prompt_token_ids"])
-        if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_tokens)
-        else:
-            request["max_tokens"] = min(max_tokens, request["max_tokens"])
-
-        data_processor_logger.info(f"Processed request {request}")
-        return request
-
-    def _process_request_paddleocr_vl(self, request, max_model_len):
-        """Process request for paddleocr_vl model type."""
-        request = self._apply_default_parameters(request)
-        if not request.get("eos_token_ids"):
-            request["eos_token_ids"] = self.eos_token_ids
-
-        process_stop_token_ids(request, self.update_stop_seq)
-
-        if request.get("prompt"):
-            multimodal_data = request.get("multimodal_data")
-            if multimodal_data is None:
-                multimodal_data = {}
-            self._check_mm_limits(multimodal_data)
-            images = multimodal_data.get("image", None)
-            videos = multimodal_data.get("video", None)
-            outputs = self.processor.text2ids(request["prompt"], images, videos)
-
-        elif request.get("messages"):
-            messages = request["messages"]
-            self._check_mm_limits(messages)
-            outputs = self.processor.request2ids(request)
-
-        else:
-            raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
-
-        metadata = request.get("metadata")
-        if metadata and metadata.get("generated_token_ids"):
-            self._append_generated_tokens_qwen(outputs, metadata["generated_token_ids"])
-
-        outputs = self.pack_outputs(outputs)
-
-        request["prompt_token_ids"] = outputs["input_ids"].tolist()
-        request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
-        request["multimodal_inputs"] = outputs
-
-        if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
-
-        max_tokens = max_model_len - len(request["prompt_token_ids"])
-        if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_tokens)
-        else:
-            request["max_tokens"] = min(max_tokens, request["max_tokens"])
-
-        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
-            request["top_p"] = _SAMPLING_EPS
-            request["top_k"] = 1
-
-        if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-            parts = request["request_id"].split("_")
-            if len(parts) > 1:
-                real_req_id = parts[0]
-                index = int(parts[1])
-                n = request.get("n", 1)
-                for idx in range(index * n, (index + 1) * n):
-                    self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
-            else:
-                self.model_status_dict[request["request_id"]] = model_status
-            request["enable_thinking"] = model_status == "think_start"
-
-        return request
-
-    def _process_request_ernie4_5_vl(self, request, max_model_len):
-        """Process request for ernie4_5_vl model type."""
-        request = self._apply_default_parameters(request)
-        if not request.get("eos_token_ids"):
-            request["eos_token_ids"] = self.eos_token_ids
-
-        process_stop_token_ids(request, self.update_stop_seq)
-
-        bad_words = request.get("bad_words")
-        bad_words_token_ids = request.get("bad_words_token_ids")
-        if bad_words:
-            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
-            request["bad_words_token_ids"] = bad_words_token_ids
-
-        logits_processors_args = self._prepare_think_stop_sentence(
-            request.get("logits_processors_args") or {}, max_model_len
-        )
-        request["logits_processors_args"] = logits_processors_args
-
-        if request.get("prompt_token_ids"):
-            messages = request.get("messages")
-            if messages:
-                self._check_mm_limits(messages)
-            request.setdefault("enable_thinking", True)
-            outputs = self.processor.prompt_token_ids2outputs(request)
-        elif request.get("prompt"):
-            multimodal_data = request.get("multimodal_data")
-            if multimodal_data is None:
-                multimodal_data = {}
-            self._check_mm_limits(multimodal_data)
-            images = multimodal_data.get("image", None)
-            videos = multimodal_data.get("video", None)
-            request["prompt_tokens"] = request.get("prompt")
-            request.setdefault("enable_thinking", True)
-            outputs = self.processor.text2ids(request["prompt"], images, videos)
-        elif request.get("messages"):
-            messages = request["messages"]
-            self._check_mm_limits(messages)
-            chat_template_kwargs = request.get("chat_template_kwargs")
-            if chat_template_kwargs:
-                if isinstance(chat_template_kwargs, dict):
-                    for k, v in chat_template_kwargs.items():
-                        if k not in request or request[k] is None:
-                            request[k] = v
-                else:
-                    raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-            request.setdefault("enable_thinking", True)
-            outputs = self.processor.request2ids(request)
-        else:
-            raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
-
-        if request.get("completion_token_ids"):
-            self.append_completion_tokens(outputs, request["completion_token_ids"])
-
-        outputs = self.pack_outputs(outputs)
-        request["prompt_token_ids"] = (
-            outputs["input_ids"].tolist()
-            if ("prompt_token_ids" not in request or not request["prompt_token_ids"])
-            else request["prompt_token_ids"]
-        )
-        request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
-        request["multimodal_inputs"] = outputs
-
-        if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
-        logits_processors_args = self._update_thinking_prompt_state(
-            request["prompt_token_ids"], request.get("logits_processors_args") or {}
-        )
-        request["logits_processors_args"] = logits_processors_args
-
-        max_tokens = max_model_len - len(request["prompt_token_ids"])
-        if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_tokens)
-        else:
-            request["max_tokens"] = min(max_tokens, request["max_tokens"])
-        if request.get("reasoning_max_tokens") is None:
+        if self.model_type == ERNIE4_5_VL and request.get("reasoning_max_tokens") is None:
             request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
 
-        if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-            parts = request["request_id"].split("_")
-            if len(parts) > 1:
-                real_req_id = parts[0]
-                index = int(parts[1])
-                n = request.get("n", 1)
-                for idx in range(index * n, (index + 1) * n):
-                    self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
-            else:
-                self.model_status_dict[request["request_id"]] = model_status
-            request["enable_thinking"] = model_status == "think_start"
-        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
-            request["top_p"] = _SAMPLING_EPS
-            request["top_k"] = 1
-        if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
-            request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
+        if self.model_type in (PADDLEOCR_VL, ERNIE4_5_VL):
+            if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
+                request["top_p"] = _SAMPLING_EPS
+                request["top_k"] = 1
+
+        if self.model_type != QWEN3_VL and self.reasoning_parser:
+            self._apply_reasoning_parser(request)
+
+        if self.model_type == ERNIE4_5_VL:
+            if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
+                request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
 
         data_processor_logger.info(f"Processed request {request}")
         return request
+
+    def _process_stop_tokens(self, request):
+        """Handle stop token processing based on model type."""
+        if self.model_type == QWEN3_VL:
+            stop_sequences = request.get("stop", [])
+            if stop_sequences:
+                stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
+                request["stop_token_ids"] = stop_seqs
+                request["stop_seqs_len"] = stop_seqs_len
+        else:
+            process_stop_token_ids(request, self.update_stop_seq)
+
+    def _process_bad_words(self, request):
+        """Process bad_words into token ids."""
+        bad_words = request.get("bad_words")
+        bad_words_token_ids = request.get("bad_words_token_ids")
+        if bad_words:
+            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
+            request["bad_words_token_ids"] = bad_words_token_ids
+
+    def _tokenize_request(self, request):
+        """Core tokenization dispatch: prompt_token_ids > prompt > messages."""
+        default_thinking = True if self.model_type == ERNIE4_5_VL else False
+
+        if request.get("prompt_token_ids") and self.model_type in (QWEN3_VL, ERNIE4_5_VL):
+            messages = request.get("messages")
+            if messages:
+                self._check_mm_limits(messages)
+            request.setdefault("enable_thinking", default_thinking)
+            return self.processor.prompt_token_ids2outputs(request)
+
+        elif request.get("prompt"):
+            multimodal_data = request.get("multimodal_data") or {}
+            self._check_mm_limits(multimodal_data)
+            images = multimodal_data.get("image", None)
+            videos = multimodal_data.get("video", None)
+            if self.model_type == ERNIE4_5_VL:
+                request["prompt_tokens"] = request.get("prompt")
+            request.setdefault("enable_thinking", default_thinking)
+            return self.processor.text2ids(request["prompt"], images, videos)
+
+        elif request.get("messages"):
+            messages = request["messages"]
+            self._check_mm_limits(messages)
+            chat_template_kwargs = request.get("chat_template_kwargs")
+            if chat_template_kwargs:
+                if isinstance(chat_template_kwargs, dict):
+                    for k, v in chat_template_kwargs.items():
+                        if k not in request or request[k] is None:
+                            request[k] = v
+                else:
+                    raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+            request.setdefault("enable_thinking", default_thinking)
+            return self.processor.request2ids(request)
+
+        else:
+            raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
+
+    def _process_post_tokens(self, request, outputs):
+        """Handle post-tokenization token appending."""
+        if self.model_type == PADDLEOCR_VL:
+            metadata = request.get("metadata")
+            if metadata and metadata.get("generated_token_ids"):
+                self._append_generated_tokens_qwen(outputs, metadata["generated_token_ids"])
+        else:
+            if request.get("completion_token_ids"):
+                self.append_completion_tokens(outputs, request["completion_token_ids"])
+
+    def _apply_reasoning_parser(self, request):
+        """Apply reasoning parser and update model status dict."""
+        model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+        parts = request["request_id"].split("_")
+        if len(parts) > 1:
+            real_req_id = parts[0]
+            index = int(parts[1])
+            n = request.get("n", 1)
+            for idx in range(index * n, (index + 1) * n):
+                self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
+        else:
+            self.model_status_dict[request["request_id"]] = model_status
+        request["enable_thinking"] = model_status == "think_start"
 
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):
         """Append completion tokens to existing multimodal outputs."""
