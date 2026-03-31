@@ -166,13 +166,27 @@ def _compute_sampling_mask(
     # Stage 3: top-p mask on already-sorted renormed probs (no re-sort).
     # ------------------------------------------------------------------
     cum_probs = paddle.cumsum(renorm_sorted_probs, axis=-1)  # [B, V]
-    topp_mask = (cum_probs - renorm_sorted_probs) < top_p  # [B, V]
+    topp_mask = (cum_probs - renorm_sorted_probs) <= top_p  # [B, V]
     # When top_p[i] >= 1.0, keep the entire row.
     topp_mask = paddle.where(
         (top_p >= 1.0).expand_as(topp_mask),
         paddle.ones_like(topp_mask),
         topp_mask,
     )
+
+    # Extend mask to cover sort tie-breaking: include all tokens whose
+    # probability >= the boundary token's probability (last retained
+    # in sorted order).  In descending-sorted probs this just extends
+    # the contiguous True block by the run of equal-prob tokens.
+    k_per_row = topp_mask.astype("int32").sum(axis=-1, keepdim=True)  # [B,1]
+    # boundary_idx = last True position (k-1), clamp for safety
+    boundary_idx = (k_per_row - 1).clip(min=0)  # [B, 1]
+    boundary_prob = paddle.take_along_axis(
+        renorm_sorted_probs,
+        boundary_idx,
+        axis=-1,
+    )  # [B, 1]
+    topp_mask = topp_mask | (renorm_sorted_probs >= boundary_prob)
 
     # ------------------------------------------------------------------
     # Stage 4: intersect on GPU, then minimal D2H.
