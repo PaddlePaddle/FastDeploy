@@ -1618,6 +1618,10 @@ class CacheConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+        # ENABLE_V1_KVCACHE_MANAGER=0 uses the old cache_transfer_manager subprocess which only supports write_through.
+        if not envs.ENABLE_V1_KVCACHE_MANAGER:
+            self.write_policy = "write_through"
+
         self.cache_queue_port = parse_ports(self.cache_queue_port)
         self.rdma_comm_ports = parse_ports(self.rdma_comm_ports)
         self.pd_comm_port = parse_ports(self.pd_comm_port)
@@ -1673,7 +1677,10 @@ class CacheConfig:
         if self.kv_cache_ratio > 1.0:
             raise ValueError("KV cache ratio must be less than 1.0. Got " f"{self.kv_cache_ratio}.")
 
-        allowed_write_policies = ["write_through_selective", "write_back", "write_through"]
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            allowed_write_policies = ["write_through_selective", "write_back", "write_through"]
+        else:
+            allowed_write_policies = ["write_through"]
         if self.write_policy not in allowed_write_policies:
             raise ValueError(
                 f"Invalid write_policy: {self.write_policy!r}. " f"Expected one of {allowed_write_policies}."
