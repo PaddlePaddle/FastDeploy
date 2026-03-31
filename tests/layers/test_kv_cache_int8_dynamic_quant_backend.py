@@ -75,8 +75,8 @@ QUANT_CONFIGS = {
 # ---------------------------------------------------------------------------
 
 BATCH_SIZE = 4
-NUM_HEADS = 56
-KV_NUM_HEADS = 4
+NUM_HEADS = 16
+KV_NUM_HEADS = 2
 HEAD_DIM = 128
 BLOCK_SIZE = 64
 NUM_LAYERS = 2
@@ -190,16 +190,18 @@ class DummyForwardMeta:
         self.block_tables = paddle.to_tensor([[i] for i in range(bs)], dtype="int32")
         self.decoder_batch_ids = paddle.to_tensor(list(range(bs)), dtype="int32")
         self.decoder_tile_ids_per_batch = paddle.to_tensor([0] * bs, dtype="int32")
-        self.decoder_num_blocks_cpu = paddle.to_tensor([bs], dtype="int32")
+        self.decoder_num_blocks_cpu = paddle.to_tensor([bs], dtype="int32", place=paddle.CPUPlace())
         self.decoder_num_blocks_device = paddle.to_tensor([bs], dtype="int32")
         self.decoder_chunk_size_device = paddle.to_tensor([1] * bs, dtype="int32")
         self.encoder_batch_ids = paddle.to_tensor(list(range(bs)), dtype="int32")
         self.encoder_tile_ids_per_batch = paddle.to_tensor([0] * bs, dtype="int32")
-        self.encoder_num_blocks_x_cpu = paddle.to_tensor([0], dtype="int32")
+        self.encoder_num_blocks_x_cpu = paddle.to_tensor([0], dtype="int32", place=paddle.CPUPlace())
         self.kv_batch_ids = paddle.to_tensor(list(range(bs)), dtype="int32")
         self.kv_tile_ids_per_batch = paddle.to_tensor([0] * bs, dtype="int32")
-        self.kv_num_blocks_x_cpu = paddle.to_tensor([bs], dtype="int32")
-        self.max_len_tensor_cpu = paddle.to_tensor([0, max_len_val, 10, 10], dtype="int32")
+        self.kv_num_blocks_x_cpu = paddle.to_tensor([bs], dtype="int32", place=paddle.CPUPlace())
+        self.max_len_tensor_cpu = paddle.to_tensor(
+            [0, max_len_val, 10, 10, 10, 10], dtype="int32", place=paddle.CPUPlace()
+        )
         self.attn_mask = None
         self.attn_mask_offsets = None
         self.forward_mode = None
@@ -485,8 +487,8 @@ class TestBackendForwardGPU(unittest.TestCase):
         np.testing.assert_allclose(
             results["C8_dynamic"].cast("float32").numpy(),
             results["C16"].cast("float32").numpy(),
-            rtol=0.1,
-            atol=0.1,
+            rtol=1e-4,
+            atol=1e-4,
             err_msg=f"C8 dynamic vs C16 GPU output diff too large for {backend_class.__name__}",
         )
 
