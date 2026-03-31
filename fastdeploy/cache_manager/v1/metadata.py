@@ -46,15 +46,15 @@ class CacheLevel(Enum):
 
 
 class CacheStatus(Enum):
-    """缓存状态枚举，表示 BlockNode 当前的位置和状态。
+    """Cache status enum representing the current location and state of a BlockNode.
 
     Attributes:
-        DEVICE: Block 在 device (GPU) 内存中，可直接使用。可以被命中
-        HOST: Block 在 host (CPU) 内存中，需要加载到 device。可以被命中
-        SWAP_TO_HOST: Block 正在从 device 驱逐到 host。不可被命中
-        SWAP_TO_DEVICE: Block 正在从 host 加载到 device。
-        LOADING_FROM_STORAGE: Block 正在从存储加载数据。
-        DELETING: Block 正在被删除（从 host 移除或无 host 缓存时删除）。不可被命中
+        DEVICE: Block is in device (GPU) memory, ready for use. Can be matched.
+        HOST: Block is in host (CPU) memory, needs to be loaded to device. Can be matched.
+        SWAP_TO_HOST: Block is being evicted from device to host. Cannot be matched.
+        SWAP_TO_DEVICE: Block is being loaded from host to device.
+        LOADING_FROM_STORAGE: Block is being loaded from storage.
+        DELETING: Block is being deleted (removed from host or deleted when no host cache). Cannot be matched.
     """
 
     DEVICE = auto()
@@ -247,11 +247,11 @@ class BlockNode:
     hash_value: Optional[str] = None
     cache_status: CacheStatus = CacheStatus.DEVICE
     last_access_time: float = field(default_factory=time.time)
-    # Backup 相关字段
-    backuped: bool = False  # 是否已有备份
-    host_block_id: Optional[int] = None  # 备份所在的 host block id
-    # write_through_selective 策略相关
-    hit_count: int = 0  # 访问次数，达到阈值后触发 backup
+    # Backup-related fields
+    backuped: bool = False  # Whether a backup exists on host memory
+    host_block_id: Optional[int] = None  # Host block ID where the backup is stored
+    # write_through_selective policy fields
+    hit_count: int = 0  # Access count; triggers backup when reaching the threshold
 
     def __post_init__(self):
         """Initialize instance with current time if last_access_time not set."""
@@ -331,14 +331,14 @@ class BlockNode:
 @dataclass
 class MatchResult:
     """
-    三级缓存前缀匹配结果.
+    Three-level cache prefix match result.
 
-    包含 Device、Host、Storage 三级匹配的节点.
+    Contains matched nodes from Device, Host, and Storage levels.
 
     Attributes:
-        storage_nodes: Storage 中匹配的 BlockNode 列表.
-        device_nodes: Device 中匹配的 BlockNode 列表.
-        host_nodes: Host 中匹配的 BlockNode 列表.
+        storage_nodes: List of matched BlockNodes in Storage.
+        device_nodes: List of matched BlockNodes in Device.
+        host_nodes: List of matched BlockNodes in Host.
     """
 
     device_nodes: List["BlockNode"] = field(default_factory=list)
@@ -375,20 +375,20 @@ class MatchResult:
 @dataclass
 class StorageMetadata:
     """
-    Storage 传输元数据基类.
+    Base metadata for storage transfer operations.
 
-    封装 storage 加载/驱逐操作的所有信息.
-    不同 storage 实现可以通过继承此类添加特定字段.
+    Encapsulates all information for storage load/evict operations.
+    Different storage implementations can extend this class with additional fields.
 
     Attributes:
-        hash_values: 要传输的 hash 值列表.
-        block_ids: 目标/源 host block IDs（由 Scheduler 预先分配）.
-        direction: 传输方向（"load" 从 storage 加载，"evict" 驱逐到 storage）.
-        storage_type: Storage 类型（"mooncake", "attnstore", "rdma" 等）.
-        endpoint: Storage 服务端点地址.
-        timeout: 操作超时时间（秒）.
-        layer_num: 传输的层数（用于逐层传输）.
-        extra_params: Storage 特定的额外参数.
+        hash_values: List of hash values to transfer.
+        block_ids: Target/source host block IDs (pre-allocated by Scheduler).
+        direction: Transfer direction ("load" from storage, "evict" to storage).
+        storage_type: Storage type ("mooncake", "attnstore", "rdma", etc.).
+        endpoint: Storage service endpoint address.
+        timeout: Operation timeout in seconds.
+        layer_num: Number of layers to transfer (for layer-by-layer transfer).
+        extra_params: Storage-specific extra parameters.
     """
 
     hash_values: List[str] = field(default_factory=list)
@@ -404,18 +404,18 @@ class StorageMetadata:
 @dataclass
 class PDTransferMetadata:
     """
-    PD 分离传输元数据基类.
+    Base metadata for PD separation transfer operations.
 
-    封装 PD 分离架构下跨节点传输的所有信息.
-    不同传输方式（RDMA、IPC）可以通过继承此类添加特定字段.
+    Encapsulates all information for cross-node transfer in PD separation architecture.
+    Different transfer mechanisms (RDMA, IPC) can extend this class with additional fields.
 
     Attributes:
-        source_node_id: 源节点标识（P 节点 ID）.
-        target_node_id: 目标节点标识（D 节点 ID）.
-        block_ids: 要传输的 block IDs 列表.
-        layer_num: 模型总层数（用于逐层传输同步）.
-        timeout: 操作超时时间（秒）.
-        extra_params: 传输特定的额外参数.
+        source_node_id: Source node identifier (P node ID).
+        target_node_id: Target node identifier (D node ID).
+        block_ids: List of block IDs to transfer.
+        layer_num: Total number of model layers (for layer-by-layer transfer sync).
+        timeout: Operation timeout in seconds.
+        extra_params: Transfer-specific extra parameters.
     """
 
     source_node_id: str = ""
@@ -429,20 +429,20 @@ class PDTransferMetadata:
 @dataclass
 class CacheSwapMetadata:
     """
-    Cache 传输操作元数据.
+    Metadata for cache transfer operations.
 
-    包装源 block IDs 和目标 block IDs 的映射关系，
-    用于 Host↔Device、Storage→Host 等传输操作.
+    Encapsulates the mapping between source and destination block IDs
+    for Host↔Device, Storage→Host, and other transfer operations.
 
     Attributes:
-        src_block_ids: 源 block IDs（传输来源）.
-        dst_block_ids: 目标 block IDs（传输目的地）.
-        src_type: 源缓存层级（CacheLevel.DEVICE/HOST/STORAGE）.
-        dst_type: 目标缓存层级（CacheLevel.DEVICE/HOST/STORAGE）.
-        hash_values: 对应的 hash 值列表（storage 相关操作时使用）.
-        success: 传输是否成功.
-        error_message: 错误信息（如果失败）.
-        async_handler: 异步任务处理器，用于追踪该 swap 任务的执行状态.
+        src_block_ids: Source block IDs (transfer origin).
+        dst_block_ids: Destination block IDs (transfer target).
+        src_type: Source cache level (CacheLevel.DEVICE/HOST/STORAGE).
+        dst_type: Destination cache level (CacheLevel.DEVICE/HOST/STORAGE).
+        hash_values: Corresponding hash values (used for storage-related operations).
+        success: Whether the transfer succeeded.
+        error_message: Error message if transfer failed.
+        async_handler: Async task handler for tracking the swap task execution state.
     """
 
     src_block_ids: List[int] = field(default_factory=list)
@@ -455,12 +455,12 @@ class CacheSwapMetadata:
     async_handler: Optional["AsyncTaskHandler"] = None
 
     def is_success(self) -> bool:
-        """成功传输的 block 数量."""
+        """Return whether the transfer succeeded."""
         return self.success
 
     @property
     def mapping(self) -> Dict[int, int]:
-        """获取 src -> dst 的映射字典."""
+        """Get the src -> dst block ID mapping dict."""
         if not self.success:
             return {}
         return dict(zip(self.src_block_ids, self.dst_block_ids))
@@ -469,18 +469,18 @@ class CacheSwapMetadata:
 @dataclass
 class TransferResult:
     """
-    Cache 传输操作结果.
+    Cache transfer operation result.
 
-    包装源 block IDs 和目标 block IDs 的映射关系，
-    用于 Host↔Device、Storage→Host 等传输操作.
+    Encapsulates the mapping between source and destination block IDs
+    for Host↔Device, Storage→Host, and other transfer operations.
 
     Attributes:
-        src_block_ids: 源 block IDs（传输来源）.
-        dst_block_ids: 目标 block IDs（传输目的地）.
-        src_type: 源缓存层级（CacheLevel.DEVICE/HOST/STORAGE）.
-        dst_type: 目标缓存层级（CacheLevel.DEVICE/HOST/STORAGE）.
-        success: 传输是否成功.
-        error_message: 错误信息（如果失败）.
+        src_block_ids: Source block IDs (transfer origin).
+        dst_block_ids: Destination block IDs (transfer target).
+        src_type: Source cache level (CacheLevel.DEVICE/HOST/STORAGE).
+        dst_type: Destination cache level (CacheLevel.DEVICE/HOST/STORAGE).
+        success: Whether the transfer succeeded.
+        error_message: Error message if transfer failed.
     """
 
     src_block_ids: List[int] = field(default_factory=list)
@@ -494,16 +494,16 @@ class TransferResult:
 @dataclass
 class AsyncTaskHandler:
     """
-    异步任务处理器.
+    Async task handler.
 
-    用于异步任务的提交和状态追踪.
-    外部通过此 handler 判断任务是否完成.
+    Used for submitting and tracking the state of async tasks.
+    External callers use this handler to check whether a task has completed.
 
     Attributes:
-        task_id: 任务唯一标识.
-        is_completed: 任务是否已完成.
-        result: 任务结果（完成后可用）.
-        error: 任务错误信息（如果失败）.
+        task_id: Unique task identifier.
+        is_completed: Whether the task has completed.
+        result: Task result (available after completion).
+        error: Task error message (if failed).
     """
 
     task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -520,22 +520,22 @@ class AsyncTaskHandler:
 
     def wait(self, timeout: Optional[float] = None) -> bool:
         """
-        等待任务完成.
+        Wait for the task to complete.
 
         Args:
-            timeout: 最大等待时间（秒），None 表示无限等待.
+            timeout: Maximum wait time in seconds. None means wait indefinitely.
 
         Returns:
-            True 表示完成，False 表示超时.
+            True if completed, False if timed out.
         """
         return self._event.wait(timeout=timeout)
 
     def cancel(self) -> bool:
         """
-        取消任务.
+        Cancel the task.
 
         Returns:
-            成功取消返回 True，否则返回 False.
+            True if successfully cancelled, False otherwise.
         """
         if self.is_completed:
             return False
@@ -546,13 +546,13 @@ class AsyncTaskHandler:
 
     def get_result(self) -> Any:
         """
-        获取任务结果（阻塞）.
+        Get the task result (blocking).
 
         Returns:
-            任务结果.
+            Task result.
 
         Raises:
-            RuntimeError: 任务失败或被取消.
+            RuntimeError: If the task failed or was cancelled.
         """
         self._event.wait()
         if self.error:
@@ -561,10 +561,10 @@ class AsyncTaskHandler:
 
     def set_result(self, result: Any) -> None:
         """
-        设置任务结果并标记完成.
+        Set the task result and mark as completed.
 
         Args:
-            result: 任务结果.
+            result: Task result.
         """
         self.result = result
         self.is_completed = True
@@ -572,10 +572,10 @@ class AsyncTaskHandler:
 
     def set_error(self, error: str) -> None:
         """
-        设置错误信息并标记完成.
+        Set the error message and mark as completed.
 
         Args:
-            error: 错误信息.
+            error: Error message.
         """
         self.error = error
         self.is_completed = True

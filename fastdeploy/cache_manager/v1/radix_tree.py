@@ -654,6 +654,8 @@ class RadixTree:
 
         Args:
             threshold: Minimum hit_count required for backup candidacy.
+            pending_block_ids: List of block IDs already in the pending backup queue,
+                               used to avoid duplicate scheduling.
 
         Returns:
             List of BlockNode objects that are candidates for backup,

@@ -13,21 +13,21 @@ from paddleformers.utils.log import logger
 
 class LayerDoneCounter:
     """
-    独立的同步原语，追踪单次传输的 layer 完成状态。
+    Independent synchronization primitive for tracking layer completion of a single transfer.
 
-    用于计算与传输重叠（Compute-Transfer Overlap）场景：
-    - 每个 LayerDoneCounter 实例追踪一次传输任务的所有 layer 完成状态
-    - 使用 CUDA Event 实现高效等待（无轮询）
-    - 线程安全
+    Used in compute-transfer overlap scenarios:
+    - Each LayerDoneCounter instance tracks layer completion for one transfer task.
+    - Uses CUDA Events for efficient waiting (no polling).
+    - Thread-safe.
 
     Attributes:
-        _num_layers: 总 layer 数
-        _lock: 线程锁
-        _completed_layers: 已完成的 layer 集合
-        _callbacks: layer 完成回调列表
-        _cuda_events: 每个 layer 的 CUDA event
-        _layer_complete_times: layer -> 完成时间
-        _wait_count: 活跃 waiter 计数
+        _num_layers: Total number of layers.
+        _lock: Thread lock.
+        _completed_layers: Set of completed layer indices.
+        _callbacks: List of layer-completion callbacks.
+        _cuda_events: CUDA event per layer.
+        _layer_complete_times: Mapping of layer index to completion time.
+        _wait_count: Count of active waiters.
     """
 
     def __init__(self, num_layers: int):
@@ -465,8 +465,8 @@ def get_block_hash_extra_keys(
 
     Returns:
         (next_mm_idx, hash_keys):
-            next_mm_idx – updated mm_idx for the next block.
-            hash_keys   – list of multimodal hash strings that fall within this block.
+            next_mm_idx: updated mm_idx for the next block.
+            hash_keys  : list of multimodal hash strings that fall within this block.
     """
     hash_keys: List[str] = []
     mm_inputs = getattr(request, "multimodal_inputs", None)
@@ -482,14 +482,14 @@ def get_block_hash_extra_keys(
     mm_hashes = mm_inputs["mm_hashes"]
 
     # Fast exit: last multimodal item ends before this block starts
-    if mm_positions[-1].offset + mm_positions[-1].length < start_idx:
+    if mm_positions[-1].offset + mm_positions[-1].length <= start_idx:
         return mm_idx, hash_keys
 
     for img_idx in range(mm_idx, len(mm_positions)):
         image_offset = mm_positions[img_idx].offset
         image_length = mm_positions[img_idx].length
 
-        if image_offset + image_length < start_idx:
+        if image_offset + image_length <= start_idx:
             # Multimodal item ends before block starts – skip
             continue
         elif image_offset >= end_idx:

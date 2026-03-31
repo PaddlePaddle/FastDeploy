@@ -83,14 +83,12 @@ class BlockPool(ABC):
                     # Clear metadata
                     self._metadata.pop(idx, None)
                 else:
-                    # ERROR: block 不在 _used_blocks 中
                     logger.error(
                         f"BlockPool.release: block_id={idx} NOT in used_blocks! "
                         f"request_blocks={block_indices}, "
                         f"is_in_free_blocks={idx in self._free_blocks}, "
                         f"is_valid_block_id={0 <= idx < self.num_blocks}"
                     )
-                    # 打印调用栈
                     logger.error(f"BlockPool.release callstack:\n{traceback.format_exc()}")
 
     def get_metadata(self, block_idx: int) -> Optional[CacheBlockMetadata]:

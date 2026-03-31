@@ -62,7 +62,6 @@ class CacheManager(KVCacheBase):
         super().__init__(config)
 
         # Extract configuration from FDConfig
-        self.cache_config = config.cache_config
         self.num_gpu_blocks = self.cache_config.total_block_num
         self.num_cpu_blocks = self.cache_config.num_cpu_blocks
         self.block_size = self.cache_config.block_size
