@@ -21,9 +21,9 @@ on ``forward_meta``.
 Usage::
 
     class Qwen3_5GatedDeltaNet(nn.Layer):
-        def __init__(self, ...):
+        def __init__(self, fd_config, layer_id, ...):
             ...
-            self.gdn_attn = GDNAttention()
+            self.gdn_attn = GDNAttention(fd_config, layer_id)
 
         def forward(self, forward_meta, hidden_states):
             ...
@@ -37,6 +37,8 @@ from typing import TYPE_CHECKING
 import paddle
 from paddle import nn
 
+from fastdeploy.config import FDConfig
+
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
@@ -45,11 +47,17 @@ class GDNAttention(nn.Layer):
     """GDN (Gated Delta Network) linear attention trampoline.
 
     Mirrors the role of :class:`Attention` for softmax attention:
-    the model layer holds ``self.gdn_attn = GDNAttention()`` and calls
-    ``self.gdn_attn(mixed_qkv, a, b, self, forward_meta)`` in its forward.
+    the model layer holds ``self.gdn_attn = GDNAttention(fd_config, layer_id)``
+    and calls ``self.gdn_attn(mixed_qkv, a, b, self, forward_meta)`` in its
+    forward.
 
     Internally delegates to ``forward_meta.gdn_attn_backend.forward()``.
     """
+
+    def __init__(self, fd_config: FDConfig, layer_id: int) -> None:
+        super().__init__()
+        self.fd_config = fd_config
+        self.layer_id = layer_id
 
     def forward(
         self,
