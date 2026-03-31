@@ -1175,13 +1175,6 @@ def fill_paddle_tensor(shared_inputs, key, value):
         llm_logger.warning(f"Failed to fill key {key} with value {value}: {e}")
 
 
-def do_nothing(*args, **kwargs):
-    def decorator(func):
-        return func
-
-    return decorator
-
-
 @cache
 def _is_package_installed(dist_name: str) -> bool:
     try:
@@ -1189,11 +1182,3 @@ def _is_package_installed(dist_name: str) -> bool:
         return True
     except PackageNotFoundError:
         return False
-
-
-if hasattr(paddle.static, "register_op"):
-    from paddle.static import register_op
-else:
-    register_op = do_nothing
-
-register_custom_python_op = register_op
