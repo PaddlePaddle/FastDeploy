@@ -22,6 +22,19 @@ import time
 
 import pytest
 from utils.baseline_manager import BaselineManager
+
+
+def _strip_logits_stats(obj):
+    """Recursively remove 'logits_stats' keys from logprobs response."""
+    if isinstance(obj, dict):
+        obj.pop("logits_stats", None)
+        for v in obj.values():
+            _strip_logits_stats(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            _strip_logits_stats(item)
+
+
 from utils.serving_utils import (
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,
@@ -185,6 +198,7 @@ def test_prefix_cache_text(api_url):
 
     print("\nresult:\n", result)
     logprobs = extract_logprobs(chunks)
+    _strip_logits_stats(logprobs)
     # req_id = chunks[-1]["id"]
     # entropy = extract_last_entropy("log/data_processor.log", req_id)
     speculate_metrics = chunks[-2]["choices"][0]["speculate_metrics"]
@@ -199,6 +213,7 @@ def test_prefix_cache_text(api_url):
     # req_id_2 = chunks2[-1]["id"]
     result_2 = "".join([x["choices"][0]["delta"]["content"] for x in chunks2[:-1]])
     logprobs_2 = extract_logprobs(chunks2)
+    _strip_logits_stats(logprobs_2)
     speculate_metrics_2 = chunks2[-2]["choices"][0]["speculate_metrics"]
     # entropy_2 = extract_last_entropy("log/data_processor.log", req_id_2)
     # speculate_metrics_2["entropy"] = entropy_2
