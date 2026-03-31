@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import ctypes
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -98,6 +100,9 @@ class CacheController(KVCacheBase):
         self._pending_evict_counters: List["LayerDoneCounter"] = []
 
         self._initialized = True
+
+        # NUMA binding flag
+        self._numa_bound = False
 
     @property
     def write_policy(self) -> Optional[str]:
@@ -384,6 +389,126 @@ class CacheController(KVCacheBase):
 
         return cache_kvs_list
 
+    def _get_numa_node_for_gpu(self, device_id: int) -> int:
+        """
+        Get the NUMA node closest to the specified GPU device.
+
+        Tries multiple methods in order:
+        1. nvidia-smi topo -C -i <gpu_id> (fastest and most reliable)
+        2. /sys/class/nvidia-gpu/ (direct sysfs)
+        3. /sys/bus/pci/devices/ (fallback)
+
+        Args:
+            device_id: CUDA device ID.
+
+        Returns:
+            NUMA node index, or -1 if cannot be determined.
+        """
+        try:
+            # Method 1: Use nvidia-smi topo -C -i (fastest, SGLang-style)
+            # This directly outputs the NUMA ID for the specific GPU
+            try:
+                import subprocess
+
+                result = subprocess.run(
+                    ["nvidia-smi", "topo", "-C", "-i", str(device_id)], capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    output_line = result.stdout.strip()
+                    prefix = "NUMA IDs of closest CPU:"
+                    if output_line.startswith(prefix):
+                        numa_str = output_line[len(prefix) :].strip()
+                        # Handle comma-separated or range values (e.g., "0" or "0,1" or "0-1")
+                        if numa_str:
+                            # Take the first NUMA node if multiple are listed
+                            first_numa = numa_str.split(",")[0].split("-")[0].strip()
+                            if first_numa.isdigit():
+                                return int(first_numa)
+            except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+                logger.debug(f"[CacheController] nvidia-smi topo -C method failed: {e}")
+
+            # Method 2: Try to read from /sys filesystem
+            sys_path = f"/sys/class/nvidia-gpu/nvidia{device_id}/device/numa_node"
+            if os.path.exists(sys_path):
+                with open(sys_path, "r") as f:
+                    return int(f.read().strip())
+
+            # Method 3: Fallback - check all NVIDIA PCI devices
+            import glob
+
+            numa_paths = glob.glob("/sys/bus/pci/devices/*/numa_node")
+            for path in numa_paths:
+                vendor_path = path.replace("numa_node", "vendor")
+                if os.path.exists(vendor_path):
+                    with open(vendor_path, "r") as f:
+                        vendor = f.read().strip()
+                        if vendor == "0x10de":  # NVIDIA vendor ID
+                            with open(path, "r") as f:
+                                return int(f.read().strip())
+
+            return -1
+        except Exception as e:
+            logger.debug(f"[CacheController] Failed to get NUMA node for GPU {device_id}: {e}")
+            return -1
+
+    def _bind_to_closest_numa_node(self) -> bool:
+        """
+        Bind current thread and memory allocation to the NUMA node closest to the GPU.
+
+        This should be called before allocating host memory to ensure the memory
+        is allocated on the NUMA node local to the GPU, reducing cross-NUMA access
+        latency during H2D transfers.
+
+        Returns:
+            True if binding was successful, False otherwise.
+        """
+        if self._numa_bound:
+            return True
+
+        try:
+            # Load libnuma
+            try:
+                libnuma = ctypes.CDLL("libnuma.so.1")
+            except OSError:
+                try:
+                    libnuma = ctypes.CDLL("libnuma.so")
+                except OSError:
+                    logger.warning("[CacheController] libnuma not found, NUMA binding skipped")
+                    return False
+
+            # Check if NUMA is available
+            if libnuma.numa_available() < 0:
+                logger.warning("[CacheController] NUMA is not available on this system")
+                return False
+
+            # Get NUMA node for current GPU
+            numa_node = self._get_numa_node_for_gpu(self._device_id)
+
+            if numa_node < 0:
+                logger.warning(f"[CacheController] Could not determine NUMA node for GPU {self._device_id}")
+                return False
+
+            # Bind current thread to specific NUMA node
+            # numa_run_on_node binds the current thread to run on the specified node
+            result = libnuma.numa_run_on_node(numa_node)
+            if result < 0:
+                logger.warning(f"[CacheController] numa_run_on_node({numa_node}) failed")
+                return False
+
+            # Set memory allocation preference to the specified NUMA node
+            # This affects subsequent memory allocations (including cudaHostAlloc)
+            libnuma.numa_set_preferred(numa_node)
+
+            self._numa_bound = True
+            logger.info(
+                f"[CacheController] NUMA binding successful: " f"GPU {self._device_id} bound to NUMA node {numa_node}"
+            )
+            return True
+
+        except Exception as e:
+            logger.warning(f"[CacheController] NUMA binding failed: {e}")
+            return False
+
     def initialize_host_cache(
         self,
         attn_backend: Any,
@@ -407,6 +532,11 @@ class CacheController(KVCacheBase):
 
         if len(self.host_cache_kvs_map) > 0:
             return
+
+        # Step 0: Bind to closest NUMA node before allocating host memory
+        # This ensures subsequent cuda_host_alloc allocations are on the local NUMA node
+        if not self._numa_bound:
+            self._bind_to_closest_numa_node()
 
         # Get kv cache quantization type
         kv_cache_quant_type = self._get_kv_cache_quant_type()

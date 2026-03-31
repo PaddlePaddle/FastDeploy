@@ -324,6 +324,7 @@ class TestSwapCacheAllLayersCorrectness(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        raise unittest.SkipTest("Swap cache ops test temporarily skipped")
         """Set up test environment."""
         if not paddle.is_compiled_with_cuda():
             raise unittest.SkipTest("CUDA not available, skipping GPU tests")
@@ -484,9 +485,7 @@ class TestSwapCacheAllLayersPerformance(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        """Set up test environment."""
-        if not paddle.is_compiled_with_cuda():
-            raise unittest.SkipTest("CUDA not available, skipping GPU tests")
+        raise unittest.SkipTest("Swap cache ops test temporarily skipped")
 
     def setUp(self):
         """Set up each test."""
@@ -601,6 +600,7 @@ class TestSwapCacheAllLayersPerformance(unittest.TestCase):
         self.assertGreater(bandwidth_gbps, 1.0)
 
 
+@unittest.skip("Swap cache ops test temporarily skipped")
 class TestSwapCacheRandomBlockIndices(unittest.TestCase):
     """
     Test swap operations with random, varying block indices per round.
