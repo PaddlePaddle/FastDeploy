@@ -1413,6 +1413,8 @@ class ResourceManagerV1(ResourceManager):
 
             request.cache_info = [matched_block_num, no_cache_block_num]
 
+            return (common_block_ids, matched_token_num, metrics)
+
     def get_prefix_cached_blocks(self, request: Request):
         """
         Match and fetch cache for a task.

@@ -1,8 +1,17 @@
 """
-Metadata definitions for cache management.
-
-This module contains data structures and configurations used across
-the cache management system.
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """
 
 import time
@@ -250,8 +259,7 @@ class BlockNode:
     # Backup-related fields
     backuped: bool = False  # Whether a backup exists on host memory
     host_block_id: Optional[int] = None  # Host block ID where the backup is stored
-    # write_through_selective policy fields
-    hit_count: int = 0  # Access count; triggers backup when reaching the threshold
+    hit_count: int = 1  # triggers backup when reaching the threshold
 
     def __post_init__(self):
         """Initialize instance with current time if last_access_time not set."""
