@@ -1671,11 +1671,6 @@ class CacheConfig:
             self.prefill_kvcache_block_num = self.total_block_num
             logger.info(f"Doing profile, the total_block_num:{self.total_block_num}")
 
-        # Normalize write_policy: "write_through" is a special case of "write_through_selective" with threshold=1
-        if self.write_policy == "write_through":
-            self.write_through_threshold = 1
-            self.write_policy = "write_through_selective"
-
     def reset(self, num_gpu_blocks):
         """
         reset gpu block number

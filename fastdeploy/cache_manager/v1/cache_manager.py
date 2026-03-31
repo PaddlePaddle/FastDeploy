@@ -69,8 +69,12 @@ class CacheManager(KVCacheBase):
         self.enable_prefix_caching = self.cache_config.enable_prefix_caching
 
         # Write policy for backup (write_through, write_through_selective, write_back)
+        # Normalize write_policy: "write_through" is a special case of "write_through_selective" with threshold=1
         self._write_policy = self.cache_config.write_policy
         self._write_through_threshold = self.cache_config.write_through_threshold
+        if self._write_policy == "write_through":
+            self._write_through_threshold = 1
+            self._write_policy = "write_through_selective"
 
         # Thread safety
         self._lock = threading.RLock()
