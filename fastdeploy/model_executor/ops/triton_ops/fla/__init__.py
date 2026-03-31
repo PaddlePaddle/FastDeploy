@@ -29,6 +29,7 @@ Public API:
     chunk_local_cumsum              — chunk-local prefix cumulative sum
     l2norm_fwd                      — L2 normalization
     solve_tril                      — lower-triangular matrix inversion
+    fused_gdn_gating                — fused GDN gating (softplus + exp + sigmoid)
 """
 
 from fastdeploy.model_executor.ops.triton_ops.fla.chunk import (
@@ -43,6 +44,9 @@ from fastdeploy.model_executor.ops.triton_ops.fla.chunk_scaled_dot_kkt import (
     chunk_scaled_dot_kkt_fwd,
 )
 from fastdeploy.model_executor.ops.triton_ops.fla.cumsum import chunk_local_cumsum
+from fastdeploy.model_executor.ops.triton_ops.fla.fused_gdn_gating import (
+    fused_gdn_gating,
+)
 from fastdeploy.model_executor.ops.triton_ops.fla.fused_recurrent import (
     fused_recurrent_gated_delta_rule,
     fused_recurrent_gated_delta_rule_fwd,
@@ -75,6 +79,7 @@ __all__ = [
     "fused_recurrent_gated_delta_rule_update_fwd",
     # Utilities
     "l2norm_fwd",
+    "fused_gdn_gating",
     "prepare_lens",
     "prepare_chunk_indices",
     "prepare_chunk_offsets",
