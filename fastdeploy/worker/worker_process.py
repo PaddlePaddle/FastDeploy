@@ -549,7 +549,6 @@ class PaddleDisWorkerProc:
                             f"Rank: {self.local_rank} has updated parameters. {self.model_weights_status.value[0]}"
                         )
                         self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
-                        continue
                     elif self.model_weights_signal[0] == ModelWeightsStatus.CLEARING:
                         logger.info(
                             f"Rank: {self.local_rank} has cleared parameters. {self.model_weights_status.value[0]}"
@@ -568,7 +567,7 @@ class PaddleDisWorkerProc:
                             self.model_weights_status.value[0] = (
                                 ModelWeightsStatus.UPDATING
                             )  # 所有 Rank 已同步唤醒，启动权重更新流程
-                            continue
+                    continue
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.debug(f"Rank: {self.local_rank} Detected new requests.")
