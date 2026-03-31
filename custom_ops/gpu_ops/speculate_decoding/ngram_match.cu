@@ -17,6 +17,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include "helper.h"
 #include "paddle/extension.h"
 #include "ngram_match_core.cuh"
 
