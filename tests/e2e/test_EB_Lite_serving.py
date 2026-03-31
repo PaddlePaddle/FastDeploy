@@ -1389,7 +1389,8 @@ def test_streaming_chat_finish_reason(openai_client):
 
 def test_profile_reset_block_num():
     """测试profile reset_block_num功能，与baseline diff不能超过5%"""
-    log_file = "./log/config.log"
+    log_dir = os.getenv("FD_LOG_DIR", "log")
+    log_file = os.path.join(log_dir, "config.log")
     baseline = 31446
 
     if not os.path.exists(log_file):

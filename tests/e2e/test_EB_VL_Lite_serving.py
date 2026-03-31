@@ -734,7 +734,8 @@ def test_chat_with_response_max_tokens(openai_client):
 
 def test_profile_reset_block_num():
     """测试profile reset_block_num功能，与baseline diff不能超过5%"""
-    log_file = "./log/config.log"
+    log_dir = os.getenv("FD_LOG_DIR", "log")
+    log_file = os.path.join(log_dir, "config.log")
     baseline = 40000
 
     if not os.path.exists(log_file):

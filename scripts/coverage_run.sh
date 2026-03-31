@@ -54,7 +54,7 @@ run_test_with_logging() {
     local log_prefix=$2
     local status
 
-    echo "Running: $test_file"
+    echo "Running pytest file: $test_file"
 
     # Create isolated log directory for this test to avoid race conditions
     # Format: unittest_logs/<test_dir>/<test_file_base>/log
@@ -97,8 +97,35 @@ run_test_with_logging() {
             grep -Rni --color=auto "error" "${isolated_log_dir}" || true
         fi
 
+        # print all server logs
+        server_logs=("${run_path}"/*.log)
+        if [ "${#server_logs[@]}" -gt 0 ]; then
+            for server_log in "${server_logs[@]}"; do
+                # skip failed_tests_file
+                [[ "$(basename "$server_log")" == "$failed_tests_file" ]] && continue
+                if [ -f "${server_log}" ]; then
+                    echo
+                    echo "---------------- ${server_log} (last 100 lines) ----------------"
+                    tail -n 100 "${server_log}" || true
+                    echo "---------------------------------------------------------------"
+                fi
+            done
+        else
+            echo "No *.log files found"
+        fi
+
         echo "======================================================="
     fi
+
+     # if passed, remove the isolated log directory and server logs
+     if [ "$status" -eq 0 ]; then
+         rm -rf "${isolated_log_dir}" || true
+         # Clean up server logs in run_path on pass
+         for f in "${run_path}"/*.log; do
+             [[ "$(basename "$f")" != "${failed_tests_file}" ]] && rm -f "$f" || true
+         done
+     fi
+
 
     # Clean up port-related processes
     if [ -n "$FD_CACHE_QUEUE_PORT" ]; then
@@ -297,25 +324,25 @@ echo "===================================="
 
 # Exit with error and package logs if there were failures
 if [ "$failed_count" -ne 0 ]; then
-  echo "Failed test cases are listed in $failed_tests_file"
-  cat "$failed_tests_file"
+    echo "Failed test cases are listed in $failed_tests_file"
+    cat "$failed_tests_file"
 
-  # Only package logs when there are failures
-  echo "===================================="
-  echo "Step 5: Packaging logs (only on failure)"
-  echo "===================================="
+    # Only package logs when there are failures
+    echo "===================================="
+    echo "Step 5: Packaging logs (only on failure)"
+    echo "===================================="
 
-  if [ -d "${run_path}/unittest_logs" ]; then
-    tar -czf "${run_path}/unittest_logs.tar.gz" -C "${run_path}" unittest_logs
-    echo "unittest_logs packaged to: ${run_path}/unittest_logs.tar.gz"
-    ls -lh "${run_path}/unittest_logs.tar.gz"
-  else
-    echo "No unittest_logs directory found."
-  fi
+    if [ -d "${run_path}/unittest_logs" ]; then
+        tar -czf "${run_path}/unittest_logs.tar.gz" -C "${run_path}" unittest_logs
+        echo "Logs packaged to: ${run_path}/unittest_logs.tar.gz"
+        ls -lh "${run_path}/unittest_logs.tar.gz"
+    else
+        echo "No unittest_logs directory found."
+    fi
 
-  echo "===================================="
+    echo "===================================="
 
-  exit 8
+    exit 8
 fi
 
 echo "All tests passed!"

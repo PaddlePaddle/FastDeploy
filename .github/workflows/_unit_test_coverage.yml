@@ -355,7 +355,7 @@ jobs:
             if [ -f "${filename}" ];then
               echo "Failed test cases:"
               cat "${filename}"
-              echo "unittest_logs_url=${UNIT_TEST_LOGS_URL}"
+              echo "unittest_logs_url=${unittest_logs_url}"
             fi
             exit "$TEST_EXIT_CODE"
           fi
