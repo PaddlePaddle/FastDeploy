@@ -411,26 +411,29 @@ class OpenAIServingChat:
 
                     output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
 
-                    delta_message = DeltaMessage(
-                        reasoning_content=output["reasoning_content"],
-                        prompt_token_ids=None,
-                        tool_calls=output["tool_calls"],
-                        completion_token_ids=None,
-                    )
-
                     if output["tool_calls"] is not None:
                         tool_called[idx] = True
 
+                    if output["skipped"] and not request.return_token_ids:
+                        continue
+
+                    delta_message = DeltaMessage(
+                        reasoning_content=output["reasoning_content"],
+                        tool_calls=output["tool_calls"],
+                        prompt_token_ids=None,
+                        completion_token_ids=None,
+                        completion_tokens=None,
+                    )
+
                     if response_processor.enable_multimodal_content():
-                        delta_message.multimodal_content = output["multipart"]
+                        delta_message.multimodal_content = (
+                            [{"type": "text", "text": ""}] if output["skipped"] else output["multipart"]
+                        )
                     else:
-                        delta_message.content = output["text"]
+                        delta_message.content = "" if output["skipped"] else (output["text"] or "")
 
                     if output.get("audio_content", None) is not None:
                         delta_message.audio_content = output["audio_content"]
-
-                    if output["skipped"]:
-                        continue
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=idx,
@@ -467,6 +470,9 @@ class OpenAIServingChat:
 
                         if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                             choice.finish_reason = "recover_stop"
+
+                        if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
+                            choice.finish_reason = "abort"
 
                         inference_start_time[idx] = 0
 
@@ -801,6 +807,8 @@ class OpenAIServingChat:
         if data.get("error_msg", None) is not None and "Recover" in data["error_msg"]:
             finish_reason = "recover_stop"
 
+        if data.get("error_msg", None) is not None and "Aborted" in data["error_msg"]:
+            finish_reason = "abort"
         return ChatCompletionResponseChoice(
             index=idx,
             message=message,

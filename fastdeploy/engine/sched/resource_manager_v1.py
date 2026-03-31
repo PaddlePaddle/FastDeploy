@@ -282,6 +282,7 @@ class ResourceManagerV1(ResourceManager):
                 del self.requests[request_id]
                 del self.req_dict[request_id]
                 self.to_be_aborted_req_id_set.remove(request_id)
+        self.update_metrics()
 
     def _trigger_abort(self, request_id, scheduled_reqs):
         if request_id in self.requests:
@@ -1207,6 +1208,9 @@ class ResourceManagerV1(ResourceManager):
                 return None
             inputs["audio_features"] = result
 
+    def get_reqs_in_aborting(self):
+        return self.waiting_abort_req_id_set | self.to_be_aborted_req_id_set
+
     def get_available_position(self) -> int:
         position = 0
         while position < self.max_num_seqs:
@@ -1439,7 +1443,9 @@ class ResourceManagerV1(ResourceManager):
 
             request_output.metrics.decode_recv_req_time = request.metrics.decode_recv_req_time
             request_output.metrics.decode_preallocate_req_time = request.metrics.decode_preallocate_req_time
-            request.metrics = request_output.metrics
+            request.metrics = copy.deepcopy(request_output.metrics)
+            request.metrics.decode_inference_start_time = time.time()
+            request.metrics.update_decoder_start_time()
             self.running.append(request)
 
     def _free_blocks(self, request: Request):

@@ -93,6 +93,9 @@ void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
       not_need_stop_gpu.copy_to(not_need_stop.place(), true);
   bool *not_need_stop_data = const_cast<bool *>(not_need_stop.data<bool>());
   not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
+  if (stop_flags.is_cpu()) {
+    delete ctx;
+  }
 }
 
 PD_BUILD_STATIC_OP(speculate_schedule_cache)

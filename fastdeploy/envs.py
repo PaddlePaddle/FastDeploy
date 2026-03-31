@@ -62,8 +62,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ATTENTION_BACKEND": lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
     # Set sampling class. "base", "base_non_truncated", "air" and "rejection" can be set currently.
     "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
-    # Set moe backend."cutlass","marlin", "triton", "flashinfer-cutlass" and "flashinfer-trtllm" can be set currently.
+    # Set moe backend."cutlass","marlin", "triton", "flashinfer-cutlass", "flashinfer-cutedsl" and "flashinfer-trtllm" can be set currently.
     "FD_MOE_BACKEND": lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
+    # Set nvfp4 load interleaved weight scale.
+    "FD_NVFP4_LOAD_BLOCKSCALE_LEAVE": lambda: os.getenv("FD_NVFP4_LOAD_BLOCKSCALE_LEAVE", "0"),
     # Set mxfp4 backend."flashinfer" can be set currently.
     "FD_MOE_MXFP4_BACKEND": lambda: os.getenv("FD_MOE_MXFP4_BACKEND", "flashinfer"),
     # Whether to use Machete for wint4 dense gemm.
@@ -135,8 +137,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ZMQ_CONTROL_CMD_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_CONTROL_CMD_SERVER_PORTS", "8202"),
     # Whether to enable the decode caches requests for preallocating resource
     "FD_ENABLE_CACHE_TASK": lambda: os.getenv("FD_ENABLE_CACHE_TASK", "0"),
-    # Batched token timeout in EP
-    "FD_EP_BATCHED_TOKEN_TIMEOUT": lambda: float(os.getenv("FD_EP_BATCHED_TOKEN_TIMEOUT", "0.1")),
     # Max pre-fetch requests number in PD
     "FD_EP_MAX_PREFETCH_TASK_NUM": lambda: int(os.getenv("FD_EP_MAX_PREFETCH_TASK_NUM", "8")),
     # Enable or disable model caching.
@@ -225,10 +225,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
     # File path for file storage backend
     "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
-    # Custom all-reduce max buffer size in MB (default 64MB).
+    # Custom all-reduce max buffer size in MB (default 8MB).
     # Increase this to avoid NCCL fallback for large tensors in deterministic mode.
     # E.g. FD_CUSTOM_AR_MAX_SIZE_MB=128 for 128MB.
-    "FD_CUSTOM_AR_MAX_SIZE_MB": lambda: int(os.getenv("FD_CUSTOM_AR_MAX_SIZE_MB", "64")),
+    "FD_CUSTOM_AR_MAX_SIZE_MB": lambda: int(os.getenv("FD_CUSTOM_AR_MAX_SIZE_MB", "8")),
     # Enable deterministic inference mode for chunked prefill alignment
     "FD_DETERMINISTIC_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_MODE", "0"))),
     # Split KV block size for deterministic alignment (must be power of 2 and > 0, default 16)
@@ -249,6 +249,11 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
     # Whether to use batch send data in zmq
     "ZMQ_SEND_BATCH_DATA": lambda: int(os.getenv("ZMQ_SEND_BATCH_DATA", "1")),
+    # Whether to enable v1 weight updating, which utilizes ZMQ/EngineWorkerQueue/EngineCacheQueue/FMQs
+    # to pass control requests and responses.
+    # When v1 is enabled, the legacy /clear_load_weight and /update_model_weight
+    # will adopt this new communication pattern.
+    "FD_ENABLE_V1_UPDATE_WEIGHTS": lambda: bool(int(os.getenv("FD_ENABLE_V1_UPDATE_WEIGHTS", "0"))),
 }
 
 
