@@ -22,7 +22,7 @@ from fastdeploy.model_executor.ops.gpu import ngram_match
 class TestNgramMatchOp(unittest.TestCase):
 
     def setUp(self):
-        paddle.set_device("cpu")
+        paddle.set_device("gpu")
 
     def test_basic_match(self):
         """
@@ -44,9 +44,11 @@ class TestNgramMatchOp(unittest.TestCase):
         draft_token_num = paddle.to_tensor([3], dtype="int32")
         # Placeholder for draft tokens
         draft_tokens = paddle.zeros([batch_size, seq_len], dtype="int64")
+        draft_tokens_copy = paddle.zeros([batch_size, seq_len], dtype="int64")
 
         # Sequence lengths for this time step
         seq_lens_this_time = paddle.zeros([batch_size], dtype="int32")
+        seq_lens_this_time_copy = paddle.zeros([batch_size], dtype="int32")
         # Sequence lengths for encoder
         seq_lens_encoder = paddle.zeros([batch_size], dtype="int32")
         # Sequence lengths for decoder
@@ -62,7 +64,9 @@ class TestNgramMatchOp(unittest.TestCase):
             step_idx,
             draft_token_num,
             draft_tokens,
+            draft_tokens_copy,
             seq_lens_this_time,
+            seq_lens_this_time_copy,
             seq_lens_encoder,
             seq_lens_decoder,
             max_dec_len,
@@ -71,12 +75,12 @@ class TestNgramMatchOp(unittest.TestCase):
         )
 
         # Extract non-zero tokens and assert the results.
-        nonzero_tokens = draft_tokens.numpy()[0][draft_tokens.numpy()[0] != 0]
+        nonzero_tokens = draft_tokens.cpu().numpy()[0][draft_tokens.cpu().numpy()[0] != 0]
         expected_tokens = [50, 60]
         self.assertTrue((nonzero_tokens == expected_tokens).all())
 
         # Check length
-        self.assertEqual(seq_lens_this_time.numpy()[0], 3)
+        self.assertEqual(seq_lens_this_time.cpu().numpy()[0], 3)
 
     def test_no_match(self):
         """
@@ -90,8 +94,10 @@ class TestNgramMatchOp(unittest.TestCase):
         step_idx = paddle.to_tensor([3], dtype="int64")
         draft_token_num = paddle.to_tensor([2], dtype="int32")
         draft_tokens = paddle.zeros([batch_size, 4], dtype="int64")
+        draft_tokens_copy = paddle.zeros([batch_size, 4], dtype="int64")
 
         seq_lens_this_time = paddle.zeros([batch_size], dtype="int32")
+        seq_lens_this_time_copy = paddle.zeros([batch_size], dtype="int32")
         seq_lens_encoder = paddle.zeros([batch_size], dtype="int32")
         seq_lens_decoder = paddle.ones([batch_size], dtype="int32")
         max_dec_len = paddle.to_tensor([6], dtype="int64")
@@ -104,7 +110,9 @@ class TestNgramMatchOp(unittest.TestCase):
             step_idx,
             draft_token_num,
             draft_tokens,
+            draft_tokens_copy,
             seq_lens_this_time,
+            seq_lens_this_time_copy,
             seq_lens_encoder,
             seq_lens_decoder,
             max_dec_len,
@@ -113,7 +121,7 @@ class TestNgramMatchOp(unittest.TestCase):
         )
 
         # No match → should only keep 1 token
-        self.assertEqual(seq_lens_this_time.numpy()[0], 1)
+        self.assertEqual(seq_lens_this_time.cpu().numpy()[0], 1)
 
 
 if __name__ == "__main__":
