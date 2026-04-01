@@ -1267,7 +1267,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with (
             patch("fastdeploy.engine.common_engine.main_process_metrics", DummyMetrics()),
-            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False),
             patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", False),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
@@ -3283,7 +3282,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         with (
             patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", True),
             patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False),
-            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False),
             patch("fastdeploy.engine.common_engine.main_process_metrics", DummyMetrics()),
             patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):

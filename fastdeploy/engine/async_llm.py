@@ -446,7 +446,7 @@ class AsyncLLM(EngineServiceClient):
                 )
             if envs.ZMQ_SEND_BATCH_DATA and self.connection_manager is not None:
                 request["zmq_worker_pid"] = self.connection_manager.worker_pid
-            if not envs.ENABLE_V1_DATA_PROCESSOR and self.cfg.model_config.enable_mm:
+            if self.cfg.model_config.enable_mm:
                 self.request_client.send_pyobj(request)
             else:
                 self.request_client.send_json(request)
@@ -543,8 +543,7 @@ class AsyncLLM(EngineServiceClient):
                             )
                         else:
                             processed_output = response_item
-                        if not envs.ENABLE_V1_DATA_PROCESSOR:
-                            processed_output = RequestOutput.from_dict(processed_output)
+                        processed_output = RequestOutput.from_dict(processed_output)
                         # Enrich outputs with prompt metadata on the first packet
                         if req_id:
                             prompt_meta = self._prompt_metadata.get(req_id)
