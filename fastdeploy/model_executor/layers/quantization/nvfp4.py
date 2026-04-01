@@ -55,13 +55,8 @@ try:
         flashinfer_cutedsl_moe_masked,
     )
 
-except ImportError as e:
-    logger.warning(
-        f"flashinfer_cutedsl_moe_masked not found, flashinfer kernel may not be enabled. " f"ImportError: {e}"
-    )
-    flashinfer_cutedsl_moe_masked = None
-    prefill_permute_to_masked_gemm = None
-    depermute_prefill_combine = None
+except ImportError:
+    raise ImportError("flashinfer_cutedsl_moe_masked not found, flashinfer kernel may not be enabled.")
 
 
 def call_prefill_permute_to_masked_gemm(
@@ -93,12 +88,6 @@ def call_prefill_permute_to_masked_gemm(
     if scale is None:
         scale = paddle.empty([0], dtype=paddle.float32)
 
-    if prefill_permute_to_masked_gemm is None:
-        logger.warning(
-            "prefill_permute_to_masked_gemm not available. "
-            "Flashinfer cutedsl kernel may not be installed correctly."
-        )
-        return None, None, None, None
     results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num)
 
     return results[0], results[1], results[2], results[3]
@@ -122,11 +111,6 @@ def call_depermute_prefill_combine(
     Returns:
         depermuted_x: Combined output [num_worst_tokens, hidden].
     """
-    if depermute_prefill_combine is None:
-        logger.warning(
-            "depermute_prefill_combine not available. " "Flashinfer cutedsl kernel may not be installed correctly."
-        )
-        return None
     results = depermute_prefill_combine(x, indice_map, topk_weights, num_worst_tokens)
 
     return results
@@ -639,18 +623,20 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             up_gate_proj_blockscale_swizzled = layer.up_gate_proj_weight_scale
         else:
             up_gate_proj_blockscale_swizzled = _process_scale_interleaved(layer.up_gate_proj_weight_scale)
-        free_tensor(layer.up_gate_proj_weight_scale)
-        layer.up_gate_proj_weight_scale = None
         create_parameter_and_copy(
             layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
         )
+
+        free_tensor(layer.up_gate_proj_weight_scale)
+        layer.up_gate_proj_weight_scale = None
+
         if envs.FD_NVFP4_LOAD_BLOCKSCALE_LEAVE:
             down_proj_blockscale_swizzled = layer.down_proj_weight_scale
         else:
             down_proj_blockscale_swizzled = _process_scale_interleaved(layer.down_proj_weight_scale)
+        create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
         free_tensor(layer.down_proj_weight_scale)
         layer.down_proj_weight_scale = None
-        create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
 
     def apply_ep_prefill(
         self,
@@ -660,8 +646,11 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
+        logger.info("prefill")
 
         # 1. top experts and weights
+        logger.info(f"layer.up_gate_proj_weight_scale:{layer.up_gate_proj_weight_scale}")
+        logger.info(f"layer.down_proj_weight_scale:{layer.down_proj_weight_scale}")
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         hidden_size = x.shape[1]
@@ -723,12 +712,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             # NVFP4 dispatch returns BF16 (no pre-quantized scale), so permute_scale is empty.
             # Use per-expert 1/input_scale (up_gate_proj_input_scale_quant) as input_global_scale,
             # consistent with apply_ep_decode which also uses this value directly.
-            if flashinfer_cutedsl_moe_masked is None:
-                logger.warning(
-                    "flashinfer_cutedsl_moe_masked not available. "
-                    "Flashinfer cutedsl kernel may not be installed correctly."
-                )
-                return None
             ffn_out = flashinfer_cutedsl_moe_masked(
                 hidden_states=(permute_input, None),
                 input_global_scale=layer.up_gate_proj_input_scale_quant.expand([layer.num_local_experts]),
@@ -775,6 +758,9 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
 
+        logger.info("decode")
+        # logger.info(f"layer.up_gate_proj_blockscale_swizzled:{layer.up_gate_proj_blockscale_swizzled}")
+        # logger.info(f"layer.down_proj_blockscale_swizzled:{layer.down_proj_blockscale_swizzled}")
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
@@ -790,12 +776,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         # Compute FFN via CuteDSL masked grouped GEMM
         num_experts = layer.num_local_experts
-        if flashinfer_cutedsl_moe_masked is None:
-            logger.warning(
-                "flashinfer_cutedsl_moe_masked not available. "
-                "Flashinfer cutedsl kernel may not be installed correctly."
-            )
-            return None
         ffn_out = flashinfer_cutedsl_moe_masked(
             hidden_states=(recv_x, None),
             input_global_scale=layer.up_gate_proj_input_scale_quant.expand([num_experts]),
@@ -868,4 +848,4 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             )
 
             return output
-        return paddle.empty_like(x)
+        # return paddle.empty_like(x)
