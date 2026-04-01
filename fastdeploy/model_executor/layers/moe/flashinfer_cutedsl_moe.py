@@ -17,8 +17,21 @@
 from typing import Any, Optional
 
 import paddle
+from paddleformers.utils.log import logger
 
-paddle.compat.enable_torch_proxy(scope={"flashinfer"})
+try:
+    from flashinfer import (
+        scaled_fp4_grouped_quantize,
+        silu_and_mul_scaled_nvfp4_experts_quantize,
+    )
+    from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
+except ImportError as e:
+    logger.warning(
+        f"flashinfer imports not found, flashinfer cutedsl moe kernel may not be enabled. " f"ImportError: {e}"
+    )
+    scaled_fp4_grouped_quantize = None
+    silu_and_mul_scaled_nvfp4_experts_quantize = None
+    grouped_gemm_nt_masked = None
 
 
 def _dtype_str(dtype) -> str:
@@ -87,11 +100,10 @@ def flashinfer_cutedsl_moe_masked(
     Returns:
         paddle.Tensor: [num_experts, m, k] bf16
     """
-    from flashinfer import (
-        scaled_fp4_grouped_quantize,
-        silu_and_mul_scaled_nvfp4_experts_quantize,
-    )
-    from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
+    # Check if flashinfer kernels are available
+    if scaled_fp4_grouped_quantize is None or grouped_gemm_nt_masked is None:
+        logger.warning("flashinfer cutedsl moe kernel not available. " "Flashinfer may not be installed correctly.")
+        return None
 
     # === Dtype assertions ===
     # Use string-based dtype check to be compatible with both paddle and torch proxy tensors

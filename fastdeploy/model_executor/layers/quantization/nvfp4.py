@@ -35,68 +35,101 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 
 paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
-from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda():
+try:
+    # FlashInfer cutedsl blockscaled gemm kernels
+
+    from fastdeploy.model_executor.layers.moe.ep import deep_ep
     from fastdeploy.model_executor.ops.gpu import (
         depermute_prefill_combine,
         prefill_permute_to_masked_gemm,
     )
 
-    def call_prefill_permute_to_masked_gemm(
-        x: paddle.Tensor,
-        scale: paddle.Tensor,
-        topk_ids: paddle.Tensor,
-        num_local_experts: int,
-        max_token_num: int,
-    ):
-        """
-        Permute input tokens and scales from token-major to expert-major layout
-        for MoE masked GEMM operations.
+    logger.info(
+        "FlashInfer cutedsl is slow to import because it triggers JIT compilation of "
+        "CUDA kernels via TVM/CODEGEN, and cuBLASLt initializes lookup tables and "
+        "compiles GEMM kernels during first load. This may take several minutes. "
+        "The wait is expected and only happens once per process."
+    )
+    from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
+        flashinfer_cutedsl_moe_masked,
+    )
 
-        Args:
-            x: Input hidden states [num_tokens, hidden].
-            scale: Input scales [num_tokens, hidden_scale].
-            topk_ids: Expert routing indices [num_tokens, topk] (int64 or int32).
-            num_local_experts: Number of local experts on this device.
-            max_token_num: Maximum tokens per expert buffer.
+except ImportError as e:
+    logger.warning(
+        f"flashinfer_cutedsl_moe_masked not found, flashinfer kernel may not be enabled. " f"ImportError: {e}"
+    )
+    flashinfer_cutedsl_moe_masked = None
+    prefill_permute_to_masked_gemm = None
+    depermute_prefill_combine = None
 
-        Returns:
-            tuple: (permute_x, permute_scale, permuted_indice_map, token_nums_per_expert)
-        """
-        if topk_ids.dtype != paddle.int64:
-            topk_ids = topk_ids.cast(paddle.int64)
 
-        # NVFP4 dispatch returns plain BF16 (no fp8 scale); pass empty tensor so the
-        # C++ op can detect the no-scale path via tensor.numel() == 0.
-        if scale is None:
-            scale = paddle.empty([0], dtype=paddle.float32)
+def call_prefill_permute_to_masked_gemm(
+    x: paddle.Tensor,
+    scale: paddle.Tensor,
+    topk_ids: paddle.Tensor,
+    num_local_experts: int,
+    max_token_num: int,
+):
+    """
+    Permute input tokens and scales from token-major to expert-major layout
+    for MoE masked GEMM operations.
 
-        results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num)
+    Args:
+        x: Input hidden states [num_tokens, hidden].
+        scale: Input scales [num_tokens, hidden_scale].
+        topk_ids: Expert routing indices [num_tokens, topk] (int64 or int32).
+        num_local_experts: Number of local experts on this device.
+        max_token_num: Maximum tokens per expert buffer.
 
-        return results[0], results[1], results[2], results[3]
+    Returns:
+        tuple: (permute_x, permute_scale, permuted_indice_map, token_nums_per_expert)
+    """
+    if topk_ids.dtype != paddle.int64:
+        topk_ids = topk_ids.cast(paddle.int64)
 
-    def call_depermute_prefill_combine(
-        x: paddle.Tensor,
-        indice_map: paddle.Tensor,
-        topk_weights: paddle.Tensor,
-        num_worst_tokens: int,
-    ):
-        """
-        Depermute and combine expert outputs back to token-major layout.
+    # NVFP4 dispatch returns plain BF16 (no fp8 scale); pass empty tensor so the
+    # C++ op can detect the no-scale path via tensor.numel() == 0.
+    if scale is None:
+        scale = paddle.empty([0], dtype=paddle.float32)
 
-        Args:
-            x: Expert outputs [num_local_experts, max_tokens_per_expert, hidden].
-            indice_map: Flat index tensor [num_worst_tokens, topk] (int32).
-            topk_weights: Combination weights [num_worst_tokens, topk] (float32).
-            num_worst_tokens: Number of output tokens to produce.
+    if prefill_permute_to_masked_gemm is None:
+        logger.warning(
+            "prefill_permute_to_masked_gemm not available. "
+            "Flashinfer cutedsl kernel may not be installed correctly."
+        )
+        return None, None, None, None
+    results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num)
 
-        Returns:
-            depermuted_x: Combined output [num_worst_tokens, hidden].
-        """
-        results = depermute_prefill_combine(x, indice_map, topk_weights, num_worst_tokens)
+    return results[0], results[1], results[2], results[3]
 
-        return results
+
+def call_depermute_prefill_combine(
+    x: paddle.Tensor,
+    indice_map: paddle.Tensor,
+    topk_weights: paddle.Tensor,
+    num_worst_tokens: int,
+):
+    """
+    Depermute and combine expert outputs back to token-major layout.
+
+    Args:
+        x: Expert outputs [num_local_experts, max_tokens_per_expert, hidden].
+        indice_map: Flat index tensor [num_worst_tokens, topk] (int32).
+        topk_weights: Combination weights [num_worst_tokens, topk] (float32).
+        num_worst_tokens: Number of output tokens to produce.
+
+    Returns:
+        depermuted_x: Combined output [num_worst_tokens, hidden].
+    """
+    if depermute_prefill_combine is None:
+        logger.warning(
+            "depermute_prefill_combine not available. " "Flashinfer cutedsl kernel may not be installed correctly."
+        )
+        return None
+    results = depermute_prefill_combine(x, indice_map, topk_weights, num_worst_tokens)
+
+    return results
 
 
 def next_power_of_2(n: int):
@@ -628,11 +661,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
 
-        from fastdeploy.model_executor.layers.moe.ep import deep_ep
-        from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
-            flashinfer_cutedsl_moe_masked,
-        )
-
         # 1. top experts and weights
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
@@ -695,6 +723,12 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             # NVFP4 dispatch returns BF16 (no pre-quantized scale), so permute_scale is empty.
             # Use per-expert 1/input_scale (up_gate_proj_input_scale_quant) as input_global_scale,
             # consistent with apply_ep_decode which also uses this value directly.
+            if flashinfer_cutedsl_moe_masked is None:
+                logger.warning(
+                    "flashinfer_cutedsl_moe_masked not available. "
+                    "Flashinfer cutedsl kernel may not be installed correctly."
+                )
+                return None
             ffn_out = flashinfer_cutedsl_moe_masked(
                 hidden_states=(permute_input, None),
                 input_global_scale=layer.up_gate_proj_input_scale_quant.expand([layer.num_local_experts]),
@@ -741,10 +775,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
 
-        from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
-            flashinfer_cutedsl_moe_masked,
-        )
-
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
@@ -760,6 +790,12 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         # Compute FFN via CuteDSL masked grouped GEMM
         num_experts = layer.num_local_experts
+        if flashinfer_cutedsl_moe_masked is None:
+            logger.warning(
+                "flashinfer_cutedsl_moe_masked not available. "
+                "Flashinfer cutedsl kernel may not be installed correctly."
+            )
+            return None
         ffn_out = flashinfer_cutedsl_moe_masked(
             hidden_states=(recv_x, None),
             input_global_scale=layer.up_gate_proj_input_scale_quant.expand([num_experts]),
@@ -832,4 +868,4 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             )
 
             return output
-        return paddle.empty_like(x)
+        # return paddle.empty_like(x)
