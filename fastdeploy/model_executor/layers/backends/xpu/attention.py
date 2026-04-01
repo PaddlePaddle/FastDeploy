@@ -196,7 +196,6 @@ class XPUAttentionBackend(AttentionBackend):
             qkv,
             forward_meta.caches[2 * layer.layer_id],
             forward_meta.caches[2 * layer.layer_id + 1],
-            forward_meta.cum_offsets,
             metadata.rotary_embs,
             metadata.block_tables,
             forward_meta.prefix_block_tables,
