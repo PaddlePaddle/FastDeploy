@@ -169,10 +169,7 @@ class ZmqServerBase(ABC):
         if len(data) > 1:
             for response in data[1:]:
                 result.add(response)
-        if not envs.ENABLE_V1_DATA_PROCESSOR:
-            result = ForkingPickler.dumps([result.to_dict()])
-        else:
-            result = ForkingPickler.dumps([result])
+        result = ForkingPickler.dumps([result.to_dict()])
         return result
 
     def receive_json_once(self, block=False):
@@ -303,10 +300,7 @@ class ZmqServerBase(ABC):
                 if self.aggregate_send:
                     result = self.pack_aggregated_data(new_data)
                 else:
-                    if not envs.ENABLE_V1_DATA_PROCESSOR:
-                        result = ForkingPickler.dumps([response.to_dict() for response in new_data])
-                    else:
-                        result = ForkingPickler.dumps(new_data)
+                    result = ForkingPickler.dumps([response.to_dict() for response in new_data])
                 with self.response_token_lock:
 
                     _zmq_metrics_stats = ZMQMetricsStats()
@@ -349,13 +343,10 @@ class ZmqServerBase(ABC):
         metrics_address = self.address or self.worker_push_addresses.get(worker_pid, "unknown")
 
         try:
-            if not envs.ENABLE_V1_DATA_PROCESSOR:
-                result = msgpack.packb(
-                    [[output.to_dict() for output in outputs] for outputs in batch_data],
-                    default=_msgpack_default,
-                )
-            else:
-                result = ForkingPickler.dumps(batch_data)
+            result = msgpack.packb(
+                [[output.to_dict() for output in outputs] for outputs in batch_data],
+                default=_msgpack_default,
+            )
             result_len = len(result)
 
             # Only hold lock for the actual socket send
