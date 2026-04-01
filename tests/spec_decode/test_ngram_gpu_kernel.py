@@ -557,10 +557,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
         np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
 
-    @unittest.skipUnless(
-        os.environ.get("BENCHMARK_NGRAM"),
-        "Benchmark: set BENCHMARK_NGRAM=1 to run",
-    )
     def test_latency(self):
         """Benchmark: GPU kernel latency vs CPU transfer overhead."""
         # Warmup
@@ -630,10 +626,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         print(f"  Speedup: {cpu_copy_time_ms / gpu_time_ms:.2f}x")
         print(f"{'='*60}")
 
-    @unittest.skipUnless(
-        os.environ.get("BENCHMARK_NGRAM"),
-        "Benchmark: set BENCHMARK_NGRAM=1 to run",
-    )
     def test_latency_scaling(self):
         """Benchmark GPU kernel across batch sizes to show Phase 2 scales."""
         batch_sizes = [32, 128, 256, 512, 1024]
