@@ -1114,16 +1114,18 @@ class TestInitMmConfig(unittest.TestCase):
 # ===================================================================
 class TestLoadTokenizer(unittest.TestCase):
 
-    @patch("fastdeploy.input.multimodal_processor.MultiModalProcessor.__init__", return_value=None)
-    def test_auto_tokenizer_path(self, mock_init):
-        """Lines 123-125: non-ernie path loads AutoTokenizer."""
-        proc = MultiModalProcessor.__new__(MultiModalProcessor)
-        proc.model_name_or_path = "/mock/model"
-        proc.tokenizer_type = "auto"
+    def test_auto_tokenizer_path(self):
+        """Lines 123-125: non-ernie path loads AutoTokenizer via paddleformers."""
+        proc = _make_processor(QWEN_VL)
+        mock_tokenizer = MagicMock()
+        mock_auto_tokenizer = MagicMock()
+        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
 
-        with patch("fastdeploy.input.multimodal_processor.MultiModalProcessor._load_tokenizer") as mock_load:
-            mock_load.return_value = MagicMock()
-            mock_load.assert_called_once()
+        with patch.dict("sys.modules", {"paddleformers.transformers": MagicMock(AutoTokenizer=mock_auto_tokenizer)}):
+            result = proc._load_tokenizer()
+
+        mock_auto_tokenizer.from_pretrained.assert_called_once_with("/mock/model", padding_side="left", use_fast=True)
+        self.assertEqual(result, mock_tokenizer)
 
 
 if __name__ == "__main__":

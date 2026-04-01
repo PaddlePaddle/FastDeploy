@@ -454,6 +454,8 @@ class AdaptiveImageProcessor(BaseImageProcessor):
         if images is not None and not valid_images(images):
             raise ValueError("Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, " "paddle.Tensor.")
 
+        data = {}
+
         if images is not None:
             pixel_values, vision_grid_thws = [], []
             for img_idx, image in enumerate(images):
@@ -479,10 +481,8 @@ class AdaptiveImageProcessor(BaseImageProcessor):
                 vision_grid_thws.append(image_grid_thw)
             pixel_values = np.array(pixel_values)
             vision_grid_thws = np.array(vision_grid_thws)
-            data = {
-                "pixel_values": pixel_values,
-                "image_grid_thw": vision_grid_thws,
-            }
+            data["pixel_values"] = pixel_values
+            data["image_grid_thw"] = vision_grid_thws
 
         if videos is not None:
             pixel_values, vision_grid_thws = [], []
@@ -505,11 +505,8 @@ class AdaptiveImageProcessor(BaseImageProcessor):
                 vision_grid_thws.append(video_grid_thw)
             pixel_values = np.array(pixel_values)
             vision_grid_thws = np.array(vision_grid_thws)
-
-            data = {
-                "pixel_values_videos": pixel_values,
-                "video_grid_thw": vision_grid_thws,
-            }
+            data["pixel_values_videos"] = pixel_values
+            data["video_grid_thw"] = vision_grid_thws
 
         return BatchFeature(data=data, tensor_type=return_tensors)
 
