@@ -20,13 +20,16 @@ from typing import Any, Optional
 # NVFP4 requires SM >= 100 (Blackwell architecture)
 NVFP4_MIN_SM_VERSION = 100
 
+from fastdeploy.platforms import current_platform
+
 
 def is_nvfp4_supported() -> bool:
-    """Check if current GPU supports NVFP4 (requires SM >= 100, Blackwell)."""
-    from fastdeploy.model_executor.utils import get_sm_version
+    if current_platform.is_cuda():
+        """Check if current GPU supports NVFP4 (requires SM >= 100, Blackwell)."""
+        from fastdeploy.model_executor.utils import get_sm_version
 
-    sm_version = get_sm_version()
-    return sm_version >= NVFP4_MIN_SM_VERSION
+        sm_version = get_sm_version()
+        return sm_version >= NVFP4_MIN_SM_VERSION
 
 
 class QuantMethodBase(ABC):
