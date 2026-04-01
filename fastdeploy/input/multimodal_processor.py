@@ -109,9 +109,16 @@ class MultiModalProcessor(BaseTextProcessor):
     def _load_tokenizer(self):
         """Load the appropriate tokenizer based on model_type."""
         if self.tokenizer_type == "ernie4_5":
-            from paddleformers.transformers import AutoTokenizer as PFAutoTokenizer
+            import os
 
-            tokenizer = PFAutoTokenizer.from_pretrained(self.model_name_or_path)
+            from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
+
+            vocab_file_names = ["tokenizer.model", "spm.model", "ernie_token_100k.model"]
+            for name in vocab_file_names:
+                if os.path.exists(os.path.join(self.model_name_or_path, name)):
+                    Ernie4_5Tokenizer.resource_files_names["vocab_file"] = name
+                    break
+            tokenizer = Ernie4_5Tokenizer.from_pretrained(self.model_name_or_path)
         else:
             from paddleformers.transformers import AutoTokenizer
 
