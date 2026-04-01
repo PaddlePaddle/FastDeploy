@@ -889,20 +889,7 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
         return mappings
 
 
-class Ernie4_5_PretrainedModel(Ernie4_5_MoePretrainedModel):
-    """
-    Ernie4_5_PretrainedModel
-    """
-
-    @classmethod
-    def arch_name(self):
-        """
-        Model Architecture Name
-        """
-        return "Ernie4_5_ForCausalLM"
-
-
-class Ernie4_5PretrainedModel(Ernie4_5_PretrainedModel):
+class Ernie4_5PretrainedModel(Ernie4_5_MoePretrainedModel):
     """
     Ernie4_5PretrainedModel 0.3B-PT
     """
