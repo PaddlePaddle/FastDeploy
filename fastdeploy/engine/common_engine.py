@@ -910,7 +910,7 @@ class EngineService:
                                 self.split_connector.send_splitwise_tasks([task], task.idx)
                                 status, msg = self.split_connector.check_decode_allocated(task)
                                 if not status:
-                                    self.llm_logger.error(
+                                    self.llm_logger.warning(
                                         f"D failed to allocate resource for request {task.request_id}, try again."
                                     )
                                     time.sleep(0.05)
