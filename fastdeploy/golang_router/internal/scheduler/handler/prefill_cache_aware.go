@@ -38,6 +38,7 @@ type schedulerConfigSnapshot struct {
 	cacheBlockSize      int
 	tokenizerURL        string
 	tokenizerTimeout    time.Duration
+	evictionDuration    time.Duration
 }
 
 // newPrefillCacheStrategy initializes cache-aware strategy config
@@ -47,7 +48,7 @@ func newPrefillCacheStrategy(cfg *schedulerConfigSnapshot) *prefillCacheStrategy
 		relThreshold:      cfg.balanceRelThreshold,
 		hitRatioWeight:    cfg.hitRatioWeight,
 		loadBalanceWeight: cfg.loadBalanceWeight,
-		cache:             newRadixPrefixCache(cfg.cacheBlockSize),
+		cache:             newRadixPrefixCache(cfg.cacheBlockSize, cfg.evictionDuration),
 		tokenizer:         NewHTTPTokenizer(cfg.tokenizerURL, cfg.tokenizerTimeout),
 		sessionWorkerMap:  make(map[string]string),
 	}
@@ -297,11 +298,10 @@ type radixNode struct {
 }
 
 // newRadixPrefixCache initializes radix prefix cache with eviction and capacity control
-func newRadixPrefixCache(blockSize int) *radixPrefixCache {
+func newRadixPrefixCache(blockSize int, evictionDuration time.Duration) *radixPrefixCache {
 	if blockSize <= 0 {
 		blockSize = 64
 	}
-	const defaultEvictionDuration = 5 * time.Minute
 	const defaultMaxNodes = 200000
 	root := &radixNode{
 		key:        nil,
@@ -311,7 +311,7 @@ func newRadixPrefixCache(blockSize int) *radixPrefixCache {
 	cache := &radixPrefixCache{
 		root:             root,
 		hasher:           newBlockHasher(blockSize),
-		evictionDuration: defaultEvictionDuration,
+		evictionDuration: evictionDuration,
 		maxNodes:         defaultMaxNodes,
 		nodeCount:        1, // root
 		allNodes:         map[*radixNode]struct{}{root: {}},
