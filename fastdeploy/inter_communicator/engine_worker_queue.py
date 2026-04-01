@@ -549,7 +549,6 @@ class EngineWorkerQueue:
             self.lock.release()
             time.sleep(0.001)
             self.lock.acquire()
-
         if envs.FD_ENABLE_MAX_PREFILL or envs.FD_ENABLE_E2W_TENSOR_CONVERT:
             # multimodal input numpy -> tensor
             to_tensor(tasks[0])
@@ -571,7 +570,6 @@ class EngineWorkerQueue:
         """
         tasks: List[Any] = list()
         self.lock.acquire()
-
         tasks.extend(self.tasks)
         self.client_read_flag[self.client_id] = 1
         all_client_read: bool = np.sum(self.client_read_flag) == self.num_client

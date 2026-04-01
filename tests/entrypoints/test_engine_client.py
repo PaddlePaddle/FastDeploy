@@ -99,6 +99,7 @@ def create_mock_fd_config(
     mock_config.structured_outputs_config = Mock()
     mock_config.structured_outputs_config.reasoning_parser = None
     mock_config.tool_parser = None
+    mock_config.enable_mm_runtime = enable_mm
 
     return mock_config
 
@@ -178,6 +179,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         mock_config.structured_outputs_config = Mock()
         mock_config.structured_outputs_config.reasoning_parser = None
         mock_config.node_rank = 0
+        mock_config.enable_mm_runtime = mock_model_config.enable_mm
 
         # Create mocks for all the external dependencies
         mock_input_processor = Mock()
@@ -360,6 +362,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
         mock_config.structured_outputs_config = MagicMock()  # Add this
         mock_config.structured_outputs_config.reasoning_parser = None
         mock_config.tool_parser = None  # Add this attribute
+        mock_config.enable_mm_runtime = mock_model_config.enable_mm
 
         # Mock IPCSignal to avoid file system dependencies
         with patch("fastdeploy.entrypoints.engine_client.IPCSignal") as mock_ipcsignal:
@@ -652,6 +655,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
             mock_config.structured_outputs_config = Mock()
             mock_config.structured_outputs_config.reasoning_parser = None
             mock_config.tool_parser = None
+            mock_config.enable_mm_runtime = mock_config.model_config.enable_mm
 
             client = EngineClient(
                 pid=5678,
@@ -1075,6 +1079,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         mock_config = Mock()
         mock_config.model_config = mock_model_config
+        mock_config.enable_mm_runtime = mock_model_config.enable_mm
         mock_config.eplb_config = Mock()
         mock_config.eplb_config.enable_eplb = False
 
@@ -1128,6 +1133,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         mock_config = Mock()
         mock_config.model_config = mock_model_config
+        mock_config.enable_mm_runtime = mock_model_config.enable_mm
         mock_config.eplb_config = Mock()
         mock_config.eplb_config.enable_eplb = False
 
@@ -1405,6 +1411,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         mock_config = Mock()
         mock_config.model_config = mock_model_config
+        mock_config.enable_mm_runtime = mock_model_config.enable_mm
         mock_config.eplb_config = Mock()
         mock_config.eplb_config.enable_eplb = False
 

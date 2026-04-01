@@ -69,7 +69,7 @@ class Proposer(ABC):
         self.max_ngram_size = self.speculative_config.max_ngram_size
         self.min_ngram_size = self.speculative_config.min_ngram_size
 
-        self.enable_mm = self.model_config.enable_mm
+        self.enable_mm = self.fd_config.enable_mm_runtime
 
         spec_logger.info(f"Speculate config: {self.speculative_config}")
 
