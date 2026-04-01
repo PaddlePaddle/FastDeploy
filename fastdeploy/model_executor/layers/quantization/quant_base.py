@@ -30,6 +30,8 @@ def is_nvfp4_supported() -> bool:
 
         sm_version = get_sm_version()
         return sm_version >= NVFP4_MIN_SM_VERSION
+    else:
+        return False
 
 
 class QuantMethodBase(ABC):
