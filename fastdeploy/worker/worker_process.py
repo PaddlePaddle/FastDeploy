@@ -1378,10 +1378,4 @@ def run_worker_proc() -> None:
 
 
 if __name__ == "__main__":
-    import sys
-
-    from fastdeploy.cache_manager.ops import cuda_host_alloc
-
-    print(f"[DEBUG] Worker process sys.path[0] = {sys.path[0]}", flush=True)
-    print(f"[DEBUG] Worker process cuda_host_alloc = {cuda_host_alloc}", flush=True)
     run_worker_proc()

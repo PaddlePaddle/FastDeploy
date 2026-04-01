@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import time
 import traceback
 from dataclasses import asdict, dataclass, fields
@@ -28,8 +27,6 @@ from typing import Union
 
 if TYPE_CHECKING:
     from fastdeploy.cache_manager.v1.metadata import MatchResult
-
-logger = logging.getLogger("request_debug")
 
 import numpy as np
 from fastapi.responses import JSONResponse
@@ -246,12 +243,6 @@ class Request:
         When accessing this property, it checks if there are new complete blocks
         that need hash computation, and if so, computes and appends them.
         """
-        logger.debug(
-            f"[DEBUG prompt_hashes] request_id={self.request_id}, "
-            f"has_block_hasher={self._block_hasher is not None}, "
-            f"existing_hashes_len={len(self._prompt_hashes)}, "
-            f"prompt_token_ids_len={len(self.prompt_token_ids) if self.prompt_token_ids else 0}"
-        )
         if self._block_hasher is not None:
             new_hashes = self._block_hasher(self)
             if new_hashes:
