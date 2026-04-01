@@ -426,9 +426,7 @@ elif paddle.is_compiled_with_cuda():
             "-DENABLE_BF16",
         ]
         # Generate marlin kernel instantiation files (needed for linking even on SM70)
-        ret = os.system("python gpu_ops/moe/moe_wna16_marlin_utils/generate_kernels.py")
-        if ret != 0:
-            raise RuntimeError("Failed to generate Marlin kernel files. " "Please install jinja2: pip install jinja2")
+        os.system("python gpu_ops/moe/moe_wna16_marlin_utils/generate_kernels.py")
         sources += [
             # MoE files for SM_70 support
             "gpu_ops/moe/deepgemm_preprocess.cu",
@@ -452,7 +450,8 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
         sources += find_end_files("gpu_ops/speculate_decoding", ".cc")
 
-    if cc >= 70:  # Changed from 75 to 70 for V100 support
+    if cc >= 75:
+        cc_compile_args += ["-DENABLE_SM75_EXT_OPS"]
         nvcc_compile_args += [
             "-DENABLE_SM75_EXT_OPS",
             "-DENABLE_SCALED_MM_C2X=1",
@@ -484,9 +483,9 @@ elif paddle.is_compiled_with_cuda():
         nvcc_compile_args += ["-Igpu_ops/moe"]
 
     if cc >= 80:
-        # append_attention (requires SM80+ due to cp.async, ldmatrix instructions - NO fallback)
-        cc_compile_args += ["-DENABLE_APPEND_ATTENTION"]
-        nvcc_compile_args += ["-DENABLE_APPEND_ATTENTION"]
+        cc_compile_args += ["-DENABLE_SM80_EXT_OPS"]
+        nvcc_compile_args += ["-DENABLE_SM80_EXT_OPS"]
+        # append_attention
         os.system(
             "python utils/auto_gen_template_instantiation.py --config gpu_ops/append_attn/template_config.json --output gpu_ops/append_attn/template_instantiation/autogen --skip-fp8"
         )
