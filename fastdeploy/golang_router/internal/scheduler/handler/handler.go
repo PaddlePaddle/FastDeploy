@@ -125,7 +125,7 @@ func SelectWorker(ctx context.Context, workers []string, message string, workerT
 
 	// 2) Prefill: current token processing count (process_tokens)
 	var tokens uint64
-	if workerType == "prefill" && message != "" {
+	if (workerType == "prefill" || workerType == "mixed") && message != "" {
 		tokenCounter := GetOrCreateTokenCounter(ctx, selectWorkerURL)
 		tokenCounter.Add(estimateTokens(message))
 		tokens = tokenCounter.Get()
