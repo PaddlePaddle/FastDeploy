@@ -17,7 +17,7 @@
 from .base import KVCacheBase
 from .cache_controller import CacheController
 from .cache_manager import CacheManager
-from .cache_utils import LayerDoneCounter, LayerSwapTimeoutError
+from .cache_utils import LayerDoneCounter, LayerSwapTimeoutError, get_rdma_nics
 from .metadata import (
     AsyncTaskHandler,
     BlockNode,
@@ -49,6 +49,7 @@ __all__ = [
     "LayerSwapTimeoutError",
     # Utils
     "LayerDoneCounter",
+    "get_rdma_nics",
     # Metadata
     "CacheBlockMetadata",
     "BlockNode",

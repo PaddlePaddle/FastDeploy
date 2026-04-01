@@ -405,18 +405,6 @@ class CacheManager(KVCacheBase):
     # These methods provide backward compatibility with PrefixCacheManager interface
     # for resource_manager.py
 
-    def write_cache_to_storage(self, req: Any) -> None:
-        """
-        Write request cache to storage if storage is enabled.
-
-        Args:
-            req: The request object containing cache data to write
-        """
-        if self._storage_scheduler is None:
-            return
-        # TODO: Implement storage write logic when storage is enabled
-        pass
-
     @property
     def gpu_free_block_list(self) -> List[int]:
         """
@@ -551,22 +539,38 @@ class CacheManager(KVCacheBase):
         """
         Match hash values against storage.
 
+        Checks each hash for existence in storage and returns the longest
+        consecutive prefix of hashes that are all present (prefix semantics
+        are required because a cache miss in the middle breaks prefetch continuity).
+
         Args:
-            hash_values: List of hash values to check
+            hash_values: List of block hash values to check, in prefix order.
 
         Returns:
-            List of hashes that exist in storage
+            The leading sub-list of hash_values whose blocks all exist in storage.
+            For example, if hash_values = [h0, h1, h2, h3] and h2 is missing,
+            returns [h0, h1].
         """
         if not self._storage_scheduler:
             return []
 
         try:
             if not self._storage_scheduler.is_connected():
-                self._storage_scheduler.connect()
+                logger.warning("_match_storage: storage scheduler disconnected, skipping storage match")
+                return []
 
-            existence_map = self._storage_scheduler.query(hash_values)
-            return [h for h, exists in existence_map.items() if exists]
+            # batch_exists returns a bool list aligned with hash_values
+            exist_flags = self._storage_scheduler.batch_exists(hash_values)
+
+            # Return only the leading consecutive hit run
+            matched = []
+            for h, exists in zip(hash_values, exist_flags):
+                if not exists:
+                    break
+                matched.append(h)
+            return matched
         except Exception:
+            logger.warning("_match_storage failed", exc_info=True)
             return []
 
     # ============ Eviction Methods ============

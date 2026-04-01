@@ -622,6 +622,15 @@ class CacheController(KVCacheBase):
         # Share host_cache_kvs_map with transfer manager
         self._transfer_manager.set_host_cache_kvs_map(self.host_cache_kvs_map)
 
+        # Propagate block shape so transfer manager can compute per-block byte offsets
+        # for prefetch_from_storage / backup_to_storage.
+        self._transfer_manager.set_host_block_shape(
+            key_shape=self._host_key_cache_shape,
+            value_shape=self._host_value_cache_shape,
+            scale_shape=self._host_cache_scale_shape,
+            cache_item_bytes=cache_item_bytes,
+        )
+
     def get_host_cache_kvs_map(self) -> Dict[str, Any]:
         """
         Get the Host KV Cache pointer dictionary.
