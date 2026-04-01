@@ -1035,7 +1035,7 @@ class MTPProposer(Proposer):
                         sampler_output.logprobs_tensors.selected_token_ranks,
                         recover_model_output_map["batch_token_num"][:real_bsz],
                         recover_model_output_map["cu_batch_token_offset"][:real_bsz],
-                        self.model_inputs["not_need_stop_device"],
+                        self.model_inputs["not_need_stop"],
                         recover_model_output_map["seq_lens_decoder"],
                         recover_model_output_map["prompt_lens"],
                         4,  # mtype

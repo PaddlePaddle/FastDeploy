@@ -1041,7 +1041,7 @@ class SpeculativeSampler(nn.Layer):
             )
             sampler_output.logprobs_tensors = logprobs_tensors
             if cu_batch_token_offset is not None:
-                sampler_output.cu_batch_token_offset = cu_batch_token_offset
+                sampler_output.cu_batch_token_offset = cu_batch_token_offset.cpu()
         return sampler_output
 
     def forward_xpu(
