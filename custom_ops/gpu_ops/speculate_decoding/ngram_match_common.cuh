@@ -22,9 +22,12 @@
 //
 // Two-phase parallel architecture:
 //   Phase 1 — <<<bsz, NGRAM_BLOCK_THREADS>>>: parallel sliding-window search
-//   Phase 2 — <<<1, 1>>>: serial threshold + token copy (inter-batch dep)
+//             + tentative token copy to scratch buffers
+//   Phase 2 — <<<1, NGRAM_GATHER_THREADS>>>: parallel threshold truncation
+//             via CUB BlockScan prefix-sum, then copy winners to output
 
 #define NGRAM_BLOCK_THREADS 256
+#define NGRAM_GATHER_THREADS 1024
 
 // Intermediate result for one batch item produced by Phase 1 (parallel search)
 // and consumed by Phase 2 (serial threshold + copy).

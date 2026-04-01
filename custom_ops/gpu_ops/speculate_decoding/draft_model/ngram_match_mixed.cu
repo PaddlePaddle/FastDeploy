@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <cub/cub.cuh>
 #include "paddle/extension.h"
 #include "../ngram_match_common.cuh"
 
@@ -24,34 +25,52 @@
 #endif
 
 // ============================================================
-// Phase 1 mixed search kernel — one block per batch item
+// Phase 1 mixed search kernel — one block per batch item.
+// Also copies tentative matched tokens to scratch buffers.
 // ============================================================
 __global__ void ngram_match_mixed_search_kernel(
     const int64_t *input_ids,
     const int64_t *input_ids_len,
     const int64_t *pre_ids,
     const int64_t *step_idx,
+    const int *draft_token_num,
     const int32_t *seq_lens_this_time,
+    const int32_t *seq_lens_decoder,
+    const int64_t *max_dec_len,
+    int64_t *draft_tokens_copy,
+    int32_t *seq_lens_this_time_copy,
     int64_t input_ids_stride,
     int64_t pre_ids_stride,
+    int64_t draft_tokens_stride,
     int64_t max_batch_size,
     int max_ngram_size,
     int min_ngram_size,
+    int max_draft_tokens_param,
     NgramMatchResult *match_results) {
   int batch_idx = blockIdx.x;
   if (batch_idx >= max_batch_size) return;
 
   __shared__ int64_t s_min_pos;
 
+  const int ori_seq_len_this_time = seq_lens_this_time[batch_idx];
+
   if (threadIdx.x == 0) {
     match_results[batch_idx].match_pos = -1;
     match_results[batch_idx].ngram_size = 0;
     match_results[batch_idx].haystack_type = 0;
+    // Default: keep the original seq_lens_this_time (no ngram match)
+    seq_lens_this_time_copy[batch_idx] = ori_seq_len_this_time;
   }
   __syncthreads();
 
-  // Skip batch items with no active tokens (matches CPU path logic)
-  if (seq_lens_this_time[batch_idx] == 0) return;
+  // Skip batch items with no active tokens
+  if (ori_seq_len_this_time == 0) return;
+
+  // Compute max_draft_tokens for this batch item
+  int max_draft_tokens = static_cast<int>(min(
+      static_cast<int64_t>(max_draft_tokens_param - ori_seq_len_this_time + 1),
+      max_dec_len[batch_idx] - step_idx[batch_idx] - 1));
+  if (max_draft_tokens <= 0) return;
 
   const int64_t *cur_input_ids = input_ids + batch_idx * input_ids_stride;
   const int64_t cur_input_ids_len = input_ids_len[batch_idx];
@@ -71,6 +90,21 @@ __global__ void ngram_match_mixed_search_kernel(
         match_results[batch_idx].match_pos = pos;
         match_results[batch_idx].ngram_size = ngram_size;
         match_results[batch_idx].haystack_type = 0;
+
+        // Tentative token copy to scratch
+        int64_t start_idx = pos + ngram_size;
+        int64_t end_idx =
+            min(start_idx + static_cast<int64_t>(max_draft_tokens),
+                cur_input_ids_len);
+        if (start_idx < end_idx) {
+          int64_t n = end_idx - start_idx;
+          seq_lens_this_time_copy[batch_idx] =
+              static_cast<int32_t>(ori_seq_len_this_time + n);
+          int64_t *dst = draft_tokens_copy + batch_idx * draft_tokens_stride;
+          for (int64_t k = 0; k < n; k++) {
+            dst[ori_seq_len_this_time + k] = cur_input_ids[start_idx + k];
+          }
+        }
       }
       return;
     }
@@ -82,6 +116,20 @@ __global__ void ngram_match_mixed_search_kernel(
         match_results[batch_idx].match_pos = pos;
         match_results[batch_idx].ngram_size = ngram_size;
         match_results[batch_idx].haystack_type = 1;
+
+        // Tentative token copy to scratch
+        int64_t start_idx = pos + ngram_size;
+        int64_t end_idx = min(
+            start_idx + static_cast<int64_t>(max_draft_tokens), cur_step_idx);
+        if (start_idx < end_idx) {
+          int64_t n = end_idx - start_idx;
+          seq_lens_this_time_copy[batch_idx] =
+              static_cast<int32_t>(ori_seq_len_this_time + n);
+          int64_t *dst = draft_tokens_copy + batch_idx * draft_tokens_stride;
+          for (int64_t k = 0; k < n; k++) {
+            dst[ori_seq_len_this_time + k] = cur_pre_ids[start_idx + k];
+          }
+        }
       }
       return;
     }
@@ -89,83 +137,73 @@ __global__ void ngram_match_mixed_search_kernel(
 }
 
 // ============================================================
-// Phase 2 mixed gather kernel — serial threshold + copy
+// Phase 2 mixed gather kernel — BlockScan threshold + copy
+//   <<<1, NGRAM_GATHER_THREADS>>>
+//
+// Reads tentative allocations from Phase 1 scratch buffers,
+// computes prefix sums to enforce the global threshold, then
+// writes final seq_lens_this_time and copies draft tokens.
+// The mixed variant respects ori_seq_len_this_time (MTP tokens).
 // ============================================================
 __global__ void ngram_match_mixed_gather_kernel(
-    const int64_t *input_ids,
-    const int64_t *input_ids_len,
-    const int64_t *pre_ids,
-    const int64_t *step_idx,
-    const int *draft_token_num,
+    const int64_t *draft_tokens_copy,
+    const int32_t *seq_lens_this_time_copy,
+    const int32_t *seq_lens_this_time_orig,
     int64_t *draft_tokens,
     int32_t *seq_lens_this_time,
-    const int32_t *seq_lens_decoder,
-    const int64_t *max_dec_len,
-    int64_t input_ids_stride,
-    int64_t pre_ids_stride,
     int64_t draft_tokens_stride,
     int64_t max_batch_size,
-    int max_draft_tokens_param,
-    int threshold,
-    const NgramMatchResult *match_results) {
-  int unprocessed_batch_size = 0;
-  for (int i = 0; i < max_batch_size; i++) {
-    if (seq_lens_decoder[i] > 0) {
-      unprocessed_batch_size++;
-    }
+    int threshold) {
+  typedef cub::BlockScan<int, NGRAM_GATHER_THREADS> BlockScanInt;
+  __shared__ typename BlockScanInt::TempStorage temp_storage;
+
+  int tid = threadIdx.x;
+
+  // Load tentative total token count from Phase 1
+  int tentative = 0;
+  if (tid < max_batch_size) {
+    tentative = seq_lens_this_time_copy[tid];
   }
 
-  for (int batch_idx = 0; batch_idx < max_batch_size; batch_idx++) {
-    const int ori_seq_len_this_time = seq_lens_this_time[batch_idx];
-    int max_draft_tokens =
-        static_cast<int>(min(static_cast<int64_t>(max_draft_tokens_param -
-                                                  ori_seq_len_this_time + 1),
-                             max_dec_len[batch_idx] - step_idx[batch_idx] - 1));
+  // Scan: inclusive prefix sum of tentative token counts
+  int token_prefix;
+  BlockScanInt(temp_storage).InclusiveSum(tentative, token_prefix);
+  __syncthreads();
 
-    if (ori_seq_len_this_time == 0 || max_draft_tokens <= 0) {
-      continue;
+  if (tid < max_batch_size) {
+    if (tentative == 0) {
+      seq_lens_this_time[tid] = 0;
+      return;
     }
 
-    unprocessed_batch_size--;
-    int sum_token_num = 0;
-    for (int i = 0; i <= batch_idx; i++) {
-      sum_token_num += seq_lens_this_time[i];
-    }
-    int left_min_token_num = unprocessed_batch_size;
+    int ori = seq_lens_this_time_orig[tid];
+    int ngram_tokens = tentative - ori;  // tokens added by ngram match
 
-    if (sum_token_num + max_draft_tokens + left_min_token_num > threshold) {
-      int tmp = threshold - sum_token_num - left_min_token_num;
-      max_draft_tokens = min(tmp, max_draft_tokens);
-    }
+    int exclusive_token_prefix = token_prefix - tentative;
 
-    if (sum_token_num + left_min_token_num >= threshold - 1) {
-      continue;
-    }
+    // Budget: threshold minus everything before this item
+    int budget = threshold - exclusive_token_prefix;
 
-    const NgramMatchResult &res = match_results[batch_idx];
-    if (res.match_pos < 0) continue;
-
-    const int64_t *haystack;
-    int64_t haystack_len;
-    if (res.haystack_type == 0) {
-      haystack = input_ids + batch_idx * input_ids_stride;
-      haystack_len = input_ids_len[batch_idx];
+    int actual;
+    if (budget <= ori) {
+      // Can't even keep all MTP base tokens — keep original only
+      actual = ori;
     } else {
-      haystack = pre_ids + batch_idx * pre_ids_stride;
-      haystack_len = step_idx[batch_idx];
+      int ngram_budget = budget - ori;
+      actual = ori + min(ngram_tokens, ngram_budget);
     }
+    actual = min(actual, tentative);
 
-    int64_t start_idx = res.match_pos + res.ngram_size;
-    int64_t end_idx =
-        min(start_idx + static_cast<int64_t>(max_draft_tokens), haystack_len);
-    if (start_idx >= end_idx) continue;
+    seq_lens_this_time[tid] = actual;
 
-    int64_t n = end_idx - start_idx;
-    seq_lens_this_time[batch_idx] =
-        static_cast<int32_t>(ori_seq_len_this_time + n);
-    int64_t *cur_draft = draft_tokens + batch_idx * draft_tokens_stride;
-    for (int64_t k = 0; k < n; k++) {
-      cur_draft[ori_seq_len_this_time + k] = haystack[start_idx + k];
+    // Copy ngram draft tokens from scratch to output
+    int ngram_to_copy = actual - ori;
+    if (ngram_to_copy > 0) {
+      int64_t *dst = draft_tokens + tid * draft_tokens_stride;
+      const int64_t *src = draft_tokens_copy + tid * draft_tokens_stride;
+      for (int k = 0; k < ngram_to_copy; k++) {
+        dst[ori + k] = src[ori + k];
+      }
     }
   }
 }
@@ -309,8 +347,9 @@ static void find_candidate_pred_tokens_mixed(const int64_t *input_ids,
 //
 // Phase 1: <<<bsz, NGRAM_BLOCK_THREADS>>> — parallel sliding-window
 //          search within each batch item (256 threads per batch).
-// Phase 2: <<<1, 1>>> — serial threshold + token copy (inter-batch
-//          dependency via running sum of seq_lens_this_time).
+//          Also copies matched draft tokens to a scratch buffer.
+// Phase 2: <<<1, NGRAM_GATHER_THREADS>>> — CUB BlockScan prefix-sum
+//          threshold enforcement + final token copy.
 // ============================================================
 
 void HybridMtpNgram(const paddle::Tensor &input_ids,
@@ -353,7 +392,28 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
     auto *match_results =
         reinterpret_cast<NgramMatchResult *>(match_buf.data<uint8_t>());
 
-    // Phase 1: parallel search — one block per batch, 256 threads per block
+    // Scratch copy of draft_tokens (Phase 1 writes tentative tokens here)
+    auto draft_tokens_copy =
+        paddle::empty({max_batch_size, draft_tokens_stride},
+                      paddle::DataType::INT64,
+                      input_ids.place());
+
+    // Scratch copy of seq_lens_this_time (Phase 1 writes tentative counts)
+    auto seq_lens_this_time_copy = paddle::empty(
+        {max_batch_size}, paddle::DataType::INT32, input_ids.place());
+
+    // Save a copy of original seq_lens_this_time for Phase 2
+    // (Phase 1 reads from the original, Phase 2 needs ori values)
+    auto seq_lens_this_time_orig = paddle::empty(
+        {max_batch_size}, paddle::DataType::INT32, input_ids.place());
+    cudaMemcpyAsync(seq_lens_this_time_orig.data<int32_t>(),
+                    seq_lens_this_time.data<int32_t>(),
+                    max_batch_size * sizeof(int32_t),
+                    cudaMemcpyDeviceToDevice,
+                    stream);
+
+    // Phase 1: parallel search — one block per batch, 256 threads per block.
+    // Also copies matched tokens to scratch and writes tentative seq_lens.
     ngram_match_mixed_search_kernel<<<max_batch_size,
                                       NGRAM_BLOCK_THREADS,
                                       0,
@@ -362,32 +422,32 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
         input_ids_len.data<int64_t>(),
         pre_ids.data<int64_t>(),
         step_idx.data<int64_t>(),
-        seq_lens_this_time.data<int32_t>(),
-        input_ids_stride,
-        pre_ids_stride,
-        max_batch_size,
-        max_ngram_size,
-        min_ngram_size,
-        match_results);
-
-    // Phase 2: serial threshold + token copy (same stream = ordered)
-    ngram_match_mixed_gather_kernel<<<1, 1, 0, stream>>>(
-        input_ids.data<int64_t>(),
-        input_ids_len.data<int64_t>(),
-        pre_ids.data<int64_t>(),
-        step_idx.data<int64_t>(),
         draft_token_num.data<int>(),
-        const_cast<int64_t *>(draft_tokens.data<int64_t>()),
-        const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
+        seq_lens_this_time.data<int32_t>(),
         seq_lens_decoder.data<int32_t>(),
         max_dec_len.data<int64_t>(),
+        draft_tokens_copy.data<int64_t>(),
+        seq_lens_this_time_copy.data<int32_t>(),
         input_ids_stride,
         pre_ids_stride,
         draft_tokens_stride,
         max_batch_size,
+        max_ngram_size,
+        min_ngram_size,
         max_draft_tokens,
-        threshold,
         match_results);
+
+    // Phase 2: BlockScan threshold enforcement + final token copy.
+    // <<<1, NGRAM_GATHER_THREADS>>> — all batch items handled by one block.
+    ngram_match_mixed_gather_kernel<<<1, NGRAM_GATHER_THREADS, 0, stream>>>(
+        draft_tokens_copy.data<int64_t>(),
+        seq_lens_this_time_copy.data<int32_t>(),
+        seq_lens_this_time_orig.data<int32_t>(),
+        const_cast<int64_t *>(draft_tokens.data<int64_t>()),
+        const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
+        draft_tokens_stride,
+        max_batch_size,
+        threshold);
   } else {
     find_candidate_pred_tokens_mixed(
         input_ids.data<int64_t>(),
