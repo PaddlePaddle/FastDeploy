@@ -39,6 +39,30 @@ for test_file in "${test_files[@]}"; do
         echo "${test_file}" >> "${FAILED_CASE_FILE}"
         FAILED_COUNT=$((FAILED_COUNT + 1))
 
+        # Save logs for failed test case
+        error_base_dir="${REPO_ROOT}/run_4_cards_tests_error_logs"
+        test_folder_name=$(echo "$test_file" | tr '/' '_' | sed 's/\.py$//')
+        error_log_dir="${error_base_dir}/${test_folder_name}"
+        mkdir -p "${error_log_dir}"
+
+        echo "Saving log* to ${error_log_dir}..."
+
+        # Copy all log* directories
+        for log_dir in "${REPO_ROOT}"/log*; do
+            if [ -d "${log_dir}" ]; then
+                cp -r "${log_dir}" "${error_log_dir}/" || true
+            fi
+        done
+
+        # Copy all *.log files
+        for log_file in "${REPO_ROOT}"/*.log; do
+            if [ -f "${log_file}" ]; then
+                cp "${log_file}" "${error_log_dir}/" || true
+            fi
+        done
+
+        echo "*.log saved to ${error_log_dir}"
+
         echo ""
         echo "==================== Dumping Logs ===================="
 
