@@ -63,10 +63,8 @@ class TestInputPreprocessorBranching(unittest.TestCase):
         mock_dp = MagicMock()
         with (
             patch.dict("sys.modules", {"fastdeploy.plugins": None, "fastdeploy.plugins.input_processor": None}),
-            patch("fastdeploy.input.preprocess.envs") as mock_envs,
             patch("fastdeploy.input.text_processor.TextProcessor", return_value=mock_dp),
         ):
-            mock_envs.ENABLE_V1_DATA_PROCESSOR = False
             pp.create_processor()
 
         self.assertIs(pp.processor, mock_dp)

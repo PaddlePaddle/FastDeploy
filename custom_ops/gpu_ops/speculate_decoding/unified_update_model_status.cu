@@ -190,13 +190,11 @@ void UnifiedUpdateModelStatus(const paddle::Tensor &seq_lens_encoder,
   constexpr int BlockSize = 1024;
 
   // has_running_seqs is CPU tensor, need to copy to GPU first
-  auto has_running_seqs_gpu =
-      has_running_seqs.copy_to(seq_lens_this_time.place(), false);
   unified_update_model_status_kernel<BlockSize>
       <<<1, BlockSize, 0, seq_lens_this_time.stream()>>>(
           const_cast<int *>(seq_lens_encoder.data<int>()),
           const_cast<int *>(seq_lens_decoder.data<int>()),
-          const_cast<bool *>(has_running_seqs_gpu.data<bool>()),
+          const_cast<bool *>(has_running_seqs.data<bool>()),
           const_cast<int64_t *>(step_input_ids.data<int64_t>()),
           const_cast<int64_t *>(step_output_ids.data<int64_t>()),
           const_cast<int *>(step_output_len.data<int>()),
@@ -213,11 +211,6 @@ void UnifiedUpdateModelStatus(const paddle::Tensor &seq_lens_encoder,
           max_step_tokens,
           max_model_len,
           num_end_tokens);
-  // Copy result back to CPU
-  auto has_running_seqs_cpu =
-      has_running_seqs_gpu.copy_to(has_running_seqs.place(), false);
-  bool *out_data = const_cast<bool *>(has_running_seqs.data<bool>());
-  out_data[0] = has_running_seqs_cpu.data<bool>()[0];
 }
 
 PD_BUILD_STATIC_OP(unified_update_model_status)
