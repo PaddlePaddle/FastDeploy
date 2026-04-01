@@ -1,10 +1,11 @@
-'''
+"""
 Author:
 Date: 2026-03-31 10:40:18
-LastEditors:  
+LastEditors:
 LastEditTime: 2026-04-01 11:00:47
 FilePath: /fastdeploy/test_decode_token.py
-'''
+"""
+
 """
 # Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
@@ -80,7 +81,7 @@ def _make_mock_ids2tokens(decode_status, undecoded_tokens=None):
                 # Only advance offsets when there are actual tokens
                 cum_len = len(decode_status[task_id][2])
                 decode_status[task_id][0] = max(0, cum_len - 1)  # prefix_offset
-                decode_status[task_id][1] = cum_len               # read_offset
+                decode_status[task_id][1] = cum_len  # read_offset
                 decode_status[task_id][3] += delta_text
 
         return delta_text, previous_token_ids, previous_texts
