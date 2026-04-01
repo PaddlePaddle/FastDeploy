@@ -66,6 +66,9 @@ class IluvatarModelRunner(GPUModelRunner):
                 not self.cache_config.enable_chunked_prefill
             ), "Iluvatar does not support chunked prefill for VL model"
 
+        if hasattr(self.quant_config, "moe_quant_type") and self.quant_config.moe_quant_type == "wint4":
+            assert not self.use_cudagraph, "Iluvatar does not support cuda graph for weight_only_int4"
+
         print(f"self.use_cudagraph={self.use_cudagraph}")
         # VL neox style = True
         emb_shape = self.share_inputs["rope_emb"].shape

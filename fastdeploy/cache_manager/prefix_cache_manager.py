@@ -217,7 +217,7 @@ class PrefixCacheManager:
             is_server=False,
             num_client=tensor_parallel_size,
             client_id=0,
-            local_data_parallel_id=self.local_data_parallel_id,
+            local_data_parallel_id=0,
         )
 
         current_dir_path = os.path.split(os.path.abspath(__file__))[0]
@@ -293,7 +293,7 @@ class PrefixCacheManager:
         else:
             storage_arg_str = " "
 
-        if self.cache_config.swap_space or self.cache_config.kvcache_storage_backend:
+        if self.cache_config.num_cpu_blocks > 0 or self.cache_config.kvcache_storage_backend:
             for i in range(tensor_parallel_size):
                 launch_cmd = (
                     "FLAGS_allocator_strategy=auto_growth "
@@ -314,7 +314,6 @@ class PrefixCacheManager:
                     + f" --pod_ip {pod_ip}"
                     + f" --engine_worker_queue_port {engine_worker_queue_port}"
                     + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
-                    + f" --ipc_suffix {ipc_suffix}"
                     + f" --protocol {cache_config.cache_transfer_protocol}"
                     + f" --local_data_parallel_id {self.local_data_parallel_id}"
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
@@ -353,9 +352,8 @@ class PrefixCacheManager:
 
         # Start additional threads
         if cache_config.kvcache_storage_backend or self.num_cpu_blocks > 0:
-            logger.info("Enable hierarchical cache.")
             threading.Thread(target=self.recv_data_transfer_result, daemon=True).start()
-        if cache_config.enable_prefix_caching:
+        if cache_config.enable_prefix_caching and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
             threading.Thread(target=self.clear_prefix_cache, daemon=True).start()
 
         all_cache_processes = cache_messager_processes + cache_manager_processes
@@ -464,12 +462,12 @@ class PrefixCacheManager:
         main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
 
-    def can_allocate_gpu_blocks(self, num_blocks: int):
+    def can_allocate_gpu_blocks(self, num_blocks: int, try_free_gpu_blocks: bool = True):
         """
         Check if num_blocks gpu blocks can be allocated.
         """
         if len(self.gpu_free_block_list) < num_blocks:
-            if self.cache_config.enable_prefix_caching:
+            if self.cache_config.enable_prefix_caching and try_free_gpu_blocks:
                 self.free_block_ids(num_blocks)
             if len(self.gpu_free_block_list) < num_blocks:
                 return False
@@ -816,7 +814,7 @@ class PrefixCacheManager:
                 # 2. prepare cpu cache: allocate gpu cache for matched cpu blocks, wait for data transfer to complete
                 gpu_recv_block_ids = []
                 match_cpu_blocks_num = len(match_cpu_block_ids)
-                if self.can_allocate_gpu_blocks(num_blocks=match_cpu_blocks_num):
+                if self.can_allocate_gpu_blocks(num_blocks=match_cpu_blocks_num, try_free_gpu_blocks=False):
                     if match_cpu_blocks_num > 0:
                         logger.debug(
                             f"request_match_blocks: req_id {req_id}, allocate {match_cpu_blocks_num} block to receive cpu cache"
@@ -847,7 +845,7 @@ class PrefixCacheManager:
                 match_storage_block_ids = []
 
                 if self.kvcache_storage_backend and no_match_token_num >= block_size:
-                    if not self.can_allocate_gpu_blocks(num_blocks=no_match_block_num):
+                    if not self.can_allocate_gpu_blocks(num_blocks=no_match_block_num, try_free_gpu_blocks=False):
                         raise Exception(
                             "request_match_blocks: Not enough GPU memory to allocate cache for matched Storage Cache"
                         )
@@ -883,7 +881,7 @@ class PrefixCacheManager:
                     read_storage_task = ReadStorageTask(
                         task_id=req_id,
                         keys=no_match_block_keys,
-                        token_ids=input_token_ids,
+                        token_ids=input_token_ids if self.kvcache_storage_backend == "attention_store" else None,
                         gpu_block_ids=gpu_recv_storage_block_ids,
                         start_read_block_idx=match_token_num // block_size,
                     )
@@ -1143,8 +1141,11 @@ class PrefixCacheManager:
         token_ids = request.prompt_token_ids
         if isinstance(token_ids, np.ndarray):
             token_ids = token_ids.tolist()
+
         if self.config.cache_config.enable_output_caching:
-            token_ids += request.output_token_ids
+            input_token_ids = token_ids + request.output_token_ids
+        else:
+            input_token_ids = token_ids
 
         req_id = request.request_id
         keys = []
@@ -1161,7 +1162,7 @@ class PrefixCacheManager:
         write_storage_task = WriteStorageTask(
             task_id=req_id,
             keys=keys,
-            token_ids=token_ids,
+            token_ids=input_token_ids if self.kvcache_storage_backend == "attention_store" else None,
             gpu_block_ids=gpu_block_ids,
         )
         logger.debug(f"issue write storage task: {write_storage_task}")
@@ -1195,7 +1196,9 @@ class PrefixCacheManager:
             token_ids = list(token_ids)
 
         if self.config.cache_config.enable_output_caching:
-            token_ids = token_ids + request.output_token_ids
+            input_token_ids = token_ids + request.output_token_ids
+        else:
+            input_token_ids = token_ids
 
         # 2. Calculate cache keys using chained hash (consistent with P instance)
         keys = []
@@ -1203,8 +1206,8 @@ class PrefixCacheManager:
         block_size = self.config.cache_config.block_size
         mm_idx = 0  # Multimodal index for tracking position in mm_inputs
 
-        for i in range(0, len(token_ids), block_size):
-            block_token_ids = token_ids[i : i + block_size]
+        for i in range(0, len(input_token_ids), block_size):
+            block_token_ids = input_token_ids[i : i + block_size]
             if len(block_token_ids) < block_size:
                 break  # Do not cache incomplete block
 
@@ -1238,7 +1241,7 @@ class PrefixCacheManager:
         write_storage_task = WriteStorageTask(
             task_id=req_id,
             keys=keys,
-            token_ids=token_ids,
+            token_ids=input_token_ids if self.kvcache_storage_backend == "attention_store" else None,
             gpu_block_ids=gpu_block_ids,
         )
 
@@ -1626,7 +1629,7 @@ class PrefixCacheManager:
             mm_inputs["mm_hashes"]
         ), f"mm_idx {mm_idx} out of range {len(mm_inputs['mm_hashes'])}"
 
-        if mm_inputs["mm_positions"][-1].offset + mm_inputs["mm_positions"][-1].length < start_idx:
+        if mm_inputs["mm_positions"][-1].offset + mm_inputs["mm_positions"][-1].length <= start_idx:
             # non images in current block
             return mm_idx, hash_keys
 
@@ -1634,7 +1637,7 @@ class PrefixCacheManager:
             image_offset = mm_inputs["mm_positions"][img_idx].offset
             image_length = mm_inputs["mm_positions"][img_idx].length
 
-            if image_offset + image_length < start_idx:
+            if image_offset + image_length <= start_idx:
                 # image before block
                 continue
             elif image_offset >= end_idx:
@@ -2168,7 +2171,7 @@ class PrefixCacheManager:
                 event_type = data[0]
 
                 if event_type.value == CacheStatus.STORAGE2GPU.value:
-                    logger.info(f"recv_data_transfer_result: {data}")
+                    logger.debug(f"recv_data_transfer_result: {data}")
                     task_id, hash_keys, block_ids = data[1:]
                     if task_id not in self.storage_prefetch_block_ids:
                         self.storage_prefetch_block_ids[task_id] = []
@@ -2179,7 +2182,7 @@ class PrefixCacheManager:
                         if task_id in self.task_prefetch_event:
                             self.task_prefetch_event[task_id].set()
                 elif event_type.value == CacheStatus.GPU2STORAGE.value:
-                    logger.info(f"recv_data_transfer_result: {data}")
+                    logger.debug(f"recv_data_transfer_result: {data}")
                     task_id, hash_keys, block_ids = data[1:]
                     if task_id in self.task_write_back_event:
                         self.task_write_back_event[task_id].set()

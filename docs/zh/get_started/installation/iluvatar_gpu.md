@@ -34,8 +34,7 @@ docker exec -it paddle_infer bash
 ### 3.2 安装paddle
 
 ```bash
-pip3 install paddlepaddle==3.4.0.dev20260226 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-pip3 install paddle-iluvatar-gpu==3.0.0.dev20260226 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+pip3 install paddlepaddle-iluvatar==3.4.0.dev20260326 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
 ```
 
 ### 3.3 安装fastdeploy
@@ -59,7 +58,6 @@ bash build.sh
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 run_demo.py
@@ -136,7 +134,6 @@ The largest ocean is  the Pacific Ocean, covering an area of approximately â¦ 
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 -m fastdeploy.entrypoints.openai.api_server \
@@ -193,7 +190,6 @@ Latency: 1539.625 s
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 -m fastdeploy.entrypoints.openai.api_server \
@@ -230,7 +226,6 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 -m fastdeploy.entrypoints.openai.api_server \
@@ -285,7 +280,6 @@ python3 -u bench_gsm8k.py --port 8180 --num-questions 1319 --num-shots 5 --paral
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 run_demo_vl.py
@@ -384,7 +378,6 @@ generated_text=
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 -m fastdeploy.entrypoints.openai.api_server \
@@ -424,7 +417,6 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 -m fastdeploy.entrypoints.openai.api_server \
@@ -475,7 +467,6 @@ pip3 install -e ".[doc-parser]"
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 export CUDA_VISIBLE_DEVICES=1
@@ -538,3 +529,7 @@ python3 infer_ocr_vl_benchmark.py
 ```
 
 每推理完一张图片，会在`output`路径下生成一个对应的`md`文件，跑完整个benchmark（1355张图片）大概需要1.8个小时。
+
+## 5. 支持的量化策略
+- `W8A16`: `--quantization wint8`
+- `W4A16`: `--quantization wint4`

@@ -142,34 +142,34 @@ class TestCUDAGrpahRecapture(unittest.TestCase):
     def capture_and_replay(self, input_tensor1, forward_meta1):
         """ """
         # Trigger Capture
-        print_gpu_memory_use(0, "before capture")
+        print_gpu_memory_use("before capture", 0)
         output1 = self.test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-        print_gpu_memory_use(0, "after capture")
+        print_gpu_memory_use("after capture", 0)
 
         # Replay
         output1 = self.test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
         assert (output1 == self.output_correct).all()
 
         # Destroy
-        print_gpu_memory_use(0, "before destroy")
+        print_gpu_memory_use("before destroy", 0)
         self.test_model1.clear_grpah_opt_backend()
-        print_gpu_memory_use(0, "after destroy")
+        print_gpu_memory_use("after destroy", 0)
 
     def recapture_and_replay(self, input_tensor1, forward_meta1):
         """ """
         # Trigger Capture
-        print_gpu_memory_use(0, "before recapture")
+        print_gpu_memory_use("before recapture", 0)
         output2 = self.test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-        print_gpu_memory_use(0, "after recapture")
+        print_gpu_memory_use("after recapture", 0)
 
         # Replay
         output2 = self.test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
         assert (output2 == self.output_correct).all()
 
         # Destroy
-        print_gpu_memory_use(0, "before destroy")
+        print_gpu_memory_use("before destroy", 0)
         self.test_model1.clear_grpah_opt_backend()
-        print_gpu_memory_use(0, "after destroy")
+        print_gpu_memory_use("after destroy", 0)
 
 
 if __name__ == "__main__":
