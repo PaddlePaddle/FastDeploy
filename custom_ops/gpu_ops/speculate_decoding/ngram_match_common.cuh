@@ -29,14 +29,6 @@
 #define NGRAM_BLOCK_THREADS 256
 #define NGRAM_GATHER_THREADS 1024
 
-// Intermediate result for one batch item produced by Phase 1 (parallel search)
-// and consumed by Phase 2 (serial threshold + copy).
-struct NgramMatchResult {
-  int64_t match_pos;  // first (leftmost) match position in haystack (-1=none)
-  int ngram_size;     // which ngram_size produced this match
-  int haystack_type;  // 0 = input_ids, 1 = pre_ids
-};
-
 // ------------------------------------------------------------
 // atomicMin for int64_t via CAS loop.  CUDA has no native
 // int64 atomicMin.  All values are non-negative positions or

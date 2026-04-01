@@ -42,8 +42,7 @@ __global__ void ngram_match_search_kernel(const int64_t *input_ids,
                                           int64_t max_model_len,
                                           int64_t draft_tokens_stride,
                                           int64_t max_batch_size,
-                                          int max_ngram_size,
-                                          int max_draft_tokens_param) {
+                                          int max_ngram_size) {
   int batch_idx = blockIdx.x;
   if (batch_idx >= max_batch_size) return;
 
@@ -425,8 +424,7 @@ void NgramMatch(const paddle::Tensor &input_ids,
         max_model_len,
         draft_tokens_stride,
         max_batch_size,
-        max_ngram_size,
-        max_draft_tokens);
+        max_ngram_size);
 
     // Phase 2: BlockScan threshold enforcement + final token copy.
     // <<<1, NGRAM_GATHER_THREADS>>> — all batch items handled by one block.
