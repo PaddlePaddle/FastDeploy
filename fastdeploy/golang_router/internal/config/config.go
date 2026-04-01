@@ -100,7 +100,7 @@ func Load(configPath, listenPort string, isSplitwise bool) (*Config, error) {
 		cfg.Scheduler.EvictionIntervalSecs = 60
 	}
 	if cfg.Scheduler.EvictionDurationMins == 0 {
-		cfg.Scheduler.EvictionDurationMins = 5
+		cfg.Scheduler.EvictionDurationMins = 30
 	}
 	if cfg.Scheduler.CacheBlockSize == 0 {
 		cfg.Scheduler.CacheBlockSize = 64
