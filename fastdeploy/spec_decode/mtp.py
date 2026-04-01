@@ -103,7 +103,7 @@ class MTPProposer(Proposer):
         self.num_main_model_layers = self.model_config.num_hidden_layers
         self.local_rank = local_rank
         self.device_id = device_id
-        self.use_attn_mask_offset = self.enable_mm and self.fd_config.deploy_modality != "text"
+        self.use_attn_mask_offset = self.enable_mm
 
         self._update_mtp_config(main_model)
         self._load_model()

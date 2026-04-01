@@ -48,6 +48,7 @@ class InputPreprocessor:
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
         tool_parser: str = None,
         enable_processor_cache: bool = False,
+        enable_mm_runtime: Optional[bool] = None,
     ) -> None:
         self.model_config = model_config
         self.model_name_or_path = self.model_config.model
@@ -56,6 +57,7 @@ class InputPreprocessor:
         self.mm_processor_kwargs = mm_processor_kwargs
         self.tool_parser = tool_parser
         self.enable_processor_cache = enable_processor_cache
+        self.enable_mm_runtime = self.model_config.enable_mm if enable_mm_runtime is None else enable_mm_runtime
 
     def create_processor(self):
         reasoning_parser_obj = None
@@ -77,10 +79,11 @@ class InputPreprocessor:
                 reasoning_parser_obj=reasoning_parser_obj,
                 tool_parser_obj=tool_parser_obj,
                 mm_processor_kwargs=self.mm_processor_kwargs,
+                enable_mm_runtime=self.enable_mm_runtime,
             )
         except Exception as e:
             logger.info(f"Plugin input processor not available ({e}), using built-in processor")
-            if not self.model_config.enable_mm:
+            if not self.enable_mm_runtime:
                 from fastdeploy.input.text_processor import TextProcessor
 
                 tokenizer_type = "ernie4_5" if ErnieArchitectures.contains_ernie_arch(architecture) else "auto"
