@@ -46,6 +46,7 @@ func Init(cfg *config.Config, managerAPI common.ManagerAPI) {
 		cacheBlockSize:      cfg.Scheduler.CacheBlockSize,
 		tokenizerURL:        cfg.Scheduler.TokenizerURL,
 		tokenizerTimeout:    time.Duration(cfg.Scheduler.TokenizerTimeoutSecs * float64(time.Second)),
+		evictionDuration:    time.Duration(cfg.Scheduler.EvictionDurationMins * float64(time.Minute)),
 	}
 
 	scheduler := &Scheduler{
