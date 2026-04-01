@@ -675,6 +675,20 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
 
+        # DEBUG: log logits stats to file
+        import os as _os
+        if _os.environ.get("FD_DEBUG_LOGITS"):
+            try:
+                import paddle as _paddle
+                _top5 = _paddle.topk(logits[0], 5)
+                _vals = _top5.values.tolist()
+                _ids = _top5.indices.tolist()
+                _msg = f"[LOGITS] shape={list(logits.shape)} top5: " + " ".join(f"id={i}:{v:.3f}" for i,v in zip(_ids, _vals))
+                with open("/tmp/fd_logits_debug.txt", "a") as _f:
+                    _f.write(_msg + "\n")
+            except Exception as _e:
+                pass
+
         return logits
 
     def empty_input_forward(self, forward_meta):

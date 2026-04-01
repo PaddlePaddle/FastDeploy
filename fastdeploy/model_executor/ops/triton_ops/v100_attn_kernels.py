@@ -69,6 +69,9 @@ def v100_write_kv_cache_kernel(
     # physical block from block_tables
     physical_block = tl.load(block_tables_ptr + batch_id * max_blocks_per_seq + block_idx)
 
+    # Guard: skip if block freed (preempted), physical_block == -1
+    valid_block = physical_block >= 0
+
     offs_d = tl.arange(0, BLOCK_D)
     d_mask = offs_d < head_dim
 
@@ -86,8 +89,8 @@ def v100_write_kv_cache_kernel(
         + head_id * (block_size * head_dim)
         + block_offset * head_dim
     )
-    tl.store(key_cache_ptr + cache_base + offs_d, k_vals, mask=d_mask)
-    tl.store(value_cache_ptr + cache_base + offs_d, v_vals, mask=d_mask)
+    tl.store(key_cache_ptr + cache_base + offs_d, k_vals, mask=d_mask & valid_block)
+    tl.store(value_cache_ptr + cache_base + offs_d, v_vals, mask=d_mask & valid_block)
 
 
 def v100_write_kv_cache(
@@ -196,32 +199,35 @@ def v100_decode_fused_kernel(
         block_idx = split_start_block + bi
         if block_idx < split_end_block:
             physical_block = tl.load(block_tables_ptr + pid_batch * max_blocks_per_seq + block_idx)
-            block_start_pos = block_idx * block_size
-            valid_tokens = tl.minimum(block_size, total_kv_len - block_start_pos)
 
-            kv_range = tl.arange(0, block_size)
-            kv_mask = kv_range < valid_tokens
+            # Guard: skip freed block (preempted, physical_block == -1)
+            if physical_block >= 0:
+                block_start_pos = block_idx * block_size
+                valid_tokens = tl.minimum(block_size, total_kv_len - block_start_pos)
 
-            k_base = physical_block * (kv_num_heads * block_size * head_dim) + kv_head_id * (block_size * head_dim)
-            k_ptrs = k_base + kv_range[:, None] * head_dim + offs_d[None, :]
-            k_vals = tl.load(key_cache_ptr + k_ptrs, mask=kv_mask[:, None] & d_mask[None, :], other=0.0).to(tl.float32)
+                kv_range = tl.arange(0, block_size)
+                kv_mask = kv_range < valid_tokens
 
-            qk = tl.sum(q_vec[None, :] * k_vals, axis=1) * sm_scale
-            qk = tl.where(kv_mask, qk, float("-inf"))
+                k_base = physical_block * (kv_num_heads * block_size * head_dim) + kv_head_id * (block_size * head_dim)
+                k_ptrs = k_base + kv_range[:, None] * head_dim + offs_d[None, :]
+                k_vals = tl.load(key_cache_ptr + k_ptrs, mask=kv_mask[:, None] & d_mask[None, :], other=0.0).to(tl.float32)
 
-            m_new = tl.maximum(m_i, tl.max(qk, axis=0))
-            alpha = tl.exp(m_i - m_new)
-            p = tl.exp(qk - m_new)
-            l_i = l_i * alpha + tl.sum(p, axis=0)
+                qk = tl.sum(q_vec[None, :] * k_vals, axis=1) * sm_scale
+                qk = tl.where(kv_mask, qk, float("-inf"))
 
-            v_base = physical_block * (kv_num_heads * block_size * head_dim) + kv_head_id * (block_size * head_dim)
-            v_ptrs = v_base + kv_range[:, None] * head_dim + offs_d[None, :]
-            v_vals = tl.load(value_cache_ptr + v_ptrs, mask=kv_mask[:, None] & d_mask[None, :], other=0.0).to(
-                tl.float32
-            )
+                m_new = tl.maximum(m_i, tl.max(qk, axis=0))
+                alpha = tl.exp(m_i - m_new)
+                p = tl.exp(qk - m_new)
+                l_i = l_i * alpha + tl.sum(p, axis=0)
 
-            acc = acc * alpha + tl.sum(p[:, None] * v_vals, axis=0)
-            m_i = m_new
+                v_base = physical_block * (kv_num_heads * block_size * head_dim) + kv_head_id * (block_size * head_dim)
+                v_ptrs = v_base + kv_range[:, None] * head_dim + offs_d[None, :]
+                v_vals = tl.load(value_cache_ptr + v_ptrs, mask=kv_mask[:, None] & d_mask[None, :], other=0.0).to(
+                    tl.float32
+                )
+
+                acc = acc * alpha + tl.sum(p[:, None] * v_vals, axis=0)
+                m_i = m_new
 
     if SINGLE_SPLIT:
         # Write final output directly (no stage2 needed)

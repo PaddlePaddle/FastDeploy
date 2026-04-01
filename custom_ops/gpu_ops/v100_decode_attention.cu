@@ -93,6 +93,8 @@ __global__ void v100_write_kv_cache_kernel(
   const int physical_block =
       __ldg(&block_tables[batch_id * max_blocks_per_seq + block_idx]);
 
+  if (physical_block < 0) return;  // Skip if block freed (preempted)
+
   // Source offset: k_new[token_id, head_id, :]
   const int64_t src_base =
       static_cast<int64_t>(token_id) * kv_num_heads * head_dim +
@@ -246,6 +248,9 @@ __global__ void v100_decode_attn_stage1_kernel(
   for (int bi = split_start; bi < split_end; bi++) {
     const int physical_block =
         __ldg(&block_tables[pid_batch * max_blocks_per_seq + bi]);
+
+    if (physical_block < 0) continue;  // Skip freed block
+
     const int block_start_pos = bi * block_size;
     const int valid_tokens = min(block_size, total_kv_len - block_start_pos);
 

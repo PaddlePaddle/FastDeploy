@@ -197,10 +197,11 @@ class VocabParallelEmbedding(nn.Layer):
         Args:
             state_dict (dict): A dictionary containing the checkpoint weights and biases.
         """
+        from fastdeploy.model_executor.utils import fd_safe_cast
         if self.tie_word_embeddings and not self.general:
-            weight_tensor = get_tensor(state_dict[self.prefix + ".weight"]).astype(paddle.get_default_dtype())
+            weight_tensor = fd_safe_cast(get_tensor(state_dict[self.prefix + ".weight"]), paddle.get_default_dtype())
         else:
-            weight_tensor = get_tensor(state_dict.pop(self.prefix + ".weight")).astype(paddle.get_default_dtype())
+            weight_tensor = fd_safe_cast(get_tensor(state_dict.pop(self.prefix + ".weight")), paddle.get_default_dtype())
 
         self.embeddings.weight.set_value(weight_tensor)
 
@@ -250,11 +251,8 @@ class VocabParallelEmbedding(nn.Layer):
             param.initialize()
 
         loaded_weight = get_tensor(loaded_weight)
-        if param.dtype != loaded_weight.dtype:
-            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                loaded_weight = loaded_weight.cast(param.dtype)
-            else:
-                loaded_weight = loaded_weight.cast(param.dtype)
+        from fastdeploy.model_executor.utils import fd_cast
+        loaded_weight = fd_cast(loaded_weight, param)
 
         if output_dim is None or self.fd_config.load_config.is_pre_sharded:
             assert (

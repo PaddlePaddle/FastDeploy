@@ -100,6 +100,8 @@ __global__ void v100_fused_rope_write_cache_kernel(
     const int physical_block =
         __ldg(&block_tables[batch_id * max_blocks_per_seq + block_idx_in_seq]);
 
+    if (physical_block < 0) return;  // Skip if block freed (preempted)
+
     const int64_t kv_base =
         static_cast<int64_t>(token_id) * kv_num_heads * head_dim +
         kv_head_id * head_dim;

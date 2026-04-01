@@ -468,7 +468,6 @@ class TokenProcessor:
 
                     if self.output_tokens[0, 0] == -2:
                         continue
-                    llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
                 with self.health_lock:
                     self.timestamp_for_alive_before_handle_batch = time.time()
                     self.timestamp_for_alive_after_handle_batch = None
@@ -800,6 +799,32 @@ class TokenProcessor:
                         ):
                             llm_logger.info(f"sync preemption for request_id {task_id} done.")
                             self.resource_manager.reschedule_preempt_task(task_id)
+                    # [V100] Negative token_id path: GPU produces negative token on every
+                    # decode step. Count steps so max_tokens detection works.
+                    self.tokens_counter[task_id] += 1
+                    _max_tokens_v100 = getattr(getattr(task, "sampling_params", None), "max_tokens", None)
+                    _cur_tokens_v100 = self.tokens_counter.get(task_id, 0)
+                    if _max_tokens_v100 is not None and _cur_tokens_v100 >= _max_tokens_v100:
+                        task.metrics.record_recv_token()
+                        _metrics_v100 = copy.copy(task.metrics)
+                        _result_v100 = RequestOutput(
+                            request_id=task_id,
+                            outputs=CompletionOutput(
+                                index=i,
+                                send_idx=_cur_tokens_v100,
+                                token_ids=[],
+                                draft_token_ids=[],
+                            ),
+                            finished=True,
+                            metrics=_metrics_v100,
+                        )
+                        self._record_completion_metrics(task, time.time())
+                        self._recycle_resources(task_id, i, task, _result_v100, is_prefill)
+                        batch_result.append(_result_v100)
+                        llm_logger.info(
+                            f"[V100] max_tokens reached (neg-token path) for {task_id}: "
+                            f"tokens={_cur_tokens_v100}/{_max_tokens_v100}"
+                        )
                     continue
             if self.cfg.scheduler_config.splitwise_role == "decode":
                 # In D instance, if preempted, error has been reported and resource recycled, tokens generated async not need to be handled
@@ -826,7 +851,7 @@ class TokenProcessor:
                 task.metrics.record_recv_first_token()
                 task.metrics.cal_cost_time()
                 metrics = copy.copy(task.metrics)
-                llm_logger.info(f"task:{task.request_id} start recode first token")
+                llm_logger.info(f"task:{task.request_id} start recode first token token_id={token_id}")
                 self._record_first_token_metrics(task, current_time)
 
                 tracing.trace_report_span(
@@ -901,7 +926,17 @@ class TokenProcessor:
                             result.outputs.top_logprobs.logprob_token_ids.extend([topk_token_ids])
                             result.outputs.top_logprobs.logprobs.extend([topk_logprobs])
                             result.outputs.top_logprobs.sampled_token_ranks.extend([sampled_rank])
-                if token_id in task.eos_token_ids or is_prefill or recovery_stop:
+                # [V100] Enforce max_tokens on positive-token path.
+                # On V100 (SM70) the GPU may not send a stop signal after max_tokens,
+                # so we force finished=True here to prevent the request from hanging.
+                _v3_max_tokens = getattr(getattr(task, "sampling_params", None), "max_tokens", None)
+                if _v3_max_tokens is not None and self.tokens_counter[task_id] >= _v3_max_tokens:
+                    result.finished = True
+                    llm_logger.info(
+                        f"[V100] max_tokens reached for {task_id}: "
+                        f"tokens={self.tokens_counter[task_id]}/{_v3_max_tokens}"
+                    )
+                if token_id in task.eos_token_ids or is_prefill or recovery_stop or result.finished:
                     result.finished = True
                     trace_carrier = tracing.trace_get_proc_propagate_context(rid=rid)
                     result.trace_carrier = trace_carrier

@@ -148,7 +148,8 @@ class RMSNorm(nn.Layer):
             )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        loaded_weight = get_tensor(loaded_weight).astype(self._norm_weight_dtype)
+        from fastdeploy.model_executor.utils import fd_safe_cast
+        loaded_weight = fd_safe_cast(get_tensor(loaded_weight), self._norm_weight_dtype)
         param.copy_(loaded_weight, False)
 
     def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
@@ -160,8 +161,9 @@ class RMSNorm(nn.Layer):
         """
 
         # weight
+        from fastdeploy.model_executor.utils import fd_safe_cast
         weight_tensor = get_tensor(state_dict.pop(self.weight_key))
-        self.weight.set_value(weight_tensor.astype(self._norm_weight_dtype))
+        self.weight.set_value(fd_safe_cast(weight_tensor, self._norm_weight_dtype))
 
     def split(self, x):
         """
@@ -453,12 +455,13 @@ class LayerNorm(nn.Layer):
         """
 
         # weight
-        weight_tensor = paddle.cast(get_tensor(state_dict.pop(self.weight_key)), self._norm_weight_dtype)
+        from fastdeploy.model_executor.utils import fd_safe_cast
+        weight_tensor = fd_safe_cast(get_tensor(state_dict.pop(self.weight_key)), self._norm_weight_dtype)
         self.weight.set_value(weight_tensor)
 
         # bias
         if self.with_bias:
-            bias_tensor = paddle.cast(
+            bias_tensor = fd_safe_cast(
                 get_tensor(state_dict.pop(self.bias_key)),
                 self._norm_weight_dtype,
             )

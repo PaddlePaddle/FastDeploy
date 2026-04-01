@@ -77,8 +77,8 @@ class UnquantizedLinearMethod(QuantMethodBase):
 
     def process_loaded_weights(self, layer, weights) -> None:
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
-        if layer.weight.dtype != weights.dtype:
-            weights = weights.cast(layer.weight.dtype)
+        from fastdeploy.model_executor.utils import fd_cast
+        weights = fd_cast(weights, layer.weight)
         layer.weight.set_value(weights)
 
     def apply(self, layer: nn.Layer, x: paddle.Tensor) -> paddle.Tensor:

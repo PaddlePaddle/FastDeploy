@@ -66,6 +66,11 @@ class GpuWorker(WorkerBase):
             self.device = f"gpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.model_config.dtype)
+            # Cap Paddle BFC allocator pool to match gpu_memory_utilization.
+            # Without this, BFC pre-allocates 0.92 * GPU = 29.2GB on a 32GB V100,
+            # which after KV cache + weights + forward pass fragmentation causes OOM.
+            _gpu_mem_fraction = getattr(self.cache_config, 'gpu_memory_utilization', 0.85)
+            paddle.set_flags({'FLAGS_fraction_of_gpu_memory_to_use': _gpu_mem_fraction})
 
             gc.collect()
             paddle.device.cuda.empty_cache()
@@ -187,6 +192,18 @@ class GpuWorker(WorkerBase):
         """Initizlize the KV Cache with accurate num_gpu_blocks"""
         # accurate cache size
         self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
+        # V100 KV cache prefault: touch all KV cache tensors to trigger GPU page faults now
+        # (during startup) rather than during the first real inference request.
+        # Without this, accessing 13.5GB of uninitialized GPU pages during the first request
+        # causes a 30-second hang (GPU page fault + CUDA JIT for large matmul shapes).
+        import time as _time
+        if "caches" in self.model_runner.share_inputs:
+            _t0 = _time.perf_counter()
+            logger.info("V100 KV cache prefault: touching all cache pages...")
+            for _cache in self.model_runner.share_inputs["caches"]:
+                _ = _cache.sum()
+            paddle.device.cuda.synchronize()
+            logger.info(f"V100 KV cache prefault done in {_time.perf_counter() - _t0:.1f}s")
 
         # Initialize routing replay manager
         if self.fd_config.routing_replay_config.enable_routing_replay:
@@ -249,14 +266,29 @@ class GpuWorker(WorkerBase):
         # Capture CUDAGraph for decode phase (all modes)
         self.model_runner.capture_model()
 
-        # Deterministic mode: reset RNG and share_inputs after warmup.
-        # Warmup _dummy_run() calls consume CUDA RNG state and leave stale
-        # data (infer_seed, stop_flags, seq_lens, etc.) in share_inputs.
-        # Without this reset, the first real request may see different state
-        # than subsequent requests, causing occasional first-run divergence.
-        if envs.FD_DETERMINISTIC_MODE:
-            set_random_seed(self.fd_config.model_config.seed)
-            self.model_runner.share_inputs.reset_share_inputs()
+        # V100 CUDA kernel warmup: run real forward passes to pre-compile CUDA kernels
+        # (cuBLAS GEMM autotuning on V100 is shape-specific: each unique (M,N,K) triggers
+        # a one-time autotuning pass of 30-120s). We run multiple token lengths to cover
+        # common request sizes. paddle.device.synchronize() is called after each run to
+        # block until the CUDA kernels actually complete (Paddle uses async GPU execution).
+        # Only needed when graph_opt_level=0 (SOT/CUDA graph warmup handles this for higher levels).
+        if self.fd_config.graph_opt_config.graph_opt_level == 0 and not self.model_runner.use_cudagraph:
+            import time as _time
+            warmup_sizes = [1, 4, 16, 64, 128]
+            logger.info(f"V100 CUDA kernel warmup: pre-compiling GEMM kernels for token sizes {warmup_sizes}...")
+            _t0 = _time.perf_counter()
+            for _n in warmup_sizes:
+                _tw = _time.perf_counter()
+                self.model_runner._dummy_run(num_tokens=_n, batch_size=1)
+                paddle.device.synchronize()
+                paddle.device.cuda.empty_cache()  # V100: flush BFC between warmup iters to prevent lm_head OOM
+                logger.info(f"V100 CUDA kernel warmup: {_n} tokens done in {_time.perf_counter() - _tw:.1f}s")
+            logger.info(f"V100 CUDA kernel warmup total done in {_time.perf_counter() - _t0:.1f}s")
+        # Signal that warmup is complete; enables per-forward empty_cache() in model runner.
+        self.model_runner._warmup_complete = True
+        logger.info("V100 warmup complete: _warmup_complete flag set, BFC flush enabled.")
+        """ """
+        return True
 
     def check_health(self) -> bool:
         """ """

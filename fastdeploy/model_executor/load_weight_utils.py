@@ -45,25 +45,14 @@ def natural_key(s: str):
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", s)]
 
 
-def layers_are_grouped(keys):
-
-    seen = set()
-    current_layer = None
-
-    for k in keys:
-        m = re.search(r"layers\.(\d+)", k)
-        if not m:
-            continue
-
-        layer = int(m.group(1))
-
-        if layer != current_layer:
-            if layer in seen:
-                return False
-            seen.add(layer)
-            current_layer = layer
-
-    return True
+def _maybe_view_bf16_as_fp16(tensor):
+    """On V100 (SM70), BF16 is not natively supported. If the model weights are
+    stored as BF16, cast them to FP16 for V100 compatibility."""
+    if isinstance(tensor, paddle.Tensor) and tensor.dtype == paddle.bfloat16:
+        from fastdeploy.platforms import current_platform
+        if not current_platform.supports_bf16():
+            return tensor.cast(paddle.float16)
+    return tensor
 
 
 def pdparams_weight_iterator(paddle_file_list: list[str]):
@@ -72,7 +61,8 @@ def pdparams_weight_iterator(paddle_file_list: list[str]):
         desc="Loading pdparams checkpoint shards",
     ):
         state_dict = paddle.load(pdparams_file)
-        yield from state_dict.items()
+        for name, tensor in state_dict.items():
+            yield name, _maybe_view_bf16_as_fp16(tensor)
         del state_dict
 
 
@@ -387,6 +377,7 @@ def kv_cache_scale_iterator(kv_cache_scale_json_path):
             yield key, scale_tensor
 
 
+
 def safetensors_weights_iterator(safe_tensor_list: list[str]):
     """
     safetensors_weights_iterator
@@ -398,6 +389,7 @@ def safetensors_weights_iterator(safe_tensor_list: list[str]):
         with safe_open(st_file, framework="paddle", device="cpu") as f:
             for name in f.keys():
                 param = f.get_tensor(name)
+                param = _maybe_view_bf16_as_fp16(param)
                 yield name, param
 
 
@@ -418,7 +410,8 @@ def safetensors_weights_iterator_ordered(ordered_weight_map: dict[str, str]):
                 current_handle = stack.enter_context(safe_open(st_file, framework="paddle", device="cpu"))
                 current_file = st_file
 
-            yield key, current_handle.get_tensor(key)
+            tensor = current_handle.get_tensor(key)
+            yield key, _maybe_view_bf16_as_fp16(tensor)
 
 
 def fast_weights_iterator(safe_tensor_list: list[str]):

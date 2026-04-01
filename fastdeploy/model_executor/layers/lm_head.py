@@ -132,18 +132,19 @@ class ParallelLMHead(nn.Layer):
             state_dict (dict): A dictionary containing the checkpoint weights and biases.
         """
 
+        from fastdeploy.model_executor.utils import fd_safe_cast
         if self.tie_word_embeddings:
             self.linear.weight.set_value(
-                get_tensor(state_dict.pop(self.weight_key)).astype(self.linear.weight.dtype).transpose([1, 0])
+                fd_safe_cast(get_tensor(state_dict.pop(self.weight_key)), self.linear.weight.dtype).transpose([1, 0])
             )
         else:
-            weight_tensor = get_tensor(state_dict.pop(self.weight_key)).astype(self.linear.weight.dtype)
+            weight_tensor = fd_safe_cast(get_tensor(state_dict.pop(self.weight_key)), self.linear.weight.dtype)
             if self.linear.weight.shape != weight_tensor.shape:
                 weight_tensor = weight_tensor.transpose([1, 0])
             self.linear.weight.set_value(weight_tensor)
 
         if self.bias_key is not None:
-            bias = get_tensor(state_dict.pop(self.bias_key)).astype(self.linear.bias.dtype)
+            bias = fd_safe_cast(get_tensor(state_dict.pop(self.bias_key)), self.linear.bias.dtype)
             self.linear.bias.set_value(bias)
 
     def forward(self, input: paddle.Tensor) -> paddle.Tensor:

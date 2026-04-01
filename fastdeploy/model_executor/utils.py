@@ -298,7 +298,28 @@ def create_parameter_and_copy(layer: paddle.nn.Layer, name: str, weight: paddle.
     getattr(layer, name).copy_(weight, False)
 
 
+def fd_safe_cast(weight, target_dtype):
+    """Cast weight to target_dtype, handling mislabeled BF16-as-FP16 checkpoints.
+
+    On V100 (SM70) where BF16 is not natively supported, cast BF16 weights
+    to FP16 before any further processing.
+    """
+    if isinstance(weight, paddle.Tensor) and weight.dtype == paddle.bfloat16 and not current_platform.supports_bf16():
+        weight = weight.cast(paddle.float16)
+    if weight.dtype == target_dtype:
+        return weight
+    if isinstance(weight, paddle.Tensor):
+        return weight.cast(target_dtype)
+    # numpy / other
+    return weight.astype(str(target_dtype).replace('paddle.', ''))
+
+
 def fd_cast(weight, param):
+    """Cast weight to match param dtype, with bf16->fp16 cast on V100."""
+    # On V100 (SM70), BF16 is not natively supported.
+    # Cast BF16 weights to FP16 for V100 compatibility.
+    if weight.dtype == paddle.bfloat16 and not current_platform.supports_bf16():
+        weight = weight.cast(paddle.float16)
     if weight.dtype != param.dtype:
         if weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
             weight = weight.view(param.dtype)
@@ -346,7 +367,12 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
         loaded_weight = get_tensor(loaded_weight)
-        param.copy_(loaded_weight, False)
+        # On V100, param may be bf16 (from LazyGuard) but loaded_weight is now fp16
+        # after fd_cast view(). Use set_value which handles the dtype change.
+        if loaded_weight.dtype != param.dtype:
+            param.set_value(loaded_weight)
+        else:
+            param.copy_(loaded_weight, False)
 
     return fn
 
