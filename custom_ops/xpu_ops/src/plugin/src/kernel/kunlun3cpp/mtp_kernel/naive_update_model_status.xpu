@@ -1,0 +1,51 @@
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+
+#include "xpu/kernel/cluster_debug.h"
+
+namespace fd_xpu3 {
+
+#define MAX_BATCH_SIZE 1024
+
+__global__ void naive_update_model_status_kernel(int64_t *accept_tokens,
+                                                 int *accept_num,
+                                                 int *seq_lens_this_time,
+                                                 const int64_t *next_tokens,
+                                                 const int *cu_seqlens_q_output,
+                                                 int real_bsz,
+                                                 int max_step_tokens) {
+  int cid = core_id();
+  int ncores = core_num();
+  int clusterid = cluster_id();
+  int tid = clusterid * ncores + cid;
+  if (tid >= real_bsz) return;
+
+  __shared__ int sm_seq_lens_this_time[MAX_BATCH_SIZE];
+  __shared__ int sm_cu_seqlens_q_output[MAX_BATCH_SIZE + 1];
+  if (cid == 0) {
+    GM2SM_ASYNC(
+        seq_lens_this_time, sm_seq_lens_this_time, sizeof(int) * real_bsz);
+    GM2SM_ASYNC(cu_seqlens_q_output,
+                sm_cu_seqlens_q_output,
+                sizeof(int) * (real_bsz + 1));
+  }
+  mfence_sm();
+  sync_all();
+
+  for (int bid = tid; bid < real_bsz; bid += ncores) {
+    if (sm_seq_lens_this_time[bid] > 0) {
+      int64_t lm_token = next_tokens[sm_cu_seqlens_q_output[bid + 1] - 1];
+      accept_tokens[bid * max_step_tokens] = lm_token;
+      accept_num[bid] = 1;
+      seq_lens_this_time[bid] = 1;
+    } else {
+      accept_num[bid] = 0;
+      seq_lens_this_time[bid] = 0;
+    }
+  }
+  mfence();
+  sync_all();
+}  // namespace fd_xpu3
+
+}  // namespace fd_xpu3
