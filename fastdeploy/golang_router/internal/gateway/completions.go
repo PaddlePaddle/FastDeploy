@@ -412,7 +412,8 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 	} else {
 		logger.Info(ctx, "Parsing completed; starting worker selection.")
 		// Non-PD mode: use Mixed instance
-		dest, err := manager.SelectWorker(ctx, "")
+		message = extractor(rawReq)
+		dest, err := manager.SelectWorker(ctx, message)
 		if err != nil {
 			logger.Error(ctx, "Failed to select worker: %v", err)
 			c.Writer.WriteHeader(http.StatusBadGateway)
@@ -427,6 +428,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		defer func() {
 			for _, url := range releaseTargets {
 				scheduler_handler.Release(ctx, url)
+				scheduler_handler.ReleasePrefillTokens(ctx, url, message)
 			}
 		}()
 	}
