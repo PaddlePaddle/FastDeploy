@@ -98,7 +98,10 @@ __global__ void speculate_limit_thinking_content_length_kernel(
       if (max_think_len > 0) {
         // A) 超长触发：到达 max_think_len 时开始注入（从本 token 起输出
         // inject_token_ids[0]）
-        if (status == 0 && current_step == max_think_len) {
+        if (status == 0 &&
+            (current_step - 1) ==
+                max_think_len) {  // current_step - 1 是因为 speculate_verify 里
+                                  // step_idx + 1 了
           status = (inject_len > 0) ? 1 : done_status;
         }
       } else if (max_think_len == 0) {
