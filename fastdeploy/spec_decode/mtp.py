@@ -82,6 +82,8 @@ class MTPProposer(Proposer):
             self.model_config.quantization = self.speculative_config.quantization
         self.model_config.start_layer_index = self.num_main_model_layers
         self.speculative_config.model_type = "mtp"
+        if self.speculative_config.quantization is not None:
+            self.model_config.is_quantized = False
 
     def _load_model(self):
         """
