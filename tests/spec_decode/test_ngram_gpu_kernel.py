@@ -626,6 +626,81 @@ class TestNgramMatchKernel(unittest.TestCase):
         print(f"  Speedup: {cpu_copy_time_ms / gpu_time_ms:.2f}x")
         print(f"{'='*60}")
 
+    def test_latency_scaling(self):
+        """Benchmark GPU kernel across batch sizes to show Phase 2 scales."""
+        batch_sizes = [32, 128, 256, 512, 1024]
+        input_len = 512
+        n_runs = 50
+        results = []
+
+        for bsz in batch_sizes:
+            # Warmup
+            for _ in range(3):
+                d = _to_gpu(_make_ngram_test_data(batch_size=bsz, input_len=input_len, seed=42))
+                self.ngram_match(
+                    d["input_ids"],
+                    d["input_ids_len"],
+                    d["token_ids_all"],
+                    d["prompt_lens"],
+                    d["step_idx"],
+                    d["draft_token_num"],
+                    d["draft_tokens"],
+                    d["seq_lens_this_time"],
+                    d["seq_lens_encoder"],
+                    d["seq_lens_decoder"],
+                    d["max_dec_len"],
+                    3,
+                    10,
+                )
+            paddle.device.synchronize()
+
+            # GPU kernel
+            paddle.device.synchronize()
+            t0 = time.perf_counter()
+            for _ in range(n_runs):
+                d = _to_gpu(_make_ngram_test_data(batch_size=bsz, input_len=input_len, seed=42))
+                self.ngram_match(
+                    d["input_ids"],
+                    d["input_ids_len"],
+                    d["token_ids_all"],
+                    d["prompt_lens"],
+                    d["step_idx"],
+                    d["draft_token_num"],
+                    d["draft_tokens"],
+                    d["seq_lens_this_time"],
+                    d["seq_lens_encoder"],
+                    d["seq_lens_decoder"],
+                    d["max_dec_len"],
+                    3,
+                    10,
+                )
+                paddle.device.synchronize()
+            gpu_ms = (time.perf_counter() - t0) / n_runs * 1000
+
+            # CPU path (copy overhead)
+            paddle.device.synchronize()
+            t0 = time.perf_counter()
+            for _ in range(n_runs):
+                d = _to_gpu(_make_ngram_test_data(batch_size=bsz, input_len=input_len, seed=42))
+                cpu_tensors = {k: v.cpu() for k, v in d.items()}
+                _ = cpu_tensors["draft_tokens"].cuda()
+                _ = cpu_tensors["seq_lens_this_time"].cuda()
+                paddle.device.synchronize()
+            cpu_ms = (time.perf_counter() - t0) / n_runs * 1000
+
+            results.append((bsz, gpu_ms, cpu_ms))
+
+        print(f"\n{'='*72}")
+        print(f"SCALING BENCHMARK (input_len={input_len}, {n_runs} runs per config)")
+        print(f"{'─'*72}")
+        print(f"{'batch':>6}  {'GPU (ms)':>10}  {'CPU (ms)':>10}  {'Speedup':>8}  {'GPU/batch(µs)':>14}")
+        print(f"{'─'*72}")
+        for bsz, gpu_ms, cpu_ms in results:
+            speedup = cpu_ms / gpu_ms
+            per_batch_us = gpu_ms / bsz * 1000
+            print(f"{bsz:>6}  {gpu_ms:>10.3f}  {cpu_ms:>10.3f}  {speedup:>7.2f}x  {per_batch_us:>14.3f}")
+        print(f"{'='*72}")
+
 
 class TestHybridMtpNgramKernel(unittest.TestCase):
     """Test hybrid_mtp_ngram GPU kernel correctness against CPU reference."""
