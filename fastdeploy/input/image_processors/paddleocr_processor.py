@@ -38,16 +38,14 @@ _OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
 _OPENAI_CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
 
 
-def make_batched_images(images) -> List[List[ImageInput]]:
+def make_batched_images(images) -> List[ImageInput]:
     """
-    Accepts images in list or nested list format, and makes a list of images for preprocessing.
-
+    Accepts images in list or nested list format, and makes a flat list of images for preprocessing.
     Args:
         images (`Union[List[List[ImageInput]], List[ImageInput], ImageInput]`):
             The input image.
-
     Returns:
-        list: A list of images.
+        List[ImageInput]: A flat list of images.
     """
     if isinstance(images, (list, tuple)) and isinstance(images[0], (list, tuple)) and is_valid_image(images[0][0]):
         return [img for img_list in images for img in img_list]

@@ -21,7 +21,6 @@ Qwen3VLProcessor, PaddleOCRVLProcessor, Ernie4_5_VLProcessor) into a
 single class that dispatches per ``model_type``.
 """
 
-import pickle
 from collections.abc import Mapping
 from typing import Any, Dict, Optional
 
@@ -56,8 +55,6 @@ _ERNIE_EXPECTED_KWARGS = {
     "video_min_frames": int,
     "video_fps": int,
 }
-
-_TYPES_ACCEPT_URL_SUFFIX = {QWEN_VL, QWEN3_VL, PADDLEOCR_VL}
 
 _DEFAULT_MM_LIMITS = {"image": 1, "video": 1, "audio": 1}
 
@@ -227,43 +224,20 @@ class MultiModalProcessor(BaseTextProcessor):
             mm_data = item
         else:
             mm_data = {"image": [], "video": []}
-            accept_url_suffix = self.model_type in _TYPES_ACCEPT_URL_SUFFIX
-
             for message in item:
                 if isinstance(message.get("content"), list):
                     for part in message["content"]:
                         part_type = part.get("type")
-                        if accept_url_suffix:
-                            if part_type in ("image_url", "image"):
-                                mm_data["image"].append(part)
-                            elif part_type in ("video_url", "video"):
-                                mm_data["video"].append(part)
-                        else:
-                            if part_type == "image":
-                                mm_data["image"].append(part)
-                            elif part_type == "video":
-                                mm_data["video"].append(part)
+                        if part_type in ("image_url", "image"):
+                            mm_data["image"].append(part)
+                        elif part_type in ("video_url", "video"):
+                            mm_data["video"].append(part)
 
         for modality, data in mm_data.items():
             if modality in self.limit_mm_per_prompt:
                 limit = self.limit_mm_per_prompt[modality]
                 if len(data) > limit:
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
-
-    def _get_processor_cache(self, socket, mm_hashes: list) -> list:
-        """Retrieve cached processor results for the given hashes."""
-        req = pickle.dumps(mm_hashes)
-        socket.send_multipart([b"", req])
-        _, resp = socket.recv_multipart()
-        mm_items = pickle.loads(resp)
-        data_processor_logger.info(f"Get cache of mm_hashes: {mm_hashes}")
-        return mm_items
-
-    def _update_processor_cache(self, socket, mm_hashes: list, mm_items):
-        """Update the processor cache with new results."""
-        req = pickle.dumps((mm_hashes, mm_items))
-        socket.send_multipart([b"", req])
-        data_processor_logger.info(f"Update cache of mm_hashes: {mm_hashes}")
 
     def get_mm_max_tokens_per_item(self, seq_len: int) -> Optional[Mapping[str, int]]:
         """Return per-modality max token counts, if available."""

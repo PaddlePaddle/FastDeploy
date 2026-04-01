@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import pickle
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -106,13 +105,9 @@ class TestMultiModalProcessorInitValidation(unittest.TestCase):
 
     def test_unsupported_model_type_raises(self):
         """Line 86: unsupported model_type should raise ValueError."""
-        with self.assertRaises(Exception):
-            # We need to let __init__ run the model_type check.
-            # Mock the parts that come after the check to isolate it.
-            with patch.object(MultiModalProcessor, "__init__", wraps=MultiModalProcessor.__init__) as _:
-                proc = object.__new__(MultiModalProcessor)
-                # Call the real __init__ which should fail on model_type check
-                MultiModalProcessor.__init__(proc, "/mock", model_type="unsupported_type")
+        with self.assertRaises(ValueError):
+            # Directly construct with unsupported model_type to trigger validation
+            MultiModalProcessor("/mock", model_type="unsupported_type")
 
 
 # ===================================================================
@@ -305,40 +300,6 @@ class TestCheckMMLimits(unittest.TestCase):
             {"role": "user", "content": "just text"},
         ]
         proc._check_mm_limits(messages)  # should not raise
-
-
-# ===================================================================
-# _get_processor_cache / _update_processor_cache
-# ===================================================================
-class TestProcessorCache(unittest.TestCase):
-
-    def test_get_processor_cache(self):
-        """Lines 255-260: retrieve cached results via socket."""
-        proc = _make_processor(QWEN_VL)
-        mock_socket = MagicMock()
-        mm_hashes = ["hash1", "hash2"]
-        expected_items = [{"data": "item1"}, {"data": "item2"}]
-        mock_socket.recv_multipart.return_value = [b"", pickle.dumps(expected_items)]
-
-        result = proc._get_processor_cache(mock_socket, mm_hashes)
-
-        mock_socket.send_multipart.assert_called_once()
-        self.assertEqual(result, expected_items)
-
-    def test_update_processor_cache(self):
-        """Lines 264-266: update cache via socket."""
-        proc = _make_processor(QWEN_VL)
-        mock_socket = MagicMock()
-        mm_hashes = ["hash1"]
-        mm_items = [{"data": "item1"}]
-
-        proc._update_processor_cache(mock_socket, mm_hashes, mm_items)
-
-        mock_socket.send_multipart.assert_called_once()
-        sent_data = mock_socket.send_multipart.call_args[0][0]
-        self.assertEqual(sent_data[0], b"")
-        unpacked = pickle.loads(sent_data[1])
-        self.assertEqual(unpacked, (mm_hashes, mm_items))
 
 
 # ===================================================================
