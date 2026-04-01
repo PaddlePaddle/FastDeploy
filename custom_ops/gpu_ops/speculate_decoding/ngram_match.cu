@@ -43,28 +43,26 @@ __global__ void ngram_match_search_kernel(const int64_t *input_ids,
                                           int64_t draft_tokens_stride,
                                           int64_t max_batch_size,
                                           int max_ngram_size,
-                                          int max_draft_tokens_param,
-                                          NgramMatchResult *match_results) {
+                                          int max_draft_tokens_param) {
   int batch_idx = blockIdx.x;
   if (batch_idx >= max_batch_size) return;
 
   __shared__ int64_t s_min_pos;
 
   if (threadIdx.x == 0) {
-    match_results[batch_idx].match_pos = -1;
-    match_results[batch_idx].ngram_size = 0;
-    match_results[batch_idx].haystack_type = 0;
-    // Default: tentative copy = 1 token (the base token)
-    seq_lens_this_time_copy[batch_idx] = 1;
+    // Default: 0 = this item contributes nothing to threshold budget.
+    // Active decoder items will be set to 1+ below.
+    seq_lens_this_time_copy[batch_idx] = 0;
   }
   __syncthreads();
 
-  // Skip if encoder active or decoder inactive
+  // Skip if encoder active (preserves original seq_lens_this_time) or
+  // decoder inactive (Phase 2 writes 0 for these).
   if (seq_lens_encoder[batch_idx] > 0) return;
-  if (seq_lens_decoder[batch_idx] == 0) {
-    if (threadIdx.x == 0) seq_lens_this_time_copy[batch_idx] = 0;
-    return;
-  }
+  if (seq_lens_decoder[batch_idx] == 0) return;
+
+  // Active decoder item: at least the base token.
+  if (threadIdx.x == 0) seq_lens_this_time_copy[batch_idx] = 1;
 
   const int64_t *cur_input_ids = input_ids + batch_idx * input_ids_stride;
   const int64_t cur_input_ids_len = input_ids_len[batch_idx];
@@ -87,10 +85,6 @@ __global__ void ngram_match_search_kernel(const int64_t *input_ids,
         cur_input_ids, cur_input_ids_len, ngram, ngram_size, &s_min_pos);
     if (pos != INT64_MAX) {
       if (threadIdx.x == 0) {
-        match_results[batch_idx].match_pos = pos;
-        match_results[batch_idx].ngram_size = ngram_size;
-        match_results[batch_idx].haystack_type = 0;
-
         // Tentative token copy to scratch
         int64_t start_idx = pos + ngram_size;
         int64_t end_idx =
@@ -112,10 +106,6 @@ __global__ void ngram_match_search_kernel(const int64_t *input_ids,
         cur_pre_ids, cur_step_idx, ngram, ngram_size, &s_min_pos);
     if (pos != INT64_MAX) {
       if (threadIdx.x == 0) {
-        match_results[batch_idx].match_pos = pos;
-        match_results[batch_idx].ngram_size = ngram_size;
-        match_results[batch_idx].haystack_type = 1;
-
         // Tentative token copy to scratch
         int64_t start_idx = pos + ngram_size;
         int64_t end_idx = min(
@@ -145,6 +135,7 @@ __global__ void ngram_match_search_kernel(const int64_t *input_ids,
 __global__ void ngram_match_gather_kernel(
     const int64_t *draft_tokens_copy,
     const int32_t *seq_lens_this_time_copy,
+    const int32_t *seq_lens_encoder,
     int64_t *draft_tokens,
     int32_t *seq_lens_this_time,
     int64_t draft_tokens_stride,
@@ -183,6 +174,9 @@ __global__ void ngram_match_gather_kernel(
   __syncthreads();
 
   if (tid < max_batch_size) {
+    // Encoder-active items: preserve original seq_lens_this_time.
+    if (seq_lens_encoder[tid] > 0) return;
+
     if (tentative == 0) {
       seq_lens_this_time[tid] = 0;
       return;
@@ -399,12 +393,6 @@ void NgramMatch(const paddle::Tensor &input_ids,
     auto stream = input_ids.stream();
 
     // Allocate scratch buffers for Phase 1 → Phase 2 communication
-    auto match_buf = paddle::empty(
-        {max_batch_size * static_cast<int64_t>(sizeof(NgramMatchResult))},
-        paddle::DataType::UINT8,
-        input_ids.place());
-    auto *match_results =
-        reinterpret_cast<NgramMatchResult *>(match_buf.data<uint8_t>());
 
     // Scratch copy of draft_tokens (Phase 1 writes tentative tokens here)
     auto draft_tokens_copy =
@@ -438,14 +426,16 @@ void NgramMatch(const paddle::Tensor &input_ids,
         draft_tokens_stride,
         max_batch_size,
         max_ngram_size,
-        max_draft_tokens,
-        match_results);
+        max_draft_tokens);
 
     // Phase 2: BlockScan threshold enforcement + final token copy.
     // <<<1, NGRAM_GATHER_THREADS>>> — all batch items handled by one block.
+    PD_CHECK(max_batch_size <= NGRAM_GATHER_THREADS,
+             "ngram_match: max_batch_size exceeds NGRAM_GATHER_THREADS");
     ngram_match_gather_kernel<<<1, NGRAM_GATHER_THREADS, 0, stream>>>(
         draft_tokens_copy.data<int64_t>(),
         seq_lens_this_time_copy.data<int32_t>(),
+        seq_lens_encoder.data<int32_t>(),
         const_cast<int64_t *>(draft_tokens.data<int64_t>()),
         const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
         draft_tokens_stride,

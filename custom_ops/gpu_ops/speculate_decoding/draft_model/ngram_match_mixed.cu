@@ -45,8 +45,7 @@ __global__ void ngram_match_mixed_search_kernel(
     int64_t max_batch_size,
     int max_ngram_size,
     int min_ngram_size,
-    int max_draft_tokens_param,
-    NgramMatchResult *match_results) {
+    int max_draft_tokens_param) {
   int batch_idx = blockIdx.x;
   if (batch_idx >= max_batch_size) return;
 
@@ -55,9 +54,6 @@ __global__ void ngram_match_mixed_search_kernel(
   const int ori_seq_len_this_time = seq_lens_this_time[batch_idx];
 
   if (threadIdx.x == 0) {
-    match_results[batch_idx].match_pos = -1;
-    match_results[batch_idx].ngram_size = 0;
-    match_results[batch_idx].haystack_type = 0;
     // Default: keep the original seq_lens_this_time (no ngram match)
     seq_lens_this_time_copy[batch_idx] = ori_seq_len_this_time;
   }
@@ -87,10 +83,6 @@ __global__ void ngram_match_mixed_search_kernel(
         cur_input_ids, cur_input_ids_len, ngram, ngram_size, &s_min_pos);
     if (pos != INT64_MAX) {
       if (threadIdx.x == 0) {
-        match_results[batch_idx].match_pos = pos;
-        match_results[batch_idx].ngram_size = ngram_size;
-        match_results[batch_idx].haystack_type = 0;
-
         // Tentative token copy to scratch
         int64_t start_idx = pos + ngram_size;
         int64_t end_idx =
@@ -113,10 +105,6 @@ __global__ void ngram_match_mixed_search_kernel(
         cur_pre_ids, cur_step_idx, ngram, ngram_size, &s_min_pos);
     if (pos != INT64_MAX) {
       if (threadIdx.x == 0) {
-        match_results[batch_idx].match_pos = pos;
-        match_results[batch_idx].ngram_size = ngram_size;
-        match_results[batch_idx].haystack_type = 1;
-
         // Tentative token copy to scratch
         int64_t start_idx = pos + ngram_size;
         int64_t end_idx = min(
@@ -155,19 +143,35 @@ __global__ void ngram_match_mixed_gather_kernel(
     int64_t max_batch_size,
     int threshold) {
   typedef cub::BlockScan<int, NGRAM_GATHER_THREADS> BlockScanInt;
-  __shared__ typename BlockScanInt::TempStorage temp_storage;
+  __shared__ typename BlockScanInt::TempStorage temp_storage1;
+  __shared__ typename BlockScanInt::TempStorage temp_storage2;
+  __shared__ int s_total_active;
 
   int tid = threadIdx.x;
 
   // Load tentative total token count from Phase 1
   int tentative = 0;
+  int is_active = 0;
   if (tid < max_batch_size) {
     tentative = seq_lens_this_time_copy[tid];
+    is_active = (tentative > 0) ? 1 : 0;
   }
 
-  // Scan: inclusive prefix sum of tentative token counts
+  // Scan 1: inclusive prefix sum of tentative token counts
   int token_prefix;
-  BlockScanInt(temp_storage).InclusiveSum(tentative, token_prefix);
+  BlockScanInt(temp_storage1).InclusiveSum(tentative, token_prefix);
+  __syncthreads();
+
+  // Scan 2: inclusive prefix sum of active-item indicators
+  int active_prefix;
+  BlockScanInt(temp_storage2).InclusiveSum(is_active, active_prefix);
+  __syncthreads();
+
+  // Total active count from the last valid thread
+  if (tid ==
+      min(static_cast<int>(max_batch_size) - 1, NGRAM_GATHER_THREADS - 1)) {
+    s_total_active = active_prefix;
+  }
   __syncthreads();
 
   if (tid < max_batch_size) {
@@ -180,9 +184,11 @@ __global__ void ngram_match_mixed_gather_kernel(
     int ngram_tokens = tentative - ori;  // tokens added by ngram match
 
     int exclusive_token_prefix = token_prefix - tentative;
+    int remaining_active = s_total_active - active_prefix;
 
-    // Budget: threshold minus everything before this item
-    int budget = threshold - exclusive_token_prefix;
+    // Budget: threshold minus tokens already allocated before me,
+    // minus at-least-ori reservation for every active item after me.
+    int budget = threshold - exclusive_token_prefix - remaining_active;
 
     int actual;
     if (budget <= ori) {
@@ -384,13 +390,7 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
   if (input_ids.is_gpu()) {
     auto stream = input_ids.stream();
 
-    // Allocate scratch buffer for Phase 1 → Phase 2 communication
-    auto match_buf = paddle::empty(
-        {max_batch_size * static_cast<int64_t>(sizeof(NgramMatchResult))},
-        paddle::DataType::UINT8,
-        input_ids.place());
-    auto *match_results =
-        reinterpret_cast<NgramMatchResult *>(match_buf.data<uint8_t>());
+    // Allocate scratch buffers for Phase 1 → Phase 2 communication
 
     // Scratch copy of draft_tokens (Phase 1 writes tentative tokens here)
     auto draft_tokens_copy =
@@ -434,11 +434,12 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
         max_batch_size,
         max_ngram_size,
         min_ngram_size,
-        max_draft_tokens,
-        match_results);
+        max_draft_tokens);
 
     // Phase 2: BlockScan threshold enforcement + final token copy.
     // <<<1, NGRAM_GATHER_THREADS>>> — all batch items handled by one block.
+    PD_CHECK(max_batch_size <= NGRAM_GATHER_THREADS,
+             "hybrid_mtp_ngram: max_batch_size exceeds NGRAM_GATHER_THREADS");
     ngram_match_mixed_gather_kernel<<<1, NGRAM_GATHER_THREADS, 0, stream>>>(
         draft_tokens_copy.data<int64_t>(),
         seq_lens_this_time_copy.data<int32_t>(),
