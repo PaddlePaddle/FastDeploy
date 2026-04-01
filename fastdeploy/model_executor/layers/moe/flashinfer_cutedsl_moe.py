@@ -17,11 +17,21 @@
 from typing import Any, Optional
 
 import paddle
-from flashinfer import (
-    scaled_fp4_grouped_quantize,
-    silu_and_mul_scaled_nvfp4_experts_quantize,
-)
-from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
+
+from fastdeploy.model_executor.layers.quantization.quant_base import is_nvfp4_supported
+
+# Only import flashinfer on supported GPUs (B卡)
+if is_nvfp4_supported():
+    from flashinfer import (
+        scaled_fp4_grouped_quantize,
+        silu_and_mul_scaled_nvfp4_experts_quantize,
+    )
+    from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
+else:
+    # Not B卡, skip flashinfer imports
+    scaled_fp4_grouped_quantize = None
+    silu_and_mul_scaled_nvfp4_experts_quantize = None
+    grouped_gemm_nt_masked = None
 
 
 def _dtype_str(dtype) -> str:

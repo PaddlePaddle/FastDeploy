@@ -28,16 +28,18 @@ from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMetho
 from fastdeploy.model_executor.utils import (
     create_parameter_and_copy,
     free_tensor,
+    get_sm_version,
     set_weight_attrs,
 )
 
-from .quant_base import QuantConfigBase, QuantMethodBase
+from .quant_base import QuantConfigBase, QuantMethodBase, is_nvfp4_supported
 
-paddle.compat.enable_torch_proxy(scope={"flashinfer"})
+# Only import flashinfer on supported GPUs (B卡)
+if is_nvfp4_supported():
+    paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
-
-try:
-    # FlashInfer cutedsl blockscaled gemm kernels
+    from flashinfer import fp4_quantize, mm_fp4
+    from flashinfer.fused_moe import cutlass_fused_moe as flashinfer_cutlass_fused_moe
 
     from fastdeploy.model_executor.layers.moe.ep import deep_ep
     from fastdeploy.model_executor.ops.gpu import (
@@ -54,9 +56,19 @@ try:
     from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
         flashinfer_cutedsl_moe_masked,
     )
-
-except ImportError:
-    raise ImportError("flashinfer_cutedsl_moe_masked not found, flashinfer kernel may not be enabled.")
+else:
+    # Not B卡, skip flashinfer imports
+    deep_ep = None
+    depermute_prefill_combine = None
+    prefill_permute_to_masked_gemm = None
+    flashinfer_cutedsl_moe_masked = None
+    fp4_quantize = None
+    mm_fp4 = None
+    flashinfer_cutlass_fused_moe = None
+    logger.warning(
+        f"NVFP4 requires Blackwell GPU (SM >= 100), "
+        f"current GPU has SM {get_sm_version()}. Skipping flashinfer imports."
+    )
 
 
 def call_prefill_permute_to_masked_gemm(
@@ -406,8 +418,6 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         output_dtype = x.dtype
 
         # Quantize BF16 or FP16 to (FP4 and interleaved block scale)
-        from flashinfer import fp4_quantize
-
         x_fp4, x_scale_interleaved = fp4_quantize(x, layer.input_scale_inv)
 
         assert x_fp4.dtype == paddle.uint8
@@ -426,9 +436,8 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         if backend == "cutlass":
             x_scale_interleaved = x_scale_interleaved.view(paddle.uint8)
             w_scale_interleaved = w_scale_interleaved.view(paddle.uint8)
-        from flashinfer import mm_fp4 as fp4_gemm
 
-        out = fp4_gemm(x_fp4, w, x_scale_interleaved, w_scale_interleaved, layer.alpha, output_dtype, backend=backend)
+        out = mm_fp4(x_fp4, w, x_scale_interleaved, w_scale_interleaved, layer.alpha, output_dtype, backend=backend)
         if layer.with_bias:
             out = paddle.add(out, layer.bias)
         assert out.shape == output_shape
@@ -581,9 +590,14 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         set_weight_attrs(layer.up_gate_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
         set_weight_attrs(layer.down_proj_input_scale, {**extra_weight_attrs, "weight_type": "input_scale"})
 
+    @property
+    def load_up_proj_weight_first(self) -> bool:
+        # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
+        if self.backend == "flashinfer-cutlass":
+            return True
+
     def process_weights_after_loading(self, layer):
         """ """
-
         # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
 
         if self.backend == "flashinfer-cutlass":
@@ -646,11 +660,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
-        logger.info("prefill")
 
         # 1. top experts and weights
-        logger.info(f"layer.up_gate_proj_weight_scale:{layer.up_gate_proj_weight_scale}")
-        logger.info(f"layer.down_proj_weight_scale:{layer.down_proj_weight_scale}")
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         hidden_size = x.shape[1]
@@ -758,9 +769,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
 
-        logger.info("decode")
-        # logger.info(f"layer.up_gate_proj_blockscale_swizzled:{layer.up_gate_proj_blockscale_swizzled}")
-        # logger.info(f"layer.down_proj_blockscale_swizzled:{layer.down_proj_blockscale_swizzled}")
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
@@ -819,10 +827,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             output = paddle.empty_like(x)
 
             # flashinfer cutlass
-            from flashinfer.fused_moe import (
-                cutlass_fused_moe as flashinfer_cutlass_fused_moe,
-            )
-
             _ = flashinfer_cutlass_fused_moe(
                 input=x,
                 token_selected_experts=topk_ids.to(paddle.int),
