@@ -80,6 +80,7 @@ from fastdeploy.utils import (
     StatefulSemaphore,
     api_server_logger,
     console_logger,
+    get_version_info,
     is_port_available,
     retrive_model_from_server,
 )
@@ -784,11 +785,60 @@ def config_info() -> Response:
 
     def process_object(obj):
         if hasattr(obj, "__dict__"):
-            # 处理有__dict__属性的对象
             return obj.__dict__
-        return None  # 或其他默认处理
+        if isinstance(obj, (set, frozenset)):
+            return list(obj)
+        return str(obj)
 
     cfg_dict = {k: v for k, v in cfg.__dict__.items()}
+
+    # Version info
+    cfg_dict["version_info"] = get_version_info()
+
+    # Chat template
+    cfg_dict["chat_template"] = chat_template
+
+    # Server config from args
+    cfg_dict["server_config"] = {
+        "host": args.host,
+        "port": args.port,
+        "workers": args.workers,
+        "metrics_port": args.metrics_port,
+        "controller_port": args.controller_port,
+        "max_concurrency": args.max_concurrency,
+        "max_waiting_time": args.max_waiting_time,
+        "timeout": args.timeout,
+        "timeout_graceful_shutdown": args.timeout_graceful_shutdown,
+        "served_model_name": args.served_model_name,
+        "task": args.task,
+        "model_config_name": args.model_config_name,
+        "tokenizer_base_url": args.tokenizer_base_url,
+        "enable_mm_output": args.enable_mm_output,
+        "tool_call_parser": args.tool_call_parser,
+        "tool_parser_plugin": args.tool_parser_plugin,
+    }
+
+    # GPU info
+    try:
+        import paddle
+
+        from fastdeploy.platforms import current_platform
+
+        device_info = {}
+        device_info["device_type"] = current_platform.device_name
+        device_info["device_count"] = paddle.device.cuda.device_count()
+        device_ids = str(cfg.parallel_config.device_ids).split(",") if cfg.parallel_config else ["0"]
+        first_device = int(device_ids[0].strip()) - 1
+        props = paddle.device.cuda.get_device_properties(first_device)
+        device_info["device_name"] = props.name
+        device_info["device_total_memory"] = props.total_memory
+        device_info["device_multi_processor_count"] = props.multi_processor_count
+        device_info["device_major"] = props.major
+        device_info["device_minor"] = props.minor
+        cfg_dict["device_info"] = device_info
+    except Exception:
+        cfg_dict["device_info"] = None
+
     env_dict = {k: v() for k, v in environment_variables.items()}
     cfg_dict["env_config"] = env_dict
     result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)

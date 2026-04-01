@@ -1186,7 +1186,7 @@ class EngineService:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if not self.cfg.model_config.enable_mm and not envs.ENABLE_V1_DATA_PROCESSOR:
+                if not self.cfg.model_config.enable_mm:
                     err, data = self.recv_request_server.receive_json_once(block)
                 else:
                     err, data = self.recv_request_server.receive_pyobj_once(block)
@@ -1243,8 +1243,7 @@ class EngineService:
                         continue
                     err_msg = None
                     try:
-                        if not envs.ENABLE_V1_DATA_PROCESSOR:
-                            request = Request.from_dict(data)
+                        request = Request.from_dict(data)
                         request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.requests_number.inc()
                         trace_carrier = data.get("trace_carrier")
