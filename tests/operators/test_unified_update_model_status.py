@@ -53,14 +53,11 @@ CPU_PLACE = paddle.CPUPlace()
 
 
 def to_paddle_inputs(inputs: Dict[str, Any]) -> Dict[str, Any]:
-    """Convert numpy dict → paddle tensors. has_running_seqs goes to CPU."""
+    """Convert numpy dict → paddle tensors."""
     paddle_inputs = {}
     for k, v in inputs.items():
         if isinstance(v, (int, bool, float, str)):
             paddle_inputs[k] = v
-        elif k == "has_running_seqs":
-            # Kernel host function: has_running_seqs.copy_to(GPU) → kernel → copy_to(CPU)
-            paddle_inputs[k] = paddle.to_tensor(v, place=CPU_PLACE)
         elif v is not None:
             paddle_inputs[k] = paddle.to_tensor(v, place=CUDA_PLACE)
         else:

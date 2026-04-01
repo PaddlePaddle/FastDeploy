@@ -567,10 +567,10 @@ class PaddleDisWorkerProc:
                             self.model_weights_status.value[0] = (
                                 ModelWeightsStatus.UPDATING
                             )  # 所有 Rank 已同步唤醒，启动权重更新流程
-                            continue
+                    continue
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
-                logger.info(f"Rank: {self.local_rank} Detected new requests.")
+                logger.debug(f"Rank: {self.local_rank} Detected new requests.")
                 self.engine_forward_signal.value[0] = 1
                 tasks, read_finish = self.task_queue.get_tasks()
                 # Only one of all tp_size client will get read_finish == True.

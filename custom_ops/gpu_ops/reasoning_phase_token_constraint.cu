@@ -137,6 +137,7 @@ __global__ void apply_token_enforce_generation_scores_kernel(
   int tid = threadIdx.x;
 
   const int bs_idx = batch_id_per_token_output[token_idx];
+  if (bs_idx < 0) return;
   const int query_start_token_idx = cu_seqlens_q_output[bs_idx];
   bool is_batch_first_token = (token_idx == query_start_token_idx);
 

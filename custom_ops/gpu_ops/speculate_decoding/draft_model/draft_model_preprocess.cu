@@ -176,8 +176,6 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
   int pre_ids_len = pre_ids.shape()[1];
   auto cu_stream = seq_lens_this_time.stream();
   int target_model_draft_tokens_len = target_model_draft_tokens.shape()[1];
-  auto not_need_stop_gpu =
-      not_need_stop.copy_to(seq_lens_this_time.place(), false);
 
   draft_model_preprocess_kernel<kBlockSize><<<1, kBlockSize, 0, cu_stream>>>(
       const_cast<int64_t*>(draft_tokens.data<int64_t>()),
@@ -187,7 +185,7 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
       const_cast<int*>(seq_lens_encoder.data<int>()),
       const_cast<int*>(seq_lens_decoder.data<int>()),
       const_cast<int64_t*>(step_idx.data<int64_t>()),
-      const_cast<bool*>(not_need_stop_gpu.data<bool>()),
+      const_cast<bool*>(not_need_stop.data<bool>()),
       const_cast<int64_t*>(pre_ids.data<int64_t>()),
       accept_tokens.data<int64_t>(),
       accept_num.data<int>(),
@@ -205,10 +203,6 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
       target_model_draft_tokens_len,
       pre_ids_len,
       is_splitwise_prefill);
-  auto not_need_stop_cpu =
-      not_need_stop_gpu.copy_to(not_need_stop.place(), false);
-  bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());
-  not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
 
 PD_BUILD_STATIC_OP(draft_model_preprocess)

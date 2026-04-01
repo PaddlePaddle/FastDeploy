@@ -151,6 +151,7 @@ The Router exposes a set of HTTP services to provide unified request scheduling,
 |----------|------|------|
 | POST | `/v1/chat/completions` | Provide scheduling services for inference requests based on the Chat Completions API |
 | POST | `/v1/completions` | Provide scheduling services for general text completion inference requests |
+| POST | `/v1/abort_requests` | Abort inference requests to release GPU memory and compute resources. Accepts `req_ids` or `abort_all=true`. Returns aborted requests with their generated token counts |
 | POST | `/register` | Allow inference instances to register their metadata with the Router for scheduling |
 | GET | `/registered` | Query the list of currently registered inference instances |
 | GET | `/registered_number` | Query the number of currently registered inference instances |

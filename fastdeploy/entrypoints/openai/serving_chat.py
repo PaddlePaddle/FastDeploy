@@ -26,7 +26,7 @@ import numpy as np
 
 import fastdeploy.envs as envs
 import fastdeploy.metrics.trace as tracing
-from fastdeploy.engine.request import Request, RequestOutput
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -145,10 +145,7 @@ class OpenAIServingChat:
             prompt_tokens = None
             max_tokens = None
             try:
-                if not envs.ENABLE_V1_DATA_PROCESSOR:
-                    current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
-                else:
-                    current_req_dict = Request.from_generic_request(request, request_id=f"{request_id}_0")
+                current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["metrics"]["arrival_time"] = time.time()
@@ -468,6 +465,9 @@ class OpenAIServingChat:
 
                         if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                             choice.finish_reason = "recover_stop"
+
+                        if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
+                            choice.finish_reason = "abort"
 
                         inference_start_time[idx] = 0
 
@@ -802,6 +802,8 @@ class OpenAIServingChat:
         if data.get("error_msg", None) is not None and "Recover" in data["error_msg"]:
             finish_reason = "recover_stop"
 
+        if data.get("error_msg", None) is not None and "Aborted" in data["error_msg"]:
+            finish_reason = "abort"
         return ChatCompletionResponseChoice(
             index=idx,
             message=message,
