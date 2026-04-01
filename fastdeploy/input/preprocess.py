@@ -19,7 +19,6 @@ from typing import Any, Dict, Optional
 from fastdeploy.config import ErnieArchitectures, ModelConfig
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.reasoning import ReasoningParserManager
-from fastdeploy.utils import envs
 from fastdeploy.utils import llm_logger as logger
 
 
@@ -82,39 +81,20 @@ class InputPreprocessor:
         except Exception as e:
             logger.info(f"Plugin input processor not available ({e}), using built-in processor")
             if not self.model_config.enable_mm:
-                if not envs.ENABLE_V1_DATA_PROCESSOR:
-                    from fastdeploy.input.text_processor import TextProcessor
+                from fastdeploy.input.text_processor import TextProcessor
 
-                    tokenizer_type = "ernie4_5" if ErnieArchitectures.contains_ernie_arch(architecture) else "auto"
-                    self.processor = TextProcessor(
-                        model_name_or_path=self.model_name_or_path,
-                        tokenizer_type=tokenizer_type,
-                        reasoning_parser_obj=reasoning_parser_obj,
-                        tool_parser_obj=tool_parser_obj,
-                    )
-                else:
-                    if not ErnieArchitectures.contains_ernie_arch(architecture):
-                        from fastdeploy.input.v1.text_processor import DataProcessor
-                    else:
-                        from fastdeploy.input.v1.ernie4_5_processor import (
-                            Ernie4_5Processor as DataProcessor,
-                        )
-
-                    self.processor = DataProcessor(
-                        model_name_or_path=self.model_name_or_path,
-                        reasoning_parser_obj=reasoning_parser_obj,
-                        tool_parser_obj=tool_parser_obj,
-                    )
+                tokenizer_type = "ernie4_5" if ErnieArchitectures.contains_ernie_arch(architecture) else "auto"
+                self.processor = TextProcessor(
+                    model_name_or_path=self.model_name_or_path,
+                    tokenizer_type=tokenizer_type,
+                    reasoning_parser_obj=reasoning_parser_obj,
+                    tool_parser_obj=tool_parser_obj,
+                )
             else:
                 if ErnieArchitectures.contains_ernie_arch(architecture):
-                    if not envs.ENABLE_V1_DATA_PROCESSOR:
-                        from fastdeploy.input.ernie4_5_vl_processor import (
-                            Ernie4_5_VLProcessor,
-                        )
-                    else:
-                        from fastdeploy.input.v1.ernie4_5_vl_processor import (
-                            Ernie4_5_VLProcessor,
-                        )
+                    from fastdeploy.input.ernie4_5_vl_processor import (
+                        Ernie4_5_VLProcessor,
+                    )
 
                     self.processor = Ernie4_5_VLProcessor(
                         model_name_or_path=self.model_name_or_path,
@@ -125,14 +105,9 @@ class InputPreprocessor:
                         enable_processor_cache=self.enable_processor_cache,
                     )
                 elif "PaddleOCRVL" in architecture:
-                    if not envs.ENABLE_V1_DATA_PROCESSOR:
-                        from fastdeploy.input.paddleocr_vl_processor import (
-                            PaddleOCRVLProcessor,
-                        )
-                    else:
-                        from fastdeploy.input.v1.paddleocr_vl_processor import (
-                            PaddleOCRVLProcessor,
-                        )
+                    from fastdeploy.input.paddleocr_vl_processor import (
+                        PaddleOCRVLProcessor,
+                    )
 
                     self.processor = PaddleOCRVLProcessor(
                         config=self.model_config,
@@ -142,12 +117,7 @@ class InputPreprocessor:
                         reasoning_parser_obj=reasoning_parser_obj,
                     )
                 elif "Qwen2_5_VL" in architecture:
-                    if not envs.ENABLE_V1_DATA_PROCESSOR:
-                        from fastdeploy.input.qwen_vl_processor import QwenVLProcessor
-                    else:
-                        from fastdeploy.input.v1.qwen_vl_processor import (
-                            QwenVLProcessor,
-                        )
+                    from fastdeploy.input.qwen_vl_processor import QwenVLProcessor
 
                     self.processor = QwenVLProcessor(
                         config=self.model_config,
@@ -158,12 +128,7 @@ class InputPreprocessor:
                         enable_processor_cache=self.enable_processor_cache,
                     )
                 elif "Qwen3VL" in architecture:
-                    if not envs.ENABLE_V1_DATA_PROCESSOR:
-                        from fastdeploy.input.qwen3_vl_processor import Qwen3VLProcessor
-                    else:
-                        from fastdeploy.input.v1.qwen3_vl_processor import (
-                            Qwen3VLProcessor,
-                        )
+                    from fastdeploy.input.qwen3_vl_processor import Qwen3VLProcessor
 
                     self.processor = Qwen3VLProcessor(
                         config=self.model_config,
