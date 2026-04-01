@@ -272,6 +272,13 @@ class MLAAttentionBackend(AttentionBackend):
         self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
 
         self.num_heads: int = num_heads
+        if self.num_heads < 64:
+            self.has_padding_num_heads = 64 - self.num_heads
+            self.heads_need_padding = True
+            # self.padded_num_heads = 64
+            print("num_heads is less than 64, force to use 64 num_heads")
+            # self.q_padding_tensor = paddle.zeros(64, (self.kv_lora_rank + self.qk_rope_head_dim))
+
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
 
@@ -280,7 +287,9 @@ class MLAAttentionBackend(AttentionBackend):
         self.qk_rope_head_dim: int = fd_config.model_config.qk_rope_head_dim
         self.qk_head_dim: int = fd_config.model_config.qk_nope_head_dim + fd_config.model_config.qk_rope_head_dim
         self.attn_softmax_scale: float = self.qk_head_dim**-0.5
-        if fd_config.model_config.rope_scaling:
+        self.rope_scaling = getattr(fd_config.model_config, "rope_scaling", None)
+        if self.rope_scaling and getattr(self.rope_scaling, "factor", None):
+            # if fd_config.model_config.rope_scaling:
             mscale_all_dim = fd_config.model_config.rope_scaling.get("mscale_all_dim", False)  # 1.0
             scaling_factor = fd_config.model_config.rope_scaling["factor"]  # 40
             mscale = yarn_get_mscale(scaling_factor, float(mscale_all_dim))
@@ -603,7 +612,11 @@ class MLAAttentionBackend(AttentionBackend):
             )
 
             if int(os.getenv("USE_FLASH_MLA", "0")) == 0:
-                assert self.num_heads <= 64, "paddle mla attention support failed"
+                # assert self.num_heads < 64, "paddle mla attention support failed"
+                if self.heads_need_padding:
+                    q = paddle.nn.functional.pad(
+                        q, [0, (self.has_padding_num_heads) * (self.kv_lora_rank + self.qk_rope_head_dim)], value=0.0
+                    ).contiguous()
                 # 多头潜在注意力计算
                 fmha_out = multi_head_latent_attention(
                     q,
@@ -646,6 +659,8 @@ class MLAAttentionBackend(AttentionBackend):
                     True,  # causal
                     speculate_decoder,
                 )
+                if self.heads_need_padding:
+                    fmha_out = fmha_out[:, : self.num_heads * self.kv_lora_rank].contiguous()
 
                 return fmha_out
             else:
@@ -661,6 +676,17 @@ class MLAAttentionBackend(AttentionBackend):
                 tile_scheduler_metadata, num_splits = flash_mla.get_mla_metadata()
                 token_num = q.shape[0]
                 decoder_q.reshape_([-1, 1, self.num_heads, 576])
+                if self.heads_need_padding:
+                    # decoder_q = paddle.nn.functional.pad(
+                    #     decoder_q,
+                    #     [0,0,0,self.has_padding_num_heads],
+                    #     value=0.0
+                    # ).contiguous()
+                    padded_q = paddle.zeros(
+                        [decoder_q.shape[0], decoder_q.shape[1], 64, decoder_q.shape[3]], dtype=decoder_q.dtype
+                    )
+                    padded_q[:, :, : self.num_heads, :] = decoder_q
+                    decoder_q = padded_q
 
                 new_cache_shape = latent_cache.shape
                 assert new_cache_shape[1] == 1
@@ -679,6 +705,8 @@ class MLAAttentionBackend(AttentionBackend):
                     softmax_scale=self.attn_softmax_scale,
                     causal=True,
                 )
+                if self.heads_need_padding:
+                    decoder_res = decoder_res[:, :, : self.num_heads, :].contiguous()
 
                 final_res = insert_decoder_result_back(
                     decoder_res,

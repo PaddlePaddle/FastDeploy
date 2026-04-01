@@ -289,7 +289,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             v_head_dim=self.v_head_dim,
         )
         self.rope_scaling = getattr(fd_config.model_config, "rope_scaling", None)
-        if self.rope_scaling:
+        if self.rope_scaling and getattr(self.rope_scaling, "factor", None):
             mscale_all_dim = self.rope_scaling.get("mscale_all_dim", False)
             scaling_factor = self.rope_scaling["factor"]
             mscale = self.yarn_get_mscale(scaling_factor, float(mscale_all_dim))
@@ -344,8 +344,6 @@ class DeepseekV3MLAAttention(nn.Layer):
         self,
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
-        position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
     ):
         """ """
 
@@ -363,7 +361,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
 
         key_pe.reshape_([-1, 1, self.qk_rope_head_dim])
-        query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
+        query_pe, key_pe = self.rotary_emb(forward_meta.position_ids, query_pe, key_pe)
 
         compressed_kv = self.kv_a_layernorm(compressed_kv)[0]
 
@@ -400,7 +398,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
             fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
             fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
-            fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
+            fmha_out_prefill = fmha_out_prefill * forward_meta.mask_encoder_batch.cast(fmha_out_prefill.dtype)
             fmha_out = fmha_out_prefill
 
         if need_do_decode:  # max_dec_len_this_time
@@ -853,7 +851,7 @@ class DeepseekV32DSAAttention(nn.Layer):
             v_head_dim=self.v_head_dim,
         )
         self.rope_scaling = getattr(fd_config.model_config, "rope_scaling", None)
-        if self.rope_scaling:
+        if self.rope_scaling and getattr(self.rope_scaling, "factor", None):
             mscale_all_dim = self.rope_scaling.get("mscale_all_dim", False)
             scaling_factor = self.rope_scaling["factor"]
             mscale = self.yarn_get_mscale(scaling_factor, float(mscale_all_dim))
@@ -926,8 +924,6 @@ class DeepseekV32DSAAttention(nn.Layer):
         self,
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
-        position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
     ):
         """ """
         qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
@@ -941,14 +937,14 @@ class DeepseekV32DSAAttention(nn.Layer):
 
         # DSA indexer
         indexer_top_k = self.indexer(
-            forward_meta, hidden_states, query, position_ids, rotary_emb=self.indexer_rotary_emb
+            forward_meta, hidden_states, query, forward_meta.position_ids, rotary_emb=self.indexer_rotary_emb
         )
 
         query = self.q_b_proj(query)
         query.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
         query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
 
-        query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
+        query_pe, key_pe = self.rotary_emb(forward_meta.position_ids, query_pe, key_pe)
         q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]).contiguous(), proj_type="k")
         q_input = paddle.concat([q_nope_out.transpose([1, 0, 2]).contiguous(), query_pe], axis=-1)
 
@@ -1044,8 +1040,6 @@ class DeepSeekV3DecoderLayer(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor,
-        position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
     ):
         """ """
         if hidden_states.shape[0] > 0:
@@ -1053,7 +1047,9 @@ class DeepSeekV3DecoderLayer(nn.Layer):
                 hidden_states, residual_input=residual, forward_meta=forward_meta
             )
 
-            hidden_states = self.self_attn(forward_meta, hidden_states, position_ids, mask_encoder_batch)
+            hidden_states = self.self_attn(
+                forward_meta, hidden_states, forward_meta.position_ids, forward_meta.mask_encoder_batch
+            )
 
             hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
         else:
@@ -1108,8 +1104,6 @@ class DeepSeekV3Model(nn.Layer):
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
-        position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
     ):
         """ """
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
@@ -1120,8 +1114,6 @@ class DeepSeekV3Model(nn.Layer):
                 forward_meta,
                 hidden_states,
                 residual,
-                position_ids,
-                mask_encoder_batch,
             )
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
@@ -1297,12 +1289,10 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         ids_remove_padding = inputs["ids_remove_padding"]
-        forward_meta.position_ids, mask_encoder_batch = self.pre_process(forward_meta)
+        forward_meta.position_ids, forward_meta.mask_encoder_batch = self.pre_process(forward_meta)
         hidden_states = self.model(
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
-            position_ids=forward_meta.position_ids,
-            mask_encoder_batch=mask_encoder_batch,
         )
         return hidden_states
 
@@ -1353,3 +1343,55 @@ class DeepSeekV32PretrainedModel(DeepSeekV3PretrainedModel):
     @classmethod
     def arch_name(self):
         return "DeepseekV32ForCausalLM"
+
+
+@ModelRegistry.register_model_class(
+    architecture="ErnieForCausalLM",
+    module_name="deepseek_v3",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
+class Ernie5MoeForCausalLM(DeepseekV3ForCausalLM):
+    """
+    Ernie5MoeForCausalLM
+    """
+
+    @classmethod
+    def name(cls):
+        return "Ernie5MoeForCausalLM"
+
+
+class Ernie5MoEPretrainedModel(DeepSeekV3PretrainedModel):
+    """
+    EErniemmMoEPretrainedModel
+    """
+
+    @classmethod
+    def arch_name(self):
+        return "Ernie5MoeForCausalLM"
+
+
+@ModelRegistry.register_model_class(
+    architecture="Glm4MoeLiteForCausalLM",
+    module_name="deepseek_v3",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
+class Glm4MoeLiteForCausalLM(DeepseekV3ForCausalLM):
+    """
+    Glm4MoeLiteForCausalLM
+    """
+
+    @classmethod
+    def name(cls):
+        return "Glm4MoeLiteForCausalLM"
+
+
+class Glm4MoeLitePretrainedModel(DeepSeekV3PretrainedModel):
+    """
+    Glm4MoeLite
+    """
+
+    @classmethod
+    def arch_name(self):
+        return "Glm4MoeLiteForCausalLM"
