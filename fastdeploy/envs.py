@@ -36,8 +36,18 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_BUILDING_ARCS": lambda: os.getenv("FD_BUILDING_ARCS", "[]"),
     # Log directory.
     "FD_LOG_DIR": lambda: os.getenv("FD_LOG_DIR", "log"),
+    # Global log level, prefer this over FD_DEBUG. Supports "INFO" and "DEBUG".
+    "FD_LOG_LEVEL": lambda: os.getenv("FD_LOG_LEVEL", None),
     # Whether to use debug mode, can set 0 or 1
     "FD_DEBUG": lambda: int(os.getenv("FD_DEBUG", "0")),
+    # Request logging master switch. Set to 0 to disable request logging.
+    "FD_LOG_REQUESTS": lambda: int(os.getenv("FD_LOG_REQUESTS", "1")),
+    # Request logging detail level (0-3). Higher level means more verbose output.
+    "FD_LOG_REQUESTS_LEVEL": lambda: int(os.getenv("FD_LOG_REQUESTS_LEVEL", "0")),
+    # Max field length for request logging truncation.
+    "FD_LOG_MAX_LEN": lambda: int(os.getenv("FD_LOG_MAX_LEN", "2048")),
+    # Unified trace mode: off, local, otel, all.
+    "FD_TRACE": lambda: os.getenv("FD_TRACE", "off"),
     # Number of days to keep fastdeploy logs.
     "FD_LOG_BACKUP_COUNT": lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),
     # Model download source, can set "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE".
@@ -96,8 +106,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "EXPORTER_OTLP_HEADERS": lambda: os.getenv("EXPORTER_OTLP_HEADERS"),
     # enable kv cache block scheduler v1 (no need for kv_cache_ratio)
     "ENABLE_V1_KVCACHE_SCHEDULER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "1")),
-    # enable data processor v2
-    "ENABLE_V1_DATA_PROCESSOR": lambda: int(os.getenv("ENABLE_V1_DATA_PROCESSOR", "0")),
     # set prealloc block num for decoder
     "FD_ENC_DEC_BLOCK_NUM": lambda: int(os.getenv("FD_ENC_DEC_BLOCK_NUM", "2")),
     # enbale max prefill of one execute step
@@ -137,8 +145,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ZMQ_CONTROL_CMD_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_CONTROL_CMD_SERVER_PORTS", "8202"),
     # Whether to enable the decode caches requests for preallocating resource
     "FD_ENABLE_CACHE_TASK": lambda: os.getenv("FD_ENABLE_CACHE_TASK", "0"),
-    # Batched token timeout in EP
-    "FD_EP_BATCHED_TOKEN_TIMEOUT": lambda: float(os.getenv("FD_EP_BATCHED_TOKEN_TIMEOUT", "0.1")),
     # Max pre-fetch requests number in PD
     "FD_EP_MAX_PREFETCH_TASK_NUM": lambda: int(os.getenv("FD_EP_MAX_PREFETCH_TASK_NUM", "8")),
     # Enable or disable model caching.
@@ -256,6 +262,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # When v1 is enabled, the legacy /clear_load_weight and /update_model_weight
     # will adopt this new communication pattern.
     "FD_ENABLE_V1_UPDATE_WEIGHTS": lambda: bool(int(os.getenv("FD_ENABLE_V1_UPDATE_WEIGHTS", "0"))),
+    # Whether to save the cache of output token for preempted request to storage.
+    "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
+        int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
+    ),
 }
 
 

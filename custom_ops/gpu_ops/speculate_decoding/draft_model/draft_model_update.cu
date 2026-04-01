@@ -123,8 +123,6 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
   auto seq_lens_this_time_shape = seq_lens_this_time.shape();
   auto cu_stream = seq_lens_this_time.stream();
   const int real_bsz = seq_lens_this_time_shape[0];
-  auto not_need_stop_gpu =
-      not_need_stop.copy_to(seq_lens_this_time.place(), false);
   const int end_ids_len = end_ids.shape()[0];
   const int max_draft_token = draft_tokens.shape()[1];
   const int pre_id_length = pre_ids.shape()[1];
@@ -149,7 +147,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
       const_cast<int64_t*>(step_idx.data<int64_t>()),
       cu_seqlens_q_output.data<int>(),
       const_cast<bool*>(stop_flags.data<bool>()),
-      not_need_stop_gpu.data<bool>(),
+      const_cast<bool*>(not_need_stop.data<bool>()),
       max_dec_len.data<int64_t>(),
       end_ids.data<int64_t>(),
       const_cast<int64_t*>(base_model_draft_tokens.data<int64_t>()),
@@ -161,11 +159,6 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
       max_seq_len,
       substep,
       prefill_one_step_stop);
-
-  auto not_need_stop_cpu =
-      not_need_stop_gpu.copy_to(not_need_stop.place(), false);
-  bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());
-  not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
 
 PD_BUILD_STATIC_OP(draft_model_update)
