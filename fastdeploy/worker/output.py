@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import dataclasses
 from dataclasses import dataclass, field
 from typing import NamedTuple, Optional
 
@@ -163,6 +164,28 @@ class SpeculateMetrics:
     Average acceptance rate of each head in the current request
     """
     accept_ratio_per_head: list[float]
+
+    def to_dict(self):
+        """
+        Convert the SpeculateMetrics object to a dictionary.
+        """
+        res = {}
+        for k in self.__dataclass_fields__:
+            v = getattr(self, k)
+            if type(v) in (int, float, str, bool, type(None)):
+                res[k] = v
+            elif isinstance(v, list):
+                res[k] = list(v)
+            elif isinstance(v, dict):
+                res[k] = dict(v)
+            elif dataclasses.is_dataclass(v):
+                if hasattr(v, "to_dict"):
+                    res[k] = v.to_dict()
+                else:
+                    res[k] = dataclasses.asdict(v)
+            else:
+                res[k] = v
+        return res
 
 
 @dataclass
