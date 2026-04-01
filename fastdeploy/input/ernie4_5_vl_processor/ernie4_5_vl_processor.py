@@ -59,6 +59,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         self.tool_parser_dict = dict()
         self.decode_status = dict()
         self.model_status_dict = dict()
+        self.tokenizer_type = "ernie4_5"
         self._load_tokenizer()
 
         # Generation config

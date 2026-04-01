@@ -86,6 +86,8 @@ def setup_and_run_server():
         model_path = "baidu/ERNIE-4.5-0.3B-Paddle"
     print(f"model_path: {model_path}")
 
+    base_log_dir = os.getenv("FD_LOG_DIR", "log")
+
     # get rdma nics
     current_dir = os.path.dirname(os.path.abspath(__file__))
     shell_path = os.path.join(current_dir, "utils/get_rdma_nics.sh")
@@ -96,7 +98,7 @@ def setup_and_run_server():
     # router
     print("start router...")
     env_router = os.environ.copy()
-    env_router["FD_LOG_DIR"] = "log_router"
+    env_router["FD_LOG_DIR"] = os.path.join(base_log_dir, "log_router")
     router_log_path = "router.log"
 
     router_cmd = [
@@ -121,7 +123,7 @@ def setup_and_run_server():
     print("start prefill...")
     env_prefill = os.environ.copy()
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0,1"
-    env_prefill["FD_LOG_DIR"] = "log_prefill"
+    env_prefill["FD_LOG_DIR"] = os.path.join(base_log_dir, "log_prefill")
     # env_prefill["KVCACHE_RDMA_NICS"] = rdma_nics
 
     prefill_log_path = "prefill.log"
@@ -170,7 +172,7 @@ def setup_and_run_server():
     print("start decode...")
     env_decode = os.environ.copy()
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
-    env_decode["FD_LOG_DIR"] = "log_decode"
+    env_decode["FD_LOG_DIR"] = os.path.join(base_log_dir, "log_decode")
     # env_decode["KVCACHE_RDMA_NICS"] = rdma_nics
 
     decode_log_path = "decode.log"

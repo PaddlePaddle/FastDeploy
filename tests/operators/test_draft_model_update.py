@@ -64,13 +64,11 @@ CPU_PLACE = paddle.CPUPlace()
 
 
 def to_paddle_inputs(inputs: Dict[str, Any]) -> Dict[str, Any]:
-    """Convert numpy dict → paddle tensors. not_need_stop stays on CPU."""
+    """Convert numpy dict → paddle tensors."""
     paddle_inputs = {}
     for k, v in inputs.items():
         if isinstance(v, (int, bool, float)):
             paddle_inputs[k] = v
-        elif k == "not_need_stop":
-            paddle_inputs[k] = paddle.to_tensor(v, place=CPU_PLACE)
         elif v is not None:
             paddle_inputs[k] = paddle.to_tensor(v, place=CUDA_PLACE)
     return paddle_inputs
