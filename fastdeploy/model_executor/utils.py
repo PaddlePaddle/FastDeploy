@@ -311,7 +311,7 @@ def fd_safe_cast(weight, target_dtype):
     if isinstance(weight, paddle.Tensor):
         return weight.cast(target_dtype)
     # numpy / other
-    return weight.astype(str(target_dtype).replace('paddle.', ''))
+    return weight.astype(str(target_dtype).replace("paddle.", ""))
 
 
 def fd_cast(weight, param):

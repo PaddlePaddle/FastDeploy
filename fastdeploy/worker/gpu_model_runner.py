@@ -2036,7 +2036,6 @@ class GPUModelRunner(ModelRunnerBase):
         for _ in range(self.fd_config.speculative_config.num_model_steps):
             self.proposer.model.empty_input_forward(forward_meta)
 
-
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,

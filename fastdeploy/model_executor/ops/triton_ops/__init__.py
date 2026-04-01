@@ -15,7 +15,7 @@
 """
 
 try:
-    from .pre_token_quant_fp8_kernel import _per_token_group_quant_fp8
+    from .pre_token_quant_fp8_kernel import _per_token_group_quant_fp8  # noqa: F401
     from .qk_rmsnorm_fused_kernel import qk_rmsnorm_fused
     from .repetition_early_stop_kernel import repetition_early_stopper_kernel
     from .wint2_fused_moe_kernel import moe_wint2_ffn_kernel

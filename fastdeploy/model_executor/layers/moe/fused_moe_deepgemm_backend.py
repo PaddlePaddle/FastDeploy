@@ -24,10 +24,6 @@ from paddleformers.utils.log import logger
 
 import fastdeploy
 from fastdeploy.model_executor.layers.moe.ep import deep_ep
-from fastdeploy.model_executor.layers.quantization.fp8_utils import (
-    deep_gemm,
-    paddlefleet_ops,
-)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import (
     count_tokens_per_expert_func,
@@ -459,7 +455,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             handle,
             event,
         ) = self.ep_prefill_runner.dispatch(
-            x_fp8, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128, previous_event=event
+            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128, previous_event=event
         )
 
         if self.ep_prefill_runner.num_worst_tokens > 0:
@@ -470,7 +466,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
 
-        global global_values
+        global global_values  # noqa: F824
 
         if thread_name not in global_values:
             global_values[thread_name] = {}

@@ -663,7 +663,6 @@ class PaddleDisWorkerProc:
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
-            start_execute_time = time.time()
 
             self._acquire_kvcache_lock(tp_rank)
             self.worker.execute_model(req_dicts, max_occupied_batch_index)
@@ -672,7 +671,6 @@ class PaddleDisWorkerProc:
             # Only v0 use this signal
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
-            _exec_cost = time.time() - start_execute_time
 
             if (
                 not self.parallel_config.use_ep
@@ -704,9 +702,11 @@ class PaddleDisWorkerProc:
             # V100 activation safety margin: lm_head matmul transpose requires ~202MB
             # contiguous on top of model weights. BFC allocator fragmentation accumulates
             # ~80MB/iter over 35+ iterations. Reserve 2GB headroom to prevent OOM crashes.
-            _ACTIVATION_SAFETY_MARGIN = 2 * 1024 ** 3  # 2 GB
+            _ACTIVATION_SAFETY_MARGIN = 2 * 1024**3  # 2 GB
             available_kv_cache_memory = max(0, available_kv_cache_memory - _ACTIVATION_SAFETY_MARGIN)
-            logger.info(f"------- available_kv_cache_memory after safety margin:{available_kv_cache_memory / 1024**3} GB --------")
+            logger.info(
+                f"------- available_kv_cache_memory after safety margin:{available_kv_cache_memory / 1024**3} GB --------"
+            )
             num_blocks_local = int(available_kv_cache_memory // model_block_memory_used)
             # NOTE(liuzichang): Too many block will lead to illegal memory access
             # We will develop dynamic limits in future.

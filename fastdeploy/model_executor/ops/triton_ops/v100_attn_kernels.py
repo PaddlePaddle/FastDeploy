@@ -210,7 +210,9 @@ def v100_decode_fused_kernel(
 
                 k_base = physical_block * (kv_num_heads * block_size * head_dim) + kv_head_id * (block_size * head_dim)
                 k_ptrs = k_base + kv_range[:, None] * head_dim + offs_d[None, :]
-                k_vals = tl.load(key_cache_ptr + k_ptrs, mask=kv_mask[:, None] & d_mask[None, :], other=0.0).to(tl.float32)
+                k_vals = tl.load(key_cache_ptr + k_ptrs, mask=kv_mask[:, None] & d_mask[None, :], other=0.0).to(
+                    tl.float32
+                )
 
                 qk = tl.sum(q_vec[None, :] * k_vals, axis=1) * sm_scale
                 qk = tl.where(kv_mask, qk, float("-inf"))

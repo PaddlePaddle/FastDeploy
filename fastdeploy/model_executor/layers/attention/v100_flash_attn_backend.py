@@ -88,8 +88,10 @@ except Exception:
 # Try importing Triton kernels (fallback: ~1.5ms launch overhead via torch_proxy)
 try:
     from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
-        v100_decode_fused,
         v100_write_kv_cache,  # KV cache write kernel (much faster than Python for-loop)
+    )
+    from fastdeploy.model_executor.ops.triton_ops.v100_attn_kernels import (
+        v100_decode_fused,
     )
 
     _TRITON_KERNELS_AVAILABLE = True
@@ -164,8 +166,7 @@ class V100FlashAttentionBackend(AttentionBackend):
             )
         elif force_triton and _TRITON_KERNELS_AVAILABLE:
             logger.info(
-                "V100FlashAttentionBackend: FD_V100_USE_TRITON=1 set, "
-                "forcing Triton kernels for decode attention."
+                "V100FlashAttentionBackend: FD_V100_USE_TRITON=1 set, " "forcing Triton kernels for decode attention."
             )
         elif self._use_cuda_kernel:
             prefill_status = "CUDA prefill" if _V100_PREFILL_CUDA_AVAILABLE else "Python prefill"
@@ -394,13 +395,13 @@ class V100FlashAttentionBackend(AttentionBackend):
                 v_reshaped = v.reshape([num_tokens, kv_num_heads, head_dim]).contiguous()
 
                 v100_write_kv_cache(
-                    k_reshaped,           # [num_tokens, kv_num_heads, head_dim]
-                    v_reshaped,           # [num_tokens, kv_num_heads, head_dim]
-                    key_cache,            # [max_num_blocks, kv_num_heads, block_size, head_dim]
-                    value_cache,          # same layout
-                    block_tables,         # [batch_size, max_blocks_per_seq]
-                    positions,            # [num_tokens] int64
-                    batch_id_per_token,   # [num_tokens] int32
+                    k_reshaped,  # [num_tokens, kv_num_heads, head_dim]
+                    v_reshaped,  # [num_tokens, kv_num_heads, head_dim]
+                    key_cache,  # [max_num_blocks, kv_num_heads, block_size, head_dim]
+                    value_cache,  # same layout
+                    block_tables,  # [batch_size, max_blocks_per_seq]
+                    positions,  # [num_tokens] int64
+                    batch_id_per_token,  # [num_tokens] int32
                 )
                 return
             except Exception as e:
@@ -613,12 +614,10 @@ class V100FlashAttentionBackend(AttentionBackend):
                 # key/value: [batch_size, kv_num_heads, head_dim]
 
                 # Reshape for Paddle SDPA: [batch_size, num_heads, seq_len, head_dim]
-                q_len = query.shape[0]
-                kv_len = key.shape[0]
 
                 query_sdpa = query.transpose([1, 0, 2]).unsqueeze(0)  # [1, num_heads, q_len, head_dim]
-                key_sdpa = key.transpose([1, 0, 2]).unsqueeze(0)    # [1, kv_num_heads, kv_len, head_dim]
-                value_sdpa = value.transpose([1, 0, 2]).unsqueeze(0) # [1, kv_num_heads, kv_len, head_dim]
+                key_sdpa = key.transpose([1, 0, 2]).unsqueeze(0)  # [1, kv_num_heads, kv_len, head_dim]
+                value_sdpa = value.transpose([1, 0, 2]).unsqueeze(0)  # [1, kv_num_heads, kv_len, head_dim]
 
                 output = paddle_sdpa(
                     query_sdpa,
@@ -738,22 +737,32 @@ class V100FlashAttentionBackend(AttentionBackend):
 
                 # Stack queries: [batch, num_heads, 1, head_dim] for SDPA
                 # q_reshaped[tok_idx]: [num_heads, head_dim]
-                q_sdpa = paddle.stack(
-                    [q_reshaped[bid_to_token[bid]] for bid in batch_ids], axis=0
-                ).unsqueeze(2)  # [batch, num_heads, 1, head_dim]
+                q_sdpa = paddle.stack([q_reshaped[bid_to_token[bid]] for bid in batch_ids], axis=0).unsqueeze(
+                    2
+                )  # [batch, num_heads, 1, head_dim]
 
                 # k from cache: [kv_len, kv_num_heads, head_dim]
                 # GQA expand -> [kv_len, num_heads, head_dim]
                 # Stack + transpose -> [batch, num_heads, kv_len, head_dim]
                 kv_len = seq_lens_list[0]
                 k_sdpa = paddle.stack(
-                    [k.unsqueeze(2).expand([-1, -1, self.group_size, -1]).reshape([kv_len, num_heads, qk_head_dim])
-                     for k in k_list], axis=0
-                ).transpose([0, 2, 1, 3])  # [batch, num_heads, kv_len, head_dim]
+                    [
+                        k.unsqueeze(2).expand([-1, -1, self.group_size, -1]).reshape([kv_len, num_heads, qk_head_dim])
+                        for k in k_list
+                    ],
+                    axis=0,
+                ).transpose(
+                    [0, 2, 1, 3]
+                )  # [batch, num_heads, kv_len, head_dim]
                 v_sdpa = paddle.stack(
-                    [v.unsqueeze(2).expand([-1, -1, self.group_size, -1]).reshape([kv_len, num_heads, v_head_dim])
-                     for v in v_list], axis=0
-                ).transpose([0, 2, 1, 3])  # [batch, num_heads, kv_len, head_dim]
+                    [
+                        v.unsqueeze(2).expand([-1, -1, self.group_size, -1]).reshape([kv_len, num_heads, v_head_dim])
+                        for v in v_list
+                    ],
+                    axis=0,
+                ).transpose(
+                    [0, 2, 1, 3]
+                )  # [batch, num_heads, kv_len, head_dim]
 
                 # Batched SDPA directly: decode q_len=1, no causal mask needed
                 # q_sdpa: [batch, num_heads, 1, head_dim]
@@ -827,8 +836,8 @@ class V100FlashAttentionBackend(AttentionBackend):
         If FD_V100_USE_PYTHON_ATTN=1: uses Python/Paddle fallback.
         """
         # DEBUG: track all forward_mixed calls to understand decode path
-        if not hasattr(self, '_fwd_calls'):
-            self._fwd_calls = {'prefill': 0, 'decode': 0}
+        if not hasattr(self, "_fwd_calls"):
+            self._fwd_calls = {"prefill": 0, "decode": 0}
         if qkv is not None:
             q, k, v = self._split_qkv(qkv, layer)
 
@@ -1215,7 +1224,7 @@ class V100FlashAttentionBackend(AttentionBackend):
         v_reshaped = v.reshape([num_tokens, kv_num_heads, qk_head_dim]).contiguous()
         q_reshaped = q_reshaped.contiguous()
         k_reshaped = k_reshaped.contiguous()
-        sm_scale = qk_head_dim ** -0.5
+        sm_scale = qk_head_dim**-0.5
         output = paddle.empty_like(q_reshaped)
 
         v100_prefill_attention_cuda(

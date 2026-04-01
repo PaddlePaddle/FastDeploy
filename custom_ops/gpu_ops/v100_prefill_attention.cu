@@ -141,15 +141,15 @@ __global__ void v100_prefill_write_kv_cache_kernel(
 
 template <typename T>
 __global__ void v100_prefill_attn_kernel(
-    const T* __restrict__ q,               // [num_tokens, num_heads, head_dim]
-    const T* __restrict__ key_cache,       // [max_num_blocks, kv_num_heads,
-                                           //  block_size, head_dim]
-    const T* __restrict__ value_cache,     // same layout
-    T* __restrict__ output,                // [num_tokens, num_heads, head_dim]
-    const int* __restrict__ block_tables,  // [batch_size, max_blocks_per_seq]
-    const int* __restrict__ seq_lens,      // [batch_size] int32 - total KV len
-    const int64_t* __restrict__ positions, // [num_tokens] int64
-    const int* __restrict__ batch_ids,     // [num_tokens] int32
+    const T* __restrict__ q,                // [num_tokens, num_heads, head_dim]
+    const T* __restrict__ key_cache,        // [max_num_blocks, kv_num_heads,
+                                            //  block_size, head_dim]
+    const T* __restrict__ value_cache,      // same layout
+    T* __restrict__ output,                 // [num_tokens, num_heads, head_dim]
+    const int* __restrict__ block_tables,   // [batch_size, max_blocks_per_seq]
+    const int* __restrict__ seq_lens,       // [batch_size] int32 - total KV len
+    const int64_t* __restrict__ positions,  // [num_tokens] int64
+    const int* __restrict__ batch_ids,      // [num_tokens] int32
     const float sm_scale,
     const int max_blocks_per_seq,
     const int num_heads,
@@ -179,8 +179,9 @@ __global__ void v100_prefill_attn_kernel(
   const int elems_per_thread = (head_dim + num_threads - 1) / num_threads;
 
   // Load Q vector into registers
-  const int64_t q_base = static_cast<int64_t>(token_idx) * num_heads * head_dim +
-                          head_idx * head_dim;
+  const int64_t q_base =
+      static_cast<int64_t>(token_idx) * num_heads * head_dim +
+      head_idx * head_dim;
   float q_reg[4] = {0.f, 0.f, 0.f, 0.f};
   for (int e = 0; e < elems_per_thread; e++) {
     const int d = tid + e * num_threads;
@@ -386,9 +387,7 @@ PD_BUILD_STATIC_OP(v100_prefill_attention)
              "positions",
              "batch_ids"})
     .Outputs({"output_out", "key_cache_out", "value_cache_out"})
-    .Attrs({"sm_scale: float",
-            "is_causal: bool",
-            "skip_kv_write: bool"})
+    .Attrs({"sm_scale: float", "is_causal: bool", "skip_kv_write: bool"})
     .SetInplaceMap({{"output", "output_out"},
                     {"key_cache", "key_cache_out"},
                     {"value_cache", "value_cache_out"}})

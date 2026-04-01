@@ -69,8 +69,8 @@ class GpuWorker(WorkerBase):
             # Cap Paddle BFC allocator pool to match gpu_memory_utilization.
             # Without this, BFC pre-allocates 0.92 * GPU = 29.2GB on a 32GB V100,
             # which after KV cache + weights + forward pass fragmentation causes OOM.
-            _gpu_mem_fraction = getattr(self.cache_config, 'gpu_memory_utilization', 0.85)
-            paddle.set_flags({'FLAGS_fraction_of_gpu_memory_to_use': _gpu_mem_fraction})
+            _gpu_mem_fraction = getattr(self.cache_config, "gpu_memory_utilization", 0.85)
+            paddle.set_flags({"FLAGS_fraction_of_gpu_memory_to_use": _gpu_mem_fraction})
 
             gc.collect()
             paddle.device.cuda.empty_cache()
@@ -197,6 +197,7 @@ class GpuWorker(WorkerBase):
         # Without this, accessing 13.5GB of uninitialized GPU pages during the first request
         # causes a 30-second hang (GPU page fault + CUDA JIT for large matmul shapes).
         import time as _time
+
         if "caches" in self.model_runner.share_inputs:
             _t0 = _time.perf_counter()
             logger.info("V100 KV cache prefault: touching all cache pages...")
@@ -274,6 +275,7 @@ class GpuWorker(WorkerBase):
         # Only needed when graph_opt_level=0 (SOT/CUDA graph warmup handles this for higher levels).
         if self.fd_config.graph_opt_config.graph_opt_level == 0 and not self.model_runner.use_cudagraph:
             import time as _time
+
             warmup_sizes = [1, 4, 16, 64, 128]
             logger.info(f"V100 CUDA kernel warmup: pre-compiling GEMM kernels for token sizes {warmup_sizes}...")
             _t0 = _time.perf_counter()

@@ -35,6 +35,7 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
 )
 from fastdeploy.platforms import current_platform
+from fastdeploy.utils import console_logger as logger
 
 if current_platform.is_xpu():
     from fastdeploy.model_executor.ops.xpu import (

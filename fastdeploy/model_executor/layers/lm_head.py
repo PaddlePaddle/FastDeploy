@@ -133,6 +133,7 @@ class ParallelLMHead(nn.Layer):
         """
 
         from fastdeploy.model_executor.utils import fd_safe_cast
+
         if self.tie_word_embeddings:
             self.linear.weight.set_value(
                 fd_safe_cast(get_tensor(state_dict.pop(self.weight_key)), self.linear.weight.dtype).transpose([1, 0])

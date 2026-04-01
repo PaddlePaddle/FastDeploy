@@ -310,7 +310,12 @@ class OpenAIServingCompletion:
                     output = data["outputs"]
                     if output is None:
                         if data.get("finished", False):
-                            data["outputs"] = {"token_ids": [], "text": "", "top_logprobs": [[], [], []], "draft_top_logprobs": [[], [], []]}
+                            data["outputs"] = {
+                                "token_ids": [],
+                                "text": "",
+                                "top_logprobs": [[], [], []],
+                                "draft_top_logprobs": [[], [], []],
+                            }
                             output = data["outputs"]
                         else:
                             continue
@@ -336,7 +341,9 @@ class OpenAIServingCompletion:
                     output_tokens[rid] += len(data["outputs"]["token_ids"])
                     completion_batched_token_ids[rid].extend(data["outputs"]["token_ids"])
 
-                    output_speculate_metrics = data["metrics"].get("speculate_metrics", None) if data["metrics"] else None
+                    output_speculate_metrics = (
+                        data["metrics"].get("speculate_metrics", None) if data["metrics"] else None
+                    )
                     if output_speculate_metrics is not None:
                         aggregated_speculate_metrics[rid] = output_speculate_metrics
 
