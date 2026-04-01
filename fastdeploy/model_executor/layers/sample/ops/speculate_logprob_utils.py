@@ -33,18 +33,20 @@ def speculate_get_target_logits(
     """
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import speculate_get_target_logits
-
-        speculate_get_target_logits(
-            target_logits,
-            logits,
-            cu_batch_token_offset,
-            ori_cu_batch_token_offset,
-            seq_lens_this_time,
-            seq_lens_encoder,
-            accept_num,
-        )
+    elif current_platform.is_xpu():
+        from fastdeploy.model_executor.ops.xpu import speculate_get_target_logits
     else:
         raise NotImplementedError
+
+    speculate_get_target_logits(
+        target_logits,
+        logits,
+        cu_batch_token_offset,
+        ori_cu_batch_token_offset,
+        seq_lens_this_time,
+        seq_lens_encoder,
+        accept_num,
+    )
 
 
 def speculate_insert_first_token(
@@ -58,15 +60,16 @@ def speculate_insert_first_token(
 ):
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import speculate_insert_first_token
-
-        speculate_insert_first_token(
-            token_ids,
-            accept_tokens,
-            next_tokens,
-            cu_next_token_offset,
-            cu_batch_token_offset,
-            seq_lens_this_time,
-            seq_lens_encoder,
-        )
+    elif current_platform.is_xpu():
+        from fastdeploy.model_executor.ops.xpu import speculate_insert_first_token
     else:
         raise NotImplementedError
+    speculate_insert_first_token(
+        token_ids,
+        accept_tokens,
+        next_tokens,
+        cu_next_token_offset,
+        cu_batch_token_offset,
+        seq_lens_this_time,
+        seq_lens_encoder,
+    )

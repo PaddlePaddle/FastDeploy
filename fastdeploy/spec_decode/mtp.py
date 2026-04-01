@@ -47,6 +47,7 @@ if current_platform.is_xpu():
         mtp_step_paddle,
         set_data_ipc,
         share_external_data,
+        speculate_save_output_topk,
         update_attn_mask_offsets,
     )
     from fastdeploy.model_executor.xpu_pre_and_post_process import (
@@ -1115,14 +1116,24 @@ class MTPProposer(Proposer):
                     self.model_inputs,
                 )
 
-                if substep == 0 and sampler_output.logprobs_tensors is not None:
+                if (
+                    not is_dummy_run
+                    and self.parallel_config.tensor_parallel_rank == 0
+                    and substep == 0
+                    and sampler_output.logprobs_tensors is not None
+                ):
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
                     recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
                     recover_model_output_map = recover_batch_index_for_output(
                         self.model_inputs,
                         self.model_inputs.index_to_batch_id,
-                        self.model_inputs.enable_pd_reorder,
-                        ["batch_token_num", "cu_batch_token_offset"],
+                        self.model_inputs.enable_pd_reorder[
+                            "batch_token_num",
+                            "cu_batch_token_offset",
+                            "seq_lens_decoder",
+                            "prompt_lens",
+                            "preempted_idx",
+                        ],
                     )
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
@@ -1132,8 +1143,12 @@ class MTPProposer(Proposer):
                         recover_model_output_map["batch_token_num"][:real_bsz],
                         recover_model_output_map["cu_batch_token_offset"][:real_bsz],
                         self.model_inputs["not_need_stop"],
+                        recover_model_output_map["seq_lens_decoder"],
+                        recover_model_output_map["prompt_lens"],
+                        recover_model_output_map["preempted_idx"],
                         4,  # mtype
                         self.local_rank,
+                        self.parallel_config.use_ep,
                     )
 
                 if self.parallel_config.tensor_parallel_size > 1:
