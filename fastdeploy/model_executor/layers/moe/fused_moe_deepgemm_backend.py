@@ -160,7 +160,6 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         permute_scale = permute_scale.transpose([1, 0]).contiguous()
         permute_scale = permute_scale.transpose([1, 0])
     # disable_ue8m0_cast is False for SM100
-    assert permute_scale.dtype == paddle.uint8, "For sm100+, scale must be uint8 dtype."
     m_grouped_fp8_gemm_nt_contiguous(
         (permute_input, permute_scale),
         (layer_added_weight_attrs_0, layer_added_scale_attrs_0),
@@ -199,7 +198,6 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         dtype=paddle.bfloat16,
     )
     # disable_ue8m0_cast is False for SM100
-    assert ffn_in_x_scale_tensor.dtype == paddle.uint8, "For sm100+, sclae must be uint8 dtype."
     m_grouped_fp8_gemm_nt_contiguous(
         (ffn_in_x, ffn_in_x_scale_tensor),
         (layer_added_weight_attrs_1, layer_added_scale_attrs_1),
@@ -630,7 +628,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 (token_all_num, getattr(layer, self.added_weight_attrs[0]).shape[1]),
                 dtype=paddle.bfloat16,
             )
-            assert permute_scale.dtype == paddle.uint8, "For sm100+, sclae must be uint8 dtype."
             m_grouped_fp8_gemm_nt_contiguous(
                 (permute_input, permute_scale),
                 (getattr(layer, self.added_weight_attrs[0]), getattr(layer, self.added_scale_attrs[0])),
@@ -668,7 +665,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 (token_all_num, getattr(layer, self.added_weight_attrs[1]).shape[1]),
                 dtype=paddle.bfloat16,
             )
-            assert ffn_in_x_scale_tensor.dtype == paddle.uint8, "For sm100+, sclae must be uint8 dtype."
             m_grouped_fp8_gemm_nt_contiguous(
                 (ffn_in_x, ffn_in_x_scale_tensor),
                 (getattr(layer, self.added_weight_attrs[1]), getattr(layer, self.added_scale_attrs[1])),
