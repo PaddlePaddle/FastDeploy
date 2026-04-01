@@ -868,4 +868,4 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             )
 
             return output
-        # return paddle.empty_like(x)
+        return paddle.empty_like(x)
