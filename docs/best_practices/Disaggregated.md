@@ -12,16 +12,16 @@ This guide demonstrates deployment practices using the ERNIE-4.5-300B-A47B-Paddl
 
 | Configuration | TP | DP | EP | GPUs Required |
 |---------|----|----|----|---------|
-| TP4DP1 | 4 | 1 | - | 8 |
-| TP1DP4EP | 1 | 4 | ✓ | 8 |
+| P：TP4DP1<br>D：TP4DP1 | 4 | 1 | - | 8 |
+| P：TP1DP4EP4 <br> D：TP1DP4EP4| 1 | 4 | ✓ | 8 |
 
 **Multi-Machine Deployment (16 GPUs, Cross-Node)**
 
 | Configuration | TP | DP | EP | GPUs Required |
 |---------|----|----|----|---------|
-| TP8DP1 | 8 | 1 | - | 16 |
-| TP4DP2 | 4 | 2 | - | 16 |
-| TP1DP8EP | 1 | 8 | ✓ | 16 |
+| P：TP8DP1<br>D：TP8DP1 | 8 | 1 | - | 16 |
+| P：TP4DP2<br>D：TP4DP2 | 4 | 2 | - | 16 |
+| P：TP1DP8EP8<br>D：TP1DP8EP8 | 1 | 8 | ✓ | 16 |
 
 **Important Notes**:
 1. **Quantization**: All configurations above use WINT4 quantization, specified via `--quantization wint4`
@@ -38,7 +38,7 @@ For model downloads, please check the [Supported Models List](https://paddlepadd
 
 ### 1.2 Deployment Topology
 
-**Single-Machine Deployment Topology (TP1DP4EP)**
+**Single-Machine Deployment Topology**
 
 ```
 ┌──────────────────────────────┐
@@ -57,7 +57,7 @@ For model downloads, please check the [Supported Models List](https://paddlepadd
 └──────────────────────────────┘
 ```
 
-**Cross-Machine Deployment Topology (TP1DP8EP)**
+**Cross-Machine Deployment Topology**
 
 ```
 ┌─────────────────────┐                      ┌─────────────────────┐
@@ -82,13 +82,13 @@ For model downloads, please check the [Supported Models List](https://paddlepadd
 
 ### 2.1 Test Scenarios and Parallelism Configuration
 
-This chapter demonstrates the **TP1DP4EP** configuration test scenario:
-- **Tensor Parallelism (TP)**: 2 — Each 2 GPUs independently load complete model parameters
-- **Data Parallelism (DP)**: 2 — 2 GPUs form a data parallelism group
+This chapter demonstrates the **TP4DP1｜D：TP4DP1** configuration test scenario:
+- **Tensor Parallelism (TP)**: 4 — Each 4 GPUs independently load complete model parameters
+- **Data Parallelism (DP)**: 1 — Each GPU forms a data parallelism group
 - **Expert Parallelism (EP)**: Not enabled
 
 **To test other parallelism configurations, adjust parameters as follows:**
-1. **TP Adjustment**: Modify `--tensor-parallel-size`, note: ERNIE-4.5-300B model requires TP ≥ 2 to load on a single GPU when EP is not enabled
+1. **TP Adjustment**: Modify `--tensor-parallel-size`
 2. **DP Adjustment**: Modify `--data-parallel-size`, ensuring `--ports` and `--num-servers` remain consistent with DP
 3. **EP Toggle**: Add or remove `--enable-expert-parallel`
 4. **GPU Allocation**: Control GPUs used by Prefill and Decode instances via `CUDA_VISIBLE_DEVICES`
@@ -103,24 +103,24 @@ python -m fastdeploy.router.launch \
     --splitwise
 ```
 
+Note: This uses the Python version of the router. If needed, you can also use the high-performance [Golang version router](../online_serving/router.md).
+
 #### Start Prefill Nodes
 
 ```bash
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 
-python -m fastdeploy.entrypoints.openai.multi_api_server \
-    --ports 8188,8189,8190,8191 \
-    --num-servers 4 \
-    --args --model /path/to/ERNIE-4.5-300B-A47B-Paddle \
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model /path/to/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
     --splitwise-role "prefill" \
     --cache-transfer-protocol "rdma,ipc" \
     --router "0.0.0.0:8109" \
     --quantization wint4 \
-    --tensor-parallel-size 2 \
-    --data-parallel-size 2 \
+    --tensor-parallel-size 4 \
+    --data-parallel-size 1 \
     --max-model-len 8192 \
-    --max-num-seqs 64 \
-    --num-gpu-blocks-override 1024
+    --max-num-seqs 64
 ```
 
 #### Start Decode Nodes
@@ -129,9 +129,8 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 export CUDA_VISIBLE_DEVICES=4,5,6,7
 
 python -m fastdeploy.entrypoints.openai.multi_api_server \
-    --ports 8198,8199,8200,8201 \
-    --num-servers 4 \
-    --args --model /path/to/ERNIE-4.5-300B-A47B-Paddle \
+    --model /path/to/ERNIE-4.5-300B-A47B-Paddle \
+    --ports 8200,8201 \
     --splitwise-role "decode" \
     --cache-transfer-protocol "rdma,ipc" \
     --router "0.0.0.0:8109" \
@@ -139,8 +138,7 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --tensor-parallel-size 2 \
     --data-parallel-size 2 \
     --max-model-len 8192 \
-    --max-num-seqs 64 \
-    --num-gpu-blocks-override 1024
+    --max-num-seqs 64
 ```
 
 ### 2.3 Key Parameter Descriptions
@@ -170,7 +168,7 @@ Cross-machine PD disaggregation deploys Prefill and Decode instances on differen
 
 ### 3.2 Test Scenarios and Parallelism Configuration
 
-This chapter demonstrates the **TP1DP8EP** cross-machine configuration (16 GPUs total):
+This chapter demonstrates the **TP1DP8EP8｜D：TP1DP8EP8** cross-machine configuration (16 GPUs total):
 - **Tensor Parallelism (TP)**: 1
 - **Data Parallelism (DP)**: 8 — 8 GPUs per machine, totaling 8 Prefill instances and 8 Decode instances
 - **Expert Parallelism (EP)**: Enabled — MoE layer shared experts are distributed across 8 GPUs for parallel computation
@@ -181,20 +179,7 @@ This chapter demonstrates the **TP1DP8EP** cross-machine configuration (16 GPUs 
 3. **Port Configuration**: The number of ports in the `--ports` list must match `--num-servers` and `--data-parallel-size`
 4. **GPU Visibility**: Each machine specifies its local GPUs via `CUDA_VISIBLE_DEVICES`
 
-### 3.3 Network Configuration
-
-Cross-machine deployment requires RDMA network support. Before starting, configure the RDMA NIC on the Prefill machine:
-
-```bash
-export $(bash /path/to/get_rdma_nics.sh gpu)
-echo "KVCACHE_RDMA_NICS:${KVCACHE_RDMA_NICS}"
-if [ -z "${KVCACHE_RDMA_NICS}" ]; then
-  echo "KVCACHE_RDMA_NICS is empty, please check the output of get_rdma_nics.sh"
-  exit 1
-fi
-```
-
-### 3.4 Prefill Machine Startup Scripts
+### 3.3 Prefill Machine Startup Scripts
 
 #### Start Router
 
@@ -209,7 +194,6 @@ python -m fastdeploy.router.launch \
 #### Start Prefill Nodes
 
 ```bash
-export $(bash /path/to/get_rdma_nics.sh gpu)
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
 python -m fastdeploy.entrypoints.openai.multi_api_server \
@@ -224,11 +208,10 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --data-parallel-size 8 \
     --enable-expert-parallel \
     --max-model-len 8192 \
-    --max-num-seqs 64 \
-    --num-gpu-blocks-override 1024
+    --max-num-seqs 64
 ```
 
-### 3.5 Decode Machine Startup Scripts
+### 3.4 Decode Machine Startup Scripts
 
 #### Start Decode Nodes
 
@@ -247,8 +230,7 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --data-parallel-size 8 \
     --enable-expert-parallel \
     --max-model-len 8192 \
-    --max-num-seqs 64 \
-    --num-gpu-blocks-override 1024
+    --max-num-seqs 64
 ```
 
 **Note**: Please replace `<PREFILL_MACHINE_IP>` with the actual IP address of the Prefill machine.

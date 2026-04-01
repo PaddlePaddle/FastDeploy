@@ -12,16 +12,16 @@
 
 | 配置方案 | TP | DP | EP | 所需卡数 |
 |---------|----|----|----|---------|
-| TP4DP1 | 4 | 1 | - | 8 |
-| TP1DP4EP | 1 | 4 | ✓ | 8 |
+| P：TP4DP1<br>D：TP4DP1 | 4 | 1 | - | 8 |
+| P：TP1DP4EP4 <br> D：TP1DP4EP4| 1 | 4 | ✓ | 8 |
 
 **多机部署（16卡跨节点）**
 
 | 配置方案 | TP | DP | EP | 所需卡数 |
 |---------|----|----|----|---------|
-| TP8DP1 | 8 | 1 | - | 16 |
-| TP4DP2 | 4 | 2 | - | 16 |
-| TP1DP8EP | 1 | 8 | ✓ | 16 |
+| P：TP8DP1<br>D：TP8DP1 | 8 | 1 | - | 16 |
+| P：TP4DP2<br>D：TP4DP2 | 4 | 2 | - | 16 |
+| P：TP1DP8EP8<br>D：TP1DP8EP8 | 1 | 8 | ✓ | 16 |
 
 **重要说明**：
 1. **量化精度**：以上所有配置均采用 WINT4 量化，通过 `--quantization wint4` 参数指定
@@ -82,13 +82,13 @@
 
 ### 2.1 测试场景与并行度配置
 
-本章节演示的测试场景为 **TP1DP4EP** 配置：
-- **张量并行度（TP）**：2 —— 每2张 GPU 独立加载完整模型参数
-- **数据并行度（DP）**：2 —— 2 张 GPU 组成一个数据并行组
+本节演示的测试场景为 **P：TP4DP1｜D：TP4DP1** 配置：
+- **张量并行度（TP）**：4 —— 每4张 GPU 独立加载完整模型参数
+- **数据并行度（DP）**：1 —— 每张 GPU 组成一个数据并行组
 - **专家并行（EP）**：不启用
 
 **若需测试其他并行度配置，请按以下方式调整参数：**
-1. **TP 调整**：修改 `--tensor-parallel-size`，注意：ERNIE-4.5-300B模型在不开启EP时，TP至少大于2才可以加载在单张卡上。
+1. **TP 调整**：修改 `--tensor-parallel-size`
 2. **DP 调整**：修改 `--data-parallel-size`，同时确保 `--ports` 和 `--num-servers` 与 DP 保持一致
 3. **EP 开关**：添加或移除 `--enable-expert-parallel`
 4. **GPU 分配**：通过 `CUDA_VISIBLE_DEVICES` 控制 Prefill 和 Decode 实例使用的 GPU
@@ -103,24 +103,23 @@ python -m fastdeploy.router.launch \
     --splitwise
 ```
 
+注意：这里使用的是python版本router，如果有需要也可以使用高性能的[Golang版本router](../online_serving/router.md)
 #### 启动 Prefill 节点
 
 ```bash
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 
-python -m fastdeploy.entrypoints.openai.multi_api_server \
-    --ports 8188,8189,8190,8191 \
-    --num-servers 4 \
-    --args --model /path/to/ERNIE-4.5-300B-A47B-Paddle \
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model /path/to/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
     --splitwise-role "prefill" \
     --cache-transfer-protocol "rdma,ipc" \
     --router "0.0.0.0:8109" \
     --quantization wint4 \
-    --tensor-parallel-size 2 \
-    --data-parallel-size 2 \
+    --tensor-parallel-size 4 \
+    --data-parallel-size 1 \
     --max-model-len 8192 \
-    --max-num-seqs 64 \
-    --num-gpu-blocks-override 1024
+    --max-num-seqs 64
 ```
 
 #### 启动 Decode 节点
@@ -129,9 +128,8 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 export CUDA_VISIBLE_DEVICES=4,5,6,7
 
 python -m fastdeploy.entrypoints.openai.multi_api_server \
-    --ports 8198,8199,8200,8201 \
-    --num-servers 4 \
-    --args --model /path/to/ERNIE-4.5-300B-A47B-Paddle \
+    --model /path/to/ERNIE-4.5-300B-A47B-Paddle \
+    --ports 8200,8201 \
     --splitwise-role "decode" \
     --cache-transfer-protocol "rdma,ipc" \
     --router "0.0.0.0:8109" \
@@ -139,8 +137,7 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --tensor-parallel-size 2 \
     --data-parallel-size 2 \
     --max-model-len 8192 \
-    --max-num-seqs 64 \
-    --num-gpu-blocks-override 1024
+    --max-num-seqs 64
 ```
 
 ### 2.3 关键参数说明
@@ -170,7 +167,7 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 
 ### 3.2 测试场景与并行度配置
 
-本章节演示的测试场景为 **TP1DP8EP** 跨机配置（共 16 张 GPU）：
+本章节演示的测试场景为 **P：TP1DP8EP8 ｜ D：P：TP1DP8EP8** 跨机配置（共 16 张 GPU）：
 - **张量并行度（TP）**：1
 - **数据并行度（DP）**：8 —— 每机 8 张 GPU，共 8 个 Prefill 实例和 8 个 Decode 实例
 - **专家并行（EP）**：启用—— MoE 层的共享专家分布在8张 GPU 上并行计算
@@ -181,20 +178,7 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 3. **端口配置**：`--ports` 列表的端口数量必须与 `--num-servers` 和 `--data-parallel-size` 保持一致
 4. **GPU 可见性**：每机通过 `CUDA_VISIBLE_DEVICES` 指定本机使用的 GPU
 
-### 3.3 网络配置
-
-跨机部署需要 RDMA 网络支持，启动前需在 Prefill 机器上配置 RDMA 网卡：
-
-```bash
-export $(bash /path/to/get_rdma_nics.sh gpu)
-echo "KVCACHE_RDMA_NICS:${KVCACHE_RDMA_NICS}"
-if [ -z "${KVCACHE_RDMA_NICS}" ]; then
-  echo "KVCACHE_RDMA_NICS is empty, please check the output of get_rdma_nics.sh"
-  exit 1
-fi
-```
-
-### 3.4 Prefill 机器启动脚本
+### 3.3 Prefill 机器启动脚本
 
 #### 启动 Router
 
@@ -209,7 +193,6 @@ python -m fastdeploy.router.launch \
 #### 启动 Prefill 节点
 
 ```bash
-export $(bash /path/to/get_rdma_nics.sh gpu)
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
 python -m fastdeploy.entrypoints.openai.multi_api_server \
@@ -224,11 +207,10 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --data-parallel-size 8 \
     --enable-expert-parallel \
     --max-model-len 8192 \
-    --max-num-seqs 64 \
-    --num-gpu-blocks-override 1024
+    --max-num-seqs 64
 ```
 
-### 3.5 Decode 机器启动脚本
+### 3.4 Decode 机器启动脚本
 
 #### 启动 Decode 节点
 
@@ -247,8 +229,7 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
     --data-parallel-size 8 \
     --enable-expert-parallel \
     --max-model-len 8192 \
-    --max-num-seqs 64 \
-    --num-gpu-blocks-override 1024
+    --max-num-seqs 64
 ```
 
 **注意**：请将 `<PREFILL_MACHINE_IP>` 替换为 Prefill 机器的实际 IP 地址。
