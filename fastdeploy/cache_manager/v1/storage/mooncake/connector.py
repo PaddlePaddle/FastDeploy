@@ -649,7 +649,6 @@ class MooncakeStorageConnector(StorageConnector):
                 final_results[idx] = raw == 0
             success_write = put_results.count(0)
             total_bytes = sum(s for r, s in zip(put_results, write_sizes) if r == 0)
-            elapsed_put_s = 0  # noqa: F841 _batch_put no longer returns elapsed; approximate from sizes
             self.logger.debug(
                 f"batch_set {len(keys)} keys: exists_check={elapsed_exists_ms:.2f}ms, "
                 f"skipped={skipped}, written={success_write}/{len(write_keys)}, "
