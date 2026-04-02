@@ -22,13 +22,7 @@ import paddle
 
 # Stub GPU-only ops so the import chain (moe → triton_backend → fp8_utils →
 # ops.gpu.deep_gemm) resolves without compiled CUDA extensions.
-# Stubs are scoped: saved before, restored immediately after import.
-
-_STUB_KEYS = [
-    "fastdeploy.model_executor.ops.gpu",
-    "fastdeploy.model_executor.ops.gpu.deep_gemm",
-]
-_saved_modules = {k: sys.modules.get(k) for k in _STUB_KEYS}
+# Scoped via patch.dict so sys.modules is restored after the import.
 
 
 class _GpuOpsStub(types.ModuleType):
@@ -44,26 +38,20 @@ class _GpuOpsStub(types.ModuleType):
         return None
 
 
-sys.modules["fastdeploy.model_executor.ops.gpu"] = _GpuOpsStub("fastdeploy.model_executor.ops.gpu")
-# fp8_utils.py:52 uses `import ...ops.gpu.deep_gemm as deep_gemm`
-_deep_gemm_stub = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm")
+_GPU_OPS = "fastdeploy.model_executor.ops.gpu"
+_DEEP_GEMM = f"{_GPU_OPS}.deep_gemm"
+
+_gpu_ops_stub = _GpuOpsStub(_GPU_OPS)
+_deep_gemm_stub = types.ModuleType(_DEEP_GEMM)
 _deep_gemm_stub.m_grouped_fp8_gemm_nt_contiguous = None
 _deep_gemm_stub.m_grouped_fp8_gemm_nt_masked = None
 _deep_gemm_stub.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous = None
 _deep_gemm_stub.m_grouped_gemm_fp8_fp8_bf16_nt_masked = None
-sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm"] = _deep_gemm_stub
-_gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
 
-from fastdeploy.model_executor.layers.moe import (  # noqa: E402
-    fused_moe_marlin_backend as mb,
-)
-
-# Restore original modules immediately after import to avoid global pollution.
-for _k in _STUB_KEYS:
-    if _saved_modules[_k] is None:
-        sys.modules.pop(_k, None)
-    else:
-        sys.modules[_k] = _saved_modules[_k]
+with patch.dict(sys.modules, {_GPU_OPS: _gpu_ops_stub, _DEEP_GEMM: _deep_gemm_stub}, clear=False):
+    from fastdeploy.model_executor.layers.moe import (  # noqa: E402
+        fused_moe_marlin_backend as mb,
+    )
 
 
 class _DummyLayer(paddle.nn.Layer):
@@ -124,7 +112,7 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
         self.assertTrue(hasattr(layer, "up_gate_proj_weight"))
         self.assertTrue(hasattr(layer, "down_proj_weight"))
         with patch.object(
-            _gpu,
+            _gpu_ops_stub,
             "gptq_marlin_repack",
             lambda w, p, sk, sn, nb: paddle.zeros([sk // 16, sn * (nb // 2)], dtype=w.dtype),
         ):
@@ -152,7 +140,7 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
                 ),
             ),
             patch.object(
-                _gpu,
+                _gpu_ops_stub,
                 "moe_topk_select",
                 lambda g, b, k, *_: (
                     paddle.zeros([g.shape[0], k], "int64"),
