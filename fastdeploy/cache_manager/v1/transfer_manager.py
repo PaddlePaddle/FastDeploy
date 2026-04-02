@@ -326,6 +326,10 @@ class CacheTransferManager:
                     f"tp_rank={self._local_rank}, cpu_cache_size={cpu_cache_size / 1024**3:.3f} GB"
                 )
                 self._storage_connector.connect()
+                # connect() completes RDMA initialization; now all three conditions for
+                # _register_host_buffers are satisfied (_host_key_ptrs set, strides > 0,
+                # connector connected), so register host pinned memory as RDMA MR.
+                self._register_host_buffers()
 
     # ============ Metadata Properties ============
 

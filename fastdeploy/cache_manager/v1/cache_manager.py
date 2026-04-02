@@ -543,6 +543,12 @@ class CacheManager(KVCacheBase):
         consecutive prefix of hashes that are all present (prefix semantics
         are required because a cache miss in the middle breaks prefetch continuity).
 
+        Uses rank=0, layer=0 key as a probe: if rank 0 has the block, all ranks
+        are assumed to have it (all ranks write storage synchronously).
+
+        Storage key format (must match TransferManager._storage_key_for_block):
+            "{hash_value}_0_key_l0"
+
         Args:
             hash_values: List of block hash values to check, in prefix order.
 
@@ -559,8 +565,11 @@ class CacheManager(KVCacheBase):
                 logger.warning("_match_storage: storage scheduler disconnected, skipping storage match")
                 return []
 
-            # batch_exists returns a bool list aligned with hash_values
-            exist_flags = self._storage_scheduler.batch_exists(hash_values)
+            # Build probe keys using rank=0, layer=0 (same format as TransferManager._storage_key_for_block)
+            probe_keys = [f"{h}_0_key_l0" for h in hash_values]
+
+            # batch_exists returns a bool list aligned with probe_keys
+            exist_flags = self._storage_scheduler.batch_exists(probe_keys)
 
             # Return only the leading consecutive hit run
             matched = []
@@ -770,6 +779,7 @@ class CacheManager(KVCacheBase):
 
                 all_device_block_ids = []
                 all_host_block_ids = []
+                all_hash_values = []
                 freed_host_ids = []
 
                 for nodes, host_block_ids in self._pending_backup:
@@ -794,9 +804,10 @@ class CacheManager(KVCacheBase):
                         # Mark nodes as backed up
                         self._radix_tree.backup_blocks(valid_nodes, valid_host_ids)
 
-                        # Collect device block IDs
+                        # Collect device block IDs and hash values
                         all_device_block_ids.extend([node.block_id for node in valid_nodes])
                         all_host_block_ids.extend(valid_host_ids)
+                        all_hash_values.extend([node.hash_value for node in valid_nodes])
 
                 # Release invalid host block allocations
                 if freed_host_ids:
@@ -813,6 +824,7 @@ class CacheManager(KVCacheBase):
                         dst_block_ids=all_host_block_ids,
                         src_type=CacheLevel.DEVICE,
                         dst_type=CacheLevel.HOST,
+                        hash_values=all_hash_values,
                     )
                     return evict_metadata
 
@@ -966,7 +978,7 @@ class CacheManager(KVCacheBase):
             (may differ from originally allocated if node was reused).
         """
         if not storage_hashes:
-            return None
+            return []
 
         try:
             with self._lock:

@@ -253,6 +253,10 @@ class Request:
     def match_result(self) -> MatchResult:
         return self._match_result
 
+    @match_result.setter
+    def match_result(self, value: Optional[MatchResult]) -> None:
+        self._match_result = value
+
     def set_block_hasher(self, block_hasher: callable):
         """Set the block hasher for dynamic hash computation."""
         self._block_hasher = block_hasher

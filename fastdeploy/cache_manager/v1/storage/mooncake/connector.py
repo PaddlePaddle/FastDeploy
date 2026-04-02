@@ -266,14 +266,8 @@ class _MooncakeStoreBase:
         elapsed = time.perf_counter() - tic
         success = results.count(0)
         total = len(keys)
-        if success == total:
-            self.logger.debug(f"batch_put {total} keys in {elapsed:.4f}s")
-        else:
+        if success != total:
             self.logger.error(f"batch_put: {total - success}/{total} keys failed, elapsed={elapsed:.4f}s")
-        if success > 0:
-            total_bytes = sum(s for r, s in zip(results, sizes) if r == 0)
-            speed_gbs = total_bytes / (elapsed * 1024**3) if elapsed > 0 else float("inf")
-            self.logger.info(f"batch_put throughput: {total_bytes / 1024**3:.4f} GB @ {speed_gbs:.4f} GB/s")
         return results
 
     def _batch_get(
@@ -303,18 +297,19 @@ class _MooncakeStoreBase:
             self.logger.info(f"batch_get throughput: {total_bytes / 1024**3:.4f} GB @ {speed_gbs:.4f} GB/s")
         return results
 
-    def _batch_exists(self, keys: List[str]) -> List[int]:
+    def _batch_exists(self, keys: List[str]) -> tuple:
         """
         Call ``store.batch_is_exist``.
 
         Returns:
-            List of ints: 1 = exists, 0 = not found.
+            Tuple of (results, elapsed_ms):
+                results: List of ints, 1 = exists, 0 = not found.
+                elapsed_ms: Time taken in milliseconds.
         """
         tic = time.perf_counter()
         results: List[int] = self._store.batch_is_exist(keys)
-        elapsed = (time.perf_counter() - tic) * 1000
-        self.logger.debug(f"batch_exists {len(keys)} keys in {elapsed:.2f}ms")
-        return results
+        elapsed_exists_ms = (time.perf_counter() - tic) * 1000
+        return results, elapsed_exists_ms
 
 
 # ---------------------------------------------------------------------------
@@ -371,14 +366,14 @@ class MooncakeStorageScheduler(StorageScheduler):
         """Check if a single key exists."""
         if not self._connected or self._base._store is None:
             return False
-        results = self._base._batch_exists([key])
+        results, _ = self._base._batch_exists([key])
         return results[0] == 1
 
     def batch_exists(self, keys: List[str]) -> List[bool]:
         """Batch check key existence."""
         if not self._connected or self._base._store is None:
             return [False] * len(keys)
-        results = self._base._batch_exists(keys)
+        results, _ = self._base._batch_exists(keys)
         return [r == 1 for r in results]
 
     def query_prefix_count(
@@ -406,7 +401,7 @@ class MooncakeStorageScheduler(StorageScheduler):
             ), "scale key lists must have the same length as k/v key lists"
             all_keys = all_keys + k_scale_keys + v_scale_keys
 
-        exist_map = dict(zip(all_keys, self._base._batch_exists(all_keys)))
+        exist_map = dict(zip(all_keys, self._base._batch_exists(all_keys)[0]))
 
         count = 0
         if has_scale:
@@ -631,7 +626,7 @@ class MooncakeStorageConnector(StorageConnector):
             raise ValueError("keys, src_ptrs, and sizes must have the same length")
 
         # Skip keys that already exist (idempotent write semantics)
-        exist_results = self._base._batch_exists(keys)
+        exist_results, elapsed_exists_ms = self._base._batch_exists(keys)
         write_keys: List[str] = []
         write_ptrs: List[int] = []
         write_sizes: List[int] = []
@@ -647,10 +642,24 @@ class MooncakeStorageConnector(StorageConnector):
                 write_sizes.append(sz)
                 write_indices.append(i)
 
+        skipped = len(keys) - len(write_keys)
         if write_keys:
             put_results = self._base._batch_put(write_keys, write_ptrs, write_sizes)
             for idx, raw in zip(write_indices, put_results):
                 final_results[idx] = raw == 0
+            success_write = put_results.count(0)
+            total_bytes = sum(s for r, s in zip(put_results, write_sizes) if r == 0)
+            elapsed_put_s = 0  # noqa: F841 _batch_put no longer returns elapsed; approximate from sizes
+            self.logger.debug(
+                f"batch_set {len(keys)} keys: exists_check={elapsed_exists_ms:.2f}ms, "
+                f"skipped={skipped}, written={success_write}/{len(write_keys)}, "
+                f"data={total_bytes / 1024**3:.4f} GB"
+            )
+        else:
+            self.logger.debug(
+                f"batch_set {len(keys)} keys: exists_check={elapsed_exists_ms:.2f}ms, "
+                f"all {skipped} keys already exist, nothing to write"
+            )
 
         return final_results
 

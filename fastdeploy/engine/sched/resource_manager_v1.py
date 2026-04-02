@@ -1259,6 +1259,44 @@ class ResourceManagerV1(ResourceManager):
 
     def apply_async_preprocess(self, request: Request) -> None:
         request.async_process_futures.append(self.async_preprocess_pool.submit(self._download_features, request))
+        if self.config.cache_config.kvcache_storage_backend:
+            request.async_process_futures.append(
+                self.async_preprocess_pool.submit(self._prefetch_storage_cache, request)
+            )
+
+    def _prefetch_storage_cache(self, request: Request) -> None:
+        """
+        Asynchronously prefetch KV cache blocks from storage to host memory.
+
+        Called when a request is added to the waiting queue. Runs `match_prefix`
+        with skip_storage=False so the Scheduler-side CacheManager can:
+          1. Query which blocks exist in storage (batch_exists).
+          2. Allocate host blocks for them.
+          3. Insert those blocks into the RadixTree with LOADING_FROM_STORAGE status.
+
+        The actual data transfer (storage → host memory) is handled by the Worker
+        via cache_controller.prefetch_from_storage once the batch is dispatched.
+
+        Args:
+            request: The request to prefetch cache for.
+        """
+        try:
+            if not self.cache_manager.enable_prefix_caching:
+                return
+            llm_logger.debug(f"[StoragePrefetch] start async prefetch for request_id={request.request_id}")
+            self.cache_manager.match_prefix(request, skip_storage=False)
+            match_result = request.match_result
+            if match_result is not None:
+                request.match_result = None
+
+                llm_logger.info(
+                    f"[StoragePrefetch] request_id={request.request_id} "
+                    f"storage_matched={match_result.matched_storage_nums} blocks"
+                )
+            # TODO: check if any of the block is still LOADING_FROM_STORAGE, if so, request.async_process_futures.append(self._prefetch_storage_cache)
+
+        except Exception as e:
+            llm_logger.error(f"[StoragePrefetch] request_id={request.request_id} error: {e}")
 
     def _has_features_info(self, task):
         inputs = task.multimodal_inputs
@@ -1369,37 +1407,33 @@ class ResourceManagerV1(ResourceManager):
         else:
             return self.cache_manager.allocate_gpu_blocks(num_blocks, request.request_id)
 
-    def _request_match_blocks(self, request: Request, skip_storage: bool = True):
+    def _request_match_blocks(self, request: Request):
         """
         Prefixed cache manager v1 will match blocks for request and return common_block_ids.
         """
         if self.enable_cache_manager_v1:
-            self.cache_manager.match_prefix(request, skip_storage)
+            self.cache_manager.match_prefix(request, skip_storage=True)
             match_result = request.match_result
 
-            if skip_storage:
-                common_block_ids = match_result.device_block_ids
-                matched_token_num = match_result.total_matched_blocks * self.config.cache_config.block_size
-                metrics = {
-                    "gpu_match_token_num": match_result.matched_device_nums * self.config.cache_config.block_size,
-                    "cpu_match_token_num": match_result.matched_host_nums * self.config.cache_config.block_size,
-                    "storage_match_token_num": match_result.matched_storage_nums * self.config.cache_config.block_size,
-                    "match_gpu_block_ids": common_block_ids,
-                    "gpu_recv_block_ids": [],
-                    "match_storage_block_ids": [],
-                    "cpu_cache_prepare_time": 0,
-                    "storage_cache_prepare_time": 0,
-                }
+            common_block_ids = match_result.device_block_ids
+            matched_token_num = match_result.total_matched_blocks * self.config.cache_config.block_size
+            metrics = {
+                "gpu_match_token_num": match_result.matched_device_nums * self.config.cache_config.block_size,
+                "cpu_match_token_num": match_result.matched_host_nums * self.config.cache_config.block_size,
+                "storage_match_token_num": match_result.matched_storage_nums * self.config.cache_config.block_size,
+                "match_gpu_block_ids": common_block_ids,
+                "gpu_recv_block_ids": [],
+                "match_storage_block_ids": [],
+                "cpu_cache_prepare_time": 0,
+                "storage_cache_prepare_time": 0,
+            }
 
-                no_cache_block_num = (
-                    request.need_prefill_tokens - matched_token_num + self.config.cache_config.block_size - 1
-                ) // self.config.cache_config.block_size
-                request.cache_info = [len(common_block_ids), no_cache_block_num]
+            no_cache_block_num = (
+                request.need_prefill_tokens - matched_token_num + self.config.cache_config.block_size - 1
+            ) // self.config.cache_config.block_size
+            request.cache_info = [len(common_block_ids), no_cache_block_num]
 
-                return (common_block_ids, matched_token_num, metrics)
-            else:
-                # Prefetch cache from storage
-                pass
+            return (common_block_ids, matched_token_num, metrics)
         else:
             (common_block_ids, matched_token_num, metrics) = self.cache_manager.request_match_blocks(
                 request, self.config.cache_config.block_size
@@ -1707,13 +1741,16 @@ class ResourceManagerV1(ResourceManager):
 
             # Do not block the main thread here
             # Write cache to storage if kvcache_storage_backend is enabled
-            for req in need_postprocess_reqs:
-                if self.config.scheduler_config.splitwise_role == "decode":
-                    # D instance uses simplified write method (does not rely on Radix Tree)
-                    self.cache_manager.write_cache_to_storage_decode(req)
-                else:
-                    # P instance / Mixed instance uses standard write method (relies on Radix Tree)
-                    self.cache_manager.write_cache_to_storage(req)
+            # v1 CacheManager handles storage write-back inside request_finish() via RadixTree,
+            # so skip this block when enable_cache_manager_v1 is True.
+            if not self.enable_cache_manager_v1:
+                for req in need_postprocess_reqs:
+                    if self.config.scheduler_config.splitwise_role == "decode":
+                        # D instance uses simplified write method (does not rely on Radix Tree)
+                        self.cache_manager.write_cache_to_storage_decode(req)
+                    else:
+                        # P instance / Mixed instance uses standard write method (relies on Radix Tree)
+                        self.cache_manager.write_cache_to_storage(req)
 
             with self.lock:
                 for req in need_postprocess_reqs:
