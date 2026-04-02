@@ -1443,10 +1443,16 @@ class EngineService:
         # pause cache transfer
         if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
             self.llm_logger.info("Start to pause cache transfer.")
-            pause_transfer_request = ControlRequest(request_id="pause_transfer", method="pause")
+            pause_transfer_request = ControlRequest(
+                request_id=f"{control_request.request_id}_pause_transfer", method="pause"
+            )
             self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, pause_transfer_request))
             # Wait for cache_transfer responses
-            asyncio.run(self._wait_for_control_responses("pause_transfer", 60, executors=["cache_transfer"]))
+            asyncio.run(
+                self._wait_for_control_responses(
+                    f"{pause_transfer_request.request_id}", 60, executors=["cache_transfer"]
+                )
+            )
             self.llm_logger.info("Successfully paused cache transfer.")
 
         self.resource_manager.cache_manager.reset()
@@ -1473,10 +1479,14 @@ class EngineService:
         # resume cache transfer
         if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
             self.llm_logger.info("Start to resume cache transfer.")
-            resume_transfer_request = ControlRequest(request_id="resume_transfer", method="resume")
+            resume_transfer_request = ControlRequest(
+                request_id=f"{control_request.request_id}_resume_transfer", method="resume"
+            )
             self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, resume_transfer_request))
             # Wait for cache_transfer responses
-            asyncio.run(self._wait_for_control_responses("resume_transfer", 60, executors=["cache_transfer"]))
+            asyncio.run(
+                self._wait_for_control_responses(resume_transfer_request.request_id, 60, executors=["cache_transfer"])
+            )
             self.llm_logger.info("Successfully resumed cache transfer.")
 
         self.llm_logger.info("Successfully resumed request generation.")
@@ -1530,6 +1540,19 @@ class EngineService:
                     break
             if new_version is not None:
                 self.cfg.model_config.version = new_version
+
+        if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+            self.llm_logger.info("Start to update cache-transfer metadata after weight update.")
+            update_cache_request = ControlRequest(
+                request_id=f"{control_request.request_id}_update_weights",
+                method="update_weights",
+                args=copy.deepcopy(control_request.args),
+            )
+            self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, update_cache_request))
+            asyncio.run(
+                self._wait_for_control_responses(update_cache_request.request_id, 60, executors=["cache_transfer"])
+            )
+            self.llm_logger.info("Successfully updated cache-transfer metadata after weight update.")
 
         return responses
 

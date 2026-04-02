@@ -273,6 +273,8 @@ class XPUForwardMeta(ForwardMeta):
     hidden_states: Optional[paddle.Tensor] = None
 
     is_draft: bool = False
+    # max bs
+    max_num_seqs: int = 0
 
     def copy_from(self, other: "XPUForwardMeta", skip_keys: Optional[list] = None):
         """

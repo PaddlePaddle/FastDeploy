@@ -39,6 +39,7 @@ if not hasattr(paddle, "compat"):
 
     paddle.compat = _PaddleCompat()
 
+from fastdeploy.cache_manager.cache_data import CacheStatus
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import (
     EngineService,
@@ -1115,6 +1116,27 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         self.assertEqual(result, [{"version": "new-version"}, {"ok": True}])
         self.assertEqual(eng.cfg.model_config.version, "new-version")
+        self._detach_finalizer(eng)
+
+    def test_control_update_weights_updates_cache_transfer_metadata(self):
+        eng = self._make_mixed_engine()
+        eng.is_paused = True
+        eng._pause_cond = threading.Condition()
+        eng.cfg.cache_config.num_cpu_blocks = 1
+        eng._call_worker = Mock(return_value=[{"version": "new-version"}])
+        eng.cache_task_queue = Mock(put_transfer_task=Mock())
+        eng._wait_for_control_responses = AsyncMock(return_value=[{"ok": True}])
+
+        result = eng._control_update_weights(ControlRequest(request_id="ctrl", method="update_weights"))
+
+        self.assertEqual(result, [{"version": "new-version"}])
+        payload = eng.cache_task_queue.put_transfer_task.call_args.args[0]
+        self.assertEqual(payload[0], CacheStatus.CTRL)
+        self.assertEqual(payload[1].method, "update_weights")
+        self.assertIn("update_weights", payload[1].request_id)
+        eng._wait_for_control_responses.assert_awaited_once_with(
+            payload[1].request_id, 60, executors=["cache_transfer"]
+        )
         self._detach_finalizer(eng)
 
     def test_control_pause_and_resume_paths(self):

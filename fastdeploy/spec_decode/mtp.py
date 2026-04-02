@@ -820,11 +820,7 @@ class MTPProposer(Proposer):
             # Note(ZKK):
             # I strongly advise xpu student delete the fuck `output_cum_offsets` name in XPU backend
             # like my pr https://github.com/PaddlePaddle/FastDeploy/pull/6358
-            (
-                self.model_inputs["cu_seqlens_q_output"]
-                if current_platform.is_cuda()
-                else self.model_inputs["output_cum_offsets"]
-            ),
+            self.model_inputs["cu_seqlens_q_output"],
             self.model_inputs["stop_flags"],
             (
                 self.model_inputs["not_need_stop_device"]
@@ -1125,9 +1121,7 @@ class MTPProposer(Proposer):
                     previous_hidden_states=self.model_inputs["target_hidden_states"],
                     forward_meta=self.forward_meta,
                 )
-                hidden_states = xpu_process_output(
-                    model_output, self.model_inputs["cum_offsets"], self.forward_meta, self.model_inputs
-                )
+                hidden_states = xpu_process_output(model_output, self.forward_meta, self.model_inputs)
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
                 sampled_token_ids, sampler_output = self.sampler(

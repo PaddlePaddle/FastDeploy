@@ -117,22 +117,21 @@ run_test_with_logging() {
         echo "======================================================="
     fi
 
-     # if passed, remove the isolated log directory and server logs
-     if [ "$status" -eq 0 ]; then
-         rm -rf "${isolated_log_dir}" || true
-         # Clean up server logs in run_path on pass
-         for f in "${run_path}"/*.log; do
-             [[ "$(basename "$f")" != "${failed_tests_file}" ]] && rm -f "$f" || true
-         done
-     fi
-
-
     # Clean up port-related processes
     if [ -n "$FD_CACHE_QUEUE_PORT" ]; then
         ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9 || true
     fi
     if [ -n "$FD_ENGINE_QUEUE_PORT" ]; then
         ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9 || true
+    fi
+
+    # if passed, remove the isolated log directory and server logs
+    if [ "$status" -eq 0 ]; then
+        rm -rf "${isolated_log_dir}" || true
+        # Clean up server logs in run_path on pass
+        for f in "${run_path}"/*.log; do
+            [[ "$(basename "$f")" != "${failed_tests_file}" ]] && rm -f "$f" || true
+        done
     fi
 
     # Unset FD_LOG_DIR to avoid affecting next test
@@ -330,6 +329,9 @@ if [ "$failed_count" -ne 0 ]; then
     # clean the empty directories
     if [ -d "${run_path}/unittest_logs" ]; then
         echo "Cleaning empty directories..."
+
+        # remove console_error.log files (cleanup logs from stopped processes)
+        find "${run_path}/unittest_logs" -name "console_error.log*" -delete || true
 
         # perform multi-round clean until no more empty directories are found
         while true; do
