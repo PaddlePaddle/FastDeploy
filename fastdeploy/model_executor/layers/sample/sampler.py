@@ -100,7 +100,7 @@ def _compute_sampling_mask(
     top_p: paddle.Tensor,
     top_k: Optional[paddle.Tensor] = None,
     top_k_list: Optional[list] = None,
-) -> tuple[List[np.ndarray], np.ndarray]:
+) -> List[np.ndarray]:
     """
     Compute a combined top-k + top-p (nucleus) sampling mask as sparse
     retained-token indices.

@@ -1015,7 +1015,7 @@ class OpenAIServingChat:
           MTP:     List[List[int]]  (indices for N tokens/step) → [[idx, ...], ...]
         """
         assert sampling_mask is not None
-        if sampling_mask and isinstance(sampling_mask[0], list):
+        if sampling_mask and len(sampling_mask) > 0 and isinstance(sampling_mask[0], list):
             # MTP: already List[List[int]], return as-is
             return sampling_mask
         # Non-MTP: already List[int], wrap in outer list for uniform format
