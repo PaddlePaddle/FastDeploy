@@ -16,7 +16,7 @@
 #include "encoder_write_cache_with_rope_impl.cuh"
 #include "remote_cache_kv_ipc.h"
 
-template <typename T, typename QKV_TYPE>
+template <typename T, typename QKV_TYPE, bool EnforceFmulRN = false>
 void EncoderWriteCacheWithRopeKernel(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor&
@@ -77,7 +77,7 @@ void EncoderWriteCacheWithRopeKernel(
   if (q_norm_weight && k_norm_weight) {
     if (num_heads != kv_num_heads && !is_scale_channel_wise &&
         !use_neox_style) {
-      gqa_rotary_qk_norm_variable(
+      gqa_rotary_qk_norm_variable<T, QKV_TYPE, EnforceFmulRN>(
           qkv_out->data<T>(),
           qkv.data<QKV_TYPE>(),
           qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
@@ -106,7 +106,7 @@ void EncoderWriteCacheWithRopeKernel(
     }
   } else {
     if (num_heads == kv_num_heads) {
-      rotary_qk_variable(
+      rotary_qk_variable<T, QKV_TYPE, EnforceFmulRN>(
           qkv_out->data<T>(),
           qkv.data<QKV_TYPE>(),
           qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
@@ -126,7 +126,7 @@ void EncoderWriteCacheWithRopeKernel(
           rope_3d);
     } else {
       if (!is_scale_channel_wise) {
-        gqa_rotary_qk_variable(
+        gqa_rotary_qk_variable<T, QKV_TYPE, EnforceFmulRN>(
             qkv_out->data<T>(),
             qkv.data<QKV_TYPE>(),
             qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
@@ -147,7 +147,7 @@ void EncoderWriteCacheWithRopeKernel(
             use_neox_style,
             rope_3d);
       } else {
-        gqa_rotary_qk_quant_variable(
+        gqa_rotary_qk_quant_variable<T, QKV_TYPE, EnforceFmulRN>(
             qkv_out->data<T>(),
             qkv.data<QKV_TYPE>(),
             qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,

@@ -21,10 +21,14 @@ import paddle.nn.functional as F
 import triton
 import triton.language as tl
 
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.output import LogprobsTensors
 
 
+@enable_compat_on_triton_kernel
 @triton.jit
 def count_greater_kernel(
     x_ptr,  # [num_tokens, n_elements]
@@ -119,7 +123,7 @@ def gather_logprobs(
         indices = token_ids
         top_logprobs = token_logprobs
 
-    return LogprobsTensors(indices, top_logprobs, token_ranks)
+    return LogprobsTensors(indices.cpu(), top_logprobs.cpu(), token_ranks.cpu())
 
 
 def build_output_logprobs(

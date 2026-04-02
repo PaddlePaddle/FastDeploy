@@ -1,5 +1,7 @@
 [简体中文](../zh/features/disaggregated.md)
 
+[Best Practice](../best_practices/Disaggregated.md)
+
 # Disaggregated Deployment
 
 Large Language Model (LLM) inference is divided into two phases: **Prefill** and **Decode**, which are compute-intensive and memory-bound, respectively.

@@ -179,6 +179,32 @@ def get_gencode_flags(archs):
     return flags
 
 
+def get_compile_parallelism():
+    """
+    Decide safe compile parallelism for both build workers and nvcc threads.
+    """
+    cpu_count = os.cpu_count() or 1
+
+    max_jobs_env = os.getenv("MAX_JOBS")
+    if max_jobs_env is not None:
+        try:
+            max_jobs = int(max_jobs_env)
+            if max_jobs < 1:
+                raise ValueError
+        except ValueError as exc:
+            raise ValueError(f"Invalid MAX_JOBS={max_jobs_env!r}, expected a positive integer.") from exc
+    else:
+        # Cap default build workers to avoid OOM in high-core CI runners.
+        max_jobs = min(cpu_count, 32)
+        os.environ["MAX_JOBS"] = str(max_jobs)
+
+    # Limit nvcc internal threads to avoid resource exhaustion when Paddle's
+    # ThreadPoolExecutor also launches many parallel compilations.
+    # Total threads ~= (number of parallel compile jobs) * nvcc_threads.
+    nvcc_threads = min(max_jobs, 4)
+    return max_jobs, nvcc_threads
+
+
 def find_end_files(directory, end_str):
     """
     Find files with end str in directory.
@@ -313,6 +339,11 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/reasoning_phase_token_constraint.cu",
         "gpu_ops/get_attn_mask_q.cu",
     ]
+    sm_versions = get_sm_version(archs)
+    # Some kernels in this file require SM75+ instructions. Exclude them when building SM70 (V100).
+    disable_gelu_tanh = 70 in sm_versions
+    if disable_gelu_tanh:
+        sources = [s for s in sources if s != "gpu_ops/gelu_tanh.cu"]
 
     # pd_disaggregation
     sources += [
@@ -352,6 +383,9 @@ elif paddle.is_compiled_with_cuda():
 
     cc_compile_args = []
     nvcc_compile_args = get_gencode_flags(archs)
+    if disable_gelu_tanh:
+        cc_compile_args += ["-DDISABLE_GELU_TANH_OP"]
+        nvcc_compile_args += ["-DDISABLE_GELU_TANH_OP"]
     nvcc_compile_args += ["-DPADDLE_DEV"]
     nvcc_compile_args += ["-DPADDLE_ON_INFERENCE"]
     nvcc_compile_args += ["-DPy_LIMITED_API=0x03090000"]
@@ -363,10 +397,8 @@ elif paddle.is_compiled_with_cuda():
         "-Igpu_ops",
         "-Ithird_party/nlohmann_json/include",
     ]
-    # Limit nvcc internal threads to avoid resource exhaustion when Paddle's
-    # ThreadPoolExecutor also launches many parallel compilations.
-    # Total threads ≈ (number of parallel compile jobs) × nvcc_threads, so cap nvcc_threads at 4.
-    nvcc_threads = min(os.cpu_count() or 1, 4)
+    max_jobs, nvcc_threads = get_compile_parallelism()
+    print(f"MAX_JOBS = {max_jobs}, nvcc -t = {nvcc_threads}")
     nvcc_compile_args += ["-t", str(nvcc_threads)]
 
     nvcc_version = get_nvcc_version()
@@ -379,14 +411,16 @@ elif paddle.is_compiled_with_cuda():
 
     if nvcc_version >= 12.0:
         sources += ["gpu_ops/sample_kernels/air_top_p_sampling.cu"]
-    cc = max(get_sm_version(archs))
+    cc = max(sm_versions)
     print(f"cc = {cc}")
     fp8_auto_gen_directory = "gpu_ops/cutlass_kernels/fp8_gemm_fused/autogen"
     if os.path.isdir(fp8_auto_gen_directory):
         shutil.rmtree(fp8_auto_gen_directory)
 
     if cc >= 75:
+        cc_compile_args += ["-DENABLE_SM75_EXT_OPS"]
         nvcc_compile_args += [
+            "-DENABLE_SM75_EXT_OPS",
             "-DENABLE_SCALED_MM_C2X=1",
             "-Igpu_ops/cutlass_kernels/w8a8",
         ]
@@ -394,9 +428,14 @@ elif paddle.is_compiled_with_cuda():
             "gpu_ops/cutlass_kernels/w8a8/scaled_mm_entry.cu",
             "gpu_ops/cutlass_kernels/w8a8/scaled_mm_c2x.cu",
             "gpu_ops/quantization/common.cu",
+            # cpp_extensions.cc always registers these two ops; include their kernels on SM75 as well.
+            "gpu_ops/moe/moe_deepgemm_permute.cu",
+            "gpu_ops/moe/moe_deepgemm_depermute.cu",
         ]
 
     if cc >= 80:
+        cc_compile_args += ["-DENABLE_SM80_EXT_OPS"]
+        nvcc_compile_args += ["-DENABLE_SM80_EXT_OPS"]
         # append_attention
         os.system(
             "python utils/auto_gen_template_instantiation.py --config gpu_ops/append_attn/template_config.json --output gpu_ops/append_attn/template_instantiation/autogen"
@@ -519,6 +558,10 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/machete", ".cu")
         cc_compile_args += ["-DENABLE_MACHETE"]
 
+    # Deduplicate translation units while preserving order. Some files are
+    # appended explicitly for SM75 and also discovered by later directory globs.
+    sources = list(dict.fromkeys(sources))
+
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
@@ -541,14 +584,13 @@ elif paddle.is_compiled_with_cuda():
 elif paddle.is_compiled_with_xpu():
     assert False, "For XPU, please use setup_ops.py in the xpu_ops directory to compile custom ops."
 elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
+    _iluvatar_clang_cuda_flags = ["-Wno-non-pod-varargs", "-DPADDLE_DEV", "-DPADDLE_WITH_CUSTOM_DEVICE"]
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
             extra_compile_args={
-                "nvcc": [
-                    "-DPADDLE_DEV",
-                    "-DPADDLE_WITH_CUSTOM_DEVICE",
-                ]
+                "cxx": _iluvatar_clang_cuda_flags,
+                "nvcc": _iluvatar_clang_cuda_flags,
             },
             sources=[
                 "gpu_ops/save_with_output_msg.cc",
@@ -582,6 +624,8 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "iluvatar_ops/mixed_fused_attn.cu",
                 "iluvatar_ops/w8a16_group_gemm.cu",
                 "iluvatar_ops/w8a16_group_gemv.cu",
+                "iluvatar_ops/wi4a16_group_gemm.cu",
+                "iluvatar_ops/wi4a16_weight_quantize.cu",
                 "iluvatar_ops/restore_tokens_per_expert.cu",
                 "iluvatar_ops/runtime/iluvatar_context.cc",
                 "iluvatar_ops/cpp_extensions.cc",

@@ -17,7 +17,12 @@
 import triton
 import triton.language as tl
 
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
 
+
+@enable_compat_on_triton_kernel
 @triton.jit
 def fused_moe_kernel_paddle(
     a_ptr,

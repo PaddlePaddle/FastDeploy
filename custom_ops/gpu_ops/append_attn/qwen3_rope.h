@@ -5,7 +5,7 @@
 #include "paddle/phi/core/memory/memcpy.h"
 #include "remote_cache_kv_ipc.h"
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
     const T *qkv,
     const float *cos_emb,
@@ -99,9 +99,11 @@ __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         src_vec0[i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_left, cos_tmp) -
+                           fmul_func<EnforceFmulRN>(input_right, sin_tmp));
         src_vec1[i] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+            static_cast<T>(fmul_func<EnforceFmulRN>(input_right, cos_tmp) +
+                           fmul_func<EnforceFmulRN>(input_left, sin_tmp));
       }
     }
     Store<T, VecSize>(src_vec0, &qkv_out[read_idx]);
@@ -111,7 +113,7 @@ __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
   }
 }
 
-template <typename T>
+template <typename T, bool EnforceFmulRN = false>
 void gqa_rotary_qk_split_variable_qwen3(T *qkv_out,
                                         T *q,
                                         T *k,
@@ -145,7 +147,7 @@ void gqa_rotary_qk_split_variable_qwen3(T *qkv_out,
   const float *cos_emb = rotary_emb;
   const float *sin_emb = rotary_emb + max_model_len * head_dim;
   launchWithPdlWhenEnabled(
-      GQAVariableLengthRotarySplitKernel_Qwen3<T, PackSize>,
+      GQAVariableLengthRotarySplitKernel_Qwen3<T, PackSize, EnforceFmulRN>,
       grid_size,
       block_size,
       0,

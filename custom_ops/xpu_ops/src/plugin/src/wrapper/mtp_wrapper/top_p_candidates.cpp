@@ -17,16 +17,17 @@
 
 namespace fd_xpu3 {
 template <typename T, int MaxLength, int TopPBeamTopK>
-__attribute__((global)) void top_p_candidates(const T* src,
-                                              const T* top_ps,
-                                              const int* output_padding_offset,
-                                              int64_t* out_id,
-                                              T* out_val,
-                                              int* actual_candidates_lens,
-                                              int vocab_size,
-                                              int token_num,
-                                              int max_candidate_len,
-                                              int max_seq_len);
+__attribute__((global)) void top_p_candidates(
+    const T* src,
+    const T* top_ps,
+    const int* batch_id_per_token_output,
+    int64_t* out_id,
+    T* out_val,
+    int* actual_candidates_lens,
+    int vocab_size,
+    int token_num,
+    int max_candidate_len,
+    int max_seq_len);
 }  // namespace fd_xpu3
 
 namespace fastdeploy {
@@ -36,7 +37,7 @@ template <typename T, int MaxLength, int TopPBeamTopK>
 static int cpu_wrapper(api::Context* ctx,
                        const T* src,
                        const T* top_ps,
-                       const int* output_padding_offset,
+                       const int* batch_id_per_token_output,
                        int64_t* out_id,
                        T* out_val,
                        int* actual_candidates_lens,
@@ -70,8 +71,7 @@ static int cpu_wrapper(api::Context* ctx,
         }
       }
     }
-    int ori_token_id = i + output_padding_offset[i];
-    int bid = ori_token_id / max_seq_len;
+    int bid = batch_id_per_token_output[i];
     float top_p_value = static_cast<float>(top_ps[bid]);
     bool set_to_default_val = false;
     for (int j = 0; j < TopPBeamTopK; j++) {
@@ -97,7 +97,7 @@ template <typename T, int MaxLength, int TopPBeamTopK>
 static int xpu3_wrapper(api::Context* ctx,
                         const T* src,
                         const T* top_ps,
-                        const int* output_padding_offset,
+                        const int* batch_id_per_token_output,
                         int64_t* out_id,
                         T* out_val,
                         int* actual_candidates_lens,
@@ -110,7 +110,7 @@ static int xpu3_wrapper(api::Context* ctx,
       <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           src,
           top_ps,
-          output_padding_offset,
+          batch_id_per_token_output,
           reinterpret_cast<XPU_INT64*>(out_id),
           out_val,
           actual_candidates_lens,
@@ -126,7 +126,7 @@ template <typename T, int MaxLength, int TopPBeamTopK>
 int top_p_candidates(api::Context* ctx,
                      const T* src,
                      const T* top_ps,
-                     const int* output_padding_offset,
+                     const int* batch_id_per_token_output,
                      int64_t* out_id,
                      T* out_val,
                      int* actual_candidates_lens,
@@ -136,7 +136,8 @@ int top_p_candidates(api::Context* ctx,
                      int max_seq_len) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(ctx, "top_p_candidates", T);
-  WRAPPER_DUMP_PARAM5(ctx, src, top_ps, output_padding_offset, out_id, out_val);
+  WRAPPER_DUMP_PARAM5(
+      ctx, src, top_ps, batch_id_per_token_output, out_id, out_val);
   WRAPPER_DUMP_PARAM5(ctx,
                       actual_candidates_lens,
                       vocab_size,
@@ -146,7 +147,7 @@ int top_p_candidates(api::Context* ctx,
   WRAPPER_DUMP(ctx);
 
   WRAPPER_CHECK_PTR(ctx, T, token_num * vocab_size, src);
-  WRAPPER_CHECK_PTR(ctx, T, token_num, output_padding_offset);
+  WRAPPER_CHECK_PTR(ctx, T, token_num, batch_id_per_token_output);
   WRAPPER_CHECK_PTR(ctx, T, token_num * candidate_len, out_id);
   WRAPPER_CHECK_PTR(ctx, T, token_num * candidate_len, out_val);
 
@@ -161,7 +162,7 @@ int top_p_candidates(api::Context* ctx,
     return cpu_wrapper<T, MaxLength, TopPBeamTopK>(ctx,
                                                    src,
                                                    top_ps,
-                                                   output_padding_offset,
+                                                   batch_id_per_token_output,
                                                    out_id,
                                                    out_val,
                                                    actual_candidates_lens,
@@ -173,7 +174,7 @@ int top_p_candidates(api::Context* ctx,
     return xpu3_wrapper<T, MaxLength, TopPBeamTopK>(ctx,
                                                     src,
                                                     top_ps,
-                                                    output_padding_offset,
+                                                    batch_id_per_token_output,
                                                     out_id,
                                                     out_val,
                                                     actual_candidates_lens,

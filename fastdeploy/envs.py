@@ -36,8 +36,18 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_BUILDING_ARCS": lambda: os.getenv("FD_BUILDING_ARCS", "[]"),
     # Log directory.
     "FD_LOG_DIR": lambda: os.getenv("FD_LOG_DIR", "log"),
+    # Global log level, prefer this over FD_DEBUG. Supports "INFO" and "DEBUG".
+    "FD_LOG_LEVEL": lambda: os.getenv("FD_LOG_LEVEL", None),
     # Whether to use debug mode, can set 0 or 1
     "FD_DEBUG": lambda: int(os.getenv("FD_DEBUG", "0")),
+    # Request logging master switch. Set to 0 to disable request logging.
+    "FD_LOG_REQUESTS": lambda: int(os.getenv("FD_LOG_REQUESTS", "1")),
+    # Request logging detail level (0-3). Higher level means more verbose output.
+    "FD_LOG_REQUESTS_LEVEL": lambda: int(os.getenv("FD_LOG_REQUESTS_LEVEL", "0")),
+    # Max field length for request logging truncation.
+    "FD_LOG_MAX_LEN": lambda: int(os.getenv("FD_LOG_MAX_LEN", "2048")),
+    # Unified trace mode: off, local, otel, all.
+    "FD_TRACE": lambda: os.getenv("FD_TRACE", "off"),
     # Number of days to keep fastdeploy logs.
     "FD_LOG_BACKUP_COUNT": lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),
     # Model download source, can set "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE".
@@ -62,8 +72,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ATTENTION_BACKEND": lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
     # Set sampling class. "base", "base_non_truncated", "air" and "rejection" can be set currently.
     "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
-    # Set moe backend."cutlass","marlin", "triton", "flashinfer-cutlass" and "flashinfer-trtllm" can be set currently.
+    # Set moe backend."cutlass","marlin", "triton", "flashinfer-cutlass", "flashinfer-cutedsl" and "flashinfer-trtllm" can be set currently.
     "FD_MOE_BACKEND": lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
+    # Set nvfp4 load interleaved weight scale.
+    "FD_NVFP4_LOAD_BLOCKSCALE_LEAVE": lambda: os.getenv("FD_NVFP4_LOAD_BLOCKSCALE_LEAVE", "0"),
     # Set mxfp4 backend."flashinfer" can be set currently.
     "FD_MOE_MXFP4_BACKEND": lambda: os.getenv("FD_MOE_MXFP4_BACKEND", "flashinfer"),
     # Whether to use Machete for wint4 dense gemm.
@@ -94,8 +106,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "EXPORTER_OTLP_HEADERS": lambda: os.getenv("EXPORTER_OTLP_HEADERS"),
     # enable kv cache block scheduler v1 (no need for kv_cache_ratio)
     "ENABLE_V1_KVCACHE_SCHEDULER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "1")),
-    # enable data processor v2
-    "ENABLE_V1_DATA_PROCESSOR": lambda: int(os.getenv("ENABLE_V1_DATA_PROCESSOR", "0")),
     # set prealloc block num for decoder
     "FD_ENC_DEC_BLOCK_NUM": lambda: int(os.getenv("FD_ENC_DEC_BLOCK_NUM", "2")),
     # enbale max prefill of one execute step
@@ -135,8 +145,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ZMQ_CONTROL_CMD_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_CONTROL_CMD_SERVER_PORTS", "8202"),
     # Whether to enable the decode caches requests for preallocating resource
     "FD_ENABLE_CACHE_TASK": lambda: os.getenv("FD_ENABLE_CACHE_TASK", "0"),
-    # Batched token timeout in EP
-    "FD_EP_BATCHED_TOKEN_TIMEOUT": lambda: float(os.getenv("FD_EP_BATCHED_TOKEN_TIMEOUT", "0.1")),
     # Max pre-fetch requests number in PD
     "FD_EP_MAX_PREFETCH_TASK_NUM": lambda: int(os.getenv("FD_EP_MAX_PREFETCH_TASK_NUM", "8")),
     # Enable or disable model caching.
@@ -204,6 +212,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
     # Whether to use phi FP8 quantization,if 1,use paddle default.
     "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
+    # Enables the Paddle/phi combined TopK operator only when topk_method == noaux_tc,
+    # intended for training alignment. Defaults to 0 (disabled).
+    "FD_USE_PHI_MOE_TOPK": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_TOPK", "0"))),
     # Whether to use phi MOE permute,if 1,use paddle op.
     "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))),
     # Control class SiluAndMul to use swiglu or fusid_bias_act operator in the forward_cuda function
@@ -222,10 +233,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
     # File path for file storage backend
     "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
-    # Custom all-reduce max buffer size in MB (default 64MB).
+    # Custom all-reduce max buffer size in MB (default 8MB).
     # Increase this to avoid NCCL fallback for large tensors in deterministic mode.
     # E.g. FD_CUSTOM_AR_MAX_SIZE_MB=128 for 128MB.
-    "FD_CUSTOM_AR_MAX_SIZE_MB": lambda: int(os.getenv("FD_CUSTOM_AR_MAX_SIZE_MB", "64")),
+    "FD_CUSTOM_AR_MAX_SIZE_MB": lambda: int(os.getenv("FD_CUSTOM_AR_MAX_SIZE_MB", "8")),
     # Enable deterministic inference mode for chunked prefill alignment
     "FD_DETERMINISTIC_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_MODE", "0"))),
     # Split KV block size for deterministic alignment (must be power of 2 and > 0, default 16)
@@ -242,8 +253,19 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # has been observed to cause NaN computation errors.
     # Set to 1 to enable the lock; defaults to 0 (disabled).
     "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
+    # Whether to probe MoE routing probabilities and use Fleet's fused SwiGLU kernel.
+    "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
     # Whether to use batch send data in zmq
     "ZMQ_SEND_BATCH_DATA": lambda: int(os.getenv("ZMQ_SEND_BATCH_DATA", "1")),
+    # Whether to enable v1 weight updating, which utilizes ZMQ/EngineWorkerQueue/EngineCacheQueue/FMQs
+    # to pass control requests and responses.
+    # When v1 is enabled, the legacy /clear_load_weight and /update_model_weight
+    # will adopt this new communication pattern.
+    "FD_ENABLE_V1_UPDATE_WEIGHTS": lambda: bool(int(os.getenv("FD_ENABLE_V1_UPDATE_WEIGHTS", "0"))),
+    # Whether to save the cache of output token for preempted request to storage.
+    "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
+        int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
+    ),
 }
 
 
