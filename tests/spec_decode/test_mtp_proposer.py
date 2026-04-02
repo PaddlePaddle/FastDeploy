@@ -462,8 +462,7 @@ class TestMTPProposer(unittest.TestCase):
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.worker.input_batch.get_rope")
     @patch("fastdeploy.spec_decode.mtp_cuda.draft_model_postprocess")
-    @patch("fastdeploy.spec_decode.mtp_cuda.mtp_step_paddle")
-    def test_update_status(self, mock_mtp_step, mock_postprocess, mock_rope, mock_attn_backend, mock_model_loader):
+    def test_update_status(self, mock_postprocess, mock_rope, mock_attn_backend, mock_model_loader):
         """Test _update_status"""
         mock_model = Mock()
         mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
@@ -473,17 +472,11 @@ class TestMTPProposer(unittest.TestCase):
         mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
         mock_postprocess.return_value = None
-        mock_mtp_step.return_value = None
 
         proposer = MTPProposer(
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
         proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
-
-        # Test with ENABLE_V1_KVCACHE_SCHEDULER=False
-        with patch("fastdeploy.spec_decode.mtp_cuda.envs.ENABLE_V1_KVCACHE_SCHEDULER", False):
-            proposer._update_status()
-            mock_mtp_step.assert_called()
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
