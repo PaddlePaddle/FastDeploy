@@ -2371,6 +2371,7 @@ class EngineService:
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
             "enable_entropy": self.cfg.model_config.enable_entropy,
             "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
+            "enable_keep_sampling_mask": self.cfg.model_config.enable_keep_sampling_mask,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:

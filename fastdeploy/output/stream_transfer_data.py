@@ -46,3 +46,7 @@ class StreamTransferData:
     accept_num: Optional[np.array] = None
     # [num_reqs, hidden_size]
     pooler_output: Optional[np.array] = None
+    # 1-D int32 numpy array of vocab indices retained by top_p/top_k for
+    # this request.  Sparse format: only retained positions, not a dense
+    # vocab-sized bool mask.
+    sampling_mask: Optional[np.array] = None
