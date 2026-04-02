@@ -47,7 +47,7 @@ if is_nvfp4_supported():
         prefill_permute_to_masked_gemm,
     )
 
-    if envs.FD_MOE_BACKEND == "flashinfer_cutedsl":
+    if envs.FD_MOE_BACKEND == "flashinfer-cutedsl":
         logger.info(
             "FlashInfer cutedsl is slow to import because it triggers JIT compilation of "
             "CUDA kernels via TVM/CODEGEN, and cuBLASLt initializes lookup tables and "
