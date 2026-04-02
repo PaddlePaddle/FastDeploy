@@ -413,6 +413,10 @@ class TestNgramMatchKernel(unittest.TestCase):
                 np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
                 np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
 
+    @unittest.skipUnless(
+        os.environ.get("RUN_LARGE_NGRAM_TESTS", "0") == "1",
+        "Set RUN_LARGE_NGRAM_TESTS=1 to run (requires >40 GB GPU memory)",
+    )
     def test_large_batch_long_seq(self):
         """bsz=256, seq_len=128k — scale the reviewer demanded.
 
@@ -557,6 +561,10 @@ class TestNgramMatchKernel(unittest.TestCase):
         np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
         np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
 
+    @unittest.skipUnless(
+        os.environ.get("RUN_NGRAM_BENCHMARKS", "0") == "1",
+        "Set RUN_NGRAM_BENCHMARKS=1 to run latency benchmark",
+    )
     def test_latency(self):
         """Benchmark: GPU kernel latency vs CPU transfer overhead."""
         # Pre-create tensors on GPU (data creation excluded from timing)
@@ -727,6 +735,10 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                 np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
                 np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
 
+    @unittest.skipUnless(
+        os.environ.get("RUN_LARGE_NGRAM_TESTS", "0") == "1",
+        "Set RUN_LARGE_NGRAM_TESTS=1 to run (requires >40 GB GPU memory)",
+    )
     def test_large_batch_long_seq(self):
         """bsz=256, seq_len=128k — scale the reviewer demanded.
 
