@@ -2404,6 +2404,13 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 5.1. Async cpy
             post_process_event = paddle.device.cuda.create_event()
+            if envs.GET_SAVE_OUTPUT_V1:
+                paddle.assign(
+                    paddle.where(
+                        self.share_inputs["preempted_idx"] == 1, PREEMPTED_TOKEN_ID, sampler_output.sampled_token_ids
+                    ),
+                    sampler_output.sampled_token_ids,
+                )
             # if not self.speculative_decoding:
             self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
             if self.speculative_decoding:
@@ -2411,13 +2418,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["accept_num_cpu"].copy_(self.share_inputs["accept_num"], False)
                 self.share_inputs["seq_lens_decoder_cpu"].copy_(self.share_inputs["seq_lens_decoder"], False)
                 self.share_inputs["prompt_lens_cpu"].copy_(self.share_inputs["prompt_lens"], False)
-            if envs.GET_SAVE_OUTPUT_V1:
-                paddle.assign(
-                    paddle.where(
-                        self.share_inputs["preempted_idx"], self.share_inputs["sampled_token_ids"], PREEMPTED_TOKEN_ID
-                    ),
-                    self.share_inputs["sampled_token_ids"],
-                )
             post_process_event.record()
 
             # 6. Speculative decode -- proposer run (method="naive" has proposer=None, skip)
