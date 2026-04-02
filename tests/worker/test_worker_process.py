@@ -1,4 +1,4 @@
-# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,25 +50,43 @@ def _cfg(**overrides):
             obj = getattr(obj, p)
         setattr(obj, parts[-1], v)
     return c
+# fmt: on
 
 
 def _make(ranks=1, local_rank=0, **cfg_kw):
     """Create PaddleDisWorkerProc with platform + get_worker mocked in setUp."""
     from fastdeploy.worker.worker_process import PaddleDisWorkerProc
+
     return PaddleDisWorkerProc(_cfg(**cfg_kw), ranks=ranks, local_rank=local_rank)
 
 
 _FD_NAMES = [
-    "v1_loader_support", "parse_quant_config", "update_fd_config_for_mm",
-    "current_platform", "paddle", "ModelConfig", "DeviceConfig", "SpeculativeConfig",
-    "ParallelConfig", "CacheConfig", "SchedulerConfig", "EPLBConfig", "LoadConfig",
-    "GraphOptimizationConfig", "PlasAttentionConfig", "EarlyStopConfig",
-    "StructuredOutputsConfig", "RoutingReplayConfig", "FDConfig"]
+    "v1_loader_support",
+    "parse_quant_config",
+    "update_fd_config_for_mm",
+    "current_platform",
+    "paddle",
+    "ModelConfig",
+    "DeviceConfig",
+    "SpeculativeConfig",
+    "ParallelConfig",
+    "CacheConfig",
+    "SchedulerConfig",
+    "EPLBConfig",
+    "LoadConfig",
+    "GraphOptimizationConfig",
+    "PlasAttentionConfig",
+    "EarlyStopConfig",
+    "StructuredOutputsConfig",
+    "RoutingReplayConfig",
+    "FDConfig",
+]
 
 
 def _fd_env():
     """Return (args, ExitStack, mocks_dict) for initialize_fd_config tests."""
     from fastdeploy.worker.worker_process import parse_args
+
     with patch.object(sys, "argv", ["prog", "-m", "/tmp/m", "--dtype", "float16"]):
         args = parse_args()
     stack = ExitStack()
@@ -94,6 +112,7 @@ class TestWorkerUtils(unittest.TestCase):
 
     def test_intercept_paddle_loggers(self):
         from fastdeploy.logger.logger import intercept_paddle_loggers
+
         original = logging.getLogger
         lg = logging.getLogger("paddle.test.check")
         lg.addHandler(logging.StreamHandler())
@@ -116,12 +135,24 @@ class TestWorkerUtils(unittest.TestCase):
 
     def test_parse_args(self):
         from fastdeploy.worker.worker_process import parse_args
+
         with patch.object(sys, "argv", ["prog"]):
             a = parse_args()
         self.assertEqual(a.model, "./output")
         self.assertEqual(a.dtype, "bfloat16")
-        argv = ["prog", "-m", "/tmp/m", "--dtype", "float16", "--tensor_parallel_size", "4",
-                "--speculative_config", '{"method":"eagle"}', "--eplb_config", '{"enable_eplb":true}']
+        argv = [
+            "prog",
+            "-m",
+            "/tmp/m",
+            "--dtype",
+            "float16",
+            "--tensor_parallel_size",
+            "4",
+            "--speculative_config",
+            '{"method":"eagle"}',
+            "--eplb_config",
+            '{"enable_eplb":true}',
+        ]
         with patch.object(sys, "argv", argv):
             a = parse_args()
         self.assertEqual(a.model, "/tmp/m")
@@ -131,6 +162,7 @@ class TestWorkerUtils(unittest.TestCase):
 
     def test_get_worker_dispatch(self):
         from fastdeploy.worker.worker_process import get_worker
+
         all_plats = ("is_dcu", "is_cuda", "is_xpu", "is_iluvatar", "is_gcu", "is_maca", "is_intel_hpu")
         cases = [
             ("is_dcu", "fastdeploy.worker.dcu_worker", "DcuWorker"),
@@ -139,13 +171,16 @@ class TestWorkerUtils(unittest.TestCase):
             ("is_iluvatar", "fastdeploy.worker.iluvatar_worker", "IluvatarWorker"),
             ("is_gcu", "fastdeploy.worker.gcu_worker", "GcuWorker"),
             ("is_maca", "fastdeploy.worker.metax_worker", "MetaxWorker"),
-            ("is_intel_hpu", "fastdeploy.worker.hpu_worker", "HpuWorker")]
+            ("is_intel_hpu", "fastdeploy.worker.hpu_worker", "HpuWorker"),
+        ]
         for plat_name, mod_path, cls_name in cases:
             with self.subTest(platform=plat_name), patch(f"{WP}.current_platform") as plat:
                 for a in all_plats:
                     getattr(plat, a).return_value = a == plat_name
                 sentinel = object()
-                with patch.dict("sys.modules", {mod_path: types.SimpleNamespace(**{cls_name: lambda *a, **kw: sentinel})}):
+                with patch.dict(
+                    "sys.modules", {mod_path: types.SimpleNamespace(**{cls_name: lambda *a, **kw: sentinel})}
+                ):
                     self.assertIs(get_worker(_cfg(), local_rank=0, rank=1), sentinel)
         with patch(f"{WP}.current_platform") as plat:
             for a in all_plats:
@@ -156,19 +191,27 @@ class TestWorkerUtils(unittest.TestCase):
     def test_update_mm(self):
         from fastdeploy.config import ErnieArchitectures
         from fastdeploy.worker.worker_process import update_fd_config_for_mm
-        fd = _cfg(**{"model_config.enable_mm": True, "model_config.architectures": ["Ernie4_5ForCausalLM"],
-                     "parallel_config.tensor_parallel_size": 4, "parallel_config.tensor_parallel_rank": 2,
-                     "model_config.dtype": "float16"})
+
+        fd = _cfg(
+            **{
+                "model_config.enable_mm": True,
+                "model_config.architectures": ["Ernie4_5ForCausalLM"],
+                "parallel_config.tensor_parallel_size": 4,
+                "parallel_config.tensor_parallel_rank": 2,
+                "model_config.dtype": "float16",
+            }
+        )
         with patch.object(ErnieArchitectures, "contains_ernie_arch", return_value=True):
             update_fd_config_for_mm(fd)
         self.assertEqual(fd.model_config.tensor_model_parallel_size, 4)
         fd2 = _cfg(**{"model_config.enable_mm": False})
         orig = fd2.model_config.tensor_model_parallel_size
         update_fd_config_for_mm(fd2)
-        self.assertIs(fd2.model_config.tensor_model_parallel_size, orig)
+        self.assertEqual(fd2.model_config.tensor_model_parallel_size, orig)
 
     def test_init_distributed(self):
         from fastdeploy.worker.worker_process import init_distributed_environment
+
         with patch(f"{WP}.dist") as dist, patch(f"{WP}.fleet") as fleet:
             dist.get_world_size.return_value = 2
             fleet.worker_index.return_value = 1
@@ -180,6 +223,7 @@ class TestWorkerUtils(unittest.TestCase):
 
     def test_initialize_fd_config(self):
         from fastdeploy.worker.worker_process import initialize_fd_config
+
         args, stack, m = _fd_env()
         with stack:
             initialize_fd_config(args, ranks=1, local_rank=0)
@@ -242,8 +286,9 @@ class TestPaddleDisWorkerProc(unittest.TestCase):
             self.assertIn("fd_task_queue_7777", tq.call_args[1]["address"])
         with patch(f"{WP}.envs") as env, patch(f"{WP}.TaskQueue") as tq:
             env.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
-            _make(**{"parallel_config.pod_ip": "10.0.0.1",
-                     "parallel_config.local_engine_worker_queue_port": 8888}).start_task_queue_service()
+            _make(
+                **{"parallel_config.pod_ip": "10.0.0.1", "parallel_config.local_engine_worker_queue_port": 8888}
+            ).start_task_queue_service()
             self.assertEqual(tq.call_args[1]["address"], ("10.0.0.1", 8888))
 
     def test_load_model_and_graph(self):
@@ -271,8 +316,8 @@ class TestPaddleDisWorkerProc(unittest.TestCase):
         self.gw.return_value.reset_mock()
         with patch(f"{WP}.IPCSignal"), patch(f"{WP}.dist"):
             p2 = _make(**{"parallel_config.do_profile": True})
-            p2.worker.determine_available_memory.return_value = 1024 ** 3
-            p2.worker.cal_theortical_kvcache.return_value = 1024 ** 2
+            p2.worker.determine_available_memory.return_value = 1024**3
+            p2.worker.cal_theortical_kvcache.return_value = 1024**2
             p2.initialize_kv_cache()
             p2.worker.initialize_cache.assert_called_once_with(num_gpu_blocks=1024)
         with patch(f"{WP}.IPCSignal"), patch(f"{WP}.dist"):
@@ -283,7 +328,7 @@ class TestPaddleDisWorkerProc(unittest.TestCase):
                 p3.initialize_kv_cache()
         with patch(f"{WP}.IPCSignal"), patch(f"{WP}.dist"):
             p4 = _make(**{"parallel_config.do_profile": True})
-            p4.worker.determine_available_memory.return_value = 100 * 1024 ** 3
+            p4.worker.determine_available_memory.return_value = 100 * 1024**3
             p4.worker.cal_theortical_kvcache.return_value = 1024
             p4.initialize_kv_cache()
             p4.worker.initialize_cache.assert_called_once_with(num_gpu_blocks=40000)
@@ -294,9 +339,13 @@ class TestPaddleDisWorkerProc(unittest.TestCase):
         self.assertFalse(hasattr(p, "experts_manager"))
         p._run_eplb(tp_rank=0)
         with patch(f"{WP}.RedundantExpertManager") as rem, patch(f"{WP}.IPCSignal"), patch(f"{WP}.create_mmap"):
-            p2 = _make(**{
-                "eplb_config.enable_eplb": True, "model_config.num_hidden_layers": 4,
-                "model_config.moe_num_experts": 8})
+            p2 = _make(
+                **{
+                    "eplb_config.enable_eplb": True,
+                    "model_config.num_hidden_layers": 4,
+                    "model_config.moe_num_experts": 8,
+                }
+            )
             p2._init_eplb_signal()
             rem.assert_called_once()
 
@@ -305,6 +354,7 @@ class TestPaddleDisWorkerProc(unittest.TestCase):
 
         async def _noop(*a, **kw):
             pass
+
         p._ctrl_output = types.SimpleNamespace(put=_noop)
         req = types.SimpleNamespace(request_id="r1", method="bad", args={})
         p.worker.bad = None
@@ -327,7 +377,8 @@ class TestPaddleDisWorkerProc(unittest.TestCase):
         p2 = _make()
         waited = []
         p2.task_queue = types.SimpleNamespace(
-            worker_process_tp_barrier=types.SimpleNamespace(wait=lambda: waited.append(1)))
+            worker_process_tp_barrier=types.SimpleNamespace(wait=lambda: waited.append(1))
+        )
         p2._tp_barrier_wait()
         self.assertEqual(len(waited), 1)
         self.plat.is_xpu.return_value = False
@@ -347,9 +398,15 @@ class TestPaddleDisWorkerProc(unittest.TestCase):
 
     def test_run_worker_proc(self):
         from fastdeploy.worker.worker_process import run_worker_proc
-        with (patch(f"{WP}.parse_args"), patch(f"{WP}.init_distributed_environment", return_value=(1, 0)),
-              patch(f"{WP}.initialize_fd_config"), patch(f"{WP}.current_platform") as plat,
-              patch(f"{WP}.PaddleDisWorkerProc") as cls, patch(f"{WP}.envs") as env):
+
+        with (
+            patch(f"{WP}.parse_args"),
+            patch(f"{WP}.init_distributed_environment", return_value=(1, 0)),
+            patch(f"{WP}.initialize_fd_config"),
+            patch(f"{WP}.current_platform") as plat,
+            patch(f"{WP}.PaddleDisWorkerProc") as cls,
+            patch(f"{WP}.envs") as env,
+        ):
             plat.is_iluvatar.return_value = False
             env.FD_DETERMINISTIC_MODE = False
             run_worker_proc()
