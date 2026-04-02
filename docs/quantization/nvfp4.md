@@ -18,6 +18,8 @@ Based on [FlashInfer](https://github.com/flashinfer-ai/flashinfer), Fastdeploy s
 Please ensure that FastDeploy is installed with NVIDIA GPU support.
 Follow the official guide to set up the base environment: [Fastdeploy NVIDIA GPU Environment Installation Guide](https://paddlepaddle.github.io/FastDeploy/get_started/installation/nvidia_gpu/).
 
+### FlashInfer-cutedsl backend
+
 #### PaddlePaddle Compatibility Patches for FlashInfer
 
 Due to compatibility issues between FlashInfer and PaddlePaddle, you need to apply the following patches in `miniconda/envs/<your_env>/lib/python3.10/site-packages/`:
