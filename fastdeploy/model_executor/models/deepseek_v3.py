@@ -289,7 +289,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             v_head_dim=self.v_head_dim,
         )
         self.rope_scaling = getattr(fd_config.model_config, "rope_scaling", None)
-        if self.rope_scaling and getattr(self.rope_scaling, "factor", None):
+        if self.rope_scaling and "factor" in self.rope_scaling:
             mscale_all_dim = self.rope_scaling.get("mscale_all_dim", False)
             scaling_factor = self.rope_scaling["factor"]
             mscale = self.yarn_get_mscale(scaling_factor, float(mscale_all_dim))
@@ -851,7 +851,7 @@ class DeepseekV32DSAAttention(nn.Layer):
             v_head_dim=self.v_head_dim,
         )
         self.rope_scaling = getattr(fd_config.model_config, "rope_scaling", None)
-        if self.rope_scaling and getattr(self.rope_scaling, "factor", None):
+        if self.rope_scaling and "factor" in self.rope_scaling:
             mscale_all_dim = self.rope_scaling.get("mscale_all_dim", False)
             scaling_factor = self.rope_scaling["factor"]
             mscale = self.yarn_get_mscale(scaling_factor, float(mscale_all_dim))
