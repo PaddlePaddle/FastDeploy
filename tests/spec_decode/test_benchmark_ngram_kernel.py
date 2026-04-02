@@ -26,7 +26,7 @@ Groups:
   5. threshold × batch (batch=128)
 
 Run:
-    cd FastDeploy && python tests/spec_decode/benchmark_ngram_kernel.py
+    cd FastDeploy && python tests/spec_decode/test_benchmark_ngram_kernel.py
 """
 import os
 import sys
