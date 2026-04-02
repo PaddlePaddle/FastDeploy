@@ -21,12 +21,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from fastdeploy.logger.setup_logging import setup_logging
+from fastdeploy.logger.setup_logging import MaxLevelFilter, setup_logging
 
 
 class TestSetupLogging(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp(prefix="logger_setup_test_")
+        if hasattr(setup_logging, "_configured"):
+            delattr(setup_logging, "_configured")
         self.patches = [
             patch("fastdeploy.envs.FD_LOG_DIR", self.temp_dir),
             patch("fastdeploy.envs.FD_DEBUG", 0),
@@ -52,7 +54,7 @@ class TestSetupLogging(unittest.TestCase):
         logger = logging.getLogger("fastdeploy")
         self.assertTrue(logger.handlers)
         handler_classes = [h.__class__.__name__ for h in logger.handlers]
-        self.assertIn("TimedRotatingFileHandler", handler_classes[0])
+        self.assertIn("TimedRotatingFileHandler", handler_classes)
 
     def test_debug_level_affects_handlers(self):
         """FD_DEBUG=1 should force DEBUG level"""
@@ -62,7 +64,7 @@ class TestSetupLogging(unittest.TestCase):
                 called_config = mock_cfg.call_args[0][0]
                 for handler in called_config["handlers"].values():
                     self.assertIn("formatter", handler)
-                self.assertEqual(called_config["handlers"]["console"]["level"], "DEBUG")
+                self.assertEqual(called_config["handlers"]["console_stdout"]["level"], "DEBUG")
 
     @patch("logging.config.dictConfig")
     def test_custom_config_with_dailyrotating_and_debug(self, mock_dict):
@@ -121,6 +123,62 @@ class TestSetupLogging(unittest.TestCase):
 
         config_used = mock_dict.call_args[0][0]
         self.assertEqual(config_used["handlers"]["daily"]["backupCount"], 3)
+
+    @patch("logging.config.dictConfig")
+    def test_error_logs_use_stderr_handler(self, mock_dict):
+        """ERROR级别日志应该使用stderr输出"""
+        setup_logging()
+        config_used = mock_dict.call_args[0][0]
+        self.assertIn("console_stderr", config_used["handlers"])
+        self.assertEqual(config_used["handlers"]["console_stderr"]["stream"], "ext://sys.stderr")
+        self.assertEqual(config_used["handlers"]["console_stderr"]["level"], "ERROR")
+
+    @patch("logging.config.dictConfig")
+    def test_console_stdout_filters_below_error(self, mock_dict):
+        """console_stdout应该只输出低于ERROR级别的日志"""
+        setup_logging()
+        config_used = mock_dict.call_args[0][0]
+        self.assertIn("console_stdout", config_used["handlers"])
+        self.assertIn("below_error", config_used["handlers"]["console_stdout"]["filters"])
+        self.assertEqual(config_used["handlers"]["console_stdout"]["stream"], "ext://sys.stdout")
+
+
+class TestMaxLevelFilter(unittest.TestCase):
+    def test_filter_allows_below_level(self):
+        """MaxLevelFilter应该允许低于指定级别的日志通过"""
+        filter = MaxLevelFilter("ERROR")
+        record = logging.LogRecord(
+            name="test", level=logging.INFO, pathname="", lineno=0, msg="test", args=(), exc_info=None
+        )
+        self.assertTrue(filter.filter(record))
+
+    def test_filter_blocks_at_level(self):
+        """MaxLevelFilter应该阻止等于指定级别的日志"""
+        filter = MaxLevelFilter("ERROR")
+        record = logging.LogRecord(
+            name="test", level=logging.ERROR, pathname="", lineno=0, msg="test", args=(), exc_info=None
+        )
+        self.assertFalse(filter.filter(record))
+
+    def test_filter_blocks_above_level(self):
+        """MaxLevelFilter应该阻止高于指定级别的日志"""
+        filter = MaxLevelFilter("ERROR")
+        record = logging.LogRecord(
+            name="test", level=logging.CRITICAL, pathname="", lineno=0, msg="test", args=(), exc_info=None
+        )
+        self.assertFalse(filter.filter(record))
+
+    def test_filter_with_numeric_level(self):
+        """MaxLevelFilter应该支持数字级别"""
+        filter = MaxLevelFilter(logging.WARNING)
+        info_record = logging.LogRecord(
+            name="test", level=logging.INFO, pathname="", lineno=0, msg="test", args=(), exc_info=None
+        )
+        warning_record = logging.LogRecord(
+            name="test", level=logging.WARNING, pathname="", lineno=0, msg="test", args=(), exc_info=None
+        )
+        self.assertTrue(filter.filter(info_record))
+        self.assertFalse(filter.filter(warning_record))
 
 
 if __name__ == "__main__":

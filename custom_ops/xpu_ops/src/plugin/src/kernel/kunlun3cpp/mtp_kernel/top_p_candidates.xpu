@@ -10,7 +10,7 @@ __device__ void top_p_candidates_big_n(
     char* lm,
     __global_ptr__ const T* src,
     __global_ptr__ const T* top_ps,
-    __global_ptr__ const int* output_padding_offset,
+    __global_ptr__ const int* batch_id_per_token_output,
     __global_ptr__ int64_t* out_id,
     __global_ptr__ T* out_val,
     __global_ptr__ int* actual_candidates_lens,
@@ -32,11 +32,13 @@ __device__ void top_p_candidates_big_n(
   __shared__ T sm_out_val[64 * TopPBeamTopK];
 
   // only used in core 0
-  int lm_output_padding_offset;
+  int lm_batch_id_per_token_output;
 
   for (int64_t i = cluster_id(); i < token_num; i += cluster_num()) {
     if (cid == 0) {
-      GM2LM(output_padding_offset + i, &lm_output_padding_offset, sizeof(int));
+      GM2LM(batch_id_per_token_output + i,
+            &lm_batch_id_per_token_output,
+            sizeof(int));
     }
     for (int64_t j = 0; j < TopPBeamTopK; j++) {
       lm_out_id[j] = -1;
@@ -142,8 +144,7 @@ __device__ void top_p_candidates_big_n(
         }
       }
 
-      int ori_token_id = i + lm_output_padding_offset;
-      int bid = ori_token_id / max_seq_len;
+      int bid = lm_batch_id_per_token_output;
       T lm_top_p;
       GM2LM(top_ps + bid, &lm_top_p, sizeof(T));
       float top_p_value = static_cast<float>(lm_top_p);
@@ -182,7 +183,7 @@ __device__ void top_p_candidates_normal(
     char* lm,
     __global_ptr__ const T* src,
     __global_ptr__ const T* top_ps,
-    __global_ptr__ const int* output_padding_offset,
+    __global_ptr__ const int* batch_id_per_token_output,
     __global_ptr__ int64_t* out_id,
     __global_ptr__ T* out_val,
     __global_ptr__ int* actual_candidates_lens,
@@ -200,7 +201,7 @@ __device__ void top_p_candidates_normal(
   int64_t lm_out_id[TopPBeamTopK];
   T lm_out_val[TopPBeamTopK];
 
-  int lm_output_padding_offset;
+  int lm_batch_id_per_token_output;
   T lm_top_p;
   int64_t default_id = 0;
   T default_val = static_cast<T>(0.f);
@@ -236,9 +237,10 @@ __device__ void top_p_candidates_normal(
       }
       mfence_lm();
     }
-    GM2LM(output_padding_offset + i, &lm_output_padding_offset, sizeof(int));
-    int ori_token_id = i + lm_output_padding_offset;
-    int bid = ori_token_id / max_seq_len;
+    GM2LM(batch_id_per_token_output + i,
+          &lm_batch_id_per_token_output,
+          sizeof(int));
+    int bid = lm_batch_id_per_token_output;
     GM2LM(top_ps + bid, &lm_top_p, sizeof(T));
     float top_p_value = static_cast<float>(lm_top_p);
     bool set_to_default_val = false;
@@ -272,7 +274,7 @@ __device__ void top_p_candidates_normal(
 template <typename T, int MaxLength, int TopPBeamTopK>
 __global__ void top_p_candidates(const T* src,
                                  const T* top_ps,
-                                 const int* output_padding_offset,
+                                 const int* batch_id_per_token_output,
                                  int64_t* out_id,
                                  T* out_val,
                                  int* actual_candidates_lens,
@@ -284,29 +286,31 @@ __global__ void top_p_candidates(const T* src,
   if (token_num % (core_num() * cluster_num()) != 0 &&
       vocab_size >= core_num() * (6 * 1024 / sizeof(T)) &&
       vocab_size >= core_num() * TopPBeamTopK) {
-    top_p_candidates_big_n<T, MaxLength, TopPBeamTopK>(lm,
-                                                       src,
-                                                       top_ps,
-                                                       output_padding_offset,
-                                                       out_id,
-                                                       out_val,
-                                                       actual_candidates_lens,
-                                                       vocab_size,
-                                                       token_num,
-                                                       max_cadidate_len,
-                                                       max_seq_len);
+    top_p_candidates_big_n<T, MaxLength, TopPBeamTopK>(
+        lm,
+        src,
+        top_ps,
+        batch_id_per_token_output,
+        out_id,
+        out_val,
+        actual_candidates_lens,
+        vocab_size,
+        token_num,
+        max_cadidate_len,
+        max_seq_len);
   } else {
-    top_p_candidates_normal<T, MaxLength, TopPBeamTopK>(lm,
-                                                        src,
-                                                        top_ps,
-                                                        output_padding_offset,
-                                                        out_id,
-                                                        out_val,
-                                                        actual_candidates_lens,
-                                                        vocab_size,
-                                                        token_num,
-                                                        max_cadidate_len,
-                                                        max_seq_len);
+    top_p_candidates_normal<T, MaxLength, TopPBeamTopK>(
+        lm,
+        src,
+        top_ps,
+        batch_id_per_token_output,
+        out_id,
+        out_val,
+        actual_candidates_lens,
+        vocab_size,
+        token_num,
+        max_cadidate_len,
+        max_seq_len);
   }
 }
 
@@ -314,7 +318,7 @@ __global__ void top_p_candidates(const T* src,
   template __global__ void top_p_candidates<T, MaxLength, TopPBeamTopK>( \
       const T* src,                                                      \
       const T* top_ps,                                                   \
-      const int* output_padding_offset,                                  \
+      const int* batch_id_per_token_output,                              \
       int64_t* out_id,                                                   \
       T* out_val,                                                        \
       int* actual_candidates_lens,                                       \
