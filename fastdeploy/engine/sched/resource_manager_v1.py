@@ -885,7 +885,7 @@ class ResourceManagerV1(ResourceManager):
             if not preempted_reqs:
                 skip_requests: list[Request] = []
                 while self.waiting and token_budget > 0:
-                    if len(self.running) == self.max_num_seqs:
+                    if len(self.running) + len(self.to_be_rescheduled_request_id_set) >= self.max_num_seqs:
                         break
 
                     request = self.waiting[0]
