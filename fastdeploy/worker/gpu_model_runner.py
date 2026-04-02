@@ -27,7 +27,7 @@ import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig
+from fastdeploy.config import PREEMPTED_TOKEN_ID, FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.request import ImagePosition, Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
@@ -2411,6 +2411,13 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["accept_num_cpu"].copy_(self.share_inputs["accept_num"], False)
                 self.share_inputs["seq_lens_decoder_cpu"].copy_(self.share_inputs["seq_lens_decoder"], False)
                 self.share_inputs["prompt_lens_cpu"].copy_(self.share_inputs["prompt_lens"], False)
+            if envs.GET_SAVE_OUTPUT_V1:
+                paddle.assign(
+                    paddle.where(
+                        self.share_inputs["preempted_idx"], self.share_inputs["sampled_token_ids"], PREEMPTED_TOKEN_ID
+                    ),
+                    self.share_inputs["sampled_token_ids"],
+                )
             post_process_event.record()
 
             # 6. Speculative decode -- proposer run (method="naive" has proposer=None, skip)
