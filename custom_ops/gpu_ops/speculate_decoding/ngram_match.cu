@@ -403,6 +403,10 @@ void NgramMatch(const paddle::Tensor &input_ids,
     auto seq_lens_this_time_copy = paddle::empty(
         {max_batch_size}, paddle::DataType::INT32, input_ids.place());
 
+    // Fail-fast: BlockScan Phase 2 requires max_batch_size ≤ block size.
+    PD_CHECK(max_batch_size <= NGRAM_GATHER_THREADS,
+             "ngram_match: max_batch_size exceeds NGRAM_GATHER_THREADS");
+
     // Phase 1: parallel search — one block per batch, 256 threads per block.
     // Also copies matched tokens to scratch and writes tentative seq_lens.
     ngram_match_search_kernel<<<max_batch_size,
@@ -428,8 +432,6 @@ void NgramMatch(const paddle::Tensor &input_ids,
 
     // Phase 2: BlockScan threshold enforcement + final token copy.
     // <<<1, NGRAM_GATHER_THREADS>>> — all batch items handled by one block.
-    PD_CHECK(max_batch_size <= NGRAM_GATHER_THREADS,
-             "ngram_match: max_batch_size exceeds NGRAM_GATHER_THREADS");
     ngram_match_gather_kernel<<<1, NGRAM_GATHER_THREADS, 0, stream>>>(
         draft_tokens_copy.data<int64_t>(),
         seq_lens_this_time_copy.data<int32_t>(),
