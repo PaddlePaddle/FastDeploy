@@ -18,6 +18,33 @@ Based on [FlashInfer](https://github.com/flashinfer-ai/flashinfer), Fastdeploy s
 Please ensure that FastDeploy is installed with NVIDIA GPU support.
 Follow the official guide to set up the base environment: [Fastdeploy NVIDIA GPU Environment Installation Guide](https://paddlepaddle.github.io/FastDeploy/get_started/installation/nvidia_gpu/).
 
+#### PaddlePaddle Compatibility Patches for FlashInfer
+
+Due to compatibility issues between FlashInfer and PaddlePaddle, you need to apply the following patches in `miniconda/envs/<your_env>/lib/python3.10/site-packages/`:
+
+1. **nvidia_cutlass_dsl/python_packages/cutlass/torch.py**
+
+   Replace `torch.device` with `"torch.device"` (as a string to avoid conflicts).
+
+2. **flashinfer/utils.py**
+
+   Modify the `get_compute_capability` function:
+   ```python
+  @functools.cache
+  def get_compute_capability(device: torch.device) -> Tuple[int, int]:
+      return torch.cuda.get_device_capability(device)
+      if device.type != "cuda":
+          raise ValueError("device must be a cuda device")
+      return torch.cuda.get_device_capability(device.index)
+   ```
+
+3. **flashinfer/cute_dsl/blockscaled_gemm.py**
+
+   Replace `cutlass_torch.current_stream()` with:
+   ```python
+   cuda.CUstream(torch.cuda.current_stream().stream_base.raw_stream)
+   ```
+
 ### Running Inference Service
 
 flashinfer-cutlass backend:

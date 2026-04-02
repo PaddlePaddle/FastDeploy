@@ -33,7 +33,39 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 
 flashinfer-cutedsl后端:
+
+#### PaddlePaddle 兼容性补丁
+
+由于 FlashInfer 与 PaddlePaddle 之间存在兼容性问题，需要在 `miniconda/envs/<your_env>/lib/python3.10/site-packages/` 中应用以下补丁：
+
+1. **nvidia_cutlass_dsl/python_packages/cutlass/torch.py**
+
+   将 `torch.device` 替换为 `"torch.device"`（作为字符串以避免冲突）。
+
+2. **flashinfer/utils.py**
+
+   修改 `get_compute_capability` 函数：
+   ```python
+  @functools.cache
+  def get_compute_capability(device: torch.device) -> Tuple[int, int]:
+      return torch.cuda.get_device_capability(device)
+      if device.type != "cuda":
+          raise ValueError("device must be a cuda device")
+      return torch.cuda.get_device_capability(device.index)
+   ```
+
+3. **flashinfer/cute_dsl/blockscaled_gemm.py**
+
+   将 `cutlass_torch.current_stream()` 替换为：
+   ```python
+   cuda.CUstream(torch.cuda.current_stream().stream_base.raw_stream)
+   ```
+
 ```bash
+export FD_MOE_BACKEND="flashinfer-cutedsl"
+export FD_USE_PFCC_DEEP_EP=1
+export CUDA_VISIBLE_DEVICES=4,5,6,7
+
 python -m fastdeploy.entrypoints.openai.multi_api_server \
        --ports "9811,9812,9813,9814" \
        --num-servers 4 \
