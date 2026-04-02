@@ -47,15 +47,16 @@ if is_nvfp4_supported():
         prefill_permute_to_masked_gemm,
     )
 
-    logger.info(
-        "FlashInfer cutedsl is slow to import because it triggers JIT compilation of "
-        "CUDA kernels via TVM/CODEGEN, and cuBLASLt initializes lookup tables and "
-        "compiles GEMM kernels during first load. This may take several minutes. "
-        "The wait is expected and only happens once per process."
-    )
-    from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
-        flashinfer_cutedsl_moe_masked,
-    )
+    if envs.FD_NVFP4_GEMM_BACKEND == "flashinfer_cutedsl":
+        logger.info(
+            "FlashInfer cutedsl is slow to import because it triggers JIT compilation of "
+            "CUDA kernels via TVM/CODEGEN, and cuBLASLt initializes lookup tables and "
+            "compiles GEMM kernels during first load. This may take several minutes. "
+            "The wait is expected and only happens once per process."
+        )
+        from fastdeploy.model_executor.layers.moe.flashinfer_cutedsl_moe import (
+            flashinfer_cutedsl_moe_masked,
+        )
 else:
     # Not B卡, skip flashinfer imports
     deep_ep = None
