@@ -34,6 +34,7 @@ class TemplateConfig:
     max_instances_per_file: int = 60  # Maximum instances per file
     file_prefix: str = ""  # File prefix
     function_signature: str = ""  # Function signature template
+    exclude_combinations: Optional[List[Dict[str, Any]]] = None  # Combinations to exclude
 
 
 class UniversalTemplateInstantiator:
@@ -178,6 +179,17 @@ class UniversalTemplateInstantiator:
                     _generate_recursive(params_dict, current_params, param_names[1:])
 
             _generate_recursive(config.dispatch_params, {}, list(config.dispatch_params.keys()))
+
+        # Filter out excluded combinations
+        if config.exclude_combinations:
+
+            def _is_excluded(combo: Dict[str, Any]) -> bool:
+                for exclude_rule in config.exclude_combinations:
+                    if all(combo.get(k) == v for k, v in exclude_rule.items()):
+                        return True
+                return False
+
+            combinations = [c for c in combinations if not _is_excluded(c)]
 
         return combinations
 
