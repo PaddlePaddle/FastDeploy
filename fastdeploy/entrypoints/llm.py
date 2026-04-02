@@ -447,7 +447,7 @@ class LLM:
                                    tensors.
         """
 
-        token_ids, logprobs, ranks = prompt_logprobs_tensors
+        token_ids, logprobs, ranks = prompt_logprobs_tensors[:3]
 
         # Detokenize non-incrementally.
         # Output is flat: [num_tok, num_lps] -> [num_tok * num_lps]

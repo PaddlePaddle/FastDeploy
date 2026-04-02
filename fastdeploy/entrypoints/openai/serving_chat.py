@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from __future__ import annotations
+
 import asyncio
 import itertools
 import time
@@ -818,22 +820,74 @@ class OpenAIServingChat:
         request_decode_flag: Optional[bool] = True,
     ) -> Optional[LogProbs]:
         """Create OpenAI-style logprobs for chat completions."""
-        if output_top_logprobs is None or len(output_top_logprobs) < 3 or any(not lst for lst in output_top_logprobs):
+        if (
+            output_top_logprobs is None
+            or len(output_top_logprobs) < 3
+            or any(not lst for lst in output_top_logprobs[:3])
+        ):
             return None
         logprobs_res: Optional[LogProbs] = None
-        for logprob_token_ids, logprobs, sampled_token_ranks in zip(
-            output_top_logprobs[0], output_top_logprobs[1], output_top_logprobs[2]
-        ):
-            top_logprobs = LogprobsLists(
-                logprob_token_ids=[logprob_token_ids],
-                logprobs=[logprobs],
-                sampled_token_ranks=[sampled_token_ranks],
-            )
+
+        # Check if output_top_logprobs is a LogprobsLists object(NamedTuple) or a list
+        is_logprobslists = hasattr(output_top_logprobs, "logprob_token_ids")
+
+        # Extract logits stats if available
+        if is_logprobslists:
+            # output_top_logprobs is LogprobsLists namedtuple
+            has_logits_stats = output_top_logprobs.logits_min is not None
+        else:
+            # list from msgpack: [logprob_token_ids, logprobs, sampled_token_ranks, logits_min, logits_max, logits_mean, logits_std]
+            has_logits_stats = len(output_top_logprobs) >= 7 and output_top_logprobs[3] is not None
+
+        if is_logprobslists:
+            num_tokens = len(output_top_logprobs.logprobs)
+            _tk_ids = lambda idx: output_top_logprobs.logprob_token_ids[idx]
+            _lps = lambda idx: output_top_logprobs.logprobs[idx]
+            _ranks = lambda idx: output_top_logprobs.sampled_token_ranks[idx]
+            _lmin = lambda idx: output_top_logprobs.logits_min[idx]
+            _lmax = lambda idx: output_top_logprobs.logits_max[idx]
+            _lmean = lambda idx: output_top_logprobs.logits_mean[idx]
+            _lstd = lambda idx: output_top_logprobs.logits_std[idx]
+        else:
+            num_tokens = len(output_top_logprobs[1])
+            _tk_ids = lambda idx: output_top_logprobs[0][idx]
+            _lps = lambda idx: output_top_logprobs[1][idx]
+            _ranks = lambda idx: output_top_logprobs[2][idx]
+            _lmin = lambda idx: output_top_logprobs[3][idx]
+            _lmax = lambda idx: output_top_logprobs[4][idx]
+            _lmean = lambda idx: output_top_logprobs[5][idx]
+            _lstd = lambda idx: output_top_logprobs[6][idx]
+
+        for idx in range(num_tokens):
+            logits_stats = None
+            if has_logits_stats:
+                top_logprobs = LogprobsLists(
+                    logprob_token_ids=[_tk_ids(idx)],
+                    logprobs=[_lps(idx)],
+                    sampled_token_ranks=[_ranks(idx)],
+                    logits_min=[_lmin(idx)],
+                    logits_max=[_lmax(idx)],
+                    logits_mean=[_lmean(idx)],
+                    logits_std=[_lstd(idx)],
+                )
+                logits_stats = {
+                    "min": float(_lmin(idx)),
+                    "max": float(_lmax(idx)),
+                    "mean": float(_lmean(idx)),
+                    "std": float(_lstd(idx)),
+                }
+            else:
+                top_logprobs = LogprobsLists(
+                    logprob_token_ids=[_tk_ids(idx)],
+                    logprobs=[_lps(idx)],
+                    sampled_token_ranks=[_ranks(idx)],
+                )
             step_logprobs_res = self._build_logprobs_response(
                 request_logprobs=request_logprobs,
                 response_logprobs=top_logprobs,
                 request_top_logprobs=request_top_logprobs,
                 request_decode_flag=request_decode_flag,
+                logits_stats=logits_stats,
             )
             if logprobs_res is None:
                 logprobs_res = step_logprobs_res
@@ -847,6 +901,7 @@ class OpenAIServingChat:
         response_logprobs: Optional[LogprobsLists],
         request_top_logprobs: int,
         request_decode_flag: bool,
+        logits_stats: Optional[dict[str, float]] = None,
     ) -> Optional[LogProbs]:
         """
         Construct a logprobs response object in line with the OpenAI style.
@@ -894,6 +949,7 @@ class OpenAIServingChat:
                 logprob=top_logprob_entries[0].logprob,
                 bytes=top_logprob_entries[0].bytes,
                 top_logprobs=top_logprob_entries[1:],  # Here are the complete topk candidates
+                logits_stats=logits_stats,
             )
 
             return LogProbs(content=[sampled_entry])
@@ -915,7 +971,7 @@ class OpenAIServingChat:
                                    tensors.
         """
 
-        token_ids, logprobs, ranks = prompt_logprobs_tensors
+        token_ids, logprobs, ranks = prompt_logprobs_tensors[:3]
 
         # Detokenize non-incrementally.
         # Output is flat: [num_tok, num_lps] -> [num_tok * num_lps]

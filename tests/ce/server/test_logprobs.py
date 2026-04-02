@@ -3,6 +3,17 @@ import json
 from core import TEMPLATE, URL, build_request_payload, send_request
 
 
+def _strip_logits_stats(obj):
+    """Recursively remove 'logits_stats' keys from logprobs response."""
+    if isinstance(obj, dict):
+        obj.pop("logits_stats", None)
+        for v in obj.values():
+            _strip_logits_stats(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            _strip_logits_stats(item)
+
+
 def test_unstream_with_logprobs():
     """
     测试非流式响应开启 logprobs 后，返回的 token 概率信息是否正确。
@@ -21,6 +32,7 @@ def test_unstream_with_logprobs():
     response = send_request(URL, payload)
     print(json.dumps(response.json(), indent=2, ensure_ascii=False))
     resp_json = response.json()
+    _strip_logits_stats(resp_json)
 
     # 校验返回内容与概率信息
     assert resp_json["choices"][0]["message"]["content"] == "牛顿的"
@@ -99,6 +111,7 @@ def test_stream_with_logprobs():
             print(json.dumps(result_chunk, indent=2, ensure_ascii=False))
             break
 
+    _strip_logits_stats(result_chunk)
     # 校验概率字段
     assert result_chunk["choices"][0]["delta"]["content"] == "牛顿"
     assert result_chunk["choices"][0]["logprobs"]["content"][0]["token"] == "牛顿"
@@ -184,6 +197,7 @@ def test_stream_with_temp_scaled_logprobs():
             print(json.dumps(result_chunk, indent=2, ensure_ascii=False))
             break
 
+    _strip_logits_stats(result_chunk)
     # 校验概率字段
     assert result_chunk["choices"][0]["delta"]["content"] == "牛顿"
     assert result_chunk["choices"][0]["logprobs"]["content"][0]["token"] == "牛顿"
@@ -229,6 +243,7 @@ def test_stream_with_top_p_normalized_logprobs():
             print(json.dumps(result_chunk, indent=2, ensure_ascii=False))
             break
 
+    _strip_logits_stats(result_chunk)
     # 校验概率字段
     assert result_chunk["choices"][0]["delta"]["content"] == "牛顿"
     assert result_chunk["choices"][0]["logprobs"]["content"][0]["token"] == "牛顿"
