@@ -437,7 +437,7 @@ class EngineClient:
     def _send_task(self, task):
         if envs.ZMQ_SEND_BATCH_DATA:
             task["zmq_worker_pid"] = self.worker_pid
-        if not self.enable_mm and not envs.ENABLE_V1_DATA_PROCESSOR:
+        if not self.enable_mm:
             self.zmq_client.send_json(task)
         else:
             if envs.FD_ENABLE_E2W_TENSOR_CONVERT:
@@ -599,7 +599,7 @@ class EngineClient:
         req_dict = request.to_dict()
         if envs.ZMQ_SEND_BATCH_DATA:
             req_dict["zmq_worker_pid"] = self.worker_pid
-        if not self.enable_mm and not envs.ENABLE_V1_DATA_PROCESSOR:
+        if not self.enable_mm:
             self.zmq_client.send_json(req_dict)
         else:
             self.zmq_client.send_pyobj(req_dict)

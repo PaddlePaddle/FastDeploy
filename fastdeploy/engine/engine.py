@@ -37,7 +37,10 @@ from tqdm import tqdm
 
 import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.args_utils import EngineArgs
-from fastdeploy.engine.common_engine import EngineService
+from fastdeploy.engine.common_engine import (
+    EngineService,
+    _format_worker_launch_failure_message,
+)
 from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
@@ -157,7 +160,7 @@ class LLMEngine:
         def check_worker_initialize_status_func(res: dict):
             res["worker_is_alive"] = True
             if not self.check_worker_initialize_status():
-                console_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
+                console_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
                 res["worker_is_alive"] = False
 
         self.check_worker_initialize_status_func_thread = threading.Thread(
@@ -175,7 +178,8 @@ class LLMEngine:
         # If block number is not specified, let workers do profiling to determine the block number,
         # and then start the cache manager
         if self.do_profile:
-            self._stop_profile()
+            if not self._stop_profile():
+                return False
         elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
             if not current_platform.is_intel_hpu():
                 device_ids = self.cfg.parallel_config.device_ids.split(",")
@@ -203,7 +207,7 @@ class LLMEngine:
         # Worker launched
         self.check_worker_initialize_status_func_thread.join()
         if not result_container["worker_is_alive"]:
-            console_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
+            console_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
             return False
 
         console_logger.info(f"Worker processes are launched with {time.time() - start_time} seconds.")
@@ -752,7 +756,8 @@ class LLMEngine:
         while self.get_profile_block_num_signal.value[0] == 0:
             if hasattr(self, "worker_proc") and self.worker_proc is not None:
                 if self.worker_proc.poll() is not None:
-                    raise RuntimeError("Worker process failed to start." "Please check log/workerlog.* for details.")
+                    console_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
+                    return False
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
@@ -761,6 +766,7 @@ class LLMEngine:
             if not current_platform.is_intel_hpu():
                 device_ids = self.cfg.parallel_config.device_ids.split(",")
                 self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+        return True
 
     def check_health(self, time_interval_threashold=30):
         """

@@ -33,8 +33,8 @@ void SpeculateTokenPenaltyMultiScores(
     const paddle::Tensor& min_len,
     const paddle::Tensor& eos_token_id,
     const paddle::Tensor& seq_lens_this_time,
-    const paddle::Tensor& output_padding_offset,
-    const paddle::Tensor& output_cum_offsets,
+    const paddle::Tensor& batch_id_per_token_output,
+    const paddle::Tensor& cu_seqlens_q_output,
     const int max_seq_len) {
   namespace api = baidu::xpu::api;
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
@@ -72,8 +72,8 @@ void SpeculateTokenPenaltyMultiScores(
           min_len.data<int64_t>(),
           eos_token_id.data<int64_t>(),
           bad_tokens.data<int64_t>(),
-          output_padding_offset.data<int>(),
-          output_cum_offsets.data<int>(),
+          batch_id_per_token_output.data<int>(),
+          cu_seqlens_q_output.data<int>(),
           bs,
           length,
           length_id,
@@ -100,8 +100,8 @@ void SpeculateTokenPenaltyMultiScores(
           min_len.data<int64_t>(),
           eos_token_id.data<int64_t>(),
           bad_tokens.data<int64_t>(),
-          output_padding_offset.data<int>(),
-          output_cum_offsets.data<int>(),
+          batch_id_per_token_output.data<int>(),
+          cu_seqlens_q_output.data<int>(),
           bs,
           length,
           length_id,
@@ -125,8 +125,8 @@ void SpeculateTokenPenaltyMultiScores(
           min_len.data<int64_t>(),
           eos_token_id.data<int64_t>(),
           bad_tokens.data<int64_t>(),
-          output_padding_offset.data<int>(),
-          output_cum_offsets.data<int>(),
+          batch_id_per_token_output.data<int>(),
+          cu_seqlens_q_output.data<int>(),
           bs,
           length,
           length_id,
@@ -157,8 +157,8 @@ PD_BUILD_STATIC_OP(speculate_get_token_penalty_multi_scores)
              "min_len",
              "eos_token_id",
              "seq_lens_this_time",
-             "output_padding_offset",
-             "output_cum_offsets"})
+             "batch_id_per_token_output",
+             "cu_seqlens_q_output"})
     .Outputs({"logits_out"})
     .Attrs({"max_seq_len: int"})
     .SetInplaceMap({{"logits", "logits_out"}})

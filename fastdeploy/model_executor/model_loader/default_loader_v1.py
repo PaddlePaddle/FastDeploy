@@ -49,7 +49,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
 
     def clean_memory_fragments(self) -> None:
         """clean_memory_fragments"""
-        if current_platform.is_cuda() or current_platform.is_maca():
+        if current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar():
             paddle.device.empty_cache()
             paddle.device.synchronize()
 
