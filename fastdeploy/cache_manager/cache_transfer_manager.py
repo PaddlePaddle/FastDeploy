@@ -796,7 +796,7 @@ class CacheTransferManager:
                 try:
                     valid_gpu_block_ids = self._run_read_storage(
                         task.task_id,
-                        task.token_ids[: match_block_num * self.block_size],
+                        task.token_ids[: match_block_num * self.block_size] if task.token_ids else None,
                         task.start_read_block_idx,
                         k_cache_keys,
                         v_cache_keys,

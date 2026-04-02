@@ -66,7 +66,6 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
-    const paddle::Tensor& cum_offsets,
     const paddle::Tensor& rotary_embs,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& prefix_block_tables,
@@ -122,7 +121,6 @@ std::vector<paddle::Tensor> BlockAttnKernel(
   auto qkv_shape = qkv.dims();
   auto cache_shape = key_cache.dims();
   auto block_table_shape = block_tables.dims();
-  const int bsz = cum_offsets.dims()[0];
   const int block_batch = block_table_shape[0];
   const int max_block_per_seq = block_table_shape[1];
   const int kv_num_heads = cache_shape[1];
@@ -984,7 +982,6 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
-    const paddle::Tensor& cum_offsets,
     const paddle::Tensor& rotary_embs,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& prefix_block_tables,
@@ -1023,7 +1020,6 @@ std::vector<paddle::Tensor> BlockAttn(
   return BlockAttnKernel<TX, TC, TS>(qkv,                           \
                                      key_cache,                     \
                                      value_cache,                   \
-                                     cum_offsets,                   \
                                      rotary_embs,                   \
                                      block_tables,                  \
                                      prefix_block_tables,           \
@@ -1099,7 +1095,6 @@ PD_BUILD_STATIC_OP(block_attn)
     .Inputs({"qkv",
              "key_cache",
              "value_cache",
-             "cum_offsets",
              "rotary_embs",
              "block_tables",
              "prefix_block_tables",

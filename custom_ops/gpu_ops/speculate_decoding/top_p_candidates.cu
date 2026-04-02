@@ -419,6 +419,7 @@ __global__ void KeMatrixTopPBeamTopKFt(
   const int lane = tid % 32;
   const int token_id = blockIdx.x;
   const int bid = batch_id_per_token_output[token_id];
+  if (bid < 0) return;
 
   int top_num = TopPBeamTopK;
   float top_p_value = static_cast<float>(top_ps[bid]);
