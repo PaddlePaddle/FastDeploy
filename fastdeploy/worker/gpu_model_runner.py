@@ -2644,14 +2644,6 @@ class GPUModelRunner(ModelRunnerBase):
             save_each_rank=self.parallel_config.use_ep,
             sampling_mask_zmq_client=self.sampling_mask_zmq_client,
         )
-        # logger.info("_______save_output ______")
-        # logger.info(f"{sampler_output.sampled_token_ids=}")
-        # logger.info(f"{sampler_output.logprobs_tensors=}")
-        # logger.info(f"{sampler_output.token_num_per_batch=}")
-        # logger.info(f"{sampler_output.cu_batch_token_offset=}")
-        # logger.info(f"{sampler_output.logits=}")
-        # logger.info(f"{sampler_output.sampling_mask=}")
-        # logger.info("_______save_output ______")
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
         num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
