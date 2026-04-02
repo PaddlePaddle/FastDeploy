@@ -676,6 +676,12 @@ class QKVParallelLinear(ColumnParallelLinear):
             skip_quant=skip_quant,
             weight_dtype=weight_dtype,
         )
+        set_weight_attrs(
+            self.weight,
+            {
+                "weight_need_transpose": self.fd_config.model_config.model_format == "torch",
+            },
+        )
 
     def _get_shard_size_mapping(self, loaded_shard_id: str, head_dim: int):
         shard_size_mapping = {
