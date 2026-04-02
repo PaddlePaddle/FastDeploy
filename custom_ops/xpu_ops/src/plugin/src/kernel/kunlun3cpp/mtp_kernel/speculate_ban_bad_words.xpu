@@ -22,7 +22,7 @@ inline __device__ void update_bad_words_logit<float16>(
 template <typename T>
 __global__ void speculate_ban_bad_words(T* logits,
                                         const int64_t* bad_words_list,
-                                        const int* output_padding_offset,
+                                        const int* batch_id_per_token_output,
                                         const int64_t bs,
                                         const int64_t length,
                                         const int64_t bad_words_length,
@@ -32,7 +32,7 @@ __global__ void speculate_ban_bad_words(T* logits,
   int nthreads = cluster_num() * core_num();
   int start = -1;
   int end = -1;
-  int output_padding_offset_lm;
+  int batch_id_per_token_output_lm;
   partition(tid,
             nthreads,
             static_cast<int>(token_num * bad_words_length),
@@ -41,10 +41,10 @@ __global__ void speculate_ban_bad_words(T* logits,
             &end);
   for (int i = start; i < end; i++) {
     int token_idx = i / bad_words_length;
-    GM2LM(output_padding_offset + token_idx,
-          &output_padding_offset_lm,
+    GM2LM(batch_id_per_token_output + token_idx,
+          &batch_id_per_token_output_lm,
           sizeof(int));
-    int bs_idx = (token_idx + output_padding_offset_lm) / max_seq_len;
+    int bs_idx = batch_id_per_token_output_lm;
     if (bs_idx >= bs) {
       continue;
     }
@@ -63,7 +63,7 @@ __global__ void speculate_ban_bad_words(T* logits,
   template __global__ void speculate_ban_bad_words( \
       DATA_TYPE* logits,                            \
       const int64_t* bad_words_list,                \
-      const int* output_padding_offset,             \
+      const int* batch_id_per_token_output_lm,      \
       const int64_t bs,                             \
       const int64_t length,                         \
       const int64_t bad_words_length,               \

@@ -123,7 +123,7 @@ def gather_logprobs(
         indices = token_ids
         top_logprobs = token_logprobs
 
-    return LogprobsTensors(indices, top_logprobs, token_ranks)
+    return LogprobsTensors(indices.cpu(), top_logprobs.cpu(), token_ranks.cpu())
 
 
 def build_output_logprobs(

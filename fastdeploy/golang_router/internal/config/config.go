@@ -36,6 +36,7 @@ type SchedulerConfig struct {
 	PrefillPolicy        string  `yaml:"prefill-policy"`
 	DecodePolicy         string  `yaml:"decode-policy"`
 	EvictionIntervalSecs float64 `yaml:"eviction-interval-secs"`
+	EvictionDurationMins float64 `yaml:"eviction-duration-mins"`
 	CacheBlockSize       int     `yaml:"cache-block-size"`
 	TokenizerURL         string  `yaml:"tokenizer-url"`
 	TokenizerTimeoutSecs float64 `yaml:"tokenizer-timeout-secs"`
@@ -97,6 +98,9 @@ func Load(configPath, listenPort string, isSplitwise bool) (*Config, error) {
 	}
 	if cfg.Scheduler.EvictionIntervalSecs == 0 {
 		cfg.Scheduler.EvictionIntervalSecs = 60
+	}
+	if cfg.Scheduler.EvictionDurationMins == 0 {
+		cfg.Scheduler.EvictionDurationMins = 30
 	}
 	if cfg.Scheduler.CacheBlockSize == 0 {
 		cfg.Scheduler.CacheBlockSize = 64

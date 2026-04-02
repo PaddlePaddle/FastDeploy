@@ -430,7 +430,8 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
 
 def test_profile_reset_block_num():
     """测试profile reset_block_num功能，与baseline diff不能超过15%"""
-    log_file = "./log/config.log"
+    log_dir = os.getenv("FD_LOG_DIR", "log")
+    log_file = os.path.join(log_dir, "config.log")
     baseline = 30000
 
     if not os.path.exists(log_file):

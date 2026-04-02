@@ -17,6 +17,7 @@
 from functools import partial
 
 import paddle
+from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
@@ -66,10 +67,17 @@ class IluvatarModelRunner(GPUModelRunner):
                 not self.cache_config.enable_chunked_prefill
             ), "Iluvatar does not support chunked prefill for VL model"
 
-        if hasattr(self.quant_config, "moe_quant_type") and self.quant_config.moe_quant_type == "wint4":
-            assert not self.use_cudagraph, "Iluvatar does not support cuda graph for weight_only_int4"
+        if self.model_config.model_type == "ernie4_5_moe_vl" and self.parallel_config.tensor_parallel_size > 1:
+            # ernie-vl does not support cuda graph for tp > 1
+            logger.warning("disable cudagraph since ernie-vl does not support cuda graph for tp > 1")
+            self.use_cudagraph = False
 
-        print(f"self.use_cudagraph={self.use_cudagraph}")
+        if hasattr(self.quant_config, "moe_quant_type") and self.quant_config.moe_quant_type == "wint4":
+            # Iluvatar does not support cuda graph for weight_only_int4 yet
+            logger.warning("disable cudagraph since iluvatar does not support cuda graph for weight_only_int4")
+            self.use_cudagraph = False
+
+        logger.info(f"self.use_cudagraph={self.use_cudagraph}")
         # VL neox style = True
         emb_shape = self.share_inputs["rope_emb"].shape
         if emb_shape[-1] == self.model_config.head_dim // 2:
