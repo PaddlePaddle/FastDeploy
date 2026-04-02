@@ -272,12 +272,11 @@ class MLAAttentionBackend(AttentionBackend):
         self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
 
         self.num_heads: int = num_heads
-        if self.num_heads < 64:
+        self.heads_need_padding = False
+        if self.num_heads < 64 and fd_config.parallel_config.tensor_parallel_size > 1:
             self.has_padding_num_heads = 64 - self.num_heads
             self.heads_need_padding = True
-            # self.padded_num_heads = 64
-            print("num_heads is less than 64, force to use 64 num_heads")
-            # self.q_padding_tensor = paddle.zeros(64, (self.kv_lora_rank + self.qk_rope_head_dim))
+            print("MLA num_attention_heads is less than 64, force to use 64 num_heads")
 
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
@@ -677,11 +676,6 @@ class MLAAttentionBackend(AttentionBackend):
                 token_num = q.shape[0]
                 decoder_q.reshape_([-1, 1, self.num_heads, 576])
                 if self.heads_need_padding:
-                    # decoder_q = paddle.nn.functional.pad(
-                    #     decoder_q,
-                    #     [0,0,0,self.has_padding_num_heads],
-                    #     value=0.0
-                    # ).contiguous()
                     padded_q = paddle.zeros(
                         [decoder_q.shape[0], decoder_q.shape[1], 64, decoder_q.shape[3]], dtype=decoder_q.dtype
                     )

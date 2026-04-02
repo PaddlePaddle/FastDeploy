@@ -615,7 +615,7 @@ class Indexer(nn.Layer):
         # self.buffer = paddle.zeros([2048 * 2048], dtype=paddle.uint8)
 
     def forward(
-        self, forward_meta: ForwardMeta, hidden_states: paddle.Tensor, qr: paddle.Tensor, positions, rotary_emb
+        self, forward_meta: ForwardMeta, hidden_states: paddle.Tensor, qr: paddle.Tensor, rotary_emb
     ) -> paddle.Tensor:
         self.indexer_cache = forward_meta.caches[2 * self.layer_id + 1]
 
@@ -627,7 +627,7 @@ class Indexer(nn.Layer):
         k, _ = self.k_norm(k)
         k_pe, k_nope = paddle.split(k, [self.rope_dim, self.index_head_dim - self.rope_dim], axis=-1)
 
-        q_pe, k_pe = rotary_emb(positions, q_pe, k_pe.unsqueeze(1))
+        q_pe, k_pe = rotary_emb(forward_meta.position_ids, q_pe, k_pe.unsqueeze(1))
         q_pe = q_pe.reshape(-1, self.index_n_heads, self.rope_dim)
         k_pe = k_pe.reshape(-1, 1, self.rope_dim)
 
@@ -936,9 +936,7 @@ class DeepseekV32DSAAttention(nn.Layer):
         query = self.q_a_layernorm(query)[0]
 
         # DSA indexer
-        indexer_top_k = self.indexer(
-            forward_meta, hidden_states, query, forward_meta.position_ids, rotary_emb=self.indexer_rotary_emb
-        )
+        indexer_top_k = self.indexer(forward_meta, hidden_states, query, rotary_emb=self.indexer_rotary_emb)
 
         query = self.q_b_proj(query)
         query.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
@@ -1047,9 +1045,7 @@ class DeepSeekV3DecoderLayer(nn.Layer):
                 hidden_states, residual_input=residual, forward_meta=forward_meta
             )
 
-            hidden_states = self.self_attn(
-                forward_meta, hidden_states, forward_meta.position_ids, forward_meta.mask_encoder_batch
-            )
+            hidden_states = self.self_attn(forward_meta, hidden_states)
 
             hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
         else:
@@ -1343,32 +1339,6 @@ class DeepSeekV32PretrainedModel(DeepSeekV3PretrainedModel):
     @classmethod
     def arch_name(self):
         return "DeepseekV32ForCausalLM"
-
-
-@ModelRegistry.register_model_class(
-    architecture="ErnieForCausalLM",
-    module_name="deepseek_v3",
-    category=ModelCategory.TEXT_GENERATION,
-    primary_use=ModelCategory.TEXT_GENERATION,
-)
-class Ernie5MoeForCausalLM(DeepseekV3ForCausalLM):
-    """
-    Ernie5MoeForCausalLM
-    """
-
-    @classmethod
-    def name(cls):
-        return "Ernie5MoeForCausalLM"
-
-
-class Ernie5MoEPretrainedModel(DeepSeekV3PretrainedModel):
-    """
-    EErniemmMoEPretrainedModel
-    """
-
-    @classmethod
-    def arch_name(self):
-        return "Ernie5MoeForCausalLM"
 
 
 @ModelRegistry.register_model_class(
