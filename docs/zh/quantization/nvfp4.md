@@ -44,20 +44,20 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 2. **flashinfer/utils.py**
 
-   修改 `get_compute_capability` 函数：
-   ```python
+  修改 `get_compute_capability` 函数：
+  ```bash
   @functools.cache
   def get_compute_capability(device: torch.device) -> Tuple[int, int]:
       return torch.cuda.get_device_capability(device)
       if device.type != "cuda":
           raise ValueError("device must be a cuda device")
       return torch.cuda.get_device_capability(device.index)
-   ```
+  ```
 
 3. **flashinfer/cute_dsl/blockscaled_gemm.py**
 
    将 `cutlass_torch.current_stream()` 替换为：
-   ```python
+   ```bash
    cuda.CUstream(torch.cuda.current_stream().stream_base.raw_stream)
    ```
 
