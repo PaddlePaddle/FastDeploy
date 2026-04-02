@@ -34,8 +34,7 @@ void prof_start();
 void prof_stop();
 
 std::vector<paddle::Tensor> AdjustBatch(
-    const paddle::Tensor& x,            // [token_num, dim_embed]
-    const paddle::Tensor& cum_offsets,  // [bsz, 1]
+    const paddle::Tensor& x,  // [token_num, dim_embed]
     const paddle::Tensor& encoder_seq_lod,
     const paddle::Tensor& decoder_seq_lod,
     const paddle::Tensor& encoder_batch_idx,
@@ -62,7 +61,6 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
-    const paddle::Tensor& cum_offsets,
     const paddle::Tensor& rotary_embs,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& prefix_block_tables,
@@ -210,7 +208,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& seq_lens_encoder,
                       const paddle::Tensor& seq_lens_decoder,
                       const paddle::Tensor& step_idx,
-                      const paddle::Tensor& output_cum_offsets,
+                      const paddle::Tensor& cu_seqlens_q_output,
                       const paddle::Tensor& stop_flags,
                       const paddle::Tensor& not_need_stop,
                       const paddle::Tensor& max_dec_len,
@@ -254,8 +252,8 @@ void SpeculateTokenPenaltyMultiScores(
     const paddle::Tensor& min_len,
     const paddle::Tensor& eos_token_id,
     const paddle::Tensor& seq_lens_this_time,
-    const paddle::Tensor& output_padding_offset,
-    const paddle::Tensor& output_cum_offsets,
+    const paddle::Tensor& batch_id_per_token_output,
+    const paddle::Tensor& cu_seqlens_q_output,
     const int max_seq_len);
 
 void SpeculateUpdateV3(const paddle::Tensor& seq_lens_encoder,
@@ -413,8 +411,7 @@ std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& step_idx);
 
 std::vector<paddle::Tensor> GatherNextToken(
-    const paddle::Tensor& x,            // [token_num, dim_embed]
-    const paddle::Tensor& cum_offsets,  // [bsz, 1]
+    const paddle::Tensor& x,  // [token_num, dim_embed]
     const paddle::Tensor& encoder_seq_lod,
     const paddle::Tensor& decoder_seq_lod,
     const paddle::Tensor& encoder_batch_map,
@@ -500,6 +497,14 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
     const paddle::Tensor& seq_len,
     const paddle::Tensor& seq_lens_encoder);
 
+std::vector<paddle::Tensor> SpeculatePreProcess(
+    const int64_t cpu_token_num,
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& seq_len,
+    const paddle::Tensor& draft_tokens,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder);
+
 void StepPaddle(const paddle::Tensor& stop_flags,
                 const paddle::Tensor& seq_lens_this_time,
                 const paddle::Tensor& ori_seq_lens_encoder,
@@ -539,6 +544,25 @@ void MTPStepPaddle(
     const paddle::Tensor& free_list_len,
     const int block_size,
     const int max_draft_tokens);
+
+void UnifiedUpdateModelStatus(const paddle::Tensor& seq_lens_encoder,
+                              const paddle::Tensor& seq_lens_decoder,
+                              const paddle::Tensor& has_running_seqs,
+                              const paddle::Tensor& step_input_ids,
+                              const paddle::Tensor& adaptive_step_input_len,
+                              const paddle::Tensor& step_output_ids,
+                              const paddle::Tensor& step_output_len,
+                              const paddle::Tensor& stop_flags,
+                              const paddle::Tensor& seq_lens_this_time,
+                              const paddle::Tensor& is_paused,
+                              const paddle::Tensor& mask_rollback,
+                              const paddle::Tensor& token_ids_all,
+                              const paddle::Tensor& prompt_lens,
+                              const paddle::Tensor& step_idx,
+                              const paddle::Tensor& end_tokens,
+                              const paddle::Tensor& max_dec_len,
+                              const bool is_naive_mode,
+                              const bool prefill_one_step_stop);
 
 void SpeculateStepPaddle(
     const paddle::Tensor& stop_flags,
@@ -682,7 +706,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("adjust_batch",
         &AdjustBatch,
         py::arg("x"),
-        py::arg("cum_offsets"),
         py::arg("encoder_seq_lod"),
         py::arg("decoder_seq_lod"),
         py::arg("encoder_batch_idx"),
@@ -701,7 +724,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("qkv"),
         py::arg("key_cache"),
         py::arg("value_cache"),
-        py::arg("cum_offsets"),
         py::arg("rotary_embs"),
         py::arg("block_tables"),
         py::arg("prefix_block_tables"),
@@ -812,7 +834,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_encoder"),         // 编码器序列长度张量
         py::arg("seq_lens_decoder"),         // 解码器序列长度张量
         py::arg("step_idx"),                 // 步骤索引张量
-        py::arg("output_cum_offsets"),       // 输出累积偏移量张量
+        py::arg("cu_seqlens_q_output"),      // 输出累积偏移量张量
         py::arg("stop_flags"),               // 停止标志张量
         py::arg("not_need_stop"),            // 无需停止标志张量
         py::arg("max_dec_len"),              // 最大解码长度张量
@@ -885,7 +907,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("gather_next_token",
         &GatherNextToken,
         py::arg("x"),
-        py::arg("cum_offsets"),
         py::arg("encoder_seq_lod"),
         py::arg("decoder_seq_lod"),
         py::arg("encoder_batch_map"),
@@ -1002,6 +1023,28 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("redundant_ep_rank_num_plus_one"),
         "moe export RedundantTopKSelect function");
 
+  m.def("unified_update_model_status",
+        &UnifiedUpdateModelStatus,
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_decoder"),
+        py::arg("has_running_seqs"),
+        py::arg("step_input_ids"),
+        py::arg("adaptive_step_input_len"),
+        py::arg("step_output_ids"),
+        py::arg("step_output_len"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens_this_time"),
+        py::arg("is_paused"),
+        py::arg("mask_rollback"),
+        py::arg("token_ids_all"),
+        py::arg("prompt_lens"),
+        py::arg("step_idx"),
+        py::arg("end_tokens"),
+        py::arg("max_dec_len"),
+        py::arg("is_naive_mode"),
+        py::arg("max_draft_tokens"),
+        "Unified update model status");
+
   m.def("mtp_step_paddle",
         &MTPStepPaddle,
         py::arg("base_model_stop_flags"),
@@ -1117,8 +1160,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("min_len"),
         py::arg("eos_token_id"),
         py::arg("seq_lens_this_time"),
-        py::arg("output_padding_offset"),
-        py::arg("output_cum_offsets"),
+        py::arg("batch_id_per_token_output"),
+        py::arg("cu_seqlens_q_output"),
         py::arg("max_seq_len"),
         "Applies token penalty with multiple scores");
 
@@ -1182,7 +1225,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("max_dec_len"),
         py::arg("end_tokens"),
         py::arg("is_block_step"),
-        py::arg("output_cum_offsets"),
+        py::arg("cu_seqlens_q_output"),
         py::arg("actual_candidate_len"),
         py::arg("actual_draft_token_nums"),
         py::arg("topp"),
@@ -1245,6 +1288,16 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_output"),
         py::arg("max_seq_len"),
         "Get output padding offset");
+
+  m.def("speculate_pre_process",
+        &SpeculatePreProcess,
+        py::arg("cpu_token_num"),
+        py::arg("input_ids"),
+        py::arg("seq_len"),
+        py::arg("draft_tokens"),
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_decoder"),
+        "speculate pre process to remove padding and to acquire cu_seq_len");
 
   m.def("speculate_get_padding_offset",
         &SpeculateGetPaddingOffset,
@@ -1419,7 +1472,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &TopPCandidates,
         py::arg("probs"),
         py::arg("top_p"),
-        py::arg("output_padding_offset"),
+        py::arg("batch_id_per_token_output"),
         py::arg("candidates_len"),
         py::arg("max_seq_len"),
         "Generate top-p candidates based on probability distributions");
