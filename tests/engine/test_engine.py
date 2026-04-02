@@ -53,6 +53,7 @@ def _make_cfg(**ov):
     cfg.graph_opt_config = cfg.early_stop_config = cfg.eplb_config = ns(to_json_string=_j)
     cfg.routing_replay_config = cfg.plas_attention_config = ns(to_json_string=_j)
     cfg.structured_outputs_config = soc
+    cfg.deploy_modality = ns(value="mixed")
     cfg.worker_num_per_node, cfg.master_ip, cfg.host_ip = 1, "127.0.0.1", "127.0.0.1"
     cfg.ips, cfg.nnode, cfg.register_info, cfg.node_rank = None, 1, None, 0
     cfg.print = lambda: None
