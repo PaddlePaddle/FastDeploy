@@ -1178,7 +1178,7 @@ class MTPProposer(Proposer):
     def _extend_draft_token_with_ngram_match(self):
         hybrid_mtp_ngram(
             self.model_inputs["input_ids_cpu"].cuda(),
-            self.model_inputs["input_ids_len"],
+            self.model_inputs["input_ids_len"].cuda(),
             self.model_inputs["pre_ids"],
             self.model_inputs["step_idx"],
             self.target_model_inputs["actual_draft_token_num"],

@@ -559,44 +559,46 @@ class TestNgramMatchKernel(unittest.TestCase):
 
     def test_latency(self):
         """Benchmark: GPU kernel latency vs CPU transfer overhead."""
+        # Pre-create tensors on GPU (data creation excluded from timing)
+        gpu_data = _to_gpu(_make_ngram_test_data(batch_size=32, input_len=512, seed=42))
+        cpu_data = _make_ngram_test_data(batch_size=32, input_len=512, seed=42)
+
         # Warmup
         for _ in range(5):
-            d = _to_gpu(_make_ngram_test_data(batch_size=32, input_len=512, seed=42))
             self.ngram_match(
-                d["input_ids"],
-                d["input_ids_len"],
-                d["token_ids_all"],
-                d["prompt_lens"],
-                d["step_idx"],
-                d["draft_token_num"],
-                d["draft_tokens"],
-                d["seq_lens_this_time"],
-                d["seq_lens_encoder"],
-                d["seq_lens_decoder"],
-                d["max_dec_len"],
+                gpu_data["input_ids"],
+                gpu_data["input_ids_len"],
+                gpu_data["token_ids_all"],
+                gpu_data["prompt_lens"],
+                gpu_data["step_idx"],
+                gpu_data["draft_token_num"],
+                gpu_data["draft_tokens"],
+                gpu_data["seq_lens_this_time"],
+                gpu_data["seq_lens_encoder"],
+                gpu_data["seq_lens_decoder"],
+                gpu_data["max_dec_len"],
                 3,
                 10,
             )
         paddle.device.synchronize()
 
-        # GPU path: tensors already on GPU, no copies
+        # GPU path: kernel execution only (no data creation/transfer)
         n_runs = 100
         paddle.device.synchronize()
         t0 = time.perf_counter()
         for _ in range(n_runs):
-            d = _to_gpu(_make_ngram_test_data(batch_size=32, input_len=512, seed=42))
             self.ngram_match(
-                d["input_ids"],
-                d["input_ids_len"],
-                d["token_ids_all"],
-                d["prompt_lens"],
-                d["step_idx"],
-                d["draft_token_num"],
-                d["draft_tokens"],
-                d["seq_lens_this_time"],
-                d["seq_lens_encoder"],
-                d["seq_lens_decoder"],
-                d["max_dec_len"],
+                gpu_data["input_ids"],
+                gpu_data["input_ids_len"],
+                gpu_data["token_ids_all"],
+                gpu_data["prompt_lens"],
+                gpu_data["step_idx"],
+                gpu_data["draft_token_num"],
+                gpu_data["draft_tokens"],
+                gpu_data["seq_lens_this_time"],
+                gpu_data["seq_lens_encoder"],
+                gpu_data["seq_lens_decoder"],
+                gpu_data["max_dec_len"],
                 3,
                 10,
             )
@@ -608,11 +610,8 @@ class TestNgramMatchKernel(unittest.TestCase):
         paddle.device.synchronize()
         t0 = time.perf_counter()
         for _ in range(n_runs):
-            d = _to_gpu(_make_ngram_test_data(batch_size=32, input_len=512, seed=42))
-            # Simulate old path: copy all tensors to CPU
-            cpu_tensors = {k: v.cpu() for k, v in d.items()}
-            # The actual op call would happen on CPU here
-            # Then copy results back to GPU
+            # Simulate old path: copy all tensors CPU→GPU→CPU→GPU
+            cpu_tensors = {k: paddle.to_tensor(v) for k, v in cpu_data.items()}
             _ = cpu_tensors["draft_tokens"].cuda()
             _ = cpu_tensors["seq_lens_this_time"].cuda()
             paddle.device.synchronize()

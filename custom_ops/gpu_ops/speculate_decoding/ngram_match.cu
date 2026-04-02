@@ -104,7 +104,6 @@ __global__ void ngram_match_gather_kernel(
     int64_t max_model_len,
     int64_t draft_tokens_stride,
     int64_t max_batch_size,
-    int max_draft_tokens_param,
     int threshold,
     const NgramMatchResult *match_results) {
   int unprocessed_batch_size = 0;
@@ -396,7 +395,6 @@ void NgramMatch(const paddle::Tensor &input_ids,
         max_model_len,
         draft_tokens_stride,
         max_batch_size,
-        max_draft_tokens,
         threshold,
         match_results);
   } else {
