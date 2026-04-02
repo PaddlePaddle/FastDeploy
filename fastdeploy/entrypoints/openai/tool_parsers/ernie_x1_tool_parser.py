@@ -20,14 +20,13 @@ import uuid
 from collections.abc import Sequence
 
 import partial_json_parser
+from partial_json_parser.core.options import Allow
 
 
 def random_tool_call_id() -> str:
     """Generate a random tool call ID"""
     return f"chatcmpl-tool-{str(uuid.uuid4().hex)}"
 
-
-from partial_json_parser.core.options import Allow
 
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
