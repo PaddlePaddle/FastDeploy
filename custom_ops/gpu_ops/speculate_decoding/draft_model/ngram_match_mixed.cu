@@ -186,7 +186,7 @@ __global__ void ngram_match_mixed_gather_kernel(
     int remaining_active = s_total_active - active_prefix;
 
     // Budget: threshold minus tokens already allocated before me,
-    // minus at-least-ori reservation for every active item after me.
+    // minus at-least-1 reservation for every active item after me.
     int budget = threshold - exclusive_token_prefix - remaining_active;
 
     int actual;
