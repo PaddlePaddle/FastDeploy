@@ -111,10 +111,17 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
         m = _init(layer)
         self.assertTrue(hasattr(layer, "up_gate_proj_weight"))
         self.assertTrue(hasattr(layer, "down_proj_weight"))
-        with patch.object(
-            _gpu_ops_stub,
-            "gptq_marlin_repack",
-            lambda w, p, sk, sn, nb: paddle.zeros([sk // 16, sn * (nb // 2)], dtype=w.dtype),
+        with (
+            patch.dict(
+                sys.modules,
+                {_GPU_OPS: _gpu_ops_stub, _DEEP_GEMM: _deep_gemm_stub},
+                clear=False,
+            ),
+            patch.object(
+                _gpu_ops_stub,
+                "gptq_marlin_repack",
+                lambda w, p, sk, sn, nb: paddle.zeros([sk // 16, sn * (nb // 2)], dtype=w.dtype),
+            ),
         ):
             m.process_loaded_weights(layer, dict(zip(("up", "down"), _make_weights(layer))))
 
@@ -125,6 +132,11 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
         gate = paddle.nn.Linear(64, 2, bias_attr=False)
         x = paddle.ones([2, 64], dtype="float32")
         with (
+            patch.dict(
+                sys.modules,
+                {_GPU_OPS: _gpu_ops_stub, _DEEP_GEMM: _deep_gemm_stub},
+                clear=False,
+            ),
             patch.object(
                 mb,
                 "MoeWna16MarlinGemmApi",
