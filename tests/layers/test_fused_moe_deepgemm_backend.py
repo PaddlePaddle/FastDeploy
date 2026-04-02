@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import sys
 import types
 import unittest
@@ -22,9 +21,16 @@ from unittest.mock import patch
 import paddle
 
 # ── Stub GPU-only modules ───────────────────────────────────────────────────
-# Stub ops.gpu so the import chain (moe → triton_backend → fp8_utils →
-# ops.gpu.deep_gemm) resolves without compiled CUDA extensions.
-# Must be installed BEFORE any fastdeploy import that touches ops.gpu.
+# Temporarily install stubs so the import chain
+# (moe → triton_backend → fp8_utils → ops.gpu.deep_gemm) resolves.
+# Stubs are scoped: saved before, restored immediately after import.
+
+_STUB_KEYS = [
+    "fastdeploy.model_executor.ops.gpu",
+    "fastdeploy.model_executor.ops.gpu.deep_gemm",
+    "fastdeploy.model_executor.layers.moe.ep",
+]
+_saved_modules = {k: sys.modules.get(k) for k in _STUB_KEYS}
 
 
 class _GpuOpsStub(types.ModuleType):
@@ -67,6 +73,13 @@ sys.modules["fastdeploy.model_executor.layers.moe.ep"] = _ep_mod
 from fastdeploy.model_executor.layers.moe import (  # noqa: E402
     fused_moe_deepgemm_backend as dgb,
 )
+
+# Restore original modules immediately after import to avoid global pollution.
+for _k in _STUB_KEYS:
+    if _saved_modules[_k] is None:
+        sys.modules.pop(_k, None)
+    else:
+        sys.modules[_k] = _saved_modules[_k]
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -121,12 +134,10 @@ class _DummyLayer(paddle.nn.Layer):
 
 
 def _ensure_dist():
+    """Mock distributed init instead of using hardcoded ports."""
     if not paddle.distributed.is_initialized():
-        os.environ.setdefault("PADDLE_TRAINER_ID", "0")
-        os.environ.setdefault("PADDLE_TRAINERS_NUM", "1")
-        os.environ.setdefault("PADDLE_CURRENT_ENDPOINT", "127.0.0.1:6170")
-        os.environ.setdefault("PADDLE_TRAINER_ENDPOINTS", "127.0.0.1:6170")
-        paddle.distributed.init_parallel_env()
+        _ensure_dist._patcher = patch.object(paddle.distributed, "is_initialized", return_value=True)
+        _ensure_dist._patcher.start()
 
 
 def _init(layer, qc=None):
