@@ -61,10 +61,14 @@ python -m fastdeploy.entrypoints.openai.api_server \
    cuda.CUstream(torch.cuda.current_stream().stream_base.raw_stream)
    ```
 
+### 运行推理服务
+
 ```bash
 export FD_MOE_BACKEND="flashinfer-cutedsl"
 export FD_USE_PFCC_DEEP_EP=1
 export CUDA_VISIBLE_DEVICES=4,5,6,7
+
+
 
 python -m fastdeploy.entrypoints.openai.multi_api_server \
        --ports "9811,9812,9813,9814" \
