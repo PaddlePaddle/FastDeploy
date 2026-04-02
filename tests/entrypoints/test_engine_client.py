@@ -25,7 +25,7 @@ import numpy as np
 import paddle
 import pytest
 
-from fastdeploy.engine.request import ControlRequest
+from fastdeploy.engine.request import ControlRequest, ControlResponse
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.inter_communicator import (
     KVCacheStatus,
@@ -1880,6 +1880,65 @@ def test_valid_parameters_and_control_timeout(minimal_engine_client):
     with patch("fastdeploy.entrypoints.engine_client.asyncio.wait_for", side_effect=asyncio.TimeoutError):
         resp = asyncio.run(minimal_engine_client.run_control_method(ControlRequest(request_id="r2", method="m")))
     assert resp.error_code == 500
+
+
+def test_run_control_method_uses_send_pyobj_for_mm_requests(minimal_engine_client):
+    queue = asyncio.Queue()
+    asyncio.run(queue.put(({"request_id": "mm-1", "status": 200, "msg": "ok"},)))
+    dealer = Mock(write=Mock())
+    minimal_engine_client.enable_mm = True
+    minimal_engine_client.connection_manager = MagicMock(get_connection=AsyncMock(return_value=(dealer, queue)))
+
+    with patch("fastdeploy.entrypoints.engine_client.envs.ZMQ_SEND_BATCH_DATA", 0):
+        resp = asyncio.run(minimal_engine_client.run_control_method(ControlRequest(request_id="mm-1", method="ping")))
+
+    assert resp.error_code == 200
+    minimal_engine_client.zmq_client.send_pyobj.assert_called_once()
+    minimal_engine_client.zmq_client.send_json.assert_not_called()
+
+
+def test_run_control_method_adds_worker_pid_in_batch_mode(minimal_engine_client):
+    queue = asyncio.Queue()
+    asyncio.run(queue.put(({"request_id": "batch-1", "status": 200, "msg": "ok"},)))
+    minimal_engine_client.connection_manager = MagicMock(get_connection=AsyncMock(return_value=(None, queue)))
+
+    with patch("fastdeploy.entrypoints.engine_client.envs.ZMQ_SEND_BATCH_DATA", 1):
+        resp = asyncio.run(
+            minimal_engine_client.run_control_method(ControlRequest(request_id="batch-1", method="ping"))
+        )
+
+    assert resp.error_code == 200
+    payload = minimal_engine_client.zmq_client.send_json.call_args.args[0]
+    assert payload["zmq_worker_pid"] == minimal_engine_client.worker_pid
+
+
+def test_run_control_method_generic_exception_returns_error(minimal_engine_client):
+    queue = MagicMock()
+    queue.get = AsyncMock(side_effect=RuntimeError("queue failed"))
+    dealer = Mock(write=Mock())
+    minimal_engine_client.connection_manager = MagicMock(get_connection=AsyncMock(return_value=(dealer, queue)))
+
+    with patch("fastdeploy.entrypoints.engine_client.envs.ZMQ_SEND_BATCH_DATA", 0):
+        resp = asyncio.run(minimal_engine_client.run_control_method(ControlRequest(request_id="r3", method="m")))
+
+    assert resp.error_code == 500
+    assert "queue failed" in resp.error_message
+
+
+def test_run_control_method_sync_uses_threadsafe_bridge(minimal_engine_client):
+    req = ControlRequest(request_id="sync-1", method="ping")
+    future = Mock(result=Mock(return_value=ControlResponse("sync-1", 200, "Success")))
+
+    minimal_engine_client.run_control_method = AsyncMock(return_value=ControlResponse("sync-1", 200, "Success"))
+
+    with patch(
+        "fastdeploy.entrypoints.engine_client.asyncio.run_coroutine_threadsafe", return_value=future
+    ) as mock_run:
+        resp = minimal_engine_client.run_control_method_sync(req, Mock())
+
+    assert resp.error_code == 200
+    mock_run.assert_called_once()
+    mock_run.call_args.args[0].close()
 
 
 def test_rearrange_and_redundant_branch_matrix(minimal_engine_client):
