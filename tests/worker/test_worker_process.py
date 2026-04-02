@@ -351,21 +351,31 @@ class TestPaddleDisWorkerProc(unittest.TestCase):
 
     def test_control_method(self):
         p = _make()
+        responses = []
 
-        async def _noop(*a, **kw):
-            pass
+        async def _capture(resp):
+            responses.append(resp)
 
-        p._ctrl_output = types.SimpleNamespace(put=_noop)
+        p._ctrl_output = types.SimpleNamespace(put=_capture)
+
+        # unknown/non-callable → 400
         req = types.SimpleNamespace(request_id="r1", method="bad", args={})
         p.worker.bad = None
         p.run_control_method(req)
+        self.assertEqual(responses[-1].error_code, 400)
+
+        # success → 200
         p.worker.do_it.return_value = {"ok": True}
         req.method, req.args = "do_it", {"x": 1}
         p.run_control_method(req)
         p.worker.do_it.assert_called_once_with(x=1)
+        self.assertEqual(responses[-1].error_code, 200)
+
+        # exception → 500
         p.worker.fail.side_effect = RuntimeError("boom")
         req.method, req.args = "fail", {}
         p.run_control_method(req)
+        self.assertEqual(responses[-1].error_code, 500)
 
     def test_barrier_broadcast(self):
         with patch(f"{WP}.paddle") as pdl:
