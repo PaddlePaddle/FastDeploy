@@ -1152,8 +1152,7 @@ class EngineService:
                     time.sleep(0.005)
 
             except RuntimeError as e:
-                if "cannot schedule new futures after shutdown" in str(e):
-                    break
+                raise e
             except Exception as e:
                 err_msg = "Error happened while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
