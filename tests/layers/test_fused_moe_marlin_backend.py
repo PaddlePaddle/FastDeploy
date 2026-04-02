@@ -22,7 +22,13 @@ import paddle
 
 # Stub GPU-only ops so the import chain (moe → triton_backend → fp8_utils →
 # ops.gpu.deep_gemm) resolves without compiled CUDA extensions.
-# Must be installed BEFORE any fastdeploy import that touches ops.gpu.
+# Stubs are scoped: saved before, restored immediately after import.
+
+_STUB_KEYS = [
+    "fastdeploy.model_executor.ops.gpu",
+    "fastdeploy.model_executor.ops.gpu.deep_gemm",
+]
+_saved_modules = {k: sys.modules.get(k) for k in _STUB_KEYS}
 
 
 class _GpuOpsStub(types.ModuleType):
@@ -51,6 +57,13 @@ _gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
 from fastdeploy.model_executor.layers.moe import (  # noqa: E402
     fused_moe_marlin_backend as mb,
 )
+
+# Restore original modules immediately after import to avoid global pollution.
+for _k in _STUB_KEYS:
+    if _saved_modules[_k] is None:
+        sys.modules.pop(_k, None)
+    else:
+        sys.modules[_k] = _saved_modules[_k]
 
 
 class _DummyLayer(paddle.nn.Layer):
@@ -146,7 +159,11 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
                     paddle.ones([g.shape[0], k], "float32"),
                 ),
             ),
-            patch("paddle.incubate.nn.functional.swiglu", lambda x: x[..., : x.shape[-1] // 2]),
+            patch(
+                "paddle.incubate.nn.functional.swiglu",
+                lambda x: x[..., : x.shape[-1] // 2],
+                create=True,
+            ),
         ):
             out = m.apply(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
         self.assertEqual(list(out.shape), [2, 64])
@@ -181,7 +198,11 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
                     paddle.zeros([g.shape[0], k], "int64"),
                 ),
             ),
-            patch("paddle.incubate.nn.functional.swiglu", lambda x: x[..., : x.shape[-1] // 2]),
+            patch(
+                "paddle.incubate.nn.functional.swiglu",
+                lambda x: x[..., : x.shape[-1] // 2],
+                create=True,
+            ),
         ):
             out = m.apply(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
         self.assertEqual(list(out.shape), [2, 64])
