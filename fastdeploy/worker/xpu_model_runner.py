@@ -485,12 +485,12 @@ class XPUModelRunner(ModelRunnerBase):
                             image_features_output is not None
                         ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
                         grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
-                        mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                        mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+                        mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                        mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
 
                         # add feature to encoder cache
                         self.encoder_cache[mm_hash] = mm_feature.detach().cpu()
-                        feature_idx += mm_token_lenght
+                        feature_idx += mm_token_length
                         thw_idx += 1
 
                     feature_start = feature_position.offset
@@ -510,13 +510,13 @@ class XPUModelRunner(ModelRunnerBase):
             image_features_output = self.extract_vision_features(multi_vision_inputs)
             for feature_position in multi_vision_inputs["feature_position_list"]:
                 grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
-                mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+                mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
 
                 feature_start = feature_position.offset
                 feature_end = feature_position.offset + feature_position.length
                 merge_image_features.append(mm_feature[feature_start:feature_end])
-                feature_idx += mm_token_lenght
+                feature_idx += mm_token_length
                 thw_idx += 1
             self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
 
