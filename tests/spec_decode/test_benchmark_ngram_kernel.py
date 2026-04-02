@@ -40,8 +40,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 MAX_NGRAM_SIZE = 3
 MAX_DRAFT_TOKENS = 10
-NUM_ITERS = 10
-WARMUP = 2
+NUM_ITERS = 10000
+WARMUP = 5
 
 
 def _build_data(batch_size, seq_len, hit_type="low_input", seed=42):
@@ -206,6 +206,10 @@ def _print_table(title, header, rows):
     print(f"{'=' * 80}")
 
 
+@unittest.skipUnless(
+    os.environ.get("RUN_NGRAM_BENCHMARKS", "0") == "1",
+    "Set RUN_NGRAM_BENCHMARKS=1 to run multi-group profiling (slow)",
+)
 class TestNgramBenchmarkGroups(unittest.TestCase):
     """Multi-dimension benchmark matching NKNaN's 5-group methodology."""
 
