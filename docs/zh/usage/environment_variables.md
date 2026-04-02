@@ -15,8 +15,23 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # 日志目录
     "FD_LOG_DIR": lambda: os.getenv("FD_LOG_DIR", "log"),
 
+    # 全局日志级别，优先于 FD_DEBUG。支持 "INFO" 和 "DEBUG"。
+    "FD_LOG_LEVEL": lambda: os.getenv("FD_LOG_LEVEL", None),
+
     # 是否启用调试模式，可设置为 0 或 1
     "FD_DEBUG": lambda: int(os.getenv("FD_DEBUG", "0")),
+
+    # 请求日志总开关。设置为 0 禁用请求日志。
+    "FD_LOG_REQUESTS": lambda: int(os.getenv("FD_LOG_REQUESTS", "1")),
+
+    # 请求日志详细级别 (0-3)。级别越高输出越详细。
+    "FD_LOG_REQUESTS_LEVEL": lambda: int(os.getenv("FD_LOG_REQUESTS_LEVEL", "0")),
+
+    # 请求日志字段截断最大长度。
+    "FD_LOG_MAX_LEN": lambda: int(os.getenv("FD_LOG_MAX_LEN", "2048")),
+
+    # 统一的 trace 开关：off, local, otel, all。
+    "FD_TRACE": lambda: os.getenv("FD_TRACE", "off"),
 
     # FastDeploy 日志保留天数
     "FD_LOG_BACKUP_COUNT": lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),

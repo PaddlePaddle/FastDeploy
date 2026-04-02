@@ -24,8 +24,7 @@
 
 template <paddle::DataType T>
 std::vector<paddle::Tensor> AdjustBatchKernel(
-    const paddle::Tensor &x,            // [token_num, dim_embed]
-    const paddle::Tensor &cum_offsets,  // [bsz, 1]
+    const paddle::Tensor &x,  // [token_num, dim_embed]
     const paddle::Tensor &encoder_seq_lod,
     const paddle::Tensor &decoder_seq_lod,
     const paddle::Tensor &encoder_batch_idx,
@@ -49,7 +48,6 @@ std::vector<paddle::Tensor> AdjustBatchKernel(
   using data_t = typename PDTraits<T>::data_t;
   const int token_num = x.dims()[0];
   const int dim = x.dims()[1];
-  const int bsz = cum_offsets.shape()[0];
   int enc_batch = len_info_cpu.data<int32_t>()[0];
   int dec_batch = len_info_cpu.data<int32_t>()[1];
 
@@ -87,8 +85,7 @@ std::vector<paddle::Tensor> AdjustBatchKernel(
 }
 
 using AdjustBatchKernelFuncPtr = std::vector<paddle::Tensor> (*)(
-    const paddle::Tensor &x,            // [token_num, dim_embed]
-    const paddle::Tensor &cum_offsets,  // [bsz, 1]
+    const paddle::Tensor &x,  // [token_num, dim_embed]
     const paddle::Tensor &encoder_seq_lod,
     const paddle::Tensor &decoder_seq_lod,
     const paddle::Tensor &encoder_batch_idx,
@@ -102,8 +99,7 @@ using AdjustBatchKernelFuncPtr = std::vector<paddle::Tensor> (*)(
     int max_input_length);
 
 std::vector<paddle::Tensor> AdjustBatch(
-    const paddle::Tensor &x,            // [token_num, dim_embed]
-    const paddle::Tensor &cum_offsets,  // [bsz, 1]
+    const paddle::Tensor &x,  // [token_num, dim_embed]
     const paddle::Tensor &encoder_seq_lod,
     const paddle::Tensor &decoder_seq_lod,
     const paddle::Tensor &encoder_batch_idx,
@@ -135,7 +131,6 @@ std::vector<paddle::Tensor> AdjustBatch(
   }
 
   return func(x,
-              cum_offsets,
               encoder_seq_lod,
               decoder_seq_lod,
               encoder_batch_idx,
@@ -151,7 +146,6 @@ std::vector<paddle::Tensor> AdjustBatch(
 
 std::vector<std::vector<int64_t>> AdjustBatchInferShape(
     const std::vector<int64_t> &x_shape,
-    const std::vector<int64_t> &cum_offsets_shape,
     const std::vector<int64_t> &encoder_seq_lod_shape,
     const std::vector<int64_t> &decoder_seq_lod_shape,
     const std::vector<int64_t> &encoder_batch_idx_shape,
@@ -172,7 +166,6 @@ std::vector<std::vector<int64_t>> AdjustBatchInferShape(
 
 std::vector<paddle::DataType> AdjustBatchInferDtype(
     const paddle::DataType &x_dtype,
-    const paddle::DataType &cum_offsets_dtype,
     const paddle::DataType &encoder_seq_lod_dtype,
     const paddle::DataType &decoder_seq_lod_dtype,
     const paddle::DataType &encoder_batch_idx_dtype,
@@ -188,7 +181,6 @@ std::vector<paddle::DataType> AdjustBatchInferDtype(
 
 PD_BUILD_STATIC_OP(adjust_batch)
     .Inputs({"x",
-             "cum_offsets",
              "encoder_seq_lod",
              "decoder_seq_lod",
              "encoder_batch_idx",

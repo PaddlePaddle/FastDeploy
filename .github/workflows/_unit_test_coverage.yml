@@ -47,6 +47,7 @@ jobs:
     outputs:
       all_cov_file_url: ${{ steps.cov_upload.outputs.all_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
+      unittest_logs_url: ${{ steps.cov_upload.outputs.unittest_logs_url }}
       diff_cov_result_json_url: ${{ steps.cov_upload.outputs.diff_cov_result_json_url }}
     steps:
       - name: Code Prepare
@@ -309,6 +310,15 @@ jobs:
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_ENV
           fi
 
+          # Only upload logs when tests failed
+          unittest_logs_archive="unittest_logs.tar.gz"
+          if [ "$HAS_FAILED_TESTS" = true ]; then
+            python ${push_file} ${unittest_logs_archive} ${target_path}/UnitTestResult
+            UNIT_TEST_LOGS_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/UnitTestResult/${unittest_logs_archive}
+            echo "unittest_logs_url=${UNIT_TEST_LOGS_URL}" >> $GITHUB_OUTPUT
+            echo "unittest_logs_url=${UNIT_TEST_LOGS_URL}" >> $GITHUB_ENV
+          fi
+
           if [[ "$IS_PR" != "true" ]]; then
             full_cov_file="full_coverage_report.txt"
             full_cov_csv="full_coverage_report.csv"
@@ -345,6 +355,7 @@ jobs:
             if [ -f "${filename}" ];then
               echo "Failed test cases:"
               cat "${filename}"
+              echo "unittest_logs_url=${unittest_logs_url}"
             fi
             exit "$TEST_EXIT_CODE"
           fi

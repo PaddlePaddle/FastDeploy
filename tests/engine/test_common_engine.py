@@ -17,6 +17,7 @@
 import asyncio
 import os
 import sys
+import tempfile
 import threading
 import time
 import types
@@ -39,7 +40,11 @@ if not hasattr(paddle, "compat"):
     paddle.compat = _PaddleCompat()
 
 from fastdeploy.engine.args_utils import EngineArgs
-from fastdeploy.engine.common_engine import EngineService
+from fastdeploy.engine.common_engine import (
+    EngineService,
+    _format_worker_launch_failure_message,
+    _read_latest_worker_traceback,
+)
 from fastdeploy.engine.request import (
     ControlRequest,
     ControlResponse,
@@ -3720,3 +3725,87 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         eng.resource_manager.recycle_abort_task.assert_called_with("req-1_0")
         self._detach_finalizer(eng)
+
+
+class TestWorkerTracebackFunctions(unittest.TestCase):
+    """测试 _read_latest_worker_traceback 和 _format_worker_launch_failure_message 函数"""
+
+    def test_read_latest_worker_traceback_finds_traceback(self):
+        """测试能够正确读取 workerlog 文件中的 traceback"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            worker_log = os.path.join(temp_dir, "workerlog.0")
+            with open(worker_log, "w", encoding="utf-8") as fp:
+                fp.write(
+                    "Some normal log output\n"
+                    "Traceback (most recent call last):\n"
+                    '  File "worker_process.py", line 1, in <module>\n'
+                    "    run_worker_proc()\n"
+                    "ValueError: The total number of blocks cannot be less than zero.\n"
+                )
+
+            result = _read_latest_worker_traceback(temp_dir)
+            self.assertIsNotNone(result)
+            self.assertIn("Traceback (most recent call last):", result)
+            self.assertIn("ValueError:", result)
+
+    def test_read_latest_worker_traceback_returns_none_when_no_traceback(self):
+        """测试当没有 traceback 时返回 None"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            worker_log = os.path.join(temp_dir, "workerlog.0")
+            with open(worker_log, "w", encoding="utf-8") as fp:
+                fp.write("Normal log output without any errors\n")
+
+            result = _read_latest_worker_traceback(temp_dir)
+            self.assertIsNone(result)
+
+    def test_read_latest_worker_traceback_returns_none_when_no_files(self):
+        """测试当没有 workerlog 文件时返回 None"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = _read_latest_worker_traceback(temp_dir)
+            self.assertIsNone(result)
+
+    def test_read_latest_worker_traceback_returns_none_for_nonexistent_dir(self):
+        """测试当目录不存在时返回 None"""
+        result = _read_latest_worker_traceback("/nonexistent/path")
+        self.assertIsNone(result)
+
+    def test_read_latest_worker_traceback_picks_latest_file(self):
+        """测试当有多个 workerlog 文件时选择最新的"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # 创建较旧的文件
+            old_log = os.path.join(temp_dir, "workerlog.0")
+            with open(old_log, "w", encoding="utf-8") as fp:
+                fp.write("Traceback (most recent call last):\nOldError: old error\n")
+
+            # 短暂等待以确保时间戳不同
+            time.sleep(0.01)
+
+            # 创建较新的文件
+            new_log = os.path.join(temp_dir, "workerlog.1")
+            with open(new_log, "w", encoding="utf-8") as fp:
+                fp.write("Traceback (most recent call last):\nNewError: new error\n")
+
+            result = _read_latest_worker_traceback(temp_dir)
+            self.assertIsNotNone(result)
+            self.assertIn("NewError", result)
+
+    def test_format_worker_launch_failure_message_with_traceback(self):
+        """测试带有 traceback 的错误消息格式化"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            worker_log = os.path.join(temp_dir, "workerlog.0")
+            with open(worker_log, "w", encoding="utf-8") as fp:
+                fp.write("Traceback (most recent call last):\n" "ValueError: Test error message\n")
+
+            result = _format_worker_launch_failure_message(temp_dir)
+            self.assertIn("Failed to launch worker processes", result)
+            self.assertIn("workerlog.*", result)
+            self.assertIn("Traceback (most recent call last):", result)
+            self.assertIn("ValueError: Test error message", result)
+
+    def test_format_worker_launch_failure_message_without_traceback(self):
+        """测试没有 traceback 时的错误消息格式化"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = _format_worker_launch_failure_message(temp_dir)
+            self.assertIn("Failed to launch worker processes", result)
+            self.assertIn("workerlog.*", result)
+            self.assertNotIn("Traceback", result)
