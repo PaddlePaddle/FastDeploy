@@ -720,7 +720,6 @@ class ResourceManagerV1(ResourceManager):
                     if (
                         len(self.running)
                         + len(self.to_be_rescheduled_request_id_set)
-                        + len(self.to_be_aborted_req_id_set)
                         + sum([req.status == RequestStatus.PREEMPTED for req in self.waiting])
                         >= self.max_num_seqs
                     ):
