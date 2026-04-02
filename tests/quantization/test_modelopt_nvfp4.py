@@ -424,6 +424,8 @@ class TestModelOptNvFp4LinearMethod(unittest.TestCase):
                 mock.patch.dict(os.environ, {"FD_MOE_BACKEND": "flashinfer-cutlass"}),
                 mock.patch.object(nvfp4_module.paddle, "float8_e4m3fn", paddle.float16),
                 mock.patch.object(nvfp4_module, "free_tensor", side_effect=lambda _: None),
+                # Patch the module-level fp4_quantize for H-card (SM 90) where it's None
+                mock.patch.object(nvfp4_module, "fp4_quantize", fake_fp4_quantize),
             ):
                 method = ModelOptNvFp4LinearMethod(
                     ModelOptNvFp4Config(True, kv_cache_quant_algo=None, exclude_modules=[], group_size=16)
@@ -436,7 +438,9 @@ class TestModelOptNvFp4LinearMethod(unittest.TestCase):
                 method.process_weights_after_loading(layer)
                 method.backend = "unsupported"
                 with self.assertRaises(ValueError):
-                    method.apply(layer, paddle.ones([2, layer.weight.shape[1]], dtype=paddle.float16))
+                    # Input dimension should be K (original, not packed)
+                    x = paddle.ones([2, layer.weight_shape[0]], dtype=paddle.float16)
+                    method.apply(layer, x)
         finally:
             # Restore original modules to avoid affecting other tests
             if prev_flashinfer is None:
