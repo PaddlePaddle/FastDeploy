@@ -84,9 +84,10 @@ class UnquantizedLinearMethod(QuantMethodBase):
     def apply(self, layer: nn.Layer, x: paddle.Tensor) -> paddle.Tensor:
         if layer.with_bias:
             bias = layer.bias
-            assert bias.dim() == 1 and bias.shape[-1] == layer.weight.shape[-1], \
-                f"bias must be 1D with size equal to the last dim of weight, " \
+            assert bias.dim() == 1 and bias.shape[-1] == layer.weight.shape[-1], (
+                f"bias must be 1D with size equal to the last dim of weight, "
                 f"but got bias.shape={bias.shape}, weight.shape[-1]={layer.weight.shape[-1]}"
+            )
         else:
             bias = None
 
