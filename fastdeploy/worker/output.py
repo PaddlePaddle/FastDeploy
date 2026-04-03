@@ -15,8 +15,9 @@
 """
 
 from dataclasses import dataclass, field
-from typing import NamedTuple, Optional
+from typing import List, NamedTuple, Optional
 
+import numpy as np
 import paddle
 
 
@@ -178,6 +179,20 @@ class SamplerOutput:
     token_num_per_batch: Optional[paddle.Tensor] = None
     cu_batch_token_offset: Optional[paddle.Tensor] = None
     logits: Optional[paddle.Tensor] = None
+    # Sparse sampling mask for top_p/top_k:
+    #   - Non-speculative decoding: per-request mask. This is a list of length
+    #     num_reqs, where element i is a 1-D int32 numpy array of vocab indices
+    #     retained by top_p/top_k for request i. Replaces the previous dense
+    #     [num_reqs, vocab_size] bool tensor.
+    #   - Speculative decoding: flattened per-accepted-token mask. This may be
+    #     stored as a list aligned with all accepted tokens
+    #     (e.g. length = total_accepted_tokens) and is regrouped by accept_num
+    #     (number of accepted tokens per request) in post-processing before
+    #     being sent back as per-request data.
+    # Callers MUST NOT assume this is always shaped by num_reqs; they should
+    # check whether the current path is speculative or non-speculative when
+    # interpreting the dimension.
+    sampling_mask: Optional[List[np.ndarray]] = None
 
 
 @dataclass

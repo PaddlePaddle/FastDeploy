@@ -216,6 +216,7 @@ def _build_stream_transfer_data(
     pooler_outputs: List[PoolingSequenceGroupOutput] = None,
     logprobs: Optional[LogprobsTensors] = None,
     prompt_logprobs_list: Optional[LogprobsTensors] = None,
+    sampling_mask: Optional[List[np.ndarray]] = None,
 ):
     """Split output_tokens and output"""
 
@@ -225,6 +226,8 @@ def _build_stream_transfer_data(
         output_tokens = output_tokens.numpy().reshape([-1])
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
+        sampling_mask_list = sampling_mask
+
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
             stream_transfer_data = StreamTransferData(
                 decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
@@ -233,6 +236,8 @@ def _build_stream_transfer_data(
                 stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
             if prompt_logprobs_list:
                 stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
+            if sampling_mask_list is not None:
+                stream_transfer_data.sampling_mask = sampling_mask_list[bid]
             stream_transfer_datas.append(stream_transfer_data)
     elif pooler_outputs is not None:
         for bid, pooler_output in enumerate(pooler_outputs):
@@ -393,6 +398,7 @@ def save_output_normal(
                 recover_share_inputs_map["sampled_token_ids"],
                 logprobs=sampler_output.logprobs_tensors,
                 prompt_logprobs_list=model_output.prompt_logprobs_list,
+                sampling_mask=sampler_output.sampling_mask,
             )
             async_output_queue.put(output)
     else:

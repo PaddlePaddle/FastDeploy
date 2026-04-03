@@ -83,6 +83,7 @@ class TokenProcessor:
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
         self.use_logprobs = self.cfg.model_config.enable_logprob
+        self.use_sampling_mask = getattr(self.cfg.model_config, "enable_keep_sampling_mask", False)
         self.enable_draft_logprob = self.cfg.speculative_config.enable_draft_logprob
 
         if self.speculative_decoding:
@@ -357,6 +358,12 @@ class TokenProcessor:
                             result.prompt_logprobs = stream_data.prompt_logprobs
                         except Exception as e:
                             llm_logger.warning(f"Failed to parse prompt_logprobs from StreamTransferData: {e}")
+                if self.use_sampling_mask:
+                    if getattr(stream_data, "sampling_mask", None) is not None:
+                        try:
+                            result.outputs.sampling_mask = stream_data.sampling_mask.tolist()
+                        except Exception as e:
+                            llm_logger.warning(f"Failed to parse sampling_mask from StreamTransferData: {e}")
                 if self.tokens_counter[task_id] == 0:
                     if task.messages is not None:
                         result.prompt = task.messages

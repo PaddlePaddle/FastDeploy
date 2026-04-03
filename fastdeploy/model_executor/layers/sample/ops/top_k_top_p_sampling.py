@@ -125,6 +125,10 @@ def top_k_top_p_sampling(
                 if topp_seed is not None:
                     topp_seed_device = paddle.empty(shape=topp_seed.shape, dtype=topp_seed.dtype)
                     topp_seed_device.copy_(topp_seed, False)
+                if top_k_list and any(x > 0 for x in top_k_list):
+                    from fastdeploy.model_executor.ops.gpu import top_k_renorm_probs
+
+                    x = top_k_renorm_probs(x, top_k)
                 _, ids = paddle.tensor.top_p_sampling(
                     x,
                     top_p,

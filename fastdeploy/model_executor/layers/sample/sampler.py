@@ -19,6 +19,7 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, List, Optional
 
+import numpy as np
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
@@ -103,6 +104,113 @@ def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_le
     topp_seed[:, 0] = (topp_seed[:, 0] + offsets) % MAX_INFER_SEED
 
     return top_p_padding, top_k_padding, topp_seed
+
+
+def _compute_sampling_mask(
+    probs: paddle.Tensor,
+    top_p: paddle.Tensor,
+    top_k: Optional[paddle.Tensor] = None,
+    top_k_list: Optional[list] = None,
+) -> List[np.ndarray]:
+    """
+    Compute a combined top-k + top-p (nucleus) sampling mask as sparse
+    retained-token indices.
+
+    Processing order:
+      1. Sort probs descending once (shared by top-k and top-p stages).
+      2. top-k mask  — zero out positions beyond top_k[i] in sorted order.
+      3. top-k renorm — renormalise in-place after truncation.
+      4. top-p mask  — cumsum on the already-sorted renormed probs; no
+                       second argsort needed.
+      5. intersect   — AND of the two masks, applied on GPU before D2H.
+
+    Either filter can be disabled:
+      - top-k is skipped when top_k_list is None or all values <= 0.
+      - top-p[i] >= 1.0  →  keep all tokens for that request.
+
+    Args:
+        probs:      [num_reqs, vocab_size] softmax probabilities (GPU).
+        top_p:      [num_reqs, 1] top-p threshold per request (GPU).
+        top_k:      [num_reqs, 1] top-k per request (GPU, int); 0 = disabled.
+        top_k_list: Python list of top-k values; used to decide whether any
+                    top-k filtering is needed at all.
+
+    Returns:
+        sparse_indices: List of length num_reqs; element i is a 1-D int64
+        numpy array of the retained vocab indices for request i.
+    """
+    real_bsz = probs.shape[0]
+    vocab_size = probs.shape[1]
+    top_p = top_p[:real_bsz]  # [B, 1]
+
+    has_top_k = top_k is not None and top_k_list and any(x > 0 for x in top_k_list)
+
+    # ------------------------------------------------------------------
+    # Stage 1: single sort — descending by probability.
+    # sorted_indices / sorted_probs are reused by both top-k and top-p.
+    # ------------------------------------------------------------------
+    sorted_indices = paddle.argsort(probs, axis=-1, descending=True)  # [B, V]
+    sorted_probs = paddle.take_along_axis(probs, sorted_indices, axis=-1)  # [B, V]
+
+    # ------------------------------------------------------------------
+    # Stage 2: top-k mask (GPU, no D2H)
+    # ------------------------------------------------------------------
+    if has_top_k:
+        top_k = top_k[:real_bsz]  # [B, 1]
+        # col_idx[0, j] == j; compare against per-row top_k threshold.
+        col_idx = paddle.arange(vocab_size, dtype=top_k.dtype).unsqueeze(0)  # [1, V]
+        # top_k == 0 means "disabled" → keep all columns for that row.
+        effective_k = paddle.where(top_k > 0, top_k, paddle.full_like(top_k, vocab_size))
+        topk_mask = col_idx < effective_k  # [B, V], True = inside top-k
+
+        # Zero out tail, then renorm row-wise.
+        masked_sorted_probs = paddle.where(topk_mask, sorted_probs, paddle.zeros_like(sorted_probs))
+        row_sums = masked_sorted_probs.sum(axis=-1, keepdim=True).clip(min=1e-9)
+        renorm_sorted_probs = masked_sorted_probs / row_sums  # [B, V]
+    else:
+        topk_mask = None
+        renorm_sorted_probs = sorted_probs
+
+    # ------------------------------------------------------------------
+    # Stage 3: top-p mask on already-sorted renormed probs (no re-sort).
+    # ------------------------------------------------------------------
+    cum_probs = paddle.cumsum(renorm_sorted_probs, axis=-1)  # [B, V]
+    topp_mask = (cum_probs - renorm_sorted_probs) <= top_p  # [B, V]
+    # When top_p[i] >= 1.0, keep the entire row.
+    topp_mask = paddle.where(
+        (top_p >= 1.0).expand_as(topp_mask),
+        paddle.ones_like(topp_mask),
+        topp_mask,
+    )
+
+    # Extend mask to cover sort tie-breaking: include all tokens whose
+    # probability >= the boundary token's probability (last retained
+    # in sorted order).  In descending-sorted probs this just extends
+    # the contiguous True block by the run of equal-prob tokens.
+    k_per_row = topp_mask.astype("int32").sum(axis=-1, keepdim=True)  # [B,1]
+    # boundary_idx = last True position (k-1), clamp for safety
+    boundary_idx = (k_per_row - 1).clip(min=0)  # [B, 1]
+    boundary_prob = paddle.take_along_axis(
+        renorm_sorted_probs,
+        boundary_idx,
+        axis=-1,
+    )  # [B, 1]
+    topp_mask = topp_mask | (renorm_sorted_probs >= boundary_prob)
+
+    # ------------------------------------------------------------------
+    # Stage 4: intersect on GPU, then minimal D2H.
+    # ------------------------------------------------------------------
+    final_mask = topk_mask & topp_mask if has_top_k else topp_mask  # [B, V]
+
+    k_per_row = final_mask.astype("int32").sum(axis=-1)  # [B]
+    max_k = int(k_per_row.max().item())
+
+    # Transfer only the leading max_k columns — typically max_k << vocab_size.
+    indices_window_cpu = sorted_indices[:, :max_k].cpu().numpy()  # [B, max_k]
+    mask_window_cpu = final_mask[:, :max_k].cpu().numpy()  # [B, max_k]
+
+    sparse_indices = [indices_window_cpu[i, mask_window_cpu[i]] for i in range(real_bsz)]
+    return sparse_indices
 
 
 class GuidedDecoding:
@@ -554,6 +662,18 @@ class Sampler(nn.Layer):
             _record_logits_diagnostic(logits, tag="post_penalty_logits", probs=probs)
 
         probs = min_p_sampling(probs, sampling_metadata.min_p, sampling_metadata.min_p_list)
+
+        # Compute sampling mask BEFORE top_k_top_p_sampling modifies probs.
+        # Binary mask [num_reqs, vocab_size]: 1 = retained by top_k/top_p, 0 = truncated.
+        sampling_mask = None
+        if sampling_metadata.keep_sampling_mask:
+            sampling_mask = _compute_sampling_mask(
+                probs,
+                sampling_metadata.top_p,
+                top_k=sampling_metadata.top_k,
+                top_k_list=sampling_metadata.top_k_list,
+            )
+
         _, next_tokens = top_k_top_p_sampling(
             probs,
             sampling_metadata.top_p,
@@ -577,6 +697,7 @@ class Sampler(nn.Layer):
             sampled_token_ids=next_tokens,
             logprobs_tensors=logprobs_tensors,
             logits=logits,
+            sampling_mask=sampling_mask,
         )
 
         return sampler_output
