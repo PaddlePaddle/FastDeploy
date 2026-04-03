@@ -20,14 +20,13 @@ import uuid
 from collections.abc import Sequence
 
 import partial_json_parser
+from partial_json_parser.core.options import Allow
 
 
 def random_tool_call_id() -> str:
     """Generate a random tool call ID"""
     return f"chatcmpl-tool-{str(uuid.uuid4().hex)}"
 
-
-from partial_json_parser.core.options import Allow
 
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
@@ -92,29 +91,32 @@ class ErnieX1ToolParser(ToolParser):
         3. Only name and arguments field without content: {"name": "get_weather", "argume
         """
 
-        try:
-            tool_call_json_list = self.tool_call_regex.findall(model_output)
-            tool_calls = []
-            for tool_call_json in tool_call_json_list:
-                tool_call_dict = json.loads(tool_call_json)
-                args_str = json.dumps(tool_call_dict.get("arguments", {}), ensure_ascii=False)
-                tool_calls.append(
-                    ToolCall(
-                        type="function",
-                        id=random_tool_call_id(),
-                        function=FunctionCall(
-                            name=tool_call_dict.get("name", ""),
-                            arguments=args_str,
-                        ),
-                    )
-                )
-            return ExtractedToolCallInformation(
-                tools_called=True,
-                tool_calls=tool_calls,
-            )
-        except Exception:
-            logger.warning("Error in extracting tool call from response.")
+        if self.tool_call_start_token not in model_output:
             return ExtractedToolCallInformation(tools_called=False, tool_calls=[], content=model_output)
+        else:
+            try:
+                tool_call_json_list = self.tool_call_regex.findall(model_output)
+                tool_calls = []
+                for tool_call_json in tool_call_json_list:
+                    tool_call_dict = json.loads(tool_call_json)
+                    args_str = json.dumps(tool_call_dict.get("arguments", {}), ensure_ascii=False)
+                    tool_calls.append(
+                        ToolCall(
+                            type="function",
+                            id=random_tool_call_id(),
+                            function=FunctionCall(
+                                name=tool_call_dict.get("name", ""),
+                                arguments=args_str,
+                            ),
+                        )
+                    )
+                return ExtractedToolCallInformation(
+                    tools_called=True,
+                    tool_calls=tool_calls,
+                )
+            except Exception:
+                logger.warning("Error in extracting tool call from response.")
+                return ExtractedToolCallInformation(tools_called=False, tool_calls=[], content=model_output)
 
     def extract_tool_calls_streaming(
         self,
