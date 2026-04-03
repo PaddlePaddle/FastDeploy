@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include <cstdlib>
+#include <string>
+
 inline uint32_t get_decoder_block_shape_q() {
   static const char* decoder_block_shape_q_env =
       std::getenv("FLAGS_dec_block_shape_q");

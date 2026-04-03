@@ -14,9 +14,11 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/types.h>
+#endif
 #include "paddle/extension.h"
 #include "../custom_ftok.h"
 
@@ -36,6 +38,11 @@ void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
                                 int msg_queue_id,
                                 int save_each_rank,
                                 bool skip_prefill) {
+#ifdef _WIN32
+  PD_THROW(
+      "SpeculateSaveWithOutputMsg is not supported on Windows "
+      "(POSIX IPC required).");
+#else
   // printf("enter save output");
   if (!save_each_rank && rank_id > 0) {
     return;
@@ -133,6 +140,7 @@ void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
     printf("full msg buffer\n");
   }
   return;
+#endif
 }
 
 void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,

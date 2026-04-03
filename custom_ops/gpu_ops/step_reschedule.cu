@@ -211,6 +211,11 @@ void Schedule(const paddle::Tensor &stop_flags,
               const paddle::Tensor &first_token_ids,
               const int block_size,
               const int encoder_decoder_block_num) {
+#ifdef _WIN32
+  PD_THROW(
+      "Schedule is not supported on Windows "
+      "(POSIX IPC required).");
+#else
   auto cu_stream = seq_lens_this_time.stream();
   const int bsz = seq_lens_this_time.shape()[0];
   const int block_num_per_seq = block_tables.shape()[1];
@@ -314,6 +319,7 @@ void Schedule(const paddle::Tensor &stop_flags,
       printf("full msg buffer\n");
     }
   }
+#endif
 }
 
 PD_BUILD_STATIC_OP(step_reschedule)
