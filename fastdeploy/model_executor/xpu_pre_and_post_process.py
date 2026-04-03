@@ -242,8 +242,14 @@ def xpu_process_output(
 
     if isinstance(share_inputs, dict):
         output_padding_offset = share_inputs.get("output_padding_offset", None)
+        if output_padding_offset is None:
+            # For XPU speculative decoding, force mtp gather path to keep
+            # output shape dynamic (real output token num) instead of max_bsz.
+            output_padding_offset = share_inputs.get("batch_id_per_token_output", None)
     else:
         output_padding_offset = getattr(share_inputs, "output_padding_offset", None)
+        if output_padding_offset is None:
+            output_padding_offset = getattr(share_inputs, "batch_id_per_token_output", None)
 
     hidden_states = gather_next_token(
         forward_output,

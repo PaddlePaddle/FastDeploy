@@ -1070,6 +1070,12 @@ class XPUModelRunner(ModelRunnerBase):
                 fill_value=max_draft_token_num,
                 dtype="int32",
             )
+            self.share_inputs["cu_seqlens_q_output"] = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
+            self.share_inputs["batch_id_per_token_output"] = paddle.full(
+                shape=[max_num_seqs * (max_draft_token_num + 1)],
+                fill_value=0,
+                dtype="int32",
+            )
             # reasoning_status: per-sequence reasoning phase indicator
             # 0=thinking, 1=emitting boundary, 2=response, 3=end
             # verify_draft_tokens 在 reasoning_status==1 时强制拒绝所有 draft token

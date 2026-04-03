@@ -1167,10 +1167,6 @@ class SpeculativeSampler(nn.Layer):
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
     ) -> SamplerOutput:
-        from fastdeploy.model_executor.ops.xpu import (
-            apply_speculative_penalty_multi_scores,
-        )
-
         logits = apply_speculative_penalty_multi_scores(
             sampling_metadata.token_ids_all,
             sampling_metadata.prompt_lens,
