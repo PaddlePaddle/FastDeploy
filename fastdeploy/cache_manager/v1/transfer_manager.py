@@ -37,7 +37,9 @@ from fastdeploy.cache_manager.ops import (
     swap_cache_per_layer_async,  # async per-layer op (no cudaStreamSynchronize)
 )
 from fastdeploy.cache_manager.ops import swap_cache_all_layers
+from fastdeploy.cache_manager.v1.cache_utils import storage_key_for_block
 from fastdeploy.cache_manager.v1.storage import create_storage_connector
+from fastdeploy.cache_manager.v1.storage.staging_manager import StagingManager
 from fastdeploy.cache_manager.v1.transfer import create_transfer_connector
 
 if TYPE_CHECKING:
@@ -134,6 +136,11 @@ class CacheTransferManager:
             tp_rank=self._local_rank,
         )
         self._transfer_connector = create_transfer_connector(self.cache_config)
+
+        # StagingManager for per-block storage I/O (initialized in set_host_block_shape)
+        self._staging_manager: Optional[StagingManager] = (
+            StagingManager(self._storage_connector) if self._storage_connector is not None else None
+        )
 
         # ============ Host block stride (bytes per block per layer) ============
         # Set by set_host_block_shape() after host cache is allocated.
@@ -306,7 +313,7 @@ class CacheTransferManager:
 
             # Connect storage connector now that block strides are known.
             # cpu_cache_size = total pinned CPU memory across all layers
-            # (key + value, plus fp8 scales when present).
+            # (key + value, plus fp8 scales when present), plus staging buffers.
             if self._storage_connector is not None and not self._storage_connector.is_connected():
                 cpu_cache_size = (
                     self._num_host_blocks
@@ -320,6 +327,12 @@ class CacheTransferManager:
                         * self._host_scale_block_stride_bytes
                         * 2  # key scale + value scale
                     )
+
+                # Include staging buffer budget in segment size
+                staging_strides = self._build_staging_strides()
+                if self._staging_manager is not None and staging_strides:
+                    cpu_cache_size += self._staging_manager.compute_staging_bytes(self._num_layers, staging_strides)
+
                 self._storage_connector._cpu_cache_size = cpu_cache_size
                 logger.info(
                     f"[TransferManager] Connecting storage connector: "
@@ -330,6 +343,22 @@ class CacheTransferManager:
                 # _register_host_buffers are satisfied (_host_key_ptrs set, strides > 0,
                 # connector connected), so register host pinned memory as RDMA MR.
                 self._register_host_buffers()
+
+                # Initialize StagingManager (allocate + RDMA-register staging buffers)
+                if self._staging_manager is not None and staging_strides:
+                    self._staging_manager.initialize(self._num_layers, staging_strides)
+
+    def _build_staging_strides(self) -> Dict[str, int]:
+        """Build stride dict for StagingManager from current block shape."""
+        strides: Dict[str, int] = {}
+        if self._host_key_block_stride_bytes > 0:
+            strides["key"] = self._host_key_block_stride_bytes
+        if self._host_value_block_stride_bytes > 0:
+            strides["value"] = self._host_value_block_stride_bytes
+        if self._is_fp8_quantization() and self._host_scale_block_stride_bytes > 0:
+            strides["key_scale"] = self._host_scale_block_stride_bytes
+            strides["value_scale"] = self._host_scale_block_stride_bytes
+        return strides
 
     # ============ Metadata Properties ============
 
@@ -771,24 +800,44 @@ class CacheTransferManager:
 
     # ============ Storage Transfer API ============
     #
-    # Key format (one key per block per layer):
-    #   K cache: "{hash_value}_{local_rank}_key_l{layer_idx}"
-    #   V cache: "{hash_value}_{local_rank}_value_l{layer_idx}"
-    #   K scale: "{hash_value}_{local_rank}_key_scale_l{layer_idx}"  (fp8 only)
-    #   V scale: "{hash_value}_{local_rank}_value_scale_l{layer_idx}" (fp8 only)
+    # Key format (one key per block, all layers packed):
+    #   K cache: "{hash_value}_{local_rank}_key"
+    #   V cache: "{hash_value}_{local_rank}_value"
+    #   K scale: "{hash_value}_{local_rank}_key_scale"  (fp8 only)
+    #   V scale: "{hash_value}_{local_rank}_value_scale" (fp8 only)
     #
-    # Each (key, ptr, size) triple maps to a single block's data for one layer
-    # using already-registered per-layer host memory. No extra copy is needed.
+    # Each key maps to a contiguous buffer containing all layers' data
+    # for one block.  A StagingManager handles gather/scatter between
+    # per-layer host memory and these contiguous regions.
 
-    def _storage_key_for_block(self, hash_value: str, layer_idx: int, kind: str) -> str:
-        """Build a storage key for a single block / layer / kind.
+    def _build_storage_io_args(
+        self,
+        hash_list: List[str],
+    ) -> tuple:
+        """Build keys_per_kind and host_ptrs_per_kind for StagingManager.
 
-        Args:
-            hash_value: Block hash value (from Scheduler).
-            layer_idx:  Layer index.
-            kind:       One of "key", "value", "key_scale", "value_scale".
+        Returns:
+            (keys_per_kind, host_ptrs_per_kind) where
+            keys_per_kind: Dict[str, List[str]]  -- storage keys per kind
+            host_ptrs_per_kind: Dict[str, List[int]] -- per-layer base pointers per kind
         """
-        return f"{hash_value}_{self._local_rank}_{kind}_l{layer_idx}"
+        is_fp8 = self._is_fp8_quantization()
+        keys_per_kind: Dict[str, List[str]] = {
+            "key": [storage_key_for_block(h, self._local_rank, "key") for h in hash_list],
+            "value": [storage_key_for_block(h, self._local_rank, "value") for h in hash_list],
+        }
+        host_ptrs_per_kind: Dict[str, List[int]] = {
+            "key": self._host_key_ptrs,
+            "value": self._host_value_ptrs,
+        }
+        if is_fp8 and self._host_scale_block_stride_bytes > 0:
+            keys_per_kind["key_scale"] = [storage_key_for_block(h, self._local_rank, "key_scale") for h in hash_list]
+            keys_per_kind["value_scale"] = [
+                storage_key_for_block(h, self._local_rank, "value_scale") for h in hash_list
+            ]
+            host_ptrs_per_kind["key_scale"] = self._host_key_scales_ptrs
+            host_ptrs_per_kind["value_scale"] = self._host_value_scales_ptrs
+        return keys_per_kind, host_ptrs_per_kind
 
     def prefetch_from_storage(
         self,
@@ -798,12 +847,12 @@ class CacheTransferManager:
         """
         Batch-prefetch KV cache blocks from remote storage into CPU host memory.
 
-        For each (hash, cpu_block_id) pair the method pulls all layers' key and
-        value cache data (and optionally FP8 scales) from Mooncake storage into
-        the corresponding slot of the already-allocated CPU cache.
+        Uses per-block storage keys (all layers packed per key).  Data is
+        fetched into staging buffers then scattered to per-layer host buffers
+        by the StagingManager.
 
-        Storage key per block/layer/kind:
-            ``"{hash}_{rank}_key_l{layer}"`` / ``"{hash}_{rank}_value_l{layer}"``
+        Storage key per block:
+            ``"{hash}_{rank}_key"`` / ``"{hash}_{rank}_value"``
 
         Args:
             hash_list:      List of block hash values (one per block).
@@ -812,8 +861,8 @@ class CacheTransferManager:
         Returns:
             List[bool]: True for each block that was fully retrieved successfully.
         """
-        if self._storage_connector is None:
-            logger.warning("[TransferManager] prefetch_from_storage: no storage connector")
+        if self._staging_manager is None or not self._staging_manager.initialized:
+            logger.warning("[TransferManager] prefetch_from_storage: staging manager not ready")
             return [False] * len(hash_list)
 
         if len(hash_list) != len(cpu_block_list):
@@ -829,66 +878,8 @@ class CacheTransferManager:
             )
             return [False] * len(hash_list)
 
-        is_fp8 = self._is_fp8_quantization()
-        num_layers = len(self._host_key_ptrs)
-        # Track per-block success: a block is successful only if all layers succeed.
-        block_success = [True] * len(hash_list)
-
-        # Build a flat batch: one entry per (block, layer, kind).
-        keys: List[str] = []
-        dst_ptrs: List[int] = []
-        sizes: List[int] = []
-        # Map flat index back to (block_idx, layer_idx) for result aggregation.
-        index_map: List[tuple] = []
-
-        for bi, (hash_val, cpu_block_id) in enumerate(zip(hash_list, cpu_block_list)):
-            for layer_idx in range(num_layers):
-                # Key cache
-                k_ptr = self._host_key_ptrs[layer_idx]
-                if k_ptr:
-                    keys.append(self._storage_key_for_block(hash_val, layer_idx, "key"))
-                    dst_ptrs.append(k_ptr + cpu_block_id * self._host_key_block_stride_bytes)
-                    sizes.append(self._host_key_block_stride_bytes)
-                    index_map.append((bi, layer_idx))
-
-                # Value cache
-                v_ptr = self._host_value_ptrs[layer_idx] if layer_idx < len(self._host_value_ptrs) else 0
-                if v_ptr:
-                    keys.append(self._storage_key_for_block(hash_val, layer_idx, "value"))
-                    dst_ptrs.append(v_ptr + cpu_block_id * self._host_value_block_stride_bytes)
-                    sizes.append(self._host_value_block_stride_bytes)
-                    index_map.append((bi, layer_idx))
-
-                if is_fp8 and self._host_scale_block_stride_bytes > 0:
-                    ks_ptr = (
-                        self._host_key_scales_ptrs[layer_idx] if layer_idx < len(self._host_key_scales_ptrs) else 0
-                    )
-                    vs_ptr = (
-                        self._host_value_scales_ptrs[layer_idx] if layer_idx < len(self._host_value_scales_ptrs) else 0
-                    )
-                    if ks_ptr:
-                        keys.append(self._storage_key_for_block(hash_val, layer_idx, "key_scale"))
-                        dst_ptrs.append(ks_ptr + cpu_block_id * self._host_scale_block_stride_bytes)
-                        sizes.append(self._host_scale_block_stride_bytes)
-                        index_map.append((bi, layer_idx))
-                    if vs_ptr:
-                        keys.append(self._storage_key_for_block(hash_val, layer_idx, "value_scale"))
-                        dst_ptrs.append(vs_ptr + cpu_block_id * self._host_scale_block_stride_bytes)
-                        sizes.append(self._host_scale_block_stride_bytes)
-                        index_map.append((bi, layer_idx))
-
-        if not keys:
-            return [False] * len(hash_list)
-
-        results = self._storage_connector.batch_get(keys, dst_ptrs, sizes)
-
-        # Aggregate: any failed entry marks the whole block as failed.
-        for flat_idx, ok in enumerate(results):
-            if not ok:
-                bi, _ = index_map[flat_idx]
-                block_success[bi] = False
-
-        return block_success
+        keys_per_kind, host_ptrs_per_kind = self._build_storage_io_args(hash_list)
+        return self._staging_manager.batch_get_block(keys_per_kind, host_ptrs_per_kind, cpu_block_list)
 
     def backup_to_storage(
         self,
@@ -898,12 +889,12 @@ class CacheTransferManager:
         """
         Batch-backup KV cache blocks from CPU host memory to remote storage.
 
-        For each (cpu_block_id, hash) pair the method writes all layers' key and
-        value cache data (and optionally FP8 scales) from the CPU cache into
-        Mooncake storage.
+        Uses per-block storage keys (all layers packed per key).  Data is
+        gathered from per-layer host buffers into staging buffers then
+        written to storage by the StagingManager.
 
-        Storage key per block/layer/kind:
-            ``"{hash}_{rank}_key_l{layer}"`` / ``"{hash}_{rank}_value_l{layer}"``
+        Storage key per block:
+            ``"{hash}_{rank}_key"`` / ``"{hash}_{rank}_value"``
 
         Blocks that already exist in storage are skipped (idempotent semantics
         handled by ``MooncakeStorageConnector.batch_set``).
@@ -915,8 +906,8 @@ class CacheTransferManager:
         Returns:
             List[bool]: True for each block that was fully stored successfully.
         """
-        if self._storage_connector is None:
-            logger.warning("[TransferManager] backup_to_storage: no storage connector")
+        if self._staging_manager is None or not self._staging_manager.initialized:
+            logger.warning("[TransferManager] backup_to_storage: staging manager not ready")
             return [False] * len(cpu_block_list)
 
         if len(cpu_block_list) != len(hash_list):
@@ -932,57 +923,5 @@ class CacheTransferManager:
             )
             return [False] * len(cpu_block_list)
 
-        is_fp8 = self._is_fp8_quantization()
-        num_layers = len(self._host_key_ptrs)
-        block_success = [True] * len(cpu_block_list)
-
-        keys: List[str] = []
-        src_ptrs: List[int] = []
-        sizes: List[int] = []
-        index_map: List[tuple] = []
-
-        for bi, (cpu_block_id, hash_val) in enumerate(zip(cpu_block_list, hash_list)):
-            for layer_idx in range(num_layers):
-                k_ptr = self._host_key_ptrs[layer_idx]
-                if k_ptr:
-                    keys.append(self._storage_key_for_block(hash_val, layer_idx, "key"))
-                    src_ptrs.append(k_ptr + cpu_block_id * self._host_key_block_stride_bytes)
-                    sizes.append(self._host_key_block_stride_bytes)
-                    index_map.append((bi, layer_idx))
-
-                v_ptr = self._host_value_ptrs[layer_idx] if layer_idx < len(self._host_value_ptrs) else 0
-                if v_ptr:
-                    keys.append(self._storage_key_for_block(hash_val, layer_idx, "value"))
-                    src_ptrs.append(v_ptr + cpu_block_id * self._host_value_block_stride_bytes)
-                    sizes.append(self._host_value_block_stride_bytes)
-                    index_map.append((bi, layer_idx))
-
-                if is_fp8 and self._host_scale_block_stride_bytes > 0:
-                    ks_ptr = (
-                        self._host_key_scales_ptrs[layer_idx] if layer_idx < len(self._host_key_scales_ptrs) else 0
-                    )
-                    vs_ptr = (
-                        self._host_value_scales_ptrs[layer_idx] if layer_idx < len(self._host_value_scales_ptrs) else 0
-                    )
-                    if ks_ptr:
-                        keys.append(self._storage_key_for_block(hash_val, layer_idx, "key_scale"))
-                        src_ptrs.append(ks_ptr + cpu_block_id * self._host_scale_block_stride_bytes)
-                        sizes.append(self._host_scale_block_stride_bytes)
-                        index_map.append((bi, layer_idx))
-                    if vs_ptr:
-                        keys.append(self._storage_key_for_block(hash_val, layer_idx, "value_scale"))
-                        src_ptrs.append(vs_ptr + cpu_block_id * self._host_scale_block_stride_bytes)
-                        sizes.append(self._host_scale_block_stride_bytes)
-                        index_map.append((bi, layer_idx))
-
-        if not keys:
-            return [False] * len(cpu_block_list)
-
-        results = self._storage_connector.batch_set(keys, src_ptrs, sizes)
-
-        for flat_idx, ok in enumerate(results):
-            if not ok:
-                bi, _ = index_map[flat_idx]
-                block_success[bi] = False
-
-        return block_success
+        keys_per_kind, host_ptrs_per_kind = self._build_storage_io_args(hash_list)
+        return self._staging_manager.batch_set_block(keys_per_kind, host_ptrs_per_kind, cpu_block_list)

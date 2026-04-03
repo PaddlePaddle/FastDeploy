@@ -647,5 +647,110 @@ class TestCacheKvsMapGetters(unittest.TestCase):
         self.assertTrue(stats["has_host_cache"])
 
 
+# ============================================================================
+# Storage Key Format Tests
+# ============================================================================
+
+
+class TestStorageKeyFormat(unittest.TestCase):
+    """Test _storage_key_for_block produces per-block keys (no layer index)."""
+
+    def setUp(self):
+        self.manager = create_transfer_manager()
+
+    def test_key_format_no_layer(self):
+        """Key should be '{hash}_{rank}_key' with no _l{layer} suffix."""
+        key = self.manager._storage_key_for_block("abc123", "key")
+        self.assertEqual(key, "abc123_0_key")
+        self.assertNotIn("_l", key)
+
+    def test_value_format_no_layer(self):
+        key = self.manager._storage_key_for_block("abc123", "value")
+        self.assertEqual(key, "abc123_0_value")
+        self.assertNotIn("_l", key)
+
+    def test_scale_format_no_layer(self):
+        key = self.manager._storage_key_for_block("abc123", "key_scale")
+        self.assertEqual(key, "abc123_0_key_scale")
+        self.assertNotIn("_l", key)
+
+    def test_value_scale_format_no_layer(self):
+        key = self.manager._storage_key_for_block("abc123", "value_scale")
+        self.assertEqual(key, "abc123_0_value_scale")
+        self.assertNotIn("_l", key)
+
+
+# ============================================================================
+# Build Staging Strides Tests
+# ============================================================================
+
+
+class TestBuildStagingStrides(unittest.TestCase):
+    """Test _build_staging_strides helper."""
+
+    def test_basic_strides(self):
+        manager = create_transfer_manager()
+        manager._host_key_block_stride_bytes = 1024
+        manager._host_value_block_stride_bytes = 1024
+        manager._host_scale_block_stride_bytes = 0
+
+        strides = manager._build_staging_strides()
+        self.assertEqual(strides, {"key": 1024, "value": 1024})
+
+    def test_fp8_strides(self):
+        from fastdeploy.cache_manager.v1.transfer_manager import CacheTransferManager
+
+        config = get_default_test_fd_config()
+        config.quant_config = Mock()
+        config.quant_config.kv_cache_quant_type = "block_wise_fp8"
+        config.cache_config.num_cpu_blocks = 50
+        config.cache_config.cache_dtype = "bfloat16"
+        manager = CacheTransferManager(config)
+
+        manager._host_key_block_stride_bytes = 1024
+        manager._host_value_block_stride_bytes = 1024
+        manager._host_scale_block_stride_bytes = 256
+
+        strides = manager._build_staging_strides()
+        self.assertIn("key_scale", strides)
+        self.assertIn("value_scale", strides)
+        self.assertEqual(strides["key_scale"], 256)
+
+    def test_zero_strides_returns_empty(self):
+        manager = create_transfer_manager()
+        strides = manager._build_staging_strides()
+        self.assertEqual(strides, {})
+
+
+# ============================================================================
+# Build Storage IO Args Tests
+# ============================================================================
+
+
+class TestBuildStorageIOArgs(unittest.TestCase):
+    """Test _build_storage_io_args helper."""
+
+    def setUp(self):
+        self.manager = create_transfer_manager()
+        num_layers = self.manager._num_layers
+        host_cache = create_mock_host_cache_kvs_map(num_layers=num_layers)
+        self.manager.set_host_cache_kvs_map(host_cache)
+        self.manager._host_key_block_stride_bytes = 1024
+        self.manager._host_value_block_stride_bytes = 1024
+
+    def test_basic_keys(self):
+        hash_list = ["h1", "h2"]
+        keys_per_kind, ptrs_per_kind = self.manager._build_storage_io_args(hash_list)
+
+        self.assertIn("key", keys_per_kind)
+        self.assertIn("value", keys_per_kind)
+        self.assertEqual(len(keys_per_kind["key"]), 2)
+        self.assertEqual(keys_per_kind["key"][0], "h1_0_key")
+        self.assertEqual(keys_per_kind["value"][1], "h2_0_value")
+
+        self.assertIn("key", ptrs_per_kind)
+        self.assertEqual(len(ptrs_per_kind["key"]), self.manager._num_layers)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 from .base import KVCacheBase
 from .block_pool import DeviceBlockPool, HostBlockPool
+from .cache_utils import storage_key_for_block
 from .metadata import BlockNode, CacheLevel, CacheStatus, CacheSwapMetadata, MatchResult
 from .radix_tree import RadixTree
 from .storage import create_storage_scheduler
@@ -543,11 +544,11 @@ class CacheManager(KVCacheBase):
         consecutive prefix of hashes that are all present (prefix semantics
         are required because a cache miss in the middle breaks prefetch continuity).
 
-        Uses rank=0, layer=0 key as a probe: if rank 0 has the block, all ranks
+        Uses rank=0 key as a probe: if rank 0 has the block, all ranks
         are assumed to have it (all ranks write storage synchronously).
 
-        Storage key format (must match TransferManager._storage_key_for_block):
-            "{hash_value}_0_key_l0"
+        Storage key format (see cache_utils.storage_key_for_block):
+            "{hash_value}_0_key"
 
         Args:
             hash_values: List of block hash values to check, in prefix order.
@@ -565,8 +566,8 @@ class CacheManager(KVCacheBase):
                 logger.warning("_match_storage: storage scheduler disconnected, skipping storage match")
                 return []
 
-            # Build probe keys using rank=0, layer=0 (same format as TransferManager._storage_key_for_block)
-            probe_keys = [f"{h}_0_key_l0" for h in hash_values]
+            # Build probe keys using rank=0 (same format as storage_key_for_block)
+            probe_keys = [storage_key_for_block(h, 0, "key") for h in hash_values]
 
             # batch_exists returns a bool list aligned with probe_keys
             exist_flags = self._storage_scheduler.batch_exists(probe_keys)
@@ -577,6 +578,10 @@ class CacheManager(KVCacheBase):
                 if not exists:
                     break
                 matched.append(h)
+
+            logger.debug(
+                f"[CacheManager] _match_storage: probing {len(probe_keys)} keys, matched hashes: {len(matched)}"
+            )
             return matched
         except Exception:
             logger.warning("_match_storage failed", exc_info=True)

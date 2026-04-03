@@ -548,7 +548,7 @@ class MooncakeStorageConnector(StorageConnector):
         ret = self._base._store.register_buffer(buffer_ptr, buffer_size)
         if ret != 0:
             raise RuntimeError(f"MooncakeDistributedStore.register_buffer() failed with error code {ret}")
-        self.logger.info(f"Registered buffer ptr=0x{buffer_ptr:x} size={buffer_size} bytes.")
+        self.logger.debug(f"Registered buffer ptr=0x{buffer_ptr:x} size={buffer_size} bytes.")
 
     # ------------------------------------------------------------------
     # Single-key operations (delegates to batch for consistency)
@@ -625,40 +625,13 @@ class MooncakeStorageConnector(StorageConnector):
         if not (len(keys) == len(src_ptrs) == len(sizes)):
             raise ValueError("keys, src_ptrs, and sizes must have the same length")
 
-        # Skip keys that already exist (idempotent write semantics)
-        exist_results, elapsed_exists_ms = self._base._batch_exists(keys)
-        write_keys: List[str] = []
-        write_ptrs: List[int] = []
-        write_sizes: List[int] = []
-        write_indices: List[int] = []
-        final_results = [False] * len(keys)
-
-        for i, (k, ptr, sz) in enumerate(zip(keys, src_ptrs, sizes)):
-            if exist_results[i] == 1:
-                final_results[i] = True  # Already present — treated as success
-            else:
-                write_keys.append(k)
-                write_ptrs.append(ptr)
-                write_sizes.append(sz)
-                write_indices.append(i)
-
-        skipped = len(keys) - len(write_keys)
-        if write_keys:
-            put_results = self._base._batch_put(write_keys, write_ptrs, write_sizes)
-            for idx, raw in zip(write_indices, put_results):
-                final_results[idx] = raw == 0
-            success_write = put_results.count(0)
-            total_bytes = sum(s for r, s in zip(put_results, write_sizes) if r == 0)
-            self.logger.debug(
-                f"batch_set {len(keys)} keys: exists_check={elapsed_exists_ms:.2f}ms, "
-                f"skipped={skipped}, written={success_write}/{len(write_keys)}, "
-                f"data={total_bytes / 1024**3:.4f} GB"
-            )
-        else:
-            self.logger.debug(
-                f"batch_set {len(keys)} keys: exists_check={elapsed_exists_ms:.2f}ms, "
-                f"all {skipped} keys already exist, nothing to write"
-            )
+        put_results = self._base._batch_put(keys, src_ptrs, sizes)
+        final_results = [r == 0 for r in put_results]
+        success = put_results.count(0)
+        total_bytes = sum(s for r, s in zip(put_results, sizes) if r == 0)
+        self.logger.debug(
+            f"batch_set {len(keys)} keys: " f"written={success}/{len(keys)}, " f"data={total_bytes / 1024**3:.4f} GB"
+        )
 
         return final_results
 

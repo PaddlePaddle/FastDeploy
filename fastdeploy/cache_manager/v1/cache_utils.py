@@ -452,6 +452,25 @@ class LayerSwapTimeoutError(Exception):
     pass
 
 
+# ============ Storage Key Computation ============
+
+
+def storage_key_for_block(hash_value: str, local_rank: int, kind: str) -> str:
+    """Build a storage key for a single block / kind (all layers packed).
+
+    Key format: ``{hash_value}_{local_rank}_{kind}``
+
+    Args:
+        hash_value: Block hash value (from Scheduler).
+        local_rank: Local rank index of the current process.
+        kind:       One of "key", "value", "key_scale", "value_scale".
+
+    Returns:
+        Storage key string.
+    """
+    return f"{hash_value}_{local_rank}_{kind}"
+
+
 # ============ Block Hash Computation ============
 
 
