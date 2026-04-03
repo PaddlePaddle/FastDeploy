@@ -528,6 +528,10 @@ def save_output_specualate(
     save_each_rank: bool = False,
     skip_save_output: bool = False,
 ):
+    # NOTE(yaohuicong): Skip non-zero TP ranks — they share identical sampling
+    # outputs, so only rank 0 needs to send results to the message queue.
+    if model_output.mp_rank > 0:
+        return
     if not skip_save_output:
         if sampler_output.logprobs_tensors is None:
             recover_share_inputs = recover_batch_index_for_output(

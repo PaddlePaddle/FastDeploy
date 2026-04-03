@@ -345,9 +345,7 @@ class GPUModelRunner(ModelRunnerBase):
         is_block_step_cpu = self.share_inputs["is_block_step_cpu"].numpy()
         next_real_bsz = (seq_lens_this_time_cpu > 0).sum().item() + (is_block_step_cpu > 0).sum().item()
         token_num_one_step = (self.speculative_config.num_speculative_tokens + 1) if self.speculative_decoding else 1
-        next_launch_token_num = (
-            seq_lens_this_time_cpu.sum().item() + is_block_step_cpu.sum().item() * token_num_one_step
-        )
+        next_launch_token_num = next_real_bsz * token_num_one_step
         return next_launch_token_num, next_real_bsz
 
     def only_prefill(self):
