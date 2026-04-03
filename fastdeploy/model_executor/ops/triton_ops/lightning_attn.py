@@ -278,7 +278,7 @@ def _fwd_kv_reduce(
     # Load the previous key-value history
     kv_pre = tl.load(KV_HISTORY_block_ptr).to(tl.float32)
 
-    # Process all blocks in reverse order to compute the prefix sum
+    # Process all blocks in forward order to compute the prefix accumulation
     for i in range(NUM_BLOCK):
         block_size = min(n - i * BLOCK, BLOCK)
         # Compute decay factor for the current block
@@ -401,8 +401,13 @@ def _linear_attn_decode_kernel(
     # Load slot index for the current batch
     slot_id = tl.load(slot_idx + pid_b).to(tl.int64)
 
-    # Skip if slot_id is -1 (padding)
+    # Skip if slot_id is -1 (padding); zero the output so the caller
+    # never reads uninitialised memory from paddle.empty_like.
     if slot_id == -1:
+        v_d_offsets = tl.arange(0, BLOCK_SIZE) + tl.program_id(2) * BLOCK_SIZE
+        v_mask = v_d_offsets < D
+        out_offset = pid_b * qkv_b_stride + pid_h * qkv_h_stride
+        tl.store(output_ptr + out_offset + v_d_offsets, tl.zeros([BLOCK_SIZE], dtype=tl.float32), mask=v_mask)
         return
 
     batch_id = pid_b
@@ -630,11 +635,12 @@ def lightning_attention(
     n = len(arr)
     output = 0
 
-    # Initialize or clone key-value history
+    # Initialize key-value history.  The Triton kernel updates kv_history
+    # in-place, so we only need a contiguous view — avoid an extra copy.
     if kv_history is None:
         kv_history = paddle.zeros([q.shape[0], q.shape[1], d, e], dtype="float32")
-    else:
-        kv_history = kv_history.clone().contiguous()
+    elif not kv_history.is_contiguous():
+        kv_history = kv_history.contiguous()
 
     # Process each chunk and accumulate results
     for i in range(n - 1):
@@ -677,6 +683,11 @@ def linear_decode_forward_triton(
 
     # Initialize output tensor
     output = paddle.empty_like(q)
+
+    assert D % BLOCK_SIZE == 0, (
+        f"Head dimension D ({D}) must be divisible by BLOCK_SIZE ({BLOCK_SIZE}); "
+        f"otherwise the kernel grid drops tail dimensions silently."
+    )
 
     # Set grid dimensions for the kernel
     grid = (B, H, D // BLOCK_SIZE)
