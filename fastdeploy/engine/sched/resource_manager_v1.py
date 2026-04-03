@@ -984,6 +984,10 @@ class ResourceManagerV1(ResourceManager):
                         ):
                             continue
                         # Allocate blocks for the tokens that does not hit cache
+                        if envs.FD_DISABLE_CHUNKED_PREFILL:
+                            # Disable chunk prefill
+                            if token_budget < request.need_prefill_tokens:
+                                break
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         if num_new_tokens == 0:
                             if self.config.cache_config.enable_prefix_caching:
@@ -1049,6 +1053,10 @@ class ResourceManagerV1(ResourceManager):
                                 break
 
                         # Allocate blocks for the tokens that does not hit cache
+                        if envs.FD_DISABLE_CHUNKED_PREFILL:
+                            # Disable chunk prefill
+                            if token_budget < request.need_prefill_tokens:
+                                break
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         if num_new_tokens == 0:
                             if self.config.cache_config.enable_prefix_caching:
