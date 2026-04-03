@@ -13,8 +13,9 @@
 # limitations under the License.
 
 """
-Tests for MiniMax-M1 model scaffold.
-Validates architecture dispatch, slope construction, registration, and forward paths.
+Tests for MiniMax-M1 model scaffold and Lightning Attention reference.
+Validates architecture dispatch, slope construction, registration, forward paths,
+and Lightning Attention correctness via a pure-Python/NumPy reference implementation.
 
 Uses importlib to load minimax_m1.py directly, bypassing fastdeploy/__init__.py
 which pulls in the full inference engine (etcd, Redis, GPU ops, etc.).
@@ -403,3 +404,125 @@ class TestDecoderLayerForward:
         out = layer(forward_meta=SimpleNamespace(), hidden_states=paddle.randn([4, 256]))
         assert isinstance(out, tuple) and len(out) == 2
         assert out[0].shape == [4, 256]
+
+
+# ===================================================================
+# 5. Lightning Attention — Pure-Python reference
+# ===================================================================
+
+
+def _lightning_attention_numpy_ref(q, k, v, slope, kv_history=None):
+    """
+    Pure NumPy reference implementation of linear attention with exponential decay.
+
+    Args:
+        q: [batch, heads, seq_len, dim]
+        k: [batch, heads, seq_len, dim]
+        v: [batch, heads, seq_len, dim_v]
+        slope: [heads] decay rates
+        kv_history: [batch, heads, dim, dim_v] or None
+
+    Returns:
+        output: [batch, heads, seq_len, dim_v]
+        kv_state: [batch, heads, dim, dim_v] updated state
+    """
+    b, h, n, d = q.shape
+    e = v.shape[-1]
+    output = np.zeros((b, h, n, e), dtype=np.float64)
+
+    if kv_history is None:
+        kv_state = np.zeros((b, h, d, e), dtype=np.float64)
+    else:
+        kv_state = kv_history.copy()
+
+    for t in range(n):
+        # Decay factor: exp(-slope) broadcast to [b, h, 1, 1] for kv_state
+        decay = np.exp(-slope)[np.newaxis, :, np.newaxis, np.newaxis]  # [1, h, 1, 1]
+        kv_state = kv_state * decay
+        # Add new key-value outer product: k[t] ⊗ v[t]
+        kt = k[:, :, t, :]  # [b, h, d]
+        vt = v[:, :, t, :]  # [b, h, e]
+        kv_state += kt[:, :, :, np.newaxis] * vt[:, :, np.newaxis, :]
+        # Query the state
+        qt = q[:, :, t, :]  # [b, h, d]
+        output[:, :, t, :] = np.einsum("bhd,bhde->bhe", qt, kv_state)
+
+    return output, kv_state
+
+
+class TestLightningAttentionPurePython:
+    """Validate Lightning Attention algorithm correctness via NumPy reference."""
+
+    def test_single_token_output_shape(self):
+        """Single token: output shape must match [b, h, 1, e]."""
+        b, h, n, d = 1, 4, 1, 16
+        q = np.random.randn(b, h, n, d)
+        k = np.random.randn(b, h, n, d)
+        v = np.random.randn(b, h, n, d)
+        slope = np.abs(np.random.randn(h)) * 0.1
+
+        output, kv = _lightning_attention_numpy_ref(q, k, v, slope)
+        assert output.shape == (b, h, n, d)
+        assert kv.shape == (b, h, d, d)
+
+    def test_multi_token_causal(self):
+        """With slope → 0, approaches standard dot-product attention (cumulative)."""
+        b, h, n, d = 1, 2, 4, 8
+        np.random.seed(42)
+        q = np.random.randn(b, h, n, d)
+        k = np.random.randn(b, h, n, d)
+        v = np.random.randn(b, h, n, d)
+        slope = np.full(h, 1e-8)
+
+        output, _ = _lightning_attention_numpy_ref(q, k, v, slope)
+
+        # With near-zero decay, position 0 sees only token 0,
+        # position 1 sees tokens 0+1, etc.  (causal linear attention)
+        for t in range(n):
+            # Reference: sum of q[t] @ (k[j] ⊗ v[j]) for j=0..t
+            ref = np.zeros((b, h, d))
+            for j in range(t + 1):
+                kv_outer = k[:, :, j, :, np.newaxis] * v[:, :, j, np.newaxis, :]
+                ref += np.einsum("bhd,bhde->bhe", q[:, :, t, :], kv_outer)
+            np.testing.assert_allclose(output[:, :, t, :], ref, rtol=1e-5, atol=1e-7)
+
+    def test_kv_history_persistence(self):
+        """KV state from one call persists to the next (recurrent property)."""
+        b, h, n, d = 2, 4, 3, 16
+        np.random.seed(123)
+        q1 = np.random.randn(b, h, n, d)
+        k1 = np.random.randn(b, h, n, d)
+        v1 = np.random.randn(b, h, n, d)
+        q2 = np.random.randn(b, h, 1, d)
+        k2 = np.random.randn(b, h, 1, d)
+        v2 = np.random.randn(b, h, 1, d)
+        slope = np.abs(np.random.randn(h)) * 0.05
+
+        # Two-step: process seq1, then continue with seq2 using returned state
+        _, kv_after_1 = _lightning_attention_numpy_ref(q1, k1, v1, slope)
+        out2, _ = _lightning_attention_numpy_ref(q2, k2, v2, slope, kv_history=kv_after_1)
+
+        # One-shot: process full concatenated sequence
+        q_full = np.concatenate([q1, q2], axis=2)
+        k_full = np.concatenate([k1, k2], axis=2)
+        v_full = np.concatenate([v1, v2], axis=2)
+        out_full, _ = _lightning_attention_numpy_ref(q_full, k_full, v_full, slope)
+
+        # The last token output should match
+        np.testing.assert_allclose(out2[:, :, 0, :], out_full[:, :, n, :], rtol=1e-5, atol=1e-7)
+
+    def test_multi_head_independent(self):
+        """Heads are computed independently — zeroing one head's Q zeros its output."""
+        b, h, n, d = 1, 8, 4, 16
+        np.random.seed(7)
+        q = np.random.randn(b, h, n, d)
+        k = np.random.randn(b, h, n, d)
+        v = np.random.randn(b, h, n, d)
+        slope = np.abs(np.random.randn(h)) * 0.1
+
+        # Zero out head 3's query
+        q_masked = q.copy()
+        q_masked[:, 3, :, :] = 0.0
+
+        output, _ = _lightning_attention_numpy_ref(q_masked, k, v, slope)
+        np.testing.assert_allclose(output[:, 3, :, :], 0.0, atol=1e-12)

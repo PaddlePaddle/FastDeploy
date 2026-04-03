@@ -456,7 +456,7 @@ def _linear_attn_decode_kernel(
 # =============================================================================
 
 
-def lightning_attention_forward(q, k, v, s, kv_history):
+def lightning_attention_forward(q, k, v, s, kv_history, block_size=256):
     """
     Forward pass of the lightning attention algorithm.
     Converted from vLLM's torch.autograd.Function to a plain function
@@ -468,10 +468,11 @@ def lightning_attention_forward(q, k, v, s, kv_history):
         v: Value tensor [b, h, n, e]
         s: Decay rate tensor [1, h, 1, 1] or [h]
         kv_history: KV history tensor [b, h, d, e]
+        block_size: Block size for block-sparse attention (default 256)
 
     Returns:
         o: Output tensor [b, h, n, e]
-        kv_state: Updated KV state tensor
+        kv_history: Updated 4D KV history tensor [b, h, d, e]
     """
     q = q.contiguous()
     k = k.contiguous()
@@ -486,7 +487,7 @@ def lightning_attention_forward(q, k, v, s, kv_history):
     o = paddle.empty([b, h, n, e], dtype=q.dtype)
 
     # Set block sizes
-    BLOCK = 256
+    BLOCK = block_size
     NUM_BLOCK = triton.cdiv(n, BLOCK)
 
     CBLOCK = 32
@@ -585,7 +586,10 @@ def lightning_attention_forward(q, k, v, s, kv_history):
         NUM_CBLOCK=NUM_CBLOCK,
     )
 
-    return o, paddle.concat([kv, kv_history.unsqueeze(2)], axis=2)
+    # In vLLM the concat [kv, kv_history] is returned for the backward pass.
+    # For inference-only we only need the updated 4D kv_history (already
+    # written in-place by _fwd_kv_reduce).
+    return o, kv_history
 
 
 def lightning_attention(
@@ -638,9 +642,9 @@ def lightning_attention(
         end_idx = arr[i + 1]
         q1 = q[..., s:end_idx]
         k1 = k[..., s:end_idx]
-        o, kv = lightning_attention_forward(q1, k1, v, ed, kv_history)
+        o, kv_history = lightning_attention_forward(q1, k1, v, ed, kv_history, block_size=block_size)
         output = output + o
-    return output, kv
+    return output, kv_history
 
 
 def linear_decode_forward_triton(

@@ -358,14 +358,16 @@ class MiniMaxM1LinearAttention(nn.Layer):
         k = k.transpose([0, 2, 1, 3])
         v = v.transpose([0, 2, 1, 3])
 
-        # Retrieve or initialize KV history for recurrent state persistence
+        # Retrieve or initialize KV history for recurrent state persistence.
+        # TODO: Migrate to ForwardMeta.caches / slot-based cache management for
+        #       proper multi-request isolation in production serving scenarios.
         if not hasattr(self, "_kv_history") or self._kv_history is None or self._kv_history.shape[0] != batch_size:
             self._kv_history = paddle.zeros(
                 [batch_size, self.num_attention_heads, self.head_dim, self.head_dim],
                 dtype=q.dtype,
             )
 
-        # Apply lightning attention
+        # Apply lightning attention (returns 4D kv_history, not 5D concat)
         attn_output, new_kv_history = lightning_attention(
             q, k, v, self.slope_rate.squeeze(-1), block_size=256, kv_history=self._kv_history
         )
