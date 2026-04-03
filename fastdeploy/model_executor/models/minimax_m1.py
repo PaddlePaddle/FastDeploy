@@ -257,8 +257,12 @@ class MiniMaxM1LinearAttention(nn.Layer):
 
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
-        self.num_attention_heads = fd_config.model_config.num_attention_heads
-        hidden_inner = self.num_attention_heads * self.head_dim
+        tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.num_attention_heads = fd_config.model_config.num_attention_heads // tp_size
+        # Full (unsharded) inner dim for parallel linear layer declarations;
+        # ColumnParallelLinear divides output and RowParallelLinear divides input
+        # by tp_size internally.
+        hidden_inner = fd_config.model_config.num_attention_heads * self.head_dim
 
         # QKV projection
         self.qkv_proj = ColumnParallelLinear(
@@ -288,16 +292,18 @@ class MiniMaxM1LinearAttention(nn.Layer):
             layer_id=layer_id,
         )
 
-        # RMSNorm on attention output before gating
+        # RMSNorm on attention output before gating (per-TP-rank dimension)
         self.norm = RMSNorm(
             fd_config,
-            hidden_size=hidden_inner,
+            hidden_size=self.num_attention_heads * self.head_dim,
             eps=1e-5,
             prefix=f"{prefix}.norm",
         )
 
-        # Build slope tensor for exponential decay
-        slope_tensor = self._build_slope_tensor(self.num_attention_heads)
+        # Build slope tensor for exponential decay; select this TP rank's subset
+        slope_tensor = self._build_slope_tensor(fd_config.model_config.num_attention_heads)
+        tp_rank = fd_config.parallel_config.tensor_parallel_rank
+        slope_tensor = slope_tensor[tp_rank * self.num_attention_heads : (tp_rank + 1) * self.num_attention_heads]
         if fd_config.model_config.num_hidden_layers <= 1:
             slope_tensor = slope_tensor * (1 + 1e-5)
         else:
@@ -779,6 +785,10 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
                     weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                     weight_loader(param, loaded_weight)
 
+            # Note: model_param_name and param are guaranteed to be set here.
+            # All three branches (stacked, expert, direct) set them before break;
+            # when no branch matches, direct loading's `continue` skips to the
+            # next outer iteration, so this line is never reached without them.
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
 

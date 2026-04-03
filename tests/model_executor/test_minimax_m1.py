@@ -269,7 +269,7 @@ def _make_fd_config(num_layers=4, attn_type_list=None, num_local_experts=4):
         layernorm_mlp_beta=1.0,
         pretrained_config=SimpleNamespace(prefix_name="model"),
     )
-    pc = SimpleNamespace(tensor_parallel_size=1, tp_group=None)
+    pc = SimpleNamespace(tensor_parallel_size=1, tensor_parallel_rank=0, tp_group=None)
     return SimpleNamespace(model_config=mc, parallel_config=pc)
 
 
