@@ -38,7 +38,6 @@ from utils.serving_utils import (
     is_port_open,
 )
 
-os.environ["FLAGS_use_legacy_linear"] = "1"
 # Read ports from environment variables; use default values if not set
 FD_CONNECTOR_PORT = int(os.getenv("FD_CONNECTOR_PORT", 8433))
 FD_ROUTER_PORT = int(os.getenv("FD_ROUTER_PORT", 8533))

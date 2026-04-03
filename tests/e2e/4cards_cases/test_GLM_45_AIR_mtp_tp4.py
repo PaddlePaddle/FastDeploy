@@ -35,7 +35,6 @@ from e2e.utils.serving_utils import (
     is_port_open,
 )
 
-os.environ["FLAGS_use_legacy_linear"] = "1"
 
 
 @pytest.fixture(scope="session", autouse=True)
