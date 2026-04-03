@@ -361,13 +361,13 @@ static void find_candidate_pred_tokens(const int64_t *input_ids,
 // GPU path — Two-phase parallel CUDA kernels for ngram matching.
 //
 // Phase 1: <<<bsz, NGRAM_BLOCK_THREADS>>> — parallel sliding-window
-//          search within each batch item (256 threads per batch).
-//          Also copies matched draft tokens to a scratch buffer.
+//          search within each batch item (NGRAM_BLOCK_THREADS threads
+//          per block).  Also copies matched draft tokens to scratch.
 // Phase 2: <<<1, NGRAM_GATHER_THREADS>>> — CUB BlockScan prefix-sum
 //          threshold enforcement + final token copy.
 //
 // Phase 1 is O(bsz × seq_len × ngram_size) distributed across
-// bsz × 256 threads.  Phase 2 is O(bsz) with parallel scans.
+// bsz × NGRAM_BLOCK_THREADS threads.  Phase 2 is O(bsz) with scans.
 // ============================================================
 
 void NgramMatch(const paddle::Tensor &input_ids,
@@ -418,7 +418,7 @@ void NgramMatch(const paddle::Tensor &input_ids,
     PD_CHECK(max_batch_size <= NGRAM_GATHER_THREADS,
              "ngram_match: max_batch_size exceeds NGRAM_GATHER_THREADS");
 
-    // Phase 1: parallel search — one block per batch, 256 threads per block.
+    // Phase 1: parallel search — one block per batch item.
     // Also copies matched tokens to scratch and writes tentative seq_lens.
     ngram_match_search_kernel<<<max_batch_size,
                                 NGRAM_BLOCK_THREADS,

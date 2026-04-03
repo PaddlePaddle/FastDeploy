@@ -357,8 +357,8 @@ static void find_candidate_pred_tokens_mixed(const int64_t *input_ids,
 // GPU path — Two-phase parallel CUDA kernels for hybrid ngram matching.
 //
 // Phase 1: <<<bsz, NGRAM_BLOCK_THREADS>>> — parallel sliding-window
-//          search within each batch item (256 threads per batch).
-//          Also copies matched draft tokens to a scratch buffer.
+//          search within each batch item (NGRAM_BLOCK_THREADS threads
+//          per block).  Also copies matched draft tokens to scratch.
 // Phase 2: <<<1, NGRAM_GATHER_THREADS>>> — CUB BlockScan prefix-sum
 //          threshold enforcement + final token copy.
 // ============================================================
@@ -428,7 +428,7 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
     PD_CHECK(max_batch_size <= NGRAM_GATHER_THREADS,
              "hybrid_mtp_ngram: max_batch_size exceeds NGRAM_GATHER_THREADS");
 
-    // Phase 1: parallel search — one block per batch, 256 threads per block.
+    // Phase 1: parallel search — one block per batch item.
     // Also copies matched tokens to scratch and writes tentative seq_lens.
     ngram_match_mixed_search_kernel<<<max_batch_size,
                                       NGRAM_BLOCK_THREADS,
