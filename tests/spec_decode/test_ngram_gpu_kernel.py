@@ -611,7 +611,7 @@ class TestNgramMatchKernel(unittest.TestCase):
         t0 = time.perf_counter()
         for _ in range(n_runs):
             # Simulate old path: copy all tensors CPU→GPU→CPU→GPU
-            cpu_tensors = {k: paddle.to_tensor(v) for k, v in cpu_data.items()}
+            cpu_tensors = {k: paddle.to_tensor(v, place=paddle.CPUPlace()) for k, v in cpu_data.items()}
             _ = cpu_tensors["draft_tokens"].cuda()
             _ = cpu_tensors["seq_lens_this_time"].cuda()
             paddle.device.synchronize()
