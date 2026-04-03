@@ -96,7 +96,6 @@ __global__ void ngram_match_mixed_gather_kernel(
     const int64_t *input_ids_len,
     const int64_t *pre_ids,
     const int64_t *step_idx,
-    const int *draft_token_num,
     int64_t *draft_tokens,
     int32_t *seq_lens_this_time,
     const int32_t *seq_lens_decoder,
@@ -118,15 +117,17 @@ __global__ void ngram_match_mixed_gather_kernel(
   int sum_token_num = 0;  // running sum — O(bsz) vs original O(bsz²)
   for (int batch_idx = 0; batch_idx < max_batch_size; batch_idx++) {
     const int ori_seq_len_this_time = seq_lens_this_time[batch_idx];
-    int max_draft_tokens =
-        static_cast<int>(min(static_cast<int64_t>(max_draft_tokens_param -
-                                                  ori_seq_len_this_time + 1),
-                             max_dec_len[batch_idx] - step_idx[batch_idx] - 1));
+    // Split into explicit int64_t steps to avoid negative intermediate values
+    // when ori_seq_len_this_time > max_draft_tokens_param.
+    int64_t draft_budget = static_cast<int64_t>(max_draft_tokens_param) -
+                           ori_seq_len_this_time + 1;
+    int64_t remaining_dec = max_dec_len[batch_idx] - step_idx[batch_idx] - 1;
 
-    if (ori_seq_len_this_time == 0 || max_draft_tokens <= 0) {
+    if (ori_seq_len_this_time == 0 || draft_budget <= 0 || remaining_dec <= 0) {
       sum_token_num += ori_seq_len_this_time;
       continue;
     }
+    int max_draft_tokens = static_cast<int>(min(draft_budget, remaining_dec));
 
     unprocessed_batch_size--;
     sum_token_num += ori_seq_len_this_time;
@@ -186,7 +187,6 @@ static void find_candidate_pred_tokens_mixed(const int64_t *input_ids,
                                              const int64_t *input_ids_len,
                                              const int64_t *pre_ids,
                                              const int64_t *step_idx,
-                                             const int *draft_token_num,
                                              int64_t *draft_tokens,
                                              int32_t *seq_lens_this_time,
                                              int32_t *seq_lens_decoder,
@@ -211,13 +211,16 @@ static void find_candidate_pred_tokens_mixed(const int64_t *input_ids,
   }
   for (int batch_idx = 0; batch_idx < max_batch_size; batch_idx++) {
     const int ori_seq_len_this_time = seq_lens_this_time[batch_idx];
-    int max_draft_tokens_query = std::min(
-        static_cast<int64_t>(max_draft_tokens - ori_seq_len_this_time + 1),
-        max_dec_len[batch_idx] - step_idx[batch_idx] - 1);
+    // Split into explicit int64_t steps to avoid negative intermediate values.
+    int64_t draft_budget =
+        static_cast<int64_t>(max_draft_tokens) - ori_seq_len_this_time + 1;
+    int64_t remaining_dec = max_dec_len[batch_idx] - step_idx[batch_idx] - 1;
 
-    if (ori_seq_len_this_time == 0 || max_draft_tokens_query <= 0) {
+    if (ori_seq_len_this_time == 0 || draft_budget <= 0 || remaining_dec <= 0) {
       continue;
     }
+    int max_draft_tokens_query =
+        static_cast<int>(std::min(draft_budget, remaining_dec));
 
     const int64_t *cur_input_ids = input_ids + batch_idx * input_ids_stride;
     int64_t *cur_draft_tokens = draft_tokens + batch_idx * draft_tokens_stride;
@@ -376,7 +379,6 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
         input_ids_len.data<int64_t>(),
         pre_ids.data<int64_t>(),
         step_idx.data<int64_t>(),
-        draft_token_num.data<int>(),
         const_cast<int64_t *>(draft_tokens.data<int64_t>()),
         const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
         seq_lens_decoder.data<int32_t>(),
@@ -394,7 +396,6 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
         input_ids_len.data<int64_t>(),
         pre_ids.data<int64_t>(),
         step_idx.data<int64_t>(),
-        draft_token_num.data<int>(),
         const_cast<int64_t *>(draft_tokens.data<int64_t>()),
         const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
         const_cast<int32_t *>(seq_lens_decoder.data<int32_t>()),

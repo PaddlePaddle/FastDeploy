@@ -120,6 +120,9 @@ __global__ void ngram_match_gather_kernel(
         min(static_cast<int64_t>(draft_token_num[batch_idx]), remaining));
 
     if (seq_lens_encoder[batch_idx] > 0) {
+      // Encoder-active items occupy tokens but produce no draft output.
+      // Accumulate their token count here (O(n) running sum) to match the
+      // CPU path's sum_cpu() which implicitly includes them via full re-scan.
       sum_token_num += seq_lens_this_time[batch_idx];
       continue;
     } else if (seq_lens_decoder[batch_idx] == 0) {
