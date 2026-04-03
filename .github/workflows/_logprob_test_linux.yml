@@ -55,7 +55,7 @@ jobs:
           docker pull ${docker_image}
 
           echo "=== Step 1: Cleanup on host (runner user) ==="
-          CLEAN_RETRIES=5
+          CLEAN_RETRIES=3
           CLEAN_COUNT=0
           while [ $CLEAN_COUNT -lt $CLEAN_RETRIES ]; do
             echo "Attempt $((CLEAN_COUNT+1)) to remove /workspace/* on host..."
