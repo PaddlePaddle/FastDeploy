@@ -250,7 +250,7 @@ class MiniMaxM1LinearAttention(nn.Layer):
         self,
         fd_config: FDConfig,
         layer_id: int,
-        linear_layer_id: int,
+        linear_layer_id: int,  # Reserved for per-linear-layer indexing in future extensions
         prefix: str = "",
     ) -> None:
         super().__init__()
@@ -359,7 +359,7 @@ class MiniMaxM1LinearAttention(nn.Layer):
         v = v.transpose([0, 2, 1, 3])
 
         # Retrieve or initialize KV history for recurrent state persistence
-        if not hasattr(self, "_kv_history") or self._kv_history is None:
+        if not hasattr(self, "_kv_history") or self._kv_history is None or self._kv_history.shape[0] != batch_size:
             self._kv_history = paddle.zeros(
                 [batch_size, self.num_attention_heads, self.head_dim, self.head_dim],
                 dtype=q.dtype,

@@ -635,9 +635,9 @@ def lightning_attention(
     # Process each chunk and accumulate results
     for i in range(n - 1):
         s = arr[i]
-        e = arr[i + 1]
-        q1 = q[..., s:e]
-        k1 = k[..., s:e]
+        end_idx = arr[i + 1]
+        q1 = q[..., s:end_idx]
+        k1 = k[..., s:end_idx]
         o, kv = lightning_attention_forward(q1, k1, v, ed, kv_history)
         output = output + o
     return output, kv
