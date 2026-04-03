@@ -1070,7 +1070,9 @@ class XPUModelRunner(ModelRunnerBase):
                 fill_value=max_draft_token_num,
                 dtype="int32",
             )
-            self.share_inputs["cu_seqlens_q_output"] = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
+            self.share_inputs["cu_seqlens_q_output"] = paddle.full(
+                shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32"
+            )
             self.share_inputs["batch_id_per_token_output"] = paddle.full(
                 shape=[max_num_seqs * (max_draft_token_num + 1)],
                 fill_value=0,
