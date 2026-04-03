@@ -251,6 +251,24 @@ class ModelConfig:
         # set attribute from pretrained_config
         for key, value in pretrained_config.items():
             setattr(self, key, value)
+
+        # Check NUM_MAX_DISPATCH_TOKENS_PER_RANK environment variable
+        env_num_max_dispatch = envs.NUM_MAX_DISPATCH_TOKENS_PER_RANK
+        if env_num_max_dispatch is not None:
+            # Only check consistency if model config explicitly sets this value
+            if "num_max_dispatch_tokens_per_rank" in pretrained_config:
+                model_num_max_dispatch = pretrained_config["num_max_dispatch_tokens_per_rank"]
+                if model_num_max_dispatch != env_num_max_dispatch:
+                    raise ValueError(
+                        f"num_max_dispatch_tokens_per_rank mismatch: "
+                        f"environment variable NUM_MAX_DISPATCH_TOKENS_PER_RANK={env_num_max_dispatch}, "
+                        f"but model config has num_max_dispatch_tokens_per_rank={model_num_max_dispatch}. "
+                        f"Please ensure they are consistent."
+                    )
+            else:
+                # Use env value if model config doesn't explicitly set it
+                self.num_max_dispatch_tokens_per_rank = env_num_max_dispatch
+
         # we need set default value when not exist
         for key, value in PRETRAINED_INIT_CONFIGURATION.items():
             if not hasattr(self, key):

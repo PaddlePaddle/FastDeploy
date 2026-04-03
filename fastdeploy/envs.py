@@ -266,6 +266,13 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
+    # Number of max dispatch tokens per rank for MoE computation.
+    # If set, it must match the value in model config if present, otherwise an error will be raised.
+    "NUM_MAX_DISPATCH_TOKENS_PER_RANK": lambda: (
+        int(os.getenv("NUM_MAX_DISPATCH_TOKENS_PER_RANK", "0"))
+        if os.getenv("NUM_MAX_DISPATCH_TOKENS_PER_RANK")
+        else None
+    ),
 }
 
 
