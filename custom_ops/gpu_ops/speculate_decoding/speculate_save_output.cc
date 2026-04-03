@@ -36,8 +36,9 @@ void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
                                 int msg_queue_id,
                                 int save_each_rank,
                                 bool skip_prefill) {
-  // printf("enter save output");
-  if (!save_each_rank && rank_id > 0) {
+  // NOTE(yaohuicong): Skip non-zero TP ranks — they share identical sampling
+  // outputs, so only rank 0 needs to send results to the message queue.
+  if (rank_id > 0) {
     return;
   }
 
