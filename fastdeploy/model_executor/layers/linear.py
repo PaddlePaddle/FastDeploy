@@ -676,12 +676,6 @@ class QKVParallelLinear(ColumnParallelLinear):
             skip_quant=skip_quant,
             weight_dtype=weight_dtype,
         )
-        set_weight_attrs(
-            self.weight,
-            {
-                "weight_need_transpose": self.fd_config.model_config.model_format == "torch",
-            },
-        )
 
     def _get_shard_size_mapping(self, loaded_shard_id: str, head_dim: int):
         shard_size_mapping = {
@@ -1314,6 +1308,8 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             # Avoid redundant transpose of fused weights when weight_loader is called iteratively
             param.weight_need_transpose = False
 
+        is_torch_format = self.fd_config.model_config.model_format == "torch"
+
         # Qwen3.5: q_proj contains query and gate in PACKED layout per head
         assert loaded_weight.shape[dim] == self.num_heads * self.head_dim * 2, (
             f"split_q_gate_weight_loader: expected output dim {self.num_heads * self.head_dim * 2}, "
@@ -1321,14 +1317,25 @@ class QKVGateParallelLinear(ColumnParallelLinear):
         )
 
         # Weight layout: [q0_0,...,q0_{hd-1}, g0_0,...,g0_{hd-1}, q1_0,...] where qi/gi each have head_dim elements
-        input_shape = loaded_weight.shape[:-1]
-        query_weight, gate_weight = paddle.chunk(
-            loaded_weight.reshape([*input_shape, -1, self.head_dim * 2]), 2, axis=-1
-        )
+        if is_torch_format:
+            # Torch format [out_size, in_size]: split along axis 0
+            in_size = loaded_weight.shape[-1]
+            w = loaded_weight.reshape([self.num_heads, self.head_dim * 2, in_size])
+            query_weight, gate_weight = paddle.chunk(w, 2, axis=1)
+            query_weight = query_weight.reshape([-1, in_size])
+            gate_weight = gate_weight.reshape([-1, in_size])
+        else:
+            # Paddle format [in_size, out_size]: split along last axis
+            input_shape = loaded_weight.shape[:-1]
+            query_weight, gate_weight = paddle.chunk(
+                loaded_weight.reshape([*input_shape, -1, self.head_dim * 2]), 2, axis=-1
+            )
+            query_weight = query_weight.reshape([*input_shape, -1])
+            gate_weight = gate_weight.reshape([*input_shape, -1])
 
         # Load query and gate weights
-        self.qkv_weight_loader(param, query_weight.reshape([*input_shape, -1]), "q")
-        self.gate_weight_loader(param, gate_weight.reshape([*input_shape, -1]))
+        self.qkv_weight_loader(param, query_weight, "q")
+        self.gate_weight_loader(param, gate_weight)
 
     def load_weight(self, state_dict: dict):
         """
