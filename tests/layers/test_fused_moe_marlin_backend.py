@@ -12,34 +12,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import sys
 import types
-import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import paddle
 
-# Stub GPU-only ops so the import chain (moe → triton_backend → fp8_utils →
-# ops.gpu.deep_gemm) resolves without compiled CUDA extensions.
-# Scoped via patch.dict so sys.modules is restored after the import.
+# ---------------------------------------------------------------------------
+# Stub GPU-only ops so the import chain resolves without CUDA extensions.
+# Try the real import first; only inject stubs when it is unavailable.
+# After the import, explicitly remove any stale parent-package attribute
+# that Python may have bound during the stub phase, preventing cross-test
+# pollution (e.g. tests that access `fastdeploy.model_executor.ops.gpu` via
+# attribute traversal rather than `import`).
+# ---------------------------------------------------------------------------
+
+_GPU_OPS = "fastdeploy.model_executor.ops.gpu"
+_DEEP_GEMM = f"{_GPU_OPS}.deep_gemm"
+
+_NEED_STUB = _GPU_OPS not in sys.modules
 
 
 class _GpuOpsStub(types.ModuleType):
-    """Catchall module: returns registered sub-modules or None for unknown attrs."""
+    """Catch-all module: returns registered sub-modules or ``None``."""
 
-    __path__ = []  # marks as package so `import X.Y.Z` can traverse
+    __path__ = []
 
     def __getattr__(self, name):
         fqn = f"{self.__name__}.{name}"
         sub = sys.modules.get(fqn)
-        if sub is not None:
-            return sub
-        return None
+        return sub if sub is not None else None
 
-
-_GPU_OPS = "fastdeploy.model_executor.ops.gpu"
-_DEEP_GEMM = f"{_GPU_OPS}.deep_gemm"
 
 _gpu_ops_stub = _GpuOpsStub(_GPU_OPS)
 _deep_gemm_stub = types.ModuleType(_DEEP_GEMM)
@@ -48,10 +54,24 @@ _deep_gemm_stub.m_grouped_fp8_gemm_nt_masked = None
 _deep_gemm_stub.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous = None
 _deep_gemm_stub.m_grouped_gemm_fp8_fp8_bf16_nt_masked = None
 
-with patch.dict(sys.modules, {_GPU_OPS: _gpu_ops_stub, _DEEP_GEMM: _deep_gemm_stub}, clear=False):
-    from fastdeploy.model_executor.layers.moe import (  # noqa: E402
-        fused_moe_marlin_backend as mb,
-    )
+if _NEED_STUB:
+    with patch.dict(sys.modules, {_GPU_OPS: _gpu_ops_stub, _DEEP_GEMM: _deep_gemm_stub}, clear=False):
+        from fastdeploy.model_executor.layers.moe import fused_moe_marlin_backend as mb
+
+    # Clean up stale attribute references that Python binds during import
+    _ops_parent = sys.modules.get("fastdeploy.model_executor.ops")
+    if _ops_parent is not None and getattr(_ops_parent, "gpu", None) is _gpu_ops_stub:
+        try:
+            delattr(_ops_parent, "gpu")
+        except AttributeError:
+            pass
+else:
+    from fastdeploy.model_executor.layers.moe import fused_moe_marlin_backend as mb
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 class _DummyLayer(paddle.nn.Layer):
@@ -90,23 +110,31 @@ def _init(layer):
     return m
 
 
-# ── Tests ──────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
 
 
-class TestFusedMoeMarlinBackend(unittest.TestCase):
-    """Tests for MarlinWeightOnlyMoEMethod."""
+class TestPureFunctions:
+    """get_scale_perms, marlin_permute_scales, and MoE wrapper variants."""
 
-    def test_pure_functions(self):
-        """get_scale_perms + marlin_permute_scales (both branches)."""
+    def test_get_scale_perms(self):
         perm, single = mb.get_scale_perms()
-        self.assertEqual(len(perm), 64)
-        self.assertEqual(len(single), 32)
+        assert len(perm) == 64
+        assert len(single) == 32
+
+    def test_marlin_permute_scales_group(self):
         s = paddle.arange(128, dtype="float32").reshape([2, 64])
-        self.assertEqual(list(mb.marlin_permute_scales(s, 16, 64, 8).shape), [2, 64])
-        self.assertEqual(list(mb.marlin_permute_scales(s, 16, 64, -1).shape), [2, 64])
+        out = mb.marlin_permute_scales(s, 16, 64, 8)
+        assert list(out.shape) == [2, 64]
+
+    def test_marlin_permute_scales_perchannel(self):
+        s = paddle.arange(128, dtype="float32").reshape([2, 64])
+        out = mb.marlin_permute_scales(s, 16, 64, -1)
+        assert list(out.shape) == [2, 64]
 
     def test_gptq_marlin_moe_repack(self):
-        """gptq_marlin_moe_repack loops over experts and repacks via C++ op."""
+        """Per-expert repack loop with mocked C++ op."""
         num_experts, size_k, size_n, num_bits = 2, 32, 16, 4
         b_q_weight = paddle.ones([num_experts, size_k, size_n], dtype="int32")
         perm = paddle.zeros([num_experts, size_k], dtype="int32")
@@ -123,28 +151,39 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
             ),
         ):
             out = mb.gptq_marlin_moe_repack(b_q_weight, perm, size_k, size_n, num_bits)
-        self.assertEqual(list(out.shape), [num_experts, size_k // 16, size_n * (num_bits // 2)])
+        assert list(out.shape) == [num_experts, size_k // 16, size_n * (num_bits // 2)]
 
     def test_marlin_moe_permute_scales(self):
-        """marlin_moe_permute_scales loops over experts applying scale permutation."""
+        """Per-expert permutation matches single-expert output."""
         num_experts, size_k, size_n, group_size = 3, 64, 64, 8
-        num_groups = size_k // group_size  # 8
+        num_groups = size_k // group_size
         s = paddle.arange(num_experts * num_groups * size_n, dtype="float32").reshape(
             [num_experts, num_groups, size_n]
         )
         out = mb.marlin_moe_permute_scales(s, size_k, size_n, group_size)
-        self.assertEqual(list(out.shape), [num_experts, num_groups, size_n])
-        # Each expert slice should match the single-expert function
+        assert list(out.shape) == [num_experts, num_groups, size_n]
         for e in range(num_experts):
             expected = mb.marlin_permute_scales(s[e], size_k, size_n, group_size)
-            self.assertTrue(paddle.equal_all(out[e], expected).item())
+            assert paddle.equal_all(out[e], expected).item()
+
+
+class TestMarlinWeightOnlyMoEMethod:
+    """create_weights, process_loaded_weights, apply."""
 
     def test_create_and_process(self):
-        """create_weights -> process_loaded_weights end-to-end."""
+        """create_weights -> process_loaded_weights with shape/dtype validation."""
         layer = _DummyLayer()
         m = _init(layer)
-        self.assertTrue(hasattr(layer, "up_gate_proj_weight"))
-        self.assertTrue(hasattr(layer, "down_proj_weight"))
+
+        # Verify create_weights set parameters with correct shape / dtype
+        E, H, I = layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size
+        assert list(layer.up_gate_proj_weight.shape) == [E, H // 16, I * 4]
+        assert str(layer.up_gate_proj_weight.dtype).endswith("int32")
+        assert list(layer.down_proj_weight.shape) == [E, I // 16, H * 2]
+        assert str(layer.down_proj_weight.dtype).endswith("int32")
+        assert list(layer.up_gate_proj_weight_scale.shape) == [E, 1, I * 2]
+        assert list(layer.down_proj_weight_scale.shape) == [E, 1, H]
+
         with (
             patch.dict(
                 sys.modules,
@@ -158,6 +197,15 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
             ),
         ):
             m.process_loaded_weights(layer, dict(zip(("up", "down"), _make_weights(layer))))
+
+        # After processing: weights repacked, scales permuted — verify shapes
+        # hold and scales are non-zero (not a no-op).
+        assert list(layer.up_gate_proj_weight.shape) == [E, H // 16, I * 4]
+        assert list(layer.down_proj_weight.shape) == [E, I // 16, H * 2]
+        assert not paddle.equal_all(
+            layer.up_gate_proj_weight_scale,
+            paddle.zeros_like(layer.up_gate_proj_weight_scale),
+        ).item()
 
     def test_apply_topk(self):
         """apply() with default topk_method='topk'."""
@@ -200,7 +248,7 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
             ),
         ):
             out = m.apply(layer, x, gate, topk_ids_hookfunc=lambda topk_ids: None)
-        self.assertEqual(list(out.shape), [2, 64])
+        assert list(out.shape) == [2, 64]
 
     def test_apply_noaux_tc(self):
         """apply() with topk_method='noaux_tc'."""
@@ -239,8 +287,4 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
             ),
         ):
             out = m.apply(layer, x, gate, topk_ids_hookfunc=lambda topk_ids: None)
-        self.assertEqual(list(out.shape), [2, 64])
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert list(out.shape) == [2, 64]
