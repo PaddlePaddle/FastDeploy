@@ -37,6 +37,8 @@
 __device__ __forceinline__ void atomicMin64(int64_t *addr, int64_t val) {
   unsigned long long *addr_ull = reinterpret_cast<unsigned long long *>(addr);
   unsigned long long val_ull = static_cast<unsigned long long>(val);
+  // Non-atomic initial read is intentional: the CAS loop below detects and
+  // retries on any stale value, so a torn read here is harmless.
   unsigned long long old = *addr_ull;
   while (val_ull < old) {
     unsigned long long assumed = old;

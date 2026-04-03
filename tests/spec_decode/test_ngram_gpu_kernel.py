@@ -632,55 +632,56 @@ class TestNgramMatchKernel(unittest.TestCase):
         results = []
 
         for bsz in batch_sizes:
+            # Pre-create tensors once per batch size (excluded from timing)
+            gpu_data = _to_gpu(_make_ngram_test_data(batch_size=bsz, input_len=input_len, seed=42))
+            cpu_data = _make_ngram_test_data(batch_size=bsz, input_len=input_len, seed=42)
+
             # Warmup
             for _ in range(3):
-                d = _to_gpu(_make_ngram_test_data(batch_size=bsz, input_len=input_len, seed=42))
                 self.ngram_match(
-                    d["input_ids"],
-                    d["input_ids_len"],
-                    d["token_ids_all"],
-                    d["prompt_lens"],
-                    d["step_idx"],
-                    d["draft_token_num"],
-                    d["draft_tokens"],
-                    d["seq_lens_this_time"],
-                    d["seq_lens_encoder"],
-                    d["seq_lens_decoder"],
-                    d["max_dec_len"],
+                    gpu_data["input_ids"],
+                    gpu_data["input_ids_len"],
+                    gpu_data["token_ids_all"],
+                    gpu_data["prompt_lens"],
+                    gpu_data["step_idx"],
+                    gpu_data["draft_token_num"],
+                    gpu_data["draft_tokens"],
+                    gpu_data["seq_lens_this_time"],
+                    gpu_data["seq_lens_encoder"],
+                    gpu_data["seq_lens_decoder"],
+                    gpu_data["max_dec_len"],
                     3,
                     10,
                 )
             paddle.device.synchronize()
 
-            # GPU kernel
+            # GPU kernel (pure kernel time — no data creation/transfer)
             paddle.device.synchronize()
             t0 = time.perf_counter()
             for _ in range(n_runs):
-                d = _to_gpu(_make_ngram_test_data(batch_size=bsz, input_len=input_len, seed=42))
                 self.ngram_match(
-                    d["input_ids"],
-                    d["input_ids_len"],
-                    d["token_ids_all"],
-                    d["prompt_lens"],
-                    d["step_idx"],
-                    d["draft_token_num"],
-                    d["draft_tokens"],
-                    d["seq_lens_this_time"],
-                    d["seq_lens_encoder"],
-                    d["seq_lens_decoder"],
-                    d["max_dec_len"],
+                    gpu_data["input_ids"],
+                    gpu_data["input_ids_len"],
+                    gpu_data["token_ids_all"],
+                    gpu_data["prompt_lens"],
+                    gpu_data["step_idx"],
+                    gpu_data["draft_token_num"],
+                    gpu_data["draft_tokens"],
+                    gpu_data["seq_lens_this_time"],
+                    gpu_data["seq_lens_encoder"],
+                    gpu_data["seq_lens_decoder"],
+                    gpu_data["max_dec_len"],
                     3,
                     10,
                 )
                 paddle.device.synchronize()
             gpu_ms = (time.perf_counter() - t0) / n_runs * 1000
 
-            # CPU path (copy overhead)
+            # CPU path: simulate the old copy-to-CPU-and-back pattern
             paddle.device.synchronize()
             t0 = time.perf_counter()
             for _ in range(n_runs):
-                d = _to_gpu(_make_ngram_test_data(batch_size=bsz, input_len=input_len, seed=42))
-                cpu_tensors = {k: v.cpu() for k, v in d.items()}
+                cpu_tensors = {k: paddle.to_tensor(v, place=paddle.CPUPlace()) for k, v in cpu_data.items()}
                 _ = cpu_tensors["draft_tokens"].cuda()
                 _ = cpu_tensors["seq_lens_this_time"].cuda()
                 paddle.device.synchronize()
@@ -697,6 +698,115 @@ class TestNgramMatchKernel(unittest.TestCase):
             speedup = cpu_ms / gpu_ms
             per_batch_us = gpu_ms / bsz * 1000
             print(f"{bsz:>6}  {gpu_ms:>10.3f}  {cpu_ms:>10.3f}  {speedup:>7.2f}x  {per_batch_us:>14.3f}")
+        print(f"{'='*72}")
+
+    def test_latency_extreme(self):
+        """Benchmark: GPU kernel at extreme scale (bsz=256, seq_len=128k).
+
+        Addresses the NCU profiler worst-case scenario (bsz=256 + 128k)
+        raised in review.  Tests with production-realistic thresholds
+        (8192, 16384) rather than the unlimited threshold used in
+        correctness tests.
+        """
+        configs = [
+            {"threshold": 8192, "label": "threshold=8192"},
+            {"threshold": 16384, "label": "threshold=16384"},
+        ]
+        batch_size = 256
+        input_len = 131072  # 128k
+        n_runs = 1000
+
+        # Pre-create tensors once (excluded from timing)
+        gpu_data = _to_gpu(
+            _make_ngram_test_data(
+                batch_size=batch_size,
+                input_len=input_len,
+                max_model_len=input_len + 64,
+                seed=77,
+            )
+        )
+        cpu_data = _make_ngram_test_data(
+            batch_size=batch_size,
+            input_len=input_len,
+            max_model_len=input_len + 64,
+            seed=77,
+        )
+
+        print(f"\n{'='*72}")
+        print(f"EXTREME BENCHMARK (batch={batch_size}, seq_len={input_len}, {n_runs} runs)")
+        print(f"{'─'*72}")
+
+        for cfg in configs:
+            threshold = cfg["threshold"]
+            old_env = os.environ.get("INFER_WITH_REFERENCE_TOKENUM_THRESHOLD")
+            os.environ["INFER_WITH_REFERENCE_TOKENUM_THRESHOLD"] = str(threshold)
+            try:
+                # Warmup
+                for _ in range(3):
+                    self.ngram_match(
+                        gpu_data["input_ids"],
+                        gpu_data["input_ids_len"],
+                        gpu_data["token_ids_all"],
+                        gpu_data["prompt_lens"],
+                        gpu_data["step_idx"],
+                        gpu_data["draft_token_num"],
+                        gpu_data["draft_tokens"],
+                        gpu_data["seq_lens_this_time"],
+                        gpu_data["seq_lens_encoder"],
+                        gpu_data["seq_lens_decoder"],
+                        gpu_data["max_dec_len"],
+                        3,
+                        10,
+                    )
+                paddle.device.synchronize()
+
+                # GPU kernel timing
+                paddle.device.synchronize()
+                t0 = time.perf_counter()
+                for _ in range(n_runs):
+                    self.ngram_match(
+                        gpu_data["input_ids"],
+                        gpu_data["input_ids_len"],
+                        gpu_data["token_ids_all"],
+                        gpu_data["prompt_lens"],
+                        gpu_data["step_idx"],
+                        gpu_data["draft_token_num"],
+                        gpu_data["draft_tokens"],
+                        gpu_data["seq_lens_this_time"],
+                        gpu_data["seq_lens_encoder"],
+                        gpu_data["seq_lens_decoder"],
+                        gpu_data["max_dec_len"],
+                        3,
+                        10,
+                    )
+                    paddle.device.synchronize()
+                t1 = time.perf_counter()
+                gpu_ms = (t1 - t0) / n_runs * 1000
+            finally:
+                if old_env is None:
+                    os.environ.pop("INFER_WITH_REFERENCE_TOKENUM_THRESHOLD", None)
+                else:
+                    os.environ["INFER_WITH_REFERENCE_TOKENUM_THRESHOLD"] = old_env
+
+            # CPU path: simulate copy-to-CPU-and-back overhead at extreme scale
+            cpu_runs = 50  # fewer runs — CPU copy of 256x128k is slow
+            paddle.device.synchronize()
+            t0 = time.perf_counter()
+            for _ in range(cpu_runs):
+                cpu_tensors = {k: paddle.to_tensor(v, place=paddle.CPUPlace()) for k, v in cpu_data.items()}
+                _ = cpu_tensors["draft_tokens"].cuda()
+                _ = cpu_tensors["seq_lens_this_time"].cuda()
+                paddle.device.synchronize()
+            t1 = time.perf_counter()
+            cpu_ms = (t1 - t0) / cpu_runs * 1000
+
+            speedup = cpu_ms / gpu_ms if gpu_ms > 0 else float("inf")
+            print(f"  [{cfg['label']}]")
+            print(f"    GPU kernel:   {gpu_ms:.3f} ms/call  ({gpu_ms * 1000:.1f} us)")
+            print(f"    CPU path:     {cpu_ms:.3f} ms/call")
+            print(f"    Speedup:      {speedup:.1f}x")
+            print()
+
         print(f"{'='*72}")
 
 

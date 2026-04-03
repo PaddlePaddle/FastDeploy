@@ -257,13 +257,16 @@ static void find_candidate_pred_tokens_mixed(const int64_t *input_ids,
   }
   for (int batch_idx = 0; batch_idx < max_batch_size; batch_idx++) {
     const int ori_seq_len_this_time = seq_lens_this_time[batch_idx];
-    int max_draft_tokens_query = std::min(
-        static_cast<int64_t>(max_draft_tokens - ori_seq_len_this_time + 1),
-        max_dec_len[batch_idx] - step_idx[batch_idx] - 1);
+    // Split into explicit int64_t steps to avoid negative intermediate values.
+    int64_t draft_budget =
+        static_cast<int64_t>(max_draft_tokens) - ori_seq_len_this_time + 1;
+    int64_t remaining_dec = max_dec_len[batch_idx] - step_idx[batch_idx] - 1;
 
-    if (ori_seq_len_this_time == 0 || max_draft_tokens_query <= 0) {
+    if (ori_seq_len_this_time == 0 || draft_budget <= 0 || remaining_dec <= 0) {
       continue;
     }
+    int max_draft_tokens_query =
+        static_cast<int>(std::min(draft_budget, remaining_dec));
 
     const int64_t *cur_input_ids = input_ids + batch_idx * input_ids_stride;
     int64_t *cur_draft_tokens = draft_tokens + batch_idx * draft_tokens_stride;
