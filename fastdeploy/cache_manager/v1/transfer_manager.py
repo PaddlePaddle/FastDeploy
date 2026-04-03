@@ -92,12 +92,12 @@ class CacheTransferManager:
         # They run in parallel without waiting for each other
         # Using cupy to avoid affecting Paddle's internal stream state
         if _HAS_CUPY and paddle.is_compiled_with_cuda():
-            cupy_current_device = cp.cuda.runtime.getDevice()
+            self._cupy_device_id = cp.cuda.runtime.getDevice()
             logger.info(
                 f"[TransferManager] Creating streams: local_rank={self._local_rank}, device_id={self._device_id}, "
-                f"cupy_current_device={cupy_current_device}"
+                f"cupy_device_id={self._cupy_device_id}"
             )
-            with cp.cuda.Device(self._device_id):
+            with cp.cuda.Device(self._cupy_device_id):
                 self._input_stream = cp.cuda.Stream(non_blocking=False)
                 self._output_stream = cp.cuda.Stream(non_blocking=False)
             logger.info(
@@ -447,12 +447,11 @@ class CacheTransferManager:
 
         stream = self._output_stream if mode == 0 else self._input_stream
         try:
-            cupy_current_device = cp.cuda.runtime.getDevice()
             logger.debug(
                 f"[TransferManager] _swap_all_layers_async: local_rank={self._local_rank}, device_id={self._device_id}, "
-                f"cupy_current_device={cupy_current_device}, stream_device={stream.device_id}, mode={mode}"
+                f"cupy_device_id={self._cupy_device_id}, stream_device={stream.device_id}, mode={mode}"
             )
-            with cp.cuda.Device(self._device_id):
+            with cp.cuda.Device(self._cupy_device_id):
                 with stream:
                     swap_cache_all_layers(
                         self._device_key_caches,
@@ -534,7 +533,7 @@ class CacheTransferManager:
             return False
 
         try:
-            with cp.cuda.Device(self._device_id):
+            with cp.cuda.Device(self._cupy_device_id):
                 with stream:
                     swap_cache_per_layer_async(
                         key_cache,
@@ -640,7 +639,7 @@ class CacheTransferManager:
         if not _HAS_CUPY or self._input_stream is None:
             return None
         try:
-            with cp.cuda.Device(self._device_id):
+            with cp.cuda.Device(self._cupy_device_id):
                 event = cp.cuda.Event()
                 with self._input_stream:
                     event.record()
