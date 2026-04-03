@@ -455,19 +455,29 @@ class Request:
         Custom getstate method for pickle support.
         Handles unpicklable attributes by filtering them from __dict__.
         """
-        # Create a filtered dictionary without problematic attributes
+        # Attributes that cannot or need not be pickled for cross-process transfer.
+        # _block_hasher: closure/callable, not picklable.
+        # _match_result: contains BlockNode tree with parent<->children circular
+        #   references, which causes RecursionError during pickling.
+        # async_process_futures: asyncio futures, not picklable.
+        _SKIP_KEYS = {"_block_hasher", "_match_result"}
         filtered_dict = {}
         for key, value in self.__dict__.items():
-            # Skip attributes that are known to contain unpicklable objects
-            if key == "async_process_futures":
-                filtered_dict[key] = []
-            elif key == "_block_hasher":
-                # Skip _block_hasher (closure function, cannot be pickled)
+            if key in _SKIP_KEYS:
                 continue
+            elif key == "async_process_futures":
+                filtered_dict[key] = []
             else:
                 filtered_dict[key] = value
-
         return filtered_dict
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # Restore fields that were excluded from pickling with safe defaults.
+        if "_block_hasher" not in self.__dict__:
+            self._block_hasher = None
+        if "_match_result" not in self.__dict__:
+            self._match_result = None
 
     def __eq__(self, other):
         """
