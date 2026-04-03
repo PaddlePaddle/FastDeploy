@@ -2404,10 +2404,13 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 5.1. Async cpy
             post_process_event = paddle.device.cuda.create_event()
-            if envs.GET_SAVE_OUTPUT_V1:
+            if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                # If one query is preempted, there is no sampled token for it, we use token_id PREEMPTED_TOKEN_ID to signal server, abort is finished.
                 paddle.assign(
                     paddle.where(
-                        self.share_inputs["preempted_idx"] == 1, PREEMPTED_TOKEN_ID, sampler_output.sampled_token_ids
+                        self.share_inputs["last_preempted_idx"][: sampler_output.sampled_token_ids.shape[0]] == 1,
+                        PREEMPTED_TOKEN_ID,
+                        sampler_output.sampled_token_ids,
                     ),
                     sampler_output.sampled_token_ids,
                 )
