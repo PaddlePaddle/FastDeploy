@@ -61,11 +61,13 @@ __global__ void ngram_match_mixed_search_kernel(
   // Skip batch items with no active tokens
   if (ori_seq_len_this_time == 0) return;
 
-  // Compute max_draft_tokens for this batch item
-  int max_draft_tokens = static_cast<int>(min(
-      static_cast<int64_t>(max_draft_tokens_param - ori_seq_len_this_time + 1),
-      max_dec_len[batch_idx] - step_idx[batch_idx] - 1));
-  if (max_draft_tokens <= 0) return;
+  // Compute max_draft_tokens for this batch item.
+  // Split into explicit steps to avoid negative intermediate values.
+  int64_t draft_budget =
+      static_cast<int64_t>(max_draft_tokens_param) - ori_seq_len_this_time + 1;
+  int64_t remaining_dec = max_dec_len[batch_idx] - step_idx[batch_idx] - 1;
+  if (draft_budget <= 0 || remaining_dec <= 0) return;
+  int max_draft_tokens = static_cast<int>(min(draft_budget, remaining_dec));
 
   const int64_t *cur_input_ids = input_ids + batch_idx * input_ids_stride;
   const int64_t cur_input_ids_len = input_ids_len[batch_idx];
@@ -81,44 +83,45 @@ __global__ void ngram_match_mixed_search_kernel(
     int64_t pos = parallel_ngram_search(
         cur_input_ids, cur_input_ids_len, ngram, ngram_size, &s_min_pos);
     if (pos != INT64_MAX) {
-      if (threadIdx.x == 0) {
+      int64_t start_idx = pos + ngram_size;
+      int64_t end_idx = min(start_idx + static_cast<int64_t>(max_draft_tokens),
+                            cur_input_ids_len);
+      if (threadIdx.x == 0 && start_idx < end_idx) {
         // Tentative token copy to scratch
-        int64_t start_idx = pos + ngram_size;
-        int64_t end_idx =
-            min(start_idx + static_cast<int64_t>(max_draft_tokens),
-                cur_input_ids_len);
-        if (start_idx < end_idx) {
-          int64_t n = end_idx - start_idx;
-          seq_lens_this_time_copy[batch_idx] =
-              static_cast<int32_t>(ori_seq_len_this_time + n);
-          int64_t *dst = draft_tokens_copy + batch_idx * draft_tokens_stride;
-          for (int64_t k = 0; k < n; k++) {
-            dst[ori_seq_len_this_time + k] = cur_input_ids[start_idx + k];
-          }
+        int64_t n = end_idx - start_idx;
+        seq_lens_this_time_copy[batch_idx] =
+            static_cast<int32_t>(ori_seq_len_this_time + n);
+        int64_t *dst = draft_tokens_copy + batch_idx * draft_tokens_stride;
+        for (int64_t k = 0; k < n; k++) {
+          dst[ori_seq_len_this_time + k] = cur_input_ids[start_idx + k];
         }
       }
-      return;
+      // Only early-exit when tokens were actually produced
+      if (start_idx < end_idx) {
+        return;
+      }
     }
 
     pos = parallel_ngram_search(
         cur_pre_ids, cur_step_idx, ngram, ngram_size, &s_min_pos);
     if (pos != INT64_MAX) {
-      if (threadIdx.x == 0) {
+      int64_t start_idx = pos + ngram_size;
+      int64_t end_idx =
+          min(start_idx + static_cast<int64_t>(max_draft_tokens), cur_step_idx);
+      if (threadIdx.x == 0 && start_idx < end_idx) {
         // Tentative token copy to scratch
-        int64_t start_idx = pos + ngram_size;
-        int64_t end_idx = min(
-            start_idx + static_cast<int64_t>(max_draft_tokens), cur_step_idx);
-        if (start_idx < end_idx) {
-          int64_t n = end_idx - start_idx;
-          seq_lens_this_time_copy[batch_idx] =
-              static_cast<int32_t>(ori_seq_len_this_time + n);
-          int64_t *dst = draft_tokens_copy + batch_idx * draft_tokens_stride;
-          for (int64_t k = 0; k < n; k++) {
-            dst[ori_seq_len_this_time + k] = cur_pre_ids[start_idx + k];
-          }
+        int64_t n = end_idx - start_idx;
+        seq_lens_this_time_copy[batch_idx] =
+            static_cast<int32_t>(ori_seq_len_this_time + n);
+        int64_t *dst = draft_tokens_copy + batch_idx * draft_tokens_stride;
+        for (int64_t k = 0; k < n; k++) {
+          dst[ori_seq_len_this_time + k] = cur_pre_ids[start_idx + k];
         }
       }
-      return;
+      // Only early-exit when tokens were actually produced
+      if (start_idx < end_idx) {
+        return;
+      }
     }
   }
 }
@@ -388,6 +391,13 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
 
   if (input_ids.is_gpu()) {
     auto stream = input_ids.stream();
+
+    // NOTE: GPU path does not pass seq_lens_decoder to kernels — the mixed
+    // variant uses ori_seq_len_this_time == 0 to skip inactive items. This
+    // matches CPU behavior under the invariant that seq_lens_decoder > 0 iff
+    // ori_seq_len_this_time > 0 (holds during normal MTP decoding). The CPU
+    // path counts seq_lens_decoder > 0 for threshold budget; the GPU scan
+    // counts tentative > 0, which is equivalent under this invariant.
 
     // Allocate scratch buffers for Phase 1 → Phase 2 communication
 

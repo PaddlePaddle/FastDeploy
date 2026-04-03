@@ -72,6 +72,7 @@ __global__ void ngram_match_search_kernel(const int64_t *input_ids,
 
   // Compute max_draft_tokens for this batch item
   int64_t remaining = max_dec_len[batch_idx] - cur_step_idx - 1;
+  if (remaining <= 0) return;
   int max_draft_tokens = static_cast<int>(
       min(static_cast<int64_t>(draft_token_num[batch_idx]), remaining));
 
@@ -83,42 +84,43 @@ __global__ void ngram_match_search_kernel(const int64_t *input_ids,
     int64_t pos = parallel_ngram_search(
         cur_input_ids, cur_input_ids_len, ngram, ngram_size, &s_min_pos);
     if (pos != INT64_MAX) {
-      if (threadIdx.x == 0) {
+      int64_t start_idx = pos + ngram_size;
+      int64_t end_idx = min(start_idx + static_cast<int64_t>(max_draft_tokens),
+                            cur_input_ids_len);
+      if (threadIdx.x == 0 && start_idx < end_idx) {
         // Tentative token copy to scratch
-        int64_t start_idx = pos + ngram_size;
-        int64_t end_idx =
-            min(start_idx + static_cast<int64_t>(max_draft_tokens),
-                cur_input_ids_len);
-        if (start_idx < end_idx) {
-          int64_t n = end_idx - start_idx;
-          seq_lens_this_time_copy[batch_idx] = static_cast<int32_t>(1 + n);
-          int64_t *dst = draft_tokens_copy + batch_idx * draft_tokens_stride;
-          for (int64_t k = 0; k < n; k++) {
-            dst[1 + k] = cur_input_ids[start_idx + k];
-          }
+        int64_t n = end_idx - start_idx;
+        seq_lens_this_time_copy[batch_idx] = static_cast<int32_t>(1 + n);
+        int64_t *dst = draft_tokens_copy + batch_idx * draft_tokens_stride;
+        for (int64_t k = 0; k < n; k++) {
+          dst[1 + k] = cur_input_ids[start_idx + k];
         }
       }
-      return;
+      // Only early-exit when tokens were actually produced
+      if (start_idx < end_idx) {
+        return;
+      }
     }
 
     pos = parallel_ngram_search(
         cur_pre_ids, cur_step_idx, ngram, ngram_size, &s_min_pos);
     if (pos != INT64_MAX) {
-      if (threadIdx.x == 0) {
+      int64_t start_idx = pos + ngram_size;
+      int64_t end_idx =
+          min(start_idx + static_cast<int64_t>(max_draft_tokens), cur_step_idx);
+      if (threadIdx.x == 0 && start_idx < end_idx) {
         // Tentative token copy to scratch
-        int64_t start_idx = pos + ngram_size;
-        int64_t end_idx = min(
-            start_idx + static_cast<int64_t>(max_draft_tokens), cur_step_idx);
-        if (start_idx < end_idx) {
-          int64_t n = end_idx - start_idx;
-          seq_lens_this_time_copy[batch_idx] = static_cast<int32_t>(1 + n);
-          int64_t *dst = draft_tokens_copy + batch_idx * draft_tokens_stride;
-          for (int64_t k = 0; k < n; k++) {
-            dst[1 + k] = cur_pre_ids[start_idx + k];
-          }
+        int64_t n = end_idx - start_idx;
+        seq_lens_this_time_copy[batch_idx] = static_cast<int32_t>(1 + n);
+        int64_t *dst = draft_tokens_copy + batch_idx * draft_tokens_stride;
+        for (int64_t k = 0; k < n; k++) {
+          dst[1 + k] = cur_pre_ids[start_idx + k];
         }
       }
-      return;
+      // Only early-exit when tokens were actually produced
+      if (start_idx < end_idx) {
+        return;
+      }
     }
   }
 }
@@ -147,12 +149,21 @@ __global__ void ngram_match_gather_kernel(
 
   int tid = threadIdx.x;
 
-  // Load tentative values from Phase 1
+  // Load tentative values from Phase 1.
+  // Encoder-active items are included in the scan with their original
+  // seq_lens_this_time to match CPU threshold-budget accounting.
   int tentative = 0;
   int is_active = 0;
   if (tid < max_batch_size) {
-    tentative = seq_lens_this_time_copy[tid];
-    is_active = (tentative > 0) ? 1 : 0;
+    if (seq_lens_encoder[tid] > 0) {
+      // Encoder-active: contribute original token count to threshold budget.
+      // seq_lens_this_time[tid] is still unmodified at this point.
+      tentative = seq_lens_this_time[tid];
+      is_active = 1;
+    } else {
+      tentative = seq_lens_this_time_copy[tid];
+      is_active = (tentative > 0) ? 1 : 0;
+    }
   }
 
   // Scan 1: inclusive prefix sum of tentative token counts
