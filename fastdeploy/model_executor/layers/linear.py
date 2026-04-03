@@ -88,10 +88,10 @@ class UnquantizedLinearMethod(QuantMethodBase):
                 f"bias must be 1D with size equal to the last dim of weight, "
                 f"but got bias.shape={bias.shape}, weight.shape[-1]={layer.weight.shape[-1]}"
             )
+            out = paddle.nn.functional.linear(x, layer.weight, bias)
         else:
-            bias = None
+            out = paddle.matmul(x, layer.weight)
 
-        out = paddle.nn.functional.linear(x, layer.weight, bias)
         return out
 
 
