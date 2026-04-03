@@ -115,6 +115,7 @@ __global__ void ngram_match_mixed_gather_kernel(
     }
   }
 
+  int sum_token_num = 0;  // running sum — O(bsz) vs original O(bsz²)
   for (int batch_idx = 0; batch_idx < max_batch_size; batch_idx++) {
     const int ori_seq_len_this_time = seq_lens_this_time[batch_idx];
     int max_draft_tokens =
@@ -123,14 +124,12 @@ __global__ void ngram_match_mixed_gather_kernel(
                              max_dec_len[batch_idx] - step_idx[batch_idx] - 1));
 
     if (ori_seq_len_this_time == 0 || max_draft_tokens <= 0) {
+      sum_token_num += ori_seq_len_this_time;
       continue;
     }
 
     unprocessed_batch_size--;
-    int sum_token_num = 0;
-    for (int i = 0; i <= batch_idx; i++) {
-      sum_token_num += seq_lens_this_time[i];
-    }
+    sum_token_num += ori_seq_len_this_time;
     int left_min_token_num = unprocessed_batch_size;
 
     if (sum_token_num + max_draft_tokens + left_min_token_num > threshold) {
@@ -163,6 +162,7 @@ __global__ void ngram_match_mixed_gather_kernel(
     int64_t n = end_idx - start_idx;
     seq_lens_this_time[batch_idx] =
         static_cast<int32_t>(ori_seq_len_this_time + n);
+    sum_token_num += static_cast<int>(n);  // adjust for draft tokens
     int64_t *cur_draft = draft_tokens + batch_idx * draft_tokens_stride;
     for (int64_t k = 0; k < n; k++) {
       cur_draft[ori_seq_len_this_time + k] = haystack[start_idx + k];
