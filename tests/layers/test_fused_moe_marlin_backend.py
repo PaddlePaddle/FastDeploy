@@ -165,7 +165,7 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
                 create=True,
             ),
         ):
-            out = m.apply(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
+            out = m.apply(layer, x, gate, topk_ids_hookfunc=lambda topk_ids: None)
         self.assertEqual(list(out.shape), [2, 64])
 
     def test_apply_noaux_tc(self):
@@ -204,7 +204,7 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
                 create=True,
             ),
         ):
-            out = m.apply(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
+            out = m.apply(layer, x, gate, topk_ids_hookfunc=lambda topk_ids: None)
         self.assertEqual(list(out.shape), [2, 64])
 
 
