@@ -21,18 +21,13 @@
 // "两个Kernel逻辑有较为相似部分，Kernel 形式为提取共用的匹配逻辑，外加业务逻辑"
 //
 // Two-phase parallel architecture:
-//   Phase 1 — <<<bsz, NGRAM_BLOCK_THREADS>>>: parallel sliding-window search
-//   Phase 2 — <<<1, 1>>>: serial threshold + token copy (inter-batch dep)
+//   Phase 1 — <<<bsz, NGRAM_BLOCK_THREADS>>>: parallel sliding-window
+//             search + tentative token copy (one block per batch item).
+//   Phase 2 — <<<1, NGRAM_GATHER_THREADS>>>: parallel threshold truncation
+//             via CUB BlockScan prefix-sum, then copy winners to output
 
-#define NGRAM_BLOCK_THREADS 256
-
-// Intermediate result for one batch item produced by Phase 1 (parallel search)
-// and consumed by Phase 2 (serial threshold + copy).
-struct NgramMatchResult {
-  int64_t match_pos;  // first (leftmost) match position in haystack (-1=none)
-  int ngram_size;     // which ngram_size produced this match
-  int haystack_type;  // 0 = input_ids, 1 = pre_ids
-};
+#define NGRAM_BLOCK_THREADS 1024
+#define NGRAM_GATHER_THREADS 1024
 
 // ------------------------------------------------------------
 // atomicMin for int64_t via CAS loop.  CUDA has no native
@@ -58,7 +53,11 @@ __device__ __forceinline__ void atomicMin64(int64_t *addr, int64_t val) {
 // Called by NGRAM_BLOCK_THREADS threads within a single block.
 // Searches for ngram[0..ngram_size-1] in haystack[0..haystack_len-1].
 // Uses shared-memory s_min_pos to reduce to the FIRST (leftmost)
-// match position.
+// match position via atomicMin64 (CAS loop, contention-free in
+// practice because matches are rare).
+//
+// Early-exit (A2): once a match is found (s_min_pos < INT64_MAX),
+// threads that are past the current best skip remaining work.
 //
 // Returns the leftmost match position, or INT64_MAX if no match.
 // Caller must provide __shared__ int64_t s_min_pos.
@@ -84,6 +83,11 @@ parallel_ngram_search(const int64_t *haystack,
   }
 
   for (int64_t i = tid; i < search_len; i += nthreads) {
+    // A2: Early-exit — skip positions beyond current best match.
+    // Non-atomic read is safe: stale value only delays exit, never
+    // causes incorrect results (we still find the true minimum).
+    if (i > *s_min_pos) break;
+
     bool match = true;
     for (int j = 0; j < ngram_size; j++) {
       if (ngram[j] != haystack[i + j]) {
