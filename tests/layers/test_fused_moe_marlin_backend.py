@@ -105,6 +105,40 @@ class TestFusedMoeMarlinBackend(unittest.TestCase):
         self.assertEqual(list(mb.marlin_permute_scales(s, 16, 64, 8).shape), [2, 64])
         self.assertEqual(list(mb.marlin_permute_scales(s, 16, 64, -1).shape), [2, 64])
 
+    def test_gptq_marlin_moe_repack(self):
+        """gptq_marlin_moe_repack loops over experts and repacks via C++ op."""
+        num_experts, size_k, size_n, num_bits = 2, 32, 16, 4
+        b_q_weight = paddle.ones([num_experts, size_k, size_n], dtype="int32")
+        perm = paddle.zeros([num_experts, size_k], dtype="int32")
+        with (
+            patch.dict(
+                sys.modules,
+                {_GPU_OPS: _gpu_ops_stub, _DEEP_GEMM: _deep_gemm_stub},
+                clear=False,
+            ),
+            patch.object(
+                _gpu_ops_stub,
+                "gptq_marlin_repack",
+                lambda w, p, sk, sn, nb: paddle.zeros([sk // 16, sn * (nb // 2)], dtype=w.dtype),
+            ),
+        ):
+            out = mb.gptq_marlin_moe_repack(b_q_weight, perm, size_k, size_n, num_bits)
+        self.assertEqual(list(out.shape), [num_experts, size_k // 16, size_n * (num_bits // 2)])
+
+    def test_marlin_moe_permute_scales(self):
+        """marlin_moe_permute_scales loops over experts applying scale permutation."""
+        num_experts, size_k, size_n, group_size = 3, 64, 64, 8
+        num_groups = size_k // group_size  # 8
+        s = paddle.arange(num_experts * num_groups * size_n, dtype="float32").reshape(
+            [num_experts, num_groups, size_n]
+        )
+        out = mb.marlin_moe_permute_scales(s, size_k, size_n, group_size)
+        self.assertEqual(list(out.shape), [num_experts, num_groups, size_n])
+        # Each expert slice should match the single-expert function
+        for e in range(num_experts):
+            expected = mb.marlin_permute_scales(s[e], size_k, size_n, group_size)
+            self.assertTrue(paddle.equal_all(out[e], expected).item())
+
     def test_create_and_process(self):
         """create_weights -> process_loaded_weights end-to-end."""
         layer = _DummyLayer()
