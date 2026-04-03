@@ -1060,13 +1060,14 @@ class SpeculativeSampler(nn.Layer):
             paddle.reshape(share_inputs["seq_lens_encoder"], shape=[-1]),
         )
         _, next_tokens = top_k_top_p_sampling(
-            probs, top_p=top_p, top_k=top_k,
-            top_k_list=sampling_metadata.top_k_list, topp_seed=topp_seed,
+            probs,
+            top_p=top_p,
+            top_k=top_k,
+            top_k_list=sampling_metadata.top_k_list,
+            topp_seed=topp_seed,
         )
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
-        running_mask = (
-            paddle.reshape(share_inputs["seq_lens_this_time"], shape=[-1]) > 0
-        ).cast("int32")
+        running_mask = (paddle.reshape(share_inputs["seq_lens_this_time"], shape=[-1]) > 0).cast("int32")
         share_inputs["accept_tokens"][:real_bsz, 0] = next_tokens.squeeze(-1)
         share_inputs["accept_num"][:real_bsz] = running_mask
         return SamplerOutput(
@@ -1087,7 +1088,10 @@ class SpeculativeSampler(nn.Layer):
         reject_all_drafts: bool = False,
     ) -> SamplerOutput:
         """Verify draft tokens (MTP/Ngram mode) on XPU using verify_draft_tokens."""
-        from fastdeploy.model_executor.ops.xpu import verify_draft_tokens, top_p_candidates
+        from fastdeploy.model_executor.ops.xpu import (
+            top_p_candidates,
+            verify_draft_tokens,
+        )
 
         target_tokens = None
         candidate_ids, candidate_scores, candidate_lens = None, None, None
@@ -1101,8 +1105,11 @@ class SpeculativeSampler(nn.Layer):
                 paddle.reshape(share_inputs["seq_lens_encoder"], shape=[-1]),
             )
             _, target_tokens = top_k_top_p_sampling(
-                probs, top_p=top_p, top_k=top_k,
-                top_k_list=sampling_metadata.top_k_list, topp_seed=topp_seed,
+                probs,
+                top_p=top_p,
+                top_k=top_k,
+                top_k_list=sampling_metadata.top_k_list,
+                topp_seed=topp_seed,
             )
         elif self.verify_strategy == VerifyStrategy.GREEDY:
             target_tokens = paddle.argmax(probs, axis=-1)
@@ -1118,8 +1125,7 @@ class SpeculativeSampler(nn.Layer):
             raise ValueError(f"Unknown verify strategy: {self.verify_strategy}")
 
         final_accept_all = self.config_accept_all or accept_all_drafts
-        final_reject_all = (self.config_reject_all or reject_all_drafts
-                            or self.speculative_benchmark_mode)
+        final_reject_all = self.config_reject_all or reject_all_drafts or self.speculative_benchmark_mode
 
         verify_draft_tokens(
             share_inputs["accept_tokens"],
@@ -1161,7 +1167,9 @@ class SpeculativeSampler(nn.Layer):
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
     ) -> SamplerOutput:
-        from fastdeploy.model_executor.ops.xpu import apply_speculative_penalty_multi_scores
+        from fastdeploy.model_executor.ops.xpu import (
+            apply_speculative_penalty_multi_scores,
+        )
 
         logits = apply_speculative_penalty_multi_scores(
             sampling_metadata.token_ids_all,
@@ -1190,8 +1198,13 @@ class SpeculativeSampler(nn.Layer):
             return self._normal_sample_xpu(logits, probs, sampling_metadata, share_inputs)
         else:
             return self._verify_and_sample_xpu(
-                logits, probs, sampling_metadata, max_model_len, share_inputs,
-                accept_all_drafts, reject_all_drafts,
+                logits,
+                probs,
+                sampling_metadata,
+                max_model_len,
+                share_inputs,
+                accept_all_drafts,
+                reject_all_drafts,
             )
 
 

@@ -46,8 +46,8 @@ if current_platform.is_xpu():
         speculate_step_paddle,
         speculate_step_reschedule,
         speculate_step_system_cache,
-        unified_update_model_status,
         step_paddle,
+        unified_update_model_status,
         update_inputs,
         update_inputs_v1,
     )
