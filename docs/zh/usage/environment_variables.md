@@ -261,4 +261,34 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_CONFIG_ROOT": lambda: os.path.expanduser(
         os.getenv("FD_CONFIG_ROOT", os.path.join(os.path.expanduser("~"), ".config", "fastdeploy"))
     ),
+
+    # Mooncake 配置 JSON 文件路径。设置后将忽略其他 MOONCAKE_* 环境变量。
+    "MOONCAKE_CONFIG_PATH": lambda: os.getenv("MOONCAKE_CONFIG_PATH", None),
+
+    # Mooncake Store 本地主机名。默认在运行时使用主机 IP 地址。
+    "MOONCAKE_LOCAL_HOSTNAME": lambda: os.getenv("MOONCAKE_LOCAL_HOSTNAME", None),
+
+    # Mooncake Store 元数据服务 URL（未设置 MOONCAKE_CONFIG_PATH 时必填）。
+    "MOONCAKE_METADATA_SERVER": lambda: os.getenv("MOONCAKE_METADATA_SERVER", None),
+
+    # 每个 TP 进程给全局共享内存共享的内存空间（字节），默认 1 GiB。
+    "MOONCAKE_GLOBAL_SEGMENT_SIZE": lambda: int(os.getenv("MOONCAKE_GLOBAL_SEGMENT_SIZE", "1073741824")),
+
+    # 数据传输本地缓冲区大小（字节），默认 128 MiB。
+    "MOONCAKE_LOCAL_BUFFER_SIZE": lambda: int(os.getenv("MOONCAKE_LOCAL_BUFFER_SIZE", "134217728")),
+
+    # Mooncake Store 传输协议："rdma" 或 "tcp"，默认 "rdma"。
+    "MOONCAKE_PROTOCOL": lambda: os.getenv("MOONCAKE_PROTOCOL", "rdma"),
+
+    # RDMA 设备名称（逗号分隔），为空时自动检测。
+    "MOONCAKE_RDMA_DEVICES": lambda: os.getenv("MOONCAKE_RDMA_DEVICES", ""),
+
+    # Mooncake Store Master 服务地址（未设置 MOONCAKE_CONFIG_PATH 时必填）。
+    "MOONCAKE_MASTER_SERVER_ADDR": lambda: os.getenv("MOONCAKE_MASTER_SERVER_ADDR", None),
+
+    # Mooncake Store TCP 绑定地址，运行时自动设置为主机 IP 地址。
+    "MC_TCP_BIND_ADDRESS": lambda: os.getenv("MC_TCP_BIND_ADDRESS", None),
+
+    # Mooncake Store 最大内存区域大小（字节），默认 4 GiB。
+    "MC_MAX_MR_SIZE": lambda: os.getenv("MC_MAX_MR_SIZE", None),
 }

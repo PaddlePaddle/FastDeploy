@@ -266,6 +266,26 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
+    # Path to mooncake configuration JSON file. When set, other MOONCAKE_* env vars are ignored.
+    "MOONCAKE_CONFIG_PATH": lambda: os.getenv("MOONCAKE_CONFIG_PATH", None),
+    # Local hostname for mooncake store. Defaults to the host IP address at runtime.
+    "MOONCAKE_LOCAL_HOSTNAME": lambda: os.getenv("MOONCAKE_LOCAL_HOSTNAME", None),
+    # Metadata server URL for mooncake store (required when MOONCAKE_CONFIG_PATH is not set).
+    "MOONCAKE_METADATA_SERVER": lambda: os.getenv("MOONCAKE_METADATA_SERVER", None),
+    # Memory space each TP process shares to global shared memory (bytes). Default: 1 GiB.
+    "MOONCAKE_GLOBAL_SEGMENT_SIZE": lambda: int(os.getenv("MOONCAKE_GLOBAL_SEGMENT_SIZE", "1073741824")),
+    # Local buffer size for data transfer (bytes). Default: 128 MiB.
+    "MOONCAKE_LOCAL_BUFFER_SIZE": lambda: int(os.getenv("MOONCAKE_LOCAL_BUFFER_SIZE", "134217728")),
+    # Transfer protocol for mooncake store: "rdma" or "tcp". Default: "rdma".
+    "MOONCAKE_PROTOCOL": lambda: os.getenv("MOONCAKE_PROTOCOL", "rdma"),
+    # RDMA device names (comma-separated). Auto-detected when empty.
+    "MOONCAKE_RDMA_DEVICES": lambda: os.getenv("MOONCAKE_RDMA_DEVICES", ""),
+    # Master server address for mooncake store (required when MOONCAKE_CONFIG_PATH is not set).
+    "MOONCAKE_MASTER_SERVER_ADDR": lambda: os.getenv("MOONCAKE_MASTER_SERVER_ADDR", None),
+    # TCP bind address for mooncake store. Set at runtime to the host IP address.
+    "MC_TCP_BIND_ADDRESS": lambda: os.getenv("MC_TCP_BIND_ADDRESS", None),
+    # Maximum memory region size for mooncake store (bytes). Default: 4 GiB.
+    "MC_MAX_MR_SIZE": lambda: os.getenv("MC_MAX_MR_SIZE", None),
 }
 
 

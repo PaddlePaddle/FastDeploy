@@ -22,6 +22,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
+import fastdeploy.envs as envs
 from fastdeploy.cache_manager.transfer_factory.kvcache_storage import (
     KVCacheStorage,
     logger,
@@ -48,17 +49,17 @@ class MooncakeStoreConfig:
     def create() -> "MooncakeStoreConfig":
         """Load the config from a JSON file or environment variables."""
         config = {}
-        file_path = os.getenv("MOONCAKE_CONFIG_PATH")
+        file_path = envs.MOONCAKE_CONFIG_PATH
         host_ip = get_host_ip()
 
         if file_path is None:
-            local_hostname = os.environ.get("MOONCAKE_LOCAL_HOSTNAME", host_ip)
-            metadata_server = os.environ.get("MOONCAKE_METADATA_SERVER")
-            global_segment_size = int(os.environ.get("MOONCAKE_GLOBAL_SEGMENT_SIZE", DEFAULT_GLOBAL_SEGMENT_SIZE))
-            local_buffer_size = int(os.environ.get("MOONCAKE_LOCAL_BUFFER_SIZE", DEFAULT_LOCAL_BUFFER_SIZE))
-            protocol = os.environ.get("MOONCAKE_PROTOCOL", "rdma")
-            rdma_devices = os.environ.get("MOONCAKE_RDMA_DEVICES", "")
-            master_server_addr = os.environ.get("MOONCAKE_MASTER_SERVER_ADDR")
+            local_hostname = envs.MOONCAKE_LOCAL_HOSTNAME or host_ip
+            metadata_server = envs.MOONCAKE_METADATA_SERVER
+            global_segment_size = envs.MOONCAKE_GLOBAL_SEGMENT_SIZE
+            local_buffer_size = envs.MOONCAKE_LOCAL_BUFFER_SIZE
+            protocol = envs.MOONCAKE_PROTOCOL
+            rdma_devices = envs.MOONCAKE_RDMA_DEVICES
+            master_server_addr = envs.MOONCAKE_MASTER_SERVER_ADDR
         else:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"File path {file_path} for creating MooncakeStoreConfig does not exist.")
@@ -109,10 +110,10 @@ class MooncakeStore(KVCacheStorage):
 
         # Set MC_TCP_BIND_ADDRESS for mooncake store to bind to the correct host IP
         host_ip = get_host_ip()
-        os.environ["MC_TCP_BIND_ADDRESS"] = host_ip
+        envs.MC_TCP_BIND_ADDRESS = host_ip
         logger.info(f"Set MC_TCP_BIND_ADDRESS to {host_ip}")
-        if os.environ.get("MC_MAX_MR_SIZE") is None:
-            os.environ["MC_MAX_MR_SIZE"] = "4294967296"  # 4GB
+        if envs.MC_MAX_MR_SIZE is None:
+            envs.MC_MAX_MR_SIZE = "4294967296"  # 4GB
             logger.info("MC_MAX_MR_SIZE is not set, default to 4GB.")
 
         try:
