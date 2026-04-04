@@ -195,7 +195,8 @@ def main(args: argparse.Namespace) -> None:
             print(f"\n{'='*50}")
 
     # 检查参数
-    if not any([args.encode, args.decode, args.vocab_size, args.info, args.vocab_export]):
+    # Optimization: Use generator expression instead of list comprehension in any() to save memory and enable short-circuiting
+    if not any((args.encode, args.decode, args.vocab_size, args.info, args.vocab_export)):
         print("请至少指定一个参数：--encode, --decode, --vocab-size, --info, --vocab-export")
         return
 

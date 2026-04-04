@@ -538,7 +538,8 @@ def calculate_metrics(
             slo_values.append(goodput_config_dict["e2el"] / MILLISECONDS_TO_SECONDS_CONVERSION)
 
         for req_metric in zip(*valid_metrics):
-            is_good_req = all([s >= r for s, r in zip(slo_values, req_metric)])
+            # Optimization: Use generator expression instead of list comprehension in all() to save memory and enable short-circuiting
+            is_good_req = all(s >= r for s, r in zip(slo_values, req_metric))
             if is_good_req:
                 good_completed += 1
 

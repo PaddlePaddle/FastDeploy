@@ -311,7 +311,8 @@ class ResourceManager:
                 break
 
         # record batch size here
-        num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
+        # Optimization: Use generator expression instead of list comprehension in sum() to save memory
+        num_blocks_used_by_tasks = sum(len(task.block_tables) if task else 0 for task in self.tasks_list)
         main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())

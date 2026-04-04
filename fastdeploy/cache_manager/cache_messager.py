@@ -1004,7 +1004,8 @@ def main():
                     gpu_cache_kvs[f"value_cache_scales_{i}_rank{rank}_device{device}"],
                     f"value_cache_scales_{i}_rank{rank}.device{device}",
                 )
-    cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in gpu_cache_kvs.items()])
+    # Optimization: Use generator expression instead of list comprehension in sum() to save memory
+    cache_kv_size_byte = sum(tmp.numel() * 1 for key, tmp in gpu_cache_kvs.items())
     logger.info(f"device :{device}")
     logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
     logger.info(f"done init cache (full) gmem alloc : {memory_allocated}")
