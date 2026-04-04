@@ -50,11 +50,13 @@ __device__ __forceinline__ void atomicMin64(int64_t *addr, int64_t val) {
 // ------------------------------------------------------------
 // parallel_ngram_search — Block-cooperative haystack search.
 //
-// Called by NGRAM_BLOCK_THREADS threads within a single block.
-// Searches for ngram[0..ngram_size-1] in haystack[0..haystack_len-1].
-// Uses shared-memory s_min_pos to reduce to the FIRST (leftmost)
-// match position via atomicMin64 (CAS loop, contention-free in
-// practice because matches are rare).
+// Template-specialized for common ngram sizes (1-3) to enable:
+//   - Register caching of ngram tokens (avoid repeated global loads)
+//   - Full compile-time unrolling of inner comparison loop
+//   - __restrict__ hints for pointer non-aliasing optimization
+//
+// Runtime dispatcher preserves the original call signature so both
+// ngram_match.cu and ngram_match_mixed.cu work transparently.
 //
 // Early-exit (A2): once a match is found (s_min_pos < INT64_MAX),
 // threads that are past the current best skip remaining work.
@@ -62,32 +64,79 @@ __device__ __forceinline__ void atomicMin64(int64_t *addr, int64_t val) {
 // Returns the leftmost match position, or INT64_MAX if no match.
 // Caller must provide __shared__ int64_t s_min_pos.
 // ------------------------------------------------------------
+template <int NGRAM_SIZE>
 __device__ __forceinline__ int64_t
-parallel_ngram_search(const int64_t *haystack,
-                      int64_t haystack_len,
-                      const int64_t *ngram,
-                      int ngram_size,
-                      int64_t *s_min_pos) {
+parallel_ngram_search_specialized(const int64_t *__restrict__ haystack,
+                                  int64_t haystack_len,
+                                  const int64_t *__restrict__ ngram,
+                                  int64_t *s_min_pos) {
   int tid = threadIdx.x;
   int nthreads = blockDim.x;
 
-  if (tid == 0) {
-    *s_min_pos = INT64_MAX;
-  }
+  if (tid == 0) *s_min_pos = INT64_MAX;
   __syncthreads();
 
-  int64_t search_len = haystack_len - ngram_size + 1;
+  int64_t search_len = haystack_len - NGRAM_SIZE + 1;
   if (search_len <= 0) {
     __syncthreads();
     return *s_min_pos;
   }
 
+  // Cache ngram tokens in registers — eliminates repeated global reads.
+  int64_t ng[NGRAM_SIZE];
+#pragma unroll
+  for (int j = 0; j < NGRAM_SIZE; j++) ng[j] = ngram[j];
+
   for (int64_t i = tid; i < search_len; i += nthreads) {
     // A2: Early-exit — skip positions beyond current best match.
-    // Non-atomic read is safe: stale value only delays exit, never
-    // causes incorrect results (we still find the true minimum).
     if (i > *s_min_pos) break;
 
+    bool match = true;
+#pragma unroll
+    for (int j = 0; j < NGRAM_SIZE; j++) {
+      if (ng[j] != haystack[i + j]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) atomicMin64(s_min_pos, i);
+  }
+  __syncthreads();
+  return *s_min_pos;
+}
+
+// Runtime dispatcher — same signature as original, transparent to callers.
+__device__ __forceinline__ int64_t
+parallel_ngram_search(const int64_t *__restrict__ haystack,
+                      int64_t haystack_len,
+                      const int64_t *__restrict__ ngram,
+                      int ngram_size,
+                      int64_t *s_min_pos) {
+  switch (ngram_size) {
+    case 1:
+      return parallel_ngram_search_specialized<1>(
+          haystack, haystack_len, ngram, s_min_pos);
+    case 2:
+      return parallel_ngram_search_specialized<2>(
+          haystack, haystack_len, ngram, s_min_pos);
+    case 3:
+      return parallel_ngram_search_specialized<3>(
+          haystack, haystack_len, ngram, s_min_pos);
+    default:
+      break;
+  }
+  // Fallback for ngram_size > 3 — runtime loop, no unrolling.
+  int tid = threadIdx.x;
+  int nthreads = blockDim.x;
+  if (tid == 0) *s_min_pos = INT64_MAX;
+  __syncthreads();
+  int64_t search_len = haystack_len - ngram_size + 1;
+  if (search_len <= 0) {
+    __syncthreads();
+    return *s_min_pos;
+  }
+  for (int64_t i = tid; i < search_len; i += nthreads) {
+    if (i > *s_min_pos) break;
     bool match = true;
     for (int j = 0; j < ngram_size; j++) {
       if (ngram[j] != haystack[i + j]) {
@@ -95,11 +144,8 @@ parallel_ngram_search(const int64_t *haystack,
         break;
       }
     }
-    if (match) {
-      atomicMin64(s_min_pos, i);
-    }
+    if (match) atomicMin64(s_min_pos, i);
   }
   __syncthreads();
-
   return *s_min_pos;
 }

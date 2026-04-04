@@ -158,19 +158,24 @@ def _run_gpu(ngram_match_fn, gpu_data):
 def _time_gpu(ngram_match_fn, batch_size, seq_len, hit_type, n_runs):
     """Time GPU kernel with pre-created tensors (no data creation in loop)."""
     gpu_data = _to_gpu(_build_data(batch_size, seq_len, hit_type))
+    # Pre-allocate mutable output buffers once — avoids per-iteration
+    # paddle.zeros/ones which add ~20-40µs allocation + fill overhead.
+    draft_buf = paddle.zeros([batch_size, MAX_DRAFT_TOKENS + 1], dtype="int64").cuda()
+    seqlens_buf = paddle.ones([batch_size], dtype="int32").cuda()
     # Warmup
     for _ in range(WARMUP):
-        # Reset mutable outputs
-        gpu_data["draft_tokens"] = paddle.zeros([batch_size, MAX_DRAFT_TOKENS + 1], dtype="int64").cuda()
-        gpu_data["seq_lens_this_time"] = paddle.ones([batch_size], dtype="int32").cuda()
+        seqlens_buf.fill_(1)
+        gpu_data["draft_tokens"] = draft_buf
+        gpu_data["seq_lens_this_time"] = seqlens_buf
         _run_gpu(ngram_match_fn, gpu_data)
     paddle.device.synchronize()
 
     paddle.device.synchronize()
     t0 = time.perf_counter()
     for _ in range(n_runs):
-        gpu_data["draft_tokens"] = paddle.zeros([batch_size, MAX_DRAFT_TOKENS + 1], dtype="int64").cuda()
-        gpu_data["seq_lens_this_time"] = paddle.ones([batch_size], dtype="int32").cuda()
+        seqlens_buf.fill_(1)
+        gpu_data["draft_tokens"] = draft_buf
+        gpu_data["seq_lens_this_time"] = seqlens_buf
         _run_gpu(ngram_match_fn, gpu_data)
         paddle.device.synchronize()
     return (time.perf_counter() - t0) / n_runs * 1e6  # microseconds

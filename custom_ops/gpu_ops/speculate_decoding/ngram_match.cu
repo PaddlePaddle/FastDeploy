@@ -402,17 +402,28 @@ void NgramMatch(const paddle::Tensor &input_ids,
   if (input_ids.is_gpu()) {
     auto stream = input_ids.stream();
 
-    // Allocate scratch buffers for Phase 1 → Phase 2 communication
+    // Persistent scratch buffers for Phase 1 → Phase 2 communication.
+    // Cached across calls to avoid per-invocation allocation overhead.
+    // Write-before-read pattern (Phase 1 writes all elements before
+    // Phase 2 reads) means no initialization is needed between calls.
+    // Safety: single-threaded Python caller + CUDA stream serialization.
+    static paddle::Tensor s_draft_copy;
+    static paddle::Tensor s_seqlens_copy;
+    static int64_t s_scratch_batch = 0;
+    static int64_t s_scratch_stride = 0;
 
-    // Scratch copy of draft_tokens (Phase 1 writes tentative tokens here)
-    auto draft_tokens_copy =
-        paddle::empty({max_batch_size, draft_tokens_stride},
-                      paddle::DataType::INT64,
-                      input_ids.place());
-
-    // Scratch copy of seq_lens_this_time (Phase 1 writes tentative counts)
-    auto seq_lens_this_time_copy = paddle::empty(
-        {max_batch_size}, paddle::DataType::INT32, input_ids.place());
+    if (max_batch_size > s_scratch_batch ||
+        draft_tokens_stride > s_scratch_stride) {
+      s_draft_copy = paddle::empty({max_batch_size, draft_tokens_stride},
+                                   paddle::DataType::INT64,
+                                   input_ids.place());
+      s_seqlens_copy = paddle::empty(
+          {max_batch_size}, paddle::DataType::INT32, input_ids.place());
+      s_scratch_batch = max_batch_size;
+      s_scratch_stride = draft_tokens_stride;
+    }
+    auto &draft_tokens_copy = s_draft_copy;
+    auto &seq_lens_this_time_copy = s_seqlens_copy;
 
     // Fail-fast: BlockScan Phase 2 requires max_batch_size ≤ block size.
     PD_CHECK(max_batch_size <= NGRAM_GATHER_THREADS,
