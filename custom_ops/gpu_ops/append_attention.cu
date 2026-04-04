@@ -170,7 +170,7 @@ void AppendAttentionKernel(
         speculate_max_draft_token_num,
         causal,
         lambda_is_decoder,
-        lambda_enable_prefill,
+        false,
         lambda_stream,
         &fmha_out,
         sliding_window,
