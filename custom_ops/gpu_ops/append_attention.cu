@@ -170,7 +170,7 @@ void AppendAttentionKernel(
         speculate_max_draft_token_num,
         causal,
         lambda_is_decoder,
-        false,
+        lambda_enable_prefill,
         lambda_stream,
         &fmha_out,
         sliding_window,
@@ -440,8 +440,8 @@ void AppendAttentionKernel(
                                             decoder_num_blocks_data,
                                             decoder_block_shape_q,
                                             max_kv_len_this_time,
-                                            !speculate_decoder,
-                                            !speculate_decoder,
+                                            false,
+                                            false,
                                             exec_stream);
     }
     if (max_enc_len_this_time > 0) {
