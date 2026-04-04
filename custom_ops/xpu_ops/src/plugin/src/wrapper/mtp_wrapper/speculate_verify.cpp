@@ -40,7 +40,7 @@ __attribute__((global)) void speculate_verify(
     const int64_t *max_dec_len,
     const int64_t *end_tokens,
     const bool *is_block_step,
-    const int *output_cum_offsets,
+    const int *cu_seqlens_q_output,
     const int *actual_candidate_len,
     const int real_bsz,
     const int max_draft_tokens,
@@ -129,7 +129,7 @@ static int cpu_wrapper(api::Context *ctx,
                        const int64_t *max_dec_len,
                        const int64_t *end_tokens,
                        const bool *is_block_step,
-                       const int *output_cum_offsets,
+                       const int *cu_seqlens_q_output,
                        const int *actual_candidate_len,
                        const int real_bsz,
                        const int max_draft_tokens,
@@ -147,7 +147,7 @@ static int cpu_wrapper(api::Context *ctx,
     int stop_flag_now_int = 0;
 
     if (!(is_block_step[bid] || bid >= real_bsz)) {
-      const int start_token_id = bid * max_seq_len - output_cum_offsets[bid];
+      const int start_token_id = cu_seqlens_q_output[bid];
       // printf("debug cpu bid:%d,start_token_id:%d\n",bid, start_token_id);
       // printf("bid %d\n", bid);
 
@@ -365,7 +365,7 @@ static int xpu3_wrapper(api::Context *ctx,
                         const int64_t *max_dec_len,
                         const int64_t *end_tokens,
                         const bool *is_block_step,
-                        const int *output_cum_offsets,
+                        const int *cu_seqlens_q_output,
                         const int *actual_candidate_len,
                         const int real_bsz,
                         const int max_draft_tokens,
@@ -397,7 +397,7 @@ static int xpu3_wrapper(api::Context *ctx,
           reinterpret_cast<const XPU_INT64 *>(max_dec_len),
           reinterpret_cast<const XPU_INT64 *>(end_tokens),
           is_block_step,
-          output_cum_offsets,
+          cu_seqlens_q_output,
           actual_candidate_len,
           real_bsz,
           max_draft_tokens,
@@ -431,7 +431,7 @@ int speculate_verify(api::Context *ctx,
                      const int64_t *max_dec_len,
                      const int64_t *end_tokens,
                      const bool *is_block_step,
-                     const int *output_cum_offsets,
+                     const int *cu_seqlens_q_output,
                      const int *actual_candidate_len,
                      const int real_bsz,
                      const int max_draft_tokens,
@@ -462,7 +462,7 @@ int speculate_verify(api::Context *ctx,
                       end_tokens);
   WRAPPER_DUMP_PARAM5(ctx,
                       is_block_step,
-                      output_cum_offsets,
+                      cu_seqlens_q_output,
                       actual_candidate_len,
                       real_bsz,
                       max_draft_tokens);
@@ -475,6 +475,7 @@ int speculate_verify(api::Context *ctx,
                       benchmark_mode);
   WRAPPER_DUMP_PARAM2(ctx, accept_all_drafts, use_target_sampling);
   WRAPPER_DUMP(ctx);
+  WRAPPER_CHECK_PTR(ctx, int64_t, real_bsz, sampled_token_ids);
   WRAPPER_CHECK_PTR(ctx, int64_t, real_bsz * max_draft_tokens, accept_tokens);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, accept_num);
   WRAPPER_CHECK_PTR(ctx, int64_t, real_bsz, step_idx);
@@ -483,7 +484,7 @@ int speculate_verify(api::Context *ctx,
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_decoder);
   WRAPPER_CHECK_PTR(ctx, int64_t, real_bsz * max_draft_tokens, draft_tokens);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, actual_draft_token_nums);
-  WRAPPER_CHECK_PTR(ctx, float, real_bsz, dev_curand_states);
+  // WRAPPER_CHECK_PTR(ctx, float, real_bsz, dev_curand_states);
   WRAPPER_CHECK_PTR(ctx, float, real_bsz, topp);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_this_time);
   // WRAPPER_CHECK_PTR(ctx, int64_t, real_bsz, verify_tokens);
@@ -491,7 +492,7 @@ int speculate_verify(api::Context *ctx,
   WRAPPER_CHECK_PTR(ctx, int64_t, real_bsz, max_dec_len);
   WRAPPER_CHECK_PTR(ctx, int64_t, end_length, end_tokens);
   WRAPPER_CHECK_PTR(ctx, bool, real_bsz, is_block_step);
-  WRAPPER_CHECK_PTR(ctx, int, real_bsz, output_cum_offsets);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, cu_seqlens_q_output);
   // WRAPPER_CHECK_PTR(ctx, int, real_bsz, actual_candidate_len);
 
   // param check sm size limit
@@ -524,7 +525,7 @@ int speculate_verify(api::Context *ctx,
                                               max_dec_len,
                                               end_tokens,
                                               is_block_step,
-                                              output_cum_offsets,
+                                              cu_seqlens_q_output,
                                               actual_candidate_len,
                                               real_bsz,
                                               max_draft_tokens,
@@ -556,7 +557,7 @@ int speculate_verify(api::Context *ctx,
                                                max_dec_len,
                                                end_tokens,
                                                is_block_step,
-                                               output_cum_offsets,
+                                               cu_seqlens_q_output,
                                                actual_candidate_len,
                                                real_bsz,
                                                max_draft_tokens,
@@ -592,7 +593,7 @@ int speculate_verify(api::Context *ctx,
       const int64_t *,                    /* max_dec_len */                 \
       const int64_t *,                    /* end_tokens */                  \
       const bool *,                       /* is_block_step */               \
-      const int *,                        /* output_cum_offsets */          \
+      const int *,                        /* cu_seqlens_q_output */         \
       const int *,                        /* actual_candidate_len */        \
       int,                                /* real_bsz */                    \
       int,                                /* max_draft_tokens */            \

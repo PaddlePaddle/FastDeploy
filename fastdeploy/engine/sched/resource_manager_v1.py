@@ -282,6 +282,7 @@ class ResourceManagerV1(ResourceManager):
                 del self.requests[request_id]
                 del self.req_dict[request_id]
                 self.to_be_aborted_req_id_set.remove(request_id)
+        self.update_metrics()
 
     def _trigger_abort(self, request_id, scheduled_reqs):
         if request_id in self.requests:
@@ -366,9 +367,15 @@ class ResourceManagerV1(ResourceManager):
                         del self.requests[preempted_req.request_id]
                     if preempted_req.request_id in self.req_dict:
                         del self.req_dict[preempted_req.request_id]
+                    if envs.FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST:
+                        if self.config.cache_config.kvcache_storage_backend:
+                            self.cache_manager.write_cache_to_storage_decode(preempted_req)
                     self._free_blocks(preempted_req)
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 else:
+                    if envs.FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST:
+                        if self.config.cache_config.kvcache_storage_backend:
+                            self.cache_manager.write_cache_to_storage(preempted_req)
                     self._free_blocks(preempted_req)
                     preempted_req.num_cached_blocks = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
@@ -398,7 +405,7 @@ class ResourceManagerV1(ResourceManager):
         self.can_relax_prefill_strategy = False
         return can_schedule
 
-    def _get_can_schedule_prefill_threshold_block(self, request, num_chunk_new_block):
+    def _get_can_schedule_prefill_threshold_block(self, num_chunk_new_block):
         if self.can_relax_prefill_strategy:
             can_schedule_block_num_threshold = num_chunk_new_block
         else:
@@ -934,7 +941,13 @@ class ResourceManagerV1(ResourceManager):
             if not preempted_reqs:
                 skip_requests: list[Request] = []
                 while self.waiting and token_budget > 0:
-                    if len(self.running) == self.max_num_seqs:
+                    if (
+                        len(self.running)
+                        + len(self.to_be_rescheduled_request_id_set)
+                        + len(self.to_be_aborted_req_id_set)
+                        + sum([req.status == RequestStatus.PREEMPTED for req in self.waiting])
+                        >= self.max_num_seqs
+                    ):
                         break
 
                     request = self.waiting[0]
@@ -977,6 +990,10 @@ class ResourceManagerV1(ResourceManager):
                         ):
                             continue
                         # Allocate blocks for the tokens that does not hit cache
+                        if envs.FD_DISABLE_CHUNKED_PREFILL:
+                            # Disable chunk prefill
+                            if token_budget < request.need_prefill_tokens:
+                                break
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         if num_new_tokens == 0:
                             if self.config.cache_config.enable_prefix_caching:
@@ -986,7 +1003,7 @@ class ResourceManagerV1(ResourceManager):
                             continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
-                            request, num_new_block
+                            num_new_block
                         )
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
@@ -1042,6 +1059,10 @@ class ResourceManagerV1(ResourceManager):
                                 break
 
                         # Allocate blocks for the tokens that does not hit cache
+                        if envs.FD_DISABLE_CHUNKED_PREFILL:
+                            # Disable chunk prefill
+                            if token_budget < request.need_prefill_tokens:
+                                break
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         if num_new_tokens == 0:
                             if self.config.cache_config.enable_prefix_caching:
@@ -1051,7 +1072,7 @@ class ResourceManagerV1(ResourceManager):
                             continue
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
-                            request, num_new_block
+                            num_new_block
                         )
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
@@ -1206,6 +1227,9 @@ class ResourceManagerV1(ResourceManager):
                 request.error_code = 530
                 return None
             inputs["audio_features"] = result
+
+    def get_reqs_in_aborting(self):
+        return self.waiting_abort_req_id_set | self.to_be_aborted_req_id_set
 
     def get_available_position(self) -> int:
         position = 0
@@ -1388,7 +1412,8 @@ class ResourceManagerV1(ResourceManager):
                 return False
             if self.available_batch() == 0:
                 return False
-            if not self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
+            total_need_blocks = self._get_can_schedule_prefill_threshold_block(need_prealloc_prefill_blocks)
+            if not self.cache_manager.can_allocate_gpu_blocks(total_need_blocks):
                 return False
 
             request.block_tables = self.cache_manager.allocate_gpu_blocks(
@@ -1439,7 +1464,9 @@ class ResourceManagerV1(ResourceManager):
 
             request_output.metrics.decode_recv_req_time = request.metrics.decode_recv_req_time
             request_output.metrics.decode_preallocate_req_time = request.metrics.decode_preallocate_req_time
-            request.metrics = request_output.metrics
+            request.metrics = copy.deepcopy(request_output.metrics)
+            request.metrics.decode_inference_start_time = time.time()
+            request.metrics.update_decoder_start_time()
             self.running.append(request)
 
     def _free_blocks(self, request: Request):
