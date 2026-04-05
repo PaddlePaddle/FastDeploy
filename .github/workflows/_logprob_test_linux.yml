@@ -52,21 +52,23 @@ jobs:
           docker_image: ${{ inputs.DOCKER_IMAGE }}
           paddletest_archive_url: ${{ inputs.PADDLETEST_ARCHIVE_URL }}
         run: |
-          set -x
           docker pull ${docker_image}
-          echo "=== Step 1: Cleanup using Docker (root user) ==="
+          # Clean the repository directory before starting
           docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -e "REPO_NAME=${REPO_NAME}" \
+          -e "BASE_BRANCH=${BASE_BRANCH}" \
           ${docker_image} /bin/bash -c '
             CLEAN_RETRIES=3
             CLEAN_COUNT=0
 
             while [ $CLEAN_COUNT -lt $CLEAN_RETRIES ]; do
-              echo "Attempt $((CLEAN_COUNT+1)) to remove /workspace/* in container..."
-              rm -rf /workspace/* 2>/dev/null || true
+              echo "Attempt $((CLEAN_COUNT+1)) to remove /workspace/* ..."
+              rm -rf /workspace/* || true
               sleep 2
 
+              # Check if anything matching /workspace/* still exists
               if ! ls /workspace/* >/dev/null 2>&1; then
-                echo "All workspace contents removed successfully in container"
+                echo "All /workspace/* removed successfully"
                 break
               fi
 
@@ -75,33 +77,28 @@ jobs:
 
             if ls /workspace/* >/dev/null 2>&1; then
               echo "ERROR: Failed to clean /workspace/* after multiple attempts"
+              ls -ld /workspace/*
               echo "Attempting force cleanup with find..."
-              find /workspace -maxdepth 1 -type d -exec chmod -R u+rwx {} \; -exec rm -rf {} + 2>/dev/null || true
-              exit 1
+              find /workspace -mindepth 1 -maxdepth 1 -type d -exec chmod -R u+rwx {} \; -exec rm -rf {} + 2>/dev/null || true
+              if ls /workspace/* >/dev/null 2>&1; then
+                echo "ERROR: Force cleanup failed. Exiting..."
+                exit 1
+              else
+                echo "Force cleanup succeeded."
             fi
           '
-
-          echo "=== Step 2: Downloading and extracting PaddleTest archive ==="
-          rm -f PaddleTest.tar.gz 2>/dev/null || true
 
           wget -q --no-proxy ${paddletest_archive_url} || {
             echo "ERROR: Failed to download archive from ${paddletest_archive_url}"
             exit 1
           }
 
-          if [ -d "PaddleTest" ]; then
-            echo "ERROR: PaddleTest directory still exists after cleanup!"
-            ls -ld PaddleTest
-            exit 1
-          fi
-
           tar --no-same-owner -xf PaddleTest.tar.gz || {
             echo "ERROR: Failed to extract archive"
             exit 1
           }
 
-          rm -f PaddleTest.tar.gz
-
+          rm -rf PaddleTest.tar.gz
           cd PaddleTest
           git config --global user.name "FastDeployCI"
           git config --global user.email "fastdeploy_ci@example.com"
