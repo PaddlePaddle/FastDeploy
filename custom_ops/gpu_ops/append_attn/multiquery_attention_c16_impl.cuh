@@ -525,17 +525,11 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   if (!partition_kv || num_chunks_this_seq <= 1) {
     o_base_ptr_int8 = out + o_offset;
   } else {
-    if (ENABLE_PREFILL) {
-      o_base_ptr_T = tmp_workspace + batch_id * num_chunks * q_n_stride +
-                     chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
-                     tid % 8 * num_elems_per_128b<T>();
-    } else {
-      o_base_ptr_T =
-          tmp_workspace +
-          batch_id * speculate_max_draft_token_num * num_chunks * q_n_stride +
-          chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
-          tid % 8 * num_elems_per_128b<T>();
-    }
+    o_base_ptr_T =
+        tmp_workspace +
+        batch_id * speculate_max_draft_token_num * num_chunks * q_n_stride +
+        chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
+        tid % 8 * num_elems_per_128b<T>();
   }
   const int *mask_offset_this_seq =
       mask_offset ? mask_offset + q_start_seq_id * 2 : nullptr;
@@ -799,18 +793,12 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
           const uint32_t qo_idx = q_start_seq_id + qo_idx_now / GROUP_SIZE;
 
           if (qo_idx - q_start_seq_id < q_len) {
-            uint32_t offset;
-            if (ENABLE_PREFILL) {
-              offset = (batch_id * num_chunks + chunk_idx) * q_num_heads +
-                       qo_head_idx;
-            } else {
-              offset = ((batch_id * speculate_max_draft_token_num +
-                         qo_idx_now / GROUP_SIZE) *
-                            num_chunks +
-                        chunk_idx) *
-                           q_num_heads +
-                       qo_head_idx;
-            }
+            const uint32_t offset = ((batch_id * speculate_max_draft_token_num +
+                                      qo_idx_now / GROUP_SIZE) *
+                                         num_chunks +
+                                     chunk_idx) *
+                                        q_num_heads +
+                                    qo_head_idx;
             tmp_m[offset] = m_frag[fx][j];
             tmp_d[offset] = d_frag[fx][j];
           }
