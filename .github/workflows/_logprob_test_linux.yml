@@ -85,6 +85,7 @@ jobs:
                 exit 1
               else
                 echo "Force cleanup succeeded."
+              fi
             fi
           '
 
