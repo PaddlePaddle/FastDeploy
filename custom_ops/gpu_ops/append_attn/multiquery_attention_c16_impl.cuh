@@ -430,8 +430,7 @@ template <typename T,
           uint32_t num_frags_x,
           uint32_t num_frags_z,
           uint32_t num_frags_y,
-          typename OutT = T,
-          bool ENABLE_PREFILL = true>
+          typename OutT = T>
 __global__ void multi_query_append_attention_warp1_4_kernel(
     T *__restrict__ q,  // [token_num, (num_heads + 2* kv_num_head) * head_dim]
     T *__restrict__ cache_k,  // [max_block_num, num_heads, block_size,
@@ -1111,8 +1110,7 @@ void MultiQueryAppendAttention(
                                                     num_frags_x,
                                                     num_frags_z,
                                                     num_frags_y,
-                                                    OUT_NV_TYPE,
-                                                    ENABLE_PREFILL>;
+                                                    OUT_NV_TYPE>;
     if (smem_size >= 48 * 1024) {
       cudaFuncSetAttribute(split_kv_kernel,
                            cudaFuncAttributeMaxDynamicSharedMemorySize,
@@ -1157,8 +1155,7 @@ void MultiQueryAppendAttention(
                                                       num_frags_x,
                                                       num_frags_z,
                                                       num_frags_y,
-                                                      OUT_NV_TYPE,
-                                                      ENABLE_PREFILL>;
+                                                      OUT_NV_TYPE>;
       if (smem_size >= 48 * 1024) {
         cudaFuncSetAttribute(nosplit_kv_kernel,
                              cudaFuncAttributeMaxDynamicSharedMemorySize,

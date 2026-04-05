@@ -440,8 +440,8 @@ void AppendAttentionKernel(
                                             decoder_num_blocks_data,
                                             decoder_block_shape_q,
                                             max_kv_len_this_time,
-                                            false,
-                                            false,
+                                            !speculate_decoder,
+                                            !speculate_decoder,
                                             exec_stream);
     }
     if (max_enc_len_this_time > 0) {
