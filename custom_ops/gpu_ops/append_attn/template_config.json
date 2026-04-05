@@ -94,7 +94,7 @@
       "BLOCK_SIZE": [64],
       "CAUSAL": [0, 1],
       "BLOCK_SHAPE_Q": [16, 32, 64, 128],
-      "ENABLE_PREFILL": [0]
+      "ENABLE_PREFILL": [0, 1]
     },
     "data_types": [
       ["paddle::float16", "paddle::float16", "float16_float16"],

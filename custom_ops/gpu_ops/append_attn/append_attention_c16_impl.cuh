@@ -122,7 +122,6 @@ void CascadeAppendAttentionC16Kernel(
                                            sliding_window,
                                            sink_size);
                                      })})})})})
-})
 }
 
 template void
