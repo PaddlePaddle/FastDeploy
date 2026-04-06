@@ -1218,32 +1218,18 @@ void MultiQueryAppendAttention(
             phi::SizeOf(paddle::DataType::FLOAT32) *
             static_cast<size_t>(bsz * num_chunks * num_heads));
       } else {
-        if (ENABLE_PREFILL) {
-          exit(0);
-          tmp_workspace =
-              allocator->Allocate(phi::SizeOf(qkv.dtype()) *
-                                  static_cast<size_t>(token_num * num_chunks *
-                                                      num_heads * HEAD_DIM));
-          tmp_m = allocator->Allocate(
-              phi::SizeOf(paddle::DataType::FLOAT32) *
-              static_cast<size_t>(token_num * num_chunks * num_heads));
-          tmp_d = allocator->Allocate(
-              phi::SizeOf(paddle::DataType::FLOAT32) *
-              static_cast<size_t>(token_num * num_chunks * num_heads));
-        } else {
-          tmp_workspace = allocator->Allocate(
-              phi::SizeOf(qkv.dtype()) *
-              static_cast<size_t>(speculate_max_draft_token_num * bsz *
-                                  num_chunks * num_heads * HEAD_DIM));
-          tmp_m = allocator->Allocate(
-              phi::SizeOf(paddle::DataType::FLOAT32) *
-              static_cast<size_t>(speculate_max_draft_token_num * bsz *
-                                  num_chunks * num_heads));
-          tmp_d = allocator->Allocate(
-              phi::SizeOf(paddle::DataType::FLOAT32) *
-              static_cast<size_t>(speculate_max_draft_token_num * bsz *
-                                  num_chunks * num_heads));
-        }
+        tmp_workspace = allocator->Allocate(
+            phi::SizeOf(qkv.dtype()) *
+            static_cast<size_t>(speculate_max_draft_token_num * bsz *
+                                num_chunks * num_heads * HEAD_DIM));
+        tmp_m = allocator->Allocate(
+            phi::SizeOf(paddle::DataType::FLOAT32) *
+            static_cast<size_t>(speculate_max_draft_token_num * bsz *
+                                num_chunks * num_heads));
+        tmp_d = allocator->Allocate(
+            phi::SizeOf(paddle::DataType::FLOAT32) *
+            static_cast<size_t>(speculate_max_draft_token_num * bsz *
+                                num_chunks * num_heads));
       }
       launchWithPdlWhenEnabled(
           split_kv_kernel,
