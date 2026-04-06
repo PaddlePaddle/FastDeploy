@@ -258,6 +258,8 @@ class FlashAttentionBackend(AttentionBackend):
         self.speculative_method = fd_config.speculative_config.method
         self.use_speculate = self.speculative_method is not None
         self.speculate_max_draft_token_num = fd_config.speculative_config.num_speculative_tokens
+        if not self.use_speculate:
+            self.speculate_max_draft_token_num = 0
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
         self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
 
