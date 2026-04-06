@@ -1219,6 +1219,7 @@ void MultiQueryAppendAttention(
             static_cast<size_t>(bsz * num_chunks * num_heads));
       } else {
         if (ENABLE_PREFILL) {
+          exit(0);
           tmp_workspace =
               allocator->Allocate(phi::SizeOf(qkv.dtype()) *
                                   static_cast<size_t>(token_num * num_chunks *
