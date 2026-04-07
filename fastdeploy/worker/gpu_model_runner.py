@@ -638,12 +638,12 @@ class GPUModelRunner(ModelRunnerBase):
                                 image_features_output is not None
                             ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
                             grid_thw = multi_vision_inputs["grid_thw_lst_batches"][index][thw_idx]
-                            mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                            mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+                            mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                            mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
 
                             # add feature to encoder cache
                             self.encoder_cache[mm_hash] = mm_feature.detach().cpu()
-                            feature_idx += mm_token_lenght
+                            feature_idx += mm_token_length
                             thw_idx += 1
 
                         feature_start = feature_position.offset
@@ -663,13 +663,13 @@ class GPUModelRunner(ModelRunnerBase):
                 merge_image_features, thw_idx = [], 0
                 for feature_position in feature_position_item:
                     grid_thw = grid_thw_lst[thw_idx]
-                    mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                    mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+                    mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                    mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
 
                     feature_start = feature_position.offset
                     feature_end = feature_position.offset + feature_position.length
                     merge_image_features.append(mm_feature[feature_start:feature_end])
-                    feature_idx += mm_token_lenght
+                    feature_idx += mm_token_length
                     thw_idx += 1
                 image_features_list.append(paddle.concat(merge_image_features, axis=0))
             for idx, index in req_idx_img_index_map.items():
