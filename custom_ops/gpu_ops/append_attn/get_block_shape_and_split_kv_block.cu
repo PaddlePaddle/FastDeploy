@@ -293,10 +293,16 @@ void GetBlockShapeAndSplitKVBlock(
   // Note (sunxin): Skip capturing the DtoH copy (it's time-consuming); CPU data
   // is only for branching in attention.
 #ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
-  if (!phi::backends::gpu::IsCUDAGraphCapturing())
-#endif
+  if (!phi::backends::gpu::IsCUDAGraphCapturing()) {
     max_len_tensor_cpu.copy_(
         max_len_tensor_gpu, max_len_tensor_cpu.place(), false);
+    cudaStreamSynchronize(stream);
+  }
+#else
+  max_len_tensor_cpu.copy_(
+      max_len_tensor_gpu, max_len_tensor_cpu.place(), false);
+  cudaStreamSynchronize(stream);
+#endif
 
   auto max_len_cpu_ptr = max_len_tensor_cpu.data<int>();
   int max_len_this_time = max_len_cpu_ptr[0];
@@ -435,6 +441,12 @@ void GetBlockShapeAndSplitKVBlock(
     encoder_num_blocks_x_cpu.copy_(
         encoder_num_blocks_x, encoder_num_blocks_x_cpu.place(), false);
   }
+#ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
+  if (!phi::backends::gpu::IsCUDAGraphCapturing())
+    cudaStreamSynchronize(stream);
+#else
+  cudaStreamSynchronize(stream);
+#endif
 }
 
 std::vector<std::vector<int64_t>> GetBlockShapeAndSplitKVBlockInferShape(
