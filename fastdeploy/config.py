@@ -1058,6 +1058,7 @@ class GraphOptimizationConfig:
         - None (default): capture sizes are inferred from llm config.
         - list[int]: capture sizes are specified as given."""
         self.cudagraph_capture_sizes: Optional[list[int]] = None
+        self.flag_cudagraph_capture_sizes_initlized = False
         self.cudagraph_capture_sizes_prefill: list[int] = [1, 2, 4, 8]
         """ Number of warmup runs for cudagraph. """
         self.cudagraph_num_of_warmups: int = 2
@@ -1108,13 +1109,25 @@ class GraphOptimizationConfig:
 
         self.check_legality_parameters()
 
-    def init_with_cudagrpah_size(self, max_capture_size: int = 0, max_capture_shape_prefill: int = 0) -> None:
+    def init_with_cudagrpah_size(
+        self,
+        max_capture_size: int = 0,
+        max_capture_shape_prefill: int = 0,
+        num_speculative_tokens: int = 0,
+    ) -> None:
         """
         Initialize cuda graph capture sizes and
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
-        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_capture_size]
+        if not self.flag_cudagraph_capture_sizes_initlized and num_speculative_tokens != 0:
+            self.cudagraph_capture_sizes = [
+                size * (num_speculative_tokens + 1)
+                for size in self.cudagraph_capture_sizes
+                if (size * (num_speculative_tokens + 1)) <= max_capture_size
+            ]
+        else:
+            self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_capture_size]
         self.cudagraph_capture_sizes_prefill = [
             size for size in self.cudagraph_capture_sizes_prefill if size <= max_capture_shape_prefill
         ]
@@ -1154,24 +1167,41 @@ class GraphOptimizationConfig:
                     self.real_shape_to_captured_size_prefill[bs] = end
         self.real_shape_to_captured_size_prefill[self.max_capture_size_prefill] = self.max_capture_size_prefill
 
+        if num_speculative_tokens != 0:
+            real_bsz_to_captured_size = {}
+            for capture_size in self.cudagraph_capture_sizes:
+                dummy_batch_size = int(capture_size / (num_speculative_tokens + 1))
+                real_bsz_to_captured_size[dummy_batch_size] = capture_size
+
+            def expand_bsz_map(real_bsz_to_captured_size):
+                sorted_items = sorted(real_bsz_to_captured_size.items())
+                result = {}
+                prev_bsz = 0
+                for curr_bsz, cap in sorted_items:
+                    for bsz in range(prev_bsz + 1, curr_bsz + 1):
+                        result[bsz] = cap
+                    prev_bsz = curr_bsz
+                return result
+
+            self.real_bsz_to_captured_size = expand_bsz_map(real_bsz_to_captured_size)
+
+        self.flag_cudagraph_capture_sizes_initlized = True
+
     def _set_cudagraph_sizes(
         self,
         max_capture_size: int = 0,
         max_capture_shape_prefill: int = 0,
-        dec_token_per_query_per_step: int = 1,
     ):
         """
         Calculate a series of candidate capture sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
         """
-        # Shape [1, 2, 4, 8, 16, ... 120, 128] * dec_token_per_query_per_step
-        draft_capture_sizes = [i * dec_token_per_query_per_step for i in [1, 2, 4]] + [
-            8 * i * dec_token_per_query_per_step for i in range(1, 17)
-        ]
-        # Shape [128, 144, ... 240, 256] * dec_token_per_query_per_step
-        draft_capture_sizes += [16 * i * dec_token_per_query_per_step for i in range(9, 17)]
-        # Shape [256, 288, ... 992, 1024] * dec_token_per_query_per_step
-        draft_capture_sizes += [32 * i * dec_token_per_query_per_step for i in range(9, 33)]
+        # Shape [1, 2, 4, 8, 16, ... 120, 128]
+        draft_capture_sizes = [i for i in [1, 2, 4]] + [8 * i for i in range(1, 17)]
+        # Shape [128, 144, ... 240, 256]
+        draft_capture_sizes += [16 * i for i in range(9, 17)]
+        # Shape [256, 288, ... 992, 1024]
+        draft_capture_sizes += [32 * i for i in range(9, 33)]
 
         draft_capture_sizes_prefill = draft_capture_sizes.copy()
         draft_capture_sizes.append(max_capture_size)
@@ -1902,44 +1932,26 @@ class FDConfig:
         max_capture_shape_prefill = graph_opt_config.max_capture_shape_prefill
 
         if self.graph_opt_config.cudagraph_capture_sizes is None:
-            dec_token_per_query_per_step = (
-                self.speculative_config.num_speculative_tokens + 1
-                if self.speculative_config is not None and self.speculative_config.method is not None
-                else 1
-            )
             self.graph_opt_config._set_cudagraph_sizes(
                 max_capture_size=max_capture_shape,
                 max_capture_shape_prefill=max_capture_shape_prefill,
-                dec_token_per_query_per_step=dec_token_per_query_per_step,
             )
-        if self.speculative_config is not None and self.speculative_config.method is not None:
-            real_bsz_to_captured_size = {}
-            for capture_size in self.graph_opt_config.cudagraph_capture_sizes:
-                dummy_batch_size = int(capture_size / (self.speculative_config.num_speculative_tokens + 1))
-                real_bsz_to_captured_size[dummy_batch_size] = capture_size
 
-            def expand_bsz_map(real_bsz_to_captured_size):
-                """
-                Expand a sparse batch size mapping into a dense one.
-
-                Args:
-                    real_bsz_to_captured_size (dict): Sparse batch size to capture size mapping.
-                Returns:
-                    dict: Dense batch size to capture size mapping.
-                """
-                sorted_items = sorted(real_bsz_to_captured_size.items())
-                result = {}
-                prev_bsz = 0
-                for curr_bsz, cap in sorted_items:
-                    for bsz in range(prev_bsz + 1, curr_bsz + 1):
-                        result[bsz] = cap
-                    prev_bsz = curr_bsz
-                return result
-
-            self.graph_opt_config.real_bsz_to_captured_size = expand_bsz_map(real_bsz_to_captured_size)
         self.graph_opt_config.init_with_cudagrpah_size(
             max_capture_size=max_capture_shape,
             max_capture_shape_prefill=max_capture_shape_prefill,
+            num_speculative_tokens=(
+                self.speculative_config.num_speculative_tokens
+                if (
+                    self.speculative_config is not None
+                    and self.speculative_config.method
+                    in [
+                        SpecMethod.MTP,
+                        SpecMethod.SUFFIX,
+                    ]
+                )
+                else 0
+            ),
         )
 
         self.tokenizer = tokenizer
