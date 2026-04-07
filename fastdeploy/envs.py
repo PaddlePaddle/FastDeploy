@@ -266,6 +266,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
+    # Whether to align RoPE and moe gate precision with training
+    "FD_ENABLE_RL": lambda: int(os.getenv("FD_ENABLE_RL", "0")),
 }
 
 
