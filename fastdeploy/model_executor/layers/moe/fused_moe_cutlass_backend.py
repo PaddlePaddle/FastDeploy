@@ -28,7 +28,11 @@ from ..utils import get_tensor, group_wise_int4_weight_quantize, pack, rotate_mo
 from .fused_moe_backend_base import UnquantizedFusedMoEMethod
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch, moe_expert_reduce
+    from fastdeploy.model_executor.ops.gpu import (
+        count_tokens_per_expert_func,
+        moe_expert_dispatch,
+        moe_expert_reduce,
+    )
 
     try:
         from fastdeploy.model_executor.ops.gpu import (
@@ -286,6 +290,70 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
             )
+            if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE and self.moe_quant_type == "w16a16":
+                # moe_permute path: CUDA-graph safe, no D2H copies
+                print("use moe_permute in tp")
+                topk_idx_i32 = topk_idx.astype(paddle.int32)
+                override_buffer_size = x.shape[0] * layer.top_k + layer.num_experts * (128 - 1)
+                (
+                    permute_input,
+                    permute_indices_per_token,  # zipped_expertwise_rowmap
+                    dst_weights,
+                    _scale_out,
+                    _m_indices,
+                ) = paddle.nn.functional.moe_permute(
+                    hidden_states=x,
+                    scale=None,
+                    expert_routemap_topk=topk_idx_i32,
+                    expert_prob_topk=topk_weights,
+                    num_experts=layer.num_experts,
+                    tokens_per_expert=[],
+                    padding_alignment=128,
+                    return_expert_indices=True,
+                    override_buffer_size=override_buffer_size,
+                )
+
+                # Compute token_nums_per_expert (prefix sum) on GPU.
+                # Use PADDED counts (row 1) because moe_permute with padding_alignment=128
+                # lays out each expert's tokens in 128-aligned blocks. Using actual counts
+                # (row 0) would cause moe_expert_ffn to read wrong positions.
+                # Use matmul with a cached lower-triangular matrix instead of
+                # paddle.cumsum, because CUB inclusive_scan allocates temp memory
+                # which is forbidden during CUDA graph capture.
+                padded_counts = count_tokens_per_expert_func(topk_idx, layer.num_experts)[
+                    1
+                ]  # [num_experts], int32, 128-aligned
+                if not hasattr(self, "_cumsum_tril") or self._cumsum_tril.shape[0] != layer.num_experts:
+                    self._cumsum_tril = paddle.tril(
+                        paddle.ones([layer.num_experts, layer.num_experts], dtype="float32")
+                    )
+                token_nums_per_expert = paddle.mv(self._cumsum_tril, padded_counts.cast("float32")).cast(paddle.int64)
+
+                if topk_ids_hookfunc is not None:
+                    topk_ids_hookfunc(topk_ids=topk_idx)
+
+                ffn_out = self.compute_ffn(
+                    layer,
+                    permute_input,
+                    token_nums_per_expert,
+                    None,  # expert_idx_per_token not needed for w16a16 without bias
+                    False,
+                    -1,
+                    None,  # dequant_scale
+                    None,  # max_tokens_per_expert
+                )
+
+                fused_moe_out, _out_probs = paddle.nn.functional.moe_unpermute(
+                    hidden_states_unzipped=ffn_out,
+                    zipped_expertwise_rowmap=permute_indices_per_token,
+                    expert_routemap_topk=topk_idx_i32,
+                    token_prob_unzipped=dst_weights,
+                    total_zipped_tokens=x.shape[0],
+                    num_experts=layer.num_experts,
+                    using_weighted_combine=True,
+                )
+                return fused_moe_out
+
             (
                 permute_input,
                 token_nums_per_expert,
