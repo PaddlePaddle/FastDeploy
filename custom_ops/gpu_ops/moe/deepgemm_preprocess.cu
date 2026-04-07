@@ -19,6 +19,7 @@ template <typename scalar_t>
 __global__ void cuda_kernel(const scalar_t *__restrict__ topk_ids,
                             int32_t *__restrict__ res,
                             int32_t *__restrict__ res_padded,
+                            int32_t *__restrict__ res_padded_cumsum,
                             size_t numel,
                             int num_experts) {
   extern __shared__ int32_t tokens_per_ep[];
@@ -34,10 +35,16 @@ __global__ void cuda_kernel(const scalar_t *__restrict__ topk_ids,
   }
 
   __syncthreads();
-
-  for (size_t i = threadIdx.x; i < num_experts; i += blockDim.x) {
-    res[i] = tokens_per_ep[i];
-    res_padded[i] = (res[i] + 127) / 128 * 128;
+  if (threadIdx.x == 0) {
+    int32_t running_sum = 0;
+    for (int i = 0; i < num_experts; i++) {
+      int32_t count = tokens_per_ep[i];
+      int32_t padded = (count + 127) / 128 * 128;
+      res[i] = count;
+      res_padded[i] = padded;
+      running_sum += padded;
+      res_padded_cumsum[i] = running_sum;
+    }
   }
 }
 
@@ -46,7 +53,7 @@ std::vector<paddle::Tensor> count_tokens_per_expert_func(
   int topk_ids_numel = topk_ids.shape()[0] * topk_ids.shape()[1];
 
   auto token_nums_per_expert = paddle::empty(
-      {2, num_experts}, paddle::DataType::INT32, topk_ids.place());
+      {3, num_experts}, paddle::DataType::INT32, topk_ids.place());
 
   auto stream = topk_ids.stream();
   using scalar_t = int64_t;
@@ -56,6 +63,7 @@ std::vector<paddle::Tensor> count_tokens_per_expert_func(
       topk_ids.data<scalar_t>(),
       token_nums_per_expert.data<int32_t>(),
       token_nums_per_expert.data<int32_t>() + num_experts,
+      token_nums_per_expert.data<int32_t>() + 2 * num_experts,
       topk_ids_numel,
       num_experts);
 
@@ -70,7 +78,7 @@ std::vector<paddle::DataType> count_tokens_per_expert_func_infer_dtype(
 
 std::vector<std::vector<int64_t>> count_tokens_per_expert_func_infer_shape(
     const std::vector<int64_t> &topk_ids_shape, int64_t num_experts) {
-  return {{2, num_experts}};
+  return {{3, num_experts}};
 }
 
 PD_BUILD_STATIC_OP(count_tokens_per_expert_func)

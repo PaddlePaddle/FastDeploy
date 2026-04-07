@@ -17,6 +17,7 @@
 from typing import Callable
 
 import paddle
+from fxy_debug import dump_tensor
 from paddle import nn
 from paddle.nn.quant import weight_quantize
 from paddleformers.utils.log import logger
@@ -150,54 +151,92 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         # 3. Compute ffn
         if token_all_num > 0:
             logger.debug(f"token_all_num {token_all_num}")
-            (
-                permute_input,
-                permute_indices_per_token,
-                recv_num_tokens_per_expert_list_cumsum,
-                dst_weights,
-                dst_indices,
-                cumsum_idx_gpu,
-                expert_idx_per_token,
-                dequant_scale,
-            ) = fastdeploy.model_executor.ops.gpu.ep_moe_expert_dispatch(
-                recv_x,
-                recv_topk_idx,
-                recv_topk_weights,
-                (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None),
-                recv_num_tokens_per_expert_list,
-                token_all_num,
-                self.moe_quant_type,
-            )
-            if not layer.with_bias and self.moe_quant_type != "w4a8" and self.moe_quant_type != "w4afp8":
-                # only w4a8 and w4afp8 need expert_idx_per_token
-                # Other need not this tensor, so we make it None.
-                expert_idx_per_token = None
+
+            if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE and self.moe_quant_type == "w16a16":
+                # --- moe_permute / moe_unpermute path ---
+                recv_topk_idx_i32 = recv_topk_idx.astype(paddle.int32)
+                (permute_input, permute_indices_per_token, dst_weights, _scale_out) = paddle.nn.functional.moe_permute(
+                    hidden_states=recv_x,
+                    scale=None,
+                    expert_routemap_topk=recv_topk_idx_i32,
+                    expert_prob_topk=recv_topk_weights,
+                    num_experts=layer.num_local_experts,
+                    tokens_per_expert=[],
+                    padding_alignment=128,
+                    override_buffer_size=token_all_num,
+                )
+
+                token_nums_per_expert_cumsum = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)[
+                    2
+                ].cast(paddle.int64)
+
+                ffn_out = self.compute_ffn(
+                    layer,
+                    permute_input,
+                    token_nums_per_expert_cumsum,
+                    None,
+                    False,
+                    -1,
+                    None,
+                    None,
+                )
+
+                tmp_ffn_out, _out_probs = paddle.nn.functional.moe_unpermute(
+                    hidden_states_unzipped=ffn_out,
+                    zipped_expertwise_rowmap=permute_indices_per_token,
+                    expert_routemap_topk=recv_topk_idx_i32,
+                    token_prob_unzipped=dst_weights,
+                    total_zipped_tokens=recv_x.shape[0],
+                    num_experts=layer.num_local_experts,
+                    using_weighted_combine=True,
+                )
             else:
-                expert_idx_per_token = expert_idx_per_token.cast("int64")
+                # --- original ep_moe_expert_dispatch / combine path ---
+                (
+                    permute_input,
+                    permute_indices_per_token,
+                    recv_num_tokens_per_expert_list_cumsum,
+                    dst_weights,
+                    dst_indices,
+                    cumsum_idx_gpu,
+                    expert_idx_per_token,
+                    dequant_scale,
+                ) = fastdeploy.model_executor.ops.gpu.ep_moe_expert_dispatch(
+                    recv_x,
+                    recv_topk_idx,
+                    recv_topk_weights,
+                    (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None),
+                    recv_num_tokens_per_expert_list,
+                    token_all_num,
+                    self.moe_quant_type,
+                )
+                if not layer.with_bias and self.moe_quant_type != "w4a8" and self.moe_quant_type != "w4afp8":
+                    expert_idx_per_token = None
+                else:
+                    expert_idx_per_token = expert_idx_per_token.cast("int64")
 
-            if hasattr(layer, "up_gate_proj_in_scale"):
-                dequant_scale = None
+                if hasattr(layer, "up_gate_proj_in_scale"):
+                    dequant_scale = None
 
-            ffn_out = self.compute_ffn(
-                layer,
-                permute_input,
-                recv_num_tokens_per_expert_list_cumsum,
-                expert_idx_per_token,
-                False,
-                -1,
-                dequant_scale,
-            )
+                ffn_out = self.compute_ffn(
+                    layer,
+                    permute_input,
+                    recv_num_tokens_per_expert_list_cumsum,
+                    expert_idx_per_token,
+                    False,
+                    -1,
+                    dequant_scale,
+                )
 
-            # prmt back per rank
-            tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
-                ffn_out,
-                dst_weights,
-                permute_indices_per_token,
-                dst_indices,
-                None,  # down_proj_bias,
-                False,  # norm_topk_prob
-                1.0,
-            )
+                tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
+                    ffn_out,
+                    dst_weights,
+                    permute_indices_per_token,
+                    dst_indices,
+                    None,  # down_proj_bias,
+                    False,  # norm_topk_prob
+                    1.0,
+                )
         else:
             tmp_ffn_out = recv_x
 
@@ -291,51 +330,43 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 getattr(layer, "renormalize", True),
             )
             if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE and self.moe_quant_type == "w16a16":
-                # moe_permute path: CUDA-graph safe, no D2H copies
-                print("use moe_permute in tp")
                 topk_idx_i32 = topk_idx.astype(paddle.int32)
                 override_buffer_size = x.shape[0] * layer.top_k + layer.num_experts * (128 - 1)
-                (
-                    permute_input,
-                    permute_indices_per_token,  # zipped_expertwise_rowmap
-                    dst_weights,
-                    _scale_out,
-                    _m_indices,
-                ) = paddle.nn.functional.moe_permute(
-                    hidden_states=x,
-                    scale=None,
-                    expert_routemap_topk=topk_idx_i32,
-                    expert_prob_topk=topk_weights,
-                    num_experts=layer.num_experts,
-                    tokens_per_expert=[],
-                    padding_alignment=128,
-                    return_expert_indices=True,
-                    override_buffer_size=override_buffer_size,
+                (permute_input, permute_indices_per_token, dst_weights, _scale_out) = (  # zipped_expertwise_rowmap
+                    paddle.nn.functional.moe_permute(
+                        hidden_states=x,
+                        scale=None,
+                        expert_routemap_topk=topk_idx_i32,
+                        expert_prob_topk=topk_weights,
+                        num_experts=layer.num_experts,
+                        tokens_per_expert=[],
+                        padding_alignment=128,
+                        override_buffer_size=override_buffer_size,
+                    )
                 )
 
-                # Compute token_nums_per_expert (prefix sum) on GPU.
-                # Use PADDED counts (row 1) because moe_permute with padding_alignment=128
-                # lays out each expert's tokens in 128-aligned blocks. Using actual counts
-                # (row 0) would cause moe_expert_ffn to read wrong positions.
-                # Use matmul with a cached lower-triangular matrix instead of
-                # paddle.cumsum, because CUB inclusive_scan allocates temp memory
-                # which is forbidden during CUDA graph capture.
-                padded_counts = count_tokens_per_expert_func(topk_idx, layer.num_experts)[
-                    1
-                ]  # [num_experts], int32, 128-aligned
-                if not hasattr(self, "_cumsum_tril") or self._cumsum_tril.shape[0] != layer.num_experts:
-                    self._cumsum_tril = paddle.tril(
-                        paddle.ones([layer.num_experts, layer.num_experts], dtype="float32")
-                    )
-                token_nums_per_expert = paddle.mv(self._cumsum_tril, padded_counts.cast("float32")).cast(paddle.int64)
-
+                # Row 2 of count_tokens_per_expert_func is the prefix sum token_nums_per_expert.
+                token_nums_per_expert_cumsum = count_tokens_per_expert_func(topk_idx, layer.num_experts)[2].cast(
+                    paddle.int64
+                )
+                dump_tensor(
+                    x,
+                    topk_idx_i32,
+                    topk_weights,
+                    layer.num_experts,
+                    override_buffer_size,
+                    permute_input,
+                    permute_indices_per_token,
+                    dst_weights,
+                    token_nums_per_expert_cumsum,
+                )
                 if topk_ids_hookfunc is not None:
                     topk_ids_hookfunc(topk_ids=topk_idx)
 
                 ffn_out = self.compute_ffn(
                     layer,
                     permute_input,
-                    token_nums_per_expert,
+                    token_nums_per_expert_cumsum,
                     None,  # expert_idx_per_token not needed for w16a16 without bias
                     False,
                     -1,
@@ -352,6 +383,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     num_experts=layer.num_experts,
                     using_weighted_combine=True,
                 )
+                dump_tensor(ffn_out, permute_indices_per_token, topk_idx_i32, fused_moe_out, dst_weights)
                 return fused_moe_out
 
             (
@@ -374,6 +406,17 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 False,
                 self.moe_quant_type,
                 topk_only_mode=True,
+            )
+            dump_tensor(
+                x,
+                gate_out,
+                token_nums_per_expert,
+                permute_input,
+                topk_weights,
+                topk_idx,
+                expert_idx_per_token,
+                dequant_scale,
+                max_tokens_per_expert,
             )
         else:
             (
@@ -408,7 +451,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             expert_idx_per_token = None
         else:
             expert_idx_per_token = expert_idx_per_token.cast("int64")
-
+        dump_tensor(permute_input, token_nums_per_expert, expert_idx_per_token, dequant_scale, max_tokens_per_expert)
         ffn_out = self.compute_ffn(
             layer,
             permute_input,
@@ -430,7 +473,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             norm_topk_prob=False if layer.topk_method == "noaux_tc" else True,
             routed_scaling_factor=1.0,
         )
-
+        dump_tensor(ffn_out, topk_weights, permute_indices_per_token, topk_idx, fused_moe_out)
         return fused_moe_out
 
 
