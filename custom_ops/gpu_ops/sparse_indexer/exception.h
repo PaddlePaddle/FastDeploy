@@ -82,8 +82,8 @@ class Error : public std::exception {
         int line,
         const std::string& message) {
     std::ostringstream oss;
-    oss << "Error in function '" << func << "' "
-        << "at " << file << ":" << line << ": " << message;
+    oss << "Error in function '" << func << "' " << "at " << file << ":" << line
+        << ": " << message;
     message_ = oss.str();
   }
 
@@ -102,8 +102,8 @@ class Warning {
           int line,
           const std::string& message) {
     std::ostringstream oss;
-    oss << "Warning in function '" << func << "' "
-        << "at " << file << ":" << line << ": " << message;
+    oss << "Warning in function '" << func << "' " << "at " << file << ":"
+        << line << ": " << message;
     message_ = oss.str();
   }
 

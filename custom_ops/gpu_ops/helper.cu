@@ -133,8 +133,7 @@ void GPUMemoryChecker::addCheckPoint(const char* call_file, int call_line) {
       std::cout << "\nCall Line: " << call_line << "\t";
       for (int i = 0; i < visible_device_.size(); i++) {
         unsigned int device_id = visible_device_.at(i);
-        std::cout << "GPU " << device_id << ": "
-                  << "  Used memory: "
+        std::cout << "GPU " << device_id << ": " << "  Used memory: "
                   << visible_device_mem_usage_.at(device_id) / (1024 * 1024)
                   << " MB\t";
       }

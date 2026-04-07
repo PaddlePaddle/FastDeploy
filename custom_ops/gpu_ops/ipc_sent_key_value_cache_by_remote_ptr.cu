@@ -245,8 +245,7 @@ void SentKeyValueByRemotePtr(const paddle::Tensor& local_key_tensor,
   getNvidiaGPUMemoryUsage(__LINE__);
 
 #ifdef DEBUG_IPC_SENT
-  std::cout << "#### 1111"
-            << " remote_key_ptr: " << remote_key_ptr
+  std::cout << "#### 1111" << " remote_key_ptr: " << remote_key_ptr
             << " remote_value_ptr: " << remote_value_ptr << std::endl;
 #endif
   getNvidiaGPUMemoryUsage(__LINE__);

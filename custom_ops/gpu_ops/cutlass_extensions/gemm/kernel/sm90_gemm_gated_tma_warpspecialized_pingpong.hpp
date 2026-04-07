@@ -618,7 +618,7 @@ class GemmUniversalGated<
         collective_epilogue.load_tail(epi_load_pipeline,
                                       epi_load_pipe_producer_state);
       }  // Epilogue Producer Warp End
-    }    // Producer Warp Group End
+    }  // Producer Warp Group End
 
     else if (warp_group_role == WarpGroupRole::Consumer0 ||
              warp_group_role == WarpGroupRole::Consumer1) {
@@ -714,7 +714,7 @@ class GemmUniversalGated<
         scheduler.advance_to_next_work(NumMmaWarpGroups);
         work_tile_info = scheduler.get_current_work();
       }  // Scheduler work fetch loop
-    }    // Consumer Warp Groups End
+    }  // Consumer Warp Groups End
 #endif
   }
 };

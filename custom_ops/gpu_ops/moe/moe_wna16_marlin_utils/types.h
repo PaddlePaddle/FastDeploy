@@ -30,7 +30,7 @@ struct Tensor {
   Tensor() : raw_tensor_() {}
   Tensor(const Tensor &) = default;
   Tensor(Tensor &&) = default;
-  Tensor operator=(const Tensor &x) &noexcept {
+  Tensor operator=(const Tensor &x) & noexcept {
     raw_tensor_ = x.raw_tensor_;
     return *this;
   }

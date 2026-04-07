@@ -617,16 +617,14 @@ struct CollectiveMmaGated<
       } else {
         return thread_mma.partition_B(sAux);
       }
-    }
-    ();
+    }();
     auto tCrAux = [&]() -> auto {
       if constexpr (SwapAB) {
         return thread_mma.make_fragment_A(tCsAux);
       } else {
         return thread_mma.make_fragment_B(tCsAux);
       }
-    }
-    ();
+    }();
 
     CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(accum0));  // M
     CUTE_STATIC_ASSERT_V(size<1>(tCsB) == size<2>(accum0));  // N

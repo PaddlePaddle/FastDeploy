@@ -1256,7 +1256,7 @@ bool RDMACommunicator::post_block_send(
     struct RdmaContext* ctx,
     int layer_idx,
     const std::vector<int64_t>& local_block_ids,
-    const std::string data_type,
+    const std::string& data_type,
     std::vector<uint64_t>& remote_addr,
     uint32_t rkey,
     const std::string& ip,
@@ -1283,7 +1283,7 @@ bool RDMACommunicator::execute_rdma_writes(
     struct RdmaContext* ctx,
     int layer_idx,
     const std::vector<int64_t>& local_block_ids,
-    const std::string data_type,
+    const std::string& data_type,
     std::vector<uint64_t>& remote_addr,
     uint32_t rkey) {
   auto block_num = local_block_ids.size();
@@ -1331,7 +1331,7 @@ void RDMACommunicator::prepare_write_requests(
     struct ibv_send_wr* send_wr_list,
     int layer_idx,
     const std::vector<int64_t>& local_block_ids,
-    const std::string data_type,
+    const std::string& data_type,
     std::vector<uint64_t>& remote_addr,
     uint32_t rkey) {
   auto block_num = local_block_ids.size();

@@ -68,27 +68,30 @@ class RDMACommunicator {
                                         uint32_t access_flags);
   bool deregister_memory_regions(struct RdmaContext* ctx);
 
+  // Performance optimization: pass data_type by reference to avoid copying
   bool post_block_send(struct RdmaContext* ctx,
                        int layer_idx,
                        const std::vector<int64_t>& local_block_ids,
-                       const std::string data_type,
+                       const std::string& data_type,
                        std::vector<uint64_t>& remote_addr,
                        uint32_t rkey,
                        const std::string& ip,
                        const std::string& port);
 
+  // Performance optimization: pass data_type by reference to avoid copying
   bool execute_rdma_writes(struct RdmaContext* ctx,
                            int layer_idx,
                            const std::vector<int64_t>& local_block_ids,
-                           const std::string data_type,
+                           const std::string& data_type,
                            std::vector<uint64_t>& remote_addr,
                            uint32_t rkey);
 
+  // Performance optimization: pass data_type by reference to avoid copying
   void prepare_write_requests(struct ibv_sge* sge_list,
                               struct ibv_send_wr* send_wr_list,
                               int layer_idx,
                               const std::vector<int64_t>& local_block_ids,
-                              const std::string data_type,
+                              const std::string& data_type,
                               std::vector<uint64_t>& remote_addr,
                               uint32_t rkey);
 

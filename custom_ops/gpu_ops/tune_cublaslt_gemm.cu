@@ -180,8 +180,7 @@ static void TestMatmulRun(cublasLtHandle_t ltHandle,
     std::cerr << "Not enough workspace! Required "
               << static_cast<double>(heurResult.workspaceSize) / 1024.0 /
                      1024.0 / 1024.0
-              << " GiB"
-              << ", But remaining "
+              << " GiB" << ", But remaining "
               << static_cast<double>(remainingMemorySize) / 1024.0 / 1024.0 /
                      1024.0
               << " GiB" << std::endl;

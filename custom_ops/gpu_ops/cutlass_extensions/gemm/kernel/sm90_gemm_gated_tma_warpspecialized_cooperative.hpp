@@ -635,7 +635,7 @@ class GemmUniversalGated<
         collective_epilogue.load_tail(epi_load_pipeline,
                                       epi_load_pipe_producer_state);
       }  // Epilogue Producer Warp End
-    }    // Producer Warp Group End
+    }  // Producer Warp Group End
 
     else if (warp_group_role == WarpGroupRole::Consumer0 ||
              warp_group_role == WarpGroupRole::Consumer1) {

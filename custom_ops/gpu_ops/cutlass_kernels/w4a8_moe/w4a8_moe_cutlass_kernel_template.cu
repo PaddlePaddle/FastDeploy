@@ -876,9 +876,8 @@ void W4A8MoeGemmRunner<OutputType, IntAType, IntBType>::moe_gemm(
         gemm_config_from_file_and_param.stages = max_total_rows_config.stages;
       }
     }
-    VLOG(1) << "W4A8 moe gemm "
-            << "total_rows: " << total_rows << " n: " << gemm_n
-            << " k: " << gemm_k
+    VLOG(1) << "W4A8 moe gemm " << "total_rows: " << total_rows
+            << " n: " << gemm_n << " k: " << gemm_k
             << "Using gemm config from config file: config_total_rows: "
             << best_total_rows << " config_n: " << best_n
             << " config_k: " << best_k << "tile_config: "

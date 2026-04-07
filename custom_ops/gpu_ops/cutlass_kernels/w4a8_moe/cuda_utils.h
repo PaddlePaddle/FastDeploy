@@ -32,9 +32,7 @@
 // workspace for cublas gemm : 32MB
 #define CUBLAS_WORKSPACE_SIZE 33554432
 
-typedef struct __align__(4) {
-  half x, y, z, w;
-}
+typedef struct __align__(4) { half x, y, z, w; }
 half4;
 
 /* **************************** type definition ***************************** */

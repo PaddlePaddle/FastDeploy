@@ -433,8 +433,7 @@ void interleave_column_major_tensor(int8_t* interleaved_quantized_tensor,
 
   const size_t rows_per_tile = 64;
   std::cout << "running interleave_column_major_tensor" << std::endl;
-  std::cout << "num_rows:" << num_rows << ","
-            << "num_cols:" << num_cols << ","
+  std::cout << "num_rows:" << num_rows << "," << "num_cols:" << num_cols << ","
             << "BITS_PER_ELT:" << BITS_PER_ELT << ","
             << "elts_in_int32:" << elts_in_int32 << ","
             << "rows_per_tile:" << rows_per_tile << std::endl;
@@ -486,8 +485,7 @@ void interleave_column_major_tensor_int4(int8_t* interleaved_quantized_tensor,
 
   const size_t rows_per_tile = 64;
   std::cout << "running interleave_column_major_tensor" << std::endl;
-  std::cout << "num_rows:" << num_rows << ","
-            << "num_cols:" << num_cols << ","
+  std::cout << "num_rows:" << num_rows << "," << "num_cols:" << num_cols << ","
             << "BITS_PER_ELT:" << BITS_PER_ELT << ","
             << "elts_in_int32:" << elts_in_int32 << ","
             << "rows_per_tile:" << rows_per_tile << std::endl;
